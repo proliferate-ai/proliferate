@@ -24,6 +24,18 @@ pub enum PokeReason {
 }
 
 impl PokeReason {
+    /// Was this poke raised by a user asking for it, right now?
+    ///
+    /// The one policy that turns on this distinction is cursor's
+    /// manual-refresh-only law (model-catalog.md, "Cursor is manual-refresh only"):
+    /// an unattended `cursor-agent` spawn can surface an OS keychain prompt with no
+    /// user-visible cause, whereas a prompt the user just asked for explains itself.
+    /// Everything else about a poke is decided by the staleness gate, deliberately —
+    /// the reason is diagnostics.
+    pub fn is_user_initiated(self) -> bool {
+        matches!(self, Self::Manual)
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Startup => "startup",

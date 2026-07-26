@@ -37,7 +37,10 @@ pub(super) fn model_is_available(
         .any(|context_id| contexts.is_active(context_id))
 }
 
-pub(super) fn find_model<'a>(agent: &'a AgentCatalogAgent, model_id: &str) -> Option<&'a AgentCatalogModel> {
+pub(super) fn find_model<'a>(
+    agent: &'a AgentCatalogAgent,
+    model_id: &str,
+) -> Option<&'a AgentCatalogModel> {
     agent
         .session
         .models

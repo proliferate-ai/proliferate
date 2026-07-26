@@ -120,7 +120,19 @@ pub struct AppState {
     pub agent_runtime: Arc<AgentRuntime>,
     pub catalog_sync_service: Arc<CatalogSyncService>,
     pub gateway_model_resolver: Arc<GatewayModelResolver>,
+    /// The probe engine, for READS and for the user-initiated refresh: the status
+    /// route and the launch-validation universe.
     pub model_snapshot_service: Arc<ModelSnapshotService>,
+    /// The same engine, for the AUTOMATIC pokes — `None` under `cfg(test)`.
+    ///
+    /// A second field rather than a flag at each call site, so "may this site fire a
+    /// probe on its own?" is answered once, by the type. The reason it exists is the
+    /// same one that suppresses `spawn_startup_pass` in tests: an automatic poke ends
+    /// in a real harness spawn, and suites that install a fake agent program and count
+    /// its ACP requests would otherwise see someone else's probe in their assertions.
+    /// Reads and the manual refresh keep the real engine above, because nothing there
+    /// fires on its own.
+    pub automatic_poke_engine: Option<Arc<ModelSnapshotService>>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -248,20 +260,10 @@ impl AppState {
                 AgentCatalogService::new(catalog_sync_service.clone()),
             )),
         ));
-        // Which consumers get the engine for their AUTOMATIC pokes.
-        //
-        // `None` under `cfg(test)`, for the same reason `spawn_startup_pass` and the
-        // loop scheduler below are suppressed there: an automatic poke is background
-        // convergence that ends in a real harness spawn. Several suites install a fake
-        // agent program and then count that program's ACP requests, so a probe firing
-        // behind them is an extra `session/new` in someone else's assertion — which
-        // is exactly how this line came to exist.
-        //
-        // Only the automatic pokes are suppressed. The status route, the manual
-        // refresh and the launch-validation universe all keep the real engine below,
-        // because those are reads and a client call — nothing fires on its own. The
-        // pokes themselves are asserted at the engine's own seam
-        // (`model_snapshot::wiring_tests`), where the spawn is a fake runner.
+        // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
+        // why it is separate; every one of the six sites reads THIS, so the
+        // suppression is a property of the wiring rather than of which sites happened
+        // to be threaded.
         #[cfg(not(test))]
         let automatic_poke_engine = Some(model_snapshot_service.clone());
         #[cfg(test)]
@@ -592,6 +594,7 @@ impl AppState {
             catalog_sync_service,
             gateway_model_resolver,
             model_snapshot_service,
+            automatic_poke_engine,
             agent_reconcile_service,
             repo_root_service,
             workspace_runtime,

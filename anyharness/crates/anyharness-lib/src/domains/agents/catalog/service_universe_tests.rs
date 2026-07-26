@@ -208,34 +208,118 @@ fn garbage_is_rejected_even_with_a_rich_universe() {
     }
 }
 
-/// An observation NEVER narrows availability.
+/// **The downgraded-key case: an observation refuses, pre-launch.**
 ///
-/// This is the direction the design has to get right, and real data forces it:
-/// claude's own `anthropic-api` probe advertises four selectors (`default`, `sonnet`,
-/// `haiku`, `opus[1m]`) while the shipped catalog additionally carries
-/// `claude-fable-5` and `claude-opus-4-8` for that same context — trial-verified rows,
-/// i.e. models the harness does not list but does launch. A per-context override would
-/// refuse a launch that works today, so the union is mandatory rather than lenient.
+/// This is what per-context override buys, and it is the reason C-A8-1 resolved toward
+/// the spec's per-context language rather than a blanket union. When a gateway key
+/// loses access to a model, the proxy stops listing it and the machine records that.
+/// Launch then refuses with `ModelGated` naming what would unlock it. Under a union
+/// the launch would be accepted and the user would meet a provider 403 mid-session
+/// instead: same outcome, discovered later, and attributed to the wrong layer.
 #[test]
-fn an_observation_never_removes_a_launchable_catalog_model() {
+fn a_model_a_downgraded_key_no_longer_serves_is_refused_before_launch() {
+    let catalog = draft_catalog();
+    let active = contexts(&["gateway"]);
+    // The key still serves sonnet, but opus-4-6 has been revoked.
+    let downgraded = observed(&[("gateway", &["claude-sonnet-4-5", "claude-haiku-4-5"])]);
+
+    let error = catalog
+        .validate_launch_in_universe("claude", &active, Some("claude-opus-4-6"), None, &downgraded)
+        .expect_err("the machine's own observation says this key cannot serve it");
+    match error {
+        SelectionUnsupported::ModelGated {
+            canonical_model_id,
+            required_contexts,
+            ..
+        } => {
+            assert_eq!(canonical_model_id, "claude-opus-4-6");
+            assert!(
+                !required_contexts.contains(&"gateway".to_string()),
+                "the rejection must not name the very context that was observed to \
+                 lack the model, got {required_contexts:?}"
+            );
+        }
+        other => panic!("expected ModelGated, got {other:?}"),
+    }
+
+    // A model the same observation DOES carry still launches, so the override is
+    // model-scoped rather than a blanket distrust of the context.
+    catalog
+        .validate_launch_in_universe(
+            "claude",
+            &active,
+            Some("claude-sonnet-4-5"),
+            None,
+            &downgraded,
+        )
+        .expect("an observed model still launches under the same key");
+}
+
+/// **Trial-verified rows survive the override**, against the real catalog and the real
+/// probe fixture.
+///
+/// `claude.anthropic-api.probe.json` advertises exactly four selectors (`default`,
+/// `sonnet`, `haiku`, `opus[1m]`) while the shipped catalog carries `claude-fable-5`
+/// and `claude-opus-4-8` for that same context as `viaTrialOnly` — the pipeline
+/// verified them by launching them, *because* the harness does not list them. A plain
+/// per-context override would refuse launches that provably work; the exemption is
+/// what makes the strict reading safe.
+///
+/// The first assertion pins the catalog fact the exemption depends on, so this fails
+/// loudly if a future catalog drops the flag rather than silently changing behavior.
+#[test]
+fn trial_verified_models_stay_launchable_against_the_real_probe_fixture() {
     let catalog = draft_catalog();
     let active = contexts(&["anthropic-api"]);
-    // Exactly what claude.anthropic-api.probe.json advertises.
+    // Exactly what the real fixture advertises.
     let universe = observed(&[("anthropic-api", &["default", "opus[1m]", "sonnet", "haiku"])]);
 
-    for still_launchable in ["claude-fable-5", "claude-opus-4-8"] {
+    let agent = catalog.agent("claude").expect("claude");
+    for id in ["claude-fable-5", "claude-opus-4-8"] {
+        let model = agent
+            .session
+            .models
+            .iter()
+            .find(|model| model.id == id)
+            .unwrap_or_else(|| panic!("{id} in the catalog"));
+        assert_eq!(
+            model
+                .provenance
+                .as_ref()
+                .and_then(|provenance| provenance.via_trial_only),
+            Some(true),
+            "{id} must be marked viaTrialOnly, or the exemption below does not apply \
+             and this launch legitimately regresses"
+        );
         let selection = catalog
-            .validate_launch_in_universe(
-                "claude",
-                &active,
-                Some(still_launchable),
-                None,
-                &universe,
-            )
-            .unwrap_or_else(|error| {
-                panic!("{still_launchable} must stay launchable, got {error:?}")
-            });
-        assert_eq!(selection.model_id.as_deref(), Some(still_launchable));
+            .validate_launch_in_universe("claude", &active, Some(id), None, &universe)
+            .unwrap_or_else(|error| panic!("{id} must stay launchable, got {error:?}"));
+        assert_eq!(selection.model_id.as_deref(), Some(id));
+    }
+
+    // A NON-trial model the same observation omits is refused — the two behaviors
+    // asserted against one universe, so the flag is provably what separates them.
+    let non_trial = agent
+        .session
+        .models
+        .iter()
+        .find(|model| {
+            model.availability.any_of.iter().any(|id| id == "anthropic-api")
+                && model
+                    .provenance
+                    .as_ref()
+                    .and_then(|provenance| provenance.via_trial_only)
+                    != Some(true)
+                && !["default", "opus[1m]", "sonnet", "haiku"].contains(&model.id.as_str())
+        })
+        .map(|model| model.id.clone());
+    if let Some(non_trial) = non_trial {
+        assert!(
+            catalog
+                .validate_launch_in_universe("claude", &active, Some(&non_trial), None, &universe)
+                .is_err(),
+            "{non_trial} is neither observed nor trial-verified, so it must be refused"
+        );
     }
 }
 
@@ -308,25 +392,43 @@ fn mode_validation_stays_catalog_authoritative() {
     ));
 }
 
-/// A default selection (no requested model) may come from the observation.
+/// A default selection follows the observation too, in both directions.
 ///
-/// The curated default is consulted first and wins whenever it is available, so this
-/// only fires when the catalog's default is NOT serveable under the active contexts —
-/// exactly the pre-probe fallback rung, now able to see observed capability.
+/// The curated default is consulted first and wins whenever the machine can serve it.
+/// When it cannot — the observation for that context does not carry it — the default
+/// falls through to a model that IS serveable, rather than advertising a default that
+/// launch would then reject. That agreement between "what we default to" and "what we
+/// accept" is the point of both reading one universe.
 #[test]
-fn a_default_selection_can_be_unlocked_by_an_observation() {
+fn a_default_selection_follows_the_observation() {
     let catalog = draft_catalog();
-    // Under gateway alone, claude's curated default is `claude-sonnet-4-5`.
     let active = contexts(&["gateway"]);
-    let universe = observed(&[("gateway", &["claude-opus-4-8"])]);
 
-    let selection = catalog
-        .validate_launch_in_universe("claude", &active, None, None, &universe)
-        .expect("a default resolves");
+    // The curated gateway default, observed present: it wins.
+    let curated = observed(&[("gateway", &["claude-sonnet-4-5", "claude-opus-4-8"])]);
     assert_eq!(
-        selection.model_id.as_deref(),
+        catalog
+            .validate_launch_in_universe("claude", &active, None, None, &curated)
+            .expect("a default resolves")
+            .model_id
+            .as_deref(),
         Some("claude-sonnet-4-5"),
-        "the curated default still wins when it is available"
+        "the curated default wins whenever the machine can serve it"
     );
-    let _ = universe;
+
+    // The curated default observed ABSENT: the default must move to something the
+    // machine actually serves, and that choice must itself validate.
+    let without_default = observed(&[("gateway", &["claude-opus-4-8"])]);
+    let fallback = catalog
+        .validate_launch_in_universe("claude", &active, None, None, &without_default)
+        .expect("a default still resolves")
+        .model_id
+        .expect("some model");
+    assert_ne!(
+        fallback, "claude-sonnet-4-5",
+        "a default the machine cannot serve must not be advertised"
+    );
+    catalog
+        .validate_launch_in_universe("claude", &active, Some(&fallback), None, &without_default)
+        .unwrap_or_else(|error| panic!("the chosen default must itself launch: {error:?}"));
 }

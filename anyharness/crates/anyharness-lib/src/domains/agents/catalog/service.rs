@@ -7,15 +7,14 @@
 //! - `defaultVisible` is the menu, `availability` is the truth:
 //!   [`ActiveCatalog::validate_launch`] accepts launchable-but-unadvertised
 //!   models (available under the active contexts but not default-visible).
-//! - Availability is the observed set: a model is available iff this machine's
-//!   snapshot observed it under an active context, or `availability.anyOf`
-//!   intersects the active context ids — `"baseline"` counts like any other
-//!   context when it is active. The two are a union, never an override:
-//!   model-catalog.md's tier law says a lower tier fills absence, and the
-//!   shipped catalog's trial-verified rows are exactly the models a harness does
-//!   not advertise but can still launch (see `universe.rs` for the real-data
-//!   argument). A machine with no snapshot therefore validates exactly as it did
-//!   before probing existed.
+//! - Availability is the observed set, per context: a model is available iff some
+//!   ACTIVE context serves it — because this machine observed it there, or because
+//!   the catalog declares it there and no fresh observation contradicts that.
+//!   `"baseline"` counts like any other context when it is active. An observation
+//!   therefore overrides the catalog for its own context, with trial-verified rows
+//!   exempt; `universe.rs` carries the tier-law reading and the measurement behind
+//!   the exemption. A machine with no snapshot validates exactly as it did before
+//!   probing existed.
 //! - Models are entities, never modes; variant launch ids (`variantSyntax`)
 //!   resolve to their base model for availability and control checks while
 //!   the composed variant id is preserved as the launch id.
@@ -336,13 +335,17 @@ impl ActiveCatalog {
     /// as well as the shipped catalog — the snapshot-first form the wired launch
     /// paths use.
     ///
-    /// The universe only ever WIDENS what validation accepts, in two ways:
+    /// The universe changes what validation accepts in three ways:
     ///
     /// 1. a catalog model observed under an active context is available even when
     ///    `availability.anyOf` predates that context;
     /// 2. a model the catalog does not know at all, observed under an active
     ///    context, resolves to itself — this is the case that makes a gateway-side
-    ///    model add launchable on the day it appears, without a catalog release.
+    ///    model add launchable on the day it appears, without a catalog release;
+    /// 3. a model the catalog declares for a context whose fresh observation does
+    ///    NOT carry it is refused for that context — the downgraded-key case, which
+    ///    is how the user gets a legible pre-launch rejection instead of a provider
+    ///    403 mid-session. Trial-verified rows are exempt (see `universe.rs`).
     ///
     /// Both error shapes are unchanged. `UnknownModel` now means "absent from every
     /// context's observation AND the catalog", exactly as model-catalog.md, "Launch

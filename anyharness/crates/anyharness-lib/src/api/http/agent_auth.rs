@@ -10,7 +10,7 @@ use axum::{body::Bytes, extract::State, http::StatusCode, Json};
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::model_snapshot::PokeReason;
+use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 use crate::domains::agents::route_auth::{
     apply_state_file, clear_state_file, AgentAuthState, RouteAuthError,
 };
@@ -56,10 +56,11 @@ pub async fn put_agent_auth_state(
     // could not do.
     //
     // Fire-and-forget: the apply response never waits for a probe.
-    state
-        .model_snapshot_service
-        .clone()
-        .poke_harnesses(&applied_harness_kinds(&document), PokeReason::AuthApplied);
+    ModelSnapshotService::poke_harnesses_optional(
+        &state.automatic_poke_engine,
+        &applied_harness_kinds(&document),
+        PokeReason::AuthApplied,
+    );
     Ok(Json(ApplyAgentAuthStateResponse {
         applied: true,
         revision: document.revision,
@@ -83,10 +84,10 @@ pub async fn delete_agent_auth_state(
     // widest possible fingerprint change — wider than any apply. Without a poke
     // here every harness's entries stay pinned to credentials that no longer
     // exist, and the picker keeps serving models the machine can no longer reach.
-    state
-        .model_snapshot_service
-        .clone()
-        .poke_all(PokeReason::AuthCleared);
+    ModelSnapshotService::poke_all_optional(
+        &state.automatic_poke_engine,
+        PokeReason::AuthCleared,
+    );
     Ok(StatusCode::NO_CONTENT)
 }
 

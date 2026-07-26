@@ -230,8 +230,24 @@ impl ModelSnapshotService {
     }
 
     /// Poke one harness's active contexts.
+    ///
+    /// **The single chokepoint for the manual-refresh-only law.** Every poke site
+    /// funnels through here — `poke_all` and `poke_harnesses` both delegate — so an
+    /// excluded harness is unreachable by an automatic poke no matter which site
+    /// raised it. Enforcing it at the call sites instead is exactly the bug this
+    /// shape prevents: the exclusion previously lived only in the whole-machine
+    /// enumeration, so the four pokes that name a harness directly bypassed it and
+    /// spawned `cursor-agent` unattended.
     pub fn poke_harness(self: Arc<Self>, harness_kind: &str, reason: PokeReason) {
         if !self.is_owner() {
+            return;
+        }
+        if !reason.is_user_initiated() && !self.targets.allows_automatic_probe(harness_kind) {
+            tracing::debug!(
+                harness = harness_kind,
+                reason = reason.as_str(),
+                "skipping an automatic probe for a manual-refresh-only harness"
+            );
             return;
         }
         if !self.targets.is_installed(harness_kind) {
@@ -249,9 +265,48 @@ impl ModelSnapshotService {
         }
     }
 
+    /// Poke one harness through an OPTIONAL engine handle — the shape every automatic
+    /// call site has, since each of them holds `Option<Arc<ModelSnapshotService>>`
+    /// (`None` means this build's pokes are suppressed, never "probe anyway").
+    ///
+    /// A named function rather than an `if let` repeated at five sites, so a test can
+    /// drive the exact code those sites run. Asserting a handler's status code proves
+    /// only that the poke did not break the response; asserting through here proves the
+    /// poke reached the engine and named the right harness.
+    pub fn poke_optional(
+        engine: &Option<Arc<Self>>,
+        harness_kind: &str,
+        reason: PokeReason,
+    ) {
+        if let Some(engine) = engine.clone() {
+            engine.poke_harness(harness_kind, reason);
+        }
+    }
+
+    /// [`ModelSnapshotService::poke_optional`]'s whole-machine sibling.
+    pub fn poke_all_optional(engine: &Option<Arc<Self>>, reason: PokeReason) {
+        if let Some(engine) = engine.clone() {
+            engine.poke_all(reason);
+        }
+    }
+
+    /// [`ModelSnapshotService::poke_optional`] for a named set of harnesses.
+    pub fn poke_harnesses_optional(
+        engine: &Option<Arc<Self>>,
+        harness_kinds: &[String],
+        reason: PokeReason,
+    ) {
+        if let Some(engine) = engine.clone() {
+            engine.poke_harnesses(harness_kinds, reason);
+        }
+    }
+
     /// Poke exactly the harnesses an applied auth document names. The FINGERPRINT
     /// gate, not the handler, then decides which actually re-probe.
     pub fn poke_harnesses(self: Arc<Self>, harness_kinds: &[String], reason: PokeReason) {
+        if !self.is_owner() {
+            return;
+        }
         for harness in harness_kinds {
             self.clone().poke_harness(harness, reason);
         }

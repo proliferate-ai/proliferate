@@ -13,19 +13,31 @@
 //! `model_snapshot::universe` builds one of these from the document; nothing else
 //! does.
 //!
-//! **Shipped catalog rows are ADDITIVE to an observation, not overridden by it.**
-//! Reading "a lower tier fills absence" at context granularity would mean a fresh
-//! entry deletes every catalog row that context did not advertise — and the shipped
-//! catalog deliberately carries *launchable-but-unadvertised* models: the central
-//! pipeline records them with `provenance.viaTrialOnly`, i.e. verified by launching
-//! them, precisely because the harness does not list them. Real data makes the
-//! consequence concrete: claude's `anthropic-api` probe advertises four selectors
-//! (`default`, `sonnet`, `haiku`, `opus[1m]`) while the catalog carries
-//! `claude-fable-5` and `claude-opus-4-8` for the same context. A per-context
-//! override would refuse a launch that works today. So absence is filled per
-//! MODEL: the universe is `snapshot ∪ shipped`, which can only ever widen
-//! capability — the gap this closes is "probed capability never enters the
-//! universe", not "probed capability is the only capability".
+//! **An observation OVERRIDES the shipped catalog for its own context — except for
+//! trial-verified rows.** The spec's tier law is written per context ("Where no fresh
+//! entry exists **for an active context**, the shipped catalog's models **for that
+//! context** fill in"), so a context that HAS a fresh entry is answered by that entry
+//! and not by the catalog's older belief about it.
+//!
+//! Taken literally that would drop real capability, because the shipped catalog
+//! deliberately carries *launchable-but-unadvertised* models: the central pipeline
+//! marks them `provenance.viaTrialOnly`, meaning it verified them by actually
+//! launching them, precisely because the harness does not list them. Those rows are
+//! therefore exempt from the override and union in.
+//!
+//! The exemption is exactly wide enough, measured rather than assumed. Across all 13
+//! real probe fixtures the only catalog rows that are available-but-unobserved are
+//! `viaTrialOnly` ones — claude's `claude-fable-5` and `claude-opus-4-8` under
+//! `anthropic-api`/`anthropic-oauth`, and `global.anthropic.claude-fable-5` under
+//! `bedrock`, with zero non-trial cases anywhere. So trial-exempt override keeps
+//! 100% of provably-launchable capability while still letting an observation say no.
+//!
+//! What the override buys, and why it is worth the strictness: a *pre-launch*
+//! rejection. When a gateway key is downgraded so the proxy stops serving a model,
+//! the observation records that, and launch refuses with `SESSION_MODEL_GATED`
+//! naming what would unlock it. A blanket union would accept the launch and the user
+//! would meet a mid-session provider 403 instead — the same outcome, discovered later
+//! and less legibly.
 //!
 //! **A fresh entry with no models is not an observation.** A harness that
 //! advertised an empty list would otherwise contribute nothing while still counting
@@ -132,21 +144,45 @@ impl ObservedUniverse {
     }
 }
 
-/// Every context that could serve `model`: the ones that observed it, plus the ones
-/// the shipped catalog declares. This is the unlock condition a `ModelGated`
+/// Was this model verified by launching it rather than by being advertised?
+///
+/// `viaTrialOnly` is the central pipeline's record that it probed the harness, did
+/// NOT see the model in the advertised list, and then launched it successfully
+/// anyway. A machine's own observation of the same context will likewise not list
+/// it, so overriding on that silence would refuse a launch the pipeline proved works.
+fn is_trial_verified(model: &AgentCatalogModel) -> bool {
+    model
+        .provenance
+        .as_ref()
+        .and_then(|provenance| provenance.via_trial_only)
+        .unwrap_or(false)
+}
+
+/// Every context that could serve `model` — the unlock condition a `ModelGated`
 /// rejection names (model-catalog.md, "Launch validation": *"`required_contexts`
 /// naming the contexts whose snapshot entries (or catalog availability, pre-probe)
 /// contain the model"*).
 ///
-/// Observed contexts come first so the most specific truth reads first; with an
-/// empty universe the result is `availability.anyOf` verbatim, in catalog order, so
-/// a pre-probe machine's rejection payload is unchanged.
+/// A context qualifies when it observed the model, or when the catalog declares it
+/// and the observation cannot contradict that — either because no fresh entry exists
+/// for that context, or because the model is trial-verified (see
+/// [`is_trial_verified`]).
+///
+/// Observed contexts come first so the most specific truth reads first; with an empty
+/// universe the result is `availability.anyOf` verbatim, in catalog order, so a
+/// pre-probe machine's rejection payload is unchanged.
 pub fn contexts_serving_model(
     model: &AgentCatalogModel,
     universe: &ObservedUniverse,
 ) -> Vec<String> {
+    let trial_verified = is_trial_verified(model);
     let mut serving = universe.contexts_observing_model(model);
     for context_id in &model.availability.any_of {
+        if universe.has_observation(context_id) && !trial_verified {
+            // This context was observed and does not serve the model. Naming it would
+            // tell the user to enable a route that cannot run what they asked for.
+            continue;
+        }
         if !serving.contains(context_id) {
             serving.push(context_id.clone());
         }
@@ -243,24 +279,65 @@ mod tests {
         );
     }
 
-    /// An observation ADDS a serving context and never removes one. The second half
-    /// is the load-bearing one: claude's real `anthropic-api` probe advertises four
-    /// selectors while the catalog carries trial-verified rows for the same context,
-    /// so subtracting would refuse launches that work today.
+    /// An observation OVERRIDES its own context: a model the catalog declares there
+    /// but the machine did not observe stops being serveable by that context.
+    ///
+    /// This is the downgraded-key case. When a gateway key loses access to a model the
+    /// proxy stops listing it, the observation records that, and the user gets a
+    /// pre-launch `ModelGated` naming what would unlock it — rather than a launch that
+    /// is accepted and then dies on a provider 403 mid-session.
     #[test]
-    fn observations_widen_the_serving_set_and_never_narrow_it() {
-        let model = model("claude-fable-5", &["anthropic-api"]);
+    fn an_observation_overrides_its_own_context() {
+        let model = model("claude-fable-5", &["anthropic-api", "anthropic-oauth"]);
         let universe = ObservedUniverse::from_observations(vec![
-            // Observed WITHOUT the model, though the catalog says this context
-            // serves it (the real claude shape).
+            // Both catalog contexts observed, NEITHER serving the model — the shape a
+            // downgraded key produces.
             ("anthropic-api".to_string(), vec!["sonnet", "haiku"]),
-            // Observed WITH it, though the catalog does not list this context.
+            ("anthropic-oauth".to_string(), vec!["sonnet", "opus"]),
+            // And one context observed WITH it that the catalog does not list.
             ("gateway".to_string(), vec!["claude-fable-5"]),
         ]);
         assert_eq!(
             contexts_serving_model(&model, &universe),
-            vec!["gateway", "anthropic-api"],
-            "observed contexts first, then the catalog's own — nothing dropped"
+            vec!["gateway"],
+            "observed contexts that lack the model are dropped; the one that has it is added"
+        );
+
+        // An UNOBSERVED catalog context still fills in — the tier law's own words.
+        let partial = ObservedUniverse::from_observations(vec![(
+            "anthropic-api".to_string(),
+            vec!["sonnet"],
+        )]);
+        assert_eq!(
+            contexts_serving_model(&model, &partial),
+            vec!["anthropic-oauth"],
+            "a context with no fresh entry keeps its catalog declaration"
+        );
+    }
+
+    /// **Trial-verified rows are exempt from the override.**
+    ///
+    /// `viaTrialOnly` means the central pipeline probed, did not see the model
+    /// advertised, and launched it successfully anyway. A machine's own observation of
+    /// that context will be equally silent, so overriding on that silence would refuse
+    /// a launch that is proven to work. Same universe as the test above, one flag
+    /// different, opposite answer.
+    #[test]
+    fn a_trial_verified_row_survives_an_observation_that_omits_it() {
+        let mut model = model("claude-fable-5", &["anthropic-api", "anthropic-oauth"]);
+        model.provenance = Some(AgentCatalogModelProvenance {
+            via_trial_only: Some(true),
+            ..provenance(&[])
+        });
+        let universe = ObservedUniverse::from_observations(vec![(
+            "anthropic-api".to_string(),
+            vec!["sonnet", "haiku"],
+        )]);
+        assert_eq!(
+            contexts_serving_model(&model, &universe),
+            vec!["anthropic-api", "anthropic-oauth"],
+            "a launchable-but-unadvertised model must not be dropped by the silence \
+             that defines it"
         );
     }
 

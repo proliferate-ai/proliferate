@@ -419,9 +419,7 @@ impl AgentRuntime {
     /// real install pass (which would download every supported harness into the
     /// test's temp home). A runtime with no engine attached pokes nothing.
     pub(crate) fn poke_model_snapshots(&self, reason: PokeReason) {
-        if let Some(model_snapshot) = self.model_snapshot.clone() {
-            model_snapshot.poke_all(reason);
-        }
+        ModelSnapshotService::poke_all_optional(&self.model_snapshot, reason);
     }
 }
 

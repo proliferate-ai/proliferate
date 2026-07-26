@@ -119,7 +119,6 @@ impl SessionService {
         let catalog = self.catalog_service.active_catalog();
         let mut agents = Vec::new();
         for agent in catalog.agents() {
-            let universe = self.observed_universe.observed_universe(&agent.kind);
             let Some(descriptor) = registry::descriptor(&agent.kind) else {
                 continue;
             };
@@ -134,6 +133,10 @@ impl SessionService {
             if resolved.status != ResolvedAgentStatus::Ready {
                 continue;
             }
+            // BELOW the two `continue` guards deliberately: reading the universe stats
+            // the document, the manifest and every context's discovery files, and doing
+            // it above would pay that for the harnesses this loop is about to skip.
+            let universe = self.observed_universe.observed_universe(&agent.kind);
 
             let facts = collect_launch_env_facts(&agent.kind, &readiness_env, &self.runtime_home);
             let active = classify(&descriptor, &agent.auth_contexts, &facts);

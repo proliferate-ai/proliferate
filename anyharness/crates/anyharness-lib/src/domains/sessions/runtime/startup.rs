@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::settings::resolve_settings_deltas;
-use crate::domains::agents::model_snapshot::PokeReason;
+use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
@@ -380,9 +380,11 @@ impl SessionRuntime {
         // Unlike its predecessor this is staleness-gated per (harness, auth context)
         // rather than per gateway revision, so a launch on a machine with fresh
         // entries costs one in-memory gate evaluation and no spawn.
-        if let Some(model_snapshot) = self.model_snapshot.clone() {
-            model_snapshot.poke_harness(&record.agent_kind, PokeReason::SessionLaunch);
-        }
+        ModelSnapshotService::poke_optional(
+            &self.model_snapshot,
+            &record.agent_kind,
+            PokeReason::SessionLaunch,
+        );
         // Catalog settings: resolve persisted toggle values into launch-time
         // deltas (extra CLI args, extra env vars). The surface is always "local"
         // for local runtime launches (cloud sandboxes use their own surface).

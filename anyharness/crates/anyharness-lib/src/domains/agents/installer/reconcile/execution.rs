@@ -421,9 +421,11 @@ async fn run_reconcile_job(
         // either would spend a real harness spawn to re-confirm an unchanged identity
         // the gate would then call fresh anyway.
         if probe_after_install(terminal_phase) {
-            if let Some(model_snapshot) = model_snapshot.clone() {
-                model_snapshot.poke_harness(kind.as_str(), PokeReason::InstallCompleted);
-            }
+            ModelSnapshotService::poke_optional(
+                &model_snapshot,
+                kind.as_str(),
+                PokeReason::InstallCompleted,
+            );
         }
 
         let _ = update_job(&jobs, &job_id, |job| {

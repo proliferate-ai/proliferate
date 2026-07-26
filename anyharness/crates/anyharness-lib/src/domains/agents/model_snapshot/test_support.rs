@@ -104,6 +104,22 @@ pub(crate) fn gateway_context() -> AgentCatalogAuthContext {
     }
 }
 
+/// Cursor's real catalog shape: one login context whose signals are an env var OR a
+/// keychain discovery. Cursor has NO gateway route at all
+/// (`render.rs` returns `UnsupportedRoute`), so a gateway-context fixture would fail
+/// materialization rather than exercise the policy under test.
+pub(crate) fn cursor_login_context() -> AgentCatalogAuthContext {
+    AgentCatalogAuthContext {
+        id: "cursor-login".to_string(),
+        auth_slot_id: Some("cursor".to_string()),
+        description: None,
+        signals: Some(AgentCatalogAuthSignal::AnyOf(vec![
+            AgentCatalogAuthSignal::Env("CURSOR_API_KEY".to_string()),
+            AgentCatalogAuthSignal::Discovery("cursor-keychain".to_string()),
+        ])),
+    }
+}
+
 pub(crate) fn env_context(id: &str, slot: &str, vars: &[&str]) -> AgentCatalogAuthContext {
     AgentCatalogAuthContext {
         id: id.to_string(),
@@ -124,6 +140,9 @@ pub(crate) struct FixedTargets {
     pub(crate) contexts: BTreeMap<String, Vec<String>>,
     pub(crate) catalog_contexts: BTreeMap<String, Vec<AgentCatalogAuthContext>>,
     pub(crate) installed: Vec<String>,
+    /// Harnesses no AUTOMATIC poke may probe — the fake's stand-in for the
+    /// production manual-refresh-only list.
+    pub(crate) manual_refresh_only: Vec<String>,
 }
 
 impl FixedTargets {
@@ -134,13 +153,22 @@ impl FixedTargets {
             contexts: BTreeMap::from([(harness.to_string(), ids)]),
             catalog_contexts: BTreeMap::from([(harness.to_string(), contexts)]),
             installed: vec![harness.to_string()],
+            manual_refresh_only: Vec::new(),
         }
     }
 }
 
 impl ProbeTargets for FixedTargets {
     fn auto_harnesses(&self) -> Vec<String> {
-        self.harnesses.clone()
+        self.harnesses
+            .iter()
+            .filter(|kind| self.allows_automatic_probe(kind))
+            .cloned()
+            .collect()
+    }
+
+    fn allows_automatic_probe(&self, harness_kind: &str) -> bool {
+        !self.manual_refresh_only.iter().any(|kind| kind == harness_kind)
     }
 
     fn active_contexts(&self, harness_kind: &str) -> Vec<String> {

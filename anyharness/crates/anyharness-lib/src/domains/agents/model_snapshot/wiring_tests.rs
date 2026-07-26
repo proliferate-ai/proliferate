@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use super::document::read_document;
 use super::test_support::{
-    gateway_context, gateway_state, wait_until, CountingPlanProducer, FakeRunner, FixedTargets,
-    TempRuntimeHome,
+    cursor_login_context, gateway_context, gateway_state, wait_until, CountingPlanProducer,
+    FakeRunner, FixedTargets, TempRuntimeHome,
 };
 use super::{ModelSnapshotService, PokeReason, ProbeEngineConfig};
 use crate::domains::agents::installer::progress::InstallProgressPhase;
@@ -281,4 +281,152 @@ async fn the_launch_backstop_self_heals_a_gap_and_is_free_when_fresh() {
             .poke_harness("opencode", PokeReason::SessionLaunch);
     }
     expect_no_further_probes(&runner, 1).await;
+}
+
+/// **Cursor's manual-refresh-only law, enforced at every poke site.**
+///
+/// model-catalog.md, "Cursor is manual-refresh only": *"Its credential lives in the
+/// macOS keychain, so an unattended spawn can surface an OS keychain prompt with no
+/// user-visible cause… cursor's entry is written only when a user asks for it."*
+///
+/// The test iterates EVERY automatic `PokeReason` rather than sampling one, because
+/// the bug this guards against was per-site: the exclusion list was consulted only by
+/// the whole-machine enumeration, so the four pokes that name a harness directly
+/// (install completed, install endpoint, auth applied, session launch) walked past it
+/// and would have spawned `cursor-agent` unattended. A test covering only `Startup`
+/// would have passed against that code.
+#[tokio::test]
+async fn cursor_is_never_probed_by_an_automatic_poke_but_a_manual_refresh_works() {
+    let home = TempRuntimeHome::new("cursor-manual-only");
+    // No enrolled sources: cursor's login is the user's keychain, and it has no
+    // gateway route at all. Its probe materializes nothing, which is exactly why an
+    // unattended spawn would reach the OS keychain.
+    home.write_state_json(&serde_json::json!({
+        "version": 2, "revision": 2, "harnesses": [],
+    }));
+    home.write_manifest("cursor", Some("1.0.0"), Some("sha-1"), "pinned_archive");
+
+    let runner = Arc::new(FakeRunner::new());
+    let mut targets = FixedTargets::single("cursor", vec![cursor_login_context()]);
+    targets.manual_refresh_only = vec!["cursor".to_string()];
+    let service = Arc::new(ModelSnapshotService::with_parts(
+        home.path().to_path_buf(),
+        Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"])),
+        Arc::new(targets),
+        runner.clone(),
+        ProbeEngineConfig {
+            min_reprobe_interval: Duration::ZERO,
+            ..ProbeEngineConfig::default()
+        },
+    ));
+
+    // Every automatic reason, through every poke entry point.
+    for reason in [
+        PokeReason::Startup,
+        PokeReason::InstallCompleted,
+        PokeReason::AuthApplied,
+        PokeReason::AuthCleared,
+        PokeReason::SessionLaunch,
+    ] {
+        service.clone().poke_all(reason);
+        service.clone().poke_harness("cursor", reason);
+        service
+            .clone()
+            .poke_harnesses(&["cursor".to_string()], reason);
+    }
+    expect_no_further_probes(&runner, 0).await;
+    assert!(
+        read_document(home.path(), "cursor").is_none(),
+        "no automatic poke may write a cursor entry"
+    );
+
+    // A user asking still gets a probe: the prompt then has an obvious cause.
+    let entry = service
+        .refresh_now("cursor", "cursor-login")
+        .await
+        .expect("a manual refresh must still probe cursor");
+    assert!(!entry.models.is_empty());
+    assert_eq!(runner.count(), 1, "exactly the one the user asked for");
+
+    // And the exclusion is not a blanket "cursor is unprobeable": a Manual poke
+    // reason is what distinguishes the two, not the harness alone.
+    assert!(PokeReason::Manual.is_user_initiated());
+    for reason in [
+        PokeReason::Startup,
+        PokeReason::InstallCompleted,
+        PokeReason::AuthApplied,
+        PokeReason::AuthCleared,
+        PokeReason::SessionLaunch,
+    ] {
+        assert!(
+            !reason.is_user_initiated(),
+            "{reason:?} must count as unattended"
+        );
+    }
+}
+
+/// The production exclusion list really names cursor, and really names nothing else.
+///
+/// The engine test above uses a fake targets impl, so on its own it would pass even if
+/// the production list were empty. This closes that loop against the real
+/// `RuntimeProbeTargets`.
+#[test]
+fn the_production_exclusion_list_covers_cursor_only() {
+    use crate::domains::agents::catalog::service::AgentCatalogService;
+    use crate::domains::agents::catalog::sync::CatalogSyncService;
+    use crate::domains::agents::model_snapshot::targets::{ProbeTargets, RuntimeProbeTargets};
+
+    let home = TempRuntimeHome::new("production-exclusions");
+    let targets = RuntimeProbeTargets::new(
+        home.path().to_path_buf(),
+        AgentCatalogService::new(Arc::new(CatalogSyncService::from_bundled())),
+    );
+
+    assert!(!targets.allows_automatic_probe("cursor"));
+    for kind in ["claude", "codex", "opencode", "grok"] {
+        assert!(
+            targets.allows_automatic_probe(kind),
+            "{kind} has no keychain-prompt hazard and must converge automatically"
+        );
+    }
+}
+
+/// **The optional-handle seam every call site runs through**, in both states.
+///
+/// The five automatic sites hold an `Option<Arc<ModelSnapshotService>>` and call these
+/// three functions; this drives the same code with a real engine and with `None`. It
+/// exists because asserting a handler's status code (as `router_tests` does) proves only
+/// that the poke did not break the response — it cannot distinguish "poked" from
+/// "silently did nothing", which is exactly the failure mode a suppressed-by-accident
+/// handle produces.
+#[tokio::test]
+async fn the_optional_poke_seam_pokes_when_wired_and_no_ops_when_suppressed() {
+    let (home, service, runner) = two_harness_engine("poke-optional-seam");
+
+    // Suppressed: every entry point is a no-op, and specifically not a panic.
+    let suppressed: Option<Arc<ModelSnapshotService>> = None;
+    ModelSnapshotService::poke_optional(&suppressed, "opencode", PokeReason::InstallCompleted);
+    ModelSnapshotService::poke_all_optional(&suppressed, PokeReason::Startup);
+    ModelSnapshotService::poke_harnesses_optional(
+        &suppressed,
+        &["opencode".to_string()],
+        PokeReason::AuthApplied,
+    );
+    expect_no_further_probes(&runner, 0).await;
+    assert!(read_document(home.path(), "opencode").is_none());
+
+    // Wired: the install-endpoint and session-launch shape (one named harness).
+    let wired = Some(service.clone());
+    ModelSnapshotService::poke_optional(&wired, "opencode", PokeReason::InstallCompleted);
+    expect_probes(&runner, 1).await;
+    assert!(read_document(home.path(), "opencode").is_some());
+    assert!(
+        read_document(home.path(), "grok").is_none(),
+        "a named-harness poke must not fan out"
+    );
+
+    // Wired: the auth-cleared shape (whole machine).
+    ModelSnapshotService::poke_all_optional(&wired, PokeReason::AuthCleared);
+    expect_probes(&runner, 2).await;
+    assert!(read_document(home.path(), "grok").is_some());
 }

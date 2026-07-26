@@ -37,35 +37,38 @@ impl ModelSnapshotService {
         let catalog_contexts = self.targets.catalog_contexts(harness_kind);
         let now = Utc::now();
 
-        let observations = document.entries.into_iter().filter_map(|(context_id, entry)| {
-            // An unresolvable context cannot produce a current fingerprint, so its
-            // entry cannot be shown to be fresh. Declining is the conservative
-            // answer: the shipped catalog fills in.
-            let material = route_auth::probe_auth_material(
-                &self.runtime_home,
-                harness_kind,
-                &context_id,
-                &catalog_contexts,
-            )
-            .ok()?;
-            let freshness = staleness::evaluate(
-                Some(&entry),
-                identity.as_ref(),
-                &fingerprint::fingerprint(&material),
-                now,
-                staleness::ttl_for_entry_with(
+        let observations = document
+            .entries
+            .into_iter()
+            .filter_map(|(context_id, entry)| {
+                // An unresolvable context cannot produce a current fingerprint, so its
+                // entry cannot be shown to be fresh. Declining is the conservative
+                // answer: the shipped catalog fills in.
+                let material = route_auth::probe_auth_material(
+                    &self.runtime_home,
                     harness_kind,
                     &context_id,
-                    self.config.ttl_base,
-                    self.config.ttl_jitter_span,
-                ),
-            );
-            if freshness.is_stale() {
-                return None;
-            }
-            let ids: Vec<String> = entry.models.into_iter().map(|model| model.id).collect();
-            Some((context_id, ids))
-        });
+                    &catalog_contexts,
+                )
+                .ok()?;
+                let freshness = staleness::evaluate(
+                    Some(&entry),
+                    identity.as_ref(),
+                    &fingerprint::fingerprint(&material),
+                    now,
+                    staleness::ttl_for_entry_with(
+                        harness_kind,
+                        &context_id,
+                        self.config.ttl_base,
+                        self.config.ttl_jitter_span,
+                    ),
+                );
+                if freshness.is_stale() {
+                    return None;
+                }
+                let ids: Vec<String> = entry.models.into_iter().map(|model| model.id).collect();
+                Some((context_id, ids))
+            });
 
         ObservedUniverse::from_observations(observations.collect::<Vec<_>>())
     }

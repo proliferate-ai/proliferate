@@ -790,6 +790,26 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       absent from the menu. Note the asymmetry is pre-existing and in the safe
       direction — the shipped catalog already carries trial-verified models a
       harness does not advertise.
+- [ ] **The legacy gateway-models route now serves seed data only**, and this is a
+      deliberate, bounded regression rather than a latent bug. The poke wiring
+      deleted the last two writers of the `gateway_model_probe` table (the
+      auth-apply scheduler and the launch-time trigger), while
+      `resolve_with_source` behind
+      `GET /v1/agents/{kind}/catalog/gateway-models` still reads only that table
+      — so it reports `source: "seed"` until a user presses the legacy Refresh.
+      Two consumers regress for the length of the window: the settings **All
+      Models** tab shows the seed list with no probe freshness, and the
+      desktop→cloud **mirror push**
+      ([gateway-catalog-mirror.ts](../../../../apps/packages/product-client/src/lib/domain/agents/gateway-catalog-mirror.ts)
+      pushes only `source === "probe"`) stops, so machineless surfaces keep
+      serving whatever they last received. The window closes when this route's
+      consumers move to the snapshot route: the mirror consumer is **deleted** by
+      the route cutover and the snapshot re-key, and the All Models tab is
+      rebuilt on the runtime status/snapshot surface. Restoring a writer here
+      would mean re-creating the revision-keyed table this design deletes, so
+      the fix is the cutover, not a patch. **Deploy implication: this must not
+      ship to users without the route cutover and the snapshot re-key in the
+      same release train.**
 - [ ] The cloud snapshot exists (`agent_catalog_snapshot` in
       [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py))
       but is keyed by
