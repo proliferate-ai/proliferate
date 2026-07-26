@@ -153,6 +153,7 @@ sample of it.
 | `RowActionIconButton` | [RowActionIconButton.tsx](../../../../apps/packages/ui/src/primitives/RowActionIconButton.tsx) | Sanctioned hover-revealed row-action icon button (sidebar kebab, archive, tab close, file-row actions) — 28px hit target, 16px glyph. |
 | `SegmentedControl` | [SegmentedControl.tsx](../../../../apps/packages/ui/src/primitives/SegmentedControl.tsx) | Segmented tab-like control. |
 | `Select` | [Select.tsx](../../../../apps/packages/ui/src/primitives/Select.tsx) | Native select styled to tokens. |
+| `ShortcutBadge` | [ShortcutBadge.tsx](../../../../apps/packages/ui/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
 | `Skeleton` | [Skeleton.tsx](../../../../apps/packages/ui/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
 | `Sonner` | [Sonner.tsx](../../../../apps/packages/ui/src/primitives/Sonner.tsx) | Raw `sonner` toast wrapper, styled to tokens. |
 | `Spinner` | [Spinner.tsx](../../../../apps/packages/ui/src/primitives/Spinner.tsx) | Inline loading spinner. |
@@ -209,9 +210,8 @@ grandfathered.
 | `PaneOptionsMenuItem` | [PaneOptionsMenuItem.tsx](../../../../apps/packages/ui/src/patterns/PaneOptionsMenuItem.tsx) | Pane options-menu row, composes `Button`. |
 | `PickerPopoverContent` | [PickerPopoverContent.tsx](../../../../apps/packages/ui/src/patterns/PickerPopoverContent.tsx) | Popover content shell for pickers: search field + list + empty row. |
 | `SettingsMenu` | [SettingsMenu.tsx](../../../../apps/packages/ui/src/patterns/SettingsMenu.tsx) | Labeled select-style menu, composes `PopoverButton`/`PopoverMenuItem`. |
-| `ShortcutBadge` | [ShortcutBadge.tsx](../../../../apps/packages/ui/src/patterns/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
 | `SidebarActionButton` | [SidebarActionButton.tsx](../../../../apps/packages/ui/src/patterns/SidebarActionButton.tsx) | Sidebar action button, composes `RowActionIconButton`. |
-| `SidebarNavRow` | [SidebarNavRow.tsx](../../../../apps/packages/ui/src/patterns/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes `ShortcutBadge` + `SidebarRowSurface`. |
+| `SidebarNavRow` | [SidebarNavRow.tsx](../../../../apps/packages/ui/src/patterns/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes the `ShortcutBadge` primitive + `SidebarRowSurface`. |
 | `SidebarRowSurface` | [SidebarRowSurface.tsx](../../../../apps/packages/ui/src/patterns/SidebarRowSurface.tsx) | Shared sidebar row interaction surface (active/disabled/press state) other sidebar rows build on. |
 | `ThinkingText` | [ThinkingText.tsx](../../../../apps/packages/ui/src/patterns/ThinkingText.tsx) | Animated "thinking" gleam text. |
 

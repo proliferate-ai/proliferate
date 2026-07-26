@@ -21,7 +21,7 @@ layout/PageHeader.tsx	patterns/PageHeader.tsx
 layout/PaneIconButton.tsx	primitives/PaneIconButton.tsx
 layout/PaneOptionsMenuItem.tsx	patterns/PaneOptionsMenuItem.tsx
 layout/RowActionIconButton.tsx	primitives/RowActionIconButton.tsx
-layout/ShortcutBadge.tsx	patterns/ShortcutBadge.tsx
+layout/ShortcutBadge.tsx	primitives/ShortcutBadge.tsx
 layout/SidebarActionButton.tsx	patterns/SidebarActionButton.tsx
 layout/SidebarNavRow.test.tsx	patterns/SidebarNavRow.test.tsx
 layout/SidebarNavRow.tsx	patterns/SidebarNavRow.tsx

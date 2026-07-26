@@ -1,6 +1,6 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ShortcutBadge } from "@proliferate/ui/patterns/ShortcutBadge";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { AppShellTerminalIcon } from "@proliferate/ui/icons";
 import { TerminalHeaderIcon } from "#product/components/workspace/shell/right-panel/TerminalHeaderIcon";
 

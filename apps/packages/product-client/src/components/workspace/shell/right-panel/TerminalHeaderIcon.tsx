@@ -3,7 +3,7 @@ import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { ShortcutBadge } from "@proliferate/ui/patterns/ShortcutBadge";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { useTerminalTabNativeContextMenu } from "#product/hooks/terminals/ui/use-terminal-tab-native-context-menu";

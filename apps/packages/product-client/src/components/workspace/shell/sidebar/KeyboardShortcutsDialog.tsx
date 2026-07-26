@@ -4,7 +4,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "@proliferate/ui/primitives/Dialog";
-import { ShortcutBadge } from "@proliferate/ui/patterns/ShortcutBadge";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import {
   buildShortcutSections,

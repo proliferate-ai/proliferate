@@ -79,7 +79,7 @@ vi.mock("@proliferate/ui/patterns/ConfirmationDialog", () => ({
   ) : null,
 }));
 
-vi.mock("@proliferate/ui/patterns/ShortcutBadge", () => ({
+vi.mock("@proliferate/ui/primitives/ShortcutBadge", () => ({
   ShortcutBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
 

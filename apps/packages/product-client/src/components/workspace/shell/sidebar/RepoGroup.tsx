@@ -4,7 +4,7 @@ import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { ShortcutBadge } from "@proliferate/ui/patterns/ShortcutBadge";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";

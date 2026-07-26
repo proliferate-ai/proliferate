@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { ShortcutBadge } from "@proliferate/ui/patterns/ShortcutBadge";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 

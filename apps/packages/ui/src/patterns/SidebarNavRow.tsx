@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { ShortcutBadge } from "./ShortcutBadge";
+import { ShortcutBadge } from "../primitives/ShortcutBadge";
 import { SidebarRowSurface } from "./SidebarRowSurface";
 
 interface SidebarNavRowProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick" | "onSelect"> {

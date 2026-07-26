@@ -51,9 +51,9 @@
       "types": "./dist/primitives/RowActionIconButton.d.ts",
       "import": "./dist/primitives/RowActionIconButton.js"
     },
-    "./patterns/ShortcutBadge": {
-      "types": "./dist/patterns/ShortcutBadge.d.ts",
-      "import": "./dist/patterns/ShortcutBadge.js"
+    "./primitives/ShortcutBadge": {
+      "types": "./dist/primitives/ShortcutBadge.d.ts",
+      "import": "./dist/primitives/ShortcutBadge.js"
     },
     "./patterns/SidebarNavRow": {
       "types": "./dist/patterns/SidebarNavRow.d.ts",
