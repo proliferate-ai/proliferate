@@ -43,6 +43,7 @@ server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read 
 server/proliferate/config.py 618 managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending
 server/proliferate/db/models/cloud/agent_gateway.py 504 agent_auth_harness_settings model added for catalog-driven per-harness settings
 server/proliferate/server/cloud/agent_gateway/api.py 405 harness-settings GET/PUT routes added for catalog-driven per-harness settings
+server/proliferate/server/cloud/materialization/sandbox_io/connect.py 608 sandbox connect/ready choreography (attempt CAS, usage convergence) + gateway-cache invalidation at the re-stamp (C8); split pending
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
 server/proliferate/server/cloud/workspaces/service.py 1099 workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path; AnyHarness provisioning handoff split out per guides/domains.md; + after-commit worktree retire and lost-status derivation (C7)
 server/tests/unit/test_cloud_connect_race.py 605 connect/detach commit-ambiguity race suite (usage-close fencing fakes) + mark-lost stub wiring (C7)
