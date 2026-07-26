@@ -32,6 +32,14 @@ const PlaygroundIndexPage = import.meta.env.DEV
     )
   : null
 
+const PlaygroundLibraryPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("#product/pages/PlaygroundLibraryPage").then((m) => ({
+        default: m.PlaygroundLibraryPage,
+      })),
+    )
+  : null
+
 const ChatPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("#product/pages/ChatPlaygroundPage").then((m) => ({
@@ -143,6 +151,16 @@ export function App({ RoutesComponent }: AppProps) {
               element={
                 <Suspense fallback={null}>
                   <PlaygroundIndexPage />
+                </Suspense>
+              }
+            />
+          )}
+          {import.meta.env.DEV && PlaygroundLibraryPage && (
+            <Route
+              path="/playground/library"
+              element={
+                <Suspense fallback={null}>
+                  <PlaygroundLibraryPage />
                 </Suspense>
               }
             />
