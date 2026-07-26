@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy } from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 
 export function CopyMessageButton({

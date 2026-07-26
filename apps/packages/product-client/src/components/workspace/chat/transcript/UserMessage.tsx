@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronDown } from "@proliferate/ui/icons";
 import { CarryOutPlanRow } from "#product/components/workspace/chat/transcript/CarryOutPlanRow";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
@@ -98,30 +97,33 @@ export function UserMessage({
               />
             </div>
             {needsToggle && (
-              <div className="mt-1 flex justify-start">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  data-chat-transcript-ignore
-                  onClick={() => setExpanded((v) => !v)}
-                  className="h-auto gap-1 px-1 py-0 text-chat text-muted-foreground hover:bg-transparent hover:text-foreground"
-                >
-                  {expanded ? "Show less" : "Show more"}
-                  {/*
-                   * Always rendered (not opacity/hover-gated) so the chevron
-                   * occupies stable space at all times — an opacity-only fade
-                   * still reserves the slot, but a hover-mounted element does
-                   * not, which is what made the label visibly shift right on
-                   * hover before. Only the rotate on expand/collapse and the
-                   * inherited hover color change; position never moves.
-                   */}
-                  <ChevronDown
-                    aria-hidden="true"
-                    className={`icon-paired shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
-                  />
-                </Button>
-              </div>
+              /*
+               * A bare text button, not the ghost Button atom: the toggle must
+               * never grow its own background (the ghost hover wash reads as a
+               * pill inside the bubble) and must sit flush with the message
+               * text's left edge, so it carries no horizontal padding of its
+               * own — the bubble's px-3 is the shared left margin.
+               */
+              <button
+                type="button"
+                data-chat-transcript-ignore
+                onClick={() => setExpanded((v) => !v)}
+                className="mt-1.5 flex items-center gap-1 text-chat text-muted-foreground hover:text-foreground"
+              >
+                {expanded ? "Show less" : "Show more"}
+                {/*
+                 * Always rendered (not opacity/hover-gated) so the chevron
+                 * occupies stable space at all times — an opacity-only fade
+                 * still reserves the slot, but a hover-mounted element does
+                 * not, which is what made the label visibly shift right on
+                 * hover before. Only the rotate on expand/collapse and the
+                 * inherited hover color change; position never moves.
+                 */}
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`icon-paired shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+                />
+              </button>
             )}
           </div>
         )}
