@@ -67,6 +67,7 @@ async function readWorkspaceUiState(
       sessionLastViewedAt: WORKSPACE_UI_DEFAULTS.sessionLastViewedAt,
       collapsedRepoGroups: WORKSPACE_UI_DEFAULTS.collapsedRepoGroups,
       showArchived: WORKSPACE_UI_DEFAULTS.showArchived,
+      repositoriesCollapsed: WORKSPACE_UI_DEFAULTS.repositoriesCollapsed,
       threadsCollapsed: WORKSPACE_UI_DEFAULTS.threadsCollapsed,
       dismissedSetupFailures: WORKSPACE_UI_DEFAULTS.dismissedSetupFailures,
       visibleChatSessionIdsByWorkspace: WORKSPACE_UI_DEFAULTS.visibleChatSessionIdsByWorkspace,

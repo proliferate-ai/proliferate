@@ -184,7 +184,6 @@ export function SidebarWorkspaceContent({
         {(cloudRepoAction) => (
       <RepoGroup
         name={group.name}
-        count={group.items.length}
         collapsed={collapsedRepoGroupKeys.has(group.sourceRoot)}
         environmentKind={resolveRepoGroupEnvironmentKind(group, configuredCloudRepoKeys)}
         onToggleCollapsed={() => onToggleRepoCollapsed(group.sourceRoot)}
