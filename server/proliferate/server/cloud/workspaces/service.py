@@ -7,6 +7,7 @@ stores the returned workspace id.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from typing import Literal, Protocol
 from uuid import UUID
@@ -70,6 +71,8 @@ from proliferate.server.cloud.workspaces.provisioning import (
     resolve_repo_root as _resolve_repo_root,
 )
 from proliferate.utils.time import utcnow
+
+logger = logging.getLogger("proliferate.cloud.workspaces")
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 
@@ -712,12 +715,19 @@ async def get_cloud_workspace_runtime_status(
 ) -> CloudWorkspaceRuntimeStatusResponse:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
     sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user_id)
+    runtime_status = _runtime_status(sandbox)
+    worker_degraded = (
+        await _worker_degraded(db, sandbox=sandbox, runtime_status=runtime_status)
+        if sandbox is not None
+        else False
+    )
     return CloudWorkspaceRuntimeStatusResponse(
         workspace_id=workspace.id,
         status=_workspace_status(workspace),
-        runtime_status=_runtime_status(sandbox),
+        runtime_status=runtime_status,
         sandbox_status=sandbox.status if sandbox is not None else None,
         anyharness_workspace_id=workspace.anyharness_workspace_id,
+        worker_degraded=worker_degraded,
     )
 
 
@@ -1038,3 +1048,51 @@ def _runtime_status(sandbox: CloudSandboxValue | None) -> CloudRuntimeStatus:
     if sandbox.status in {"error", "destroyed"}:
         return "error"
     return "pending"
+
+
+async def _worker_degraded(
+    db: AsyncSession,
+    *,
+    sandbox: CloudSandboxValue,
+    runtime_status: CloudRuntimeStatus,
+) -> bool:
+    """Surface a dead Worker as degraded, only when liveness is meaningful.
+
+    A sandbox that is not `running` has a Worker that is legitimately not
+    heartbeating (paused VMs don't heartbeat; creating/error/destroyed
+    sandboxes never had a live one to begin with) — never report those as
+    degraded. For a `running` sandbox, the Worker should exist and be
+    heartbeating within the offline threshold; a missing row or a stale
+    `last_seen_at` both surface as degraded, and either one is logged once as
+    a structured warning (this is a per-read-time derivation, so a polled
+    endpoint logs on every read of a genuinely stale/missing worker — no
+    dedup infrastructure is built for that here).
+    """
+    if runtime_status != "running":
+        return False
+    worker = await runtime_workers_store.get_worker_for_cloud_sandbox(
+        db,
+        cloud_sandbox_id=sandbox.id,
+    )
+    if worker is None:
+        logger.warning(
+            "cloud sandbox ready with no runtime worker row",
+            extra={"cloud_sandbox_id": str(sandbox.id)},
+        )
+        return True
+    if worker.online:
+        return False
+    age_seconds: float | None = None
+    if worker.last_seen_at is not None:
+        age_seconds = (utcnow() - worker.last_seen_at).total_seconds()
+    logger.warning(
+        "cloud sandbox worker heartbeat stale",
+        extra={
+            "cloud_sandbox_id": str(sandbox.id),
+            "worker_id": str(worker.id),
+            "worker_status": worker.status,
+            "last_seen_at": worker.last_seen_at.isoformat() if worker.last_seen_at else None,
+            "last_seen_age_seconds": age_seconds,
+        },
+    )
+    return True

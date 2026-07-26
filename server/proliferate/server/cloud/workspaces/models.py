@@ -249,3 +249,9 @@ class CloudWorkspaceRuntimeStatusResponse(BaseModel):
         default=None,
         serialization_alias="anyharnessWorkspaceId",
     )
+    # Additive sibling to `runtime_status`, never overloaded onto it: a paused
+    # or non-ready sandbox's Worker is legitimately not heartbeating, so this
+    # is only meaningful (and only ever true) when `runtime_status == "running"`.
+    # A missing field on older clients defaults to "not degraded" false
+    # negative, which is the safe failure direction for an additive read.
+    worker_degraded: bool = Field(default=False, serialization_alias="workerDegraded")
