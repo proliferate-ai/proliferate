@@ -10,10 +10,14 @@ use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogServic
 use crate::domains::agents::installer::progress::{
     InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
 };
+use crate::domains::agents::installer::auto_install::{
+    auto_install_decision, AgentInstallFacts,
+};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
 use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole, ResolvedArtifact};
 use crate::domains::agents::readiness::service::resolve_agent_unrouted;
+use crate::domains::agents::runtime::RuntimeSurface;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {
@@ -127,6 +131,7 @@ impl AgentReconcileService {
         requested_agent_kinds: Vec<AgentKind>,
         agent_seed_store: Option<AgentSeedStore>,
         catalog: Option<AgentCatalogService>,
+        surface: RuntimeSurface,
         admission: AgentReconcileAdmission,
     ) -> Result<AgentReconcileJobSnapshot, AgentReconcileStartError> {
         let (snapshot, progress) = {
@@ -209,6 +214,7 @@ impl AgentReconcileService {
                 runtime_home,
                 reinstall,
                 installed_only,
+                surface,
                 progress,
                 agent_seed_store,
             )
@@ -245,6 +251,7 @@ async fn run_reconcile_job(
     runtime_home: PathBuf,
     reinstall: bool,
     installed_only: bool,
+    surface: RuntimeSurface,
     progress: Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
     agent_seed_store: Option<AgentSeedStore>,
 ) {
@@ -295,29 +302,45 @@ async fn run_reconcile_job(
         let agent_progress = progress.clone();
         let progress_kind = kind.clone();
         let result = match tokio::task::spawn_blocking(move || {
-            // installed-only scope (startup pass): only reconcile agents WE manage
-            // in runtime_home — update those to the catalog pins. Skip agents that
-            // are absent or only present via PATH (source != "managed"); a managed
-            // install over a PATH-provided agent would fail, and missing agents
-            // install on demand at session start. Resolution is side-effect-free,
-            // and unrouted because this reads ARTIFACTS only — an enrolled
-            // agent-auth route cannot change whether a binary is managed-installed,
-            // so consulting it would be a state-file read per agent per pass for no
-            // effect on the decision.
-            if installed_only {
-                let is_managed = |artifact: &ResolvedArtifact| {
-                    artifact.installed && artifact.source.as_deref() == Some("managed")
+            // Should this pass touch this agent at all? Two carve-outs (a user's
+            // own PATH binary, cursor in cloud) plus the installed-only scope,
+            // decided by one named predicate rather than inferred from a boolean —
+            // see `installer::auto_install` for why that distinction matters.
+            //
+            // Resolution is side-effect-free, and unrouted because this reads
+            // ARTIFACTS only: an enrolled agent-auth route cannot change whether a
+            // binary is on PATH or managed-installed, so consulting it would be a
+            // state-file read per agent per pass with no effect on the decision.
+            {
+                let source_is = |artifact: &ResolvedArtifact, source: &str| {
+                    artifact.installed && artifact.source.as_deref() == Some(source)
                 };
                 let resolved = resolve_agent_unrouted(&descriptor, &agent_runtime_home);
-                let managed_installed = is_managed(&resolved.agent_process)
-                    || resolved.native.as_ref().map(is_managed).unwrap_or(false);
-                if !managed_installed {
+                let any_artifact_is = |source: &str| {
+                    source_is(&resolved.agent_process, source)
+                        || resolved
+                            .native
+                            .as_ref()
+                            .is_some_and(|native| source_is(native, source))
+                };
+                let facts = AgentInstallFacts {
+                    has_path_artifact: any_artifact_is("path"),
+                    has_managed_artifact: any_artifact_is("managed"),
+                };
+                if let Err(skip) =
+                    auto_install_decision(&descriptor.kind, surface, installed_only, facts)
+                {
+                    tracing::debug!(
+                        agent_kind = descriptor.kind.as_str(),
+                        ?surface,
+                        installed_only,
+                        reason = skip.message(),
+                        "reconcile skipping agent"
+                    );
                     return AgentReconcileResult {
                         kind: descriptor.kind.clone(),
                         outcome: AgentReconcileOutcome::Skipped,
-                        message: Some(
-                            "not managed-installed; installs on demand at session start".into(),
-                        ),
+                        message: Some(skip.message().to_string()),
                         installed_artifacts: vec![],
                     };
                 }
