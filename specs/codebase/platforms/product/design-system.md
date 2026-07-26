@@ -531,7 +531,7 @@ button respond identically to the pointer.
 | `--radius-xl` | `0.75rem` (12px) | Dialogs, popover/menu frames, toasts. |
 | `--radius-2xl` | `1rem` (16px) | Modal shells and the command palette — the largest panels. |
 | `--radius-full` | `9999px` | Pills, avatars, status dots, the composer send button, level bars. |
-| `--radius-composer` | `0.75rem` (12px) | The composer frame, as its own name. |
+| `--radius-composer` | `1.25rem` (20px) | The composer frame, as its own name — deliberately softer than the panel scale. |
 | `--radius` | `0.5rem` (8px) | The unqualified base, equal to `md`. |
 
 **Radius grows with the element.** The named steps run 6 → 8 → 10 → 12 → 16px
@@ -539,8 +539,10 @@ across elements that themselves grow from a 28px sidebar row to a 520px command
 palette, so the ratio of corner to element stays in a narrow band and nothing
 reads either boxy or over-rounded at its own scale.
 
-`--radius-composer` is a named 12px rather than a reference to `xl` because the
-composer's corner is its own anatomy value, tunable without moving every dialog.
+`--radius-composer` is a named 20px rather than a reference to any shared step
+because the composer's corner is its own anatomy value — softer than the
+dialogs' `xl` — tunable without moving every dialog
+(`AgentHarnessConfigComposer` already overrides it locally).
 `--radius` duplicates `md` as the unqualified base for consumers that ask for
 "the" radius.
 
