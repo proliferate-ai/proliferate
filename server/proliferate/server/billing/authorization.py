@@ -162,7 +162,7 @@ async def assert_cloud_sandbox_resume_allowed(
 
     Delegates to ``assert_cloud_sandbox_resume_allowed_for_owner``; the gate only
     reads ``sandbox.owner_user_id``, so the owner-id variant can run at seams that
-    do not yet have a sandbox row (see the wake/ensure service layer).
+    do not yet have a sandbox row (see the ensure service layer).
     """
     await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=sandbox.owner_user_id)
 
@@ -238,7 +238,7 @@ async def assert_cloud_sandbox_resume_allowed_for_owner(
     # (materialization/runner._run_with_fresh_session) rolls back its session in
     # the exception handler, which would otherwise discard this un-committed
     # audit row. Safe at every call site: this gate runs first at each seam
-    # (connect_ready_sandbox's opening statement, and the wake/ensure service
+    # (connect_ready_sandbox's opening statement, and the ensure service
     # layer before ensure_personal_cloud_sandbox_exists stages a row INSERT), so
     # no other writes are staged on this session yet.
     await db.commit()

@@ -14,12 +14,11 @@ one product user
   -> optional Proliferate Worker sidecar
 ```
 
-`POST /v1/cloud/cloud-sandbox/ensure` and `POST
-/v1/cloud/cloud-sandbox/wake` ensure the database row after configuration and
-billing checks. They do not contact E2B, resume a provider sandbox, launch
-AnyHarness, or reconcile repositories. Provider and runtime work happens when
-a materialization operation calls `connect_ready_sandbox` under the sandbox
-operation lock.
+`POST /v1/cloud/cloud-sandbox/ensure` ensures the database row after
+configuration and billing checks. It does not contact E2B, resume a provider
+sandbox, launch AnyHarness, or reconcile repositories. Provider and runtime
+work happens when a materialization operation calls `connect_ready_sandbox`
+under the sandbox operation lock.
 
 ## Persisted Owner
 
@@ -57,7 +56,6 @@ User-authenticated routes in
 ```text
 GET    /v1/cloud/cloud-sandbox
 POST   /v1/cloud/cloud-sandbox/ensure
-POST   /v1/cloud/cloud-sandbox/wake
 DELETE /v1/cloud/cloud-sandbox
 ```
 
@@ -78,7 +76,7 @@ sandbox locks.
 
 ## Lifecycle
 
-### Ensure and wake
+### Ensure
 
 [`cloud_sandboxes/service.py`](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)
 does three things:
@@ -89,8 +87,7 @@ does three things:
 3. lock the personal owner and ensure the `cloud_sandbox` and billing-subject
    rows.
 
-`wake` delegates to the same row-level operation as `ensure`. A returned
-`creating` row is not proof that E2B or AnyHarness is running.
+A returned `creating` row is not proof that E2B or AnyHarness is running.
 
 ### Just-in-time provider and runtime connection
 
@@ -235,7 +232,7 @@ destroys that row.
 
 | Concern | Current owner |
 | --- | --- |
-| Sandbox row, ensure/wake/delete | [`server/.../cloud/cloud_sandboxes/`](../../../../server/proliferate/server/cloud/cloud_sandboxes/) |
+| Sandbox row, ensure/delete | [`server/.../cloud/cloud_sandboxes/`](../../../../server/proliferate/server/cloud/cloud_sandboxes/) |
 | Sandbox persistence | [`db/models/cloud/sandboxes.py`](../../../../server/proliferate/db/models/cloud/sandboxes.py), [`db/store/cloud_sandboxes.py`](../../../../server/proliferate/db/store/cloud_sandboxes.py) |
 | E2B and AnyHarness connection | [`server/.../cloud/materialization/sandbox_io/`](../../../../server/proliferate/server/cloud/materialization/sandbox_io/) |
 | Provider adapter | [`integrations/sandbox/`](../../../../server/proliferate/integrations/sandbox/) |
@@ -247,7 +244,7 @@ destroys that row.
 
 ## Failure Boundaries
 
-- An ensure/wake configuration or billing error occurs before provider work.
+- An ensure configuration or billing error occurs before provider work.
 - Provider create/resume, launch, health, and auth failures surface from
   materialization, not from the row ensure alone.
 - A persisted `error` and non-null `last_error` describe the latest completed

@@ -80,7 +80,7 @@ async def test_commit_ambiguous_candidate_is_adopted_when_binding_remains_null(
         events.append(f"mark:{expected_provider_sandbox_id}")
         if state["provider_id"] != expected_provider_sandbox_id:
             return None
-        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id)
+        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id, owner_user_id=None)
 
     async def _adopt(
         _db: object,
@@ -183,7 +183,7 @@ async def test_missing_fallback_converges_paused_or_detached_commit_outcome(
             return None
         state["provider_id"] = None
         state["status"] = "creating"
-        return SimpleNamespace(provider_sandbox_id=None)
+        return SimpleNamespace(provider_sandbox_id=None, owner_user_id=None)
 
     async def _mark(
         _db: object,
@@ -203,7 +203,7 @@ async def test_missing_fallback_converges_paused_or_detached_commit_outcome(
             return None
         state["status"] = "error"
         state["receipt"] = last_error
-        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id)
+        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id, owner_user_id=None)
 
     async def _close(
         _db: object,
@@ -284,7 +284,7 @@ async def test_missing_fallback_preserves_newer_bound_provider_observation(
             return None
         state["status"] = "error"
         state["receipt"] = last_error
-        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id)
+        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id, owner_user_id=None)
 
     async def _unexpected_close(*_args: object, **_kwargs: object) -> None:
         pytest.fail("newer provider usage must remain open")

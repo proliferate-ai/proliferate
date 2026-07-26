@@ -18,6 +18,20 @@ def reset_gateway_access_cache() -> object:
     service._reset_cloud_sandbox_gateway_access_cache_for_tests()
 
 
+def _patch_gateway_prerequisites(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def allow_billing(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(service, "require_cloud_provisioning_configured", lambda: None)
+    monkeypatch.setattr(
+        service,
+        "assert_cloud_sandbox_resume_allowed_for_owner",
+        allow_billing,
+    )
+
+
 @pytest.mark.asyncio
 async def test_gateway_access_reuses_recent_runtime_resolution(
     monkeypatch: pytest.MonkeyPatch,
@@ -37,7 +51,8 @@ async def test_gateway_access_reuses_recent_runtime_resolution(
         load_calls += 1
         return ("https://sandbox.example.test", "sandbox-token", "data-key")
 
-    monkeypatch.setattr(service, "ensure_cloud_sandbox_ready", ensure_ready)
+    _patch_gateway_prerequisites(monkeypatch)
+    monkeypatch.setattr(service, "ensure_personal_cloud_sandbox_exists", ensure_ready)
     monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
 
     first = await service.ensure_cloud_sandbox_gateway_access(
@@ -77,7 +92,8 @@ async def test_gateway_access_singleflights_concurrent_runtime_resolution(
         load_calls += 1
         return ("https://sandbox.example.test", "sandbox-token", "data-key")
 
-    monkeypatch.setattr(service, "ensure_cloud_sandbox_ready", ensure_ready)
+    _patch_gateway_prerequisites(monkeypatch)
+    monkeypatch.setattr(service, "ensure_personal_cloud_sandbox_exists", ensure_ready)
     monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
 
     results = await asyncio.gather(
@@ -117,7 +133,8 @@ async def test_gateway_access_refreshes_after_cache_expiry(
 
     monkeypatch.setattr(service, "_GATEWAY_ACCESS_CACHE_TTL_SECONDS", 1.0)
     monkeypatch.setattr(service.time, "monotonic", monotonic)
-    monkeypatch.setattr(service, "ensure_cloud_sandbox_ready", ensure_ready)
+    _patch_gateway_prerequisites(monkeypatch)
+    monkeypatch.setattr(service, "ensure_personal_cloud_sandbox_exists", ensure_ready)
     monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
 
     first = await service.ensure_cloud_sandbox_gateway_access(
@@ -135,3 +152,105 @@ async def test_gateway_access_refreshes_after_cache_expiry(
     assert second.runtime_generation == 2
     assert second.upstream_token == "sandbox-token-2"
     assert ensure_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_gateway_access_rechecks_billing_before_runtime_cache_expires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    now = 1000.0
+    billing_checks = 0
+    runtime_resolutions = 0
+
+    async def assert_billing(*_args: object, **_kwargs: object) -> None:
+        nonlocal billing_checks
+        billing_checks += 1
+
+    async def ensure_sandbox(*_args: object, **_kwargs: object) -> object:
+        nonlocal runtime_resolutions
+        runtime_resolutions += 1
+        return SimpleNamespace(runtime_generation=9)
+
+    async def load_access(*_args: object, **_kwargs: object) -> tuple[str, str, str]:
+        return ("https://sandbox.example.test", "sandbox-token", "data-key")
+
+    monkeypatch.setattr(service, "require_cloud_provisioning_configured", lambda: None)
+    monkeypatch.setattr(
+        service,
+        "assert_cloud_sandbox_resume_allowed_for_owner",
+        assert_billing,
+    )
+    monkeypatch.setattr(service.time, "monotonic", lambda: now)
+    monkeypatch.setattr(service, "ensure_personal_cloud_sandbox_exists", ensure_sandbox)
+    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
+
+    await service.ensure_cloud_sandbox_gateway_access(
+        cast(AsyncSession, object()),
+        cast(service._UserWithId, user),
+    )
+    now += service._GATEWAY_BILLING_ALLOW_CACHE_TTL_SECONDS + 0.1
+    await service.ensure_cloud_sandbox_gateway_access(
+        cast(AsyncSession, object()),
+        cast(service._UserWithId, user),
+    )
+
+    assert billing_checks == 2
+    assert runtime_resolutions == 1
+
+
+@pytest.mark.asyncio
+async def test_gateway_billing_denial_is_not_cached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    billing_checks = 0
+
+    async def deny_billing(*_args: object, **_kwargs: object) -> None:
+        nonlocal billing_checks
+        billing_checks += 1
+        raise RuntimeError("billing blocked")
+
+    monkeypatch.setattr(service, "require_cloud_provisioning_configured", lambda: None)
+    monkeypatch.setattr(
+        service,
+        "assert_cloud_sandbox_resume_allowed_for_owner",
+        deny_billing,
+    )
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="billing blocked"):
+            await service.ensure_cloud_sandbox_gateway_access(
+                cast(AsyncSession, object()),
+                cast(service._UserWithId, user),
+            )
+
+    assert billing_checks == 2
+
+
+@pytest.mark.asyncio
+async def test_gateway_access_forwards_paused_sandbox_with_stamped_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    paused_sandbox = SimpleNamespace(status="paused", runtime_generation=10)
+
+    async def ensure_sandbox(*_args: object, **_kwargs: object) -> object:
+        return paused_sandbox
+
+    async def load_access(sandbox: object) -> tuple[str, str, str]:
+        assert sandbox is paused_sandbox
+        return ("https://paused.example.test", "paused-token", "data-key")
+
+    _patch_gateway_prerequisites(monkeypatch)
+    monkeypatch.setattr(service, "ensure_personal_cloud_sandbox_exists", ensure_sandbox)
+    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
+
+    access = await service.ensure_cloud_sandbox_gateway_access(
+        cast(AsyncSession, object()),
+        cast(service._UserWithId, user),
+    )
+
+    assert access.upstream_base_url == "https://paused.example.test"
+    assert access.upstream_token == "paused-token"
+    assert access.runtime_generation == 10
