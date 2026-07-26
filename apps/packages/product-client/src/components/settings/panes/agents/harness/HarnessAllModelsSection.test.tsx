@@ -40,6 +40,10 @@ const state = vi.hoisted(() => ({
     },
     isLoading: false,
   },
+  modelSnapshotStatus: {
+    data: undefined,
+    isLoading: false,
+  },
 }));
 
 const refreshCatalog = vi.hoisted(() => vi.fn());
@@ -51,6 +55,7 @@ const authSelectionsQuery = vi.hoisted(() => vi.fn());
 const cloudCatalogQuery = vi.hoisted(() => vi.fn());
 const gatewayModelsQuery = vi.hoisted(() => vi.fn());
 const launchOptionsQuery = vi.hoisted(() => vi.fn());
+const modelSnapshotStatusQuery = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAuthSelections: (...args: unknown[]) => {
@@ -80,6 +85,10 @@ vi.mock("@anyharness/sdk-react", () => ({
       ...state.launchOptions,
       refetch: refetchLaunchOptions,
     };
+  },
+  useModelSnapshotStatusQuery: (...args: unknown[]) => {
+    modelSnapshotStatusQuery(...args);
+    return state.modelSnapshotStatus;
   },
 }));
 

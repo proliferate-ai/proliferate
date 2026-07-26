@@ -6,6 +6,7 @@ import { CoworkClient } from "./cowork.js";
 import { FilesClient } from "./files.js";
 import { GitClient } from "./git.js";
 import { MobilityClient } from "./mobility.js";
+import { ModelSnapshotClient } from "./model-snapshot.js";
 import { PlansClient } from "./plans.js";
 import { ProcessesClient } from "./processes.js";
 import { PullRequestsClient } from "./pull-requests.js";
@@ -499,6 +500,7 @@ export class AnyHarnessClient {
   readonly agentAuth: AgentAuthClient;
   readonly agentGatewayCatalog: AgentGatewayCatalogClient;
   readonly mobility: MobilityClient;
+  readonly modelSnapshot: ModelSnapshotClient;
   readonly plans: PlansClient;
   readonly repoRoots: RepoRootsClient;
   readonly replay: ReplayClient;
@@ -520,6 +522,7 @@ export class AnyHarnessClient {
     this.agentAuth = new AgentAuthClient(transport);
     this.agentGatewayCatalog = new AgentGatewayCatalogClient(transport);
     this.mobility = new MobilityClient(transport);
+    this.modelSnapshot = new ModelSnapshotClient(transport);
     this.plans = new PlansClient(transport);
     this.repoRoots = new RepoRootsClient(transport);
     this.replay = new ReplayClient(transport);

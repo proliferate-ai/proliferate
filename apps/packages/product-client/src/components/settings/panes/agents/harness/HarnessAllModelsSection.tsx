@@ -9,10 +9,12 @@ import {
 import {
   useAgentGatewayModelsQuery,
   useAgentLaunchOptionsQuery,
+  useModelSnapshotStatusQuery,
   useRefreshAgentGatewayModelsMutation,
 } from "@anyharness/sdk-react";
 import { RefreshCw, Search, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/settings/ModelTable";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
@@ -27,6 +29,12 @@ import {
   normalizeGatewayModels,
   normalizeRuntimeLaunchModels,
 } from "#product/lib/domain/settings/harness-catalog";
+import {
+  findContextStatus,
+  formatSnapshotAge,
+  GATEWAY_AUTH_CONTEXT_ID,
+  resolveModelSnapshotFreshness,
+} from "#product/lib/domain/settings/model-snapshot-staleness";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;
@@ -74,6 +82,16 @@ export function HarnessAllModelsSection({
   const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
     enabled: isRuntimeProbedRoute || isSignedOutLocal,
   });
+  // Probe-status polling (A7's route, contract §4): staleness/freshness for
+  // the gateway auth context this runtime just resolved above. Scoped to the
+  // runtime-gateway path only — the cloud-catalog and signed-out-local paths
+  // have no local probe engine to poll.
+  const modelSnapshotStatusQuery = useModelSnapshotStatusQuery(harnessKind, {
+    enabled: cloudActive && isRuntimeGateway,
+  });
+  const gatewayFreshness = resolveModelSnapshotFreshness(
+    findContextStatus(modelSnapshotStatusQuery.data, GATEWAY_AUTH_CONTEXT_ID),
+  );
 
   const models = useMemo(() => {
     if (isSignedOutLocal) {
@@ -239,6 +257,24 @@ export function HarnessAllModelsSection({
         ? `Source: ${catalogQuery.data.source}`
         : "";
 
+  // Staleness badge (model-catalog.md "Failure modes"): only rendered for the
+  // runtime-gateway path, which is the only source this status route covers.
+  // Age alone never blocks the table above from rendering — this is purely
+  // informational, next to the existing freshnessLine text.
+  const stalenessBadge = isRuntimeGateway
+    ? gatewayFreshness.kind === "refreshing"
+      ? <Badge tone="neutral">{HARNESS_PANE_COPY.allModelsStaleRefreshing}</Badge>
+      : gatewayFreshness.kind === "stale"
+        ? <Badge tone="warning">{HARNESS_PANE_COPY.allModelsStaleNeedsRefresh}</Badge>
+        : gatewayFreshness.kind === "fresh"
+          ? (
+            <Badge tone="neutral">
+              {HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(formatSnapshotAge(gatewayFreshness.ageSeconds))}
+            </Badge>
+          )
+          : null
+    : null;
+
   const [filterText, setFilterText] = useState("");
   const filteredRows = useMemo(() => {
     if (!filterText.trim()) return rows;
@@ -256,7 +292,10 @@ export function HarnessAllModelsSection({
     <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
       <div className="space-y-3 py-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-ui-sm text-muted-foreground">{freshnessLine}</p>
+          <span className="flex items-center gap-2">
+            <p className="text-ui-sm text-muted-foreground">{freshnessLine}</p>
+            {stalenessBadge}
+          </span>
           <Button
             type="button"
             variant="ghost"

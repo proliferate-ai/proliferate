@@ -813,11 +813,22 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       the gateway-context special case of the machine snapshot and is
       replaced by it (jointly ruled with the agent-distribution and
       model-gateway gap lists).
-- [ ] No staleness UI exists: `probed_at` is stored on cloud snapshots but
-      no surface renders "refreshed N minutes ago" or "needs refresh",
-      and no auth fingerprint exists to compute staleness from.
-- [ ] Model entries do not carry provider namespace or serving-context as
-      explicit fields; the frontend derives what it can from ids.
+- [ ] Staleness UI for the local/native/api_key routes and the no-runtime
+      cloud picker: the runtime-gateway path now polls
+      `GET /v1/agents/{kind}/model-snapshot` (A7's route) and renders
+      "refreshed N minutes ago" / "needs refresh" from its `ContextStatus`
+      (C3, [HarnessAllModelsSection](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAllModelsSection.tsx)).
+      The other routes still show no staleness — their picker sources
+      (cloud catalog snapshot, no-runtime signed-out local) have no per-auth-
+      context machine-snapshot document to poll yet (blocked on the cloud
+      snapshot re-key, B4/C2).
+- [ ] Model entries do not carry serving-context (the auth context that
+      served them) as an explicit field; `AgentLaunchModelOption` and
+      `GatewayModelEntry` (contract/`agent_gateway_catalog.rs`) have no
+      per-model context attribution today, only a harness-level kind. This
+      matters once a harness materializes several auth contexts at once
+      (opencode's multi-provider case); the gateway route's single fixed
+      context needed no tagging to render correctly (C3).
 - [ ] Route rename `/v1/cloud/agent-gateway/catalog/*` →
       `/v1/cloud/agent-models/*` (hard cutover; first-party consumers:
       the catalog functions in
