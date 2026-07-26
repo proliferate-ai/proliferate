@@ -110,6 +110,65 @@ struct ContextSlot {
     state: Mutex<ContextRuntimeState>,
 }
 
+/// RAII guard over one [`ContextSlot`]'s live state, for the lifetime of a single
+/// attempt (F-036).
+///
+/// Before this guard, `run_attempt` set `Queued`/`Running`/`Idle` as three bare
+/// statements straddling three await points (the harness gate, the machine-wide
+/// semaphore, and the probe itself). Dropping the caller's future anywhere
+/// between the first write and the last — a client that disconnects mid
+/// `refresh_now`, a task that gets aborted — skipped the final `Idle` write and
+/// left the slot pinned at `Queued` or `Running` forever, because `gate_admits`
+/// treats both as in-flight and refuses every subsequent poke for that key. A
+/// wedge like that is invisible from the status surface too: it reads a
+/// plausible `queued`/`running` forever, exactly the lie the design note beside
+/// `ContextRuntimeState::live` says the engine must not tell.
+///
+/// The fix mirrors two guards this module already has: `ProbeScratch`
+/// (`route_auth/probe_materialization/scratch.rs`) removes its scratch root on
+/// `Drop`, and the `CancellationToken` guard in `probe.rs` fires cancellation on
+/// `Drop`. Both make their piece of attempt state correct by construction,
+/// covering return, `?`, panic and future-drop alike. The live state was the one
+/// piece of attempt state that never got the same treatment.
+struct LiveStateGuard {
+    slot: Arc<ContextSlot>,
+}
+
+impl LiveStateGuard {
+    /// Admits the attempt: sets `Queued` immediately, BEFORE the harness gate and
+    /// the machine-wide semaphore, so a probe that is genuinely pending never
+    /// reports `idle`.
+    fn admit(slot: Arc<ContextSlot>) -> Self {
+        let guard = Self { slot };
+        guard.set(status::LiveState::Queued);
+        guard
+    }
+
+    /// The attempt cleared both concurrency waits and is now inside the probe
+    /// itself.
+    fn running(&self) {
+        self.set(status::LiveState::Running);
+    }
+
+    fn set(&self, live: status::LiveState) {
+        self.slot
+            .state
+            .lock()
+            .expect("model snapshot slot poisoned")
+            .live = live;
+    }
+}
+
+impl Drop for LiveStateGuard {
+    fn drop(&mut self) {
+        // Every exit out of `run_attempt` lands here: the success return, the
+        // failure return, an early `?`, a panic unwinding through the frame, or —
+        // the case F-036 proved reachable — the whole future being dropped
+        // without any of `run_attempt`'s own code running again.
+        self.set(status::LiveState::Idle);
+    }
+}
+
 pub struct ModelSnapshotService {
     runtime_home: PathBuf,
     /// `None` ⇒ read-only mode: serve the document, never probe, never sweep.
@@ -500,13 +559,11 @@ impl ModelSnapshotService {
         backoff::jittered_backoff_seconds(harness_kind, auth_context_id, attempt, base_seconds)
     }
 
-    /// Set the live state, so a polling surface can tell "waiting for a slot" from
-    /// "a harness process is running" from "nothing is happening".
-    fn set_live_state(&self, slot: &ContextSlot, live: status::LiveState) {
-        slot.state
-            .lock()
-            .expect("model snapshot slot poisoned")
-            .live = live;
+    /// Admit an attempt to `slot`'s live state, RAII-style: `Queued` immediately,
+    /// `Idle` on `Drop` — regardless of which of `run_attempt`'s exits runs,
+    /// including a future dropped mid-probe (F-036). See [`LiveStateGuard`].
+    fn admit_attempt(&self, slot: Arc<ContextSlot>) -> LiveStateGuard {
+        LiveStateGuard::admit(slot)
     }
 
     fn harness_gate(&self, harness_kind: &str) -> Arc<tokio::sync::Mutex<()>> {

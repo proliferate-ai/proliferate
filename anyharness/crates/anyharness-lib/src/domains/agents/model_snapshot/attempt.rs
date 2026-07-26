@@ -9,6 +9,8 @@
 //! `lastAttempt` and NOTHING else — so the last good model list keeps serving with its
 //! original `probedAt`. A failed refresh must never destroy truth.
 
+use std::sync::Arc;
+
 use chrono::{DateTime, Utc};
 
 use super::backoff::jittered_backoff_seconds;
@@ -19,7 +21,7 @@ use super::document::{
 use super::entry::entry_from_snapshot;
 use super::fingerprint;
 use super::probe::ProbeRequest;
-use super::{ContextRuntimeState, ContextSlot, ModelSnapshotService, PokeReason, RefreshError, status};
+use super::{ContextRuntimeState, ContextSlot, ModelSnapshotService, PokeReason, RefreshError};
 
 impl ModelSnapshotService {
 // -----------------------------------------------------------------------
@@ -30,7 +32,7 @@ impl ModelSnapshotService {
         &self,
         harness_kind: &str,
         auth_context_id: &str,
-        slot: &ContextSlot,
+        slot: &Arc<ContextSlot>,
         reason: PokeReason,
     ) -> Result<SnapshotEntry, RefreshError> {
         let material = self.material(harness_kind, auth_context_id)?;
@@ -70,9 +72,13 @@ impl ModelSnapshotService {
         // be what the gate will later compare against.
         let install_identity = install_identity_of(&self.runtime_home, harness_kind);
 
-        // Queued BEFORE the two waits, so the status surface never reports `idle`
-        // for an attempt that is genuinely pending on a slot.
-        self.set_live_state(slot, status::LiveState::Queued);
+        // The guard owns the slot's live state for the rest of this function's
+        // life: `Queued` from construction, `Idle` on drop, no matter which exit
+        // this attempt takes — including the future being dropped out from under
+        // it, which is exactly what a disconnecting `refresh_now` caller does
+        // (F-036). Constructed BEFORE the two waits, so the status surface never
+        // reports `idle` for an attempt that is genuinely pending on a slot.
+        let live_state = self.admit_attempt(slot.clone());
         let harness_gate = self.harness_gate(harness_kind);
         let _harness_permit = harness_gate.lock().await;
         let _permit = self
@@ -81,7 +87,7 @@ impl ModelSnapshotService {
             .await
             .expect("probe semaphore closed");
 
-        self.set_live_state(slot, status::LiveState::Running);
+        live_state.running();
         let outcome = self
             .runner
             .run(ProbeRequest {
@@ -94,7 +100,9 @@ impl ModelSnapshotService {
                 model_switch_timeout: self.config.model_switch_timeout,
             })
             .await;
-        self.set_live_state(slot, status::LiveState::Idle);
+        // No explicit Idle write: `live_state` drops at the end of this scope on
+        // every path below (success, failure, or an early return this function
+        // gains later), and its `Drop` is what sets `Idle`.
 
         let now = Utc::now();
         match outcome {
