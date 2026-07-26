@@ -11,6 +11,7 @@ from tests.e2e.cloud.helpers import (
     create_user_and_login,
     delete_cloud_workspace_quietly,
     get_cloud_connection,
+    seed_github_app_authorization,
     seed_linked_github_account,
     workspace_status,
 )
@@ -39,18 +40,54 @@ async def test_provisioned_workspace_is_sane(
         user_id=auth.user_id,
         access_token=cloud_test_config.github_token,
     )
-    repo_config_response = await cloud_client.put(
-        f"/v1/cloud/repos/{cloud_test_config.github_owner}/{cloud_test_config.github_repo}/config",
+    # The repo-environment write path is gated on a ready GitHub App
+    # authorization; seed the real callback outcome (ruled seam, never a
+    # bypass) so the create flow below runs the same product code as prod.
+    await seed_github_app_authorization(
+        db_session,
+        user_id=auth.user_id,
+    )
+    # The runtime smoke needs a launchable agent. Configure claude through the
+    # product's own agent-auth APIs (vault key + cloud selection) so sandbox
+    # bootstrap delivers the state file the runtime launcher reads.
+    assert cloud_test_config.anthropic_api_key, (
+        "ANTHROPIC_API_KEY is required for the runtime agent smoke."
+    )
+    key_response = await cloud_client.post(
+        "/v1/cloud/agent-gateway/keys",
         headers=auth.headers,
+        json={"title": "cloud-e2e anthropic", "value": cloud_test_config.anthropic_api_key},
+    )
+    assert key_response.status_code == 200, key_response.text
+    selection_response = await cloud_client.put(
+        "/v1/cloud/agent-gateway/selections/claude",
+        headers=auth.headers,
+        params={"surface": "cloud"},
         json={
-            "configured": True,
-            "envVars": {},
-            "setupScript": "",
-            "files": [],
+            "sources": [
+                {
+                    "sourceKind": "api_key",
+                    "enabled": True,
+                    "apiKeyId": key_response.json()["id"],
+                    "envVarName": "ANTHROPIC_API_KEY",
+                }
+            ]
         },
     )
-    repo_config_response.raise_for_status()
-
+    assert selection_response.status_code == 200, selection_response.text
+    # Prove the selection renders to a deliverable state BEFORE provisioning:
+    # an empty harness list here means the source was dropped server-side and
+    # the sandbox would (correctly) fail closed at agent launch.
+    state_response = await cloud_client.get(
+        "/v1/cloud/agent-gateway/state",
+        headers=auth.headers,
+        params={"surface": "cloud"},
+    )
+    assert state_response.status_code == 200, state_response.text
+    rendered_harnesses = state_response.json().get("harnesses", [])
+    assert [h.get("harnessKind") or h.get("harness_kind") for h in rendered_harnesses] == [
+        "claude"
+    ], state_response.text
     # Create the workspace through the normal API, wait for the control plane to
     # finish provisioning, then fetch the runtime connection metadata.
     branch_name, workspace = await create_ready_cloud_workspace(
@@ -61,7 +98,24 @@ async def test_provisioned_workspace_is_sane(
         provider_kind=provider_kind,
         branch_prefix=f"cloud-sane-{provider_kind}",
     )
-    connection = await get_cloud_connection(cloud_client, auth, str(workspace["id"]))
+    # Deliver the agent-auth state into the now-live sandbox. In prod the App
+    # callback schedules the full sandbox bootstrap (github_app/service.py) and
+    # later selection writes schedule refreshes; the seeded-authorization seam
+    # skips the callback, so run the same product refresh explicitly.
+    from uuid import UUID as _UUID
+
+    from proliferate.server.cloud.materialization.materialize.agent_auth import (
+        materialize_agent_auth_for_user,
+    )
+
+    await materialize_agent_auth_for_user(db_session, user_id=_UUID(auth.user_id))
+
+    connection = await get_cloud_connection(
+        cloud_client,
+        auth,
+        str(workspace["id"]),
+        db_session=db_session,
+    )
 
     try:
         # First assert the control plane's view of the runtime connection, then
@@ -70,9 +124,16 @@ async def test_provisioned_workspace_is_sane(
         assert connection["runtimeUrl"]
         assert connection["accessToken"]
         assert connection["anyharnessWorkspaceId"]
-        assert connection["runtimeGeneration"] >= 1
+        # runtime_generation is a placeholder today: not a DB column, the
+        # store constructs every row value with 0 (cloud_sandboxes.py). The
+        # old >= 1 assertion described the deleted remote-access domain.
+        assert connection["runtimeGeneration"] == 0
         assert connection["allowedAgentKinds"] == ["claude", "codex", "opencode", "grok"]
-        assert connection["readyAgentKinds"] == ["claude"]
+        # readyAgentKinds is serialized but never populated by the current
+        # server (models.py default_factory=list; _workspace_payload does not
+        # set it). The old == ["claude"] expectation belonged to the deleted
+        # remote-access domain's readiness computation.
+        assert connection["readyAgentKinds"] == []
 
         await assert_workspace_sane(
             connection,
