@@ -265,7 +265,6 @@ change detection and the promote flow.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `config.yaml` entries carry no `access_groups` tags.
 - [ ] Enrollment mints one unscoped key per subject (it sees all models)
       instead of per-harness group-scoped keys; existing enrollments need
       rotation at migration.
