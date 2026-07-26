@@ -1362,6 +1362,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-gateway/keys/provider-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Agent Provider Config Endpoint
+         * @description Create a typed vault entry (Bedrock/Azure) — D2's modal's request shape.
+         *
+         *     A distinct route rather than overloading ``POST /keys``: the request body
+         *     shape genuinely differs (a field map, not one secret string) and a typed
+         *     entry is not bound to any harness until a selection references it, same
+         *     as a bare key.
+         */
+        post: operations["create_agent_provider_config_endpoint_v1_cloud_agent_gateway_keys_provider_config_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-gateway/keys/{key_id}": {
         parameters: {
             query?: never;
@@ -3169,6 +3194,11 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "api_key" | "aws_bedrock" | "azure_openai";
             /** Redactedhint */
             redactedHint: string;
             /** Status */
@@ -3649,6 +3679,23 @@ export interface components {
             probedAt: string | null;
             /** Overrideapplied */
             overrideApplied: boolean;
+        };
+        /**
+         * AgentProviderConfigCreateRequest
+         * @description Create a typed vault entry (D2's ``ProviderConfigCreatorSubmit`` shape).
+         */
+        AgentProviderConfigCreateRequest: {
+            /** Title */
+            title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "aws_bedrock" | "azure_openai";
+            /** Value */
+            value: {
+                [key: string]: string;
+            };
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -10293,6 +10340,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AgentApiKeyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApiKeyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_agent_provider_config_endpoint_v1_cloud_agent_gateway_keys_provider_config_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentProviderConfigCreateRequest"];
             };
         };
         responses: {
