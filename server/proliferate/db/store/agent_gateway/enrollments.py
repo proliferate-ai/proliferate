@@ -208,6 +208,28 @@ async def mark_enrollment_failed(
     return enrollment_record(row)
 
 
+async def mark_enrollment_pending(
+    db: AsyncSession,
+    *,
+    enrollment_id: UUID,
+) -> AgentGatewayEnrollmentRecord:
+    """Flip a synced enrollment back to ``pending`` so the sync path re-runs.
+
+    Used by the drift check in ``enrollment.ensure_*_enrollment``: when the
+    stored ``sync_fingerprint`` no longer matches the currently-expected key
+    set (e.g. a new gateway-capable harness kind was added), the row must
+    re-enter the sync path, which short-circuits on ``synced``. Key material,
+    team, and budget are untouched — ``pending`` alone disables nothing.
+    """
+    row = await db.get(AgentGatewayEnrollment, enrollment_id)
+    if row is None:
+        raise RuntimeError("Agent gateway enrollment not found.")
+    row.sync_status = AGENT_GATEWAY_SYNC_STATUS_PENDING
+    row.updated_at = utcnow()
+    await db.flush()
+    return enrollment_record(row)
+
+
 async def list_enrollments_needing_sync(
     db: AsyncSession,
     *,

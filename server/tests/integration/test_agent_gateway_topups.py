@@ -315,9 +315,7 @@ async def test_reactivation_falls_back_to_remint_when_unblock_fails(
     enrollment = await ensure_user_enrollment(db_session, user_id)
     old_key_ids = {
         key.virtual_key_id
-        for key in await store.list_active_enrollment_keys(
-            db_session, enrollment_id=enrollment.id
-        )
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
     }
     assert all(key_id is not None for key_id in old_key_ids)
     await _spend(
@@ -409,9 +407,7 @@ async def test_remint_schedules_materialization(
     enrollment = await ensure_user_enrollment(db_session, user_id)
     old_key_ids = {
         key.virtual_key_id
-        for key in await store.list_active_enrollment_keys(
-            db_session, enrollment_id=enrollment.id
-        )
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
     }
     assert all(key_id is not None for key_id in old_key_ids)
     await _spend(
@@ -447,7 +443,9 @@ async def test_remint_schedules_materialization(
     )
 
     # Every per-harness key was rotated, and materialization was scheduled
-    # once per remint (harmless — schedule_materialize_agent_auth is a cheap
-    # idempotent re-render trigger, not a per-call side effect).
+    # exactly ONCE for the enrollment — not once per re-minted key. The render
+    # reads the whole key map in one pass, so N schedules for N keys would be
+    # pure amplification (and only the last one would see a complete set).
     assert set(stub_litellm.rotated) == old_key_ids
-    assert scheduled_users == [user_id] * len(old_key_ids)
+    assert len(old_key_ids) > 1
+    assert scheduled_users == [user_id]

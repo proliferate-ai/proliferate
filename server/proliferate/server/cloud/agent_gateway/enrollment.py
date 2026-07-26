@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Sequence
 from decimal import Decimal
 from uuid import UUID
 
@@ -57,6 +58,45 @@ def build_sync_fingerprint(*, team_id: str, budget: str, key_alias: str) -> str:
     """Stable hash of the provisioned LiteLLM state, used to detect drift."""
     material = f"{team_id}|{budget}|{key_alias}"
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def build_enrollment_key_set_fingerprint(
+    *,
+    team_id: str,
+    subject_label: str,
+    harness_kinds: Sequence[str],
+) -> str:
+    """Fingerprint of the whole key *set* an enrollment is expected to hold.
+
+    This is the parent row's ``sync_fingerprint`` and the value
+    ``ensure_user_enrollment``/``ensure_org_enrollment`` re-compute and compare
+    on every pass: a mismatch flips the row back to ``pending`` so the next
+    sync provisions whatever the set is now supposed to contain. It therefore
+    covers exactly the three inputs that decide the set's shape:
+
+    * ``team_id`` — the LiteLLM team the keys live under,
+    * ``subject_label`` — what every key alias is derived from, and
+    * the sorted gateway-capable ``harness_kinds`` — one key per entry.
+
+    It deliberately does NOT cover the mirrored team budget. That mirror moves
+    with every spend and top-up and is already rewritten by the importer and
+    top-up loops; folding it in would re-sync on every login while repairing
+    nothing the sync path owns. Per-key drift (a key's own alias) is tracked
+    separately on each child row via :func:`build_sync_fingerprint`.
+    """
+    material = f"{team_id}|{subject_label}|{','.join(sorted(harness_kinds))}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def build_enrollment_key_fingerprint(*, team_id: str, key_alias: str) -> str:
+    """Fingerprint of one child key's provisioned identity (team + its alias).
+
+    Per-key counterpart of :func:`build_enrollment_key_set_fingerprint`. Every
+    writer of a child row computes it from that row's *current* team and alias
+    — a re-mint must never copy the previous row's value forward, or the stored
+    fingerprint would describe state the key no longer has.
+    """
+    return build_sync_fingerprint(team_id=team_id, budget="", key_alias=key_alias)
 
 
 def _parse_budget(raw: str) -> float | None:
@@ -165,6 +205,49 @@ def _qualification_run_metadata() -> dict[str, str]:
     }
 
 
+async def _reopen_if_key_set_drifted(
+    db: AsyncSession,
+    enrollment: AgentGatewayEnrollmentRecord,
+    *,
+    subject_label: str,
+) -> AgentGatewayEnrollmentRecord:
+    """Flip a synced enrollment back to ``pending`` when its key set drifted.
+
+    This is what makes the fingerprint an actual mechanism rather than a
+    write-only column: the expected set is recomputed from today's inputs
+    (:func:`build_enrollment_key_set_fingerprint`) and compared to what the row
+    was last synced against. A mismatch — a new gateway-capable harness kind,
+    a moved team, a changed subject label — reopens the row so ``_sync_enrollment``
+    mints whatever is missing on the next pass (each per-harness mint is
+    idempotent, so nothing already present is re-minted).
+
+    A row that never recorded a fingerprint is left alone: pre-fingerprint rows
+    would otherwise re-sync forever with nothing to fix.
+    """
+    if enrollment.sync_status != AGENT_GATEWAY_SYNC_STATUS_SYNCED:
+        return enrollment
+    if enrollment.sync_fingerprint is None or enrollment.litellm_team_id is None:
+        return enrollment
+    expected = build_enrollment_key_set_fingerprint(
+        team_id=enrollment.litellm_team_id,
+        subject_label=subject_label,
+        harness_kinds=_GATEWAY_CAPABLE_HARNESS_KINDS,
+    )
+    if expected == enrollment.sync_fingerprint:
+        return enrollment
+    logger.info(
+        "Agent gateway enrollment key set drifted; reopening for sync",
+        extra={
+            "enrollment_id": str(enrollment.id),
+            "subject_kind": enrollment.subject_kind,
+        },
+    )
+    return await agent_gateway_store.mark_enrollment_pending(
+        db,
+        enrollment_id=enrollment.id,
+    )
+
+
 async def ensure_user_enrollment(
     db: AsyncSession,
     user_id: UUID,
@@ -181,6 +264,11 @@ async def ensure_user_enrollment(
     # Grant free credits (deduped) before syncing so the LiteLLM budget can
     # mirror the resulting remaining balance. Runs every pass; idempotent.
     await ensure_user_free_credit_grant(db, user_id)
+    enrollment = await _reopen_if_key_set_drifted(
+        db,
+        enrollment,
+        subject_label=f"user-{user_id}",
+    )
     if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
         return enrollment
     budget_raw = await _remaining_credit_budget_raw(
@@ -243,6 +331,11 @@ async def ensure_org_enrollment(
     )
     if not settings.agent_gateway_enabled:
         return enrollment
+    enrollment = await _reopen_if_key_set_drifted(
+        db,
+        enrollment,
+        subject_label=f"org-{organization_id}-user-{user_id}",
+    )
     if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
         return enrollment
     # Org caps (spec section 7): overage-enabled orgs are effectively
@@ -309,12 +402,39 @@ async def _sync_one_harness_key(
         harness_kind=harness_kind,
         virtual_key_id=minted.token_id or None,
         virtual_key=minted.key,
-        sync_fingerprint=build_sync_fingerprint(
+        sync_fingerprint=build_enrollment_key_fingerprint(
             team_id=team_id,
-            budget="",
             key_alias=key_alias,
         ),
     )
+
+
+async def _revoke_parent_key(enrollment: AgentGatewayEnrollmentRecord) -> None:
+    """Delete the pre-B2 unscoped per-subject key this enrollment still owns.
+
+    The B2 migration flips synced enrollments back to ``pending`` so they
+    re-sync into per-harness keys, and that sync clears the parent row's key
+    material. Clearing the row is not revocation: the key stays live on the
+    proxy with all-model access, honoring any client that already holds it,
+    and its spend can no longer be attributed to a tracked key (the importer
+    files it ``needs_review``, so it is never debited).
+
+    Best-effort in the sense that a LiteLLM outage must not wedge the sync
+    permanently — but never silent: the ``LiteLLMIntegrationError`` propagates
+    to ``_sync_enrollment``'s handler, which marks the row ``failed`` so the
+    backfill worker retries the sync (and this revocation) on a later tick.
+    Enrollments minted post-B2 carry no parent key and no-op here.
+    """
+    if enrollment.virtual_key_id is None:
+        return
+    logger.info(
+        "Reclaiming pre-B2 unscoped gateway key at sync",
+        extra={
+            "enrollment_id": str(enrollment.id),
+            "subject_kind": enrollment.subject_kind,
+        },
+    )
+    await litellm.delete_virtual_key(key_or_token_id=enrollment.virtual_key_id)
 
 
 async def _sync_enrollment(
@@ -352,6 +472,15 @@ async def _sync_enrollment(
                 litellm_user_id=litellm_user_id,
                 subject_label=subject_label,
             )
+        # Reclaim the pre-B2 unscoped key BEFORE the row stops pointing at it:
+        # once `mark_enrollment_synced` clears `virtual_key_id` we lose the
+        # only handle we have on it. Left alive it would be an all-model key
+        # any client that already holds it keeps using, and its spend would
+        # land `needs_review` (unresolvable to a tracked key) instead of being
+        # debited. A delete failure raises, so the row goes `failed` and the
+        # backfill worker retries the whole sync — never silently dropping the
+        # revocation.
+        await _revoke_parent_key(enrollment)
         # The parent enrollment row no longer carries its own key material
         # (post-B2, model-gateway.md §Account model): keys live exclusively on
         # the child table. `virtual_key_id=None, virtual_key=None` clears any
@@ -363,10 +492,16 @@ async def _sync_enrollment(
             litellm_user_id=litellm_user_id,
             virtual_key_id=None,
             virtual_key=None,
-            sync_fingerprint=build_sync_fingerprint(
+            # Fingerprints the expected *key set* (team + alias subject +
+            # gateway-capable harness kinds), which is exactly what
+            # `_reopen_if_key_set_drifted` re-computes and compares on the next
+            # pass. The old value hashed the budget and mislabeled
+            # `subject_label` as a `key_alias`, describing neither the set nor
+            # any real alias.
+            sync_fingerprint=build_enrollment_key_set_fingerprint(
                 team_id=team_id,
-                budget=budget_raw,
-                key_alias=subject_label,
+                subject_label=subject_label,
+                harness_kinds=_GATEWAY_CAPABLE_HARNESS_KINDS,
             ),
         )
         if synced.user_id is not None:

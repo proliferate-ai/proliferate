@@ -308,6 +308,20 @@ async def rotate_virtual_key(
     )
 
 
+async def delete_virtual_key(*, key_or_token_id: str) -> None:
+    """Permanently delete one virtual key by raw value or token hash.
+
+    Unlike :func:`disable_virtual_key` (``/key/block``, reversible) this
+    reclaims the key for good. Used when a key must stop existing rather than
+    stop working — e.g. the pre-B2 unscoped per-subject key, which the B2 sync
+    replaces with per-harness scoped keys: leaving it live would let any client
+    that already holds it keep all-model access, and its spend would land
+    ``needs_review`` (unattributable to any tracked key) instead of being
+    debited.
+    """
+    await _admin_request("POST", "/key/delete", json_body={"keys": [key_or_token_id]})
+
+
 async def delete_virtual_keys_by_alias(*, alias: str) -> int:
     """Delete every live virtual key minted under ``alias``; returns the count.
 

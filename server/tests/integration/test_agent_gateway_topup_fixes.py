@@ -72,9 +72,7 @@ async def test_reactivation_uncaps_overage_subject_capped_at_enrollment(
     assert enrollment.virtual_key_id is None
     key_ids = {
         key.virtual_key_id
-        for key in await store.list_active_enrollment_keys(
-            db_session, enrollment_id=enrollment.id
-        )
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
     }
 
     # Spend past the cap and mark exhausted (as the importer would, non-overage).
@@ -157,9 +155,7 @@ async def test_importer_enforces_overage_when_topup_amount_invalid(
     enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
     key_ids = {
         key.virtual_key_id
-        for key in await store.list_active_enrollment_keys(
-            db_session, enrollment_id=enrollment.id
-        )
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
     }
     await store.create_llm_credit_grant(
         db_session,

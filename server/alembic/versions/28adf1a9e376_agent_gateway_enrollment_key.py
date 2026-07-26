@@ -4,10 +4,18 @@ Adds ``agent_gateway_enrollment_key``, the child table of
 ``agent_gateway_enrollment`` that holds one access-group-scoped LiteLLM
 virtual key per (enrollment, harness_kind) — model-gateway.md §Account model,
 ruling R2 (agents-impl-plan.md). Backfill of existing single-unscoped-key
-enrollments into per-harness keys happens via a sync pass (the backfill
-worker naturally re-syncs any enrollment whose fingerprint no longer matches
-its current per-harness-key state), not inline in this migration, to avoid a
+enrollments into per-harness keys happens via a sync pass (this migration
+flips synced rows to 'pending' so the backfill worker re-runs
+``_sync_enrollment`` on them), not inline in this migration, to avoid a
 migration-time dependency on the LiteLLM admin API being reachable.
+
+That deferred sync is also where the OLD unscoped key is reclaimed:
+``_sync_enrollment`` calls ``/key/delete`` on the parent row's
+``virtual_key_id`` before clearing it (``_revoke_parent_key``). This migration
+must not do it — it would need the LiteLLM admin API — so between the upgrade
+and the enrollment's next sync tick the old all-model key is still live. That
+window is bounded by the backfill worker's interval; a revocation failure
+marks the row ``failed`` and is retried rather than dropped.
 
 Revision ID: 28adf1a9e376
 Revises: 35fa0038d703

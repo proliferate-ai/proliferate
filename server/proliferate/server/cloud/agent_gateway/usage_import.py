@@ -362,10 +362,24 @@ async def _disable_enrollment_keys(
     Post-B2 there is no single key on the enrollment row to disable — every
     gateway-capable harness has its own key (model-gateway.md §Account
     model), so exhaustion/limit enforcement must walk and disable all of
-    them. Returns ``False`` (do not flip budget_status) only when at least
-    one live key failed to disable, mirroring the pre-B2 fail-open-on-error
-    behavior (a lagging disable is logged, not fatal to the tick).
+    them.
+
+    Returns ``True`` only when at least one key was actually disabled and no
+    live key failed. Two distinct "nothing was enforced" cases return
+    ``False`` so the caller does NOT flip ``budget_status``:
+
+    * a live key failed to disable (a lagging disable is logged, not fatal to
+      the tick — the next tick retries), and
+    * there was no disablable child key at all (no rows yet, or every row
+      still missing its ``virtual_key_id``). Returning ``True`` there would
+      mark the enrollment ``exhausted``/``limit_reached`` having disabled
+      nothing, and because both callers skip already-flipped enrollments the
+      flip then suppresses every later tick — so a key minted moments later
+      (mid-sync enrollment, or a row written after this tick read it) would
+      stay live and billable forever with no retry. Reporting "not enforced"
+      keeps the enrollment in the retry set instead.
     """
+    disabled = 0
     all_disabled = True
     for enrollment_key in await agent_gateway_store.list_active_enrollment_keys(
         db,
@@ -386,6 +400,17 @@ async def _disable_enrollment_keys(
                 },
             )
             all_disabled = False
+            continue
+        disabled += 1
+    if disabled == 0:
+        logger.warning(
+            "No gateway key was disabled for enrollment; leaving it unenforced for retry",
+            extra={
+                "enrollment_id": str(enrollment.id),
+                "log_context": log_context,
+            },
+        )
+        return False
     return all_disabled
 
 

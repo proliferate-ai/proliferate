@@ -246,6 +246,4 @@ async def test_get_enrollment_by_id_returns_row_regardless_of_revocation(
     assert still_found is not None
     assert still_found.revoked_at is not None
 
-    assert (
-        await store.get_enrollment_by_id(db_session, enrollment_id=uuid.uuid4()) is None
-    )
+    assert await store.get_enrollment_by_id(db_session, enrollment_id=uuid.uuid4()) is None
