@@ -23,6 +23,7 @@ export type {
   RuntimeCapabilities,
   RuntimePressureLevel,
   RuntimeCpuPressure,
+  RuntimeDiskPressure,
   RuntimeMemoryPressure,
   RuntimeResourcePressure,
   AgentSeedHealth,
