@@ -43,12 +43,12 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
     expect(html).toContain("text-chat");
     expect(html).not.toContain("thread-diff-virtualized");
-    expect(html).toContain("--codex-diffs-surface:var(--codex-diffs-surface-override, var(--color-diff-panel-surface))");
+    expect(html).toContain("--diff-view-surface:var(--diff-view-surface-override, var(--color-diff-panel-surface))");
     expect(html).toContain("data-diff-surface=\"sidebar\"");
     expect(html).toContain("codex-review-diff-card");
-    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-sidebar-file-header-surface)");
-    expect(html).toContain("--codex-diffs-separator-surface:var(--color-diff-sidebar-file-header-hover-surface)");
-    expect(html).toContain("sticky top-0 bg-[color-mix(in_srgb,var(--codex-diffs-header-surface)_97%,transparent)]");
+    expect(html).toContain("--diff-view-header-surface:var(--color-diff-sidebar-file-header-surface)");
+    expect(html).toContain("--diff-view-separator-surface:var(--color-diff-sidebar-file-header-hover-surface)");
+    expect(html).toContain("sticky top-0 bg-[color-mix(in_srgb,var(--diff-view-header-surface)_97%,transparent)]");
     expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("#1c1c1c");
     expect(html).toContain("data-app-action-review-file-expanded=\"true\"");
@@ -99,7 +99,7 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).not.toContain(">/Users/pablo/.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
     expect(html).not.toContain("hover:underline");
     expect(html).toContain("thread-diff-virtualized");
-    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-chat-file-header-surface)");
+    expect(html).toContain("--diff-view-header-surface:var(--color-diff-chat-file-header-surface)");
     expect(html).toContain("hover:bg-[var(--color-diff-chat-file-header-hover-surface)]");
     expect(html).toContain("group-hover/diff-header:opacity-100");
     expect(html).not.toContain("group-hover/diff-header:block");
