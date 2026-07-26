@@ -3,7 +3,6 @@ use tracing::{info, warn};
 
 use crate::{
     anyharness_update,
-    catalog_sync::{self, CatalogSyncState},
     cloud_client::CloudClient,
     config::WorkerConfig,
     error::WorkerError,
@@ -43,14 +42,12 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
         );
     }
 
-    let catalog_state = CatalogSyncState::new();
     if heartbeat_and_converge(
         &config,
         &cloud,
         &store,
         &identity,
         integration_gateway.as_ref(),
-        &catalog_state,
         once,
     )
     .await
@@ -69,7 +66,6 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
             &store,
             &identity,
             integration_gateway.as_ref(),
-            &catalog_state,
             false,
         )
         .await
@@ -90,7 +86,6 @@ async fn heartbeat_and_converge(
     store: &WorkerStore,
     identity: &WorkerIdentity,
     gateway: Option<&crate::cloud_client::IntegrationGatewayConfig>,
-    catalog_state: &CatalogSyncState,
     dry_run: bool,
 ) -> TickControl {
     let anyharness_version = anyharness_update::running_anyharness_version(store);
@@ -117,17 +112,6 @@ async fn heartbeat_and_converge(
             Err(error) => warn!(?error, "failed to repair integration-gateway dotfile"),
         }
     }
-
-    // Catalog sync: non-fatal, runs first (a worker binary swap exec's and
-    // never returns, so anything on this tick must precede it).
-    catalog_sync::maybe_sync(
-        config,
-        cloud,
-        &identity.worker_token,
-        &response,
-        catalog_state,
-    )
-    .await;
 
     // D5 bridge (decision 6) is reachable from BOTH the supervisor-owned and the
     // legacy branch: an already-provisioned *legacy* Worker that receives the

@@ -355,10 +355,18 @@ async fn installed_only_reuses_in_flight_installed_only_job() {
     assert_eq!(snapshot.job_id.as_deref(), Some("running-installed-only"));
 }
 
+/// The internal reconcile poke (`spawn_startup_pass`) must not be dropped
+/// merely because a foreground scoped update owns the one observable reconcile
+/// slot: it waits out the busy job and then admits a fresh installed-only pass.
+///
+/// Under the binary-only transport law (agent-distribution.md, "Convergence")
+/// the active catalog is immutable for the process lifetime, so the fresh pass
+/// necessarily carries the same bundled pins as the job it waited on — there is
+/// no mid-process pin movement left to assert. What the pass must still prove is
+/// that it read the pins from the ACTIVE catalog (not an empty snapshot) and
+/// that it is a genuinely new job.
 #[tokio::test]
-async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
-    use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
-    use crate::domains::agents::catalog::schema::AgentCatalogArtifactSource;
+async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active_pins() {
     use crate::domains::agents::catalog::service::AgentCatalogService;
     use crate::domains::agents::catalog::sync::CatalogSyncService;
     use crate::domains::agents::installer::install_policy::ResolvedPinSource;
@@ -376,10 +384,17 @@ async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
         AgentSeedStore::not_configured_dev(),
         catalog.clone(),
     ));
-    let old_pin = catalog
+    let active_pin = catalog
         .pin_overrides("codex")
         .and_then(|pins| pins.agent_process)
         .expect("bundled codex pin");
+    let active_package = match catalog
+        .pin_overrides("codex")
+        .and_then(|pins| pins.agent_process_source)
+    {
+        Some(ResolvedPinSource::Npm { package, .. }) => package,
+        other => panic!("codex adapter must use an npm pin, got {other:?}"),
+    };
 
     let first = runtime
         .start_reconcile(false, true, Vec::new())
@@ -394,30 +409,8 @@ async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
             .as_ref()
             .and_then(|catalog| catalog.pin_overrides("codex"))
             .and_then(|pins| pins.agent_process);
-        assert_eq!(admitted_pin.as_deref(), Some(old_pin.as_str()));
+        assert_eq!(admitted_pin.as_deref(), Some(active_pin.as_str()));
     }
-
-    let latest_pin = "catalog-poke-latest";
-    let latest_package = "@proliferate-ai/codex-acp@catalog-poke-latest";
-    let mut latest = bundled_agent_catalog_document().clone();
-    latest.catalog_version = "2099-01-01.catalog-poke".into();
-    let codex = latest
-        .agents
-        .iter_mut()
-        .find(|agent| agent.kind == "codex")
-        .expect("codex catalog row");
-    codex.harness.agent_process.version = latest_pin.into();
-    match codex.harness.agent_process.source.as_mut() {
-        Some(AgentCatalogArtifactSource::Npm { package, .. }) => {
-            *package = latest_package.into();
-        }
-        _ => panic!("codex adapter must use an npm pin"),
-    }
-    sync.apply_fetched(
-        &serde_json::to_vec(&latest).expect("serialize latest catalog"),
-        None,
-    )
-    .expect("apply latest catalog");
 
     let busy = service
         .start_with_admission(
@@ -455,7 +448,7 @@ async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
         }
     })
     .await
-    .expect("fresh latest-catalog pass should complete");
+    .expect("fresh active-catalog pass should complete");
     assert_ne!(fresh.job_id.as_deref(), Some(first_id.as_str()));
     assert!(fresh.installed_only);
     assert!(fresh.agent_kinds.is_empty());
@@ -465,10 +458,10 @@ async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
         .and_then(|job| job.catalog.as_ref())
         .and_then(|catalog| catalog.pin_overrides("codex"))
         .expect("fresh job codex pins");
-    assert_eq!(used_pins.agent_process.as_deref(), Some(latest_pin));
+    assert_eq!(used_pins.agent_process.as_deref(), Some(active_pin.as_str()));
     assert!(matches!(
         used_pins.agent_process_source,
-        Some(ResolvedPinSource::Npm { package, .. }) if package == latest_package
+        Some(ResolvedPinSource::Npm { package, .. }) if package == active_package
     ));
 
     let _ = std::fs::remove_dir_all(home);
