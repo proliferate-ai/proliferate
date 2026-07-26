@@ -559,10 +559,12 @@ word belongs to the agent-distribution document):
 Snapshot identity on the wire matches the tables: harness, auth
 context id, `probedAt`. Renames are hard cutovers with no alias windows;
 all consumers are first-party (pre-launch ruling): the cloud SDK's
-agent-gateway catalog functions, the sdk-react hooks
-(`useAgentCatalog`, `useRefreshAgentCatalog`, `useMirrorAgentCatalog`,
-`useUpsertCatalogOverride`, `useDeleteCatalogOverride`), the mirror-sync
-hook, and the settings All Models surface.
+agent-models functions (`getAgentModels`, `upsertAgentModelOverride`,
+`deleteAgentModelOverride` — no product-client refresh/mirror function,
+since the single ingest route is Worker-authenticated only), the
+sdk-react hooks (`useAgentModels`, `useUpsertAgentModelOverride`,
+`useDeleteAgentModelOverride`), the mirror-sync hook (deleted with no
+replacement — see below), and the settings All Models surface.
 
 ### Runtime routes
 
@@ -693,14 +695,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       and no auth fingerprint exists to compute staleness from.
 - [ ] Model entries do not carry provider namespace or serving-context as
       explicit fields; the frontend derives what it can from ids.
-- [ ] Route rename `/v1/cloud/agent-gateway/catalog/*` →
-      `/v1/cloud/agent-models/*` (hard cutover; first-party consumers:
-      the catalog functions in
-      [cloud/sdk/src/client/agent-gateway.ts](../../../../cloud/sdk/src/client/agent-gateway.ts),
-      the sdk-react agent-gateway catalog hooks in
-      [cloud/sdk-react/src/hooks/agent-gateway.ts](../../../../cloud/sdk-react/src/hooks/agent-gateway.ts),
-      the mirror-sync hook, and
-      [HarnessAllModelsSection](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAllModelsSection.tsx)).
 - [ ] Onboarding contains no "checking for latest models" step (the
       surface rendering the install-completed and auth-applied pokes).
 - [ ] Probe status is not pollable: no runtime endpoint exposes

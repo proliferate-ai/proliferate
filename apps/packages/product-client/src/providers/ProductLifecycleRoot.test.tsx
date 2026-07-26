@@ -32,7 +32,6 @@ vi.mock("#product/hooks/app/workflows/use-app-command-actions", () => ({
 }));
 vi.mock("#product/hooks/agents/lifecycle/use-agent-auto-reconcile", () => ({ useAgentAutoReconcile: vi.fn() }));
 vi.mock("#product/hooks/agents/lifecycle/use-first-run-auth-adoption", () => ({ useFirstRunAuthAdoption: vi.fn() }));
-vi.mock("#product/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync", () => ({ useGatewayCatalogMirrorSync: vi.fn() }));
 vi.mock("#product/hooks/agents/lifecycle/use-local-auth-state-sync", () => ({ useLocalAuthStateSync: vi.fn() }));
 vi.mock("#product/hooks/automations/lifecycle/use-local-automation-executor", () => ({ useLocalAutomationExecutor: vi.fn() }));
 vi.mock("#product/hooks/home/lifecycle/use-home-deferred-launch-runner", () => ({ useHomeDeferredLaunchRunner: vi.fn() }));

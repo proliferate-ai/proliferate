@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import {
-  useAgentCatalog,
-  useRefreshAgentCatalog,
+  useAgentModels,
   useAuthSelections,
-  useUpsertCatalogOverride,
+  useUpsertAgentModelOverride,
 } from "@proliferate/cloud-sdk-react";
 import {
   useAgentGatewayModelsQuery,
@@ -20,8 +19,9 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
+  apiKeyProviderHintForSurface,
+  authContextIdForRoute,
   buildEnabledOverridePatchJson,
-  buildRuntimeCatalogModelsJson,
   catalogRouteForSurface,
   normalizeCatalogModels,
   normalizeGatewayModels,
@@ -43,37 +43,45 @@ export function HarnessAllModelsSection({
   const showToast = useToastStore((state) => state.show);
 
   const selectionsQuery = useAuthSelections(null, cloudActive);
-  const route = catalogRouteForSurface(
-    harnessKind,
-    surface,
-    cloudActive ? selectionsQuery.data ?? [] : [],
-  );
+  const selections = cloudActive ? selectionsQuery.data ?? [] : [];
+  const route = catalogRouteForSurface(harnessKind, surface, selections);
   // Local surface + gateway route: the RUNTIME has already resolved what its
   // harness + auth can actually reach (contract §5) — read that directly
   // instead of the cloud catalog snapshot, which never sees the runtime's own
   // gateway probes.
   const isRuntimeGateway = surface === "local" && route === "gateway";
   const isSignedOutLocal = surface === "local" && !cloudActive;
-  // native/api_key routes probe on the client (catalog.py's refresh_catalog
-  // contract) — the server rejects a refresh with no uploaded payload for
-  // these routes, so Refresh sources one from the local AnyHarness runtime's
-  // already-resolved launch catalog instead (see buildRuntimeCatalogModelsJson).
-  const isRuntimeProbedRoute = route !== "gateway";
 
-  const catalogQuery = useAgentCatalog(
-    { harnessKind, surface, route },
+  // The B4 cloud-snapshot re-key (model-catalog.md §Cloud routes) scopes the
+  // layered read by auth-context id rather than (surface, route); resolve the
+  // best-known context id for the active route (see authContextIdForRoute's
+  // docstring for the exact mapping and its limits).
+  const authContextId = authContextIdForRoute(
+    harnessKind,
+    route,
+    apiKeyProviderHintForSurface(harnessKind, surface, selections),
+  );
+  const agentModelsQuery = useAgentModels(
+    { harnessKind, authContextId },
     cloudActive && !isRuntimeGateway,
   );
-  const refreshCatalog = useRefreshAgentCatalog();
-  const upsertOverride = useUpsertCatalogOverride();
+  const upsertOverride = useUpsertAgentModelOverride();
 
   const gatewayModelsQuery = useAgentGatewayModelsQuery(harnessKind, {
     enabled: cloudActive && isRuntimeGateway,
   });
   const refreshGatewayModels = useRefreshAgentGatewayModelsMutation();
   const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
-    enabled: isRuntimeProbedRoute || isSignedOutLocal,
+    enabled: isSignedOutLocal,
   });
+
+  // Manual refresh only exists where a caller can actually trigger a probe:
+  // the signed-out-local runtime refetch, and the runtime-gateway mutation.
+  // The cloud-snapshot ingest route is Worker-authenticated only
+  // (`authenticate_worker`) — no product client can call it — so there is no
+  // refresh affordance for the native/api_key/cloud-surface branch below
+  // until a real caller exists (F-040; tracked to return in C3).
+  const canManuallyRefresh = isSignedOutLocal || isRuntimeGateway;
 
   const models = useMemo(() => {
     if (isSignedOutLocal) {
@@ -82,14 +90,14 @@ export function HarnessAllModelsSection({
     if (isRuntimeGateway) {
       return normalizeGatewayModels(gatewayModelsQuery.data?.models ?? []);
     }
-    return normalizeCatalogModels(catalogQuery.data?.models ?? []);
+    return normalizeCatalogModels(agentModelsQuery.data?.models ?? []);
   }, [
     isSignedOutLocal,
     harnessKind,
     runtimeLaunchOptionsQuery.data,
     isRuntimeGateway,
     gatewayModelsQuery.data?.models,
-    catalogQuery.data?.models,
+    agentModelsQuery.data?.models,
   ]);
   // Each row carries its own enriched metadata (contract §1); probe-only models
   // stay sparse (Provider "—" when unmatched — no harness-name fallback).
@@ -131,33 +139,9 @@ export function HarnessAllModelsSection({
       });
       return;
     }
-    if (isRuntimeProbedRoute) {
-      const modelsJson = buildRuntimeCatalogModelsJson(
-        harnessKind,
-        runtimeLaunchOptionsQuery.data,
-      );
-      if (modelsJson === null) {
-        showToast(HARNESS_PANE_COPY.catalogRefreshRuntimeUnavailable(displayName));
-        return;
-      }
-      refreshCatalog.mutate(
-        { harnessKind, body: { surface, route, modelsJson } },
-        {
-          onError: (error) => {
-            showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
-          },
-        },
-      );
-      return;
-    }
-    refreshCatalog.mutate(
-      { harnessKind, body: { surface, route } },
-      {
-        onError: (error) => {
-          showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
-        },
-      },
-    );
+    // No callable refresh for the cloud-snapshot branch — see
+    // `canManuallyRefresh` above. The button is not rendered in this case, so
+    // this branch is unreachable from the UI; it stays only as a safe no-op.
   }
 
   function handleToggle(modelId: string, enabled: boolean) {
@@ -181,44 +165,36 @@ export function HarnessAllModelsSection({
     ? runtimeLaunchOptionsQuery.isLoading
     : isRuntimeGateway
       ? gatewayModelsQuery.isLoading
-      : catalogQuery.isLoading;
+      : agentModelsQuery.isLoading;
   const isRefreshing = isSignedOutLocal
     ? runtimeLaunchOptionsQuery.isFetching
     : isRuntimeGateway
       ? refreshGatewayModels.isPending
-      : refreshCatalog.isPending;
+      : false;
 
   // Auto-probe an empty catalog: landing on a resolved-but-empty catalog kicks
   // off the same refresh the button uses, exactly once per (harnessKind, surface,
   // route) scope. Guards against loops — we only fire when nothing is
-  // loading/refreshing and we haven't already probed this scope. For
-  // runtime-probed routes we skip when the runtime launch options aren't
-  // available yet (buildRuntimeCatalogModelsJson would be null); the empty
-  // message stays until the runtime is reachable.
+  // loading/refreshing, we haven't already probed this scope, and a manual
+  // refresh actually exists for this branch (see `canManuallyRefresh`).
   const autoProbedScopeRef = useRef<string | null>(null);
   const autoProbeScope = `${harnessKind}:${surface}:${route}`;
-  const runtimeModelsUnavailable =
-    isRuntimeProbedRoute
-    && buildRuntimeCatalogModelsJson(harnessKind, runtimeLaunchOptionsQuery.data) === null;
   useEffect(() => {
-    if (!cloudActive || isLoading || isRefreshing || models.length > 0) {
+    if (!canManuallyRefresh || !cloudActive || isLoading || isRefreshing || models.length > 0) {
       return;
     }
     if (autoProbedScopeRef.current === autoProbeScope) {
       return;
     }
-    if (runtimeModelsUnavailable) {
-      return;
-    }
     autoProbedScopeRef.current = autoProbeScope;
     handleRefresh();
   }, [
+    canManuallyRefresh,
     cloudActive,
     isLoading,
     isRefreshing,
     models.length,
     autoProbeScope,
-    runtimeModelsUnavailable,
   ]);
   // Empty catalog with a probe in flight (auto or manual) shows the probing state
   // instead of the static empty copy.
@@ -233,10 +209,10 @@ export function HarnessAllModelsSection({
         )
         : HARNESS_PANE_COPY.allModelsFreshnessSeed
       : ""
-    : catalogQuery.data?.probedAt
-      ? `Last refreshed ${new Date(catalogQuery.data.probedAt).toLocaleString()}`
-      : catalogQuery.data?.source
-        ? `Source: ${catalogQuery.data.source}`
+    : agentModelsQuery.data?.probedAt
+      ? `Last refreshed ${new Date(agentModelsQuery.data.probedAt).toLocaleString()}`
+      : agentModelsQuery.data?.origin
+        ? `Source: ${agentModelsQuery.data.origin}`
         : "";
 
   const [filterText, setFilterText] = useState("");
@@ -257,21 +233,23 @@ export function HarnessAllModelsSection({
       <div className="space-y-3 py-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-ui-sm text-muted-foreground">{freshnessLine}</p>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-2"
-            disabled={isRefreshing}
-            onClick={handleRefresh}
-          >
-            <RefreshCw
-              className={`icon-paired ${isRefreshing ? "animate-spin" : ""}`}
-            />
-            {isRefreshing
-              ? HARNESS_PANE_COPY.allModelsRefreshing
-              : HARNESS_PANE_COPY.allModelsRefresh}
-          </Button>
+          {canManuallyRefresh ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              disabled={isRefreshing}
+              onClick={handleRefresh}
+            >
+              <RefreshCw
+                className={`icon-paired ${isRefreshing ? "animate-spin" : ""}`}
+              />
+              {isRefreshing
+                ? HARNESS_PANE_COPY.allModelsRefreshing
+                : HARNESS_PANE_COPY.allModelsRefresh}
+            </Button>
+          ) : null}
         </div>
 
         {rows.length > 0 ? (

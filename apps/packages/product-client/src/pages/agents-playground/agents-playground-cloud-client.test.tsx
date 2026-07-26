@@ -11,9 +11,8 @@ import {
   useAgentApiKeys,
   useCreateAgentApiKey,
   usePutAuthSelections,
-  useRefreshAgentCatalog,
   useRevokeAgentApiKey,
-  useUpsertCatalogOverride,
+  useUpsertAgentModelOverride,
 } from "@proliferate/cloud-sdk-react";
 import { agentApiKeysKey } from "@proliferate/cloud-sdk-react/lib/query-keys";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -148,15 +147,14 @@ describe("Agents playground Cloud transport", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run fake Cloud mutations" }));
 
     await waitFor(() => {
-      expect(transport.requests).toHaveLength(5);
+      expect(transport.requests).toHaveLength(4);
     });
 
     expect(transport.requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
       "POST /v1/cloud/agent-gateway/keys",
       "DELETE /v1/cloud/agent-gateway/keys/key-1",
       "PUT /v1/cloud/agent-gateway/selections/claude",
-      "POST /v1/cloud/agent-gateway/catalog/claude/refresh",
-      "PUT /v1/cloud/agent-gateway/catalog/claude/override",
+      "PUT /v1/cloud/agent-models/claude/override",
     ]);
     expect(realRequestJson).not.toHaveBeenCalled();
     expect(outerQueryClient.getQueryData(agentApiKeysKey())).toEqual([REAL_SIGNED_IN_KEY]);
@@ -171,12 +169,11 @@ describe("Agents playground Cloud transport", () => {
         enabled: true,
       }),
     ]);
-    expect(snapshot.catalogs).toEqual(expect.arrayContaining([
+    expect(snapshot.agentModels).toEqual(expect.arrayContaining([
       expect.objectContaining({
         harnessKind: "claude",
-        surface: "local",
-        route: "gateway",
-        source: "probe",
+        authContextId: "gateway",
+        origin: "snapshot",
         overrideApplied: true,
       }),
     ]));
@@ -289,8 +286,7 @@ function MutationProbe() {
   const createKey = useCreateAgentApiKey();
   const revokeKey = useRevokeAgentApiKey();
   const putSelections = usePutAuthSelections();
-  const refreshCatalog = useRefreshAgentCatalog();
-  const upsertOverride = useUpsertCatalogOverride();
+  const upsertOverride = useUpsertAgentModelOverride();
 
   async function runMutations() {
     await createKey.mutateAsync({ title: "New playground key", value: "sk-new-secret" });
@@ -301,10 +297,6 @@ function MutationProbe() {
       body: {
         sources: [{ sourceKind: "gateway", enabled: true }],
       },
-    });
-    await refreshCatalog.mutateAsync({
-      harnessKind: "claude",
-      body: { surface: "local", route: "gateway" },
     });
     await upsertOverride.mutateAsync({
       harnessKind: "claude",

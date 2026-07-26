@@ -1442,83 +1442,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/catalog/{harness_kind}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Agent Catalog Endpoint */
-        get: operations["get_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/agent-gateway/catalog/{harness_kind}/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Refresh Agent Catalog Endpoint */
-        post: operations["refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/agent-gateway/catalog/{harness_kind}/mirror": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mirror Agent Catalog Endpoint
-         * @description Store the caller's own runtime-probed catalog as a read-model snapshot.
-         *
-         *     Distinct from ``.../refresh``: the runtime already did the probing (a
-         *     harness/gateway reachability check, possibly server-side via LiteLLM) and
-         *     is pushing the result here fire-and-forget, so this endpoint never talks
-         *     to an upstream itself.
-         */
-        post: operations["mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/agent-gateway/catalog/{harness_kind}/override": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Upsert Agent Catalog Override Endpoint */
-        put: operations["upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put"];
-        post?: never;
-        /** Delete Agent Catalog Override Endpoint */
-        delete: operations["delete_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/agent-gateway/capabilities": {
         parameters: {
             query?: never;
@@ -1583,6 +1506,74 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-models/{harness_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Models Endpoint
+         * @description The layered read: own snapshot, else the shipped catalog's models as the
+         *     read-time seed, with the override patch applied.
+         *
+         *     No ``surface`` param: the cloud store holds cloud-sandbox observations only.
+         */
+        get: operations["get_agent_models_endpoint_v1_cloud_agent_models__harness_kind__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-models/{harness_kind}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Agent Model Snapshot Endpoint
+         * @description The single ingest route: a Worker-uploaded machine-snapshot entry.
+         *
+         *     Absorbs the former ``refresh``-with-payload and ``mirror`` endpoints, which
+         *     were two names for the same write, and the server-side gateway discovery
+         *     that used to live inside ``refresh`` — the server never generates snapshots.
+         *
+         *     The owner is resolved from the Worker's sandbox row, so the body carries no
+         *     user identity to spoof.
+         */
+        post: operations["ingest_agent_model_snapshot_endpoint_v1_cloud_agent_models__harness_kind__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-models/{harness_kind}/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Agent Model Override Endpoint */
+        put: operations["upsert_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_put"];
+        post?: never;
+        /** Delete Agent Model Override Endpoint */
+        delete: operations["delete_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3578,93 +3569,6 @@ export interface components {
             /** Enrollmentstatus */
             enrollmentStatus: string;
         };
-        /**
-         * AgentGatewayCatalogMirrorRequest
-         * @description A runtime's push of its own resolved probe result (contract §4).
-         *
-         *     Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
-         *     AnyHarness today), not the product UI, and ``probed_at`` reflects when the
-         *     runtime actually probed rather than when this request landed.
-         */
-        AgentGatewayCatalogMirrorRequest: {
-            /**
-             * Surface
-             * @enum {string}
-             */
-            surface: "local" | "cloud";
-            /**
-             * Route
-             * @enum {string}
-             */
-            route: "native" | "api_key" | "gateway";
-            /** Modelsjson */
-            modelsJson: string;
-            /** Probedat */
-            probedAt: string;
-        };
-        /** AgentGatewayCatalogOverrideResponse */
-        AgentGatewayCatalogOverrideResponse: {
-            /** Id */
-            id: string;
-            /** Harnesskind */
-            harnessKind: string;
-            /** Patchjson */
-            patchJson: string;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-        };
-        /** AgentGatewayCatalogOverrideUpsertRequest */
-        AgentGatewayCatalogOverrideUpsertRequest: {
-            /** Patchjson */
-            patchJson: string;
-        };
-        /** AgentGatewayCatalogRefreshRequest */
-        AgentGatewayCatalogRefreshRequest: {
-            /**
-             * Surface
-             * @enum {string}
-             */
-            surface: "local" | "cloud";
-            /**
-             * Route
-             * @enum {string}
-             */
-            route: "native" | "api_key" | "gateway";
-            /** Modelsjson */
-            modelsJson?: string | null;
-        };
-        /**
-         * AgentGatewayCatalogResponse
-         * @description Layered catalog: latest snapshot (owner else seed) + caller override.
-         */
-        AgentGatewayCatalogResponse: {
-            /** Harnesskind */
-            harnessKind: string;
-            /**
-             * Surface
-             * @enum {string}
-             */
-            surface: "local" | "cloud";
-            /**
-             * Route
-             * @enum {string}
-             */
-            route: "native" | "api_key" | "gateway";
-            /** Models */
-            models: {
-                [key: string]: unknown;
-            }[];
-            /** Snapshotid */
-            snapshotId: string | null;
-            /** Probedat */
-            probedAt: string | null;
-            /** Source */
-            source: string | null;
-            /** Overrideapplied */
-            overrideApplied: boolean;
-        };
         /** AgentGatewayEnrollmentResponse */
         AgentGatewayEnrollmentResponse: {
             /** Id */
@@ -3681,6 +3585,70 @@ export interface components {
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
+        };
+        /** AgentModelOverrideResponse */
+        AgentModelOverrideResponse: {
+            /** Id */
+            id: string;
+            /** Harnesskind */
+            harnessKind: string;
+            /** Patchjson */
+            patchJson: string;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AgentModelOverrideUpsertRequest */
+        AgentModelOverrideUpsertRequest: {
+            /** Patchjson */
+            patchJson: string;
+        };
+        /**
+         * AgentModelSnapshotIngestRequest
+         * @description A Worker's upload of one changed machine-document entry.
+         *
+         *     Deliberately carries no user identity: the server resolves the owner from
+         *     the Worker's sandbox row. ``snapshotJson`` is one document entry verbatim
+         *     (camelCase ``probedAt``/``models``/``modes``/``attestation``/``warnings``),
+         *     stored as-is so the cloud tier serves exactly what the machine observed.
+         */
+        AgentModelSnapshotIngestRequest: {
+            /** Authcontextid */
+            authContextId: string;
+            /** Snapshotjson */
+            snapshotJson: string;
+            /** Probedat */
+            probedAt: string;
+        };
+        /**
+         * AgentModelsResponse
+         * @description The layered read: owner's snapshot else shipped seed, + caller override.
+         */
+        AgentModelsResponse: {
+            /** Harnesskind */
+            harnessKind: string;
+            /** Authcontextid */
+            authContextId: string;
+            /** Models */
+            models: {
+                [key: string]: unknown;
+            }[];
+            /** Modes */
+            modes: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "snapshot" | "catalog";
+            /** Snapshotid */
+            snapshotId: string | null;
+            /** Probedat */
+            probedAt: string | null;
+            /** Overrideapplied */
+            overrideApplied: boolean;
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -10478,174 +10446,6 @@ export interface operations {
             };
         };
     };
-    get_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__get: {
-        parameters: {
-            query: {
-                surface: "local" | "cloud";
-                route?: "native" | "api_key" | "gateway";
-            };
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentGatewayCatalogRefreshRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentGatewayCatalogMirrorRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentGatewayCatalogOverrideUpsertRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentGatewayCatalogOverrideResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_agent_gateway_capabilities_endpoint_v1_cloud_agent_gateway_capabilities_get: {
         parameters: {
             query?: never;
@@ -10771,6 +10571,138 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OrgAgentPolicyViolationListResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_models_endpoint_v1_cloud_agent_models__harness_kind__get: {
+        parameters: {
+            query: {
+                authContextId: string;
+            };
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModelsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_agent_model_snapshot_endpoint_v1_cloud_agent_models__harness_kind__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentModelSnapshotIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModelsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentModelOverrideUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModelOverrideResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
