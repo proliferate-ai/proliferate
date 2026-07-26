@@ -21,8 +21,8 @@ Fences, one owner per concern:
   the box, content owns what the user put in it. Runtime binaries and
   rendered state files are machinery, not content, and stay here.
 - How bytes reach a running sandbox (the AnyHarness proxy, streaming rules)
-  belongs to the sandbox gateway platform (document planned). This document
-  owns only the lifecycle consequence: traffic wakes a paused sandbox.
+  belongs to [sandbox-gateway.md](sandbox-gateway.md). This document owns
+  only the lifecycle consequence: traffic wakes a paused sandbox.
 - Whether a caller may have a sandbox at all, and the choreography callers
   use to reach one, belong to the sandbox access platform (document
   planned).
