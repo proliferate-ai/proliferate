@@ -1,14 +1,14 @@
-# E2B template rollback
+# E2B template operations
 
-Status: authoritative for rolling an E2B cloud runtime template tag back to a
-known-good immutable build.
+Status: authoritative for building, publishing, promoting, and rolling back
+the E2B cloud runtime template.
 
-Use this runbook when a newly promoted E2B template causes managed cloud
-sandbox creation, runtime boot, or template smoke failures.
-The release lane is documented in
-[`../deploying/releases.md`](../deploying/releases.md), and the managed sandbox model
-is documented in
-[`../../codebase/platforms/product/sandbox-provisioning.md`](../../codebase/platforms/product/sandbox-provisioning.md).
+Use this runbook to change what image new managed cloud sandboxes boot from:
+publishing a new template build, moving a rolling tag forward, or rolling it
+back after a bad promotion. The release lane is documented in
+[`../deploying/releases.md`](../deploying/releases.md); what the template *is*
+(contents, instantiation, initialization) is owned by
+[`../../codebase/platforms/product/sandbox-lifecycle.md`](../../codebase/platforms/product/sandbox-lifecycle.md).
 
 ## Mental model
 
@@ -29,6 +29,33 @@ Rolling tags affect newly created E2B sandboxes. Existing running or paused
 sandboxes keep the image they already started with. There is no shipped atomic
 sandbox-replacement flow; escalate existing-sandbox recovery instead of
 improvising one.
+
+## Build and publish
+
+The normal path is CI, not a laptop:
+
+1. `Release Cloud Template`
+   ([release-cloud-template.yml](../../../.github/workflows/release-cloud-template.yml))
+   builds the runtime binaries, runs
+   [`scripts/build-template.mjs`](../../../scripts/build-template.mjs)
+   (`Template.build`, 4 CPU / 8192 MB, AnyHarness + Worker + Supervisor
+   binaries copied into the image), and publishes the immutable
+   `sha-<first 12 of the commit SHA>` tag.
+2. The lane smoke-tests the exact immutable ref with
+   [`scripts/smoke-cloud-template.mjs`](../../../scripts/smoke-cloud-template.mjs)
+   before any rolling tag moves.
+3. Promotion to a rolling tag happens through the same lane
+   ([_deploy-e2b.yml](../../../.github/workflows/_deploy-e2b.yml)) or the
+   manual `Promote Cloud Template` workflow
+   ([promote-cloud-template.yml](../../../.github/workflows/promote-cloud-template.yml)),
+   both of which call
+   [`scripts/promote-cloud-template.mjs`](../../../scripts/promote-cloud-template.mjs).
+
+Local builds (`node scripts/build-template.mjs`) exist for template
+development against a personal dev alias; they require `E2B_ACCESS_TOKEN`
+and `E2B_TEAM_ID` and must never publish to the shared family's rolling
+tags. Promotion of anything user-facing goes through Actions so the move is
+attributable and its smoke evidence is preserved.
 
 ## Required access
 

@@ -183,7 +183,7 @@ run and immutable template tag.
 | Evidence | First response |
 | --- | --- |
 | Provider auth, quota, or capacity failure | Check E2B status and account quota; repair credentials only in their owning secret store. |
-| New template fails to boot or lacks a required binary | Follow [`e2b-template-rollback.md`](e2b-template-rollback.md). |
+| New template fails to boot or lacks a required binary | Follow [`e2b-template-operations.md`](e2b-template-operations.md). |
 | Sandbox row is `error` with `last_error` | Treat it as the terminal receipt for the latest sandbox connection failure or authoritative current-provider loss. Repair the classified provider/runtime cause, then retry through the normal materialization or workspace path; the retry moves the same logical row to `creating` and clears the old receipt. |
 | Persisted provider target is authoritatively not found | Retry through the normal product path. Under the sandbox lock, the server atomically supersedes only the expected binding and closes its exact old usage segment, commits the detach, and permits one replacement create. Do not clear the id or create a provider sandbox manually. |
 | Provider request is transiently unavailable or configuration is invalid | Repair or wait for the classified cause and retry normally. The server intentionally retains the provider binding and does not infer that the target is gone. |

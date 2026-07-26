@@ -15,7 +15,7 @@ under [`../deploying/`](../deploying/).
 | Discover and verify current Customer.io, Metabase, PostHog, and Sentry state | [Analytics and observability](analytics/README.md) |
 | Grant a user free or discounted Pro access through Stripe | [Pro early-access promo codes](billing-pro-promo-codes.md) |
 | Triage Stripe webhook delivery or billing-mirror failures | [Stripe webhook failure](stripe-webhook-failure.md) |
-| Roll an E2B runtime template tag back to an immutable build | [E2B template rollback](e2b-template-rollback.md) |
+| Build, publish, promote, or roll back the E2B runtime template | [E2B template operations](e2b-template-operations.md) |
 | Triage cloud sandbox, repository materialization, or workspace creation failures | [Cloud provisioning failure](cloud-provisioning-failure.md) |
 | Triage Worker enrollment, heartbeat, or version convergence after checking AnyHarness independently | [Worker enrollment failure](worker-enrollment-failure.md) |
 | Prepare for break-glass access, secret rotation, support-bundle handling, or audit closeout | [Operator security posture](operator-security-posture.md) |
