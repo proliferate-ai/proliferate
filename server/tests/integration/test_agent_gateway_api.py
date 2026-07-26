@@ -363,7 +363,9 @@ class TestAgentAuthSelections:
         assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
 
     @pytest.mark.asyncio
-    async def test_cursor_rejects_sources(self, client: AsyncClient) -> None:
+    async def test_cursor_rejects_gateway_source(self, client: AsyncClient) -> None:
+        # Cursor has no gateway recipe (agent-auth.md: "typed refusal, no
+        # gateway route exists for cursor") — a gateway source is illegal.
         _, headers = await _authed_user(client)
         response = await _put_selections(
             client,
@@ -374,6 +376,36 @@ class TestAgentAuthSelections:
         )
         assert response.status_code == 400
         assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
+
+    @pytest.mark.asyncio
+    async def test_cursor_accepts_api_key_source(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        # Cursor DOES take an api_key selection end to end (its CURSOR_API_KEY
+        # slot) — only the gateway route is closed to it.
+        _, headers = await _authed_user(client)
+        created = await _create_key(client, headers)
+        response = await _put_selections(
+            client,
+            headers,
+            harness="cursor",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "CURSOR_API_KEY",
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 200, response.text
+        selection = next(row for row in response.json() if row["sourceKind"] == "api_key")
+        assert selection["harnessKind"] == "cursor"
+        assert selection["envVarName"] == "CURSOR_API_KEY"
+        assert selection["enabled"] is True
 
     @pytest.mark.asyncio
     async def test_unknown_harness_is_400(self, client: AsyncClient) -> None:

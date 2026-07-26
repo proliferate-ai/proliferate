@@ -10,9 +10,10 @@ AGENT_AUTH_SURFACES = (AGENT_AUTH_SURFACE_LOCAL, AGENT_AUTH_SURFACE_CLOUD)
 # Auth selections are keyed by harness. The set mirrors the supported cloud
 # agent kinds; validating against it keeps unbounded/junk path params out of the
 # VARCHAR(64) column (an over-length value would otherwise surface as a 500).
-# cursor is intentionally absent: it has no gateway recipe and takes no sources
-# (native only), so no selection row may target it.
-AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok")
+# cursor takes selection rows too — it has no gateway recipe (excluded from
+# selection_rules.GATEWAY_CAPABLE_HARNESSES), but its single api_key slot
+# (CURSOR_API_KEY) is a normal selection like any other single-source harness.
+AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok", "cursor")
 
 # A selection row is either the gateway (virtual key) or a single direct
 # api_key (a raw provider key bound to an env var). There is no native

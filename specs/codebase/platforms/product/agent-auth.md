@@ -543,16 +543,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       registry declaration of supported provider-config kinds. (The old
       Bifrost `provider_kind` tables were dropped outright and are not a
       starting point.)
-- [ ] **Cursor selections are rejected server-side.** `selection_rules.py`
-      lists cursor as native-only and the store's harness allow-list
-      excludes it, even though the registry declares `CURSOR_API_KEY` as
-      its credential slot; the `api_key` source needs enabling for
-      cursor end to end (rules, allow-list, recipe already generic).
-- [ ] **Cloud native login is not offered.** The cloud settings surface
-      shows static "no auth configured" text instead of the Authenticate
-      action, though the login-terminal mechanism is surface-agnostic;
-      wiring it up also revisits agent-distribution's cursor-in-cloud
-      carve-out, which assumed no headless credential path.
 - [ ] **Codex has a second, competing isolated home.** Every codex launch
       — including gateway-routed ones — also writes
       `agent-auth/codex-local/` with a hardcoded `config.toml` pinning

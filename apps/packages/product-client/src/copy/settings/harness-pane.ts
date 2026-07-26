@@ -101,11 +101,10 @@ export const HARNESS_PANE_COPY = {
   cliNotAuthenticated: "CLI not authenticated",
   cliAuthenticated: "Authenticated",
   // Native == the implicit empty state (contract §7): zero enabled sources.
+  // Same copy on both surfaces — the CLI's own login now runs identically
+  // whether that CLI is the desktop process or the one inside the sandbox.
   nativeStateLocal: "No auth configured — the CLI's own login is used.",
-  nativeStateCloud: "No auth configured — cloud runs stay disabled for this harness.",
   cliAlwaysActive: "Native logins always apply alongside other sources.",
-  cursorNativeDescription: (displayName: string) =>
-    `${displayName} authenticates with its own sign-in. There is nothing to configure here.`,
   signInDescription: (displayName: string) =>
     `Sign in to Proliferate Cloud to manage how ${displayName} authenticates to models.`,
   authenticationDescription: (displayName: string) =>

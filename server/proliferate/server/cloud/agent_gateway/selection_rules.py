@@ -1,10 +1,9 @@
 """Per-harness legality of an agent-auth selection set (the ONE server validator).
 
 Runs before ``put_auth_selections`` on every write endpoint (contract §2): it
-gates the *enabled* set's cardinality per harness, the env-var name shape,
-gateway capability, and the cursor "native only" rule. DB-coherence (source
-shape, key ownership, duplicate sources) is the store's job; this is the
-business layer.
+gates the *enabled* set's cardinality per harness, the env-var name shape, and
+gateway capability. DB-coherence (source shape, key ownership, duplicate
+sources) is the store's job; this is the business layer.
 """
 
 from __future__ import annotations
@@ -19,14 +18,19 @@ from proliferate.constants.agent_gateway import (
 from proliferate.db.store.agent_gateway.records import DesiredAuthSource
 
 # Harnesses whose launch supports the gateway (virtual-key) recipe. Exactly the
-# supported cloud harness kinds; cursor is absent (native login only).
+# gateway-capable cloud harness kinds; cursor is absent — it has no gateway
+# recipe (agent-auth.md's per-harness recipe table: "typed refusal, no gateway
+# route exists for cursor") and stays native-for-the-gateway per R13, but it
+# DOES take an api_key source (its CURSOR_API_KEY slot) same as any other
+# single-source harness — see SINGLE_SOURCE_HARNESSES below.
 GATEWAY_CAPABLE_HARNESSES = ("claude", "codex", "opencode", "grok")
 # Radio harnesses: at most one enabled source (gateway XOR one api_key row).
-SINGLE_SOURCE_HARNESSES = ("claude", "codex", "grok")
+# cursor's radio can only ever land on api_key (no gateway row is legal for
+# it — enforced below via GATEWAY_CAPABLE_HARNESSES), never a true XOR with
+# gateway, but the cardinality rule (at most one enabled source) still applies.
+SINGLE_SOURCE_HARNESSES = ("claude", "codex", "grok", "cursor")
 # Additive harnesses: gateway + any number of api_key rows may all be enabled.
 MULTI_SOURCE_HARNESSES = ("opencode",)
-# No source may target these; auth is the CLI's own login only.
-NATIVE_ONLY_HARNESSES = ("cursor",)
 
 ENV_VAR_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,127}$")
 
@@ -41,13 +45,6 @@ def validate_auth_selection_set(
     sources: Sequence[DesiredAuthSource],
 ) -> None:
     """Raise ``SelectionRuleError`` unless ``sources`` is legal for the harness."""
-    if harness_kind in NATIVE_ONLY_HARNESSES:
-        if sources:
-            raise SelectionRuleError(
-                f"Harness '{harness_kind}' takes no auth sources (native login only)."
-            )
-        return
-
     for source in sources:
         if source.source_kind == AGENT_AUTH_SOURCE_GATEWAY:
             if harness_kind not in GATEWAY_CAPABLE_HARNESSES:

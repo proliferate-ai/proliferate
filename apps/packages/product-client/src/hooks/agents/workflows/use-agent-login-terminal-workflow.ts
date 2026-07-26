@@ -8,8 +8,11 @@ import {
   useCloseAgentLoginTerminalMutation,
   useStartAgentLoginTerminalMutation,
 } from "@anyharness/sdk-react";
+import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
+import { cloudSandboxGatewayRuntimeUrl } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export interface AgentLoginTerminalSession {
@@ -31,21 +34,45 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function useAgentLoginTerminalWorkflow() {
-  // Owns Agent Defaults' local auth terminal workflow. Components decide layout;
-  // this hook owns start/close/restart and post-exit readiness refresh.
+export function useAgentLoginTerminalWorkflow(surface: AgentAuthSurface) {
+  // Owns Agent Defaults' auth terminal workflow for BOTH surfaces. Components
+  // decide layout; this hook owns start/close/restart and post-exit readiness
+  // refresh. On the cloud surface the runtime connection is the user's one
+  // managed-Cloud sandbox (mirrors CloudAnyHarnessRuntimeProvider's resolution),
+  // never the local desktop runtime — a fresh gateway access token is minted
+  // per terminal open, since WebSocket connections cannot ride the
+  // fetch-wrapping bearer-refresh trick the REST/query hooks use.
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
+  const host = useProductHost();
+  const cloudClient = host.cloud.client;
+  const isCloudSurface = surface === "cloud";
   const { invalidateAgentLaunchReadinessResources } = useAgentResourcesCache();
   const startLoginTerminal = useStartAgentLoginTerminalMutation();
   const closeLoginTerminal = useCloseAgentLoginTerminalMutation();
   const [sessionsByKind, setSessionsByKind] = useState<Record<string, AgentLoginTerminalSession>>({});
+  // Minted lazily in openAuthTerminal (cloud only) — never falls back to a
+  // stale value across sandboxes/users, since each open re-mints it.
+  const [cloudAuthToken, setCloudAuthToken] = useState<string | undefined>(undefined);
+
+  const cloudBaseUrl = isCloudSurface && cloudClient
+    ? cloudSandboxGatewayRuntimeUrl(cloudClient)
+    : "";
 
   const runtimeConnection = useMemo(() => ({
-    baseUrl: runtime.runtimeUrl?.trim() || runtimeUrl.trim(),
-    authToken: runtime.authToken ?? undefined,
-  }), [runtime.authToken, runtime.runtimeUrl, runtimeUrl]);
+    baseUrl: isCloudSurface
+      ? cloudBaseUrl
+      : (runtime.runtimeUrl?.trim() || runtimeUrl.trim()),
+    authToken: isCloudSurface ? cloudAuthToken : (runtime.authToken ?? undefined),
+  }), [cloudAuthToken, cloudBaseUrl, isCloudSurface, runtime.authToken, runtime.runtimeUrl, runtimeUrl]);
+  // Cloud has no local "connecting/failed" boot sequence to gate on — the
+  // surface is already behind CloudGuard (cloudActive) by the time this runs,
+  // so a resolved sandbox base URL is itself the readiness signal. Local keeps
+  // gating on the desktop runtime's own connection lifecycle.
+  const runtimeReady = isCloudSurface
+    ? runtimeConnection.baseUrl.trim().length > 0
+    : connectionState === "healthy" && runtimeConnection.baseUrl.trim().length > 0;
   const activeSessionCount = useMemo(
     () => Object.values(sessionsByKind).filter((session) =>
       session.isStarting || session.terminal
@@ -75,7 +102,7 @@ export function useAgentLoginTerminalWorkflow() {
     agent: AgentSummary,
     options?: { restart?: boolean },
   ) => {
-    if (connectionState !== "healthy" || runtimeConnection.baseUrl.trim().length === 0) {
+    if (!runtimeReady) {
       setSessionsByKind((current) => ({
         ...current,
         [agent.kind]: {
@@ -117,6 +144,13 @@ export function useAgentLoginTerminalWorkflow() {
     }));
 
     try {
+      // The WebSocket viewport (AgentLoginTerminalPanel) cannot ride the
+      // context's fetch-wrapping bearer refresh, so a cloud open mints its own
+      // token here — once per open, mirroring withFreshCloudSandboxGatewayAccessToken's
+      // per-resolve minting for terminal-stream connections.
+      if (isCloudSurface) {
+        setCloudAuthToken(await host.cloud.getSandboxGatewayAccessToken());
+      }
       const response = await startLoginTerminal.mutateAsync(agent.kind);
       setSessionsByKind((current) => ({
         ...current,
@@ -144,8 +178,9 @@ export function useAgentLoginTerminalWorkflow() {
     }
   }, [
     closeExistingTerminal,
-    connectionState,
-    runtimeConnection.baseUrl,
+    host.cloud,
+    isCloudSurface,
+    runtimeReady,
     sessionsByKind,
     startLoginTerminal,
   ]);
@@ -187,11 +222,7 @@ export function useAgentLoginTerminalWorkflow() {
   }, [refreshAgentReadiness]);
 
   useEffect(() => {
-    if (
-      activeSessionCount === 0
-      || connectionState !== "healthy"
-      || runtimeConnection.baseUrl.trim().length === 0
-    ) {
+    if (activeSessionCount === 0 || !runtimeReady) {
       return;
     }
 
@@ -206,9 +237,8 @@ export function useAgentLoginTerminalWorkflow() {
     };
   }, [
     activeSessionCount,
-    connectionState,
     refreshAgentReadiness,
-    runtimeConnection.baseUrl,
+    runtimeReady,
   ]);
 
   return {
