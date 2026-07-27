@@ -1478,10 +1478,30 @@ export const themeTokens = {
     light: "1.75rem",
     provenance: "[SHIPPED]",
   },
+  "--workspace-shell-tab-active-background": {
+    dark: "transparent",
+    light: "transparent",
+    provenance: "[RETUNE:header/unboxed-tabs]",
+  },
   "--workspace-shell-tab-active-border": {
-    dark: "var(--color-border)",
-    light: "var(--color-border)",
-    provenance: "[RETUNE:header/quiet-active-tab]",
+    dark: "transparent",
+    light: "transparent",
+    provenance: "[RETUNE:header/unboxed-tabs]",
+  },
+  "--workspace-shell-tab-active-underline": {
+    dark: "var(--color-foreground)",
+    light: "var(--color-foreground)",
+    provenance: "[RETUNE:header/unboxed-tabs]",
+  },
+  "--workspace-shell-tab-active-underline-size": {
+    dark: "1px",
+    light: "1px",
+    provenance: "[RETUNE:header/unboxed-tabs]",
+  },
+  "--workspace-shell-tab-close-collapse": {
+    dark: "tab-close-collapse var(--duration-enter) var(--ease-out-quint) both",
+    light: "tab-close-collapse var(--duration-enter) var(--ease-out-quint) both",
+    provenance: "[RETUNE:header/tab-close-slide]",
   },
   "--workspace-shell-tab-content-gap": {
     dark: "0.5rem",
@@ -1492,6 +1512,11 @@ export const themeTokens = {
     dark: "1.75rem",
     light: "1.75rem",
     provenance: "[SHIPPED]",
+  },
+  "--workspace-shell-tab-hover-background": {
+    dark: "var(--color-hover)",
+    light: "var(--color-hover)",
+    provenance: "[RETUNE:header/unboxed-tabs]",
   },
   "--workspace-shell-tab-hover-border": {
     dark: "transparent",
@@ -1513,10 +1538,15 @@ export const themeTokens = {
     light: "0.375rem",
     provenance: "[RETUNE:radii/soft-scale]",
   },
+  "--workspace-shell-tab-selected-background": {
+    dark: "var(--color-selected)",
+    light: "var(--color-selected)",
+    provenance: "[RETUNE:header/unboxed-tabs]",
+  },
   "--workspace-shell-tab-selected-border": {
-    dark: "var(--color-border-heavy)",
-    light: "var(--color-border-heavy)",
-    provenance: "[SHIPPED]",
+    dark: "transparent",
+    light: "transparent",
+    provenance: "[RETUNE:header/unboxed-tabs]",
   },
   "--z-base": {
     dark: "0",

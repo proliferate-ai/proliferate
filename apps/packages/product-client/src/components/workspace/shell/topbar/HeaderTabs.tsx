@@ -19,6 +19,7 @@ import { useSessionTitleActions } from "#product/hooks/sessions/workflows/use-se
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useResizeObserverWidth } from "#product/hooks/ui/layout/use-resize-observer-width";
 import { useHeaderTabsCloseActions } from "#product/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions";
+import { useHeaderTabCloseTransition } from "#product/hooks/workspaces/ui/tabs/use-header-tab-close-transition";
 import { useHeaderTabsGroupEditor } from "#product/hooks/workspaces/ui/tabs/use-header-tabs-group-editor";
 import {
   useHeaderTabsLayout,
@@ -123,6 +124,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     shellRows: viewModel.shellRows,
     reservedWidth,
   });
+  const { closingTabs, beginClose } = useHeaderTabCloseTransition();
   const contentWidth = layout.widths.length > 0
     ? (layout.positions[layout.positions.length - 1] ?? 0)
       + (layout.widths[layout.widths.length - 1] ?? 0)
@@ -264,12 +266,28 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     if (!chatVisibilityActions.canHideChatSessionTabs([sessionId])) {
       return;
     }
+    const closingIndex = viewModel.shellRows.findIndex((shellRow) =>
+      shellRow.kind === "chat"
+      && shellRow.row.kind === "tab"
+      && shellRow.row.tab.id === sessionId
+    );
+    if (closingIndex >= 0) {
+      beginClose({
+        id: sessionId,
+        left: layout.positions[closingIndex] ?? 0,
+        width: layout.widths[closingIndex] ?? 0,
+      });
+    }
     multiSelect.clearSelection();
     chatVisibilityActions.hideChatSessionTabs([sessionId], { selectFallback: true });
   }, [
+    beginClose,
     chatVisibilityActions.canHideChatSessionTabs,
     chatVisibilityActions.hideChatSessionTabs,
+    layout.positions,
+    layout.widths,
     multiSelect.clearSelection,
+    viewModel.shellRows,
   ]);
   const handleCloseOtherChatTabs = useCallback((sessionId: string) => {
     closeOtherWorkspaceTabs({ kind: "chat", sessionId });
@@ -290,7 +308,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
             stripRef={stripScrollRef}
             contentWidth={contentWidth}
             data-workspace-tab-strip
-            className="h-7 min-w-0 shrink"
+            className="workspace-shell-tab-strip__viewport h-7 min-w-0 shrink"
             style={{ maxWidth: contentWidth }}
             {...shellDrag.stripDragProps}
           >
@@ -305,6 +323,20 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
                   backgroundColor: range.color,
                 }}
               />
+            ))}
+            {closingTabs.map((closing) => (
+              <span
+                key={`closing-${closing.id}`}
+                aria-hidden="true"
+                data-closing-chat-tab={closing.id}
+                className="workspace-shell-tab workspace-shell-tab--closing pointer-events-none absolute bottom-0 z-base"
+                style={{ left: closing.left, width: closing.width }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="workspace-shell-tab__surface pointer-events-none absolute inset-0 border"
+                />
+              </span>
             ))}
             <HeaderTabsStripRows
               shellRows={viewModel.shellRows}

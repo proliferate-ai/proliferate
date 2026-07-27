@@ -30,6 +30,7 @@ import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { Tooltip as TooltipPrimitiveRoot, TooltipContent, TooltipProvider, TooltipTrigger } from "@proliferate/ui/primitives/tooltip-primitive";
+import { TypewriterRevealText } from "@proliferate/ui/primitives/TypewriterRevealText";
 import { UserAvatar } from "@proliferate/ui/primitives/UserAvatar";
 import { Trash } from "@proliferate/ui/icons";
 import { useState } from "react";
@@ -39,6 +40,16 @@ import type { LibraryEntry, LibraryTier } from "./types";
 function CheckboxDemo() {
   const [checked, setChecked] = useState(true);
   return <Checkbox checked={checked} onCheckedChange={(value) => setChecked(value === true)} />;
+}
+
+function TypewriterRevealTextDemo() {
+  // Starts unassigned so clicking replays the one-time first-assignment reveal.
+  const [name, setName] = useState<string | null>(null);
+  return (
+    <Button variant="secondary" size="sm" onClick={() => setName(name ? null : "Named session")}>
+      <TypewriterRevealText text={name ?? "Untitled"} revealOnFirstAssignment={name !== null} />
+    </Button>
+  );
 }
 
 function SwitchDemo() {
@@ -281,6 +292,7 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
     <Tooltip content="Tooltip content"><Button variant="secondary" size="sm">Hover me</Button></Tooltip>
   ) },
   { name: "tooltip-primitive", subpath: "@proliferate/ui/primitives/tooltip-primitive", render: TooltipPrimitiveDemo },
+  { name: "TypewriterRevealText", subpath: "@proliferate/ui/primitives/TypewriterRevealText", render: TypewriterRevealTextDemo },
   { name: "UserAvatar", subpath: "@proliferate/ui/primitives/UserAvatar", render: () => (
     <UserAvatar displayName="Jane Doe" className="size-8" />
   ) },

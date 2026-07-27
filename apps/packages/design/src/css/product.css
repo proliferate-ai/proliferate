@@ -120,9 +120,13 @@ body {
 
 /* Spinner.tsx keeps the wrapper box stationary while the shared theme rotates
    only its centered SVG. Neutralize legacy wrapper animation classes so
-   transforms never compound. */
+   transforms never compound. The square box is the second half of "rotates in
+   place": the glyph tiers are em-based, so a spinner stretched by a flex or
+   grid parent resolves a non-square box, and rotating a non-square box sweeps
+   an arc wider than its own footprint. */
 .proliferate-spinner {
   animation: none !important;
+  aspect-ratio: 1 / 1;
 }
 
 /*
@@ -1483,6 +1487,11 @@ body {
   height: var(--workspace-shell-tab-height);
 }
 
+/* Header tabs are unboxed: no chip fill and no border in the resting or active
+   state. Hover is the only fill an ordinary tab gets, and selection is carried
+   by a 1px underline flush with the strip's baseline rather than by a box. The
+   surface span still owns fill/border/underline so the tab's own content box
+   never animates its geometry. */
 .workspace-shell-tab__surface {
   background-color: var(--workspace-shell-tab-inactive-background);
   border-color: var(--workspace-shell-tab-inactive-border);
@@ -1493,19 +1502,72 @@ body {
   border-radius: var(--workspace-shell-tab-radius);
 }
 
+.workspace-shell-tab__surface::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: var(--workspace-shell-tab-active-underline-size);
+  background-color: var(--workspace-shell-tab-active-underline);
+  opacity: 0;
+  transition: opacity var(--duration-hover) var(--ease-standard);
+}
+
 .workspace-shell-tab:hover .workspace-shell-tab__surface {
-  background-color: var(--color-hover);
+  background-color: var(--workspace-shell-tab-hover-background);
   border-color: var(--workspace-shell-tab-hover-border);
 }
 
 .workspace-shell-tab[data-multi-selected="true"] .workspace-shell-tab__surface {
-  background-color: var(--color-selected);
+  background-color: var(--workspace-shell-tab-selected-background);
   border-color: var(--workspace-shell-tab-selected-border);
 }
 
 .workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface {
-  background-color: var(--color-selected);
+  background-color: var(--workspace-shell-tab-active-background);
   border-color: var(--workspace-shell-tab-active-border);
+}
+
+.workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface::after {
+  opacity: 1;
+}
+
+/* Tab close: the closing tab fades and collapses its own width while the
+   surviving tabs (and the trailing "+" button, which follows the strip's
+   measured content width) translate into the vacated space on the same
+   duration and curve, so the row reads as one slide rather than a snap. */
+@keyframes tab-close-collapse {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.workspace-shell-tab--closing {
+  pointer-events: none;
+  animation: var(--workspace-shell-tab-close-collapse);
+}
+
+/* The trailing "+" button is a flex sibling of the strip, so it does not move
+   by transform — it moves because the strip's measured content width shrinks.
+   Animating that width is therefore the only way to make the button travel with
+   the surviving tabs instead of snapping to the new edge. */
+.workspace-shell-tab-strip__viewport,
+.workspace-shell-tab-strip__viewport > .workspace-tab-strip__content {
+  transition:
+    max-width var(--duration-enter) var(--ease-out-quint),
+    width var(--duration-enter) var(--ease-out-quint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell-tab--closing {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .workspace-shell-tab__icon {

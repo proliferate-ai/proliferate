@@ -7,6 +7,7 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
+import { TypewriterRevealText } from "@proliferate/ui/primitives/TypewriterRevealText";
 import { X } from "@proliferate/ui/icons";
 
 interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {
@@ -15,6 +16,9 @@ interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "
   width: number;
   icon: ReactNode;
   label: string;
+  /** True once `label` is a real assigned name; reveals it once, on the first
+   *  assignment only. */
+  hasAssignedLabel?: boolean;
   onSelect: (event: MouseEvent<HTMLButtonElement>) => void;
   onSelectPointerDownCapture?: (event: PointerEvent<HTMLButtonElement>) => void;
   canClose?: boolean;
@@ -35,6 +39,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     width,
     icon,
     label,
+    hasAssignedLabel = false,
     onSelect,
     onSelectPointerDownCapture,
     canClose = true,
@@ -140,7 +145,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
                   maskImage: titleMask,
                 }}
               >
-                {label}
+                <TypewriterRevealText
+                  text={label}
+                  revealOnFirstAssignment={hasAssignedLabel}
+                />
               </span>
             )}
             {showBadge && badge && (

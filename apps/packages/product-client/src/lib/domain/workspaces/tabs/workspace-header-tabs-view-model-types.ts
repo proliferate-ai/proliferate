@@ -22,6 +22,11 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   manualGroupId: ManualChatGroupId | null;
   isHierarchyResolved: boolean;
   isResolvingSession: boolean;
+  /**
+   * True when `title` is a real assigned name rather than a placeholder or the
+   * provider fallback. Drives the label's one-time reveal animation only.
+   */
+  hasAssignedTitle: boolean;
   delegatedAgent: DelegatedWorkTabIdentity | null;
   /**
    * True when the session behind this tab has never run a prompt (a visible

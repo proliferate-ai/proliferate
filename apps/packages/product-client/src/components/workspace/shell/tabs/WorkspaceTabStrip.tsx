@@ -27,7 +27,7 @@ export function WorkspaceTabStrip({
       {...props}
     >
       <div
-        className="relative h-full"
+        className="workspace-tab-strip__content relative h-full"
         style={{ width: contentWidth ? `${contentWidth}px` : "100%" }}
       >
         {children}

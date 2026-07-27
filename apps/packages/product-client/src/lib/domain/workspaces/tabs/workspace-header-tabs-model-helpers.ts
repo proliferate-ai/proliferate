@@ -159,6 +159,23 @@ export function getKnownSessionTitle(known: KnownHeaderSession): string {
     || getProviderDisplayName(known.session.agentKind);
 }
 
+/**
+ * True when the session carries a real, server-assigned title rather than the
+ * placeholder or the provider's display name. Drives the tab label's one-time
+ * reveal, so it must be false for every fallback title.
+ */
+export function getKnownSessionHasAssignedTitle(known: KnownHeaderSession): boolean {
+  if (known.kind === "placeholder") {
+    return false;
+  }
+  if (known.kind === "slot") {
+    return Boolean(
+      known.slot.title?.trim() || known.slot.activity.transcriptTitle?.trim(),
+    );
+  }
+  return Boolean(known.session.title?.trim());
+}
+
 export function getKnownSessionViewState(known: KnownHeaderSession): SessionViewState {
   if (known.kind === "placeholder") {
     return "idle";
