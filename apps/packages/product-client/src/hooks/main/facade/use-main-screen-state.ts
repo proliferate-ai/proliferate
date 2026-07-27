@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type MouseEvent,
@@ -25,9 +26,9 @@ import {
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
   RIGHT_PANEL_DEFAULT_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
-  RIGHT_PANEL_MIN_WIDTH,
   clampRightPanelWidth,
   normalizeRightPanelDurableState,
+  resolveRightPanelDragOutcome,
   type RightPanelDurableState,
   type RightPanelWorkspaceState,
 } from "#product/lib/domain/workspaces/shell/right-panel-model";
@@ -268,14 +269,47 @@ export function useMainScreenState(): MainScreenState {
     max: WORKSPACE_SIDEBAR_MAX_WIDTH,
   });
 
-  const onRightSeparatorDown = useResize({
+  // Dragging the right separator expresses two gestures through one pointer
+  // stream: resize while the requested width is credible, collapse once it is
+  // not. The domain decides which (`resolveRightPanelDragOutcome`), so the
+  // resize hook is deliberately given `min: 0` — a hook-level clamp at the
+  // panel minimum would hide the very part of the gesture that means "close
+  // this". Collapse ends the gesture: once closed, the remainder of the same
+  // drag is ignored so a jittery pointer cannot re-expand the panel from under
+  // the user's cursor.
+  const rightPanelDragCollapsedRef = useRef(false);
+  const handleRightPanelDrag = useCallback(
+    (rawWidth: number) => {
+      if (rightPanelDragCollapsedRef.current) {
+        return;
+      }
+      const outcome = resolveRightPanelDragOutcome(rawWidth);
+      if (outcome.kind === "collapse") {
+        rightPanelDragCollapsedRef.current = true;
+        // The last credible width stays persisted, so reopening restores the
+        // size the user had chosen rather than the panel's default.
+        setRightPanelOpen(false);
+        return;
+      }
+      setRightPanelWidth(outcome.width);
+    },
+    [setRightPanelOpen, setRightPanelWidth],
+  );
+  const beginRightSeparatorDrag = useResize({
     direction: "horizontal",
     size: rightPanelWidth,
-    onResize: setRightPanelWidth,
+    onResize: handleRightPanelDrag,
     reverse: true,
-    min: RIGHT_PANEL_MIN_WIDTH,
+    min: 0,
     max: RIGHT_PANEL_MAX_WIDTH,
   });
+  const onRightSeparatorDown = useCallback(
+    (event: MouseEvent) => {
+      rightPanelDragCollapsedRef.current = false;
+      beginRightSeparatorDrag(event);
+    },
+    [beginRightSeparatorDrag],
+  );
 
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();

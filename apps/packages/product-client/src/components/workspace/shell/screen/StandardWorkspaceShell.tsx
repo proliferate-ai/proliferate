@@ -214,7 +214,9 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellShortcuts enabled={visible} />
             ) : null}
             <div
-              className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
+              // relative: the collapsed sidebar's hover peek is an overlay
+              // anchored to this shell box, so it never displaces content.
+              className={`relative h-screen flex overflow-hidden ${chromeClasses.root}`}
               data-workspace-shell
               data-workspace-ui-key={selectedLogicalWorkspaceId ?? selectedWorkspaceId ?? ""}
               data-workspace-session-id={activeSessionId ?? ""}

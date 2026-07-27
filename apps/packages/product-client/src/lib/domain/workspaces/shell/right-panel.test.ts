@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   availableRightPanelTools,
   clampRightPanelWidth,
+  normalizeRightPanelDurableState,
   parseRightPanelHeaderEntryKey,
+  resolveRightPanelDragOutcome,
   rightPanelViewerHeaderKey,
+  RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD,
+  RIGHT_PANEL_MAX_WIDTH,
+  RIGHT_PANEL_MIN_WIDTH,
 } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   removeTerminalFromRightPanelState,
@@ -258,9 +263,55 @@ describe("right panel domain", () => {
     expect(state.activeEntryKey).toBe(targetKey);
   });
 
-  it("clamps persisted right panel widths", () => {
-    expect(clampRightPanelWidth(100)).toBe(260);
+  it("clamps persisted right panel widths to the legible minimum", () => {
+    expect(clampRightPanelWidth(100)).toBe(380);
     expect(clampRightPanelWidth(900)).toBe(700);
     expect(clampRightPanelWidth(Number.NaN)).toBe(420);
+    expect(RIGHT_PANEL_MIN_WIDTH).toBe(380);
+    expect(RIGHT_PANEL_MAX_WIDTH).toBe(700);
+  });
+
+  it("re-clamps widths persisted below the raised minimum", () => {
+    // Windows that stored the previous 260px floor must come back legible
+    // rather than reopening at a width the panel no longer supports.
+    expect(normalizeRightPanelDurableState({ open: true, width: 260 })).toEqual({
+      open: true,
+      width: RIGHT_PANEL_MIN_WIDTH,
+    });
+  });
+
+  it("keeps the collapse threshold below the minimum so clamping cannot express it", () => {
+    expect(RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD).toBeLessThan(RIGHT_PANEL_MIN_WIDTH);
+  });
+
+  it("resizes while the dragged width stays above the collapse threshold", () => {
+    expect(resolveRightPanelDragOutcome(520)).toEqual({ kind: "resize", width: 520 });
+    // Between the threshold and the minimum the panel sticks at its minimum:
+    // this is the resistance a user feels before the panel will close.
+    expect(resolveRightPanelDragOutcome(RIGHT_PANEL_MIN_WIDTH - 1)).toEqual({
+      kind: "resize",
+      width: RIGHT_PANEL_MIN_WIDTH,
+    });
+    expect(resolveRightPanelDragOutcome(RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD)).toEqual({
+      kind: "resize",
+      width: RIGHT_PANEL_MIN_WIDTH,
+    });
+    expect(resolveRightPanelDragOutcome(2000)).toEqual({
+      kind: "resize",
+      width: RIGHT_PANEL_MAX_WIDTH,
+    });
+  });
+
+  it("collapses instead of sticking once the drag passes the threshold", () => {
+    expect(resolveRightPanelDragOutcome(RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD - 1)).toEqual({
+      kind: "collapse",
+    });
+    expect(resolveRightPanelDragOutcome(0)).toEqual({ kind: "collapse" });
+    expect(resolveRightPanelDragOutcome(-120)).toEqual({ kind: "collapse" });
+  });
+
+  it("treats a non-finite drag width as a resize, never a collapse", () => {
+    // A broken measurement must not close the panel behind the user's back.
+    expect(resolveRightPanelDragOutcome(Number.NaN)).toEqual({ kind: "resize", width: 420 });
   });
 });

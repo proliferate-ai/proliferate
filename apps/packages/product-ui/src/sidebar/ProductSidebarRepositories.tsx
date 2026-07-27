@@ -219,8 +219,11 @@ export function ProductSidebarWorkspaceRow({
             ) : trailingLabel ? (
               // Centered in the same end-anchored 20px cell as the activity
               // glyphs and unread dot, so the time column shares their axis
-              // instead of hugging the right edge.
-              <div className={`col-start-1 row-start-1 flex h-5 min-w-5 items-center justify-center justify-self-end overflow-visible truncate whitespace-nowrap text-ui tabular-nums text-faint transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
+              // instead of hugging the right edge. `text-ui-sm` (the ramp's meta
+              // step), not the row's own `text-sidebar-row`: the timestamp is
+              // metadata about the row, and at the row's size it competed with
+              // the workspace name for the eye.
+              <div className={`col-start-1 row-start-1 flex h-5 min-w-5 items-center justify-center justify-self-end overflow-visible truncate whitespace-nowrap text-ui-sm tabular-nums text-faint transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>
