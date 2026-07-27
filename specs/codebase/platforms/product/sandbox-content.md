@@ -481,7 +481,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       Build the clone-delete primitive under the same fence discipline as
       retire, then pair repository-environment deletion with an after-commit
       reclaim.
-- [ ] Git identity is not materialized at all: the only implementation was
 - [ ] The inventory row carries no last-activity timestamp for suggesting
       stale worktrees. Add last activity after wiring the session store
       into worktree inventory.
