@@ -1,4 +1,4 @@
-import type { AgentLoginTerminalRecord } from "@anyharness/sdk";
+import type { AgentLoginTerminalRecord, TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import { connectAgentLoginTerminal, type TerminalStreamHandle } from "@anyharness/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useXtermSurface } from "#product/hooks/terminals/lifecycle/use-xterm-surface";
@@ -7,6 +7,12 @@ interface UseAgentLoginTerminalViewportInput {
   terminal: AgentLoginTerminalRecord | null;
   baseUrl: string;
   authToken?: string;
+  // Cloud carries a 7-day product JWT — it must ride the WS subprotocol
+  // (`proliferate-gateway-bearer`), never the `?access_token=` query string,
+  // matching every other cloud WS path (cloud-sandbox-gateway.ts,
+  // terminal-stream-controller.ts). Local's short-lived local-runtime token
+  // has no such requirement and keeps the default query transport.
+  webSocketAuthTransport?: TerminalWebSocketAuthTransport;
   visible: boolean;
   focusRequestToken: number;
   onExit: (code: number | null) => void;
@@ -16,6 +22,7 @@ export function useAgentLoginTerminalViewport({
   terminal,
   baseUrl,
   authToken,
+  webSocketAuthTransport,
   visible,
   focusRequestToken,
   onExit,
@@ -69,6 +76,7 @@ export function useAgentLoginTerminalViewport({
     const handle = connectAgentLoginTerminal({
       baseUrl,
       authToken,
+      webSocketAuthTransport,
       terminalId,
       afterSeq: lastSeqRef.current > 0 ? lastSeqRef.current : undefined,
       onData: (data, frame) => {
@@ -97,7 +105,7 @@ export function useAgentLoginTerminalViewport({
       }
       handle.close();
     };
-  }, [authToken, baseUrl, isReady, terminal, terminalRef, visible, write]);
+  }, [authToken, baseUrl, isReady, terminal, terminalRef, visible, webSocketAuthTransport, write]);
 
   return {
     connectionError,

@@ -5,8 +5,10 @@ import type { LocalHarnessKind } from "../evidence/schema.js";
  * catalog (audit ruling #2, registry/catalog verified). Cursor carries an
  * account key, not a provider key, so it can never take a gateway selection —
  * this is a genuine product design fact (server `selection_rules.py`'s
- * `NATIVE_ONLY_HARNESSES`), not a test gap; the server's 400 on a cursor
- * gateway-selection PUT is CORRECT by design and must never be worked around.
+ * `GATEWAY_CAPABLE_HARNESSES` allow-list, which cursor is absent from — it
+ * DOES take an ordinary api_key selection, just never a gateway one), not a
+ * test gap; the server's 400 on a cursor gateway-selection PUT is CORRECT by
+ * design and must never be worked around.
  *
  * Every LOCAL-* collector that drives a gateway-route cell per harness
  * (LOCAL-2/T3-CHAT-1, LOCAL-4/T3-CFG-1, LOCAL-7/T3-INT-1) must short-circuit

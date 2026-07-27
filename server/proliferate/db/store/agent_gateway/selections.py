@@ -119,13 +119,15 @@ async def put_auth_selections(
         if source.api_key_id is not None:
             referenced_key_ids.add(source.api_key_id)
 
-    # Every harness kind accepted by this store is gateway-capable. Keep a
-    # disabled gateway row even when an older/direct client sends the native
-    # state as ``sources=[]``. Besides representing no effective source, this
-    # row is the scope's durable revision marker: deleting the final row would
+    # Keep a disabled gateway row even when an older/direct client sends the
+    # native state as ``sources=[]``, regardless of whether this harness kind
+    # is gateway-capable. Besides representing no effective source, this row
+    # is the scope's durable revision marker: deleting the final row would
     # reset the rendered revision to zero (or an older sibling scope), causing
     # an AnyHarness runtime to reject the clear as stale and retain its prior
-    # gateway route.
+    # route. Surface-revision monotonicity is harness-agnostic — it must hold
+    # even for a harness (e.g. cursor) that can never select the gateway
+    # source itself.
     gateway_key = _source_key(AGENT_AUTH_SOURCE_GATEWAY, None)
     if gateway_key not in desired:
         desired[gateway_key] = DesiredAuthSource(

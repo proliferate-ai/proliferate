@@ -1,3 +1,4 @@
+import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import type { AgentLoginTerminalSession } from "#product/hooks/agents/workflows/use-agent-login-terminal-workflow";
 import { useCallback } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -8,6 +9,7 @@ interface AgentLoginTerminalPanelProps {
   session: AgentLoginTerminalSession;
   baseUrl: string;
   authToken?: string;
+  webSocketAuthTransport?: TerminalWebSocketAuthTransport;
   onClose: (kind: string) => void;
   onExit: (kind: string, code: number | null) => void;
   onRestart: () => void;
@@ -17,6 +19,7 @@ export function AgentLoginTerminalPanel({
   session,
   baseUrl,
   authToken,
+  webSocketAuthTransport,
   onClose,
   onExit,
   onRestart,
@@ -29,6 +32,7 @@ export function AgentLoginTerminalPanel({
     terminal,
     baseUrl,
     authToken,
+    webSocketAuthTransport,
     visible: Boolean(terminal),
     focusRequestToken: session.focusRequestToken,
     onExit: handleExit,

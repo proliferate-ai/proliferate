@@ -456,14 +456,37 @@ describe("HarnessPane authentication", () => {
     ).not.toBeNull();
   });
 
-  it("shows cursor as native-only with no controls", () => {
+  it("offers cursor api_key and CLI methods but never the gateway card", () => {
     renderPane("cursor");
 
-    expect(
-      screen.queryByText(/authenticates with its own sign-in/),
-    ).not.toBeNull();
+    // Cursor has no gateway recipe (agent-auth.md: "typed refusal, no gateway
+    // route exists for cursor") — the gateway card is omitted, not disabled.
     expect(screen.queryByRole("button", { name: "Proliferate gateway" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Add variable/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "API key" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "CLI login" })).toBeTruthy();
+  });
+
+  it("persists a cursor api_key selection using its CURSOR_API_KEY suggestion", () => {
+    state.apiKeys.data = [{
+      id: "key-1",
+      title: "Cursor key",
+      redactedHint: "sk-...abcd",
+      status: "active",
+      createdAt: "2026-07-01T00:00:00Z",
+    }];
+    renderPane("cursor");
+
+    fireEvent.click(screen.getByRole("button", { name: "API key" }));
+    expect(screen.getByText("No API key configured.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Add API key/ }));
+    expect(screen.getByTestId("add-key-modal")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "submit-add-key" }));
+    expect(createKeyMutate).toHaveBeenCalledWith(
+      { title: "Test key", value: "sk-test-value" },
+      expect.anything(),
+    );
   });
 
   it("offers Add provider only for opencode when API key method is active", () => {

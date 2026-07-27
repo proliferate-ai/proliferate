@@ -32,11 +32,27 @@ def _api_key(
 
 
 class TestAuthSelectionRules:
-    def test_cursor_rejects_any_source(self) -> None:
-        with pytest.raises(SelectionRuleError, match="native login only"):
+    def test_cursor_rejects_gateway_but_allows_api_key(self) -> None:
+        # Cursor has no gateway recipe (agent-auth.md: "typed refusal, no
+        # gateway route exists for cursor") — a gateway source is illegal.
+        with pytest.raises(SelectionRuleError, match="no gateway recipe"):
             validate_auth_selection_set(harness_kind="cursor", sources=[_gateway()])
-        # Empty is fine — cursor is always the native empty state.
+        # Empty is fine — cursor's implicit native empty state.
         validate_auth_selection_set(harness_kind="cursor", sources=[])
+        # Its single api_key slot (CURSOR_API_KEY) IS a legal selection, same
+        # cardinality rule as any other single-source harness.
+        validate_auth_selection_set(
+            harness_kind="cursor",
+            sources=[_api_key(env_var_name="CURSOR_API_KEY")],
+        )
+        with pytest.raises(SelectionRuleError, match="at most one enabled"):
+            validate_auth_selection_set(
+                harness_kind="cursor",
+                sources=[
+                    _api_key(env_var_name="CURSOR_API_KEY"),
+                    _api_key(env_var_name="CURSOR_API_KEY_2"),
+                ],
+            )
 
     def test_single_source_harnesses_allow_at_most_one_enabled(self) -> None:
         for harness in ("claude", "codex", "grok"):
