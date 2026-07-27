@@ -32,13 +32,13 @@ import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug
 import { ComposerFileMentionSearch } from "#product/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
 import { $createComposerFileMentionNode } from "#product/components/workspace/chat/input/ComposerFileMentionNode";
+import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import {
-  ComposerRichTextEditor,
   getComposerEditorContext,
   replaceComposerRangeWithNodes,
   replaceComposerTextRange,
   type ComposerEditorContext,
-} from "#product/components/workspace/chat/input/ComposerRichTextEditor";
+} from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "@proliferate/ui/patterns/ComposerTextareaFrame";
 
