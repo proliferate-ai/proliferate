@@ -22,12 +22,12 @@
 //! credential-derived digest, and the client contract is the boolean `stale` plus
 //! its reason. The projection type has no field for it, so it cannot leak.
 
+use anyharness_contract::v1::ProblemDetails;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
-use anyharness_contract::v1::ProblemDetails;
 use serde::Deserialize;
 
 use super::error::ApiError;
@@ -62,6 +62,7 @@ pub async fn get_model_snapshot_status(
     State(state): State<AppState>,
     Path(kind): Path<String>,
 ) -> Result<Json<ModelSnapshotStatus>, ApiError> {
+    ensure_path_safe_identifier(&kind, "kind")?;
     ensure_known_kind(&kind)?;
     Ok(Json(
         state
@@ -91,6 +92,8 @@ pub async fn refresh_model_snapshot(
     Path(kind): Path<String>,
     Query(query): Query<RefreshQuery>,
 ) -> Result<(StatusCode, Json<ModelSnapshotStatus>), ApiError> {
+    ensure_path_safe_identifier(&kind, "kind")?;
+    ensure_path_safe_identifier(&query.auth_context_id, "authContextId")?;
     ensure_known_kind(&kind)?;
     let service = state.model_snapshot_service.clone();
 
@@ -114,6 +117,75 @@ fn ensure_known_kind(kind: &str) -> Result<(), ApiError> {
             "MODEL_SNAPSHOT_UNKNOWN_AGENT",
         )
     })
+}
+
+/// Syntactic gate for wire identifiers that become filesystem path components.
+///
+/// `kind` and `authContextId` both end up inside paths under the runtime home
+/// (`agents/<kind>/model-snapshot.json`, the probe scratch directory name). The
+/// semantic checks downstream — the registry lookup, the active-context
+/// membership test — reject unknown values, but they are lookups, not shape
+/// proofs. This is the boundary guarantee that no separator, dot, or control
+/// character from the wire can ever become part of a path. Every legitimate
+/// identifier is lowercase kebab/underscore ASCII, so the allowlist excludes
+/// nothing real.
+pub(super) fn ensure_path_safe_identifier(value: &str, field: &str) -> Result<(), ApiError> {
+    let well_formed = !value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_');
+    if well_formed {
+        Ok(())
+    } else {
+        Err(ApiError::bad_request(
+            format!("{field} must be 1-64 characters of [a-z0-9_-]"),
+            "MODEL_SNAPSHOT_INVALID_IDENTIFIER",
+        ))
+    }
+}
+
+#[cfg(test)]
+mod identifier_tests {
+    use super::ensure_path_safe_identifier;
+
+    #[test]
+    fn accepts_every_real_identifier_shape() {
+        for value in [
+            "claude",
+            "opencode",
+            "anthropic-api",
+            "api_key",
+            "gateway",
+            "b2",
+        ] {
+            assert!(
+                ensure_path_safe_identifier(value, "kind").is_ok(),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_path_metacharacters_and_junk() {
+        for value in [
+            "",
+            "..",
+            "../claude",
+            "a/b",
+            "a\\b",
+            "claude.json",
+            "CLAUDE",
+            "a b",
+            "a\0b",
+            &"x".repeat(65),
+        ] {
+            assert!(
+                ensure_path_safe_identifier(value, "kind").is_err(),
+                "{value:?}"
+            );
+        }
+    }
 }
 
 /// Status codes mirror the contract the manual gateway-refresh endpoint
