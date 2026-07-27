@@ -1,0 +1,27 @@
+/* Geist / Geist Mono @font-face for the design-sync bundle.
+ *
+ * `@proliferate/design`'s product.css declares these families with absolute
+ * `/node_modules/geist/...` URLs, which the host app serves but a bundle
+ * cannot resolve — so the shipped rules dangle and code/mono text falls back
+ * to a system font. These rules redeclare the same two families with paths
+ * the converter can resolve and rewrite into `fonts/`.
+ *
+ * Wired via `extraFonts` in .design-sync/config.json.
+ */
+@font-face {
+  font-family: "Geist";
+  src: url("../../apps/packages/design/node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2")
+    format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../../apps/packages/design/node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2")
+    format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
