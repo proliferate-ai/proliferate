@@ -25,8 +25,6 @@ vi.mock("#product/components/feedback/Skeleton", () => ({
 }));
 
 vi.mock("@proliferate/ui/icons", () => ({
-  ChevronDownUp: () => <span data-testid="collapse-icon" />,
-  ChevronUpDown: () => <span data-testid="expand-icon" />,
   Plus: () => <span data-testid="plus-icon" />,
 }));
 

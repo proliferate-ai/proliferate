@@ -430,30 +430,20 @@ export const themeTokens = {
   },
   "--color-composer-backdrop-filter": {
     dark: "none",
-    light: "blur(16px)",
-    provenance: "[SHIPPED]",
+    light: "none",
+    provenance: "[RETUNE:surface/composer-opaque]",
   },
   /**
-   * The composer is a translucent input surface floating over the app
-   * background, not an opaque card, so the transcript reads through it. The
-   * dark half renders `rgba(45,45,45,.96)` expressed in the house
-   * `color-mix()` form, landing on the same 96%-of-a-lifted-gray treatment
-   * `--color-surface-control` already uses in dark.
-   *
-   * The light half keeps its shipped `rgba(255,255,255,0.864)`: light was
-   * already translucent, tuned for its own blur treatment, and light is the
-   * only mode that carries `--color-composer-backdrop-filter: blur(16px)`
-   * (dark stays `none` on purpose — WKWebView re-blurs the whole transcript on
-   * every keystroke; see ChatComposerDock's PERF note). Raising light's alpha
-   * to match dark's 96% would cancel that blur rather than derive from it, so
-   * the translucency treatment applies per mode at the alpha each mode's
-   * backdrop was tuned for.
+   * The composer is a fully opaque input surface — no transcript bleed-
+   * through, in either mode. Dark keeps the lifted-gray `#2d2d2d` hue
+   * `--color-surface-control` already uses; light keeps its shipped white.
+   * Both render at 100% alpha now, so `--color-composer-backdrop-filter`
+   * (below) has nothing left to blur and is set to `none` in both modes.
    */
   "--color-composer-background": {
-    dark: "color-mix(in oklab, #2d2d2d 96%, transparent)",
-    light: "rgba(255, 255, 255, 0.864)",
-    themeFallback: "rgba(45, 45, 45, 0.96)",
-    provenance: "[RETUNE:surface/composer-translucent]",
+    dark: "#2d2d2d",
+    light: "#ffffff",
+    provenance: "[RETUNE:surface/composer-opaque]",
   },
   "--color-composer-border": {
     dark: "var(--color-border) /* legacy-alias */",
@@ -863,9 +853,13 @@ export const themeTokens = {
     provenance: "[RETUNE:state/overlay]",
   },
   "--color-sidebar": {
-    dark: "#1d1d1d",
+    // Round-2 measurement against the reference app's dark capture: the
+    // sidebar rail reads rgb(34, 34, 34) — one step LIGHTER than the root
+    // surface, not recessed to --color-surface-under. Supersedes the
+    // surface-recess ruling from the prior retune.
+    dark: "#222222",
     light: "var(--color-surface-under)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:sidebar/reference-surface]",
   },
   "--color-sidebar-accent": {
     dark: "var(--color-hover) /* legacy-alias */",
@@ -1094,9 +1088,20 @@ export const themeTokens = {
     light: "40rem",
     provenance: "[RETUNE:layout/transcript-measure]",
   },
+  /**
+   * Two-tier measure: the thread column itself (avatars, action rows, wide
+   * blocks) widens to 48rem while readable prose stays capped at
+   * `--container-transcript-readable` (40rem, applied directly on the
+   * Markdown body). See ChatColumn.ts and MarkdownBody.tsx.
+   */
+  "--container-transcript-thread": {
+    dark: "48rem",
+    light: "48rem",
+    provenance: "[RETUNE:layout/transcript-measure]",
+  },
   "--container-transcript-wide": {
-    dark: "64rem",
-    light: "64rem",
+    dark: "56rem",
+    light: "56rem",
     provenance: "[RETUNE:layout/transcript-measure]",
   },
   "--diffs-addition-color-override": {
@@ -1245,6 +1250,15 @@ export const themeTokens = {
     light: "-apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, \"Segoe UI\", sans-serif",
     provenance: "[RETUNE:type/Geist] — trial: native system stack; Geist variant preserved in git history, swap back = revert this value",
   },
+  /**
+   * Base document weight. `product.css`'s `body` rule reads this token
+   * instead of a bare literal so the value stays single-sourced here.
+   */
+  "--font-weight-body": {
+    dark: "445",
+    light: "445",
+    provenance: "[RETUNE:type/body-weight]",
+  },
   "--font-weight-control": {
     dark: "450",
     light: "450",
@@ -1265,6 +1279,19 @@ export const themeTokens = {
     light: "2em",
     provenance: "[SHIPPED]",
   },
+  /**
+   * [RETUNE:icons/sidebar-indicator] — the sidebar row's trailing activity
+   * glyphs (waiting clock, running spinner, error/warning badge) render at
+   * 14px inside a 20px centered cell in the reference, against the same 12px
+   * row text. 1.166667em is exactly 14px at that base — between
+   * `--icon-compact` (12px, too small) and `--icon-control` (16px, visibly
+   * too big), neither of which matches on screen.
+   */
+  "--icon-indicator": {
+    dark: "1.166667em",
+    light: "1.166667em",
+    provenance: "[RETUNE:icons/sidebar-indicator]",
+  },
   "--icon-large": {
     dark: "1.666667em",
     light: "1.666667em",
@@ -1280,6 +1307,21 @@ export const themeTokens = {
     light: "0.55em",
     provenance: "[SHIPPED]",
   },
+  /**
+   * [RETUNE:icons/sidebar-trailing-tight] — round-4 sidebar feedback: the
+   * trailing plus/three-dots row controls (`SidebarActionButton`, the
+   * sidebar's `RowActionIconButton` kebab) rendered their glyph at
+   * `--icon-control` (16px), which read 50-60% too big against the
+   * reference sidebar on screen even though the ratio math looked correct.
+   * `0.875em` lands at 10.5px against the sidebar row's 12px text — the
+   * smallest inline-glyph tier, reserved for these row-trailing controls
+   * whose 24px hit box is unusually large relative to their glyph.
+   */
+  "--icon-tight": {
+    dark: "0.875em",
+    light: "0.875em",
+    provenance: "[RETUNE:icons/sidebar-trailing-tight]",
+  },
   "--radius": {
     dark: "0.5rem",
     light: "0.5rem",
@@ -1291,8 +1333,8 @@ export const themeTokens = {
     provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-composer": {
-    dark: "0.75rem",
-    light: "0.75rem",
+    dark: "1.25rem",
+    light: "1.25rem",
     provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-full": {
@@ -1406,7 +1448,7 @@ export const themeTokens = {
     provenance: "[RETUNE:icons/control-boxes]",
   },
   /**
-   * Vertical rhythm between top-level transcript turns: a 12px gap, tokenized
+   * Vertical rhythm between top-level transcript turns: a 16px gap, tokenized
    * rather than left to each consuming layout. Lives in Tailwind's
    * `--spacing-*` namespace so `gap-transcript-turn` (and `mt-`/`p-`/`py-` on
    * the same name) resolves without an arbitrary gap value, which the
@@ -1416,8 +1458,19 @@ export const themeTokens = {
    * name.
    */
   "--spacing-transcript-turn": {
-    dark: "0.75rem",
-    light: "0.75rem",
+    dark: "1rem",
+    light: "1rem",
+    provenance: "[RETUNE:layout/transcript-measure]",
+  },
+  /**
+   * Tight intra-turn grouping (e.g. a prose block and its immediately
+   * following action row) — deliberately smaller than
+   * `--spacing-transcript-turn` so turn-to-turn rhythm and within-turn
+   * rhythm read as two distinct rungs, not one shared gap.
+   */
+  "--spacing-transcript-turn-tight": {
+    dark: "0.25rem",
+    light: "0.25rem",
     provenance: "[RETUNE:layout/transcript-measure]",
   },
   "--text-body": {
@@ -1529,6 +1582,36 @@ export const themeTokens = {
     dark: "var(--text-composer--line-height)",
     light: "var(--text-composer--line-height)",
     provenance: "[SHIPPED]",
+  },
+  /**
+   * Inline code sits slightly under its surrounding prose. Expressed in `em`
+   * (not a fixed px size) so it scales with whatever `--markdown-font-size`
+   * the enclosing message has set, instead of pinning a literal size the
+   * appearance gate would flag.
+   */
+  "--text-markdown-inline-code": {
+    dark: "0.92em",
+    light: "0.92em",
+    provenance: "[RETUNE:type/markdown-heading-ramp]",
+  },
+  /**
+   * Markdown heading ramp multipliers consumed by authenticated.css's
+   * `.chat-markdown` scope. h1 stays anchored on the semantic `--text-title`
+   * role and h2 stays the midpoint of `--text-title`/body (no magic
+   * literal in either); h3/h4 are unitless multipliers of
+   * `--markdown-font-size`, tokenized here instead of living as bare
+   * literals in authenticated.css. h5/h6 stay at 1x (no additional
+   * scale-up), matching the reference's compact micro-heading treatment.
+   */
+  "--markdown-heading-h3-scale": {
+    dark: "1.1667",
+    light: "1.1667",
+    provenance: "[RETUNE:type/markdown-heading-ramp]",
+  },
+  "--markdown-heading-h4-scale": {
+    dark: "1.0833",
+    light: "1.0833",
+    provenance: "[RETUNE:type/markdown-heading-ramp]",
   },
   "--text-readable-code": {
     dark: "var(--readable-code-font-size)",
