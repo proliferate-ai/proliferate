@@ -247,38 +247,37 @@ environment or workspace needs materialization:
 ```text
 Cloud service
   -> E2B create/resume
-  -> settings.supervisor_owned_runtime on (default since 2026-07-26):
-       launch Proliferate Supervisor detached (build_supervisor_config +
-       build_detached_supervisor_launch_command); Supervisor starts and
-       supervises AnyHarness and Worker itself — no separate Worker sidecar
-       launch
-  -> settings.supervisor_owned_runtime off (legacy, opt-out only):
-       launch authenticated AnyHarness when absent/unhealthy
-         -> persist ready access
-         -> best-effort start Proliferate Worker sidecar
-       OR reuse an already-healthy authenticated AnyHarness
-         -> do not restart a missing Worker sidecar
+  -> launch Proliferate Supervisor detached (build_supervisor_config +
+     build_detached_supervisor_launch_command); Supervisor starts and
+     supervises AnyHarness and Worker itself — no separate Worker sidecar
+     launch. This is the only launch topology; there is no flag branch here.
   -> materialize the repo
 ```
 
-`supervisor_owned_runtime` is a server config flag. The live E2B N-1→N proof
-passed (2026-07-26: real sandbox, supervisor-owned topology, pins
-0.3.47→0.3.48, zero rollbacks, ~75s convergence), so the flag now defaults on:
-a newly provisioned sandbox is Supervisor-first from the start. The env var
-still allows opting back out per-deploy; with the flag off, the E2B launch
-path is unchanged from before this flip — it does not start Proliferate
-Supervisor, and Supervisor remains the process/update owner only for the SSH
-installer and its installed target layout. Do not infer either topology for a
-given target without checking the flag and how that target was provisioned.
+`supervisor_owned_runtime` is a server config flag, but as of S5-B
+(2026-07-26) it no longer gates which topology a *launch* takes: the live E2B
+N-1→N proof (real sandbox, supervisor-owned topology, pins 0.3.47→0.3.48,
+zero rollbacks, ~75s convergence) and the D5 BRIDGE proof (a running legacy
+sandbox migrated onto the Supervisor-owned topology in place, ~2.5s, sandbox
+`iwwvadhffzxoora56f437`) both passed 2026-07-26, clearing the gate to delete
+the legacy direct-nohup'd-AnyHarness-plus-Worker-sidecar launch path entirely.
+Every (re)launch is now unconditionally Supervisor-owned, regardless of this
+flag's value. The flag survives with a narrower, asymmetric meaning: it only
+gates the `desiredTopology: "supervisor_owned"` heartbeat signal
+(`record_heartbeat` in `runtime_workers/service.py`) that tells an
+already-running LEGACY Worker (one launched before this deletion, or before
+the flag existed) to self-bridge onto a Supervisor. Flag off therefore no
+longer means "launch the legacy topology" — it means "stop advertising the
+bridge signal to legacy workers still out there." See the flag's docstring in
+`config.py` for the exact wording. Do not infer a non-Supervisor-owned launch
+from this flag anymore; Supervisor remains the process/update owner for the
+SSH installer path too, unconditionally.
 
-The `connect.py` branch that issues the Supervisor-first launch is
-implemented, and the `proliferate-supervisor` update-mailbox consumer it
-depends on is now implemented too (verify → bounded download → re-verify →
-stage → atomic activate → dependency-ordered restart → health-gate → rollback;
-see
+The `connect.py` call that issues the Supervisor-first launch is implemented,
+and the `proliferate-supervisor` update-mailbox consumer it depends on is
+implemented too (verify → bounded download → re-verify → stage → atomic
+activate → dependency-ordered restart → health-gate → rollback; see
 [`proliferate-supervisor/README.md`](../proliferate-supervisor/README.md#implementation-status-this-pr)).
-The legacy launch path remains only for rollback; its deletion is the named
-follow-up.
 
 The optional Worker has one heartbeat loop, not a product-command channel:
 
@@ -324,8 +323,11 @@ bridge logic lives in `supervisor_bridge.rs` and is reached from
 signal from BOTH the supervisor-owned and the legacy branch so an
 already-provisioned legacy Worker migrates too (see
 `proliferate-worker/README.md`).
-The live bridge and live N-1→N proof are deferred to the post-merge Tier 4
-pass.
+The live D5 BRIDGE proof passed 2026-07-26 (sandbox `iwwvadhffzxoora56f437`:
+a running legacy sandbox migrated onto the Supervisor-owned topology in
+place, ~2.5s, no destroy/recreate), alongside the live E2B N-1→N update
+proof (also 2026-07-26) — both cited above and both gating the launch-path
+deletion.
 
 There is no mounted Target registry, command/control poll, event tail, exposure
 reconcile loop, inventory report, or materialization report.

@@ -1,13 +1,13 @@
-"""New-provision topology branch (Make Managed Runtime Updates Supervisor-Owned, decision 5).
+"""Supervisor-owned launch (Make Managed Runtime Updates Supervisor-Owned, decision 5).
 
-``settings.supervisor_owned_runtime`` gates ``_launch_anyharness_runtime``:
-off keeps today's direct-nohup AnyHarness + separate worker-sidecar launch
-byte-for-byte (regression pin, explicitly monkeypatched by the flag-off
-test); on (the default since the live E2B N-1->N proof passed 2026-07-26)
-launches the Supervisor first (via ``build_supervisor_config`` +
-``build_detached_supervisor_launch_command``) and never launches a separate
-worker sidecar. Providers and runtime probes are stubbed per the repo testing
-standard -- no real sandboxes.
+Launching a cloud sandbox always launches Proliferate Supervisor first (via
+``build_supervisor_config`` + ``build_detached_supervisor_launch_command``);
+Supervisor spawns and supervises AnyHarness and the Worker itself, so there is
+no separate worker-sidecar launch. The legacy direct-nohup'd AnyHarness path
+(gated by ``settings.supervisor_owned_runtime`` off) was deleted once the live
+E2B N-1->N update proof and the D5 BRIDGE proof both passed (2026-07-26); see
+the PR that deleted it for the caller-verification evidence. Providers and
+runtime probes are stubbed per the repo testing standard -- no real sandboxes.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
@@ -36,7 +35,6 @@ from proliferate.server.cloud.runtime.bootstrap import (
     supervisor_config_path,
     worker_config_path,
 )
-from proliferate.server.cloud.runtime.sandbox_exec import build_detached_runtime_launch_command
 
 RUNTIME_URL = "https://runtime.example.invalid"
 HOME_DIR = "/home/user"
@@ -94,15 +92,9 @@ class _FakeProvider:
 def _install_stubs(
     monkeypatch: pytest.MonkeyPatch,
     provider: _FakeProvider,
-) -> tuple[list[str], list[dict[str, object]]]:
-    """Installs the same stubs as the reconnect self-heal suite, plus a
-    ``launch_worker_sidecar`` spy so tests can assert it was (not) called."""
+) -> list[dict[str, object]]:
+    """Installs stubs for the Supervisor-owned launch path."""
     monkeypatch.setattr(connect_module, "get_sandbox_provider", lambda _ref: provider)
-    monkeypatch.setattr(
-        runtime_launch_module,
-        "build_runtime_launch_script",
-        lambda *a, **k: "#!/bin/bash\ntrue\n",
-    )
     runtime_env_calls: list[dict[str, object]] = []
 
     def _capture_runtime_env(*_args: object, **kwargs: object) -> dict[str, str]:
@@ -131,19 +123,13 @@ def _install_stubs(
     async def _ok_auth(*_a: Any, **_k: Any) -> None:
         return None
 
-    sidecar_calls: list[str] = []
-
-    async def _spy_sidecar(*_a: Any, **_k: Any) -> None:
-        sidecar_calls.append("called")
-
     async def _resume_allowed(*_a: Any, **_k: Any) -> None:
         return None
 
     monkeypatch.setattr(runtime_launch_module, "wait_for_runtime_health", _ok_health)
     monkeypatch.setattr(runtime_launch_module, "verify_runtime_auth_enforced", _ok_auth)
-    monkeypatch.setattr(runtime_launch_module, "launch_worker_sidecar", _spy_sidecar)
     monkeypatch.setattr(connect_module, "assert_cloud_sandbox_resume_allowed", _resume_allowed)
-    return sidecar_calls, runtime_env_calls
+    return runtime_env_calls
 
 
 async def _seed_sandbox(db: AsyncSession) -> CloudSandbox:
@@ -178,13 +164,12 @@ def _runtime_context() -> SandboxRuntimeContext:
 
 
 @pytest.mark.asyncio
-async def test_flag_off_keeps_legacy_launch_unchanged(
+async def test_launches_supervisor_first_no_sidecar(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "supervisor_owned_runtime", False)
     provider = _FakeProvider(db_session)
-    sidecar_calls, runtime_env_calls = _install_stubs(monkeypatch, provider)
+    runtime_env_calls = _install_stubs(monkeypatch, provider)
     sandbox = await _seed_sandbox(db_session)
     value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
     assert value is not None
@@ -192,37 +177,6 @@ async def test_flag_off_keeps_legacy_launch_unchanged(
     await connect_module.connect_ready_sandbox(db_session, sandbox=value)
 
     runtime_context = _runtime_context()
-    launch_command = build_detached_runtime_launch_command(runtime_context)
-    supervisor_command = build_detached_supervisor_launch_command(runtime_context)
-
-    assert launch_command in provider.commands
-    assert supervisor_command not in provider.commands
-    assert sidecar_calls == ["called"]
-    assert [(call["target_id"], call["sandbox_id"]) for call in runtime_env_calls] == [
-        (sandbox.id, sandbox.provider_sandbox_id)
-    ]
-    assert worker_config_path(runtime_context) not in provider.written_files
-    assert supervisor_config_path(runtime_context) not in provider.written_files
-    assert provider.runtime_io_transactions
-    assert not any(provider.runtime_io_transactions)
-
-
-@pytest.mark.asyncio
-async def test_flag_on_launches_supervisor_first_no_sidecar(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
-    provider = _FakeProvider(db_session)
-    sidecar_calls, runtime_env_calls = _install_stubs(monkeypatch, provider)
-    sandbox = await _seed_sandbox(db_session)
-    value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
-    assert value is not None
-
-    await connect_module.connect_ready_sandbox(db_session, sandbox=value)
-
-    runtime_context = _runtime_context()
-    launch_command = build_detached_runtime_launch_command(runtime_context)
     supervisor_binary = supervisor_binary_path(runtime_context)
     # The issued command embeds per-call identity env (sandbox/user ids), so it
     # cannot be reconstructed byte-for-byte here; assert on its stable shape
@@ -233,9 +187,6 @@ async def test_flag_on_launches_supervisor_first_no_sidecar(
         if supervisor_binary in cmd and supervisor_config_path(runtime_context) in cmd
     ]
     assert supervisor_commands, provider.commands
-    assert launch_command not in provider.commands
-    # The Supervisor spawns the Worker itself: no separate sidecar launch.
-    assert sidecar_calls == []
     assert [(call["target_id"], call["sandbox_id"]) for call in runtime_env_calls] == [
         (sandbox.id, sandbox.provider_sandbox_id)
     ]
@@ -248,20 +199,23 @@ async def test_flag_on_launches_supervisor_first_no_sidecar(
     assert not any(provider.runtime_io_transactions)
 
 
-@pytest.mark.asyncio
-async def test_default_takes_supervisor_path_without_monkeypatch(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The live E2B N-1->N proof passed 2026-07-26; the flag now defaults on.
+def test_supervisor_owned_runtime_default_is_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin ``supervisor_owned_runtime``'s field default now that the launch
+    path itself no longer branches on it (S5-B deleted the legacy branch, so
+    no launch-behavior test would catch a flipped default anymore).
 
-    This pins the *default* the ``supervisor_owned_runtime`` field resolves
-    to, not the ambient module-level ``settings`` singleton -- a dev with
-    ``SUPERVISOR_OWNED_RUNTIME=0`` (or the ``PROLIFERATE_`` alias) exported in
-    their shell would make an assertion against the singleton fail
-    spuriously even though the field's own default is correct. Construct a
-    fresh ``Settings()`` with both env var spellings cleared instead, so the
-    assertion reflects only the field default, never ambient env."""
+    This flag still gates the D5 ``desiredTopology`` heartbeat signal
+    (``record_heartbeat`` in ``runtime_workers/service.py``) that tells an
+    already-running legacy Worker to bridge onto a Supervisor. A silent flip
+    of the default to ``False`` would quietly stop advertising that bridge
+    signal to legacy workers still out there -- with no test failure to
+    surface it, since it no longer touches fresh-launch behavior at all.
+
+    Construct a fresh ``Settings()`` with both env var spellings cleared
+    (rather than asserting against the ambient module-level ``settings``
+    singleton) so this reflects only the field's own default, never
+    whatever env a dev's shell happens to export.
+    """
     monkeypatch.delenv("PROLIFERATE_SUPERVISOR_OWNED_RUNTIME", raising=False)
     monkeypatch.delenv("SUPERVISOR_OWNED_RUNTIME", raising=False)
     from proliferate.config import Settings
@@ -269,40 +223,9 @@ async def test_default_takes_supervisor_path_without_monkeypatch(
     fresh_settings = Settings()
     assert fresh_settings.supervisor_owned_runtime is True
 
-    # The launch path itself reads the module-level ``settings`` singleton
-    # (see ``_launch_anyharness_runtime``'s ``settings.supervisor_owned_runtime``
-    # check), which is resolved once at import time and is NOT re-read from
-    # the cleared env above. Pin it to the freshly-resolved default so the
-    # launch-path assertion below is deterministic regardless of what env
-    # var state this process's `settings` singleton happened to import with.
-    monkeypatch.setattr(
-        settings, "supervisor_owned_runtime", fresh_settings.supervisor_owned_runtime
-    )
-
-    provider = _FakeProvider(db_session)
-    sidecar_calls, _runtime_env_calls = _install_stubs(monkeypatch, provider)
-    sandbox = await _seed_sandbox(db_session)
-    value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
-    assert value is not None
-
-    await connect_module.connect_ready_sandbox(db_session, sandbox=value)
-
-    runtime_context = _runtime_context()
-    launch_command = build_detached_runtime_launch_command(runtime_context)
-    supervisor_binary = supervisor_binary_path(runtime_context)
-    supervisor_commands = [
-        cmd
-        for cmd in provider.commands
-        if supervisor_binary in cmd and supervisor_config_path(runtime_context) in cmd
-    ]
-    assert supervisor_commands, provider.commands
-    assert launch_command not in provider.commands
-    assert sidecar_calls == []
-
 
 class TestSupervisorLaunchCommandHardening:
-    """Flip-hazard parity with the legacy worker sidecar (worker_sidecar.py):
-    a paused VM resumed from a template baked before the supervisor binary
+    """A paused VM resumed from a template baked before the supervisor binary
     existed must not half-start. The launch command guards with ``test -x``
     so it still exits 0 without launching anything; the health probe then
     fails with a clean signal instead of a silent timeout."""
@@ -370,7 +293,6 @@ class TestSupervisorLaunchCommandHardening:
         possible missing-binary cause instead of a generic timeout only."""
         from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 
-        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
         provider = _FakeProvider(db_session)
         _install_stubs(monkeypatch, provider)
 
@@ -404,20 +326,16 @@ class TestSupervisorLaunchCommandHardening:
 
 class TestSupervisorOwnedLaunchEmptyBaseUrl:
     """The supervisor path must warn (not silently proceed) when no cloud
-    base URL is configured, matching the legacy sidecar's loud warning
-    (worker_sidecar.py:91-103) -- warning parity only, NOT behavioral parity.
-    The legacy sidecar warns and then skips launching the worker entirely, so
-    a misconfigured deploy ends up with AnyHarness and no worker. The
-    supervisor-owned path cannot do that: `SupervisorConfig.worker_binary`/
-    `worker_config` (anyharness/crates/proliferate-supervisor/src/config.rs)
-    are required, non-Option fields with no supervisor-config shape that
-    omits the worker, so the Supervisor still launches AnyHarness AND a
-    Worker child that bakes in the empty base URL, fails to enroll, exits,
-    and gets endlessly respawned by the Supervisor's restart loop -- a
-    permanent crash-loop rather than the legacy path's quiet no-worker
-    runtime. This test only asserts the Supervisor still launches and that
-    the warning fires; it does not (and cannot) assert a worker-less
-    config, because none exists on the Rust side."""
+    base URL is configured. `SupervisorConfig.worker_binary`/`worker_config`
+    (anyharness/crates/proliferate-supervisor/src/config.rs) are required,
+    non-Option fields with no supervisor-config shape that omits the worker,
+    so the Supervisor still launches AnyHarness AND a Worker child that bakes
+    in the empty base URL, fails to enroll, exits, and gets endlessly
+    respawned by the Supervisor's restart loop -- a permanent crash-loop
+    rather than a quiet no-worker runtime. This test only asserts the
+    Supervisor still launches and that the warning fires; it does not (and
+    cannot) assert a worker-less config, because none exists on the Rust
+    side."""
 
     @pytest.mark.asyncio
     async def test_empty_base_url_warns_but_still_launches_supervisor(
@@ -425,7 +343,6 @@ class TestSupervisorOwnedLaunchEmptyBaseUrl:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
         provider = _FakeProvider(db_session)
         _install_stubs(monkeypatch, provider)
         # Override the stubbed base URL back to empty to hit the warning path.
@@ -461,18 +378,20 @@ class TestSupervisorOwnedLaunchEmptyBaseUrl:
 class TestBuildWorkerConfigFence:
     """Decision 7: a supervisor-owned target's worker config never emits the
     legacy self-/anyharness-update gates, and carries the mailbox + bridge
-    config fields instead."""
+    config fields instead. The legacy non-supervisor-owned config shape
+    (self_update_enabled=true, anyharness_update_enabled=true, in-place swap
+    paths) was deleted along with its only caller (the legacy launch path);
+    ``build_worker_config`` now refuses ``supervisor_owned=False`` outright."""
 
-    def test_legacy_target_unchanged(self) -> None:
+    def test_supervisor_owned_is_the_only_supported_shape(self) -> None:
         runtime_context = _runtime_context()
-        config = build_worker_config(
-            cloud_base_url="http://cloud.test",
-            enrollment_token="tok",
-            runtime_context=runtime_context,
-        )
-        assert "self_update_enabled = true" in config
-        assert "anyharness_update_enabled = true" in config
-        assert "supervisor_update_request_dir" not in config
+        with pytest.raises(ValueError, match="supervisor-owned"):
+            build_worker_config(
+                cloud_base_url="http://cloud.test",
+                enrollment_token="tok",
+                runtime_context=runtime_context,
+                supervisor_owned=False,
+            )
 
     def test_supervisor_owned_fences_legacy_gates(self) -> None:
         runtime_context = _runtime_context()
