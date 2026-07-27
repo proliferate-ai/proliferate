@@ -297,6 +297,37 @@ change detection and the promote flow.
   the pinned image (v1.93.0, 2026-07-25) ahead of B2's per-(subject,harness)
   minting.
 
+Org-only account model (named, binary assertions; the unification corridor
+is done when they are green — IDs are stable, tests reference them by name):
+
+- **D1** Signup produces: team `org-<id>`, LiteLLM user
+  `org-<org>-user-<id>`, one key per gateway-capable harness (cursor
+  absent), and the free grant on the default org's billing subject.
+  (enrollment pytest)
+- **D2** A second account on the same GitHub identity gets no grant, and
+  creating additional orgs mints nothing. (free-credits pytest)
+- **D3** An unfunded org: the renderer withholds key material, launches
+  refuse with the typed error, and LiteLLM never receives a literal `0`
+  budget. This assertion *replaces* the "no grant means unlimited" tests,
+  which must be deleted, not kept green. (budget + renderer pytest)
+- **D4** Spend through a member's harness key lands in the imported ledger
+  attributed to (user, org, harness, model), and the team aggregate equals
+  the sum across member keys — live-verified against the staging proxy.
+  (usage-import pytest + live run)
+- **D5** Spend-to-zero disables keys and withholds material → typed
+  refusal; a top-up grant reactivates → launch succeeds. (release
+  scenarios, rewired to org subjects)
+- **D6** The migration re-parents a personal enrollment onto the default
+  org, re-mints keys under the per-org LiteLLM user, revokes the old keys,
+  is idempotent on re-run, and a session launched after it works.
+  (migration pytest + intent test)
+- **D7** Adding a gateway-capable harness kind flips enrollments to
+  `pending` and the next pass mints exactly the missing key. (enrollment
+  fingerprint pytest)
+- **D8** `get_gateway_enrollment_for_user` resolves the default org
+  unconditionally; the funding guard and the name-ordered org choice are
+  gone from the codebase (grep-gated). (budget pytest + grep gate)
+
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:

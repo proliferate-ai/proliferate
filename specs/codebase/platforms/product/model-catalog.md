@@ -503,6 +503,41 @@ unchanged).
   next event rewrites it whole. It is derived state — deleting it loses
   nothing a re-probe cannot restore.
 
+## Proof
+
+Named, binary assertions; the probe re-cut is done when they are green. IDs
+are stable — tests reference them by name.
+
+- **B1** Probe env ≡ launch env modulo the file root, parameterized over
+  every harness × source-combination in the recipe table.
+  (probe_materialization tests)
+- **B2** Any probe writes one schemaVersion-2 document — single entry, no
+  `entries` map, no fingerprint — with `stateRevision` equal to the state
+  file's and `installIdentity` equal to the manifest's. (document tests)
+- **B3** Opencode with gateway + api_key + native login yields one
+  observation whose model list contains every provider's models with
+  verbatim `provider` fields. (engine test)
+- **B4** A gateway-claude probe on a host exporting
+  `CLAUDE_CODE_USE_BEDROCK` and `ANTHROPIC_API_KEY` records gateway models,
+  not Bedrock's menu. (probe env tests)
+- **B5** The five events (auth-apply ack, install completed, login-terminal
+  exit, unconditional startup pass, manual refresh) are the only probe
+  spawn sites; no poll, timer, or gate-triggered spawn exists. (wiring
+  tests)
+- **B6** A crashed probe updates `lastAttempt` only and the last-good lists
+  keep serving; a dead provider inside the composed world yields a
+  successful reduced observation, never seed backfill. (engine degraded
+  tests)
+- **B7** Concurrent triggers coalesce to one spawn; a SIGKILLed probe
+  leaves zero credential bytes after the sweep; a non-owner runtime's
+  forced refresh is a 409. (concurrency/sweep/lock tests — survive the
+  re-cut verbatim)
+- **B8** The picker menu equals the observation wherever one exists (seed
+  only in true absence); launch accepts exactly the resolvable set; and
+  `SESSION_MODEL_GATED`/`required_contexts` no longer exist anywhere in
+  the codebase (grep-gated, so deleted concepts stay deleted). (universe
+  tests + grep gate)
+
 ## Current gaps
 
 Deltas between this document and the integration stack

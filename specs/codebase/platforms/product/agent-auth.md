@@ -633,6 +633,62 @@ shape change is made by changing the fixture — which breaks whichever side lag
 - Gateway not deployed (`gateway_enabled` false): the gateway option is
   not offered and nothing fails at launch.
 
+## Proof
+
+Named, binary assertions; a corridor of work is done when its assertions are
+green. IDs are stable — tests reference them by name.
+
+Auth (the full system):
+
+- **A1** Zero enabled rows → no `state.json` entry → launch renders the
+  empty delta; the harness sees only its own login. (contract fixtures +
+  render tests)
+- **A2** Every unsatisfiable selected source — unsynced enrollment, revoked
+  key, exhausted credit, unfunded org — refuses launch with the typed 409;
+  no input silently degrades a selection to native. (runtime startup tests +
+  renderer pytest)
+- **A3** Every non-native route strips ambient rerouting flags and unset
+  Anthropic selectors; env vars the route itself set (including
+  provider-config mode flags) always survive. (`render_tests.rs`)
+- **A4** Opencode composes gateway + N api_keys + ambient native into one
+  delta; `XDG_DATA_HOME` stays ambient. (`opencode_render_tests.rs`)
+- **A5** Typed-config end to end (once the write gate opens): typed vault
+  row → selection with no env var → `provider_config` wire source → spawn
+  env contains the harness's real env set; revoking the entry drops the
+  source at the next pass. (server pytest + render tests + one intent test)
+- **A6** The store rejects both illegal shapes: a bare-key selection
+  without an env var, and a typed-entry selection with one. (server pytest)
+- **A7** A gateway launch cannot read native credentials (isolated homes),
+  and codex's native recipe delivers the copied `auth.json` so a relocated
+  home stays authenticated. (render + native_render tests)
+
+Delivery, acknowledgement, restart:
+
+- **C1** A switch renders *pending* until the runtime ack and *applied*
+  after; a failed push stays visibly pending — no path shows applied
+  without an ack. (frontend hook tests + intent test)
+- **C2** A cloud switch against an asleep sandbox ensures → materializes →
+  acks; the never-provisioned case falls to bootstrap. (server integration
+  test)
+- **C3** Rapid switches deliver latest-wins; no intermediate document is
+  observable after a later one. (desktop hook tests + server pytest)
+- **C4** A delayed lower-revision push is rejected
+  `AGENT_ROUTE_STATE_STALE`; an equal-revision content change applies.
+  (`state.rs` tests)
+- **C5** A state pulled before enrollment sync lacks the key; sync
+  completion re-renders both surfaces with no unrelated mutation needed.
+  (server pytest + hook test)
+- **C6** After the ack, the restart modal lists exactly the running
+  sessions of the switched harness on the switched surface; restart
+  relaunches in place on the new auth with the transcript kept; declining
+  leaves the old auth running. (runtime resume test + frontend test)
+- **C7** A fresh signup on a healthy stack reaches an applied `state.json`
+  and a first observation within the onboarding grace window; with LiteLLM
+  down, signup still succeeds and onboarding proceeds with a pending
+  badge. (release scenario)
+- **C8** A server-switched desktop's stale document reads as absent.
+  (`origin_guard_tests.rs`)
+
 ## Current gaps
 
 Deltas between this document and the integration stack
