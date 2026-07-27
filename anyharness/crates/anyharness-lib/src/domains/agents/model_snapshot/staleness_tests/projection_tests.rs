@@ -97,6 +97,17 @@ fn the_status_projection_shapes_every_field_and_never_exposes_the_fingerprint() 
     assert!(serialized.contains("\"snapshotAgeSeconds\":3600"));
     assert!(serialized.contains("\"identityComparable\":true"));
     assert!(serialized.contains("\"state\":\"idle\""));
+    // T-45 (S2b): the full models/modes lists ride alongside the counts —
+    // model-catalog.md:660 always said this route serves "model and mode
+    // lists off the same document read"; the shipped shape undershot that
+    // with counts only, and this closes the gap the Worker's
+    // model_snapshot_sync now depends on.
+    assert_eq!(status.models.len(), 1);
+    assert_eq!(status.models[0].id, "m-1");
+    assert_eq!(status.modes.len(), 1);
+    assert_eq!(status.modes[0].id, "build");
+    assert!(serialized.contains("\"models\":[{\"id\":\"m-1\""));
+    assert!(serialized.contains("\"modes\":[{\"id\":\"build\""));
 
     // An indeterminate identity must tell the UI to claim no version binding.
     let pre_field = entry(HOUR, None, secret_fingerprint);
@@ -137,7 +148,10 @@ fn the_status_projection_shapes_every_field_and_never_exposes_the_fingerprint() 
         next_attempt_at: Some(next),
     });
     assert_eq!(backoff.last_error.as_deref(), Some("timeout"));
-    assert_eq!(backoff.probed_at.as_deref(), Some(failed_probed_at.as_str()));
+    assert_eq!(
+        backoff.probed_at.as_deref(),
+        Some(failed_probed_at.as_str())
+    );
     assert_eq!(backoff.model_count, 1, "the last good list keeps serving");
     assert_eq!(backoff.state, LiveState::Backoff);
     assert_eq!(backoff.next_attempt_at, Some(next.to_rfc3339()));
@@ -190,6 +204,8 @@ fn a_context_with_no_entry_projects_as_missing() {
     assert_eq!(status.probed_at, None);
     assert_eq!(status.snapshot_age_seconds, None);
     assert_eq!(status.model_count, 0);
+    assert!(status.models.is_empty(), "no entry means no models to list");
+    assert!(status.modes.is_empty(), "no entry means no modes to list");
     let _unused: BTreeMap<String, String> = BTreeMap::new();
 }
 
@@ -205,22 +221,15 @@ fn a_context_with_no_entry_projects_as_missing() {
 /// of a silent client break.
 #[test]
 fn every_live_state_serializes_exactly_as_the_generated_schema_declares() {
-    let schema = serde_json::to_value(
-        utoipa::openapi::schema::Schema::from(
-            <LiveState as utoipa::PartialSchema>::schema(),
-        ),
-    )
+    let schema = serde_json::to_value(utoipa::openapi::schema::Schema::from(
+        <LiveState as utoipa::PartialSchema>::schema(),
+    ))
     .expect("serialize the generated schema");
     let declared: Vec<String> = schema["enum"]
         .as_array()
         .expect("the schema must declare an enum")
         .iter()
-        .map(|value| {
-            value
-                .as_str()
-                .expect("enum values are strings")
-                .to_string()
-        })
+        .map(|value| value.as_str().expect("enum values are strings").to_string())
         .collect();
 
     let wire: Vec<String> = [

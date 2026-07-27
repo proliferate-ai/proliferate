@@ -2509,6 +2509,18 @@ export interface components {
             lastError?: string | null;
             modeCount: number;
             modelCount: number;
+            /**
+             * @description The full model list off the same document read as `modelCount`. Added
+             *     alongside the count (never replacing it — model-catalog.md:660 always
+             *     said this route serves "model and mode lists off the same document
+             *     read"; the count-only shape undershot that, and this is the fix) so a
+             *     machineless-surface uploader (the Worker's `model_snapshot_sync`) has
+             *     something to read besides raw disk access to a document it should not
+             *     know the layout of.
+             */
+            models?: Record<string, never>[];
+            /** @description The full mode list, same rationale as `models` above. */
+            modes?: Record<string, never>[];
             /** @description Set iff `state == backoff`. */
             nextAttemptAt?: string | null;
             /** @description Last SUCCESSFUL observation. Never regresses on failure. */
