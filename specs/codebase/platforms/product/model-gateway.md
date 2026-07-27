@@ -42,11 +42,14 @@ Config laws, enforced by review (the file's comments restate them):
   import; an unknown id can pass traffic while mispricing it.
 - Every entry carries `model_info: {access_groups: [...]}` naming the
   harness group(s) it belongs to. Group names are exactly the harness
-  `harness_kind` identifiers (`claude`, `codex`, `opencode`, `cursor`,
-  `grok`) — no translation table; see LiteLLM's
+  `harness_kind` identifiers of the gateway-capable harnesses (`claude`,
+  `codex`, `opencode`, `grok`) — no translation table; see LiteLLM's
   [model access groups](https://docs.litellm.ai/docs/proxy/model_access_groups).
   This one reviewed file is therefore also the harness-to-model map; no
-  client-side model filtering exists anywhere.
+  client-side model filtering exists anywhere. `cursor` is deliberately
+  absent from the vocabulary: it is native-only (no gateway recipe exists
+  for it), so no model belongs to a `cursor` group and no `cursor` virtual
+  key is ever minted.
 - No dev shims. Because dev and prod run this exact file, any local
   convenience placed in it ships to production verbatim. Two shims are
   banned by name:
@@ -260,12 +263,16 @@ change detection and the promote flow.
 - Scoped-key verification: mint a key granted one group, assert
   `GET /v1/models` returns exactly that group and an out-of-group invoke
   403s. Verified live against the pinned image (v1.93.0, 2026-07-24).
+- Team-budget aggregation: spend from every key in a team aggregates against
+  that team's budget (the mechanism the whole per-harness-key account model
+  depends on) — confirmed standard LiteLLM behavior, live-verified against
+  the pinned image (v1.93.0, 2026-07-25) ahead of B2's per-(subject,harness)
+  minting.
 
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `config.yaml` entries carry no `access_groups` tags.
 - [ ] Enrollment mints one unscoped key per subject (it sees all models)
       instead of per-harness group-scoped keys; existing enrollments need
       rotation at migration.
@@ -277,9 +284,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
       state, org policy, and catalog routes; `api.py`/`service.py`/
       `models.py` split along the same three-domain line.
-- [ ] Team-budget aggregation across multiple keys is standard LiteLLM but
-      not yet live-proven on the pinned image (a short check before the
-      enrollment code PR freezes).
 - [ ] Enrollment copies `max_budget` onto the virtual key as well as the
       team; keys must stop carrying budgets (the team cap already
       aggregates, and N per-key copies of the mirror would drift).
