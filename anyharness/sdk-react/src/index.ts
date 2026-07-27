@@ -106,7 +106,6 @@ export {
 } from "./hooks/agents.js";
 export {
   useAgentGatewayModelsQuery,
-  useAgentGatewayModelsQueries,
   useRefreshAgentGatewayModelsMutation,
 } from "./hooks/agent-gateway-catalog.js";
 export {

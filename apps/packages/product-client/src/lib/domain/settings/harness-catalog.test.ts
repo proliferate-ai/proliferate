@@ -2,7 +2,6 @@ import type { AgentLaunchOptionsResponse, GatewayModelEntry } from "@anyharness/
 import type { AgentAuthSelection } from "@proliferate/cloud-sdk";
 import { describe, expect, it } from "vitest";
 import {
-  buildRuntimeCatalogModelsJson,
   catalogRouteForSurface,
   defaultRouteForSurface,
   normalizeCatalogModels,
@@ -252,109 +251,5 @@ describe("normalizeRuntimeLaunchModels", () => {
     };
 
     expect(normalizeRuntimeLaunchModels("codex", launchOptions)).toEqual([]);
-  });
-});
-
-describe("buildRuntimeCatalogModelsJson", () => {
-  function launchOptions(
-    agents: AgentLaunchOptionsResponse["agents"],
-  ): AgentLaunchOptionsResponse {
-    return { agents, workspaceId: null };
-  }
-
-  it("serializes the runtime's resolved models for the requested harness", () => {
-    const result = buildRuntimeCatalogModelsJson(
-      "claude",
-      launchOptions([
-        {
-          kind: "claude",
-          displayName: "Claude Code",
-          defaultModelId: "sonnet",
-          models: [
-            { id: "sonnet", displayName: "Sonnet 4.6", isDefault: true },
-            { id: "haiku", displayName: "Haiku 4.5", aliases: ["haiku-latest"], isDefault: false },
-          ],
-        },
-      ]),
-    );
-
-    expect(result).toBe(
-      JSON.stringify([
-        { id: "sonnet", displayName: "Sonnet 4.6" },
-        { id: "haiku", displayName: "Haiku 4.5", aliases: ["haiku-latest"] },
-      ]),
-    );
-  });
-
-  it("forwards the runtime-enriched catalog fields into the snapshot payload", () => {
-    const result = buildRuntimeCatalogModelsJson(
-      "claude",
-      launchOptions([
-        {
-          kind: "claude",
-          displayName: "Claude Code",
-          defaultModelId: "sonnet",
-          models: [
-            {
-              id: "sonnet",
-              displayName: "Sonnet 4.6",
-              isDefault: true,
-              description: "Balanced coding model",
-              provider: "anthropic",
-              status: "active",
-              effort: { values: ["low", "medium", "high"], default: "medium" },
-              fastMode: true,
-              modes: ["default", "acceptEdits", "plan"],
-            },
-          ],
-        },
-      ]),
-    );
-
-    expect(result).toBe(
-      JSON.stringify([
-        {
-          id: "sonnet",
-          displayName: "Sonnet 4.6",
-          description: "Balanced coding model",
-          provider: "anthropic",
-          status: "active",
-          effort: { values: ["low", "medium", "high"], default: "medium" },
-          fastMode: true,
-          modes: ["default", "acceptEdits", "plan"],
-        },
-      ]),
-    );
-  });
-
-  it("returns null when the runtime has no entry for the harness", () => {
-    const result = buildRuntimeCatalogModelsJson(
-      "codex",
-      launchOptions([
-        {
-          kind: "claude",
-          displayName: "Claude Code",
-          defaultModelId: null,
-          models: [{ id: "sonnet", displayName: "Sonnet 4.6", isDefault: true }],
-        },
-      ]),
-    );
-
-    expect(result).toBeNull();
-  });
-
-  it("returns null when the harness has zero ready models", () => {
-    const result = buildRuntimeCatalogModelsJson(
-      "claude",
-      launchOptions([
-        { kind: "claude", displayName: "Claude Code", defaultModelId: null, models: [] },
-      ]),
-    );
-
-    expect(result).toBeNull();
-  });
-
-  it("returns null when the runtime data is unavailable", () => {
-    expect(buildRuntimeCatalogModelsJson("claude", undefined)).toBeNull();
   });
 });
