@@ -34,8 +34,7 @@ pub struct GatewayModelPlan {
     /// `gatewayPolicy.roles["small_fast"]`.
     pub small_fast_model: Option<String>,
     /// The explicit gateway model list (opencode's models map). Latest probe
-    /// rows for (harness, revision) if present, else `gatewayPolicy.seedModels`,
-    /// filtered by `gatewayPolicy.providers`.
+    /// rows for (harness, revision) if present, else `gatewayPolicy.seedModels`.
     pub models: Vec<String>,
 }
 

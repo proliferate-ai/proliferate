@@ -10595,7 +10595,7 @@
             "items": {
               "$ref": "#/components/schemas/GatewayModelEntry"
             },
-            "description": "The resolved, provider-filtered models — each id enriched with the\nbundled catalog row (or bare `{ id, provider? }` for probe-only ids)."
+            "description": "The resolved gateway models — each id enriched with the bundled\ncatalog row (or bare `{ id, provider? }` for probe-only ids). No\nclient-side provider filtering is applied; server-side access groups\n(once B1 lands) own scoping."
           },
           "probedAt": {
             "type": [
@@ -15075,7 +15075,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The freshly probed model ids (unfiltered — exactly what the gateway\nreturned; the resolver applies provider filtering when building plans)."
+            "description": "The freshly probed model ids — exactly what the gateway returned, with\nno client-side provider filtering applied anywhere downstream."
           },
           "probedAt": {
             "type": "string",

@@ -180,8 +180,10 @@ fn enrich_model(
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GatewayModelsResponse {
-    /// The resolved, provider-filtered models — each id enriched with the
-    /// bundled catalog row (or bare `{ id, provider? }` for probe-only ids).
+    /// The resolved gateway models — each id enriched with the bundled
+    /// catalog row (or bare `{ id, provider? }` for probe-only ids). No
+    /// client-side provider filtering is applied; server-side access groups
+    /// (once B1 lands) own scoping.
     pub models: Vec<GatewayModelEntry>,
     /// `"seed"` (no probe yet) or `"probe"` (a live probe supplied the list).
     pub source: String,
@@ -194,8 +196,8 @@ pub struct GatewayModelsResponse {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RefreshGatewayResponse {
-    /// The freshly probed model ids (unfiltered — exactly what the gateway
-    /// returned; the resolver applies provider filtering when building plans).
+    /// The freshly probed model ids — exactly what the gateway returned, with
+    /// no client-side provider filtering applied anywhere downstream.
     pub models: Vec<String>,
     /// The probe timestamp (RFC3339).
     pub probed_at: String,

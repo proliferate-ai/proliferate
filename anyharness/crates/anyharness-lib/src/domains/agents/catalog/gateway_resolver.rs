@@ -76,8 +76,7 @@ pub enum GatewayModelSource {
 
 /// Model-id -> provider-id prefix/family matcher. The long-term home is
 /// provider-tagged catalog model entries; until then this tiny table maps the
-/// known gateway model id patterns to their provider id. Used both to filter a
-/// probed/seed list by `gatewayPolicy.providers` and to tag enriched
+/// known gateway model id patterns to their provider id, used to tag enriched
 /// gateway-model / launch-option rows with a provider. Returns `None` when no
 /// family matches (the caller omits `provider`).
 pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
@@ -221,28 +220,6 @@ fn strip_release_date_suffix(s: &str) -> String {
     }
 }
 
-/// Does `provider` serve `model_id`? A provider not in the family table (or a
-/// model matching no family) matches nothing.
-fn model_matches_provider(provider: &str, model_id: &str) -> bool {
-    provider_for_model(model_id) == Some(provider)
-}
-
-/// Filter `models` to those served by any of `providers`. Empty `providers`
-/// means "all" — no filtering (opencode/grok).
-pub(super) fn filter_by_providers(models: Vec<String>, providers: &[String]) -> Vec<String> {
-    if providers.is_empty() {
-        return models;
-    }
-    models
-        .into_iter()
-        .filter(|model| {
-            providers
-                .iter()
-                .any(|provider| model_matches_provider(provider, model))
-        })
-        .collect()
-}
-
 /// Resolves gateway model plans from the active catalog + the probe store, and
 /// (lazily) schedules background probes. Holds the probe store and a catalog
 /// snapshot source; cheap to clone.
@@ -346,13 +323,12 @@ impl GatewayModelResolver {
             }
         };
 
-        let models = filter_by_providers(raw_models, &policy.providers);
         (
             GatewayModelPlan {
                 default_model,
                 native_default_model,
                 small_fast_model,
-                models,
+                models: raw_models,
             },
             source,
         )
@@ -519,24 +495,28 @@ mod tests {
 
     #[test]
     fn provider_matcher_covers_known_families() {
-        assert!(model_matches_provider("anthropic", "claude-sonnet-4-5"));
-        assert!(!model_matches_provider("anthropic", "gpt-5.5"));
-        assert!(model_matches_provider("openai", "gpt-5.5"));
-        assert!(model_matches_provider("openai", "o3"));
-        assert!(model_matches_provider("openai", "o3-mini"));
-        assert!(model_matches_provider("openai", "o4-mini"));
-        assert!(model_matches_provider("openai", "openai.gpt-oss-120b-1:0"));
-        assert!(model_matches_provider("xai", "grok-4"));
-        assert!(!model_matches_provider("unknown", "claude-sonnet-4-5"));
+        assert_eq!(provider_for_model("claude-sonnet-4-5"), Some("anthropic"));
+        assert_ne!(provider_for_model("gpt-5.5"), Some("anthropic"));
+        assert_eq!(provider_for_model("gpt-5.5"), Some("openai"));
+        assert_eq!(provider_for_model("o3"), Some("openai"));
+        assert_eq!(provider_for_model("o3-mini"), Some("openai"));
+        assert_eq!(provider_for_model("o4-mini"), Some("openai"));
+        assert_eq!(
+            provider_for_model("openai.gpt-oss-120b-1:0"),
+            Some("openai")
+        );
+        assert_eq!(provider_for_model("grok-4"), Some("xai"));
+        assert_ne!(provider_for_model("claude-sonnet-4-5"), Some("unknown"));
         // CLI selectors like opus/opus[1m] should NOT match openai
-        assert!(!model_matches_provider("openai", "opus"));
-        assert!(!model_matches_provider("openai", "opus[1m]"));
+        assert_ne!(provider_for_model("opus"), Some("openai"));
+        assert_ne!(provider_for_model("opus[1m]"), Some("openai"));
         // Also verify they return None (no provider)
         assert_eq!(provider_for_model("opus"), None);
         assert_eq!(provider_for_model("opus[1m]"), None);
         assert_eq!(provider_for_model("claude-sonnet-4-6"), Some("anthropic"));
-        // Bedrock-style anthropic ids (region-prefixed and bare) map to anthropic
-        // so filter_by_providers keeps them in claude's gateway model plan.
+        // Bedrock-style anthropic ids (region-prefixed and bare) map to anthropic,
+        // so a caller tagging gateway rows with a provider still tags them
+        // correctly for claude's gateway model plan.
         assert_eq!(
             provider_for_model("us.anthropic.claude-sonnet-4-6"),
             Some("anthropic")
@@ -553,28 +533,10 @@ mod tests {
             provider_for_model("anthropic.claude-sonnet-4-6"),
             Some("anthropic")
         );
-        assert!(model_matches_provider(
-            "anthropic",
-            "us.anthropic.claude-sonnet-4-6"
-        ));
-    }
-
-    #[test]
-    fn empty_providers_means_all() {
-        let models = vec!["claude-sonnet-4-5".to_string(), "gpt-5.5".to_string()];
-        assert_eq!(filter_by_providers(models.clone(), &[]), models);
-    }
-
-    #[test]
-    fn providers_filter_to_the_compat_group() {
-        let models = vec![
-            "claude-sonnet-4-5".to_string(),
-            "gpt-5.5".to_string(),
-            "grok-4".to_string(),
-        ];
-        let filtered =
-            filter_by_providers(models, &["anthropic".to_string(), "openai".to_string()]);
-        assert_eq!(filtered, vec!["claude-sonnet-4-5", "gpt-5.5"]);
+        assert_eq!(
+            provider_for_model("us.anthropic.claude-sonnet-4-6"),
+            Some("anthropic")
+        );
     }
 
     // --- normalize_model_family (contract §5), exercised with the REAL id sets

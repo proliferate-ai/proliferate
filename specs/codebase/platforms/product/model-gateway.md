@@ -273,9 +273,12 @@ change detection and the promote flow.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Harness-to-model filtering is client-side (the Rust
-      `provider_for_model` prefix-matcher and catalog
-      `gatewayPolicy.providers`); both delete once proxy-side grants land.
+- [ ] The Rust `provider_for_model` prefix-matcher is a provisional stand-in
+      for provider-tagged catalog model entries; it now only labels enriched
+      gateway-model / launch-option rows for the UI (the client-side
+      `gatewayPolicy.providers` filter it used to back is gone — B5 — now
+      that LiteLLM access-group tags enforce harness-to-model scoping
+      server-side).
 - [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
       state, org policy, and catalog routes; `api.py`/`service.py`/
       `models.py` split along the same three-domain line.

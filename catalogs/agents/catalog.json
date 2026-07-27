@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-07-17.6",
+  "catalogVersion": "2026-07-17.7",
   "probedAgainst": {
     "registryVersion": "2026-07-17.2"
   },
@@ -1175,9 +1175,6 @@
           "bedrock": "default"
         },
         "gatewayPolicy": {
-          "providers": [
-            "anthropic"
-          ],
           "roles": {
             "small_fast": "claude-haiku-4-5-20251001"
           },
@@ -2154,9 +2151,6 @@
           "openai-oauth": "gpt-5.6-sol"
         },
         "gatewayPolicy": {
-          "providers": [
-            "openai"
-          ],
           "seedModels": [
             "gpt-5.2",
             "gpt-5.2-2025-12-11",
@@ -3934,9 +3928,6 @@
             "grok-4-fast",
             "grok-code-fast-1",
             "grok-build"
-          ],
-          "providers": [
-            "xai"
           ]
         }
       },

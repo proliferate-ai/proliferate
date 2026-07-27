@@ -134,8 +134,8 @@ fn a_probe_plan_carries_the_live_gateway_list_not_the_seed_floor() {
             "gpt-5.2",
             "a-model-the-catalog-has-never-heard-of"
         ],
-        "opencode declares no gatewayPolicy.providers, so nothing is filtered — \
-         including an id the catalog does not know, which is the whole point"
+        "the full live list passes through untouched, including an id the \
+         catalog does not know, which is the whole point"
     );
     // The fetch really was handed this harness's own gateway credentials.
     assert_eq!(
@@ -339,29 +339,37 @@ fn an_expired_memo_still_beats_the_floor_for_a_launch() {
     assert_eq!(fetcher.calls(), 1);
 }
 
-/// `gatewayPolicy.providers` filtering is preserved: claude's gateway plan keeps only
-/// anthropic-family ids even when the proxy serves more.
+/// Claude's `roles`-derived `small_fast_model` and `default_model` still ride
+/// through the real `GatewayModelPlanner` now that the provider filter that used
+/// to sit next to them (`provider_filtering_is_preserved_for_a_scoped_harness`,
+/// deleted with the client-side filter itself) is gone. No filtering assertion
+/// here on purpose — the live list passes through untouched, which
+/// `a_probe_plan_carries_the_live_gateway_list_not_the_seed_floor` already covers.
 #[test]
-fn provider_filtering_is_preserved_for_a_scoped_harness() {
-    let home = TempHome::new("providers");
+fn a_claude_plan_pins_roles_without_filtering() {
+    let home = TempHome::new("claude-roles");
     home.write_gateway_state("claude", "https://gw.example", "sk-virtual");
-    let fetcher = Arc::new(CountingFetch::new(&[
-        "claude-sonnet-4-5",
-        "gpt-5.2",
-        "grok-4",
-    ]));
+    let fetcher = Arc::new(CountingFetch::new(&["claude-sonnet-4-5", "gpt-5.2", "grok-4"]));
     let planner = build_planner(&home, fetcher, DEFAULT_PLAN_FETCH_TTL);
 
     let (plan, used_floor) = planner.resolve_gateway_models_blocking("claude", 3);
+
     assert!(!used_floor);
     assert_eq!(
         plan.models,
-        vec!["claude-sonnet-4-5"],
-        "claude declares providers: [anthropic], so the proxy's other families drop"
+        vec!["claude-sonnet-4-5", "gpt-5.2", "grok-4"],
+        "no client-side provider filter narrows the live list anymore"
     );
-    // And the curated pins still ride along from the catalog.
-    assert!(plan.small_fast_model.is_some(), "claude's small_fast role pin");
-    assert!(plan.default_model.is_some(), "the gateway default model");
+    assert_eq!(
+        plan.small_fast_model,
+        Some("claude-haiku-4-5-20251001".to_string()),
+        "claude's small_fast role pin, from the catalog's gatewayPolicy.roles"
+    );
+    assert_eq!(
+        plan.default_model,
+        Some("claude-sonnet-4-5".to_string()),
+        "the gateway default model, from session.defaults.gateway"
+    );
 }
 
 /// The seed-floor warning string is the one the entry records, asserted here so the
