@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -17,6 +18,9 @@ from proliferate.server.cloud.materialization.materialize import agent_auth
 USER_ID = uuid.uuid4()
 NOW = datetime(2026, 7, 1, tzinfo=UTC)
 REVISION = 4211
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+FIXTURE_PATH = REPO_ROOT / "fixtures/contracts/agent-auth-state/v2.json"
 
 
 def _selection(
@@ -504,9 +508,11 @@ class TestMaterializeAgentAuth:
     async def test_unsatisfiable_selection_writes_an_empty_entry_instead_of_deleting(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # Rewrite of `..._deletes_state_file`: deleting the file here silently
-        # degrades to native; the selection must ship as `sources: []` instead so
-        # the runtime refuses the launch (agent-auth.md: present-but-empty fails closed).
+        # Rewrite of `..._deletes_state_file`. Deleting the file here was the
+        # silent-degradation bug at the delivery layer: the sandbox reader then
+        # finds NO document and launches claude on whatever ambient credential it
+        # has. The selection must instead be delivered as `sources: []` so the
+        # runtime refuses (agent-auth.md: present-but-empty fails closed).
         inputs = _inputs(
             (_selection(harness="claude", source_kind="gateway"),),
             enrollment_sync_status="pending",
@@ -598,3 +604,81 @@ class TestMaterializeAgentAuth:
         serialized = json.dumps(state)
         assert "sk-live" in serialized
         assert str(revoked_id) not in serialized
+
+    @pytest.mark.asyncio
+    async def test_unsatisfiable_selection_survives_renderer_merge_tripwire(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Guard both halves of the fail-closed fix against a careless B3 rebase.
+
+        ``agents/b3-renderer-key-map`` (Track B) touches THIS renderer for the
+        per-harness key map, and its branch point predates this PR: its copy still
+        carries the two lines this PR deleted —
+
+        1. ``by_harness.setdefault(selection.harness_kind, []).append(...)`` instead
+           of pre-seeding a key for every SELECTED harness, so a harness whose every
+           source is unsatisfiable disappears from ``harnesses`` entirely; and
+        2. a ``materialize_agent_auth`` delete branch whose comment reads "no
+           resolvable cloud sources", so the state file is removed for an exhausted
+           budget rather than only for "nothing selected".
+
+        Either one reverted turns a dead selection back into a silent native launch
+        on the user's personal credentials — and it reverts SILENTLY, because it is a
+        deletion of behavior rather than a conflicting edit. This test asserts the
+        two semantics together in one pass so a merge that resurrects either half
+        fails loudly here, naming the branch that would have done it.
+        """
+        # A harness whose EVERY source is unsatisfiable, and nothing else selected:
+        # the exact input where a `setdefault` renderer produces `harnesses: []` and
+        # a broad delete condition then removes the document.
+        inputs = _inputs(
+            (_selection(harness="claude", source_kind="gateway"),),
+            enrollment_sync_status="pending",
+            gateway_virtual_key=None,
+        )
+
+        # Half 1 — the renderer pre-seeds an entry per selected harness.
+        state, _ = agent_auth.render_agent_auth_state(inputs)
+        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}], (
+            "renderer regressed to dropping a fully-unsatisfiable harness "
+            "(by_harness.setdefault) — see agents/b3-renderer-key-map"
+        )
+
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+            return inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
+        spy = _install_spy(monkeypatch, previous_manifest=None)
+
+        # Half 2 — the delete branch is narrowed to "nothing selected at all", so
+        # this pass WRITES the empty entry instead of removing the document.
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+
+        assert spy.removed == set(), (
+            "materializer regressed to deleting the state file for an unsatisfiable "
+            "selection — see agents/b3-renderer-key-map"
+        )
+        assert [write["path"] for write in spy.writes] == [
+            paths.agent_auth_state_path(),
+            paths.agent_auth_manifest_path(),
+        ]
+        written = json.loads(str(spy.writes[0]["content"]))
+        assert written["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+
+        # And the delete branch is still REACHABLE for its one legitimate case, so
+        # the narrowing did not simply disable it.
+        empty_inputs = _inputs(())
+
+        async def fake_load_empty(
+            db: object, *, user_id: uuid.UUID, surface: str = "cloud"
+        ) -> Any:
+            return empty_inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load_empty)
+        empty_spy = _install_spy(monkeypatch, previous_manifest=None)
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+        assert empty_spy.writes == []
+        assert empty_spy.removed == {
+            paths.agent_auth_state_path(),
+            paths.agent_auth_manifest_path(),
+        }

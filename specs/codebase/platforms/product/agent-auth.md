@@ -509,9 +509,16 @@ anyharness/
     │   ├── materialize.rs                     atomic writes, revision dirs, GC
     │   └── mod.rs                             pipeline, origin guard, typed errors
     ├── domains/agents/readiness/service.rs    route-aware readiness upgrade
+    ├── domains/sessions/service/create.rs     create-time fail-closed refusal (409)
     ├── domains/sessions/runtime/startup.rs    launch integration, fail-closed refusal
     └── live/sessions/driver/process.rs        env layering + ambient removal at spawn
 ```
+
+The wire shape crossing the Python↔Rust boundary is pinned by the
+`agent-auth-state` contract fixture
+([fixtures/contracts/agent-auth-state/](../../../../fixtures/contracts/agent-auth-state/)):
+the renderer asserts it produces it, `route_auth/` asserts it consumes it, and a
+shape change is made by changing the fixture — which breaks whichever side lags.
 
 | Layer | Owns |
 | --- | --- |
@@ -542,13 +549,6 @@ anyharness/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] **Unsatisfiable sources silently degrade to native.** The renderer
-      drops a dead source and omits an empty harness entry, and the
-      runtime reads absence as native — so a desktop user with a native
-      claude login whose gateway budget exhausts silently starts billing
-      their personal Anthropic account. The body's
-      "present-but-empty fails closed" law is not implemented; today
-      only render-stage errors refuse the launch.
 - [ ] **Typed provider configurations do not exist.** The vault has no
       `kind` column and stores exactly one opaque string per entry; no
       Bedrock/Azure payloads, no `provider_config` wire source, no
@@ -589,10 +589,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `/v1/cloud/agent-auth/` (with catalog routes to the model-catalog
       platform) is pending, including the matching
       `api.py`/`service.py`/`models.py` three-domain split.
-- [ ] **Dead error variants.** `RouteAuthError::SelectionMissing` and
-      `SelectionConflict` are never constructed (leftovers of the
-      pre-`sources[]` design); delete them or wire them to the
-      fail-closed law above.
 - [ ] **Opencode's method state is projection-derived on some read
       surfaces.** Settings derives opencode's active methods from
       selections, but readiness still reports the structural

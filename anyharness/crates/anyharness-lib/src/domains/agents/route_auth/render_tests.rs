@@ -8,7 +8,7 @@ use super::plan::{GatewayModelPlan, GatewayModelResolve};
 use super::render::render_profile;
 use super::state::state_file_path;
 use super::test_support::TempHome;
-use super::{load_state_file, resolve_launch_route_auth, resolve_profile};
+use super::{load_state_file, resolve_launch_route_auth, resolve_profile, RouteAuthError};
 
 const GATEWAY_BASE_URL: &str = "https://llm.proliferate.ai";
 const VK: &str = "sk-virtual-1234";
@@ -431,13 +431,27 @@ fn absent_harness_renders_native_delta() {
     assert!(rendered.files.is_empty());
 }
 
+/// A present-but-empty entry refuses the launch through the FULL render path,
+/// not just at the pure profile layer — the launcher must never receive an empty
+/// delta it would interpret as native.
+///
+/// This test previously asserted an empty (native) delta, which pinned the
+/// silent-degradation bug: the user selected the gateway, the renderer could not
+/// satisfy it, and the launch proceeded on their personal credentials.
 #[test]
-fn empty_sources_render_native_delta() {
+fn empty_sources_refuse_the_launch_instead_of_rendering_native() {
     let home = TempHome::new("empty-sources");
     home.write_state_json(&v2_state(4, vec![harness("claude", vec![])]));
-    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
-    assert!(rendered.set.is_empty());
-    assert!(rendered.remove.is_empty());
+
+    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver)
+        .expect_err("a dead selection must refuse the launch");
+
+    assert!(matches!(
+        &error,
+        RouteAuthError::SelectionMissing { harness_kind, revision: 4 } if harness_kind == "claude"
+    ));
+    // Nothing was materialized on the way to the refusal.
+    assert!(!home.path().join("agent-auth/claude-config").exists());
 }
 
 #[test]
@@ -597,3 +611,6 @@ fn state_file_path_snapshot() {
 
 #[path = "cursor_render_tests.rs"]
 mod cursor_render;
+
+#[path = "contract_fixture_tests.rs"]
+mod contract_fixture;

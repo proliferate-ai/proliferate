@@ -276,7 +276,10 @@ pub async fn refresh_gateway_models(
         ));
     };
     let revision = document.revision;
-    let sources = document.sources_for(&kind);
+    // Absent harness and present-but-empty are the same answer here — either way
+    // there is no gateway source to refresh against, and the caller gets the
+    // typed NO_SELECTION rejection below.
+    let sources = document.sources_for(&kind).unwrap_or_default();
     let source = sources
         .iter()
         .find(|source| source.kind == SOURCE_KIND_GATEWAY)

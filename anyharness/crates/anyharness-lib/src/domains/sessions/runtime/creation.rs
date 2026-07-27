@@ -357,6 +357,9 @@ fn map_create_session_service_error(
             agent_kind,
             mode_id,
         },
+        crate::domains::sessions::service::CreateSessionError::RouteAuth(error) => {
+            CreateAndStartSessionError::RouteAuth(error)
+        }
         crate::domains::sessions::service::CreateSessionError::Invalid(detail) => {
             CreateAndStartSessionError::Invalid(detail)
         }

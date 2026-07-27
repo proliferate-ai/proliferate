@@ -67,11 +67,20 @@ pub struct GatewayProfile {
 
 /// Resolve the auth profile for `harness_kind` from the loaded state.
 ///
-/// - `state == None` (no file): `Native`.
-/// - harness absent, or present with no sources: `Native`. A harness the user
-///   never configured uses its own native login — the least-surprising default,
-///   and safe (native = the user's own CLI sign-in, never ambient/leaked
-///   credentials).
+/// The three-way answer is agent-auth.md's law "Absent means native;
+/// present-but-empty fails closed":
+///
+/// - `state == None` (no file): `Native`. Nothing was ever selected.
+/// - harness **absent** from the document: `Native`. The user never configured
+///   this harness, so its own CLI sign-in owns auth — the least-surprising
+///   default, and safe (never ambient or leaked credentials).
+/// - harness **present with an empty source list**:
+///   [`RouteAuthError::SelectionMissing`]. The user DID select a route and the
+///   renderer could not satisfy any of it (unsynced enrollment, exhausted
+///   budget, revoked key). Silently treating that as native is the
+///   silent-degradation bug: a desktop user with a native claude login whose
+///   gateway budget exhausts would start billing their personal Anthropic
+///   account mid-session with no signal.
 /// - harness present with sources: each source is validated + typed. An unknown
 ///   `kind`, or a source missing its required fields, is a typed error (the
 ///   server should never emit these).
@@ -82,9 +91,15 @@ pub fn resolve_profile(
     let Some(state) = state else {
         return Ok(AgentRuntimeAuthProfile::Native);
     };
-    let raw_sources = state.sources_for(harness_kind);
-    if raw_sources.is_empty() {
+    // Absent vs present-but-empty: `None` is native, `Some([])` fails closed.
+    let Some(raw_sources) = state.sources_for(harness_kind) else {
         return Ok(AgentRuntimeAuthProfile::Native);
+    };
+    if raw_sources.is_empty() {
+        return Err(RouteAuthError::SelectionMissing {
+            harness_kind: harness_kind.to_string(),
+            revision: state.revision,
+        });
     }
     let mut sources = Vec::with_capacity(raw_sources.len());
     for source in raw_sources {
@@ -199,11 +214,92 @@ mod tests {
         assert_eq!(profile, AgentRuntimeAuthProfile::Native);
     }
 
+    /// THE fail-closed case, and the one this rewrites: an entry the user
+    /// selected whose every source the renderer dropped as unsatisfiable.
+    ///
+    /// This test previously asserted `Native` — i.e. it pinned the
+    /// silent-degradation bug as intended behavior. A desktop user with a native
+    /// claude login whose gateway budget exhausts would have had the launch
+    /// silently succeed against their personal Anthropic account. It now asserts
+    /// the typed refusal, carrying the revision so the UI can say which document
+    /// generation was dead.
     #[test]
-    fn empty_sources_is_native() {
+    fn empty_sources_fails_closed_with_the_revision() {
         let state = state(4, vec![harness("claude", vec![])]);
-        let profile = resolve_profile(Some(&state), "claude").expect("resolve");
-        assert_eq!(profile, AgentRuntimeAuthProfile::Native);
+
+        let error = resolve_profile(Some(&state), "claude").expect_err("must fail closed");
+
+        assert!(matches!(
+            error,
+            RouteAuthError::SelectionMissing {
+                ref harness_kind,
+                revision: 4,
+            } if harness_kind == "claude"
+        ));
+        assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_MISSING");
+    }
+
+    /// The distinction the whole change rests on, asserted as one comparison:
+    /// the same document, two harnesses, opposite answers. Absent → native;
+    /// present-but-empty → refused.
+    #[test]
+    fn absent_is_native_while_present_but_empty_is_refused() {
+        let state = state(
+            9,
+            vec![
+                harness("claude", vec![]),
+                harness("codex", vec![gateway_source("https://gw", "sk")]),
+            ],
+        );
+
+        // claude: selected, unsatisfiable → refuse.
+        assert!(matches!(
+            resolve_profile(Some(&state), "claude"),
+            Err(RouteAuthError::SelectionMissing { .. })
+        ));
+        // opencode: never configured → native. Same document.
+        assert_eq!(
+            resolve_profile(Some(&state), "opencode").expect("resolve"),
+            AgentRuntimeAuthProfile::Native
+        );
+        // codex: satisfiable → sources.
+        assert!(matches!(
+            resolve_profile(Some(&state), "codex").expect("resolve"),
+            AgentRuntimeAuthProfile::Sources(_)
+        ));
+    }
+
+    /// An empty entry for ANOTHER harness must not contaminate this one: the
+    /// refusal is per-harness, not per-document. Without this, one exhausted
+    /// budget would take every harness on the machine down with it.
+    #[test]
+    fn one_harnesss_dead_selection_does_not_refuse_another() {
+        let state = state(
+            11,
+            vec![
+                harness("opencode", vec![]),
+                harness("claude", vec![gateway_source("https://gw", "sk-vk")]),
+            ],
+        );
+
+        assert!(matches!(
+            resolve_profile(Some(&state), "claude").expect("resolve"),
+            AgentRuntimeAuthProfile::Sources(_)
+        ));
+        assert!(matches!(
+            resolve_profile(Some(&state), "opencode"),
+            Err(RouteAuthError::SelectionMissing { .. })
+        ));
+    }
+
+    /// No state file at all is still native — the fail-closed rule keys on a
+    /// PRESENT entry, so a machine that has never synced auth is unaffected.
+    #[test]
+    fn no_file_is_native_even_though_empty_entries_now_refuse() {
+        assert_eq!(
+            resolve_profile(None, "claude").expect("resolve"),
+            AgentRuntimeAuthProfile::Native
+        );
     }
 
     #[test]

@@ -111,14 +111,30 @@ pub struct AgentAuthState {
 }
 
 impl AgentAuthState {
-    /// The enabled sources for a harness kind. Absent harness → empty slice
-    /// (the render plane treats this as native — no rendered credentials).
-    pub fn sources_for(&self, harness_kind: &str) -> &[AuthSource] {
+    /// The enabled sources for a harness kind, distinguishing **absent** from
+    /// **present-but-empty** — the whole point of the return type.
+    ///
+    /// agent-auth.md, "Absent means native; present-but-empty fails closed": a
+    /// harness with no entry in the document runs on its own login, while a
+    /// harness whose entry is present but whose selected sources could not be
+    /// satisfied is a *selection the machine cannot honor* and a launch must be
+    /// refused rather than quietly falling back to the user's personal
+    /// credentials.
+    ///
+    /// - `None` — no entry for this harness. Native.
+    /// - `Some([])` — an entry exists and every source in it was dropped as
+    ///   unsatisfiable. Fail closed.
+    /// - `Some([..])` — usable sources.
+    ///
+    /// The old signature returned `&[]` for both of the first two cases, which
+    /// made the law unimplementable at this layer: the caller could not tell a
+    /// user who never configured the harness from a user whose gateway budget
+    /// just exhausted.
+    pub fn sources_for(&self, harness_kind: &str) -> Option<&[AuthSource]> {
         self.harnesses
             .iter()
             .find(|entry| entry.harness_kind == harness_kind)
             .map(|entry| entry.sources.as_slice())
-            .unwrap_or(&[])
     }
 
     /// Guards against injecting a PREVIOUS server's gateway tokens after a
@@ -338,23 +354,46 @@ mod tests {
         assert!(!json.contains("\"env_var_name\":null"));
     }
 
+    /// The three-way lookup that the fail-closed law needs: absent, present-but-
+    /// empty, and present-with-sources must be distinguishable AT THIS LAYER.
+    /// The old `&[AuthSource]` signature collapsed the first two, which is why
+    /// "present-but-empty fails closed" could not be implemented above it.
     #[test]
-    fn sources_lookup() {
+    fn sources_lookup_distinguishes_absent_from_present_but_empty() {
         let state = AgentAuthState {
             version: STATE_VERSION,
             revision: 5,
             user_id: None,
             issuing_server_origin: None,
-            harnesses: vec![HarnessAuth {
-                harness_kind: "codex".into(),
-                sources: vec![api_key_source("OPENAI_API_KEY", "sk-raw")],
-                settings: None,
-            }],
+            harnesses: vec![
+                HarnessAuth {
+                    harness_kind: "codex".into(),
+                    sources: vec![api_key_source("OPENAI_API_KEY", "sk-raw")],
+                    settings: None,
+                },
+                // A selected harness whose every source was dropped as
+                // unsatisfiable: the renderer keeps the entry, empty.
+                HarnessAuth {
+                    harness_kind: "opencode".into(),
+                    sources: vec![],
+                    settings: None,
+                },
+            ],
         };
-        assert_eq!(state.sources_for("codex").len(), 1);
-        assert_eq!(state.sources_for("codex")[0].kind, SOURCE_KIND_API_KEY);
-        // Absent harness → empty slice (native).
-        assert!(state.sources_for("claude").is_empty());
+
+        let codex = state.sources_for("codex").expect("codex entry present");
+        assert_eq!(codex.len(), 1);
+        assert_eq!(codex[0].kind, SOURCE_KIND_API_KEY);
+
+        // Present but empty → Some([]) (fails closed upstream).
+        assert_eq!(
+            state.sources_for("opencode").map(<[_]>::len),
+            Some(0),
+            "a present-but-empty entry must not read as absent"
+        );
+
+        // Absent harness → None (native upstream).
+        assert!(state.sources_for("claude").is_none());
     }
 
     #[test]
