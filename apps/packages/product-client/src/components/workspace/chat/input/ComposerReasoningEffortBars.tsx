@@ -69,8 +69,11 @@ export function ComposerReasoningEffortBars({
   const chipClass = isUltraTier ? "composer-reasoning-ultra-chip" : "";
   const toneClass = isUltraLadder ? TIER_TONE_CLASSES[tierTone] : "";
 
+  // The bars are a stepper: clicking cycles the level in place, so the tooltip
+  // naming the level must survive the press instead of blinking out on every
+  // step.
   return (
-    <Tooltip content={tooltip}>
+    <Tooltip content={tooltip} keepOpenOnPress>
       <LevelBarsButton
         levels={levels}
         currentIndex={effectiveIndex}

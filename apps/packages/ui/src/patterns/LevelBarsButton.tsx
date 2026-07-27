@@ -74,7 +74,7 @@ const LEVEL_BAR_TRANSITION_STAGGER_MS = 40;
 // cycle (composer-level-bar-wave in product.css) rather than an interaction
 // duration: it is ambient activity, so the travelling crest should read as one
 // slow sweep across the ladder, not N bars pulsing near-together.
-const LEVEL_BAR_WAVE_STAGGER_MS = 180;
+const LEVEL_BAR_WAVE_STAGGER_MS = 480;
 
 type LevelBarStepTransition =
   | { kind: "increase" | "decrease"; from: number; to: number }

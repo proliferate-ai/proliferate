@@ -946,20 +946,27 @@ body {
    pulse (which read as a loading spinner). The per-bar stagger in
    LevelBarsButton.tsx paces the crest so the sweep stays legible at this
    duration. */
+/* The crest rises slowly and at a decelerating rate, then settles back over a
+   comparable span — no symmetric ease in both directions. Two things produce
+   the shape: the peak sits at 52% of the cycle, giving the upward travel ~4.5s
+   (the drain gets the remaining ~4.1s), and --ease-out-quint front-loads the
+   motion within each leg, so most of the distance is covered early and then
+   decelerates hard into a long tail. Reads as a breath drawn and released, not
+   a pulse. */
 .composer-level-bar-wave {
   transform-origin: bottom;
-  animation: composer-level-bar-wave 2.4s var(--ease-standard) infinite;
+  animation: composer-level-bar-wave 8.6s var(--ease-out-quint) infinite;
 }
 
 @keyframes composer-level-bar-wave {
   0%,
   100% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-  50% {
     transform: scaleY(0.72);
     opacity: 0.78;
+  }
+  52% {
+    transform: scaleY(1);
+    opacity: 1;
   }
 }
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Tooltip as KitTooltip,
   TooltipContent,
@@ -11,6 +11,15 @@ interface TooltipProps {
   children: ReactNode;
   className?: string;
   singleLine?: boolean;
+  /**
+   * Keeps the tooltip open while the trigger is pressed. By default the
+   * underlying primitive dismisses on pointer-down, which is right for a
+   * trigger that opens something (the tooltip would cover it) but wrong for a
+   * control you click repeatedly in place — a stepper whose tooltip reports
+   * the value you are stepping must stay legible across the click, not blink
+   * out on every press.
+   */
+  keepOpenOnPress?: boolean;
 }
 
 export function Tooltip({
@@ -18,12 +27,34 @@ export function Tooltip({
   children,
   className = "inline-flex shrink-0",
   singleLine = false,
+  keepOpenOnPress = false,
 }: TooltipProps) {
+  const [hoverOpen, setHoverOpen] = useState(false);
+  // Pointer enter/leave on the trigger wrapper is the only thing that closes
+  // this tooltip. The primitive's own close requests are ignored because
+  // pointer-down is one of them: honoring it is exactly the blink-on-click
+  // being fixed. Open requests still pass through, so keyboard focus opens it
+  // the usual way.
+  const controlled = keepOpenOnPress
+    ? {
+      open: hoverOpen,
+      onOpenChange: (next: boolean) => {
+        if (next) setHoverOpen(true);
+      },
+    }
+    : {};
+
   return (
     <TooltipProvider delayDuration={0}>
-      <KitTooltip>
+      <KitTooltip {...controlled}>
         <TooltipTrigger asChild>
-          <span className={className}>{children}</span>
+          <span
+            className={className}
+            onPointerEnter={keepOpenOnPress ? () => setHoverOpen(true) : undefined}
+            onPointerLeave={keepOpenOnPress ? () => setHoverOpen(false) : undefined}
+          >
+            {children}
+          </span>
         </TooltipTrigger>
         <TooltipContent
           sideOffset={10}
