@@ -310,6 +310,10 @@ profile/members/invitations, billing, secrets (personal + org), SSO,
 org integrations, environments, personal compute, worktree pruning,
 agent authentication, and agent defaults.
 
+(shipped: `agent-authentication` and `agent-defaults` are no longer connected
+panes — removed by PR #814 (`f0f8403fa`) and PR #1100 (`7d5894807`); the
+Agents scope ships as the per-harness panes plus `agent-api-keys`.)
+
 One page is intentionally scaffolded with `SettingsScaffoldPane`
 (registered in `copy/settings/settings-scaffold-copy.ts`) until its
 owning feature spec provides a connected body:
@@ -587,9 +591,11 @@ Legacy id:
                 needed.
 ```
 
-> Shipped correction: the "Agent Authentication" slice of this split
-> never shipped under that name; it landed as the per-harness panes
-> plus the `agent-api-keys` pool (see the staleness note at the top).
+> Shipped correction: this split did ship — `?section=cloud` redirected to
+> `agent-authentication` (`navigation.ts`, pre-#814). PR #814 (`f0f8403fa`)
+> then removed that pane, and the Agent Authentication slice now lands on the
+> per-harness panes plus the `agent-api-keys` pool; the `cloud` redirect is
+> focus-dependent (repo focus → `environments`, billing focus → `billing`).
 
 Preserved id:
 
