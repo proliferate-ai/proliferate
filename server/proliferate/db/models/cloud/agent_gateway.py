@@ -163,6 +163,54 @@ class AgentAuthSelection(Base):
     )
 
 
+class AgentAuthDeliveryAck(Base):
+    """The last acknowledged agent-auth state delivery per (user, surface).
+
+    One row per (user, surface), stamped when the surface's runtime confirms
+    the rendered ``state.json`` (agent-auth.md "Applied means acknowledged"):
+    cloud — the materialization operation completing against the sandbox;
+    local — the desktop reporting its runtime's accepted state push. The UI's
+    pending→applied truth is derived by comparing the surface's CURRENT
+    rendered (revision, fingerprint) against this stamp; the fingerprint is
+    the change detector, the revision only rejects an out-of-order (delayed)
+    ack for an older document.
+    """
+
+    __tablename__ = "agent_auth_delivery_ack"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "surface",
+            name="uq_agent_auth_delivery_ack_scope",
+        ),
+        CheckConstraint(
+            "surface IN ('local', 'cloud')",
+            name="ck_agent_auth_delivery_ack_surface",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+    )
+    surface: Mapped[str] = mapped_column(Text)
+    # The rendered document's revision (ms-epoch max(updated_at) over the
+    # surface's selection rows) at delivery time. BigInteger: ms epochs exceed
+    # int32 by six orders of magnitude.
+    acked_revision: Mapped[int] = mapped_column(BigInteger)
+    # sha256 hex of the canonical rendered document — the same fingerprint the
+    # renderer computes (materialize/agent_auth.py).
+    acked_fingerprint: Mapped[str] = mapped_column(String(128))
+    acked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
 class AgentAuthHarnessSettings(Base):
     """Per-(user, harness, surface) advanced settings (catalog-declared toggles).
 

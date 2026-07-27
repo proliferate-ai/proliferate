@@ -98,15 +98,26 @@ export function useRevokeAgentApiKey() {
 
 // --- Auth selections -------------------------------------------------------
 
+export interface AuthQueryPollOptions {
+  /**
+   * Re-fetch on an interval (ms). The delivery-ack pipeline uses this to
+   * observe pending→applied flips that land server-side (the cloud
+   * materializer's ack) without a client mutation to invalidate on.
+   */
+  refetchInterval?: number | false;
+}
+
 export function useAuthSelections(
   surface: AgentAuthSurface | null = null,
   enabled = true,
+  options: AuthQueryPollOptions = {},
 ) {
   const client = useCloudClient();
   return useQuery<AgentAuthSelection[]>({
     queryKey: agentAuthSelectionsKey(surface),
     queryFn: () => listAuthSelections(surface ?? undefined, client),
     enabled,
+    refetchInterval: options.refetchInterval ?? false,
   });
 }
 
@@ -193,12 +204,16 @@ export function useAgentGatewayCapabilities(enabled = true) {
   });
 }
 
-export function useAgentGatewayEnrollment(enabled = true) {
+export function useAgentGatewayEnrollment(
+  enabled = true,
+  options: AuthQueryPollOptions = {},
+) {
   const client = useCloudClient();
   return useQuery<AgentGatewayEnrollment>({
     queryKey: agentGatewayEnrollmentKey(),
     queryFn: () => getAgentGatewayEnrollment(client),
     enabled,
+    refetchInterval: options.refetchInterval ?? false,
   });
 }
 

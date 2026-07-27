@@ -40,6 +40,25 @@ class AgentAuthSelectionRecord:
 
 
 @dataclass(frozen=True)
+class AgentAuthDeliveryAckRecord:
+    """The last acknowledged state delivery for one (user, surface).
+
+    ``acked_fingerprint`` is the renderer's sha256 of the delivered canonical
+    document (change detection); ``acked_revision`` is that document's
+    revision, kept as the out-of-order backstop only.
+    """
+
+    id: UUID
+    user_id: UUID
+    surface: str
+    acked_revision: int
+    acked_fingerprint: str
+    acked_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
 class DesiredAuthSource:
     """One entry of a full-desired-state PUT of a scope's selection sources.
 

@@ -732,7 +732,13 @@ class TestAgentAuthState:
         user_id, headers = await _authed_user(client)
         empty = await _get_state(client, headers, "local")
         assert empty.status_code == 200, empty.text
-        assert empty.json() == {
+        payload = empty.json()
+        # `fingerprint` is a response-only rider for the delivery ack (C-2's
+        # "Applied means acknowledged" seam), never part of the state.json
+        # wire contract the desktop pushes to the runtime.
+        fingerprint = payload.pop("fingerprint")
+        assert isinstance(fingerprint, str) and len(fingerprint) == 64
+        assert payload == {
             "version": 2,
             "revision": 0,
             "user_id": user_id,
@@ -916,6 +922,7 @@ class TestOldAgentGatewayRoutesAreGone:
             ),
             ("POST", "/v1/cloud/agent-auth/keys"),
             ("POST", "/v1/cloud/agent-auth/keys/provider-config"),
+            ("POST", "/v1/cloud/agent-auth/state/ack"),
             ("PUT", "/v1/cloud/agent-auth/selections/{harness_kind}"),
             ("PUT", "/v1/cloud/organizations/{organization_id}/agent-auth/policy"),
         ]

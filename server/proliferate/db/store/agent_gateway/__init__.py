@@ -21,6 +21,10 @@ from proliferate.db.store.agent_gateway.credits import (
     sum_active_grants_usd,
     sum_usage_cost_usd,
 )
+from proliferate.db.store.agent_gateway.delivery_acks import (
+    get_delivery_ack,
+    record_delivery_ack,
+)
 from proliferate.db.store.agent_gateway.enrollment_keys import (
     get_active_enrollment_key,
     get_enrollment_key_by_virtual_key_id,
@@ -65,6 +69,7 @@ from proliferate.db.store.agent_gateway.policy import (
 )
 from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
+    AgentAuthDeliveryAckRecord,
     AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
     AgentGatewayEnrollmentKeyRecord,
@@ -98,6 +103,7 @@ from proliferate.db.store.agent_gateway.usage import (
 __all__ = [
     "AgentApiKeyNotUsableError",
     "AgentApiKeyRecord",
+    "AgentAuthDeliveryAckRecord",
     "AgentAuthSelectionRecord",
     "AgentCatalogOverrideRecord",
     "AgentGatewayEnrollmentKeyRecord",
@@ -124,6 +130,7 @@ __all__ = [
     "get_agent_api_key_decrypted",
     "get_agent_provider_config_decrypted",
     "get_catalog_override",
+    "get_delivery_ack",
     "get_enrollment_by_id",
     "get_enrollment_by_virtual_key_id",
     "get_enrollment_for_organization",
@@ -158,6 +165,7 @@ __all__ = [
     "mark_enrollment_synced",
     "put_auth_selections",
     "put_harness_settings",
+    "record_delivery_ack",
     "revoke_agent_api_key",
     "revoke_enrollment",
     "revoke_enrollment_keys",

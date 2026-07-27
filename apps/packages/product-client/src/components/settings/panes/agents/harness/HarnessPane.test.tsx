@@ -449,6 +449,107 @@ describe("HarnessPane authentication", () => {
     expect(gateway().getAttribute("aria-pressed")).toBe("false");
   });
 
+  it("shows Applying… while the delivery ack is outstanding and clears it once acked", () => {
+    // Proof C1 (UI state): a selection reads pending until the surface's
+    // runtime acknowledges the delivered state, then flips to applied.
+    const pendingSelection = {
+      id: "sel-gw",
+      harnessKind: "claude",
+      surface: "local",
+      sourceKind: "gateway",
+      apiKeyId: null,
+      keyTitle: null,
+      envVarName: null,
+      providerHint: null,
+      enabled: true,
+      applied: false,
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:00:00Z",
+    };
+    state.selections.data = [pendingSelection];
+    const queryClient = new QueryClient({ defaultOptions: {
+      queries: { retry: false }, mutations: { retry: false },
+    } });
+    const element = () => (
+      <QueryClientProvider client={queryClient}>
+        <ProductHostProvider host={harnessTestHost}>
+          <HarnessPane harnessKind="claude" />
+        </ProductHostProvider>
+      </QueryClientProvider>
+    );
+    const view = render(element());
+
+    expect(screen.queryByText("Applying…")).not.toBeNull();
+    expect(
+      view.container.querySelector('[data-harness-auth-delivery="pending"]'),
+    ).not.toBeNull();
+
+    // The ack lands (desktop ack POST or the cloud materializer's stamp) and
+    // the refetched selections read applied.
+    state.selections.data = [{ ...pendingSelection, applied: true }];
+    view.rerender(element());
+
+    expect(screen.queryByText("Applying…")).toBeNull();
+    expect(
+      view.container.querySelector('[data-harness-auth-delivery="applied"]'),
+    ).not.toBeNull();
+  });
+
+  it("scopes the Applying… indicator to the pending harness and surface", () => {
+    // A sibling harness's (codex) and the other surface's (cloud) unacked
+    // deliveries must not flip the claude/local pane to pending.
+    state.selections.data = [
+      {
+        id: "sel-codex",
+        harnessKind: "codex",
+        surface: "local",
+        sourceKind: "gateway",
+        apiKeyId: null,
+        keyTitle: null,
+        envVarName: null,
+        providerHint: null,
+        enabled: true,
+        applied: false,
+        createdAt: "2026-07-01T00:00:00Z",
+        updatedAt: "2026-07-01T00:00:00Z",
+      },
+      {
+        id: "sel-claude-cloud",
+        harnessKind: "claude",
+        surface: "cloud",
+        sourceKind: "gateway",
+        apiKeyId: null,
+        keyTitle: null,
+        envVarName: null,
+        providerHint: null,
+        enabled: true,
+        applied: false,
+        createdAt: "2026-07-01T00:00:00Z",
+        updatedAt: "2026-07-01T00:00:00Z",
+      },
+      {
+        id: "sel-claude-local",
+        harnessKind: "claude",
+        surface: "local",
+        sourceKind: "gateway",
+        apiKeyId: null,
+        keyTitle: null,
+        envVarName: null,
+        providerHint: null,
+        enabled: true,
+        applied: true,
+        createdAt: "2026-07-01T00:00:00Z",
+        updatedAt: "2026-07-01T00:00:00Z",
+      },
+    ];
+    const { container } = renderPane("claude");
+
+    expect(screen.queryByText("Applying…")).toBeNull();
+    expect(
+      container.querySelector('[data-harness-auth-delivery="applied"]'),
+    ).not.toBeNull();
+  });
+
   it("shows the native empty-state copy when nothing is enabled", () => {
     renderPane("claude");
     expect(

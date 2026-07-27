@@ -25,8 +25,10 @@ from proliferate.server.cloud.agent_gateway import service
 from proliferate.server.cloud.agent_gateway.models import (
     AgentApiKeyCreateRequest,
     AgentApiKeyResponse,
+    AgentAuthDeliveryAckResponse,
     AgentAuthSelectionResponse,
     AgentAuthSelectionsPutRequest,
+    AgentAuthStateAckRequest,
     AgentAuthStateResponse,
     AgentAuthSurface,
     AgentGatewayCapabilitiesResponse,
@@ -38,6 +40,7 @@ from proliferate.server.cloud.agent_gateway.models import (
     agent_auth_state_payload,
     api_key_payload,
     auth_selection_payload,
+    delivery_ack_payload,
     desired_source,
     enrollment_payload,
     org_agent_policy_payload,
@@ -143,8 +146,13 @@ async def list_agent_auth_selections_endpoint(
 ) -> list[AgentAuthSelectionResponse]:
     records = await service.list_auth_selections(db, user_id=user.id, surface=surface)
     titles = await service.key_titles(db, user_id=user.id)
+    applied = await service.annotate_selection_delivery(db, user_id=user.id, records=records)
     return [
-        auth_selection_payload(record, key_title=titles.get(record.api_key_id))
+        auth_selection_payload(
+            record,
+            key_title=titles.get(record.api_key_id),
+            applied=applied.get(record.id, False),
+        )
         for record in records
     ]
 
@@ -193,8 +201,13 @@ async def put_agent_auth_selections_endpoint(
         except CloudApiError as error:
             raise_cloud_error(error)
     titles = await service.key_titles(db, user_id=user.id)
+    applied = await service.annotate_selection_delivery(db, user_id=user.id, records=records)
     return [
-        auth_selection_payload(record, key_title=titles.get(record.api_key_id))
+        auth_selection_payload(
+            record,
+            key_title=titles.get(record.api_key_id),
+            applied=applied.get(record.id, False),
+        )
         for record in records
     ]
 
@@ -220,8 +233,37 @@ async def get_agent_auth_state_endpoint(
     materializer writes into the user's own sandbox. Nothing crosses a user
     boundary.
     """
-    state = await service.get_auth_state(db, user_id=user.id, surface=surface)
-    return agent_auth_state_payload(state)
+    state, fingerprint = await service.get_auth_state(db, user_id=user.id, surface=surface)
+    return agent_auth_state_payload(state, fingerprint=fingerprint)
+
+
+@router.post("/state/ack", response_model=AgentAuthDeliveryAckResponse)
+async def ack_agent_auth_state_endpoint(
+    body: AgentAuthStateAckRequest,
+    surface: AgentAuthSurface = Query(...),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentAuthDeliveryAckResponse:
+    """Record a surface runtime's delivery acknowledgement (the desktop seam).
+
+    The desktop calls this after its local runtime's state PUT/DELETE
+    succeeded, echoing the pushed document's ``revision`` and the served
+    ``fingerprint`` from ``GET /state``. This stamp is what flips the
+    selections read from pending to applied (agent-auth.md "Applied means
+    acknowledged"). The cloud surface's twin is stamped server-side by the
+    materialization worker, not through this route.
+    """
+    try:
+        record = await service.ack_auth_state_delivery(
+            db,
+            user_id=user.id,
+            surface=surface,
+            revision=body.revision,
+            fingerprint=body.fingerprint,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return delivery_ack_payload(record)
 
 
 # --------------------------------------------------------------------------- #

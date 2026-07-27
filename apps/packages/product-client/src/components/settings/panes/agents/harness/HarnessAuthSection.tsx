@@ -173,6 +173,15 @@ function HarnessAuthMethods({
       {editor.harnessDisallowed ? (
         <p className="pb-2 text-ui-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
       ) : null}
+      {editor.deliveryPending ? (
+        // Applied means acknowledged (agent-auth.md): the selection is stored
+        // but the surface's runtime has not confirmed the delivered auth state
+        // yet. Flips off when the ack lands (the selections query polls while
+        // pending).
+        <p className="pb-2 text-ui-sm text-muted-foreground">
+          {HARNESS_PANE_COPY.deliveryPending}
+        </p>
+      ) : null}
       <div
         className={
           gatewayCapable
@@ -180,6 +189,7 @@ function HarnessAuthMethods({
             : "grid grid-cols-1 gap-2 sm:grid-cols-2"
         }
         data-harness-auth-section={harnessKind}
+        data-harness-auth-delivery={editor.deliveryPending ? "pending" : "applied"}
         data-harness-selected-route={[...selectedMethods]
           .map((method) => `${harnessKind}:${method}`)
           .join(" ")}

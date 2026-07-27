@@ -120,6 +120,9 @@ export const HARNESS_PANE_COPY = {
     `How ${displayName} authenticates to models on this surface.`,
   selectionUpdateError: (displayName: string) =>
     `Could not update ${displayName} authentication.`,
+  // Applied means acknowledged (agent-auth.md): shown from a selection write
+  // until the surface's runtime confirms the delivered auth state.
+  deliveryPending: "Applying…",
   catalogRefreshError: (displayName: string) =>
     `Could not refresh the ${displayName} model catalog.`,
   catalogOverrideError: (displayName: string) =>

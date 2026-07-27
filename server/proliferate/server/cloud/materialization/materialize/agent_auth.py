@@ -610,10 +610,15 @@ async def materialize_agent_auth(
             operation_id=ctx.sandbox.id,
             paths={state_path, manifest_path},
         )
+        await _record_cloud_delivery_ack(db, user_id=user_id, state=state, fingerprint=fingerprint)
         return
 
     previous = await _read_previous_manifest(ctx)
     if previous.get("fingerprint") == fingerprint:
+        # Content already at rest in the sandbox — the delivery is confirmed at
+        # this fingerprint, so stamp the ack even without a rewrite (a re-run
+        # after a crashed ack write must still converge to applied).
+        await _record_cloud_delivery_ack(db, user_id=user_id, state=state, fingerprint=fingerprint)
         return
 
     await sandbox_io.write_private_file_atomic(
@@ -634,6 +639,31 @@ async def materialize_agent_auth(
         path=manifest_path,
         content=json.dumps(manifest, sort_keys=True, indent=2) + "\n",
         mode="600",
+    )
+    await _record_cloud_delivery_ack(db, user_id=user_id, state=state, fingerprint=fingerprint)
+
+
+async def _record_cloud_delivery_ack(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    state: Mapping[str, object],
+    fingerprint: str,
+) -> None:
+    """Stamp the cloud ack: the materialization op completing IS the cloud
+    runtime's acknowledgement (agent-auth.md "Applied means acknowledged" —
+    sessions read the file fresh at launch, so file-at-rest == rendered).
+
+    Runs after ``commit_cloud_sandbox_session`` released the state-read
+    transaction; the write opens a fresh one that the task runner (or the
+    bootstrap caller) commits.
+    """
+    await agent_gateway_store.record_delivery_ack(
+        db,
+        user_id=user_id,
+        surface=AGENT_AUTH_SURFACE_CLOUD,
+        revision=int(state["revision"]),  # type: ignore[call-overload]
+        fingerprint=fingerprint,
     )
 
 

@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
+    AgentAuthDeliveryAckRecord,
     AgentAuthSelectionRecord,
     AgentGatewayEnrollmentRecord,
     DesiredAuthSource,
@@ -83,6 +84,14 @@ class AgentAuthSelectionResponse(AgentGatewayBaseModel):
     env_var_name: str | None = Field(alias="envVarName")
     provider_hint: str | None = Field(alias="providerHint")
     enabled: bool
+    # Applied means acknowledged (agent-auth.md): True only once this scope's
+    # surface runtime has confirmed a delivery covering it. False is the
+    # visible pending state — including a delivery that never happened. The
+    # server always computes and sets a boolean; the schema-optional shape
+    # exists only so the generated client type stays optional (fixture
+    # builders predating the ack pipeline read as applied — clients treat
+    # exactly `false` as pending, never absence).
+    applied: bool | None = None
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
 
@@ -128,12 +137,37 @@ class AgentAuthStateHarness(BaseModel):
 
 
 class AgentAuthStateResponse(BaseModel):
-    """The whole ``state.json`` v2 document (``route_auth/state.rs``)."""
+    """The whole ``state.json`` v2 document (``route_auth/state.rs``).
+
+    ``fingerprint`` is a response-only rider (the renderer's sha256 of the
+    canonical document), NOT part of the state.json wire contract: the desktop
+    echoes it through ``POST /state/ack`` after a successful runtime push and
+    must strip it before pushing the document to the local runtime.
+    """
 
     version: int
     revision: int
     user_id: str | None = None
     harnesses: list[AgentAuthStateHarness]
+    fingerprint: str | None = None
+
+
+class AgentAuthStateAckRequest(BaseModel):
+    """Desktop delivery ack: the pushed document's identity, echoed back.
+
+    ``revision`` is the revision the local runtime's state PUT/DELETE
+    confirmed; ``fingerprint`` is the served document's fingerprint from
+    ``GET /state`` (never client-computed).
+    """
+
+    revision: int
+    fingerprint: str
+
+
+class AgentAuthDeliveryAckResponse(AgentGatewayBaseModel):
+    surface: AgentAuthSurface
+    acked_revision: int = Field(alias="ackedRevision")
+    acked_at: str = Field(alias="ackedAt")
 
 
 # --------------------------------------------------------------------------- #
@@ -215,6 +249,7 @@ def auth_selection_payload(
     record: AgentAuthSelectionRecord,
     *,
     key_title: str | None,
+    applied: bool,
 ) -> AgentAuthSelectionResponse:
     return AgentAuthSelectionResponse(
         id=str(record.id),
@@ -226,6 +261,7 @@ def auth_selection_payload(
         env_var_name=record.env_var_name,
         provider_hint=record.provider_hint,
         enabled=record.enabled,
+        applied=applied,
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
     )
@@ -242,8 +278,24 @@ def desired_source(input_source: AgentAuthSourceInput) -> DesiredAuthSource:
     )
 
 
-def agent_auth_state_payload(state: dict[str, object]) -> AgentAuthStateResponse:
-    return AgentAuthStateResponse.model_validate(state)
+def agent_auth_state_payload(
+    state: dict[str, object],
+    *,
+    fingerprint: str | None = None,
+) -> AgentAuthStateResponse:
+    response = AgentAuthStateResponse.model_validate(state)
+    response.fingerprint = fingerprint
+    return response
+
+
+def delivery_ack_payload(
+    record: AgentAuthDeliveryAckRecord,
+) -> AgentAuthDeliveryAckResponse:
+    return AgentAuthDeliveryAckResponse(
+        surface=record.surface,  # type: ignore[arg-type]
+        acked_revision=record.acked_revision,
+        acked_at=record.acked_at.isoformat(),
+    )
 
 
 def org_agent_policy_payload(snapshot: OrgAgentPolicySnapshot) -> OrgAgentPolicyResponse:

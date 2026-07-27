@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from proliferate.db.models.cloud.agent_gateway import (
     AgentApiKey,
+    AgentAuthDeliveryAck,
     AgentAuthSelection,
     AgentCatalogOverride,
     AgentGatewayEnrollment,
@@ -15,6 +16,7 @@ from proliferate.db.models.cloud.agent_gateway import (
 )
 from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
+    AgentAuthDeliveryAckRecord,
     AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
     AgentGatewayEnrollmentKeyRecord,
@@ -50,6 +52,19 @@ def selection_record(row: AgentAuthSelection) -> AgentAuthSelectionRecord:
         env_var_name=row.env_var_name,
         provider_hint=row.provider_hint,
         enabled=row.enabled,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def delivery_ack_record(row: AgentAuthDeliveryAck) -> AgentAuthDeliveryAckRecord:
+    return AgentAuthDeliveryAckRecord(
+        id=row.id,
+        user_id=row.user_id,
+        surface=row.surface,
+        acked_revision=row.acked_revision,
+        acked_fingerprint=row.acked_fingerprint,
+        acked_at=row.acked_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
