@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "#product/components/workspace/chat/surface/CloudStatusCompactHeader";
 import {

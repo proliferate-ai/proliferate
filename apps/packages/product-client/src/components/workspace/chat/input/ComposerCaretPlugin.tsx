@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createDOMRange } from "@lexical/selection";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
@@ -6,6 +6,7 @@ import {
   $isRangeSelection,
   type LexicalEditor,
 } from "lexical";
+import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
 
 interface ComposerCaretMeasurement {
   color: string;
@@ -24,6 +25,25 @@ const CARET_WIDTH_PX = 1;
  */
 export function ComposerCaretPlugin() {
   const [editor] = useLexicalComposerContext();
+  // The composer keeps DOM focus while a popover is open (PopoverButton
+  // prevents onOpenAutoFocus so opening a reasoning/model/integrations
+  // popover never blurs the editor). Our replacement caret is a fixed,
+  // maximum-z-index span, so without this check it kept blinking in front
+  // of any popover surface stacked above the composer. Suppress the
+  // replacement caret for the duration of any open popover; the native
+  // (now-invisible, caret-color: transparent) caret has already been
+  // hidden too, so nothing blinks while an overlay is up.
+  const nativeOverlayOpen = useNativeOverlayOpen();
+  const overlayOpenRef = useRef(nativeOverlayOpen);
+  overlayOpenRef.current = nativeOverlayOpen;
+  // Re-run the hide/reposition pass whenever overlay presence flips — this
+  // covers both directions: hiding immediately when a popover opens (even
+  // if the caret was already visible and idle, with no other Lexical
+  // update in flight), and repainting it once the popover closes.
+  const scheduleForOverlayRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    scheduleForOverlayRef.current?.();
+  }, [nativeOverlayOpen]);
 
   useEffect(() => {
     let caretElement: HTMLSpanElement | null = null;
@@ -144,7 +164,7 @@ export function ComposerCaretPlugin() {
       }
 
       const root = rootElement;
-      if (root === null || isComposing || !rootHasFocus(root)) {
+      if (root === null || isComposing || !rootHasFocus(root) || overlayOpenRef.current) {
         hideReplacementCaret();
         return;
       }
@@ -199,6 +219,7 @@ export function ComposerCaretPlugin() {
         positionReplacementCaret();
       });
     };
+    scheduleForOverlayRef.current = scheduleReplacementCaret;
 
     // Lexical may publish several updates in one input turn. Measure once on
     // the next display frame so typing never synchronously forces layout.
@@ -263,6 +284,7 @@ export function ComposerCaretPlugin() {
       rootCleanup?.();
       destroyReplacementCaret();
       rootElement = null;
+      scheduleForOverlayRef.current = null;
     };
   }, [editor]);
 

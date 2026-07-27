@@ -22,7 +22,7 @@ Scope:
 - `apps/desktop/src/lib/domain/reviews/**`
 - `apps/desktop/src/stores/reviews/**`
 
-Read this doc before changing the composer, the panels that sit above it (todo tracker, approval card, workspace status, cloud runtime), or where the Claude plan body renders. The structure below was chosen to mirror Codex's reference (`references/codex_todo.html`, `references/codex_plan.html`) and is load-bearing for several visual decisions that are not obvious from the code alone.
+Read this doc before changing the composer, the panels that sit above it (todo tracker, approval card, workspace status, cloud runtime), or where the Claude plan body renders. The structure below is load-bearing for several visual decisions that are not obvious from the code alone.
 
 For delegated work semantics across subagents, cowork sessions, plan review
 agents, code review agents, tab indicators, and delegated-work delete behavior,
@@ -278,7 +278,7 @@ mock accepted in the playground `workspace-status-card` scenario) is the
 **workspace status card**: the composer carries no ambient-state bar at all.
 A single icon-only bulleted-list trigger sits in the trailing control cluster
 (right of the runtime-pressure ring — never a count, never a warning tint) and
-opens a codex-anatomy popover card
+opens a structured popover card
 (`workspace-status/WorkspaceStatusComposerControl.tsx`):
 
 - Surface: 300px, 1.25rem radius, solid popover background, `overflow-hidden`,
@@ -287,8 +287,8 @@ opens a codex-anatomy popover card
 - Sections in order: **Source control** (Review N changes via the
   `AppShellReviewIcon` ± glyph → review panel; Commit or push with
   ahead/behind meta; Compare branch with PR number meta → PR view; a distinct
-  checks row with inline Fix), then **Subagents** (ours) as codex-format
-  grouped rows — pixel-sprite cluster (`PixelAgentSprite`, ≤4) + "N working" /
+  checks row with inline Fix), then **Subagents** (ours) as grouped rows —
+  pixel-sprite cluster (`PixelAgentSprite`, ≤4) + "N working" /
   "N done", click opens the subagents surface — then **Native agents &
   terminals** as count rows (single basic agent icon / terminal / loop icons).
 - Leaf detail is hover-only: checks, native counts, and subagent group rows
@@ -433,9 +433,9 @@ echoes it back as a `plan_reference` content part.
 
 `useActiveTodoTracker` narrows `deriveCanonicalPlan` to `sourceKind === "structured_plan"`. Claude's `plan` items are filtered out by the SDK (Claude's `TodoWrite` is internal bookkeeping, not a presented plan). Do not re-enable Claude's structured plans in the todo tracker — they belong elsewhere.
 
-## 4. Visual rules (the Codex minimalist pattern)
+## 4. Visual rules (minimalist pattern)
 
-Borrowed directly from `references/codex_todo.html` and `references/codex_plan.html`. These are the calls that get broken most easily.
+These are the calls that get broken most easily.
 
 ### 4.1 Panels are one dock stack
 
@@ -493,7 +493,7 @@ button row.
 - Completed entries: `line-through` + `text-muted-foreground/60` on both the index and the content span.
 - Default: expanded. Collapse chevron in header.
 
-Do **not** grow the scroll cap past `max-h-40` — the Codex reference is exactly this size and larger caps dominate the composer visually.
+Do **not** grow the scroll cap past `max-h-40` — larger caps dominate the composer visually.
 
 ### 4.5 ProposedPlanCard specifics
 
@@ -518,7 +518,7 @@ Do **not** grow the scroll cap past `max-h-40` — the Codex reference is exactl
 Control-row tone rule — the pills are **monochrome**:
 
 - Every control pill is a `ComposerControlButton`
-  (`apps/packages/ui/src/primitives/ComposerControlButton.tsx`). It has no
+  (`apps/packages/ui/src/patterns/ComposerControlButton.tsx`). It has no
   `tone` prop; the tone system was deleted 2026-07-02 along with the plan-mode
   tint (`--color-plan-border` is gone). Do **not** reintroduce mode-based
   tinting on the mode pill or any other control.

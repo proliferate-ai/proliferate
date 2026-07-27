@@ -6,7 +6,7 @@ import {
   GitBranchIcon,
   Spinner,
 } from "@proliferate/ui/icons";
-import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
+import { ProliferateIcon } from "@proliferate/ui/icons/proliferate-icons";
 import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
 import {
   CoworkCodingLedger,

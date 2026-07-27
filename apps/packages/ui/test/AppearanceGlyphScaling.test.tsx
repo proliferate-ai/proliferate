@@ -9,9 +9,9 @@ import {
   InlinePathMentionIcon,
 } from "../src/icons/workspace";
 import { SegmentedControl } from "../src/primitives/SegmentedControl";
-import { ProviderIcon } from "../src/provider-icons";
+import { ProviderIcon } from "../src/icons/provider-icons";
 import { twMerge } from "../src/utils/tw-merge";
-import { SidebarActionButton } from "../src/layout/SidebarActionButton";
+import { SidebarActionButton } from "../src/patterns/SidebarActionButton";
 
 afterEach(cleanup);
 
@@ -67,6 +67,13 @@ describe("appearance-owned glyph sizing", () => {
     const button = getByRole("button", { name: "Add repository" });
     expect(button.className).toContain("[font-size:var(--text-sidebar-row)]");
     expect(button.className).toContain("size-6");
+    // Round-4: the wrapper's own [&_svg]:icon-tight is what actually reaches
+    // the child glyph — it wins the same twMerge icon-size group as the base
+    // RowActionIconButton's [&_svg]:icon-control descendant selector, which
+    // otherwise beats any plain size class a caller puts on the child SVG
+    // directly (that's why the glyph rendered at 16px regardless of the
+    // "icon-compact" class below).
+    expect(button.className).toContain("[&_svg]:icon-tight");
     expect(button.querySelector("svg")?.className.baseVal).toContain("icon-compact");
   });
 

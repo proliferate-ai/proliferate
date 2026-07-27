@@ -44,9 +44,9 @@ implementation such as Tauri, browser auth transport, and vendor bootstrap.
 ```text
 apps/packages/
   design/src/        tokens.ts · css/{dom.css,product.css,desktop.css} · react-native.ts
-  ui/src/            kit/ · primitives/ · layout/ · lib/
+  ui/src/            primitives/ · patterns/ · icons/ · lib/ · utils/ · overlays/
   product-domain/src/<domain>/
-  product-ui/src/<domain>/<surface>/
+  product-ui/src/    patterns/ · <domain>/<surface>/
   product-surfaces/src/<domain>/<surface>/
   product-client/src/
     ProductClient.tsx
@@ -84,27 +84,27 @@ The **single DOM primitive system** for Desktop, Web, `product-client`,
 *only* place primitives exist.
 
 ```text
-ui/src/kit/** · ui/src/primitives/** · ui/src/layout/** · ui/src/lib/utils.ts
+ui/src/primitives/** · ui/src/patterns/** · ui/src/icons/** · ui/src/{lib,utils,overlays}/
 ```
 
 **Hard invariant: no DOM primitive component may be defined outside `apps/packages/ui/**`.** A primitive is any generic reusable control/shell/low-level building block — *including a differently-named wrapper* around a raw DOM control.
 
 Primitives that belong here: `Button`/`IconButton`, `Input`/`Textarea`/`Label`/`Select`, `Checkbox`/`Switch`/radio, `Tabs`/segmented controls, `Menu`/`Popover`/`Tooltip`, `Dialog`/modal shells, badges/pills/separators/scroll-areas/layout shells.
 
-#### `kit/` — the primitive tier going forward
+#### `primitives/` — the base tier
 
-`kit/` holds Radix-backed primitives (`Dialog`, `AlertDialog`, `Popover`, `Tooltip`, `DropdownMenu`, `ContextMenu`, `Checkbox`, `RadioGroup`, `Avatar`, `Separator`, `Skeleton`, `Table`, `Sonner`). The source is shadcn-derived and **we own it** — it is vendored, not a dependency — and every component is styled to the design contract via `design` tokens.
+`primitives/` holds Radix-backed base controls (`Dialog`, `AlertDialog`, `Popover`, `DropdownMenu`, `Sonner`, `Command`, plus the raw `checkbox-primitive`/`tooltip-primitive` pair) alongside legacy overlay wrappers that compose them (`PopoverButton`, low-level icon-button shells, and the `Checkbox`/`Tooltip` re-export shims). The Radix source is shadcn-derived and **we own it** — it is vendored, not a dependency — and every component is styled to the design contract via `design` tokens. `patterns/` holds compositions one level up (`ModalShell`, `ConfirmationDialog`, `CommandPalette`, and other multi-primitive assemblies).
 
-- Import via export-map subpaths: `@proliferate/ui/kit/Dialog` (the `./kit/<Component>` convention; no barrels, same as `primitives/`).
-- `lib/utils.ts` exports `cn()` (tailwind-merge class joiner) at `@proliferate/ui/lib/utils`; kit components use it and callsites may too.
-- **New code imports `kit/` directly** when a kit component exists for the need.
+- Import via export-map subpaths: `@proliferate/ui/primitives/Dialog` (the `./primitives/<Component>` convention; no barrels).
+- `lib/utils.ts` exports `cn()` (tailwind-merge class joiner) at `@proliferate/ui/lib/utils`; primitives use it and callsites may too.
+- **New code imports the base primitive directly** when one exists for the need.
 
-Relationship to `primitives/`: `primitives/` is the legacy tier. Its overlay components (`ModalShell`, `PopoverButton`, `Tooltip`, `ConfirmationDialog`) are thin wrappers that delegate to `kit/` and are being migrated. Four component families currently exist in both tiers — `Checkbox`, `Tooltip`, the Popover family, and the Dialog family. This overlap is **transitional, with `kit/` as the survivor**: do not extend the legacy twin; add capability to the kit component and thin the wrapper.
+Two component families still ship a raw/wrapper pair under the same `primitives/` directory — `Checkbox` (`checkbox-primitive.tsx` + `Checkbox.tsx`) and `Tooltip` (`tooltip-primitive.tsx` + `Tooltip.tsx`) — because the wrapper's public name collided with the base primitive's. This overlap is **transitional, with the raw `-primitive` module as the survivor**: do not extend the wrapper further; add capability to the raw primitive and thin the wrapper.
 
 Rules:
 - Do **not** define primitives in `apps/desktop/src`, `apps/web/src`,
   `product-client`, `product-ui`, or `product-surfaces`.
-- Do **not** define a second button/input/dialog/menu/select/tabs primitive under another name, or restyle raw DOM controls at callsites to mimic one. *(Transitional exception: the four `kit/`↔`primitives/` pairs above, resolving toward `kit/`. No new pairs.)*
+- Do **not** define a second button/input/dialog/menu/select/tabs primitive under another name, or restyle raw DOM controls at callsites to mimic one. *(Transitional exception: the `checkbox-primitive`/`tooltip-primitive` pairs above, resolving toward the raw module. No new pairs.)*
 - Do **not** render raw `<button>`/`<input>`/`<label>`/`<select>`/`<textarea>` outside `ui`.
 - Need a new size/tone/density/icon-position/loading/destructive/layout mode? **Add the API to `ui` first.**
 - Callsite classes may handle layout/spacing; the primitive owns color, border, radius, typography, focus, hover, disabled, and loading behavior.
@@ -173,7 +173,7 @@ stays outside `product-client` and DOM-free.
 
 ## Package rules
 
-- Use concrete export-map subpaths (`@proliferate/ui/kit/Dialog`, `@proliferate/ui/primitives/Button`); **no barrels.**
+- Use concrete export-map subpaths (`@proliferate/ui/primitives/Dialog`, `@proliferate/ui/primitives/Button`); **no barrels.**
 - Package code must not import app code via `@/` or relative paths into an app, nor app stores/providers/routes/Tauri/AnyHarness wiring unless the map above allows it.
 - No `shared`/`common`/`types`/`utils` buckets. Name files for the rule/primitive/component/surface they own.
 - If sharing needs many app-specific branches, keep it app-local and extract only the pure `product-domain` rule.

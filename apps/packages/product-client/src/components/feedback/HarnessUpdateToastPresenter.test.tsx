@@ -42,7 +42,7 @@ const sonnerMocks = vi.hoisted(() => {
   return { toast };
 });
 
-vi.mock("@proliferate/ui/kit/Sonner", () => ({ toast: sonnerMocks.toast }));
+vi.mock("@proliferate/ui/primitives/Sonner", () => ({ toast: sonnerMocks.toast }));
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => {
     state.catalogCallCount += 1;

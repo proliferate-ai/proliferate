@@ -7,7 +7,7 @@ import {
   ReadBook,
   Settings,
 } from "@proliferate/ui/icons";
-import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
+import { ProliferateIcon } from "@proliferate/ui/icons/proliferate-icons";
 import type { ToolDisplayIconKey } from "@proliferate/product-domain/chats/tools/tool-call-display";
 
 export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {

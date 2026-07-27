@@ -8,7 +8,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@proliferate/ui/kit/AlertDialog";
+} from "@proliferate/ui/primitives/AlertDialog";
 import { RadioCardGroup } from "@proliferate/ui/primitives/RadioCardGroup";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { remoteRepoKey } from "#product/lib/domain/workspaces/cloud/logical-workspace-source";

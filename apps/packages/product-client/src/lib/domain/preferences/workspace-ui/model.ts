@@ -26,8 +26,11 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "#product/lib/domain/preferences
  * v10: add session-scoped activity/read timestamps for chat tab unread dots.
  * v11: drop retired finish-suggestion sidebar dismissal state.
  * v12: add per-logical-workspace git/PR status snapshots.
+ * v13: add a section-level Repositories collapse flag, distinct from the
+ * per-repo-group collapse array — collapsing the section hides every repo
+ * group's rows at once instead of each group owning its own toggle only.
  */
-export const WORKSPACE_UI_MIGRATION_VERSION = 12;
+export const WORKSPACE_UI_MIGRATION_VERSION = 13;
 
 export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
@@ -35,6 +38,7 @@ export interface PersistedWorkspaceUiState {
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;
+  repositoriesCollapsed: boolean;
   threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -69,6 +73,7 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   hiddenRepoRootIds: [],
   collapsedRepoGroups: [],
   showArchived: false,
+  repositoriesCollapsed: false,
   threadsCollapsed: false,
   sidebarOpen: false,
   sidebarWidth: WORKSPACE_SIDEBAR_DEFAULT_WIDTH,

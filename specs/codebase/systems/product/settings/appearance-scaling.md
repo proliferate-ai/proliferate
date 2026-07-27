@@ -32,12 +32,11 @@ equivalent native setting.
 
 ## Design reference
 
-- **Primary reference:** Codex Desktop `26.715.31925`.
+- **Primary reference:** local desktop reference captures (untracked `reference/` tree).
 - **Exact state:** the open file-browser/file-tree workspace preserved as
-  `reference/codex/files/file-browser.png`, a `1800 × 1600` deterministic replay
-  of saved live DOM with the installed renderer's adopted stylesheet. Its
-  measured file-tree row uses 13px text in a 28px row with a 10px label/icon
-  gap.
+  a `1800 × 1600` deterministic replay of saved live DOM with the installed
+  renderer's adopted stylesheet. Its measured file-tree row uses 13px text in
+  a 28px row with a 10px label/icon gap.
 - **Match:** one legible scale per semantic role, code that is not artificially
   smaller than surrounding reading text, label/icon optical sizing that moves
   together, and stable compact-control hit areas.

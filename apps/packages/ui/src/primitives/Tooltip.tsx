@@ -4,7 +4,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "../kit/Tooltip";
+} from "./tooltip-primitive";
 
 interface TooltipProps {
   content: string;

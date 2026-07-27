@@ -89,7 +89,7 @@ Three rules every settings page follows:
    (frontend/guides/access.md)
 
 3. Page chrome uses SettingsPageHeader + SettingsSection + SettingsRow
-   (from @proliferate/product-ui/settings). New pages do not invent
+   (from @proliferate/product-ui/patterns). New pages do not invent
    new wrappers.
 
 4. The Agents `Local` surface remains useful without a Cloud session. Its
@@ -146,7 +146,7 @@ Verified against the current repository worktree on 2026-07-01.
 **Entry point**: `apps/desktop/src/pages/SettingsPage.tsx` renders
 `<SettingsScreen />`. `SettingsScreen` renders a two-row header — a back
 row, then a 46px row of horizontal scope tabs (`SettingsScopeTabs` from
-`@proliferate/product-ui/settings`) — over `SettingsSidebar` (240px
+`@proliferate/product-ui/patterns`) — over `SettingsSidebar` (240px
 fixed rail) + a scrollable content area.
 
 **Scope-tab IA**: navigation is split into four top-level scopes,
@@ -263,7 +263,7 @@ subfolders:
 > [`agent-auth.md`](../../../platforms/product/agent-auth.md).
 
 **Existing shared primitives**: page chrome lives in
-`apps/packages/product-ui/src/settings/`:
+`apps/packages/product-ui/src/patterns/`:
 
 ```text
 SettingsPageHeader.tsx    title + description + action slot
@@ -780,9 +780,9 @@ in copy/settings/vocabulary-copy.ts keys.
 Existing (kept; no changes):
 
 ```text
-SettingsPageHeader          apps/packages/product-ui/src/settings/SettingsPageHeader.tsx
-SettingsSection             apps/packages/product-ui/src/settings/SettingsSection.tsx
-SettingsRow                 apps/packages/product-ui/src/settings/SettingsRow.tsx
+SettingsPageHeader          apps/packages/product-ui/src/patterns/SettingsPageHeader.tsx
+SettingsSection             apps/packages/product-ui/src/patterns/SettingsSection.tsx
+SettingsRow                 apps/packages/product-ui/src/patterns/SettingsRow.tsx
 SettingsEyebrow / SettingsScopeTabs / SettingsEmptyState / SettingsShell
                             same directory
 ```
@@ -1047,7 +1047,7 @@ apps/desktop/src/lib/domain/settings/navigation-presentation.ts
     scope<->section mapping, PARKED_SECTION_SCOPES
   - adminOnly metadata on Org-scope rows
 
-apps/packages/product-ui/src/settings/SettingsScopeTabs.tsx
+apps/packages/product-ui/src/patterns/SettingsScopeTabs.tsx
   - horizontal underline scope switcher consumed by SettingsScreen
 
 apps/desktop/src/components/settings/sidebar/SettingsSidebar.tsx

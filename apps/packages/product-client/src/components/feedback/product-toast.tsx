@@ -1,4 +1,4 @@
-import { toast } from "@proliferate/ui/kit/Sonner";
+import { toast } from "@proliferate/ui/primitives/Sonner";
 
 export type ProductToastKind = "error" | "info";
 

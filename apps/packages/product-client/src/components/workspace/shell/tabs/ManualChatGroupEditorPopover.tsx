@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";
+import { FixedPositionLayer } from "@proliferate/ui/primitives/FixedPositionLayer";
 import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { useNativeOverlayRegistration } from "@proliferate/ui/overlays/overlay-presence";
 import {
