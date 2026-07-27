@@ -157,9 +157,13 @@ function formatGeminiModelId(modelId: string): string | null {
 // The minor component is optional: a generation that ships without one
 // ("claude-sonnet-5") is named "Sonnet 5", not left to fall through to the raw
 // catalog id. The optional trailing `-<digits>` still absorbs date/revision
-// suffixes.
+// suffixes. The minor digit's negative lookahead (`(?![\dm])`) requires the
+// candidate minor digit to end a version component, so it isn't fooled by
+// the leading digit of a longer suffix: a `-1m` context marker on a bare id
+// ("claude-sonnet-5-1m") or a full date stamp on a bare id
+// ("claude-sonnet-5-20260101") would otherwise be misread as ".1" or ".2".
 function formatClaudeModelId(modelId: string): string | null {
-  const match = /claude-([a-z]+)-(\d)(?:-(\d))?(?:-[\d-]+)?/.exec(modelId);
+  const match = /claude-([a-z]+)-(\d)(?:-(\d)(?![\dm]))?(?:-[\d-]+)?/.exec(modelId);
   if (!match) {
     return null;
   }
