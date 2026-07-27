@@ -268,6 +268,10 @@ function buildSidebarWorkspaceItem(
       workspaceLocationCopyValue: copyMetadata.workspaceLocation?.value ?? null,
       workspaceLocationCopyToastLabel: copyMetadata.workspaceLocation?.toastLabel ?? null,
       branchName: copyMetadata.branchName,
+      // Already on the workspace record the collections query fetches — no
+      // extra request. Absent on cloud summaries, which carry no execution
+      // summary in this projection.
+      sessionCount: preferredLocalWorkspace?.executionSummary?.totalSessionCount ?? null,
       gitStatus,
       availabilityCommands,
       cloudWorkspaceIdForActions: cloudSummary?.id ?? null,

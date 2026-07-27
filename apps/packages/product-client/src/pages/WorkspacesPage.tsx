@@ -25,11 +25,14 @@ import type { SidebarGroupState, SidebarWorkspaceItemState } from "#product/lib/
 const PR_STATUS_UNAVAILABLE_LABEL = "PR status unavailable — gh not signed in";
 
 /**
- * Workspaces page (UX spec §3): cmdk filter-list with
- * recency-grouped rows. Reuses the sidebar's workspace selectors (same data
- * wiring as the main sidebar) — this surface is presentation only. Git/PR
- * state comes from `useWorkspaceGitStatuses`, keyed by the same logical
- * workspace id the sidebar items carry.
+ * The Workspaces page (UX spec §3): cmdk filter-list with recency-grouped
+ * rows. Reuses the sidebar's workspace selectors (same data wiring as the main
+ * sidebar) — this surface is presentation only. Git/PR state comes from
+ * `useWorkspaceGitStatuses`, keyed by the same logical workspace id the
+ * sidebar items carry.
+ *
+ * Every row detail is projected from data the sidebar state already holds; the
+ * page adds no query of its own.
  */
 export function WorkspacesPage() {
   const actions = useWorkspaceSidebarActions();
@@ -57,8 +60,17 @@ export function WorkspacesPage() {
 
   return (
     <MainSidebarPageShell>
-      {/* pt-10 clears the 40px drag-region strip MainSidebarPageShell overlays. */}
-      <div className="mx-auto flex h-full w-full max-w-3xl min-w-0 flex-col px-8 pt-10">
+      {/*
+        max-w-5xl + px-10 is the standard wide full-page measure and gutter in
+        this app: it is what PageContentFrame is given by every other full-page
+        product surface (the workflows definition list, run detail, resource
+        state, and the workflows access screen all pass maxWidthClassName
+        max-w-5xl, and PageContentFrame's own gutter is px-10). This page keeps
+        its own frame instead of PageContentFrame because the command list owns
+        its scroll container, so the measure is matched by hand.
+        pt-10 clears the 40px drag-region strip MainSidebarPageShell overlays.
+      */}
+      <div className="mx-auto flex h-full w-full max-w-5xl min-w-0 flex-col px-10 pt-10">
         <WorkspacesCommandList
           groups={commandGroups}
           filterRowActions={ghAuthRequired ? (
@@ -123,6 +135,8 @@ function buildRecencyGroups(
       attention: gitStatus?.attention === "conflicts" ? "conflicts" : null,
       aheadBehindLabel: gitAheadBehindLabel(gitStatus),
       prNumberLabel: prNumberLabelFromGitStatus(gitStatus),
+      sessionCount: item.sessionCount,
+      placementLabel: placementLabelForVariant(item.variant),
     };
     if (existing) {
       existing.items.push(row);
@@ -134,6 +148,24 @@ function buildRecencyGroups(
   return RECENCY_BUCKETS
     .map((bucket) => buckets.get(bucket.id))
     .filter((group): group is WorkspacesCommandGroupView => Boolean(group));
+}
+
+/**
+ * Only non-local placement earns a badge. A local worktree is the default and
+ * labelling it would mark every row with the same word.
+ */
+function placementLabelForVariant(
+  variant: SidebarWorkspaceItemState["variant"],
+): string | null {
+  switch (variant) {
+    case "cloud":
+      return "Cloud";
+    case "ssh":
+      return "SSH";
+    case "local":
+    case "worktree":
+      return null;
+  }
 }
 
 function isRunningIndicator(item: SidebarWorkspaceItemState): boolean {

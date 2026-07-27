@@ -177,6 +177,32 @@ describe("WorkflowsPage authentication boundary", () => {
     }));
   });
 
+  // TEMPORARY (workflows beta gate): delete with WORKFLOWS_BETA_GATE_ENABLED.
+  it("raises the beta notice over the mounted surface and dismisses it", () => {
+    useAuthStore.setState({
+      status: "authenticated",
+      session: null,
+      user: {
+        id: "user-1",
+        email: "user@example.com",
+        display_name: "Test User",
+      },
+      error: null,
+    });
+
+    renderWorkflows();
+
+    expect(screen.getByText("This feature is in beta")).toBeTruthy();
+    // The gate is an interstitial, not a removal: the surface is still mounted.
+    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
+    expect(workflowSurface).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue anyway" }));
+
+    expect(screen.queryByText("This feature is in beta")).toBeNull();
+    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
+  });
+
   it("mounts the definition-scoped run deep link with the authenticated scope", () => {
     useAuthStore.setState({
       status: "authenticated",

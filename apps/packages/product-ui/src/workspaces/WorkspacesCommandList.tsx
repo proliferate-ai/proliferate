@@ -1,25 +1,27 @@
 /**
- * Workspaces list (UX spec §3): a cmdk filter-list, not a
- * table. Filter input row on top (border-b, search icon, 13px input), then a
- * scrolling list of recency-grouped rows:
+ * The workspaces list (UX spec §3): a cmdk filter-list, not a table. Filter
+ * input row on top (border-b, search icon), then a scrolling list of
+ * recency-grouped rows:
  *
- *   [well: spinner | PR | branch glyph] [name 13px/500, 144px, truncate]
- *   [chevron 12px] [branch 13px truncate] [PR dot] [#805] [· meta]
- *   …… [↑2 ↓1] [last-used 12px faint, right-aligned]
+ *   [well: spinner | PR | branch glyph] [name, 144px, truncate]
+ *   [chevron] [branch truncate] [PR dot] [#805] [· meta]
+ *   …… [placement badge] [session count] [↑2 ↓1] [last-used, right-aligned]
  *
  * The leading well mirrors the sidebar ladder (running > PR > branch >
- * empty), uniformly `!size-3`, faint — destructive when the worktree has
+ * empty), uniformly `!icon-paired`, faint — destructive when the worktree has
  * merge conflicts. PR state at page scale is dot + number; the state words
- * live in the dot's tooltip (compound label).
+ * live in the dot's tooltip (compound label). Session count reuses that same
+ * glyph-plus-number vocabulary so the trailing cluster reads as one system.
  *
- * Rows are ~36px, radius 6px, `--accent` fill when selected; the selected row
- * swaps the date for `Go to →` (and hides the ahead/behind label). Group
- * headings are 13px/500 foreground with the item count in `--faint`. An
- * optional dashed "Create" row closes the list with a ⌘N hint.
+ * Rows are ~36px, `--accent` fill when selected; the selected row swaps the
+ * date for `Go to →` (and hides the ahead/behind label). Group headings carry
+ * the item count in `--faint`. An optional dashed "Create" row closes the
+ * list with a ⌘N hint.
  */
 import { ChevronRight, FolderPlus, GitPullRequest } from "lucide-react";
-import { GitBranchIcon } from "@proliferate/ui/icons";
+import { GitBranchIcon, MessageSquare } from "@proliferate/ui/icons";
 import type { ReactNode } from "react";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
@@ -54,6 +56,19 @@ export interface WorkspacesCommandItemView {
   aheadBehindLabel?: string | null;
   /** "#805" — rendered after the PR dot; included in the filter value. */
   prNumberLabel?: string | null;
+  /**
+   * Session count for the workspace. Rendered as glyph + number in the
+   * trailing cluster (same glyph-plus-number vocabulary as the PR dot and
+   * its number). Omit when the count is unknown; `0` renders nothing, since
+   * "no sessions yet" is the default state and not worth a mark.
+   */
+  sessionCount?: number | null;
+  /**
+   * Where the workspace runs, when that is not the local default: a quiet
+   * neutral badge ("Cloud", "SSH"). Local/worktree entries omit it rather
+   * than label the common case.
+   */
+  placementLabel?: string | null;
 }
 
 export interface WorkspacesCommandGroupView {
@@ -154,10 +169,12 @@ function WorkspaceCommandRow({
   const branch = item.branch ?? null;
   const meta = item.meta ?? null;
   const conflicted = item.attention === "conflicts";
+  const sessionCount = item.sessionCount && item.sessionCount > 0 ? item.sessionCount : null;
+  const placementLabel = item.placementLabel ?? null;
 
   return (
     <CommandItem
-      value={`${item.id} ${item.title} ${branch ?? ""} ${meta ?? ""} ${item.prNumberLabel ?? ""}`.trim()}
+      value={`${item.id} ${item.title} ${branch ?? ""} ${meta ?? ""} ${item.prNumberLabel ?? ""} ${placementLabel ?? ""}`.trim()}
       onSelect={onSelect ? () => onSelect(item.id) : undefined}
       className="min-h-9"
     >
@@ -199,6 +216,21 @@ function WorkspaceCommandRow({
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-3">
+          {placementLabel ? (
+            <Badge tone="neutral" className="px-1.5 py-0 font-normal text-faint">
+              {placementLabel}
+            </Badge>
+          ) : null}
+          {sessionCount ? (
+            <span
+              className="flex items-center gap-1 text-ui-sm tabular-nums text-faint"
+              title={sessionLabel(sessionCount)}
+              aria-label={sessionLabel(sessionCount)}
+            >
+              <MessageSquare className="!icon-paired shrink-0" aria-hidden />
+              {sessionCount}
+            </span>
+          ) : null}
           {item.aheadBehindLabel ? (
             <span className="text-ui-sm tabular-nums text-faint group-data-[selected=true]:hidden">
               {item.aheadBehindLabel}
@@ -214,6 +246,10 @@ function WorkspaceCommandRow({
       </div>
     </CommandItem>
   );
+}
+
+function sessionLabel(count: number): string {
+  return count === 1 ? "1 session" : `${count} sessions`;
 }
 
 /**

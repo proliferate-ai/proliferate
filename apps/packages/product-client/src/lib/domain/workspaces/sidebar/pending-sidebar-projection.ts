@@ -97,6 +97,8 @@ export function buildPendingSidebarProjection(args: {
       workspaceLocationCopyValue: null,
       workspaceLocationCopyToastLabel: null,
       branchName: null,
+      // A pending entry has no materialization, so no execution summary yet.
+      sessionCount: null,
       gitStatus: null,
       // A pending (not-yet-created) entry has no materialized copies to act on.
       availabilityCommands: [],
