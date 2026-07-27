@@ -8,7 +8,6 @@ interface ChatInputAvailabilityArgs {
   workspaceDirectoryMissingSendReason?: string | null;
   connectionState: string;
   selectedCloudWorkspaceStatus: string | null;
-  selectedCloudWorkspaceActionBlockReason: string | null;
   selectedCloudRuntimePhase: "ready" | "resuming" | "failed" | "claim_required" | null;
   selectedCloudRuntimeActionBlockReason: string | null;
   activeSessionId: string | null;
@@ -79,7 +78,6 @@ export function resolveChatInputAvailability({
   workspaceDirectoryMissingSendReason = null,
   connectionState,
   selectedCloudWorkspaceStatus,
-  selectedCloudWorkspaceActionBlockReason,
   selectedCloudRuntimePhase,
   selectedCloudRuntimeActionBlockReason,
   activeSessionId,
@@ -137,14 +135,11 @@ export function resolveChatInputAvailability({
   if (isCloudWorkspaceSelected && selectedCloudWorkspaceStatus !== "ready") {
     return {
       isDisabled: true,
-      disabledReason: selectedCloudWorkspaceActionBlockReason
-        ?? (
-          selectedCloudWorkspaceStatus === "archived"
-            ? "Cloud workspace is archived."
-            : selectedCloudWorkspaceStatus === "error"
-              ? "Cloud workspace hit an error. Retry provisioning to continue."
-            : "Cloud workspace is still preparing."
-        ),
+      disabledReason: selectedCloudWorkspaceStatus === "archived"
+        ? "Cloud workspace is archived."
+        : selectedCloudWorkspaceStatus === "error"
+          ? "Cloud workspace hit an error. Retry provisioning to continue."
+          : "Cloud workspace is still preparing.",
       sendBlockedReason: null,
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind,

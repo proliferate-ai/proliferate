@@ -133,8 +133,6 @@ class WorkspaceRuntimeSummary(BaseModel):
         default_factory=WorkspaceRuntimeAuthState,
         serialization_alias="runtimeAuth",
     )
-    action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
-    action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
 
 
 class WorkspaceExecutionTargetSummary(BaseModel):
@@ -199,8 +197,6 @@ class WorkspaceSummary(BaseModel):
     updated_at: str | None = Field(default=None, serialization_alias="updatedAt")
     created_at: str | None = Field(default=None, serialization_alias="createdAt")
     ready_at: str | None = Field(default=None, serialization_alias="readyAt")
-    action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
-    action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
     post_ready_phase: Literal["idle"] = Field(default="idle", serialization_alias="postReadyPhase")
     post_ready_files_total: int = Field(default=0, serialization_alias="postReadyFilesTotal")
     post_ready_files_applied: int = Field(default=0, serialization_alias="postReadyFilesApplied")

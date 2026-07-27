@@ -10,9 +10,6 @@ from proliferate.server.automations.worker.cloud_execution.context import (
 from proliferate.server.automations.worker.cloud_execution.stages.environment import (
     materialize_environment_stage,
 )
-from proliferate.server.automations.worker.cloud_execution.stages.git_identity import (
-    ensure_git_identity_stage,
-)
 from proliferate.server.automations.worker.cloud_execution.stages.prompt import (
     dispatch_prompt_stage,
 )
@@ -43,10 +40,6 @@ async def run_automation_pipeline(
         return None
 
     ctx = await resolve_target_stage(ctx)
-    if ctx is None or _claim_is_stale(stale_claim_event):
-        return None
-
-    ctx = await ensure_git_identity_stage(ctx)
     if ctx is None or _claim_is_stale(stale_claim_event):
         return None
 

@@ -275,20 +275,6 @@ cloud/sdk/src/client/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `actionBlockKind` is a live wire field with a dead producer: the
-      server serializes it always-`null` on two workspace models
-      ([workspaces/models.py](../../../../server/proliferate/server/cloud/workspaces/models.py))
-      while the client *branches on it* to decide whether to show the
-      status screen
-      ([cloud-workspace-status.ts](../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts));
-      the client also keeps a `CloudStartBlockReason` union mirroring
-      server constants that never reach the wire. Delete the field and the
-      dead client branch — the 402 body is the subject layer's one
-      representation — or wire it for real; the ruling is delete.
-- [ ] `authorize_sandbox_start` is dead code (no callers since #823,
-      documented as dead in three places); the live gate is the
-      resume-blocked path. Delete it and its sibling
-      ([billing/authorization.py](../../../../server/proliferate/server/billing/authorization.py)).
 - [ ] Two hand-written capability parsers: product-client and mobile
       ([mobile-server-capabilities.ts](../../../../apps/mobile/src/lib/access/cloud/capabilities/mobile-server-capabilities.ts))
       each reimplement the v1/v2+ derivation. Collapse mobile onto the
@@ -309,11 +295,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       vocabulary (`ready`/`materializing`/`error`) predates this enum.
       Fold the derivation rules (threshold included) into this document
       and align the enums when that doc slims.
-- [ ] `_runtime_status` maps sandbox statuses (`provisioning`, `stopped`)
-      the enum and check constraint do not allow; the runtime-status
-      shape is this document's, so the dead-branch deletion rides its fix
-      PR (cross-listed from
-      [sandbox-lifecycle.md](sandbox-lifecycle.md)).
 - [ ] Cold access has no repair trigger: a sandbox whose access material
       was never stamped (or was cleared by provider loss) 409s forever at
       the gateway; nothing on the access path starts the materialization
