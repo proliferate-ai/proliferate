@@ -586,7 +586,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] **Org members launch on their personal key.** Cross-referenced from
       model-gateway.md's gaps: the renderer and budget gate resolve the
       personal enrollment even for org members.
-- [ ] **Stale IA references.** The settings information-architecture doc
-      still describes the removed Bifrost-era `agent-authentication`
-      pane (the shipped UI redirects it to `agent-api-keys`); its Agents
-      scope needs a truth pass (PR E).
