@@ -305,6 +305,29 @@ apps/mobile/src/lib/access/anyharness/cloud-sandbox-runtime.ts  mobile resolver
 - Client connection contract:
   [cloud-sandbox-gateway.test.ts](../../../../apps/packages/product-client/src/lib/access/cloud/cloud-sandbox-gateway.test.ts).
 
+Corridor F — wire deletions and budgets. Named, binary assertions; the
+corridor is done when they are green. IDs are stable — tests reference
+them by name:
+
+- **F1** `runtimeGeneration` is deleted end to end — wire payloads,
+  the access dataclass, client cache keys, the store constant; grep-gate
+  on both spellings outside migrations. The client tests keyed on it are
+  deleted, not kept green.
+- **F2** The two retry budgets hold: 2 s × 45 for
+  `cloud_sandbox_runtime_not_ready`, 750 ms × 8 for
+  `workspace_not_ready` —
+  [workspace-connection-retry.test.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.test.ts)
+  survives ([sandbox-access.md](sandbox-access.md)'s client contract).
+- **F3** A WebSocket offering only `?access_token=` closes 1008; the
+  subprotocol is the only accepted transport; the legacy-acceptance test
+  is deleted. (gateway pytest)
+- **F4** Mobile consumes the shared connection resolver and capability
+  parser; grep-gate: the duplicate mobile resolver stays deleted.
+  (frontend tests)
+- **F5** Resolution takes the request's org context; another user's —
+  or another org's — sandbox stays unrepresentable. (pytest; lands with
+  lifecycle's E3)
+
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:

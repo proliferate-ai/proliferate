@@ -170,6 +170,20 @@ action; the product surface must say so (gap below).
   case (repo removed from the installation → typed `not_covered` before
   any clone).
 
+Corridor G — one credential story. Named, binary assertions; the
+corridor is done when they are green. IDs are stable — tests reference
+them by name:
+
+- **G1** The repo catalog and branch listings serve on App tokens;
+  grep-gate: `repos/domain/github_credentials` stays deleted; the
+  zero-installation state renders the install CTA. (pytest + frontend
+  test)
+- **G2** An expired lease surfaces typed, naming the repair (any
+  materialization-triggering action); raw git auth noise never reaches
+  the user as the only signal. (pytest + frontend copy test)
+- **G3** One installation-completion function behind thin route
+  entrypoints. (pytest)
+
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:

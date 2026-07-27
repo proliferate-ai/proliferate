@@ -614,6 +614,30 @@ server/proliferate/
   gate that same `desiredTopology` heartbeat signal for any already-running
   legacy worker still bridging — see its docstring for the asymmetry.
 
+Corridor E — provisioning triggers and the org account model. Named,
+binary assertions; the corridor is done when they are green. IDs are
+stable — tests reference them by name:
+
+- **E1** A user-auth callback with no installation schedules *no*
+  bootstrap; the event that completes the authority chain schedules
+  exactly one. (github_app service pytest)
+- **E2** The chain-completion bootstrap ends with the provider sandbox
+  explicitly paused; interactive materializations never force-pause.
+  (materialization pytest)
+- **E3** After the migration every active row carries a non-null
+  `organization_id`, uniqueness is (owner, org), solo flows land in the
+  default org, and re-running the migration is a no-op.
+  (migration pytest + intent test)
+- **E4** Billing derives the payer from the row's org; grep-gate:
+  `billing_subject_id` is gone from the sandbox model and store.
+  (pytest + grep gate)
+- **E5** Joining an org whose installation and user-auth legs already
+  hold bootstraps that (user, org) sandbox. (server pytest; lands with
+  E3)
+- **E6** [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py)
+  survives unchanged — cold repair stays the loss backstop. Grep-gates:
+  no `POST /wake` route, no legacy (non-Supervisor) launch path.
+
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
