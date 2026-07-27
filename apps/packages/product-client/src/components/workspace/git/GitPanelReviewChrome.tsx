@@ -23,7 +23,7 @@ export function GitLastTurnUndoAction({
   onUndo: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-sidebar-border/70 bg-surface-elevated-secondary px-2.5 py-2 text-ui-sm leading-5 text-sidebar-muted-foreground">
+    <div className="flex items-center gap-2 rounded-md border border-border/70 bg-surface-elevated-secondary px-2.5 py-2 text-ui-sm leading-5 text-sidebar-muted-foreground">
       <Undo className="icon-paired shrink-0" />
       <span className="min-w-0 flex-1 truncate">
         {fileCount > 0
@@ -52,7 +52,7 @@ export function GitReviewDiffPolicyNotice({ summary }: { summary: DiffDisplayPol
     ? `${summary.tooLargeInline} too large to render inline`
     : null;
   return (
-    <div className="rounded-md border border-sidebar-border/70 bg-surface-elevated-secondary px-2.5 py-2 text-ui-sm leading-5 text-sidebar-muted-foreground">
+    <div className="rounded-md border border-border/70 bg-surface-elevated-secondary px-2.5 py-2 text-ui-sm leading-5 text-sidebar-muted-foreground">
       <span>
         {hiddenLabel} collapsed to keep review responsive.
       </span>

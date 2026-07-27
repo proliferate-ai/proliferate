@@ -276,7 +276,7 @@ describe("ChatInputControlRow", () => {
     );
 
     const onButton = screen.getByRole("button", { name: "Fast mode: Fast" });
-    expect(onButton.className).toContain("bg-[var(--color-composer-control-hover)]");
+    expect(onButton.className).toContain("bg-hover");
     expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("fill-current");
     expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("stroke-none");
     expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("opacity-100");
