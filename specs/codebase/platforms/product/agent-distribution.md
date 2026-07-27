@@ -444,12 +444,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       that migrates legacy sandboxes. All of it — plus the
       `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes once
       the fleet is fully supervisor-owned.
-- [ ] The `Ready` gate still runs only in `create_session`: resume and
-      fork live-starts spawn without re-checking, so credentials revoked
-      after a session exists fail downstream at spawn instead of with
-      the typed readiness error. The other three projection laws (the
-      non-empty env rule, the workspace-scoped credential ladder, and
-      route-aware resolution on the settings read) are enforced.
 - [ ] Two known readiness inefficiencies, neither a correctness law:
       claude's Node gate shells out uncached on every read, and the
       journal-protected atomic activation guard

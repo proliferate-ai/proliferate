@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::settings::resolve_settings_deltas;
+use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
@@ -166,6 +167,15 @@ impl SessionRuntime {
                     EnsureLiveSessionError::RestartRequired(detail)
                 }
                 StartSessionError::RouteAuth(error) => EnsureLiveSessionError::RouteAuth(error),
+                StartSessionError::AgentNotReady {
+                    agent_kind,
+                    status,
+                    detail,
+                } => EnsureLiveSessionError::AgentNotReady {
+                    agent_kind,
+                    status,
+                    detail,
+                },
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     EnsureLiveSessionError::Internal(error)
                 }
@@ -343,6 +353,32 @@ impl SessionRuntime {
             elapsed_ms = agent_resolution_started.elapsed().as_millis(),
             "[workspace-latency] session.runtime.start_live_session.agent_resolved"
         );
+        // A9 Scope C: mirrors create_session's readiness gate (create.rs) at
+        // the common live-start seam, so resume/fork/prompt/config-lazy-start
+        // converge on the same typed condition create-time already enforces
+        // — an agent whose readiness regressed after creation (e.g. revoked
+        // credentials) is refused here instead of falling through to a spawn
+        // attempt and a generic ACP-start failure.
+        if resolved_agent.status != ResolvedAgentStatus::Ready {
+            tracing::warn!(
+                session_id = %record.id,
+                agent_kind = %record.agent_kind,
+                status = ?resolved_agent.status,
+                credential_state = ?resolved_agent.credential_state,
+                "Agent readiness check failed for live session start"
+            );
+            let detail = resolved_agent.agent_process.message.clone().or_else(|| {
+                resolved_agent
+                    .native
+                    .as_ref()
+                    .and_then(|artifact| artifact.message.clone())
+            });
+            return Err(StartSessionError::AgentNotReady {
+                agent_kind: record.agent_kind.clone(),
+                status: resolved_agent.status,
+                detail,
+            });
+        }
         // Agent-auth render plane: read the declarative state file fresh and
         // render the route layer for this harness. Absent file = empty layer
         // (legacy/native); a scoped file with no selection fails the launch
@@ -498,6 +534,16 @@ pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> any
         }
         StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
         StartSessionError::RouteAuth(error) => anyhow::Error::new(error),
+        StartSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        } => match detail {
+            Some(detail) => {
+                anyhow::anyhow!("agent '{agent_kind}' is not ready (status: {status:?}): {detail}")
+            }
+            None => anyhow::anyhow!("agent '{agent_kind}' is not ready (status: {status:?})"),
+        },
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
     }
 }
@@ -553,6 +599,24 @@ pub(super) fn map_start_session_error_to_create(
             CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
         }
         StartSessionError::RouteAuth(error) => CreateAndStartSessionError::RouteAuth(error),
+        // create_session already gates readiness before this seam runs
+        // (create.rs), so this arm should be unreachable on that path in
+        // practice; mapped for exhaustiveness with the same shape the
+        // create-time gate itself would have produced (Invalid, not a 500),
+        // since a caller reaching this without having already gated is still
+        // a plain launch-readiness rejection, not an internal error.
+        StartSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        } => match detail {
+            Some(detail) => CreateAndStartSessionError::Invalid(format!(
+                "agent '{agent_kind}' is not ready (status: {status:?}): {detail}"
+            )),
+            None => CreateAndStartSessionError::Invalid(format!(
+                "agent '{agent_kind}' is not ready (status: {status:?})"
+            )),
+        },
         StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
         StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),
     }
