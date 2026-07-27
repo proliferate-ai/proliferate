@@ -600,11 +600,14 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_VERTEX`, so a
       Bedrock-configured host reroutes a BYOK launch. The body requires
       sanitization on every non-native route.
-- [ ] **Route prefix.** Vault, selections, state, and org policy still
-      live under `/v1/cloud/agent-gateway/`; the split to
-      `/v1/cloud/agent-auth/` (with catalog routes to the model-catalog
-      platform) is pending, including the matching
-      `api.py`/`service.py`/`models.py` three-domain split.
+- [ ] **Module split.** The route prefix split landed (S1): vault,
+      selections, state, and org policy now live under `/v1/cloud/agent-auth/`,
+      and enrollment/capabilities stayed at `/v1/cloud/agent-gateway/`
+      (model-gateway.md). The matching `api.py`/`service.py`/`models.py`
+      three-domain code split (one module set per platform, not one shared
+      `agent_gateway` package) is still pending — S1 was URL-string-only by
+      design, so the account/auth/policy code still lives in the single
+      `agent_gateway` package regardless of which prefix its routes answer.
 - [ ] **Dead error variants.** `RouteAuthError::SelectionMissing` and
       `SelectionConflict` are never constructed (leftovers of the
       pre-`sources[]` design); delete them or wire them to the

@@ -847,10 +847,10 @@ async function dumpServerGatewayState(actor: AuthenticatedActor, label: string):
   const nodePath = await import("node:path");
   const diag: Record<string, unknown> = {};
   diag.stateLocal = await actor.api
-    .get("/v1/cloud/agent-gateway/state?surface=local")
+    .get("/v1/cloud/agent-auth/state?surface=local")
     .catch((e) => `err: ${describe(e)}`);
   diag.selectionsLocal = await actor.api
-    .get("/v1/cloud/agent-gateway/selections?surface=local")
+    .get("/v1/cloud/agent-auth/selections?surface=local")
     .catch((e) => `err: ${describe(e)}`);
   diag.capabilities = await actor.api
     .get("/v1/cloud/agent-gateway/capabilities")

@@ -101,7 +101,7 @@ export function createAgentsPlaygroundCloudTransport(
       body: input.body,
     });
 
-    if (input.path === "/v1/cloud/agent-gateway/keys") {
+    if (input.path === "/v1/cloud/agent-auth/keys") {
       if (input.method === "GET") return clone(apiKeys) as TResponse;
       if (input.method === "POST") {
         const body = input.body as CreateAgentApiKeyRequest;
@@ -120,7 +120,7 @@ export function createAgentsPlaygroundCloudTransport(
     }
 
     const apiKeyMatch = input.path.match(
-      /^\/v1\/cloud\/agent-gateway\/keys\/([^/]+)$/,
+      /^\/v1\/cloud\/agent-auth\/keys\/([^/]+)$/,
     );
     if (input.method === "DELETE" && apiKeyMatch) {
       const keyId = decodeURIComponent(apiKeyMatch[1] ?? "");
@@ -130,7 +130,7 @@ export function createAgentsPlaygroundCloudTransport(
       return { ...revoked, status: "revoked" } as TResponse;
     }
 
-    if (input.path === "/v1/cloud/agent-gateway/selections" && input.method === "GET") {
+    if (input.path === "/v1/cloud/agent-auth/selections" && input.method === "GET") {
       const surface = input.query?.surface as AgentAuthSurface | undefined;
       const rows = surface
         ? selections.filter((selection) => selection.surface === surface)
@@ -139,7 +139,7 @@ export function createAgentsPlaygroundCloudTransport(
     }
 
     const selectionMatch = input.path.match(
-      /^\/v1\/cloud\/agent-gateway\/selections\/([^/]+)$/,
+      /^\/v1\/cloud\/agent-auth\/selections\/([^/]+)$/,
     );
     if (input.method === "PUT" && selectionMatch) {
       const harnessKind = decodeURIComponent(selectionMatch[1] ?? "");
@@ -169,7 +169,7 @@ export function createAgentsPlaygroundCloudTransport(
       return clone(replacements) as TResponse;
     }
 
-    if (input.path === "/v1/cloud/agent-gateway/state" && input.method === "GET") {
+    if (input.path === "/v1/cloud/agent-auth/state" && input.method === "GET") {
       return {
         version: 2,
         revision: 1,

@@ -150,9 +150,9 @@ def _redact_validation_input(value: object) -> object:
 
 
 def _redacts_entire_body(request: Request) -> bool:
-    # The agent-gateway key-create endpoint accepts a raw key value in the body;
+    # The agent-auth key-create endpoint accepts a raw key value in the body;
     # redact its echoed input wholesale so no malformed shape can leak it.
-    return request.method == "POST" and request.url.path.endswith("/agent-gateway/keys")
+    return request.method == "POST" and request.url.path.endswith("/agent-auth/keys")
 
 
 def _is_workflow_invocation_argument_error(request: Request, loc: object) -> bool:

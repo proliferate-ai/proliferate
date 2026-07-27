@@ -195,13 +195,13 @@ export interface GatewaySelectionTransport {
 
 export const defaultGatewaySelectionTransport: GatewaySelectionTransport = {
   async putSelection(api, harnessKind, body) {
-    await api.put(`/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}?surface=local`, body);
+    await api.put(`/v1/cloud/agent-auth/selections/${encodeURIComponent(harnessKind)}?surface=local`, body);
   },
 };
 
 /**
  * Selects the managed-gateway route for a harness on the LOCAL surface exactly
- * the way the product does — `PUT /v1/cloud/agent-gateway/selections/{harness}?
+ * the way the product does — `PUT /v1/cloud/agent-auth/selections/{harness}?
  * surface=local` with the single gateway source. The enrolled actor's own API
  * client is passed (the selection is per-user; the Desktop later fetches
  * `GET /state?surface=local` for THIS user and pushes the rendered gateway

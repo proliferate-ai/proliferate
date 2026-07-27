@@ -56,7 +56,7 @@ never to rename a field. The DB ``source_kind`` for this row is still
 decided at render time by which vault ``kind`` the referenced row has.
 
 Two delivery surfaces share this one renderer: the cloud materialization worker
-writes the ``cloud`` surface into sandboxes, and ``GET /agent-gateway/state``
+writes the ``cloud`` surface into sandboxes, and ``GET /agent-auth/state``
 serves the ``local`` surface to the desktop (which pushes it to its local
 AnyHarness runtime). ``render_agent_auth_state`` operates on pre-scoped inputs;
 ``build_agent_auth_state`` loads them for a surface.
