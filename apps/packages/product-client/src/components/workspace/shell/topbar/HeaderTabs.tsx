@@ -12,6 +12,7 @@ import {
 } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { WorkspaceTabStrip } from "#product/components/workspace/shell/tabs/WorkspaceTabStrip";
 import { NewChatButton, ClosedSessionsTrigger } from "#product/components/workspace/shell/topbar/HeaderTabsActions";
+import { HeaderTabsClosingGhosts } from "#product/components/workspace/shell/topbar/HeaderTabsClosingGhosts";
 import { HeaderTabsStripRows } from "#product/components/workspace/shell/topbar/HeaderTabsStripRows";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { useSessionForkActions } from "#product/hooks/sessions/workflows/use-session-fork-actions";
@@ -124,11 +125,15 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     shellRows: viewModel.shellRows,
     reservedWidth,
   });
-  const { closingTabs, beginClose } = useHeaderTabCloseTransition();
-  const contentWidth = layout.widths.length > 0
-    ? (layout.positions[layout.positions.length - 1] ?? 0)
-      + (layout.widths[layout.widths.length - 1] ?? 0)
-    : 0;
+  const {
+    closingTabs,
+    contentWidth,
+    beginCloseChatTab,
+  } = useHeaderTabCloseTransition({
+    shellRows: viewModel.shellRows,
+    positions: layout.positions,
+    widths: layout.widths,
+  });
 
   const activeTabIndex = viewModel.shellRows.findIndex((shellRow) =>
     shellRow.kind === "chat"
@@ -266,28 +271,14 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     if (!chatVisibilityActions.canHideChatSessionTabs([sessionId])) {
       return;
     }
-    const closingIndex = viewModel.shellRows.findIndex((shellRow) =>
-      shellRow.kind === "chat"
-      && shellRow.row.kind === "tab"
-      && shellRow.row.tab.id === sessionId
-    );
-    if (closingIndex >= 0) {
-      beginClose({
-        id: sessionId,
-        left: layout.positions[closingIndex] ?? 0,
-        width: layout.widths[closingIndex] ?? 0,
-      });
-    }
+    beginCloseChatTab(sessionId);
     multiSelect.clearSelection();
     chatVisibilityActions.hideChatSessionTabs([sessionId], { selectFallback: true });
   }, [
-    beginClose,
+    beginCloseChatTab,
     chatVisibilityActions.canHideChatSessionTabs,
     chatVisibilityActions.hideChatSessionTabs,
-    layout.positions,
-    layout.widths,
     multiSelect.clearSelection,
-    viewModel.shellRows,
   ]);
   const handleCloseOtherChatTabs = useCallback((sessionId: string) => {
     closeOtherWorkspaceTabs({ kind: "chat", sessionId });
@@ -324,20 +315,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
                 }}
               />
             ))}
-            {closingTabs.map((closing) => (
-              <span
-                key={`closing-${closing.id}`}
-                aria-hidden="true"
-                data-closing-chat-tab={closing.id}
-                className="workspace-shell-tab workspace-shell-tab--closing pointer-events-none absolute bottom-0 z-base"
-                style={{ left: closing.left, width: closing.width }}
-              >
-                <span
-                  aria-hidden="true"
-                  className="workspace-shell-tab__surface pointer-events-none absolute inset-0 border"
-                />
-              </span>
-            ))}
+            <HeaderTabsClosingGhosts closingTabs={closingTabs} />
             <HeaderTabsStripRows
               shellRows={viewModel.shellRows}
               widths={layout.widths}

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "@proliferate/design/motion";
+import type { HeaderWorkspaceShellStripRow } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 export interface ClosingHeaderTab {
   id: string;
@@ -8,16 +9,31 @@ export interface ClosingHeaderTab {
 }
 
 /**
- * Keeps a just-closed tab on screen for one exit duration so the close reads as
- * a slide instead of a snap.
+ * The row model for a tab close.
  *
- * The real tab leaves `shellRows` immediately — that is what lets every
- * surviving tab (and the trailing "+" button, which tracks the strip's measured
- * content width) translate into the vacated space. A non-interactive ghost is
- * painted at the departing tab's last known geometry and collapses in place
- * over the same duration, so the two halves of the motion are simultaneous.
+ * Owns three things that have to agree with each other:
+ *
+ * 1. **Departing-tab bookkeeping.** The real tab leaves the row model the
+ *    instant it is closed — that is what lets every surviving tab translate
+ *    into the vacated space. A ghost entry keeps its last measured geometry
+ *    alive for exactly one exit duration so the departure is visible.
+ * 2. **Ghost geometry.** `beginCloseChatTab` resolves the closing tab's index
+ *    in the strip's rows and freezes the layout's `left`/`width` for it, since
+ *    both are gone from the layout by the next render.
+ * 3. **Strip width.** The trailing "+" button is a flex sibling of the scroll
+ *    strip, so it moves because the strip's measured content width shrinks,
+ *    not by transform. `contentWidth` is therefore derived here alongside the
+ *    ghosts, and the CSS transitions it on the same duration and curve.
  */
-export function useHeaderTabCloseTransition() {
+export function useHeaderTabCloseTransition({
+  shellRows,
+  positions,
+  widths,
+}: {
+  shellRows: readonly HeaderWorkspaceShellStripRow[];
+  positions: readonly number[];
+  widths: readonly number[];
+}) {
   const [closingTabs, setClosingTabs] = useState<readonly ClosingHeaderTab[]>([]);
   const timeoutsRef = useRef(new Map<string, number>());
 
@@ -31,25 +47,45 @@ export function useHeaderTabCloseTransition() {
     };
   }, []);
 
-  const beginClose = useCallback((tab: ClosingHeaderTab) => {
-    if (tab.width <= 0) {
+  const contentWidth = useMemo(() => (
+    widths.length > 0
+      ? (positions[positions.length - 1] ?? 0) + (widths[widths.length - 1] ?? 0)
+      : 0
+  ), [positions, widths]);
+
+  const beginCloseChatTab = useCallback((sessionId: string) => {
+    const closingIndex = shellRows.findIndex((shellRow) =>
+      shellRow.kind === "chat"
+      && shellRow.row.kind === "tab"
+      && shellRow.row.tab.id === sessionId
+    );
+    if (closingIndex < 0) {
       return;
     }
+    const width = widths[closingIndex] ?? 0;
+    if (width <= 0) {
+      return;
+    }
+    const ghost: ClosingHeaderTab = {
+      id: sessionId,
+      left: positions[closingIndex] ?? 0,
+      width,
+    };
     setClosingTabs((current) => [
-      ...current.filter((entry) => entry.id !== tab.id),
-      tab,
+      ...current.filter((entry) => entry.id !== sessionId),
+      ghost,
     ]);
 
-    const existing = timeoutsRef.current.get(tab.id);
+    const existing = timeoutsRef.current.get(sessionId);
     if (existing !== undefined) {
       window.clearTimeout(existing);
     }
     const handle = window.setTimeout(() => {
-      timeoutsRef.current.delete(tab.id);
-      setClosingTabs((current) => current.filter((entry) => entry.id !== tab.id));
+      timeoutsRef.current.delete(sessionId);
+      setClosingTabs((current) => current.filter((entry) => entry.id !== sessionId));
     }, motion.duration.enterMs);
-    timeoutsRef.current.set(tab.id, handle);
-  }, []);
+    timeoutsRef.current.set(sessionId, handle);
+  }, [positions, shellRows, widths]);
 
-  return { closingTabs, beginClose };
+  return { closingTabs, contentWidth, beginCloseChatTab };
 }
