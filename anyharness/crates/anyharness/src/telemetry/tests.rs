@@ -219,17 +219,16 @@ fn runtime_incident_reaches_sentry_once_with_stable_scrubbed_context() {
                 tracing::error!(
                     target: RUNTIME_INCIDENT_TRACING_TARGET,
                     incident_id = "incident-1",
-                    error_code = "SESSION_MODEL_GATED",
-                    fingerprint = "anyharness:session_model_gated",
+                    error_code = "SESSION_MODEL_UNSUPPORTED",
+                    fingerprint = "anyharness:runtime_incident",
                     workspace_id = "workspace-1",
                     attempted_session_id = "session-1",
                     agent_kind = "claude",
                     requested_model = "haiku",
                     canonical_model = "claude-haiku-4-5",
                     active_contexts = "anthropic-api-key",
-                    required_contexts = "anthropic-api-key",
                     catalog_version = "catalog-1",
-                    selection_outcome = "model_gated",
+                    selection_outcome = "model_unsupported",
                     effective_model = "none",
                     effective_route = "none",
                     provider_output = "raw provider secret",
@@ -258,7 +257,10 @@ fn runtime_incident_reaches_sentry_once_with_stable_scrubbed_context() {
         other => panic!("expected tracing fields context, got {other:?}"),
     };
     assert_eq!(string_field(fields, "incident_id"), "incident-1");
-    assert_eq!(string_field(fields, "error_code"), "SESSION_MODEL_GATED");
+    assert_eq!(
+        string_field(fields, "error_code"),
+        "SESSION_MODEL_UNSUPPORTED"
+    );
     assert_eq!(
         string_field(fields, "fingerprint"),
         RUNTIME_INCIDENT_FINGERPRINT

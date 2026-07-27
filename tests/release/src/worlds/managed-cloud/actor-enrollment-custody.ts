@@ -201,8 +201,9 @@ export function decodeActorEnrollmentCustody(
 export function bindActorEnrollment(
   intent: ActorEnrollmentIntentV1,
   actor: ActorKeyIdentity,
+  harnessKind: string,
 ): ActorEnrollmentBindingV1 {
-  const expectedAlias = `vk-user-${actor.userId}-${actor.enrollmentId.slice(0, 8)}`;
+  const expectedAlias = `vk-user-${actor.userId}-${harnessKind}-${actor.enrollmentId.slice(0, 8)}`;
   const expectedUser = `user-${actor.userId}`;
   if (
     actor.keyAlias !== expectedAlias ||
@@ -223,11 +224,18 @@ export function bindActorEnrollment(
   };
 }
 
+// R2 (agents/b2-per-harness-keys): each enrollment row mints one child
+// agent_gateway_enrollment_key row PER gateway-capable harness_kind, not one
+// key on the parent row. Recovery must enumerate those child rows to produce
+// the full per-harness alias set (`vk-{subject_label}-{harness_kind}-{id[:8]}`,
+// `enrollment.py` `_key_alias`) — an alias per ENROLLMENT (pre-B2 shape) would
+// silently miss every non-representative harness's key and leave it
+// undeleted/unverified.
 const LOOKUP_SCRIPT = `import asyncio, json, os
 from sqlalchemy import select
 from proliferate.db.engine import async_session_factory
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
+from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment, AgentGatewayEnrollmentKey
 from proliferate.db.models.organizations import OrganizationMembership
 
 EMAIL = os.environ["QUAL_ACTOR_EMAIL"].lower()
@@ -277,12 +285,23 @@ async def main():
             print(json.dumps({"status": "ambiguous", "reason": "unexpected LiteLLM user identity"}))
             return
         ordered = personal + [by_org[org_id][0] for org_id in organization_ids]
+        enrollment_ids = [row.id for row in ordered]
+        key_rows = list((await db.execute(select(AgentGatewayEnrollmentKey).where(
+            AgentGatewayEnrollmentKey.enrollment_id.in_(enrollment_ids),
+            AgentGatewayEnrollmentKey.revoked_at.is_(None),
+        ))).scalars().all())
+        keys_by_enrollment = {}
+        for key_row in key_rows:
+            keys_by_enrollment.setdefault(key_row.enrollment_id, []).append(key_row)
         key_aliases = []
         for row in ordered:
-            if row.subject_kind == "user":
-                key_aliases.append(f"vk-user-{user.id}-{str(row.id)[:8]}")
-            else:
-                key_aliases.append(f"vk-org-{row.organization_id}-user-{user.id}-{str(row.id)[:8]}")
+            for key_row in keys_by_enrollment.get(row.id, []):
+                if row.subject_kind == "user":
+                    key_aliases.append(f"vk-user-{user.id}-{key_row.harness_kind}-{str(row.id)[:8]}")
+                else:
+                    key_aliases.append(
+                        f"vk-org-{row.organization_id}-user-{user.id}-{key_row.harness_kind}-{str(row.id)[:8]}"
+                    )
         print(json.dumps({
             "status": "recovered",
             "user_id": str(user.id),

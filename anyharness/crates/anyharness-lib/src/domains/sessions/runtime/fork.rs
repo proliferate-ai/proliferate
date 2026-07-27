@@ -285,6 +285,15 @@ fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
         StartSessionError::MissingDataKey => ForkSessionError::MissingDataKey,
         StartSessionError::RestartRequired(detail) => ForkSessionError::Invalid(detail),
         StartSessionError::RouteAuth(error) => ForkSessionError::Invalid(error.to_string()),
+        StartSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        } => ForkSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        },
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             ForkSessionError::Internal(error)
         }

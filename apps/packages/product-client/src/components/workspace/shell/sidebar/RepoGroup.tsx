@@ -349,7 +349,6 @@ function RepoContextMenuContent({
           <PopoverMenuItem
             icon={repoMenuActionIcon(action.id)}
             label={action.label}
-            variant="sidebar"
             className={action.destructive ? "text-destructive hover:text-destructive" : undefined}
             onClick={() => { onClose(); handlers[action.id]?.(); }}
           />

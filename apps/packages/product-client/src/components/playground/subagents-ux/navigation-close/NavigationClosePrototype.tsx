@@ -265,8 +265,8 @@ export function NavigationClosePrototype() {
         </div>
 
         {/* Parent-scoped right pane: sibling scope never changes with tab focus */}
-        <div className="flex w-72 shrink-0 flex-col overflow-hidden border-l border-sidebar-border bg-sidebar-background text-sidebar-foreground">
-          <div className="border-b border-sidebar-border px-4 py-3">
+        <div className="flex w-72 shrink-0 flex-col overflow-hidden border-l border-border bg-sidebar-background text-sidebar-foreground">
+          <div className="border-b border-border px-4 py-3">
             <p className="truncate text-ui font-medium">{scenario.parentTitle}</p>
             <p className="mt-0.5 truncate text-ui-sm text-sidebar-muted-foreground">
               {activeChildren.length === 0 && doneChildren.length === 0

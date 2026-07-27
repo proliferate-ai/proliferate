@@ -1,34 +1,37 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
+  AckAgentAuthStateRequest,
   AgentApiKey,
-  AgentAuthRoute,
+  AgentAuthDeliveryAck,
   AgentAuthSelection,
   AgentAuthState,
   AgentAuthSurface,
   AgentGatewayCapabilities,
-  AgentGatewayCatalog,
-  AgentGatewayCatalogOverride,
   AgentGatewayEnrollment,
+  AgentModelOverride,
+  AgentModels,
   CreateAgentApiKeyRequest,
-  MirrorAgentGatewayCatalogRequest,
   OrgAgentPolicy,
   OrgAgentPolicyViolationListResponse,
   PutAuthSelectionsRequest,
-  RefreshAgentGatewayCatalogRequest,
   UpdateOrgAgentPolicyRequest,
-  UpsertAgentGatewayCatalogOverrideRequest,
+  UpsertAgentModelOverrideRequest,
 } from "../types/index.js";
 
 function selectionsPath(harnessKind: string): string {
-  return `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}`;
+  return `/v1/cloud/agent-auth/selections/${encodeURIComponent(harnessKind)}`;
 }
 
-function catalogPath(harnessKind: string): string {
-  return `/v1/cloud/agent-gateway/catalog/${encodeURIComponent(harnessKind)}`;
+// The composed re-key (model-catalog.md §Cloud routes): the cloud snapshot
+// lives under /v1/cloud/agent-models/*, keyed by (owner, harness) alone. The
+// former `authContextId` query parameter is deleted — one composed observation
+// per harness, no per-context anything. Hard cutover, no alias window (F-040).
+function agentModelsPath(harnessKind: string): string {
+  return `/v1/cloud/agent-models/${encodeURIComponent(harnessKind)}`;
 }
 
 function orgAgentPolicyPath(organizationId: string): string {
-  return `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/agent-gateway/policy`;
+  return `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/agent-auth/policy`;
 }
 
 // --- Key vault -------------------------------------------------------------
@@ -38,7 +41,7 @@ export async function listAgentApiKeys(
 ): Promise<AgentApiKey[]> {
   return client.requestJson<AgentApiKey[]>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/keys",
+    path: "/v1/cloud/agent-auth/keys",
   });
 }
 
@@ -48,7 +51,7 @@ export async function createAgentApiKey(
 ): Promise<AgentApiKey> {
   return client.requestJson<AgentApiKey>({
     method: "POST",
-    path: "/v1/cloud/agent-gateway/keys",
+    path: "/v1/cloud/agent-auth/keys",
     body: input,
   });
 }
@@ -59,7 +62,7 @@ export async function revokeAgentApiKey(
 ): Promise<AgentApiKey> {
   return client.requestJson<AgentApiKey>({
     method: "DELETE",
-    path: `/v1/cloud/agent-gateway/keys/${encodeURIComponent(keyId)}`,
+    path: `/v1/cloud/agent-auth/keys/${encodeURIComponent(keyId)}`,
   });
 }
 
@@ -71,7 +74,7 @@ export async function listAuthSelections(
 ): Promise<AgentAuthSelection[]> {
   return client.requestJson<AgentAuthSelection[]>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/selections",
+    path: "/v1/cloud/agent-auth/selections",
     query: surface ? { surface } : undefined,
   });
 }
@@ -96,69 +99,72 @@ export async function getAgentAuthState(
 ): Promise<AgentAuthState> {
   return client.requestJson<AgentAuthState>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/state",
+    path: "/v1/cloud/agent-auth/state",
     query: { surface },
   });
 }
 
-// --- Catalog ---------------------------------------------------------------
-
-export async function getAgentCatalog(
-  harnessKind: string,
+/**
+ * Report a surface runtime's delivery acknowledgement (agent-auth.md "Applied
+ * means acknowledged"). The desktop calls this after its local runtime's
+ * state PUT/DELETE succeeded, echoing the pushed document's `revision` and
+ * the served `fingerprint` from `getAgentAuthState` — never a
+ * client-computed hash. This stamp flips the selections read from pending to
+ * applied; the cloud surface's twin is stamped server-side by the
+ * materialization worker.
+ */
+export async function ackAgentAuthState(
   surface: AgentAuthSurface,
-  route: AgentAuthRoute = "gateway",
+  input: AckAgentAuthStateRequest,
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentGatewayCatalog> {
-  return client.requestJson<AgentGatewayCatalog>({
+): Promise<AgentAuthDeliveryAck> {
+  return client.requestJson<AgentAuthDeliveryAck>({
+    method: "POST",
+    path: "/v1/cloud/agent-auth/state/ack",
+    query: { surface },
+    body: input,
+  });
+}
+
+// --- Agent models (cloud snapshot) -----------------------------------------
+//
+// The layered read only: model-catalog.md's B4 re-key absorbed the old
+// `refresh`/`mirror` product mutations into a single Worker-authenticated
+// ingest route (`POST .../refresh`, `authenticate_worker`) that a signed-in
+// product client cannot call — see server/proliferate/server/cloud/
+// agent_models/api.py. There is no product-client-callable write function
+// here; a manual "refresh" affordance returns in C3 once a real caller (the
+// runtime-facing surface, not this SDK) exists (F-040).
+
+export async function getAgentModels(
+  harnessKind: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AgentModels> {
+  return client.requestJson<AgentModels>({
     method: "GET",
-    path: catalogPath(harnessKind),
-    query: { surface, route },
+    path: agentModelsPath(harnessKind),
   });
 }
 
-export async function refreshAgentCatalog(
+export async function upsertAgentModelOverride(
   harnessKind: string,
-  input: RefreshAgentGatewayCatalogRequest,
+  input: UpsertAgentModelOverrideRequest,
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentGatewayCatalog> {
-  return client.requestJson<AgentGatewayCatalog>({
-    method: "POST",
-    path: `${catalogPath(harnessKind)}/refresh`,
-    body: input,
-  });
-}
-
-export async function mirrorAgentCatalog(
-  harnessKind: string,
-  input: MirrorAgentGatewayCatalogRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentGatewayCatalog> {
-  return client.requestJson<AgentGatewayCatalog>({
-    method: "POST",
-    path: `${catalogPath(harnessKind)}/mirror`,
-    body: input,
-  });
-}
-
-export async function upsertAgentCatalogOverride(
-  harnessKind: string,
-  input: UpsertAgentGatewayCatalogOverrideRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentGatewayCatalogOverride> {
-  return client.requestJson<AgentGatewayCatalogOverride>({
+): Promise<AgentModelOverride> {
+  return client.requestJson<AgentModelOverride>({
     method: "PUT",
-    path: `${catalogPath(harnessKind)}/override`,
+    path: `${agentModelsPath(harnessKind)}/override`,
     body: input,
   });
 }
 
-export async function deleteAgentCatalogOverride(
+export async function deleteAgentModelOverride(
   harnessKind: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<void> {
   await client.requestJson<void>({
     method: "DELETE",
-    path: `${catalogPath(harnessKind)}/override`,
+    path: `${agentModelsPath(harnessKind)}/override`,
   });
 }
 

@@ -300,6 +300,28 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
                 error.to_string(),
             ),
         ),
+        // A9 Scope C: lazy-start on prompt hits the same live-start readiness
+        // gate as resume/fork/create now. SendPromptError has no dedicated
+        // readiness variant, so this rides InvalidPrompt with a stable
+        // AGENT_NOT_READY code, same shape as the RouteAuth arm above.
+        StartSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        } => {
+            let message = match detail {
+                Some(detail) => {
+                    format!("agent '{agent_kind}' is not ready (status: {status:?}): {detail}")
+                }
+                None => format!("agent '{agent_kind}' is not ready (status: {status:?})"),
+            };
+            SendPromptError::InvalidPrompt(
+                crate::domains::sessions::prompt::PromptValidationError::new(
+                    "AGENT_NOT_READY",
+                    message,
+                ),
+            )
+        }
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             SendPromptError::Internal(error)
         }

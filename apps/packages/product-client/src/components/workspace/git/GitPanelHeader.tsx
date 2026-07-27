@@ -60,7 +60,7 @@ export function GitPanelHeader({
 
   return (
     <div
-      className="z-20 flex shrink-0 flex-col [container-name:review-header] [container-type:inline-size] border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
+      className="z-20 flex shrink-0 flex-col [container-name:review-header] [container-type:inline-size] border-b border-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
     >
       <div className="flex min-h-7 min-w-0 items-center gap-1">
         <GitReviewBaseSelector

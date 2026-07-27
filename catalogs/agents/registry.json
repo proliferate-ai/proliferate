@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-07-17.2",
+  "registryVersion": "2026-07-17.4",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -108,7 +108,37 @@
           }
         ]
       },
-      "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp"
+      "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp",
+      "providerConfig": [
+        {
+          "kind": "aws_bedrock",
+          "label": "AWS Bedrock",
+          "envVars": [
+            {
+              "name": "CLAUDE_CODE_USE_BEDROCK",
+              "kind": "flag"
+            },
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "AWS_REGION"
+          ]
+        },
+        {
+          "kind": "azure_openai",
+          "label": "Azure AI Foundry",
+          "envVars": [
+            {
+              "name": "CLAUDE_CODE_USE_FOUNDRY",
+              "kind": "flag"
+            },
+            "ANTHROPIC_FOUNDRY_RESOURCE",
+            "ANTHROPIC_FOUNDRY_BASE_URL",
+            "ANTHROPIC_FOUNDRY_API_KEY",
+            "ANTHROPIC_FOUNDRY_AUTH_TOKEN"
+          ],
+          "pending": true,
+          "pendingReason": "Foundry translation built but live-unverified: the renderer's endpoint->ANTHROPIC_FOUNDRY_RESOURCE derivation and API_KEY/AUTH_TOKEN alternative are unverified judgment calls awaiting a Gate 4 live claude x azure_openai run (R5/R11: the cell stays excluded from supported kinds until then)."
+        }
+      ]
     },
     {
       "kind": "codex",
@@ -217,7 +247,26 @@
           }
         ]
       },
-      "docsUrl": "https://github.com/proliferate-ai/codex-acp"
+      "docsUrl": "https://github.com/proliferate-ai/codex-acp",
+      "providerConfig": [
+        {
+          "kind": "aws_bedrock",
+          "label": "AWS Bedrock",
+          "envVars": [
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "AWS_REGION"
+          ]
+        },
+        {
+          "kind": "azure_openai",
+          "label": "Azure OpenAI",
+          "envVars": [
+            "AZURE_OPENAI_API_KEY"
+          ],
+          "pending": true,
+          "pendingReason": "config.toml injection built, live-unverified: nobody has exercised codex against real Azure OpenAI yet (D3 brief \u00a75/\u00a76 Gate 4), and the registry only declares AZURE_OPENAI_API_KEY today \u2014 not yet the endpoint/deployment vars the render arm also needs."
+        }
+      ]
     },
     {
       "kind": "cursor",
@@ -422,7 +471,25 @@
           }
         ]
       },
-      "docsUrl": "https://opencode.ai"
+      "docsUrl": "https://opencode.ai",
+      "providerConfig": [
+        {
+          "kind": "aws_bedrock",
+          "label": "AWS Bedrock",
+          "envVars": [
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "AWS_REGION"
+          ]
+        },
+        {
+          "kind": "azure_openai",
+          "label": "Azure OpenAI",
+          "envVars": [
+            "AZURE_RESOURCE_NAME",
+            "AZURE_API_KEY"
+          ]
+        }
+      ]
     },
     {
       "kind": "grok",

@@ -242,7 +242,7 @@ describe("FileEditorView", () => {
     expect(container.querySelector("[data-file-source-view]")?.getAttribute("data-word-wrap"))
       .toBe("false");
     expect(container.querySelector("[data-file-source-virtualized]")).toBeTruthy();
-    expect(container.querySelector(".file-source-line-number")?.textContent).toBe("1");
+    expect(container.querySelector("[data-column-number]")?.textContent).toBe("1");
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
     // Native menu resolves unavailable async before the DOM fallback opens.

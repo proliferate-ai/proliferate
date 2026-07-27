@@ -159,6 +159,11 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
           id: model.id,
           displayName: resolveRuntimeMergedModelDisplayName(model, cloudModel),
           description: cloudModel?.description ?? null,
+          // Explicit provider namespace (model-catalog.md "Provider badges"):
+          // the runtime already resolves this per model (`provider_for_model`
+          // id-prefix match, contract §5); the cloud catalog carries none yet,
+          // so runtime wins outright rather than falling back to a guess.
+          provider: model.provider ?? null,
           aliases: mergeModelAliases(model.id, model.aliases ?? [], cloudModel),
           status: cloudModel?.status ?? "active",
           isDefault: model.isDefault || modelIdCandidates.includes(defaultModelId ?? ""),
@@ -364,6 +369,10 @@ function projectCloudModel(
     id: model.id,
     displayName: model.displayName,
     description: model.description ?? null,
+    // The shipped catalog carries no provider field yet (catalog/schema.rs);
+    // this stays null rather than guessing from the id (model-catalog.md
+    // "Provider badges" — explicit fields only, never inferred).
+    provider: null,
     aliases: model.aliases ?? [],
     status: model.status ?? "active",
     isDefault: model.id === defaultModelId,

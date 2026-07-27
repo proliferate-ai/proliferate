@@ -86,6 +86,11 @@ export type {
 } from "./types/agent-gateway-catalog.js";
 
 export type {
+  ModelSnapshotLiveState,
+  ModelSnapshotStatus,
+} from "./types/model-snapshot.js";
+
+export type {
   RepoRootKind,
   RepoRoot,
   ResolveRepoRootFromPathRequest,

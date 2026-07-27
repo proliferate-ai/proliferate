@@ -13,7 +13,7 @@
 //! var; `gateway` sources run the per-harness recipe (the live-verified ones
 //! from `scripts/agent-gateway-smoke/HARNESS-MATRIX.md`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::json;
@@ -22,7 +22,9 @@ use crate::domains::agents::model::AgentKind;
 
 use super::materialize::{self, FileSpec, PathFamily};
 use super::plan::GatewayModelPlan;
-use super::profile::{AgentRuntimeAuthProfile, GatewayProfile, HarnessSources, ResolvedSource};
+use super::profile::{
+    AgentRuntimeAuthProfile, GatewayProfile, HarnessSources, ProviderConfigProfile, ResolvedSource,
+};
 use super::RouteAuthError;
 
 /// The rendered launch delta for a route-auth profile (two-phase, contract §4).
@@ -46,20 +48,76 @@ impl RenderedRouteAuth {
     fn remove(&mut self, key: &str) {
         self.remove.push(key.to_string());
     }
+
+    /// Set a key AND record its name in `recorded`. Used only by the
+    /// `provider_config` arm, so [`sanitize_claude_ambient`] can tell a
+    /// rerouting flag THAT ARM composed (which it must keep — the flag IS the
+    /// route) from an arbitrary, user-named `api_key` var that merely collides
+    /// with one (which it must still strip). See that fn's doc for why the
+    /// distinction is load-bearing.
+    fn set_recorded(
+        &mut self,
+        recorded: &mut BTreeSet<String>,
+        key: &str,
+        value: impl Into<String>,
+    ) {
+        self.set(key, value);
+        recorded.insert(key.to_string());
+    }
 }
 
 /// Render the launch delta for a resolved profile. PURE: no filesystem I/O —
 /// isolated-config paths are computed by deterministic joins and the writes are
 /// described in [`RenderedRouteAuth::files`] for the launcher to apply.
+///
+/// `harness_kind` is needed even for [`AgentRuntimeAuthProfile::Native`]: native
+/// is not always an empty delta. Codex reads its model and provider settings from
+/// `CODEX_HOME/config.toml`, so a native codex launch needs a rendered config
+/// too — see [`render_native`]. This is what lets the native recipe live in the
+/// same table as the routed ones instead of in a second, divergent code path.
 pub fn render_profile(
     profile: &AgentRuntimeAuthProfile,
+    harness_kind: &str,
     plan: &GatewayModelPlan,
     runtime_home: &Path,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     match profile {
-        AgentRuntimeAuthProfile::Native => Ok(RenderedRouteAuth::default()),
+        AgentRuntimeAuthProfile::Native => render_native(harness_kind, plan, runtime_home),
         AgentRuntimeAuthProfile::Sources(sources) => render_sources(sources, plan, runtime_home),
     }
+}
+
+/// The NATIVE recipe table — "the user's own login owns auth", per harness.
+///
+/// For four of five harnesses this is genuinely an empty delta: the CLI finds its
+/// own credentials and its own config, and injecting anything would be a lie
+/// about what the user chose.
+///
+/// Codex is the exception, and folding it in here is the point of this function.
+/// Codex takes its model and provider configuration from
+/// `CODEX_HOME/config.toml` rather than from env, so *something* has to render
+/// that file. Before this, a second isolated home (`agent-auth/codex-local/`) was
+/// written on EVERY codex launch — including gateway-routed ones, where
+/// route-auth's own `CODEX_HOME` then shadowed it — from a Rust constant pinning
+/// `model = "gpt-5.5"`. That violated the catalog-owns-model-names law and left
+/// a copy of the user's `auth.json` on disk for launches that never read it.
+///
+/// Now the native codex home is one arm of this table, sourced from the catalog
+/// like every other model value, and it is rendered only when the launch is
+/// actually native.
+fn render_native(
+    harness_kind: &str,
+    plan: &GatewayModelPlan,
+    runtime_home: &Path,
+) -> Result<RenderedRouteAuth, RouteAuthError> {
+    let mut rendered = RenderedRouteAuth::default();
+    match parse_harness(harness_kind)? {
+        AgentKind::Codex => render_codex_native(plan, runtime_home, &mut rendered)?,
+        // claude/opencode/cursor/grok read their own credentials and their own
+        // config on a native launch; there is nothing honest to inject.
+        AgentKind::Claude | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Grok => {}
+    }
+    Ok(rendered)
 }
 
 /// Compose a harness's enabled sources into one additive launch delta. Each
@@ -67,16 +125,50 @@ pub fn render_profile(
 /// per-harness recipe (consuming the catalog-resolved [`GatewayModelPlan`] for
 /// model values, spec §3). The server validated legality, so ordering/count are
 /// trusted here.
+/// Sanitize claude's ambient provider env on EVERY non-native route, after the
+/// sources have composed.
+///
+/// agent-auth.md requires sanitization on every non-native route, and it was only
+/// wired into the gateway recipe. The gap this closes is REVERSE contamination:
+/// an `api_key` selection set `ANTHROPIC_API_KEY` and stopped there, so on a
+/// Bedrock-configured host the ambient `CLAUDE_CODE_USE_BEDROCK=1` survived and
+/// the CLI routed the user's BYOK launch to Bedrock — billing an account they did
+/// not select, with the key they did select sitting unused in the env.
+///
+/// Applied here rather than inside each recipe because it must observe the FULLY
+/// composed delta: `sanitize_claude_ambient` keeps whatever this route actually
+/// set and removes the rest, so running it per-source would let an earlier
+/// source's var be removed on behalf of a later one.
+///
+/// `provider_config_keys` is the set of env var names the `provider_config` arm
+/// itself composed — the ONLY source whose keys may exempt a rerouting flag from
+/// removal (see [`sanitize_claude_ambient`]).
+fn sanitize_claude_if_routed(
+    harness_kind: &str,
+    rendered: &mut RenderedRouteAuth,
+    provider_config_keys: &BTreeSet<String>,
+) {
+    if harness_kind == AgentKind::Claude.as_str() {
+        sanitize_claude_ambient(rendered, provider_config_keys);
+    }
+}
+
 fn render_sources(
     sources: &HarnessSources,
     plan: &GatewayModelPlan,
     runtime_home: &Path,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let mut rendered = RenderedRouteAuth::default();
+    // The env var names the `provider_config` arm composed. Kept separate from
+    // `rendered.set` because only THIS arm's names may exempt a claude rerouting
+    // flag from sanitization — see `sanitize_claude_ambient`.
+    let mut provider_config_keys: BTreeSet<String> = BTreeSet::new();
     for source in &sources.sources {
         match source {
             ResolvedSource::ApiKey(profile) => {
                 // Fully generic: set exactly the requested var (contract §4).
+                // NOT recorded as a provider_config key: the name is user-chosen
+                // and must stay subject to claude's ambient strip list.
                 rendered.set(&profile.env_var_name, &profile.value);
             }
             ResolvedSource::Gateway(profile) => render_gateway(
@@ -87,8 +179,23 @@ fn render_sources(
                 runtime_home,
                 &mut rendered,
             )?,
+            ResolvedSource::ProviderConfig(profile) => render_provider_config(
+                &sources.harness_kind,
+                profile,
+                plan,
+                sources.revision,
+                runtime_home,
+                &mut rendered,
+                &mut provider_config_keys,
+            )?,
         }
     }
+    // Every non-native route, not just the gateway one. See the fn's doc for the
+    // reverse-contamination case this closes. Must run AFTER provider_config
+    // composes too, so a claude provider_config source's mode-switch flag
+    // (e.g. CLAUDE_CODE_USE_BEDROCK) is in `provider_config_keys` and kept,
+    // rather than stripped as stale ambient state.
+    sanitize_claude_if_routed(&sources.harness_kind, &mut rendered, &provider_config_keys);
     Ok(rendered)
 }
 
@@ -156,7 +263,9 @@ fn render_claude_gateway(
         revision,
         contents: None,
     });
-    sanitize_claude_ambient(rendered);
+    // Sanitization is applied once for the whole composed delta by
+    // `render_sources` (`sanitize_claude_if_routed`), not per-recipe — see that
+    // fn for why the composed view is required.
     Ok(())
 }
 
@@ -170,14 +279,45 @@ fn render_claude_gateway(
 /// The rules key off which vars THIS render set, not off providers: the gateway
 /// route sets base-url + auth-token → those are kept; ambient ANTHROPIC_API_KEY
 /// is removed so a raw key cannot shadow the gateway token.
-fn sanitize_claude_ambient(rendered: &mut RenderedRouteAuth) {
+///
+/// The rerouting flags are the ONE exception, and their exemption is deliberately
+/// narrower. Track D makes a `provider_config` × `aws_bedrock`/`azure_openai`
+/// source legitimately SET `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_FOUNDRY` —
+/// that flag IS the route, so stripping it would sanitize away the very thing the
+/// arm just composed. But the exemption keys off `provider_config_keys` (the keys
+/// the provider_config arm itself rendered), NOT off `rendered.set` at large,
+/// because the `api_key` arm sets an ARBITRARY, user-chosen env var name gated
+/// only by a shape regex server-side (`^[A-Z][A-Z0-9_]{0,127}$`, no denylist). An
+/// `api_key` row named `CLAUDE_CODE_USE_BEDROCK=1` would otherwise survive and
+/// reroute the launch to Bedrock with no Bedrock credential selected — exactly the
+/// hole described above, re-opened through the user's own naming. For those names
+/// the removal stays unconditional.
+fn sanitize_claude_ambient(
+    rendered: &mut RenderedRouteAuth,
+    provider_config_keys: &BTreeSet<String>,
+) {
     for key in [
         "CLAUDE_CODE_USE_BEDROCK",
         "CLAUDE_CODE_USE_VERTEX",
+        // Azure AI Foundry, the third provider-rerouting flag. Included now
+        // rather than with Track D's Foundry support, because the flag reroutes
+        // an ambient host TODAY whether or not we can yet configure Foundry
+        // ourselves — leaving it out would be a hole with no upside.
+        "CLAUDE_CODE_USE_FOUNDRY",
         "AWS_BEARER_TOKEN_BEDROCK",
     ] {
-        rendered.remove(key);
+        if !provider_config_keys.contains(key) {
+            rendered.remove(key);
+        }
     }
+    // DELIBERATELY NOT REMOVED: ambient `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/
+    // `AWS_SESSION_TOKEN`/`AWS_PROFILE`. `AWS_BEARER_TOKEN_BEDROCK` is used by the
+    // CLI as a direct auth header rather than through SigV4, so an ambient
+    // long-lived credential does not take precedence over the token we inject, and
+    // stripping the AWS credential chain would also break unrelated tooling the
+    // session legitimately inherits. Revisit if a precedence inversion is ever
+    // observed; the python arm makes the same call.
+    //
     // Remove each Anthropic selector we didn't explicitly set on this route, so
     // ambient values can't shadow the chosen credential path.
     for key in [
@@ -228,27 +368,186 @@ fn render_codex_gateway(
     rendered.files.push(FileSpec {
         path_family: PathFamily::CodexHome,
         revision,
-        contents: Some(codex_config_toml(&profile.base_url, default_model).into_bytes()),
+        contents: Some(
+            codex_config_toml(CodexConfigRecipe::Gateway {
+                base_url: &profile.base_url,
+                default_model,
+            })
+            .into_bytes(),
+        ),
     });
     Ok(())
 }
 
-/// Build the codex gateway config.toml. Written by hand (small, deterministic)
-/// so the snapshot test can assert exact content without a toml serializer. The
-/// `default_model` is the catalog-resolved gateway default (spec §3), never a
-/// Rust constant.
-fn codex_config_toml(base_url: &str, default_model: &str) -> String {
-    let base_url = format!("{}/v1", trim_trailing_slash(base_url));
-    format!(
-        "model_provider = \"proliferate\"\n\
-         model = \"{default_model}\"\n\
-         \n\
-         [model_providers.proliferate]\n\
-         name = \"Proliferate Gateway\"\n\
-         base_url = \"{base_url}\"\n\
-         env_key = \"PROLIFERATE_GATEWAY_KEY\"\n\
-         wire_api = \"responses\"\n"
-    )
+/// The NATIVE codex recipe: an isolated `CODEX_HOME` holding TWO files — a
+/// `config.toml` pinning the catalog's native default model, and the user's own
+/// `auth.json`.
+///
+/// Why isolate at all when the credential is the user's own? Because codex reads
+/// `~/.codex/config.toml`, and the runtime must not silently inherit whatever
+/// model, provider or feature flags a developer left there — a session launched
+/// from the product would then run a different configuration than the product
+/// believes. Isolation also keeps the native and routed launch paths symmetric:
+/// one home per route, rendered from the catalog, never edited in place.
+///
+/// **And why the credential must be delivered here.** Relocating `CODEX_HOME`
+/// relocates where codex looks for its login: it resolves credentials at
+/// `$CODEX_HOME/auth.json`, NOT at `~/.codex/auth.json`
+/// ([`anyharness_credential_discovery::codex`]). So an isolated home that carries
+/// only `config.toml` launches a natively-logged-in user UNAUTHENTICATED, and
+/// nothing later fixes it: the login terminal runs `codex login` with only `PATH`
+/// adjusted, so it writes `~/.codex` — never this home. The credential copy is
+/// therefore not a leftover of the old implementation, it is what makes an
+/// isolated native home usable at all.
+///
+/// Two files, one recipe: [`PathFamily::CodexNativeHome`] carries the rendered
+/// config bytes; [`PathFamily::CodexNativeAuth`] carries no bytes because the
+/// credential is read from the user's real codex home at APPLY time (render stays
+/// pure — see [`materialize::apply_file_spec`], which also handles the
+/// no-credential case by removing a stale copy).
+fn render_codex_native(
+    plan: &GatewayModelPlan,
+    runtime_home: &Path,
+    rendered: &mut RenderedRouteAuth,
+) -> Result<(), RouteAuthError> {
+    // No catalog default for a native codex launch → render nothing and let the
+    // CLI use its own config. This is the honest degradation: a missing catalog
+    // value must not become a hardcoded model id (the exact violation this
+    // replaces), and unlike the gateway route a native launch CAN proceed
+    // without our config file.
+    //
+    // Rendering nothing also leaves `CODEX_HOME` ambient, which is what keeps
+    // this branch safe: the CLI reads its own `~/.codex` — config AND credential
+    // together — so a missing catalog value degrades to "unmanaged" rather than
+    // to "authenticated against nothing".
+    let Some(default_model) = plan.native_default_model.as_deref() else {
+        tracing::debug!(
+            "codex native launch has no catalog default model; leaving the CLI's own config"
+        );
+        return Ok(());
+    };
+    let codex_home = materialize::codex_native_home_path(runtime_home);
+    rendered.set("CODEX_HOME", path_string(&codex_home));
+    rendered.files.push(FileSpec {
+        path_family: PathFamily::CodexNativeHome,
+        revision: 0,
+        contents: Some(codex_config_toml(CodexConfigRecipe::Native { default_model }).into_bytes()),
+    });
+    // The credential that makes the relocated home usable. Its bytes are the
+    // user's own codex login, resolved at apply time rather than here so this
+    // function stays pure (contract §4 two-phase render).
+    rendered.files.push(FileSpec {
+        path_family: PathFamily::CodexNativeAuth,
+        revision: 0,
+        contents: None,
+    });
+    Ok(())
+}
+
+/// Which codex configuration a launch needs. One enum rather than one function
+/// per route so every codex `config.toml` in the system is emitted by
+/// [`codex_config_toml`] below — the property that keeps the variants
+/// comparable and stops a new route from inventing its own TOML.
+///
+/// Track D (typed provider configs) adds two variants:
+/// - `Bedrock { default_model }` → `model_provider = "amazon-bedrock"`,
+///   codex's BUILT-IN upstream provider, so NO `[model_providers.*]` block at
+///   all — the one variant that adds a provider without adding a table
+///   (confirmed against catalog_probe.rs's corrected comment: the probe's own
+///   custom `[model_providers.bedrock]` table is a PROBE-specific choice for
+///   /v1/responses enumeration, not a statement about codex's real needs).
+///   `region`/credential ride as plain env from `profile.env`, never
+///   interpolated into the TOML body.
+/// - `Azure { base_url, deployment, env_key }` → a `[model_providers.azure]`
+///   block with `wire_api = "responses"` (Azure OpenAI's Responses-API-
+///   compatible surface) and `env_key` naming the vault-supplied credential
+///   var, mirroring the gateway recipe's `env_key = "PROLIFERATE_GATEWAY_KEY"`
+///   pattern. **UNVERIFIED** (brief §5/§8 item 2): nobody has live-tested
+///   codex against real Azure OpenAI, and the registry's `pending` flag on
+///   codex×azure_openai stays `true` until Gate 4 passes — this arm exists so
+///   the eventual flip is a one-line registry change, not a code change.
+///
+/// Adding either is a new arm here plus a new `ResolvedSource::ProviderConfig`
+/// arm in `render_sources`; no existing arm changes.
+enum CodexConfigRecipe<'a> {
+    /// The user's own login. Pins only the model — codex owns the credential.
+    Native { default_model: &'a str },
+    /// The managed gateway: a custom OpenAI-compatible provider whose key comes
+    /// from `PROLIFERATE_GATEWAY_KEY` in the launch env.
+    Gateway {
+        base_url: &'a str,
+        default_model: &'a str,
+    },
+    /// Track D: the user's own AWS Bedrock account, via codex's built-in
+    /// `amazon-bedrock` provider. `default_model` is catalog-resolved from
+    /// `session.defaults["bedrock"]` ([`GatewayModelPlan::bedrock_default_model`]),
+    /// never a Rust constant.
+    Bedrock { default_model: &'a str },
+    /// Track D, UNVERIFIED (see enum doc): the user's own Azure OpenAI
+    /// account via codex's `[model_providers.azure]` config.toml injection.
+    Azure {
+        base_url: &'a str,
+        deployment: &'a str,
+        env_key: &'a str,
+    },
+}
+
+/// Build a codex `config.toml`. Written by hand (small, deterministic) so the
+/// snapshot tests can assert exact content without a toml serializer.
+///
+/// Every `model` value is catalog-resolved (`session.defaults[<context>]`),
+/// never a Rust constant — that law is why the native arm exists at all.
+fn codex_config_toml(recipe: CodexConfigRecipe<'_>) -> String {
+    match recipe {
+        CodexConfigRecipe::Native { default_model } => {
+            format!("model = \"{default_model}\"\n")
+        }
+        CodexConfigRecipe::Gateway {
+            base_url,
+            default_model,
+        } => {
+            let base_url = format!("{}/v1", trim_trailing_slash(base_url));
+            format!(
+                "model_provider = \"proliferate\"\n\
+                 model = \"{default_model}\"\n\
+                 \n\
+                 [model_providers.proliferate]\n\
+                 name = \"Proliferate Gateway\"\n\
+                 base_url = \"{base_url}\"\n\
+                 env_key = \"PROLIFERATE_GATEWAY_KEY\"\n\
+                 wire_api = \"responses\"\n"
+            )
+        }
+        CodexConfigRecipe::Bedrock { default_model } => {
+            // codex's BUILT-IN amazon-bedrock upstream: no [model_providers.*]
+            // table at all (D3 brief §9, confirmed against catalog_probe.rs's
+            // corrected comment). Credential + region ride as plain env from
+            // profile.env, set by the caller — never interpolated here.
+            format!(
+                "model_provider = \"amazon-bedrock\"\n\
+                 model = \"{default_model}\"\n"
+            )
+        }
+        CodexConfigRecipe::Azure {
+            base_url,
+            deployment,
+            env_key,
+        } => {
+            // UNVERIFIED (see CodexConfigRecipe::Azure's doc) -- built so the
+            // eventual registry flip is a one-line change, not a code change.
+            // The deployment name is the model selector for Azure OpenAI.
+            format!(
+                "model_provider = \"azure\"\n\
+                 model = \"{deployment}\"\n\
+                 \n\
+                 [model_providers.azure]\n\
+                 name = \"Azure OpenAI\"\n\
+                 base_url = \"{base_url}\"\n\
+                 env_key = \"{env_key}\"\n\
+                 wire_api = \"responses\"\n"
+            )
+        }
+    }
 }
 
 fn render_opencode_gateway(
@@ -352,6 +651,169 @@ fn render_grok_gateway(
         contents: None,
     });
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// provider_config route (Track D): "use my own cloud provider account" — the
+// env map's keys are ALREADY the harness's real names (Python resolved them;
+// see agent-auth.md's wire contract and state.rs's SOURCE_KIND_PROVIDER_CONFIG
+// doc). Rust's job is only to pick which per-harness arm to run.
+// ---------------------------------------------------------------------------
+
+/// The registry's declared credential var for codex×azure_openai (D1's
+/// registry.json `providerConfig[].envVars`), and the `env_key` codex's
+/// `[model_providers.azure]` block references — mirrors the gateway recipe's
+/// `env_key = "PROLIFERATE_GATEWAY_KEY"` pattern (D3 brief §5).
+const AZURE_OPENAI_API_KEY_ENV: &str = "AZURE_OPENAI_API_KEY";
+/// Placeholder env-var names for codex's Azure arm's base_url/deployment.
+/// **ASSUMPTION, flagged in the PR body**: the registry today declares ONLY
+/// `AZURE_OPENAI_API_KEY` for codex×azure_openai (the kind stays `pending`,
+/// so no real selection can reach this arm yet); these two names are this
+/// arm's placeholder expectation for when the registry is extended to wire a
+/// real endpoint/deployment through, not a verified contract. Update these
+/// constants (and the registry) together when Gate 4 for this cell is
+/// scoped.
+///
+/// TODO(gate-4): the flip is NOT one line. Three things must land together, or
+/// no producer will ever emit these keys: (1) the registry's
+/// codex×azure_openai `providerConfig[].envVars` gains the endpoint/deployment
+/// names and drops `pending`; (2) the python arm's translation table gains the
+/// codex×azure_openai row (`_translate_provider_config_env` currently returns
+/// `None` for that cell — structurally excluded); (3) these constants are
+/// reconciled with whatever names (1) lands.
+const AZURE_OPENAI_ENDPOINT_ENV: &str = "AZURE_OPENAI_ENDPOINT";
+const AZURE_OPENAI_DEPLOYMENT_ENV: &str = "AZURE_OPENAI_DEPLOYMENT";
+
+/// `provider_config_keys` accumulates every env var name THIS arm sets. It is
+/// what lets [`sanitize_claude_ambient`] keep a rerouting flag this arm composed
+/// while still stripping an identically-named `api_key` var.
+fn render_provider_config(
+    harness_kind: &str,
+    profile: &ProviderConfigProfile,
+    plan: &GatewayModelPlan,
+    revision: i64,
+    runtime_home: &Path,
+    rendered: &mut RenderedRouteAuth,
+    provider_config_keys: &mut BTreeSet<String>,
+) -> Result<(), RouteAuthError> {
+    match (parse_harness(harness_kind)?, profile.config_kind.as_str()) {
+        (AgentKind::Claude, _) | (AgentKind::OpenCode, _) => {
+            // Fully generic: the map's keys are already the harness's real
+            // env var names for EVERY config_kind claude/opencode support
+            // (including the mode-switch flags CLAUDE_CODE_USE_BEDROCK /
+            // CLAUDE_CODE_USE_FOUNDRY) — no per-kind branch needed, per the
+            // wire-contract ruling (D3 brief §2/§3.3).
+            for (key, value) in &profile.env {
+                rendered.set_recorded(provider_config_keys, key, value);
+            }
+            Ok(())
+        }
+        (AgentKind::Codex, "aws_bedrock") => {
+            // codex requires a model id in config.toml even on Bedrock, and
+            // the native/gateway defaults are wrong contexts for it (see
+            // GatewayModelPlan::bedrock_default_model's doc) — error rather
+            // than invent one.
+            let default_model = plan.bedrock_default_model.as_deref().ok_or_else(|| {
+                RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: "codex aws_bedrock requires a default model from the catalog \
+                             (defaults[\"bedrock\"])"
+                        .to_string(),
+                }
+            })?;
+            let codex_home = materialize::revision_dir_path(
+                runtime_home,
+                materialize::CODEX_HOME_PREFIX,
+                revision,
+            );
+            rendered.set("CODEX_HOME", path_string(&codex_home));
+            // No ambient-key removals here, unlike `render_codex_gateway`: that
+            // recipe drops OPENAI_API_KEY/ANTHROPIC_API_KEY because its provider
+            // is only reachable through the config file, whereas
+            // `model_provider = "amazon-bedrock"` below pins the provider
+            // outright — an ambient OpenAI/Anthropic key has nothing to shadow.
+            // The asymmetry is intentional, not an omission.
+            // AWS_REGION + AWS_BEARER_TOKEN_BEDROCK ride as plain env from the
+            // already-resolved map (codex's built-in amazon-bedrock provider
+            // reads its credential from env, same as claude/opencode) — NOT
+            // interpolated into the TOML body.
+            for (key, value) in &profile.env {
+                rendered.set_recorded(provider_config_keys, key, value);
+            }
+            rendered.files.push(FileSpec {
+                path_family: PathFamily::CodexHome,
+                revision,
+                contents: Some(
+                    codex_config_toml(CodexConfigRecipe::Bedrock { default_model }).into_bytes(),
+                ),
+            });
+            Ok(())
+        }
+        (AgentKind::Codex, "azure_openai") => {
+            // UNVERIFIED (see CodexConfigRecipe::Azure's doc): built so the
+            // registry flip from `pending` is a one-line change later, but
+            // NOT reachable today — the registry keeps codex×azure_openai
+            // `pending` and the server's `supported_provider_config_kinds`
+            // excludes it, so no real selection should ever construct this
+            // profile. Render it anyway rather than erroring, so a future
+            // flip needs no Rust change; the unit test in
+            // provider_config_render_tests.rs exercises this arm directly
+            // (not through the full pipeline, which cannot reach it yet).
+            let api_key = profile.env.get(AZURE_OPENAI_API_KEY_ENV).ok_or_else(|| {
+                RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: format!(
+                        "codex azure_openai requires '{AZURE_OPENAI_API_KEY_ENV}' in the resolved env map"
+                    ),
+                }
+            })?;
+            let base_url = profile.env.get(AZURE_OPENAI_ENDPOINT_ENV).ok_or_else(|| {
+                RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: format!(
+                        "codex azure_openai requires '{AZURE_OPENAI_ENDPOINT_ENV}' in the resolved env map"
+                    ),
+                }
+            })?;
+            let deployment = profile
+                .env
+                .get(AZURE_OPENAI_DEPLOYMENT_ENV)
+                .ok_or_else(|| RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: format!(
+                        "codex azure_openai requires '{AZURE_OPENAI_DEPLOYMENT_ENV}' in the resolved env map"
+                    ),
+                })?;
+            let codex_home = materialize::revision_dir_path(
+                runtime_home,
+                materialize::CODEX_HOME_PREFIX,
+                revision,
+            );
+            rendered.set("CODEX_HOME", path_string(&codex_home));
+            rendered.set_recorded(provider_config_keys, AZURE_OPENAI_API_KEY_ENV, api_key);
+            rendered.files.push(FileSpec {
+                path_family: PathFamily::CodexHome,
+                revision,
+                contents: Some(
+                    codex_config_toml(CodexConfigRecipe::Azure {
+                        base_url,
+                        deployment,
+                        env_key: AZURE_OPENAI_API_KEY_ENV,
+                    })
+                    .into_bytes(),
+                ),
+            });
+            Ok(())
+        }
+        (AgentKind::Cursor, _) | (AgentKind::Grok, _) => Err(RouteAuthError::UnsupportedRoute {
+            harness_kind: harness_kind.to_string(),
+            detail: format!("{harness_kind} has no provider-config recipe"),
+        }),
+        (_, other) => Err(RouteAuthError::UnsupportedRoute {
+            harness_kind: harness_kind.to_string(),
+            detail: format!("unknown provider-config kind '{other}'"),
+        }),
+    }
 }
 
 fn path_string(path: &Path) -> String {

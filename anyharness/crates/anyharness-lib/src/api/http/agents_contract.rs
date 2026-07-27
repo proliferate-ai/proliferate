@@ -255,6 +255,7 @@ pub(super) fn to_summary(
         native: resolved.native.as_ref().map(to_artifact_status),
         agent_process: to_artifact_status(&resolved.agent_process),
         credential_state,
+        credentials_from_route: resolved.credentials_from_route,
         readiness,
         supports_login: desc.auth.supports_login(),
         expected_env_vars: desc.auth.expected_env_vars(),

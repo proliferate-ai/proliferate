@@ -134,7 +134,7 @@ export function TurnDiffPanel({
               size="sm"
               onClick={() => setShowAllFiles((value) => !value)}
               aria-expanded={showAllFiles}
-              className="group/show-files flex h-9 w-full justify-start gap-2 rounded-none bg-transparent px-[var(--turn-diff-row-padding-x)] py-[var(--turn-diff-row-padding-y)] text-left text-chat text-foreground hover:bg-list-hover/30"
+              className="group/show-files flex h-9 w-full justify-start gap-2 rounded-none bg-transparent px-[var(--turn-diff-row-padding-x)] py-[var(--turn-diff-row-padding-y)] text-left text-chat text-foreground hover:bg-hover/30"
             >
               {showAllFiles ? "Collapse files" : `Show ${hiddenFileCount} more files`}
               <ChevronDown

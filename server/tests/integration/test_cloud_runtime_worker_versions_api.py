@@ -82,7 +82,6 @@ class TestRuntimeWorkerVersionConvergence:
         desired = heartbeat.json()["desiredVersions"]
         assert desired["worker"] == "9.9.9"
         assert desired["anyharness"] == "8.8.8"
-        assert "catalogVersion" in desired
 
     @pytest.mark.asyncio
     async def test_heartbeat_omits_anyharness_pin_when_unstamped(
@@ -138,11 +137,15 @@ class TestRuntimeWorkerVersionConvergence:
         assert heartbeat.json()["desiredVersions"]["anyharness"] == "8.8.8"
 
     @pytest.mark.asyncio
-    async def test_heartbeat_includes_catalog_version(
+    async def test_heartbeat_advertises_no_catalog_version(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
     ) -> None:
+        # The runtime binary is the only catalog transport
+        # (agent-distribution.md, "Convergence"): a runtime binary swap IS the
+        # catalog update, so the ack advertises binary pins only. A stray
+        # catalogVersion would resurrect the deleted heartbeat push path.
         auth = await _authed_user(client, db_session, prefix="worker-catalog")
         token = await _desktop_enrollment_token(client, auth, install_id="install-catalog")
         enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
@@ -155,10 +158,8 @@ class TestRuntimeWorkerVersionConvergence:
         )
         assert heartbeat.status_code == 200, heartbeat.text
         desired = heartbeat.json()["desiredVersions"]
-        assert "catalogVersion" in desired
-        # The catalog version should be present and a non-empty string
-        assert isinstance(desired["catalogVersion"], str)
-        assert len(desired["catalogVersion"]) > 0
+        assert "catalogVersion" not in desired
+        assert set(desired) == {"worker", "anyharness"}
 
     @pytest.mark.asyncio
     async def test_heartbeat_omits_worker_pin_when_unstamped(

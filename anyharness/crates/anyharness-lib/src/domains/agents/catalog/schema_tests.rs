@@ -62,7 +62,6 @@ fn draft_catalog_parses_with_expected_shape() {
         .gateway_policy
         .as_ref()
         .expect("claude gatewayPolicy");
-    assert_eq!(policy.providers, vec!["anthropic"]);
     assert_eq!(
         policy.roles.get("small_fast").map(String::as_str),
         Some("claude-haiku-4-5-20251001")

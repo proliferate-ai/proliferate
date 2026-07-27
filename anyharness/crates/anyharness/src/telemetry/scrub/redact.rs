@@ -24,7 +24,6 @@ const SAFE_DIAGNOSTIC_KEYS: &[&str] = &[
     "requested_model",
     "canonical_model",
     "active_contexts",
-    "required_contexts",
     "catalog_version",
     "selection_outcome",
     "effective_model",
