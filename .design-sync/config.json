@@ -1,4 +1,9 @@
 {
   "shape": "package",
-  "pkg": "apps/packages/ui"
+  "pkg": "@proliferate/ui",
+  "globalName": "ProliferateUI",
+  "buildCmd": "COREPACK_ENABLE_STRICT=0 pnpm -F \"@proliferate/product-ui...\" build && node .design-sync/make-entries.mjs && node .ds-sync/node_modules/.bin/tailwindcss -i .design-sync/css/ds-source.css -o apps/packages/ui/.ds-compiled.css",
+  "srcDir": "src",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": ".ds-compiled.css"
 }

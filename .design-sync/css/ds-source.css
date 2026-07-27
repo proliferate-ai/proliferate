@@ -1,0 +1,9 @@
+/* Tailwind compile source for the design-sync bundle.
+   Mirrors apps/web/src/index.css (which imports @proliferate/design/product.css)
+   but scans only the design-system packages, so the emitted utility set covers
+   every class the shipped components use. Relative import: this file lives
+   outside any package, so the package specifier would not resolve. */
+@import "../../apps/packages/design/dist/css/product.css";
+
+@source "../../apps/packages/ui/src";
+@source "../../apps/packages/product-ui/src";

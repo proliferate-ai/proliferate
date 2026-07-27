@@ -100,3 +100,14 @@ apps/packages/product-client/src/generated/
 
 # Local dev symlink into the root workspace node_modules (never committed)
 tests/release/node_modules
+
+# design-sync (claude.ai/design) working state
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+apps/packages/*/.ds-entry.mjs
+
+apps/packages/*/.ds-compiled.css
+apps/packages/ui/index.d.ts
