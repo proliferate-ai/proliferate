@@ -247,27 +247,29 @@ environment or workspace needs materialization:
 ```text
 Cloud service
   -> E2B create/resume
-  -> settings.supervisor_owned_runtime off (default at merge):
+  -> settings.supervisor_owned_runtime on (default since 2026-07-26):
+       launch Proliferate Supervisor detached (build_supervisor_config +
+       build_detached_supervisor_launch_command); Supervisor starts and
+       supervises AnyHarness and Worker itself — no separate Worker sidecar
+       launch
+  -> settings.supervisor_owned_runtime off (legacy, opt-out only):
        launch authenticated AnyHarness when absent/unhealthy
          -> persist ready access
          -> best-effort start Proliferate Worker sidecar
        OR reuse an already-healthy authenticated AnyHarness
          -> do not restart a missing Worker sidecar
-  -> settings.supervisor_owned_runtime on:
-       launch Proliferate Supervisor detached (build_supervisor_config +
-       build_detached_supervisor_launch_command); Supervisor starts and
-       supervises AnyHarness and Worker itself — no separate Worker sidecar
-       launch
   -> materialize the repo
 ```
 
-`supervisor_owned_runtime` is a server config flag, off by default until the
-post-merge live E2B N-1→N proof passes. With the flag off, the E2B launch path
-is unchanged: it does not start Proliferate Supervisor, and Supervisor remains
-the process/update owner only for the SSH installer and its installed target
-layout. With the flag on, a newly provisioned sandbox is Supervisor-first from
-the start; do not infer either topology for a given target without checking
-the flag and how that target was provisioned.
+`supervisor_owned_runtime` is a server config flag. The live E2B N-1→N proof
+passed (2026-07-26: real sandbox, supervisor-owned topology, pins
+0.3.47→0.3.48, zero rollbacks, ~75s convergence), so the flag now defaults on:
+a newly provisioned sandbox is Supervisor-first from the start. The env var
+still allows opting back out per-deploy; with the flag off, the E2B launch
+path is unchanged from before this flip — it does not start Proliferate
+Supervisor, and Supervisor remains the process/update owner only for the SSH
+installer and its installed target layout. Do not infer either topology for a
+given target without checking the flag and how that target was provisioned.
 
 The `connect.py` branch that issues the Supervisor-first launch is
 implemented, and the `proliferate-supervisor` update-mailbox consumer it
@@ -275,8 +277,8 @@ depends on is now implemented too (verify → bounded download → re-verify →
 stage → atomic activate → dependency-ordered restart → health-gate → rollback;
 see
 [`proliferate-supervisor/README.md`](../proliferate-supervisor/README.md#implementation-status-this-pr)).
-The remaining gate is operational, not a build gap: do not flip
-`supervisor_owned_runtime` on before the live E2B N-1→N proof passes.
+The legacy launch path remains only for rollback; its deletion is the named
+follow-up.
 
 The optional Worker has one heartbeat loop, not a product-command channel:
 

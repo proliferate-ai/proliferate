@@ -163,7 +163,8 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
     throw new ScenarioBlockedError(
       "T4-RUNTIME-1: the supervisor-owned runtime topology must be active on the candidate API for the " +
         "heartbeat to return desiredTopology=supervisor_owned and for the Worker to write the durable " +
-        "mailbox request rather than swapping the binary itself (server default is OFF). Deploy the " +
+        "mailbox request rather than swapping the binary itself (server default is ON since 2026-07-26; " +
+        "this check still confirms the candidate under test actually has it enabled). Deploy the " +
         `candidate API with PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=1 and set ${SUPERVISOR_OWNED_RUNTIME_ENV}=1 ` +
         "to confirm it. Without it the observed behavior would be the legacy direct-Worker path, which " +
         "contradicts the T4-RUNTIME-1 contract.",
