@@ -33,6 +33,15 @@ export function AuthRestartModal({
   onRestartNow,
   onDecline,
 }: AuthRestartModalProps) {
+  const sessionRows = sessions.map((session) => (
+    <li
+      key={session.sessionId}
+      className="truncate rounded-md bg-surface-control px-3 py-2 text-ui-sm text-foreground"
+      data-auth-restart-session={session.sessionId}
+    >
+      {session.label}
+    </li>
+  ));
   return (
     <ModalShell
       open={open}
@@ -69,15 +78,13 @@ export function AuthRestartModal({
         className="flex max-h-64 flex-col gap-1 overflow-y-auto"
         data-auth-restart-modal={`${harnessKind}:${surface}`}
       >
-        {sessions.map((session) => (
-          <li
-            key={session.sessionId}
-            className="truncate rounded-md bg-foreground/5 px-3 py-2 text-ui-sm text-foreground"
-            data-auth-restart-session={session.sessionId}
-          >
-            {session.label}
-          </li>
-        ))}
+        {/* Bounded list: exactly the running sessions of one harness on one
+            surface (a handful), rendered eagerly — hoisted rows, not a
+            virtualized surface. bg-surface-control is the ruled static
+            surface for a quiet non-interactive row (see
+            HarnessAuthApiKeyRow); no low-alpha foreground role exists in
+            the closed vocabulary. */}
+        {sessionRows}
       </ul>
     </ModalShell>
   );

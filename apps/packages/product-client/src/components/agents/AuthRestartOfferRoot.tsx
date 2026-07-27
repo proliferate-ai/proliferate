@@ -14,15 +14,19 @@ export function AuthRestartOfferRoot() {
   if (offer === null) {
     return null;
   }
+  // Bounded view-model: the offer covers only the running sessions of the
+  // switched harness on the switched surface — a handful, built eagerly
+  // rather than rendered as a virtualized long-list surface.
+  const sessionEntries = offeredSessions.map((entry) => ({
+    sessionId: entry.sessionId,
+    label: restartSessionLabel(entry),
+  }));
   return (
     <AuthRestartModal
       open
       harnessKind={offer.harnessKind}
       surface={offer.surface}
-      sessions={offeredSessions.map((entry) => ({
-        sessionId: entry.sessionId,
-        label: restartSessionLabel(entry),
-      }))}
+      sessions={sessionEntries}
       onRestartNow={restartNow}
       onDecline={decline}
     />
