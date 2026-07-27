@@ -7,3 +7,29 @@
 
 @source "../../apps/packages/ui/src";
 @source "../../apps/packages/product-ui/src";
+
+/* Paint the root surface.
+ *
+ * This design system is DARK-FIRST: theme.css puts the dark values on `:root`
+ * and flips to light under `:root[data-mode="light"]`. product.css sets
+ * `body { background: var(--color-background) }` early, but a later rule in the
+ * same file resets `html, body` to `background: transparent` — in the real app
+ * the shell (`#root`) paints the surface instead.
+ *
+ * A preview card and a design built with this DS have no such shell, so without
+ * this the page falls back to white while the tokens stay dark — and
+ * `--color-primary` (#ffffff in dark mode) then renders a white primary button
+ * on a white page, i.e. invisible. Every default-variant control would
+ * silently disappear.
+ */
+/* The `html body` compound selector is deliberate: the converter's preview-card
+ * template hardcodes an inline `body{background:#fff}` in the card's own
+ * <style>, which would beat a plain `body` rule from a linked stylesheet. Its
+ * lib/emit.mjs defines the app's output contract and must not be forked, so
+ * this wins on specificity (0,0,2 vs 0,0,1) instead.
+ */
+html,
+html body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}

@@ -108,6 +108,37 @@ Verified present in the compiled output: `bg-surface-elevated`,
   the build log says so explicitly ("add a matching @font-face").
 - Result: 45 `@font-face` rules, 15 urls rewritten into `fonts/`.
 
+### The dark-first root surface (found by the Button calibration)
+
+**This is the single most important fix in this sync.** The DS is
+dark-first: `theme.css` puts dark values on `:root` and flips to light
+under `:root[data-mode="light"]`. But:
+
+- `product.css` sets `body { background: var(--color-background) }` early
+  and then a LATER rule in the same file resets `html, body` to
+  `background: transparent` — in the real app the shell (`#root`) paints
+  the surface.
+- The converter's preview-card template hardcodes
+  `body{margin:0;padding:24px;background:#fff}` in the card's own inline
+  `<style>`.
+
+Net effect before the fix: cards rendered on **white** while the tokens
+stayed **dark**, so `--color-primary` (`#ffffff` in dark mode) drew a
+white primary button on a white page. Primary/default-variant controls
+were **invisible** — and `[RENDER_THIN]` does not reliably catch it,
+because the text nodes are present. Secondary and destructive rendered
+fine, which is what makes it so easy to miss.
+
+Fix lives at the end of `.design-sync/css/ds-source.css`: an
+`html, html body` rule painting `--color-background` /
+`--color-foreground`. The compound `html body` selector is deliberate —
+specificity (0,0,2) beats the card's inline `body` rule (0,0,1) without
+forking `lib/emit.mjs`, which the skill forbids because it defines the
+app's output contract.
+
+**Any future preview that looks unstyled: check this rule survived the
+Tailwind compile before debugging the component.**
+
 ### Known render warns (triaged as legitimate — a warn NOT listed here is new)
 
 - `[FONT_MISSING] "Manrope"` — benign. Bare `Manrope` appears only as a
@@ -143,8 +174,11 @@ exports (spot-checked: `Home`, `GitHub`, `ArrowDown`, `Sparkles`,
 ## Status / where this stopped
 
 Build and `package-validate.mjs` are clean (exit 0, 5 non-blocking warns,
-all triaged above). **No previews authored yet** — every component ships
-the honest floor card. **Nothing uploaded**: `DesignSync` returned an
+all triaged above). **Preview authoring is in progress**: `Button` is
+authored and graded `good` on all three cells (Variants / Sizes /
+States) — it was the calibration component and it earned its keep by
+surfacing the dark-surface defect above. The other 183 components still
+ship the honest floor card. **Nothing uploaded**: `DesignSync` returned an
 authorization error in this remote (claude.ai/code) session
 (`/design-login` needs an interactive terminal); resolve via Claude
 Design's "Send to Claude Code Web". `config.json` therefore has **no
