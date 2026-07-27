@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useActiveSessionTranscript } from "#product/hooks/chat/derived/use-active-session-transcript-state";
+import { useComposerMenuNavigation } from "#product/hooks/chat/ui/use-composer-menu-navigation";
 import {
   filterDesktopRunnableSessionSlashCommands,
   matchSessionSlashCommandQuery,
@@ -21,9 +22,6 @@ export function useChatSlashCommandMenu({
 }: UseChatSlashCommandMenuArgs) {
   const transcript = useActiveSessionTranscript();
   const availableCommands = transcript?.availableCommands ?? EMPTY_COMMANDS;
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const commands = useMemo(() => {
     if (!open) {
@@ -33,57 +31,26 @@ export function useChatSlashCommandMenu({
       .filter((command) => matchSessionSlashCommandQuery(command, query));
   }, [availableCommands, open, query]);
 
-  const activeIndex = commands.length === 0
-    ? 0
-    : Math.min(highlightedIndex, commands.length - 1);
-
-  useEffect(() => {
-    if (!open) {
-      rowRefs.current = [];
-    }
-    setHighlightedIndex(0);
-    listRef.current?.scrollTo({ top: 0 });
-  }, [open, query, commands.length]);
-
-  const scrollToIndex = useCallback((index: number) => {
-    rowRefs.current[index]?.scrollIntoView({ block: "nearest" });
-  }, []);
-
-  const moveHighlight = useCallback((delta: number) => {
-    if (commands.length === 0) {
-      return;
-    }
-
-    const next = Math.max(0, Math.min(activeIndex + delta, commands.length - 1));
-    if (next === activeIndex) {
-      return;
-    }
-    setHighlightedIndex(next);
-    scrollToIndex(next);
-  }, [activeIndex, commands.length, scrollToIndex]);
+  const navigation = useComposerMenuNavigation({
+    open,
+    query,
+    itemCount: commands.length,
+  });
 
   const selectHighlighted = useCallback(() => {
-    const command = commands[activeIndex];
+    const command = commands[navigation.highlightedIndex];
     if (command) {
       onSelect(command);
     }
-  }, [activeIndex, commands, onSelect]);
-
-  const setRowRef = useCallback((index: number, element: HTMLButtonElement | null) => {
-    rowRefs.current[index] = element;
-  }, []);
-
-  const handleRowMouseEnter = useCallback((index: number) => {
-    setHighlightedIndex(index);
-  }, []);
+  }, [commands, navigation.highlightedIndex, onSelect]);
 
   return {
     commands,
-    highlightedIndex: activeIndex,
-    listRef,
-    moveHighlight,
+    highlightedIndex: navigation.highlightedIndex,
+    listRef: navigation.listRef,
+    moveHighlight: navigation.moveHighlight,
     selectHighlighted,
-    setRowRef,
-    handleRowMouseEnter,
+    setRowRef: navigation.setRowRef,
+    handleRowMouseEnter: navigation.handleRowMouseEnter,
   };
 }
