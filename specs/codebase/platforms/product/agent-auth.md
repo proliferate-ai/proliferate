@@ -283,8 +283,15 @@ sandbox
   the handler registers the task on the open transaction via
   `run_after_commit`, and a spawned task runs only once the transaction
   commits — the materializer always reads committed truth, never a state
-  mid-write. The task resolves the user's active personal sandbox and
-  no-ops if none has booted yet (bootstrap will cover it).
+  mid-write. The task resolves the user's active personal sandbox. For a
+  plain poke (enrollment sync, background refresh) it no-ops if none has
+  booted yet — bootstrap will cover it. The ensure-on-switch path is the
+  exception: a cloud selection change schedules with ensure semantics, so
+  a provisioned-but-unbooted or asleep sandbox is provisioned/woken to
+  receive the new state (never awaited by the request), and only a
+  never-provisioned user — who cannot have cloud selections yet — defers
+  to bootstrap. An ensure with an empty rendered document does not boot a
+  sandbox just to delete a file.
 - **What it writes.** The renderer builds the full document from enabled
   selections, decrypted vault values, and the enrollment's key material,
   then compares a sha256 fingerprint against a sidecar manifest: an
