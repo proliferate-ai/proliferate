@@ -121,6 +121,20 @@ material stays valid across a pause); the 409 means the access material
 genuinely does not exist yet — never stamped, or cleared by provider loss
 — not "try again once it wakes".
 
+Because that 409 means "nothing has been stamped yet", every request-time
+access path resolves through
+`load_cloud_sandbox_runtime_access_or_repair`, which returns the identical
+409 *and* schedules one background materialization for the sandbox
+(lifecycle's cold-access law owns the mechanism and its stampede guard).
+The wire contract is unchanged — provisioning takes tens of seconds, far
+too long to hold a request — but the caller's retry is now waiting on work
+that is actually running. Materialization-internal callers keep using the
+bare loader: they are already inside the operation that does the repair.
+That law also settles what used to be lifecycle's open cold-start
+choreography question in favor of provision-on-access: there is no
+wake-and-poll handshake to add, because the poll the client already does
+against the unchanged 409 *is* the handshake.
+
 Adjacent `CloudApiError` codes (repository access, agent-gateway catalog,
 …) are their platforms' business and are not access-gating
 representations; a client must never treat an unrecognized code as one of
@@ -253,8 +267,9 @@ cloud/sdk/src/client/
 - Billing hold at spend time: typed 402; the client shows the block with
   the decision detail; no retry helps until the subject state changes.
 - Runtime access material missing: typed 409
-  `cloud_sandbox_runtime_not_ready`; materialization repairs it, the
-  gateway does not.
+  `cloud_sandbox_runtime_not_ready`; the same request schedules the
+  materialization that repairs it, so the retry resolves once provisioning
+  finishes. The repair is always a materialization, never a gateway retry.
 - Workspace not yet stamped with a runtime id: typed client-side
   `workspace_not_ready`, absorbed by the flat retry; visible only if
   8 × 750 ms elapses.
@@ -273,6 +288,8 @@ cloud/sdk/src/client/
 - Gateway auth and proxying:
   [test_cloud_sandbox_gateway_proxy.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_proxy.py),
   [test_cloud_sandbox_gateway_service.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_service.py).
+- Cold access still 409s and schedules one repair:
+  [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py).
 - Pending, landing with the gap PRs: shared-classifier unit tests; a
   contract test that the wire carries no unpopulated branchable fields.
 
@@ -300,10 +317,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       vocabulary (`ready`/`materializing`/`error`) predates this enum.
       Fold the derivation rules (threshold included) into this document
       and align the enums when that doc slims.
-- [ ] Cold access has no repair trigger: a sandbox whose access material
-      was never stamped (or was cleared by provider loss) 409s forever at
-      the gateway; nothing on the access path starts the materialization
-      that would repair it. The choreography ruling (wake-and-poll vs
-      provision-on-access) is [sandbox-lifecycle.md](sandbox-lifecycle.md)'s
-      open question; this document's failure modes assume today's
-      repair-by-materializing-action behavior.
