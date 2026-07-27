@@ -66,6 +66,21 @@ impl SessionRuntime {
                 StartSessionError::RouteAuth(error) => {
                     SetSessionConfigOptionError::Rejected(error.to_string())
                 }
+                // A9 Scope C: config lazy-start hits the same live-start
+                // readiness gate as resume/fork/create/prompt now.
+                // SetSessionConfigOptionError has no dedicated readiness
+                // variant, so this rides Rejected, same shape as the
+                // RouteAuth arm above.
+                StartSessionError::AgentNotReady {
+                    agent_kind,
+                    status,
+                    detail,
+                } => SetSessionConfigOptionError::Rejected(match detail {
+                    Some(detail) => {
+                        format!("agent '{agent_kind}' is not ready (status: {status:?}): {detail}")
+                    }
+                    None => format!("agent '{agent_kind}' is not ready (status: {status:?})"),
+                }),
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     SetSessionConfigOptionError::Internal(error)
                 }

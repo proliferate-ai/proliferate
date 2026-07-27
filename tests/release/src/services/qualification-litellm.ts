@@ -5,7 +5,8 @@
  * behalf of one local-world run:
  *
  *   - preflight (admin reachability + a non-Fable Claude model in the allowlist);
- *   - deterministic actor-key alias derivation `vk-user-<user_id>-<enrollment_id[:8]>`;
+ *   - deterministic per-(subject, harness) actor-key alias derivation
+ *     `vk-{subject_label}-{harness_kind}-<enrollment_id[:8]>` (R2);
  *   - resolution of the actor key's `token_id` and owning subjects via the admin API;
  *   - pre-turn spend snapshot and post-turn spend correlation; and
  *   - deletion of the run-created virtual key, LiteLLM user, and LiteLLM team
@@ -143,6 +144,15 @@ export class QualificationLiteLlmError extends Error {
 }
 
 /**
+ * The gateway-capable harness kinds the candidate Server mints a per-harness
+ * key for at enrollment sync (`AGENT_AUTH_HARNESS_KINDS`,
+ * `server/proliferate/constants/agent_gateway.py`; consumed as
+ * `_GATEWAY_CAPABLE_HARNESS_KINDS` in `enrollment.py`). `cursor` is
+ * intentionally absent — it has no gateway recipe (native-only).
+ */
+export const GATEWAY_CAPABLE_HARNESS_KINDS = ["claude", "codex", "opencode", "grok"] as const;
+
+/**
  * Resolved, typed LiteLLM access. Both URLs and the master key arrive only via
  * typed env inputs (spec "Credential pointers"); this object is constructed
  * inside the world and never serialized.
@@ -212,13 +222,30 @@ export interface ActorSubjectsDeletion {
 }
 
 /**
- * The deterministic actor-key alias the candidate Server mints per enrollment
- * (`server/proliferate/server/cloud/agent_gateway/enrollment.py`):
- * `vk-user-<user_id>-<enrollment_id[:8]>`. Implemented here because it is the
- * frozen cross-workstream contract and must not drift.
+ * The deterministic actor-key alias the candidate Server mints per
+ * (enrollment, harness) child key row (R2, `agents/b2-per-harness-keys`
+ * `server/proliferate/server/cloud/agent_gateway/enrollment.py` `_key_alias`):
+ * ``vk-{subject_label}-{harness_kind}-{enrollment_id[:8]}``.
+ *
+ * `subjectLabel` is the enrollment's OWN subject label, not necessarily the
+ * product user id: a personal enrollment's label is `user-<user_id>`, but an
+ * organization-member enrollment's label is
+ * `org-<organization_id>-user-<user_id>` (`enrollment_subject_label` /
+ * `ensure_org_enrollment`, same file). Callers resolving a personal actor's
+ * key pass `user-<userId>`; callers resolving an org-member key must build the
+ * org-shaped label themselves.
+ *
+ * Implemented here because it is the frozen cross-workstream contract and
+ * must not drift — the offline test in this file pins the exact format so a
+ * server-side alias change fails CI here, not at a live gate.
  */
-export function deriveActorKeyAlias(userId: string, enrollmentId: string): string {
-  return `vk-user-${userId}-${enrollmentId.slice(0, 8)}`;
+export function deriveActorKeyAlias(subjectLabel: string, harnessKind: string, enrollmentId: string): string {
+  return `vk-${subjectLabel}-${harnessKind}-${enrollmentId.slice(0, 8)}`;
+}
+
+/** `deriveActorKeyAlias` for the common personal-enrollment case (`subjectLabel = "user-<userId>"`). */
+export function derivePersonalActorKeyAlias(userId: string, harnessKind: string, enrollmentId: string): string {
+  return deriveActorKeyAlias(`user-${userId}`, harnessKind, enrollmentId);
 }
 
 /**
@@ -403,12 +430,22 @@ export class QualificationLiteLlmController {
 
   /**
    * Resolves the actor key's `token_id` and owning user/team via the admin API
-   * from the authenticated enrollment id + user id, deriving the deterministic
-   * alias. Live-probing the actor key's model list happens separately, after
-   * enrollment and before the turn.
+   * from the authenticated PERSONAL enrollment id + user id + harness kind,
+   * deriving the deterministic per-harness alias. `GET
+   * /v1/cloud/agent-gateway/enrollment` (the only enrollment id callers of
+   * this method hold) always resolves the caller's PERSONAL enrollment
+   * (`get_enrollment_for_user` filters `subject_kind=user`), whose subject
+   * label is always `user-<userId>` (`enrollment_subject_label`) — never the
+   * org-member `org-<id>-user-<userId>` shape, so this method derives the
+   * personal alias unconditionally. Live-probing the actor key's model list
+   * happens separately, after enrollment and before the turn.
    */
-  async resolveActorKey(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity> {
-    const keyAlias = deriveActorKeyAlias(params.userId, params.enrollmentId);
+  async resolveActorKey(params: {
+    userId: string;
+    enrollmentId: string;
+    harnessKind: string;
+  }): Promise<ActorKeyIdentity> {
+    const keyAlias = derivePersonalActorKeyAlias(params.userId, params.harnessKind, params.enrollmentId);
     const payload = await this.adminGet(
       `/key/list?key_alias=${encodeURIComponent(keyAlias)}&return_full_object=true`,
     );

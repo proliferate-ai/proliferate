@@ -66,6 +66,13 @@ export interface DesktopLaunchModelRegistryModel {
   id: string;
   displayName: string;
   description?: string | null;
+  /**
+   * Explicit provider namespace (model-catalog.md "Provider badges" —
+   * every served model entry carries its origin as an explicit field, not
+   * inferred from the id/displayName). `null`/absent when the source has no
+   * provider classification for this model (e.g. an unmatched probe-only id).
+   */
+  provider?: string | null;
   aliases?: string[];
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
@@ -142,6 +149,8 @@ export interface RuntimeAgentLaunchOptions {
     isDefault: boolean;
     defaultOptIn?: boolean | null;
     modes?: string[] | null;
+    /** Runtime-resolved provider namespace (`AgentLaunchModelOption.provider`); already joined server-side. */
+    provider?: string | null;
   }>;
 }
 

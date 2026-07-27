@@ -39,11 +39,10 @@ import type { PlannedCellV1 } from "../runner/result.js";
  *
  * Local lane: real, against the local AnyHarness runtime directly, using
  * whichever credential source the runtime already resolves for the harness
- * (native CLI login for Claude on this machine — verified for real
- * 2026-07-09: on fresh main the t3local account classifies claude to
- * `["bedrock"]`, so the bare native ids are correctly gated
- * `SESSION_MODEL_GATED` and the candidate resolver lands on a
- * gateway/Bedrock id).
+ * (native CLI login for Claude on this machine). Under the composed-observation
+ * cut a bare native id that does not resolve against the harness's observation
+ * is refused with the single `SESSION_MODEL_UNSUPPORTED` code, and the
+ * candidate resolver lands on a gateway/Bedrock id that does resolve.
  *
  * Sandbox lane: the current_product_user gate is lifted in single-org mode
  * (verified 2026-07-09); what remains is a test-implementation gap: driving a
@@ -130,12 +129,12 @@ export interface HarnessModelChoice {
   harnessKind: string;
   /**
    * Ranked candidates, cheapest-preferred first. More than one candidate is
-   * kept because which id the runtime accepts depends on the account's
-   * classified auth context: on a Bedrock/gateway-classified account (t3local,
-   * fresh main 2026-07-09) the bare native ids are gated `SESSION_MODEL_GATED`
-   * and a `us.anthropic.*`/`anthropic/claude-*` id is the one that passes, so
-   * trying candidates in order lands on whatever the live classification
-   * yields.
+   * kept because which id the runtime accepts depends on what the harness's
+   * composed observation serves: on a Bedrock/gateway-routed account (t3local)
+   * a bare native id can be absent from the observation and refused
+   * `SESSION_MODEL_UNSUPPORTED`, while a `us.anthropic.*`/`anthropic/claude-*`
+   * id resolves — trying candidates in order lands on whatever the live
+   * observation yields.
    */
   modelCandidates: string[];
   catalogPinVersion: string | undefined;

@@ -2,14 +2,13 @@ import type {
   AgentApiKey,
   AgentAuthSelection,
   AgentAuthSurface,
-  AgentGatewayCatalog,
-  AgentGatewayCatalogOverride,
+  AgentModelOverride,
+  AgentModels,
   CreateAgentApiKeyRequest,
   ProliferateCloudClient,
   ProliferateRequestJsonInput,
   PutAuthSelectionsRequest,
-  RefreshAgentGatewayCatalogRequest,
-  UpsertAgentGatewayCatalogOverrideRequest,
+  UpsertAgentModelOverrideRequest,
 } from "@proliferate/cloud-sdk";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 
@@ -31,8 +30,8 @@ export interface AgentsPlaygroundCloudRequest {
 export interface AgentsPlaygroundCloudSnapshot {
   apiKeys: AgentApiKey[];
   selections: AgentAuthSelection[];
-  catalogs: AgentGatewayCatalog[];
-  overrides: AgentGatewayCatalogOverride[];
+  agentModels: AgentModels[];
+  overrides: AgentModelOverride[];
 }
 
 export interface AgentsPlaygroundCloudTransport {
@@ -66,8 +65,10 @@ export function buildPlaygroundHost(
 }
 
 const FIXTURE_TIME = "2026-07-18T18:00:00Z";
-const ROUTES = ["native", "api_key", "gateway"] as const;
-const SURFACES = ["local", "cloud"] as const;
+// The composed re-key (model-catalog.md §Cloud routes): one layered document
+// per harness, keyed by (owner, harness). The former per-authContextId
+// seeding (one document per catalog auth-context id) is deleted with the
+// context-free route.
 
 export function createAgentsPlaygroundCloudTransport(
   seed: AgentsPlaygroundCloudSeed,
@@ -77,16 +78,11 @@ export function createAgentsPlaygroundCloudTransport(
   let overrideSequence = 0;
   const apiKeys = seed.apiKeys.map((key) => ({ ...key }));
   let selections = seed.selections.map((selection) => ({ ...selection }));
-  const catalogs = new Map<string, AgentGatewayCatalog>();
-  const overrides = new Map<string, AgentGatewayCatalogOverride>();
+  const agentModels = new Map<string, AgentModels>();
+  const overrides = new Map<string, AgentModelOverride>();
   const requests: AgentsPlaygroundCloudRequest[] = [];
 
-  for (const surface of SURFACES) {
-    for (const route of ROUTES) {
-      const catalog = makeCatalog(seed.harnessKind, surface, route);
-      catalogs.set(catalogKey(seed.harnessKind, surface, route), catalog);
-    }
-  }
+  agentModels.set(seed.harnessKind, makeAgentModels(seed.harnessKind));
 
   async function requestJson<TResponse>(input: ProliferateRequestJsonInput): Promise<TResponse> {
     requests.push({
@@ -96,7 +92,7 @@ export function createAgentsPlaygroundCloudTransport(
       body: input.body,
     });
 
-    if (input.path === "/v1/cloud/agent-gateway/keys") {
+    if (input.path === "/v1/cloud/agent-auth/keys") {
       if (input.method === "GET") return clone(apiKeys) as TResponse;
       if (input.method === "POST") {
         const body = input.body as CreateAgentApiKeyRequest;
@@ -104,6 +100,7 @@ export function createAgentsPlaygroundCloudTransport(
         const key: AgentApiKey = {
           id: `playground-key-${keySequence}`,
           title: body.title,
+          kind: "api_key",
           redactedHint: redactSecret(body.value),
           status: "active",
           createdAt: FIXTURE_TIME,
@@ -114,7 +111,7 @@ export function createAgentsPlaygroundCloudTransport(
     }
 
     const apiKeyMatch = input.path.match(
-      /^\/v1\/cloud\/agent-gateway\/keys\/([^/]+)$/,
+      /^\/v1\/cloud\/agent-auth\/keys\/([^/]+)$/,
     );
     if (input.method === "DELETE" && apiKeyMatch) {
       const keyId = decodeURIComponent(apiKeyMatch[1] ?? "");
@@ -124,7 +121,7 @@ export function createAgentsPlaygroundCloudTransport(
       return { ...revoked, status: "revoked" } as TResponse;
     }
 
-    if (input.path === "/v1/cloud/agent-gateway/selections" && input.method === "GET") {
+    if (input.path === "/v1/cloud/agent-auth/selections" && input.method === "GET") {
       const surface = input.query?.surface as AgentAuthSurface | undefined;
       const rows = surface
         ? selections.filter((selection) => selection.surface === surface)
@@ -133,7 +130,7 @@ export function createAgentsPlaygroundCloudTransport(
     }
 
     const selectionMatch = input.path.match(
-      /^\/v1\/cloud\/agent-gateway\/selections\/([^/]+)$/,
+      /^\/v1\/cloud\/agent-auth\/selections\/([^/]+)$/,
     );
     if (input.method === "PUT" && selectionMatch) {
       const harnessKind = decodeURIComponent(selectionMatch[1] ?? "");
@@ -163,7 +160,7 @@ export function createAgentsPlaygroundCloudTransport(
       return clone(replacements) as TResponse;
     }
 
-    if (input.path === "/v1/cloud/agent-gateway/state" && input.method === "GET") {
+    if (input.path === "/v1/cloud/agent-auth/state" && input.method === "GET") {
       return {
         version: 2,
         revision: 1,
@@ -192,34 +189,24 @@ export function createAgentsPlaygroundCloudTransport(
       } as TResponse;
     }
 
-    const catalogMatch = input.path.match(
-      /^\/v1\/cloud\/agent-gateway\/catalog\/([^/]+)(\/refresh|\/override)?$/,
+    // The composed cloud snapshot re-key (model-catalog.md §Cloud routes):
+    // layered read + override, keyed by harness alone — no authContextId
+    // query. There is no playground-callable refresh here — the real ingest
+    // route is Worker-authenticated only (F-040), so a product client (this
+    // fixture's subject) never calls it either.
+    const agentModelsMatch = input.path.match(
+      /^\/v1\/cloud\/agent-models\/([^/]+)(\/override)?$/,
     );
-    if (catalogMatch) {
-      const harnessKind = decodeURIComponent(catalogMatch[1] ?? "");
-      const action = catalogMatch[2] ?? "";
+    if (agentModelsMatch) {
+      const harnessKind = decodeURIComponent(agentModelsMatch[1] ?? "");
+      const action = agentModelsMatch[2] ?? "";
       if (input.method === "GET" && action === "") {
-        const surface = input.query?.surface as AgentAuthSurface;
-        const route = (input.query?.route ?? "gateway") as AgentGatewayCatalog["route"];
-        return clone(requiredCatalog(catalogs, harnessKind, surface, route)) as TResponse;
-      }
-      if (input.method === "POST" && action === "/refresh") {
-        const body = input.body as RefreshAgentGatewayCatalogRequest;
-        const current = requiredCatalog(catalogs, harnessKind, body.surface, body.route);
-        const refreshed = {
-          ...current,
-          models: parseModels(body.modelsJson) ?? current.models,
-          snapshotId: "playground-refreshed-snapshot",
-          probedAt: FIXTURE_TIME,
-          source: "probe",
-        };
-        catalogs.set(catalogKey(harnessKind, body.surface, body.route), refreshed);
-        return clone(refreshed) as TResponse;
+        return clone(requiredAgentModels(agentModels, harnessKind)) as TResponse;
       }
       if (input.method === "PUT" && action === "/override") {
-        const body = input.body as UpsertAgentGatewayCatalogOverrideRequest;
+        const body = input.body as UpsertAgentModelOverrideRequest;
         overrideSequence += 1;
-        const override: AgentGatewayCatalogOverride = {
+        const override: AgentModelOverride = {
           id: `playground-override-${overrideSequence}`,
           harnessKind,
           patchJson: body.patchJson,
@@ -227,9 +214,9 @@ export function createAgentsPlaygroundCloudTransport(
           updatedAt: FIXTURE_TIME,
         };
         overrides.set(harnessKind, override);
-        for (const [key, catalog] of catalogs) {
-          if (catalog.harnessKind === harnessKind) {
-            catalogs.set(key, { ...catalog, overrideApplied: true });
+        for (const [key, entry] of agentModels) {
+          if (entry.harnessKind === harnessKind) {
+            agentModels.set(key, { ...entry, overrideApplied: true });
           }
         }
         return clone(override) as TResponse;
@@ -263,55 +250,34 @@ export function createAgentsPlaygroundCloudTransport(
     snapshot: () => ({
       apiKeys: clone(apiKeys),
       selections: clone(selections),
-      catalogs: clone([...catalogs.values()]),
+      agentModels: clone([...agentModels.values()]),
       overrides: clone([...overrides.values()]),
     }),
   };
 }
 
-function makeCatalog(
-  harnessKind: string,
-  surface: AgentAuthSurface,
-  route: AgentGatewayCatalog["route"],
-): AgentGatewayCatalog {
+function makeAgentModels(harnessKind: string): AgentModels {
   return {
     harnessKind,
-    surface,
-    route,
     models: [
       { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
       { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
     ],
+    modes: [{ id: "build" }],
+    origin: "snapshot",
     snapshotId: "playground-snapshot",
     probedAt: FIXTURE_TIME,
-    source: "probe",
     overrideApplied: false,
   };
 }
 
-function catalogKey(
+function requiredAgentModels(
+  agentModels: Map<string, AgentModels>,
   harnessKind: string,
-  surface: AgentAuthSurface,
-  route: AgentGatewayCatalog["route"],
 ) {
-  return `${harnessKind}:${surface}:${route}`;
-}
-
-function requiredCatalog(
-  catalogs: Map<string, AgentGatewayCatalog>,
-  harnessKind: string,
-  surface: AgentAuthSurface,
-  route: AgentGatewayCatalog["route"],
-) {
-  const catalog = catalogs.get(catalogKey(harnessKind, surface, route));
-  if (!catalog) throw new Error(`Unknown playground catalog: ${harnessKind}/${surface}/${route}`);
-  return catalog;
-}
-
-function parseModels(modelsJson: string | null | undefined): Record<string, unknown>[] | null {
-  if (!modelsJson) return null;
-  const parsed = JSON.parse(modelsJson) as unknown;
-  return Array.isArray(parsed) ? parsed as Record<string, unknown>[] : null;
+  const entry = agentModels.get(harnessKind);
+  if (!entry) throw new Error(`Unknown playground agent models: ${harnessKind}`);
+  return entry;
 }
 
 function redactSecret(value: string) {

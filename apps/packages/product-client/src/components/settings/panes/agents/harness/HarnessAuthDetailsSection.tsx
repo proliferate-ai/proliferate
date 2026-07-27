@@ -1,4 +1,3 @@
-import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import {
   isMultiSourceHarness,
@@ -13,7 +12,6 @@ import { CliDetails } from "#product/components/settings/panes/agents/harness/Ha
 interface HarnessAuthDetailsSectionProps {
   harnessKind: string;
   displayName: string;
-  surface: AgentAuthSurface;
   // Single-source harnesses pass the resolved radio method; multi-source
   // harnesses ignore it and render the union of active/config blocks.
   selectedMethod: AuthMethod;
@@ -24,7 +22,6 @@ interface HarnessAuthDetailsSectionProps {
 export function HarnessAuthDetailsSection({
   harnessKind,
   displayName,
-  surface,
   selectedMethod,
   editor,
   variant = "section",
@@ -48,7 +45,7 @@ export function HarnessAuthDetailsSection({
             variant={variant}
           />
         ) : null}
-        <CliDetails surface={surface} editor={editor} variant={variant} />
+        <CliDetails editor={editor} variant={variant} />
       </>
     );
   }
@@ -70,7 +67,6 @@ export function HarnessAuthDetailsSection({
 
   return (
     <CliDetails
-      surface={surface}
       editor={editor}
       variant={variant}
     />

@@ -88,7 +88,7 @@ export interface LocalConfigDriver {
   createActor(world: ReadyLocalWorld, harness: LocalHarnessKind): Promise<AuthenticatedActor>;
   /**
    * Selects the `gateway` route for `harness` through the genuine product
-   * selections API (`PUT /v1/cloud/agent-gateway/selections/{harness}?surface=local`
+   * selections API (`PUT /v1/cloud/agent-auth/selections/{harness}?surface=local`
    * — the exact call `HarnessSettingsSection` drives, and the one
    * `authenticatedActor` itself uses for its default harness). LOCAL-4 reuses ONE
    * owner actor across the whole harness batch, but `authenticatedActor` selects
@@ -308,7 +308,7 @@ export const defaultLocalSessionTabsDriver: LocalSessionTabsDriver = {
     // launch-options, so select its gateway route through the same documented
     // selections API the actor fixture itself uses (fix round 4).
     await actor.api.put(
-      `/v1/cloud/agent-gateway/selections/${encodeURIComponent(SESSION_TABS_SWITCH_HARNESS)}?surface=local`,
+      `/v1/cloud/agent-auth/selections/${encodeURIComponent(SESSION_TABS_SWITCH_HARNESS)}?surface=local`,
       { sources: [{ sourceKind: "gateway", enabled: true }] },
     );
     return actor;
@@ -819,7 +819,7 @@ function runnableHarnesses(cells: readonly PlannedCellV1[]): LocalHarnessKind[] 
  */
 async function selectGatewayRouteForHarness(actor: AuthenticatedActor, harness: LocalHarnessKind): Promise<void> {
   await actor.api.put(
-    `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harness)}?surface=local`,
+    `/v1/cloud/agent-auth/selections/${encodeURIComponent(harness)}?surface=local`,
     { sources: [{ sourceKind: "gateway", enabled: true }] },
   );
 }

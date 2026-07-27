@@ -397,8 +397,18 @@
               }
             }
           },
-          "400": {
-            "description": "No gateway selection for this harness",
+          "404": {
+            "description": "Unknown agent kind or no gateway route active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This runtime does not own the probe engine, or its local auth config is unusable",
             "content": {
               "application/json": {
                 "schema": {
@@ -623,6 +633,108 @@
         }
       }
     },
+    "/v1/agents/{kind}/model-snapshot": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "get_model_snapshot_status",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The harness's composed model-snapshot status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSnapshotStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown agent kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/model-snapshot/refresh": {
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "refresh_model_snapshot",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Re-probe completed; the status body reflects it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSnapshotStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown agent kind, or the harness is not installed here",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This runtime does not own the probe engine, or its local auth config is unusable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The forced probe ran and failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/revoked-jtis": {
       "put": {
         "tags": [
@@ -663,40 +775,19 @@
         }
       }
     },
-    "/v1/catalogs/agents": {
-      "put": {
+    "/v1/catalogs/agents/version": {
+      "get": {
         "tags": [
           "catalogs"
         ],
-        "operationId": "apply_agent_catalog",
-        "requestBody": {
-          "description": "Raw agent catalog JSON document (schema v1 or v2)",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "string"
-              }
-            }
-          },
-          "required": true
-        },
+        "operationId": "get_agent_catalog_version",
         "responses": {
           "200": {
-            "description": "Catalog accepted (applied or already current)",
+            "description": "Active agent catalog version and source",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApplyAgentCatalogResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Catalog payload rejected; active catalog unchanged",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/AgentCatalogVersionResponse"
                 }
               }
             }
@@ -7459,6 +7550,24 @@
           }
         }
       },
+      "AgentCatalogVersionResponse": {
+        "type": "object",
+        "description": "The runtime's active agent catalog version and its provenance. Read-only:\nthe runtime binary is the only catalog transport, so there is no apply\nresponse shape to report.",
+        "required": [
+          "catalogVersion",
+          "source"
+        ],
+        "properties": {
+          "catalogVersion": {
+            "type": "string",
+            "description": "The `catalogVersion` string from the active document."
+          },
+          "source": {
+            "type": "string",
+            "description": "Where the active catalog came from. Always `\"bundled\"`."
+          }
+        }
+      },
       "AgentCliAuthState": {
         "type": "string",
         "enum": [
@@ -7966,6 +8075,10 @@
           "credentialState": {
             "$ref": "#/components/schemas/AgentCredentialState"
           },
+          "credentialsFromRoute": {
+            "type": "boolean",
+            "description": "True when the enrolled agent-auth route — not a credential detected on\nthis machine — is what makes `credentialState` read `ready`.\n\nReadiness is route-aware on every surface (agent-distribution.md's\nroute-aware law: settings and launch must agree), so `ready` alone no\nlonger means \"the vendor CLI is logged in here\". A client that means the\nlatter — first-run native-auth adoption, CLI login chrome — must exclude\nthe route-upgraded case. Absent on older runtimes; treat absent as\n`false` (the pre-route-aware meaning, which is what those runtimes had)."
+          },
           "displayName": {
             "type": "string"
           },
@@ -8030,31 +8143,6 @@
             "type": "integer",
             "format": "int64",
             "description": "The persisted document's revision."
-          }
-        }
-      },
-      "ApplyAgentCatalogResponse": {
-        "type": "object",
-        "description": "Outcome of pushing an agent catalog document into the runtime.",
-        "required": [
-          "applied"
-        ],
-        "properties": {
-          "applied": {
-            "type": "boolean",
-            "description": "True when the document replaced the active catalog (its version\ndiffered); false when the runtime was already on that version."
-          },
-          "fromVersion": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "toVersion": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         }
       },
@@ -10405,7 +10493,7 @@
             "items": {
               "$ref": "#/components/schemas/GatewayModelEntry"
             },
-            "description": "The resolved, provider-filtered models — each id enriched with the\nbundled catalog row (or bare `{ id, provider? }` for probe-only ids)."
+            "description": "The resolved gateway models — each id enriched with the bundled\ncatalog row (or bare `{ id, provider? }` for probe-only ids). No\nclient-side provider filtering is applied; server-side access groups\n(once B1 lands) own scoping."
           },
           "probedAt": {
             "type": [
@@ -10416,7 +10504,7 @@
           },
           "source": {
             "type": "string",
-            "description": "`\"seed\"` (no probe yet) or `\"probe\"` (a live probe supplied the list)."
+            "description": "`\"seed\"` (no snapshot entry yet) or `\"probe\"` (a snapshot observation\nsupplied the list)."
           }
         }
       },
@@ -12974,6 +13062,131 @@
           }
         }
       },
+      "ModelSnapshotLiveState": {
+        "type": "string",
+        "description": "The engine's live view of one harness. In-memory only, so a restart reports\n`Idle` — which is true: nothing is running.\n\n`Queued` is distinct from `Running` on purpose: a probe admitted to its slot but\nstill waiting on the machine-wide semaphore is neither \"nothing is happening\"\n(which is what `Idle` would tell a polling UI, wrongly) nor \"a harness process\nexists\".",
+        "enum": [
+          "idle",
+          "queued",
+          "running",
+          "backoff"
+        ],
+        "example": "idle"
+      },
+      "ModelSnapshotStatus": {
+        "type": "object",
+        "required": [
+          "agent",
+          "schemaVersion",
+          "probeEngine",
+          "state",
+          "modelCount",
+          "modeCount"
+        ],
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "attestation": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Provenance: the binary that answered. Diagnostics only."
+          },
+          "installIdentity": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Provenance: the install the observation was recorded on, as the document\ncarries it. `null` when the document is absent or recorded none."
+          },
+          "lastAttempt": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`lastAttempt.detail` when the last attempt failed. Lifted to its own field\nso a surface can render an error without knowing the attempt shape."
+          },
+          "modeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "modelCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The full model list off the same document read as `modelCount`, so a\nmachineless-surface uploader (the Worker's `model_snapshot_sync`) has\nsomething to read besides raw disk access to a document it should not\nknow the layout of."
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The full mode list, same rationale as `models` above."
+          },
+          "nextAttemptAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set iff `state == backoff`."
+          },
+          "probeEngine": {
+            "type": "string",
+            "description": "`owner` | `readonly` — visible rather than mysterious when a second\nruntime shares this home.",
+            "example": "owner"
+          },
+          "probedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last SUCCESSFUL observation. Never regresses on failure. Absent until the\nfirst observation lands."
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "snapshotAgeSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Server-computed so every surface renders the same age from one clock."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ModelSnapshotLiveState"
+          },
+          "stateRevision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Provenance: the `state.json` revision the observation was probed under."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "NormalizedSessionControl": {
         "type": "object",
         "description": "A product-normalized live session control derived from raw ACP config options.\n\nThis is the product semantics layer used by clients to render consistent\ncontrols such as model, mode, reasoning, effort, and fast mode across\ndifferent harnesses.",
@@ -13708,16 +13921,6 @@
               "string",
               "null"
             ]
-          },
-          "requiredContexts": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "description": "RFC 7807 extension member: the auth-context ids that would unlock a\ngated selection (the model's `availability.anyOf`). Only set on\n`SESSION_MODEL_GATED`; absent on every other error, so unrelated responses\nstay byte-identical."
           },
           "status": {
             "type": "integer",
@@ -14837,7 +15040,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The freshly probed model ids (unfiltered — exactly what the gateway\nreturned; the resolver applies provider filtering when building plans)."
+            "description": "The freshly probed model ids — exactly what the snapshot entry now\ncarries for the gateway context, with no client-side provider\nfiltering applied anywhere downstream."
           },
           "probedAt": {
             "type": "string",

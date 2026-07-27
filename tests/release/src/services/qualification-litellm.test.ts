@@ -4,6 +4,8 @@ import { test } from "node:test";
 
 import {
   deriveActorKeyAlias,
+  derivePersonalActorKeyAlias,
+  GATEWAY_CAPABLE_HARNESS_KINDS,
   QualificationLiteLlmController,
   QualificationLiteLlmError,
   selectCheapestEligibleModel,
@@ -72,8 +74,22 @@ test("selectQualificationGatewayModel pins Codex to gpt-5.2 without changing oth
   assert.equal(selectQualificationGatewayModel("grok", allow, ["grok-4", "grok-4-fast"]), "grok-4-fast");
 });
 
-test("deriveActorKeyAlias is the frozen vk-user-<user>-<enrollment[:8]> contract", () => {
-  assert.equal(deriveActorKeyAlias("u123", "abcdef0123456789"), "vk-user-u123-abcdef01");
+test("deriveActorKeyAlias is the frozen vk-{subject_label}-{harness_kind}-{enrollment[:8]} contract (R2, drift protection for Gate G1)", () => {
+  assert.equal(deriveActorKeyAlias("user-u123", "claude", "abcdef0123456789"), "vk-user-u123-claude-abcdef01");
+  assert.equal(deriveActorKeyAlias("org-org1-user-u123", "codex", "abcdef0123456789"), "vk-org-org1-user-u123-codex-abcdef01");
+});
+
+test("derivePersonalActorKeyAlias is the personal-enrollment shorthand (subjectLabel = user-<userId>)", () => {
+  assert.equal(derivePersonalActorKeyAlias("u123", "claude", "abcdef0123456789"), "vk-user-u123-claude-abcdef01");
+});
+
+test("deriveActorKeyAlias covers every gateway-capable harness kind (AGENT_AUTH_HARNESS_KINDS)", () => {
+  for (const harnessKind of GATEWAY_CAPABLE_HARNESS_KINDS) {
+    assert.equal(
+      derivePersonalActorKeyAlias("u1", harnessKind, "abcdef0123456789"),
+      `vk-user-u1-${harnessKind}-abcdef01`,
+    );
+  }
 });
 
 test("preflight requires non-empty inputs", async () => {
@@ -103,7 +119,7 @@ test("preflight throws when the allowlist has no eligible Claude model", async (
   await assert.rejects(new QualificationLiteLlmController(CONFIG, { fetch }).preflight(), /no eligible/i);
 });
 
-const ALIAS = deriveActorKeyAlias("u1", "enroll-9999-aaaa");
+const ALIAS = derivePersonalActorKeyAlias("u1", "claude", "enroll-9999-aaaa");
 const TOKEN = "tok_hash_abc";
 
 function actor(): ActorKeyIdentity {
@@ -126,6 +142,7 @@ test("resolveActorKey reads token/team/user from /key/list by alias", async () =
   const resolved = await new QualificationLiteLlmController(CONFIG, { fetch }).resolveActorKey({
     userId: "u1",
     enrollmentId: "enroll-9999-aaaa",
+    harnessKind: "claude",
   });
   assert.equal(resolved.keyAlias, ALIAS);
   assert.equal(resolved.tokenId, TOKEN);
@@ -139,7 +156,11 @@ test("resolveActorKey throws when no key matches the alias", async () => {
     "GET /key/list": () => response(200, { keys: [{ key_alias: "other", token: "x" }] }),
   });
   await assert.rejects(
-    new QualificationLiteLlmController(CONFIG, { fetch }).resolveActorKey({ userId: "u1", enrollmentId: "enroll-9999-aaaa" }),
+    new QualificationLiteLlmController(CONFIG, { fetch }).resolveActorKey({
+      userId: "u1",
+      enrollmentId: "enroll-9999-aaaa",
+      harnessKind: "claude",
+    }),
     /No LiteLLM key resolved/,
   );
 });
@@ -155,6 +176,7 @@ test("resolveActorKey fails closed when the exact deterministic alias is ambiguo
     new QualificationLiteLlmController(CONFIG, { fetch }).resolveActorKey({
       userId: "u1",
       enrollmentId: "enroll-9999-aaaa",
+      harnessKind: "claude",
     }),
     /multiple keys.*ambiguous/i,
   );
@@ -168,6 +190,7 @@ test("resolveActorKey fails closed when the exact alias row omits its token iden
     new QualificationLiteLlmController(CONFIG, { fetch }).resolveActorKey({
       userId: "u1",
       enrollmentId: "enroll-9999-aaaa",
+      harnessKind: "claude",
     }),
     /omitted its exact token identity/i,
   );

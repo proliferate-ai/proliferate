@@ -150,9 +150,15 @@ def _redact_validation_input(value: object) -> object:
 
 
 def _redacts_entire_body(request: Request) -> bool:
-    # The agent-gateway key-create endpoint accepts a raw key value in the body;
-    # redact its echoed input wholesale so no malformed shape can leak it.
-    return request.method == "POST" and request.url.path.endswith("/agent-gateway/keys")
+    # The agent-auth key routes accept a raw key value in the body — either
+    # directly (POST .../agent-auth/keys) or nested under a typed
+    # provider-config document (POST .../agent-auth/keys/provider-config,
+    # e.g. azure_openai's value.apiKey). Match the whole subtree by
+    # substring rather than endswith("/keys") so provider-config (and any
+    # future .../keys/<suffix> route) is covered too; no other route in the
+    # app contains "/agent-auth/keys" (verified via git grep), so this stays
+    # scoped to this one endpoint family regardless of self-host api-prefix.
+    return request.method == "POST" and "/agent-auth/keys" in request.url.path
 
 
 def _is_workflow_invocation_argument_error(request: Request, loc: object) -> bool:
