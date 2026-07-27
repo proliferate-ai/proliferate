@@ -7,9 +7,6 @@ import { HarnessAllModelsSection } from "#product/components/settings/panes/agen
 
 const state = vi.hoisted(() => ({
   cloudActive: false,
-  selections: {
-    data: [] as Array<Record<string, unknown>>,
-  },
   launchOptions: {
     data: {
       agents: [{
@@ -35,16 +32,11 @@ const state = vi.hoisted(() => ({
 const upsertOverride = vi.hoisted(() => vi.fn());
 const refreshModelSnapshot = vi.hoisted(() => vi.fn());
 const showToast = vi.hoisted(() => vi.fn());
-const authSelectionsQuery = vi.hoisted(() => vi.fn());
 const cloudAgentModelsQuery = vi.hoisted(() => vi.fn());
 const launchOptionsQuery = vi.hoisted(() => vi.fn());
 const modelSnapshotStatusQuery = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useAuthSelections: (...args: unknown[]) => {
-    authSelectionsQuery(...args);
-    return state.selections;
-  },
   useAgentModels: (...args: unknown[]) => {
     cloudAgentModelsQuery(...args);
     return state.agentModels;
@@ -196,10 +188,7 @@ describe("HarnessAllModelsSection local surface (the composed observation)", () 
     expect(refreshModelSnapshot).toHaveBeenCalledWith("codex", expect.anything());
     expect(upsertOverride).not.toHaveBeenCalled();
     // The local surface never touches the cloud layered read.
-    expect(cloudAgentModelsQuery).toHaveBeenCalledWith(
-      expect.anything(),
-      false,
-    );
+    expect(cloudAgentModelsQuery).toHaveBeenCalledWith("codex", false);
   });
 
   it("shows the refreshing state while the engine is queued or running", () => {
@@ -266,7 +255,7 @@ describe("HarnessAllModelsSection cloud surface (the layered read)", () => {
         "Sign in to Proliferate Cloud to manage how Codex authenticates to models.",
       ),
     ).not.toBeNull();
-    expect(cloudAgentModelsQuery).toHaveBeenCalledWith(expect.anything(), false);
+    expect(cloudAgentModelsQuery).toHaveBeenCalledWith("codex", false);
   });
 
   it("renders the layered read with override toggles and no Refresh affordance", () => {
@@ -293,6 +282,8 @@ describe("HarnessAllModelsSection cloud surface (the layered read)", () => {
     );
 
     expect(screen.queryByText("GPT 5.5")).not.toBeNull();
+    // The context-free layered read: keyed by harness alone, no authContextId.
+    expect(cloudAgentModelsQuery).toHaveBeenCalledWith("codex", true);
     // Ingest is Worker-authenticated only — no product-side refresh exists.
     expect(screen.queryByRole("button", { name: /^Refresh$/ })).toBeNull();
     expect(screen.queryByText("unverified")).toBeNull();

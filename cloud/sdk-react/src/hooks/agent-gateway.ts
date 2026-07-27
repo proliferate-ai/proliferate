@@ -50,11 +50,6 @@ export interface PutAuthSelectionsInput {
   body: PutAuthSelectionsRequest;
 }
 
-export interface AgentModelsScope {
-  harnessKind: string;
-  authContextId: string;
-}
-
 export interface UpsertAgentModelOverrideInput {
   harnessKind: string;
   body: UpsertAgentModelOverrideRequest;
@@ -139,20 +134,21 @@ export function usePutAuthSelections() {
 
 // --- Agent models (cloud snapshot) -----------------------------------------
 //
-// B4 re-key (model-catalog.md §Cloud routes): the layered read is scoped by
-// (harnessKind, authContextId) now, not (surface, route). `useRefreshAgentCatalog`
-// and `useMirrorAgentCatalog` are DELETED, not renamed — b4's single ingest
-// route (`POST /agent-models/{h}/refresh`) is Worker-authenticated
+// The composed re-key (model-catalog.md §Cloud routes): the layered read is
+// scoped by harness alone — one composed observation per harness; the former
+// `authContextId` scope member is deleted. `useRefreshAgentCatalog` and
+// `useMirrorAgentCatalog` are DELETED, not renamed — the single ingest route
+// (`POST /agent-models/{h}/refresh`) is Worker-authenticated
 // (`authenticate_worker`), so no product client can call it; keeping a hook
 // that can only 403 would be a live export aimed at a dead call (F-040). A
 // manual "refresh" affordance for the settings All Models pane returns in C3
 // once a real caller exists.
 
-export function useAgentModels(scope: AgentModelsScope, enabled = true) {
+export function useAgentModels(harnessKind: string, enabled = true) {
   const client = useCloudClient();
   return useQuery<AgentModels>({
-    queryKey: agentModelsKey(scope.harnessKind, scope.authContextId),
-    queryFn: () => getAgentModels(scope.harnessKind, scope.authContextId, client),
+    queryKey: agentModelsKey(harnessKind),
+    queryFn: () => getAgentModels(harnessKind, client),
     enabled,
   });
 }
@@ -164,7 +160,7 @@ export function useUpsertAgentModelOverride() {
     mutationFn: ({ harnessKind, body }) =>
       upsertAgentModelOverride(harnessKind, body, client),
     onSuccess: () => {
-      // Overrides are per-harness and layer over every auth-context view.
+      // Overrides are per-harness and layer over every read of that harness.
       void queryClient.invalidateQueries({ queryKey: agentModelsRootKey() });
     },
   });

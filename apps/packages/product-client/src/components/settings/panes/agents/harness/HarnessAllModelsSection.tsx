@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import {
   useAgentModels,
-  useAuthSelections,
   useUpsertAgentModelOverride,
 } from "@proliferate/cloud-sdk-react";
 import {
@@ -20,10 +19,7 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
-  apiKeyProviderHintForSurface,
-  authContextIdForRoute,
   buildEnabledOverridePatchJson,
-  catalogRouteForSurface,
   normalizeCatalogModels,
   normalizeRuntimeLaunchModels,
 } from "#product/lib/domain/settings/harness-catalog";
@@ -67,21 +63,13 @@ export function HarnessAllModelsSection({
   const showToast = useToastStore((state) => state.show);
   const isLocal = surface === "local";
 
-  // Cloud (machineless) branch: the layered read. The cloud routes still key
-  // by auth-context id (the cloud-store re-key to (harness, owner) is a
-  // C-track server cutover); resolve the best-known id for the active route.
-  const selectionsQuery = useAuthSelections(null, cloudActive && !isLocal);
-  const selections = cloudActive && !isLocal ? selectionsQuery.data ?? [] : [];
-  const route = catalogRouteForSurface(harnessKind, surface, selections);
-  const authContextId = authContextIdForRoute(
-    harnessKind,
-    route,
-    apiKeyProviderHintForSurface(harnessKind, surface, selections),
-  );
-  const agentModelsQuery = useAgentModels(
-    { harnessKind, authContextId },
-    cloudActive && !isLocal,
-  );
+  // Cloud (machineless) branch: the layered read off the context-free route —
+  // one composed observation per (owner, harness), the cloud sandbox's
+  // document at rest else the shipped catalog's read-time seed, with the
+  // user's override patch applied. The former per-auth-context routing
+  // (authContextId resolution off the enabled selections) is deleted with the
+  // (owner, harness) re-key (model-catalog.md §Cloud routes).
+  const agentModelsQuery = useAgentModels(harnessKind, cloudActive && !isLocal);
   const upsertOverride = useUpsertAgentModelOverride();
 
   // Local branch: the composed observation off the runtime's polled status

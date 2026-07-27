@@ -320,32 +320,24 @@ function seedCloudQueries(
     user_id: "agents-playground",
     harnesses: [],
   });
-  // B4 re-key (model-catalog.md §Cloud routes): the layered read is keyed by
-  // (harnessKind, authContextId), not (surface, route) — seed every context id
-  // this harness's catalog entry declares (matches
-  // agents-playground-cloud-client.ts's AUTH_CONTEXT_IDS).
-  const authContextIds: Record<"claude" | "opencode", readonly string[]> = {
-    claude: ["bedrock", "anthropic-api", "anthropic-oauth", "gateway"],
-    opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline", "gateway"],
-  };
-  for (const authContextId of authContextIds[scenario.harnessKind]) {
-    client.setQueryData(
-      agentModelsKey(scenario.harnessKind, authContextId),
-      {
-        harnessKind: scenario.harnessKind,
-        authContextId,
-        models: [
-          { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
-          { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
-        ],
-        modes: [{ id: "build" }],
-        origin: "snapshot",
-        snapshotId: "playground-snapshot",
-        probedAt: "2026-07-18T18:00:00Z",
-        overrideApplied: false,
-      },
-    );
-  }
+  // The composed re-key (model-catalog.md §Cloud routes): the layered read is
+  // keyed by harness alone — one composed document; the former per-context
+  // seeding (one entry per catalog auth-context id) is deleted.
+  client.setQueryData(
+    agentModelsKey(scenario.harnessKind),
+    {
+      harnessKind: scenario.harnessKind,
+      models: [
+        { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
+        { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
+      ],
+      modes: [{ id: "build" }],
+      origin: "snapshot",
+      snapshotId: "playground-snapshot",
+      probedAt: "2026-07-18T18:00:00Z",
+      overrideApplied: false,
+    },
+  );
 
   if (scenario.id === "api-keys-loading") {
     void client.prefetchQuery({

@@ -1548,7 +1548,9 @@ export interface paths {
          * @description The layered read: own snapshot, else the shipped catalog's models as the
          *     read-time seed, with the override patch applied.
          *
-         *     No ``surface`` param: the cloud store holds cloud-sandbox observations only.
+         *     No ``authContextId`` and no ``surface`` params (model-catalog.md §Cloud
+         *     routes): one composed observation per harness, cloud-sandbox observations
+         *     only.
          */
         get: operations["get_agent_models_endpoint_v1_cloud_agent_models__harness_kind__get"];
         put?: never;
@@ -1570,14 +1572,16 @@ export interface paths {
         put?: never;
         /**
          * Ingest Agent Model Snapshot Endpoint
-         * @description The single ingest route: a Worker-uploaded machine-snapshot entry.
+         * @description The single ingest route: a Worker-uploaded machine document.
          *
          *     Absorbs the former ``refresh``-with-payload and ``mirror`` endpoints, which
          *     were two names for the same write, and the server-side gateway discovery
          *     that used to live inside ``refresh`` — the server never generates snapshots.
          *
-         *     The owner is resolved from the Worker's sandbox row, so the body carries no
-         *     user identity to spoof.
+         *     The body is the worker's wire shape verbatim — ``snapshotJson`` (the whole
+         *     schemaVersion-2 document) plus ``probedAt``, nothing else. The owner is
+         *     resolved from the Worker's sandbox row, so the body carries no user
+         *     identity to spoof.
          */
         post: operations["ingest_agent_model_snapshot_endpoint_v1_cloud_agent_models__harness_kind__refresh_post"];
         delete?: never;
@@ -3636,16 +3640,17 @@ export interface components {
         };
         /**
          * AgentModelSnapshotIngestRequest
-         * @description A Worker's upload of one changed machine-document entry.
+         * @description A Worker's upload of one changed machine document.
          *
          *     Deliberately carries no user identity: the server resolves the owner from
-         *     the Worker's sandbox row. ``snapshotJson`` is one document entry verbatim
-         *     (camelCase ``probedAt``/``models``/``modes``/``attestation``/``warnings``),
-         *     stored as-is so the cloud tier serves exactly what the machine observed.
+         *     the Worker's sandbox row. And no ``authContextId``: one composed
+         *     observation per harness (the harness is in the path). ``snapshotJson`` is
+         *     the whole schemaVersion-2 document verbatim (camelCase
+         *     ``probedAt``/``models``/``modes``/``attestation``/``installIdentity``/
+         *     ``stateRevision``/``warnings``/``lastAttempt``), stored as-is so the cloud
+         *     tier serves exactly what the machine observed.
          */
         AgentModelSnapshotIngestRequest: {
-            /** Authcontextid */
-            authContextId: string;
             /** Snapshotjson */
             snapshotJson: string;
             /** Probedat */
@@ -3658,8 +3663,6 @@ export interface components {
         AgentModelsResponse: {
             /** Harnesskind */
             harnessKind: string;
-            /** Authcontextid */
-            authContextId: string;
             /** Models */
             models: {
                 [key: string]: unknown;
@@ -6899,8 +6902,6 @@ export interface components {
             worker?: string | null;
             /** Anyharness */
             anyharness?: string | null;
-            /** Catalogversion */
-            catalogVersion?: string | null;
         };
         /** WorkerEnrollRequest */
         WorkerEnrollRequest: {
@@ -10665,9 +10666,7 @@ export interface operations {
     };
     get_agent_models_endpoint_v1_cloud_agent_models__harness_kind__get: {
         parameters: {
-            query: {
-                authContextId: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 harness_kind: string;

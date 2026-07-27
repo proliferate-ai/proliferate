@@ -51,7 +51,6 @@ const state = vi.hoisted(() => ({
     data: undefined as
       | {
         harnessKind: string;
-        authContextId: string;
         models: Array<Record<string, unknown>>;
         modes: Array<Record<string, unknown>>;
         snapshotId: string | null;
@@ -766,7 +765,6 @@ describe("HarnessPane all models", () => {
     state.agentSurface = "cloud";
     state.agentModels.data = {
       harnessKind: "claude",
-      authContextId: "anthropic-oauth",
       models: [
         { id: "sonnet", displayName: "Sonnet 4.6" },
         { id: "haiku", displayName: "Haiku 4.5", enabled: false },
@@ -794,7 +792,6 @@ describe("HarnessPane all models", () => {
     state.agentSurface = "cloud";
     state.agentModels.data = {
       harnessKind: "claude",
-      authContextId: "anthropic-oauth",
       models: [],
       modes: [],
       snapshotId: null,
@@ -811,7 +808,6 @@ describe("HarnessPane all models", () => {
     state.agentSurface = "cloud";
     state.agentModels.data = {
       harnessKind: "claude",
-      authContextId: "anthropic-oauth",
       models: [
         { id: "sonnet", displayName: "Sonnet 4.6" },
         { id: "haiku", displayName: "Haiku 4.5", enabled: false },
