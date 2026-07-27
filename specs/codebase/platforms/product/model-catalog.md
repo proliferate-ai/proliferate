@@ -330,8 +330,8 @@ redundant upload after a Worker restart, which the soft-versioned write
 absorbs idempotently), and POSTs changed documents to the ingest route with
 the Worker's own bearer; the server resolves the owner from the Worker's
 sandbox row. Non-fatal like every convergence action. The ingest route
-refuses non-cloud-sandbox Workers — desktop does not sync, and its 60-second
-mirror-poll hook deletes with no replacement.
+refuses non-cloud-sandbox Workers — desktop does not sync; its former
+60-second mirror-poll hook is deleted with no replacement.
 
 ## Serving
 
@@ -587,8 +587,11 @@ implements the superseded per-context design; these gaps are the re-cut.
 - [ ] The retained `inactive` cloud rows have no retention bound; the
       document owes a retention rule (keep N per scope, or an age bound) and
       the sweep that enforces it.
-- [ ] The legacy gateway-models routes and the desktop mirror-sync hook
-      (`useGatewayCatalogMirrorSync`) still exist beside the snapshot
-      surface; both delete with the C-track cutover of the All Models tab.
+- [ ] The legacy gateway-models routes (`GET .../catalog/gateway-models`,
+      `POST .../catalog/refresh-gateway`) still serve beside the snapshot
+      surface; they delete with the C-track cutover of the All Models tab.
+      The desktop mirror-sync hook (`useGatewayCatalogMirrorSync`) and its
+      `gateway-catalog-mirror.ts` push are already gone — the route cutover
+      on the integration branch deleted them.
 - [ ] Onboarding contains no "checking for latest models" step (the surface
       rendering the install-completed and auth-applied events).

@@ -24,7 +24,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.agent_gateway import AGENT_AUTH_HARNESS_KINDS, LLM_CREDIT_SOURCE_ADMIN
+from proliferate.constants.agent_gateway import (
+    AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
+    LLM_CREDIT_SOURCE_ADMIN,
+)
 from proliferate.db.models.auth import User
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
@@ -272,7 +275,7 @@ async def test_first_sync_revokes_the_pre_b2_unscoped_key(
         key.harness_kind
         for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
     }
-    assert child_kinds == set(AGENT_AUTH_HARNESS_KINDS)
+    assert child_kinds == set(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
 
 
 @pytest.mark.asyncio
@@ -334,7 +337,7 @@ async def test_revocation_retry_of_already_deleted_key_still_completes_sync(
         key.harness_kind
         for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
     }
-    assert child_kinds == set(AGENT_AUTH_HARNESS_KINDS)
+    assert child_kinds == set(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
 
 
 # --- 3. the fingerprint is compared, so the bump mechanism is real ----------
