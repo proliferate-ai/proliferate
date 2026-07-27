@@ -12,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 SECRET = "sk-ant-api03-super-secret-payload-abc4"
@@ -62,6 +64,43 @@ async def _authed_user(client: AsyncClient) -> tuple[str, dict[str, str]]:
         f"agent-gateway-api-{uuid.uuid4().hex[:8]}@example.com",
     )
     return tokens["user_id"], {"Authorization": f"Bearer {tokens['access_token']}"}
+
+
+async def _org_enrollment_row(db_session: AsyncSession, user_id: str):
+    """The authed user's DEFAULT-org enrollment row (org-only account model).
+
+    Signup already placed the user into a default org; the resolver
+    (`get_gateway_enrollment_for_user`) resolves that org unconditionally, so
+    the enrollment row must live there — a row on any later-joined org would
+    never govern. Falls back to creating the placement when a test user
+    somehow has none.
+    """
+    member_id = uuid.UUID(user_id)
+    default_org = await organization_store.get_default_organization_for_user(db_session, member_id)
+    if default_org is not None:
+        organization_id = default_org.organization.id
+    else:
+        organization = Organization(name=f"API Org {uuid.uuid4().hex[:6]}")
+        db_session.add(organization)
+        await db_session.flush()
+        db_session.add(
+            OrganizationMembership(
+                organization_id=organization.id,
+                user_id=member_id,
+                role="member",
+                status="active",
+            )
+        )
+        await db_session.flush()
+        organization_id = organization.id
+    subject = await ensure_organization_billing_subject(db_session, organization_id)
+    enrollment = await store.ensure_enrollment_row(
+        db_session,
+        billing_subject_id=subject.id,
+        organization_id=organization_id,
+        user_id=member_id,
+    )
+    return organization_id, enrollment
 
 
 def _assert_no_secret(response: Response) -> None:
@@ -657,13 +696,7 @@ class TestAgentGatewayCapabilities:
         )
         user_id, headers = await _authed_user(client)
 
-        subject = await ensure_personal_billing_subject(db_session, uuid.UUID(user_id))
-        await store.ensure_enrollment_row(
-            db_session,
-            subject_kind="user",
-            billing_subject_id=subject.id,
-            user_id=uuid.UUID(user_id),
-        )
+        await _org_enrollment_row(db_session, user_id)
         await db_session.commit()
 
         response = await client.get("/v1/cloud/agent-gateway/capabilities", headers=headers)
@@ -682,18 +715,12 @@ class TestAgentGatewayEnrollment:
         db_session: AsyncSession,
     ) -> None:
         user_id, headers = await _authed_user(client)
-        subject = await ensure_personal_billing_subject(db_session, uuid.UUID(user_id))
-        enrollment = await store.ensure_enrollment_row(
-            db_session,
-            subject_kind="user",
-            billing_subject_id=subject.id,
-            user_id=uuid.UUID(user_id),
-        )
+        org_id, enrollment = await _org_enrollment_row(db_session, user_id)
         await store.mark_enrollment_synced(
             db_session,
             enrollment_id=enrollment.id,
             litellm_team_id="team-1",
-            litellm_user_id=f"user-{user_id}",
+            litellm_user_id=f"org-{org_id}-user-{user_id}",
             virtual_key_id="token-1",
             virtual_key="sk-litellm-virtual-key-plaintext",
             sync_fingerprint="fp",
@@ -703,7 +730,7 @@ class TestAgentGatewayEnrollment:
         response = await client.get("/v1/cloud/agent-gateway/enrollment", headers=headers)
         assert response.status_code == 200
         payload = response.json()
-        assert payload["subjectKind"] == "user"
+        assert payload["subjectKind"] == "organization"
         assert payload["litellmTeamId"] == "team-1"
         assert payload["syncStatus"] == "synced"
         assert "sk-litellm-virtual-key-plaintext" not in response.text
@@ -755,18 +782,12 @@ class TestAgentAuthState:
         )
         user_id, headers = await _authed_user(client)
 
-        subject = await ensure_personal_billing_subject(db_session, uuid.UUID(user_id))
-        enrollment = await store.ensure_enrollment_row(
-            db_session,
-            subject_kind="user",
-            billing_subject_id=subject.id,
-            user_id=uuid.UUID(user_id),
-        )
+        org_id, enrollment = await _org_enrollment_row(db_session, user_id)
         await store.mark_enrollment_synced(
             db_session,
             enrollment_id=enrollment.id,
             litellm_team_id="team-1",
-            litellm_user_id=f"user-{user_id}",
+            litellm_user_id=f"org-{org_id}-user-{user_id}",
             virtual_key_id=None,
             virtual_key=None,
             sync_fingerprint="fp",

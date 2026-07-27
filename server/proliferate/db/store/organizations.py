@@ -201,6 +201,48 @@ async def get_current_membership_for_user(
     return records[0] if records else None
 
 
+async def get_default_organization_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> OrganizationWithMembershipRecord | None:
+    """The user's default organization: the earliest active membership.
+
+    The default org is the one the identity was placed into at signup — the
+    personal default org on hosted (``HostedPolicy``), the instance org in
+    single-org mode — which is always the user's oldest membership row. Orgs
+    joined later (by invitation) never become the default, and renaming an
+    org never moves it — unlike the name-ordered
+    :func:`get_current_membership_for_user` choice, which the v1 payer law
+    (model-gateway.md §Account model) forbids for gateway payment resolution.
+    """
+    row = (
+        await db.execute(
+            select(Organization, OrganizationMembership)
+            .join(
+                OrganizationMembership,
+                OrganizationMembership.organization_id == Organization.id,
+            )
+            .where(
+                OrganizationMembership.user_id == user_id,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
+            )
+            .order_by(
+                OrganizationMembership.created_at.asc(),
+                OrganizationMembership.id.asc(),
+            )
+            .limit(1)
+        )
+    ).first()
+    if row is None:
+        return None
+    organization, membership = row
+    return OrganizationWithMembershipRecord(
+        organization=organization_record(organization),
+        membership=membership_record(membership),
+    )
+
+
 async def ensure_default_organization_for_user(
     db: AsyncSession,
     *,

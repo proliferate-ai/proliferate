@@ -416,7 +416,7 @@ async def get_enrollment(
     *,
     user_id: UUID,
 ) -> AgentGatewayEnrollmentRecord:
-    """The governing enrollment for this user (org when funded, else personal)."""
+    """The governing enrollment for this user: the default org's, always."""
     enrollment = await get_gateway_enrollment_for_user(db, user_id)
     if enrollment is None:
         raise CloudApiError(

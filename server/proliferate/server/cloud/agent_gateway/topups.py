@@ -337,6 +337,7 @@ async def _remint_enrollment_key(
         # comparison the fingerprint exists for.
         sync_fingerprint=build_enrollment_key_fingerprint(
             team_id=enrollment.litellm_team_id,
+            litellm_user_id=enrollment.litellm_user_id or label,
             key_alias=key_alias,
         ),
     )

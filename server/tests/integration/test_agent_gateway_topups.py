@@ -16,14 +16,10 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
-from proliferate.server.cloud.agent_gateway.enrollment import (
-    ensure_org_enrollment,
-    ensure_user_enrollment,
-)
+from proliferate.server.cloud.agent_gateway.enrollment import ensure_org_enrollment
 from proliferate.server.cloud.agent_gateway.topups import (
     create_llm_topup_grant,
     run_llm_topups,
@@ -256,17 +252,24 @@ async def test_topup_without_stripe_customer_is_skipped(
 
 
 @pytest.mark.asyncio
-async def test_reactivation_raises_hard_cap_budgets_for_user_subject(
+async def test_reactivation_raises_hard_cap_budgets_for_hard_capped_org(
     db_session: AsyncSession,
     stub_litellm: StubLiteLLM,
     stub_stripe: StubStripe,
     topup_settings: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    org_id = await _create_org(db_session)
     user_id = await _create_user(db_session)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
     assert enrollment.virtual_key_id is None
+    # Fund the org subject explicitly (admin grant, not the signup grant).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
     enrollment_keys = await store.list_active_enrollment_keys(
         db_session, enrollment_id=enrollment.id
     )
@@ -292,7 +295,9 @@ async def test_reactivation_raises_hard_cap_budgets_for_user_subject(
     assert grant.source == "topup"
     # Every per-harness key unblocked + budget_status ok.
     assert set(stub_litellm.enabled_keys) == key_ids
-    refreshed = await store.get_enrollment_for_user(db_session, user_id=user_id)
+    refreshed = await store.get_enrollment_for_organization(
+        db_session, organization_id=org_id, user_id=user_id
+    )
     assert refreshed is not None
     assert refreshed.budget_status == "ok"
     # Hard-cap subject: only the TEAM budget is raised to the total granted
@@ -310,9 +315,16 @@ async def test_reactivation_falls_back_to_remint_when_unblock_fails(
     topup_settings: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    org_id = await _create_org(db_session)
     user_id = await _create_user(db_session)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
+    # Explicit funding for the org subject (admin grant, not the signup grant).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
     old_key_ids = {
         key.virtual_key_id
         for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
@@ -343,7 +355,9 @@ async def test_reactivation_falls_back_to_remint_when_unblock_fails(
     refreshed_keys = await store.list_active_enrollment_keys(
         db_session, enrollment_id=enrollment.id
     )
-    refreshed = await store.get_enrollment_for_user(db_session, user_id=user_id)
+    refreshed = await store.get_enrollment_for_organization(
+        db_session, organization_id=org_id, user_id=user_id
+    )
     assert refreshed is not None
     assert refreshed.budget_status == "ok"
     new_key_ids = {key.virtual_key_id for key in refreshed_keys}
@@ -402,9 +416,16 @@ async def test_remint_schedules_materialization(
 ) -> None:
     """After a virtual key rotation during top-up reactivation, agent-auth
     materialization is scheduled for the affected user."""
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    org_id = await _create_org(db_session)
     user_id = await _create_user(db_session)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
+    # Explicit funding for the org subject (admin grant, not the signup grant).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
     old_key_ids = {
         key.virtual_key_id
         for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
