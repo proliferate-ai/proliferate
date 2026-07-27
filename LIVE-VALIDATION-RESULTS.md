@@ -17,7 +17,9 @@ were not re-run.
 | 3b | D5/D4 release-scenario half — T3-BILL-4 | **BLOCKED** (staging runs 0.3.48, pre-re-cut) |
 | 3c | C7 — grace/fails-closed, server half | **PASS** |
 | 3d | C7 — release-scenario half | **SKIPPED** (T3-ONBOARD-1 is `deferred` in the manifest; hand-driven instead) |
-| 4 | E2B — cloud delivery + composed observation | see §4 |
+| 4a | E2B — cloud delivery (state.json + ack) | **PASS** |
+| 4b | E2B — composed observation upload | **BLOCKED** (sandbox runtime predates the re-cut) |
+| 4c | E2B — AWAKE-sandbox observation lag | **CONFIRMED** (known/ruled, not filed) |
 | 5a | A5 — typed keys, write gate + render (server half) | **PASS** |
 | 5b | A5 — typed keys, runtime launch half | **BLOCKED** (no runtime binary; see §Blockers) |
 | 5c | Bedrock live completion | **BLOCKED** (no dedicated Bedrock automation principal) |
@@ -26,7 +28,13 @@ were not re-run.
 | 6 | Desktop QA | **HANDED OFF** — `DESKTOP-QA-CHECKLIST.md` |
 
 Proof IDs closed live: **D4(live), D5, D6(live echo), C7(server half), A5(server
-half)**. Not closed: C7's release half, A5's runtime half, the Bedrock cell.
+half), and B's cloud-copy delivery half**. Not closed: C7's release half, A5's
+runtime half, B's observation-upload half, the Bedrock cell.
+
+The one cause behind every remaining gap is that **no runtime binary containing
+the re-cut exists yet** — not locally (Jul 4) and not in the E2B template
+(Jul 26, with no composed-snapshot writer). Everything that does not need the
+runtime is green.
 
 ## 1. D4-live — PASS
 
@@ -104,9 +112,62 @@ instead, as 3c.
 
 ## 4. E2B — cloud delivery + composed observation
 
-Delegated to a dedicated agent and still in flight at the time of writing. Fold
-its verdicts in here before treating the matrix as closed; the D4 staging team is
-held open for it (see §Uncleaned resources).
+Sandbox `inc8wykyzzrz7y4161h67` (row `36208ba7`), reached `ready` at 21:07:24,
+destroyed at the end of the run.
+
+**4a. Cloud delivery — PASS, with the ack matched byte-for-byte.** The state
+document landed at `/home/user/.proliferate/anyharness/agent-auth/state.json`,
+mode **600**, owner `user:user`, 583 bytes, containing exactly the selected
+gateway sources (claude + codex, each with the staging gateway base URL and its
+own key). The sidecar manifest at
+`/home/user/.proliferate/agent-auth/state.manifest.json` is also 0600 and names
+the path, revision, and fingerprint.
+
+The pending→applied flip is a real ack, not an inferred one. The
+`agent_auth_delivery_ack` row carried
+`acked_revision = 1785186437904` and
+`acked_fingerprint = 5d25a04e…e64a5e1`, and `GET /agent-auth/state?surface=cloud`
+returned that same revision and the identical fingerprint — which is what makes
+`GET selections` report `applied: true`. Cloud ack is the materialization op
+completing; there is no `POST /state/ack` counterpart on this path, as specified.
+
+**Ensure-on-switch, re-proven on an awake box.** Flipping opencode's cloud
+selection to gateway returned `applied: false` (pending) immediately, the state
+doc was rewritten **one second later** (21:16:53) at revision `1785187012261`
+with a new fingerprint `c4a88ae6…`, still 0600, and the selection re-converged to
+`applied: true` inside the first 20 s poll. The rewritten doc contains codex and
+opencode but not claude — correct, because claude's cloud selection is
+`enabled: false`; the delivered document tracks enabled sources, not rows.
+
+**4b. Composed observation upload — BLOCKED, same root cause as A5's runtime
+half.** No `model-snapshot.json` was ever produced, and the sandbox's runtime is
+why: `/home/user/anyharness` is dated **Jul 26**, and `strings` on it finds
+**zero** occurrences of `model-snapshot` while it still carries the assertion
+`"schemaVersion must be exactly 1"`. That binary has no composed-snapshot writer
+at all. Main's
+`anyharness-lib/src/domains/agents/model_snapshot/document.rs:30` sets
+`MODEL_SNAPSHOT_SCHEMA_VERSION = 2`. So the upload path cannot be exercised until
+the E2B template ships a runtime built from a tree containing `15098c21a`.
+
+What could be verified without it: the server-side read contract holds. `GET
+/v1/cloud/agent-models/{harness}` takes no `authContextId` and no `surface`
+(one composed observation per harness), and returned a well-formed payload for
+all five harnesses — claude 25 models, codex 17, opencode 172, grok 14, cursor 33
+— every one `origin: "catalog"`, `snapshotId: null`, `probedAt: null`, and **no
+`entries` key**. That is the honest unverified-seed state: the catalog serving as
+the read-time seed because no snapshot exists. The `schemaVersion 2` / no-`entries`
+shape is fixed by the Rust type itself, whose module doc calls the per-context
+`entries` map exactly the mismatch it removed.
+
+**4c. AWAKE-sandbox observation lag — CONFIRMED, not filed.** Directly observed
+in the flip above: delivery re-converged within 20 s while
+`GET /agent-models/opencode` stayed at `origin: catalog` / `probedAt: null` across
+120 s of polling. The awake sandbox's probe engine gets no auth-applied poke, so
+the observation waits for the next wake or startup. Bounded and exactly as ruled
+in agent-auth.md's gap list, so per the runbook it is recorded, not reported as a
+bug. Note this run cannot distinguish "no poke" from "no snapshot writer in the
+binary" as the proximate cause, since 4b means no snapshot could appear either
+way — but the delivery-vs-observation asymmetry is visible regardless.
 
 ## 5. Typed keys live
 
@@ -167,9 +228,12 @@ and per the runbook is recorded as the known ruled gap, not a bug.
 
 ## Blockers, restated plainly
 
-1. **No runtime binary newer than Jul 4.** Blocks A5's launch half and every
-   local-launch item. Resolving it requires a cargo build that this machine could
-   not safely run.
+1. **No runtime binary containing the re-cut, anywhere.** Locally the only
+   prebuilt `anyharness` is dated Jul 4; the E2B template's is dated Jul 26 and
+   has no composed-snapshot writer at all (zero `model-snapshot` strings, still
+   asserting `schemaVersion must be exactly 1`). This single cause blocks both
+   A5's launch half and E2B's observation-upload half. Resolving it requires a
+   cargo build this machine could not safely run, plus an E2B template rebuild.
 2. **Staging is a pre-re-cut deployment (0.3.48).** Blocks the T3-BILL-4 harness
    half regardless of the rewire.
 3. **No Bedrock automation principal.** Blocks the Bedrock live completion.
@@ -181,14 +245,12 @@ and per the runbook is recorded as the known ruled gap, not a bug.
 
 ## Uncleaned staging resources
 
-Five LiteLLM teams were minted. Four are deleted with all their keys and their
-`org-<org>-user-<user>` / `user-<uuid>` identities, each verified `Team not
-found`: `886ddc64…`, `3535c4ea…`, `6e0defab…`, `bd0d205b…`.
-
-**One is deliberately still open:** `c8060671-e082-4484-9ff7-92171407b606`
-(`org-ca8d3fa6-cee8-4c8e-97f3-e709fc0c0661`), the D4 attribution org, because the
-E2B check is still running against it. Delete it and its
-`org-ca8d3fa6-…-user-e7fc088c-…` identity when that finishes.
+**None.** All five LiteLLM teams minted by this run are deleted, with every key
+and every `org-<org>-user-<user>` / `user-<uuid>` identity they owned:
+`886ddc64…`, `3535c4ea…`, `6e0defab…`, `bd0d205b…`, `c8060671…` — each
+re-queried afterward and confirmed gone. (My first pass identified only four; a
+fifth, `bd0d205b…`, surfaced from the enrollment table and was cleaned too.)
+The E2B sandbox `inc8wykyzzrz7y4161h67` is destroyed and confirmed unreachable.
 
 ## Filed PR comments
 
