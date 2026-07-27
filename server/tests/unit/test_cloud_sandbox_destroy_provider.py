@@ -191,12 +191,12 @@ async def test_destroy_invalidates_cached_gateway_access(
     )
     monkeypatch.setattr(
         gateway_service,
-        "ensure_personal_cloud_sandbox_exists",
+        "ensure_cloud_sandbox_ready",
         _ensure,
     )
     monkeypatch.setattr(
         gateway_service,
-        "load_cloud_sandbox_runtime_access",
+        "load_cloud_sandbox_runtime_access_or_repair",
         _access,
     )
     monkeypatch.setattr(
