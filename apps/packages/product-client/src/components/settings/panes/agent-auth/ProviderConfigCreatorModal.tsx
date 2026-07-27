@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
 import {
   getProviderConfigFieldSpec,
   type ProviderConfigFieldSpec,
