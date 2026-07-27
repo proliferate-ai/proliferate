@@ -2,10 +2,10 @@ import { Cloud, Folder, Plus } from "lucide-react";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsEmptyState } from "../settings/SettingsEmptyState";
-import { SettingsPageHeader } from "../settings/SettingsPageHeader";
-import { SettingsRow } from "../settings/SettingsRow";
-import { SettingsSection } from "../settings/SettingsSection";
+import { SettingsEmptyState } from "../patterns/SettingsEmptyState";
+import { SettingsPageHeader } from "../patterns/SettingsPageHeader";
+import { SettingsRow } from "../patterns/SettingsRow";
+import { SettingsSection } from "../patterns/SettingsSection";
 
 export interface CloudEnvironmentListItemView {
   id: string;

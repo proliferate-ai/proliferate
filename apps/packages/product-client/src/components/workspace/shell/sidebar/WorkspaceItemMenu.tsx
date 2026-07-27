@@ -23,8 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@proliferate/ui/kit/DropdownMenu";
-import { RowActionIconButton } from "@proliferate/ui/layout/RowActionIconButton";
+} from "@proliferate/ui/primitives/DropdownMenu";
+import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 interface WorkspaceItemMenuProps {
@@ -105,6 +105,13 @@ export function WorkspaceItemMenu({
         <RowActionIconButton
           ref={triggerRef}
           label="Workspace actions"
+          // Round-4: match the sidebar's other trailing row controls
+          // (SidebarActionButton) — a 24px hit box with the glyph pinned to
+          // [&_svg]:icon-tight so it wins over the base primitive's own
+          // [&_svg]:icon-control descendant selector. Without this override
+          // the kebab rendered at the base's 28px/16px scale, which read far
+          // heavier than the reference sidebar's equivalent control.
+          className="size-6 [font-size:var(--text-sidebar-row)] [&_svg]:icon-tight"
         >
           <MoreHorizontal />
         </RowActionIconButton>

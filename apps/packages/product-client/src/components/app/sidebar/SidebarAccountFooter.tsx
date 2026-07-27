@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CreditCard, Keyboard, LogOut, Settings } from "lucide-react";
 import { Check, ChevronUpDown, Mail } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,

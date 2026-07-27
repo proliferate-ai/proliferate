@@ -6,7 +6,7 @@ import {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { CloudUpload } from "@proliferate/ui/icons";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { OrganizationLogo } from "#product/components/settings/panes/organization/OrganizationLogo";
 import type { OrganizationRecord } from "#product/lib/domain/organizations/organization-records";
 

@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from "react";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { PickerEmptyRow } from "@proliferate/ui/primitives/PickerPopoverContent";
+import { PickerEmptyRow } from "@proliferate/ui/patterns/PickerPopoverContent";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,

@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from "react";
 
-import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
+import { SidebarNavRow } from "@proliferate/ui/patterns/SidebarNavRow";
 
 import type { SidebarNavItemView } from "./ProductSidebarModel";
 

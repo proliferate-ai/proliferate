@@ -197,7 +197,7 @@ function FileTreeStatus({
         compact ? "h-7" : "px-1 py-3",
         tone === "error" && "text-destructive",
       )}
-      style={compact ? { paddingLeft: 28 + level * 14 } : undefined}
+      style={compact ? { paddingLeft: 6 + level * 14 } : undefined}
     >
       {message}
     </p>

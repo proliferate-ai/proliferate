@@ -4,7 +4,7 @@ import { Check } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
 
 import type { BillingPlanColumn } from "./billing-plan-ladder";
 import type { BillingActionView } from "./billing-types";

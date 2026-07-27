@@ -1,4 +1,4 @@
-import type { PrStatusKind, PrStatusView } from "@proliferate/product-ui/workspaces/PrStatusBadge";
+import type { PrStatusKind, PrStatusView } from "@proliferate/product-ui/patterns/PrStatusBadge";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import type {
   WorkspaceGitStatus,

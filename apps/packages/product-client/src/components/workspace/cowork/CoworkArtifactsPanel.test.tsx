@@ -14,7 +14,7 @@ const artifactState = vi.hoisted(() => ({
   setSelectedArtifactId: vi.fn(),
 }));
 
-vi.mock("@proliferate/ui/layout/AutoHideScrollArea", () => ({
+vi.mock("@proliferate/ui/patterns/AutoHideScrollArea", () => ({
   AutoHideScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 

@@ -14,8 +14,8 @@ import {
 import { RefreshCw, Search, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/settings/ModelTable";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/patterns/ModelTable";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";

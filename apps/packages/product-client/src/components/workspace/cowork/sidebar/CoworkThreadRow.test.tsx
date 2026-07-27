@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CoworkThreadRow } from "#product/components/workspace/cowork/sidebar/CoworkThreadRow";
 
 vi.mock("@proliferate/ui/icons", () => ({
-  ChevronDown: () => <span />,
   ChevronRight: () => <span />,
 }));
 

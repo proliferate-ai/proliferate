@@ -183,53 +183,53 @@
       "types": "./dist/layout/ProductNotice.d.ts",
       "import": "./dist/layout/ProductNotice.js"
     },
-    "./layout/ProductPageShell": {
-      "types": "./dist/layout/ProductPageShell.d.ts",
-      "import": "./dist/layout/ProductPageShell.js"
+    "./patterns/ProductPageShell": {
+      "types": "./dist/patterns/ProductPageShell.d.ts",
+      "import": "./dist/patterns/ProductPageShell.js"
     },
-    "./settings/ModelTable": {
-      "types": "./dist/settings/ModelTable.d.ts",
-      "import": "./dist/settings/ModelTable.js"
+    "./patterns/ModelTable": {
+      "types": "./dist/patterns/ModelTable.d.ts",
+      "import": "./dist/patterns/ModelTable.js"
     },
-    "./settings/SettingsPageHeader": {
-      "types": "./dist/settings/SettingsPageHeader.d.ts",
-      "import": "./dist/settings/SettingsPageHeader.js"
+    "./patterns/SettingsPageHeader": {
+      "types": "./dist/patterns/SettingsPageHeader.d.ts",
+      "import": "./dist/patterns/SettingsPageHeader.js"
     },
-    "./settings/SettingsRow": {
-      "types": "./dist/settings/SettingsRow.d.ts",
-      "import": "./dist/settings/SettingsRow.js"
+    "./patterns/SettingsRow": {
+      "types": "./dist/patterns/SettingsRow.d.ts",
+      "import": "./dist/patterns/SettingsRow.js"
     },
-    "./settings/SettingsSection": {
-      "types": "./dist/settings/SettingsSection.d.ts",
-      "import": "./dist/settings/SettingsSection.js"
+    "./patterns/SettingsSection": {
+      "types": "./dist/patterns/SettingsSection.d.ts",
+      "import": "./dist/patterns/SettingsSection.js"
     },
-    "./settings/SettingsEmptyState": {
-      "types": "./dist/settings/SettingsEmptyState.d.ts",
-      "import": "./dist/settings/SettingsEmptyState.js"
+    "./patterns/SettingsEmptyState": {
+      "types": "./dist/patterns/SettingsEmptyState.d.ts",
+      "import": "./dist/patterns/SettingsEmptyState.js"
     },
-    "./settings/SettingsEyebrow": {
-      "types": "./dist/settings/SettingsEyebrow.d.ts",
-      "import": "./dist/settings/SettingsEyebrow.js"
+    "./patterns/SettingsEyebrow": {
+      "types": "./dist/patterns/SettingsEyebrow.d.ts",
+      "import": "./dist/patterns/SettingsEyebrow.js"
     },
-    "./settings/SettingsScopeTabs": {
-      "types": "./dist/settings/SettingsScopeTabs.d.ts",
-      "import": "./dist/settings/SettingsScopeTabs.js"
+    "./patterns/SettingsScopeTabs": {
+      "types": "./dist/patterns/SettingsScopeTabs.d.ts",
+      "import": "./dist/patterns/SettingsScopeTabs.js"
     },
     "./settings/RepoPicker": {
       "types": "./dist/settings/RepoPicker.d.ts",
       "import": "./dist/settings/RepoPicker.js"
     },
-    "./settings/SettingsSaveFooter": {
-      "types": "./dist/settings/SettingsSaveFooter.d.ts",
-      "import": "./dist/settings/SettingsSaveFooter.js"
+    "./patterns/SettingsSaveFooter": {
+      "types": "./dist/patterns/SettingsSaveFooter.d.ts",
+      "import": "./dist/patterns/SettingsSaveFooter.js"
     },
     "./settings/OrganizationSsoSettingsSurface": {
       "types": "./dist/settings/OrganizationSsoSettingsSurface.d.ts",
       "import": "./dist/settings/OrganizationSsoSettingsSurface.js"
     },
-    "./secrets/SecretManagementPanel": {
-      "types": "./dist/secrets/SecretManagementPanel.d.ts",
-      "import": "./dist/secrets/SecretManagementPanel.js"
+    "./patterns/secrets/SecretManagementPanel": {
+      "types": "./dist/patterns/secrets/SecretManagementPanel.d.ts",
+      "import": "./dist/patterns/secrets/SecretManagementPanel.js"
     },
     "./sidebar/ProductSidebarLayout": {
       "types": "./dist/sidebar/ProductSidebarLayout.d.ts",
@@ -287,9 +287,9 @@
       "types": "./dist/workspaces/RecentWorkStatusDot.d.ts",
       "import": "./dist/workspaces/RecentWorkStatusDot.js"
     },
-    "./workspaces/PrStatusBadge": {
-      "types": "./dist/workspaces/PrStatusBadge.d.ts",
-      "import": "./dist/workspaces/PrStatusBadge.js"
+    "./patterns/PrStatusBadge": {
+      "types": "./dist/patterns/PrStatusBadge.d.ts",
+      "import": "./dist/patterns/PrStatusBadge.js"
     },
     "./workspaces/WorkspaceInventory": {
       "types": "./dist/workspaces/WorkspaceInventory.d.ts",

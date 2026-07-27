@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Switch } from "@proliferate/ui/primitives/Switch";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import {
   usePutAuthSelections,
   useAgentAuthState,

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { toast } from "@proliferate/ui/kit/Sonner";
+import { toast } from "@proliferate/ui/primitives/Sonner";
 import { CircleAlert } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";

@@ -6,7 +6,7 @@ import {
   MessageSquare,
   Spinner,
 } from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 import type {

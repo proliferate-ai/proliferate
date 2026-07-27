@@ -5,7 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@proliferate/ui/kit/DropdownMenu";
+} from "@proliferate/ui/primitives/DropdownMenu";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   Fork,

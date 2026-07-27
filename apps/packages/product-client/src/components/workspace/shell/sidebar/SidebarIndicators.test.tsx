@@ -60,12 +60,12 @@ function glyphClassName(node: ReactNode): string {
 describe("SidebarStatusGlyph", () => {
 
   it.each(["error", "worktree_missing"] as const)(
-    "uses the control tier for the %s warning glyph",
+    "uses the indicator tier for the %s warning glyph",
     (kind) => {
       const glyph = renderGlyph(kind);
 
       expect(countElementsByType(glyph, CircleAlert)).toBe(1);
-      expect(glyphClassName(glyph)).toContain("icon-control");
+      expect(glyphClassName(glyph)).toContain("icon-indicator");
     },
   );
 
@@ -74,7 +74,7 @@ describe("SidebarStatusGlyph", () => {
 
     expect(countElementsByType(glyph, Clock)).toBe(1);
     expect(countElementsByType(glyph, Spinner)).toBe(0);
-    expect(glyphClassName(glyph)).toContain("icon-control");
+    expect(glyphClassName(glyph)).toContain("icon-indicator");
   });
 
   it("keeps plan-approval blockers visually distinct from progress", () => {
@@ -82,21 +82,21 @@ describe("SidebarStatusGlyph", () => {
 
     expect(countElementsByType(glyph, Clock)).toBe(1);
     expect(countElementsByType(glyph, Spinner)).toBe(0);
-    expect(glyphClassName(glyph)).toContain("icon-control");
+    expect(glyphClassName(glyph)).toContain("icon-indicator");
   });
 
   it("uses a progress glyph for active work", () => {
     const glyph = renderGlyph("iterating");
 
     expect(countElementsByType(glyph, Spinner)).toBe(1);
-    expect(glyphClassName(glyph)).toContain("icon-control");
+    expect(glyphClassName(glyph)).toContain("icon-indicator");
   });
 
   it("uses a progress glyph for queued prompts", () => {
     const glyph = renderGlyph("queued_prompt");
 
     expect(countElementsByType(glyph, Spinner)).toBe(1);
-    expect(glyphClassName(glyph)).toContain("icon-control");
+    expect(glyphClassName(glyph)).toContain("icon-indicator");
   });
 });
 
