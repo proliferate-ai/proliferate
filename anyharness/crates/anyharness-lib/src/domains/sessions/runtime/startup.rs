@@ -342,6 +342,26 @@ impl SessionRuntime {
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
         let readiness_env = workspace_env.clone();
+        // Fail closed BEFORE the readiness gate, mirroring create_session
+        // (service/create.rs): an unsatisfiable selection must be reported as
+        // the auth problem it is, not as "agent is not ready" — which reads
+        // to a user as "go install something" when the real answer is "your
+        // gateway budget is exhausted". agent-auth.md: a selection never
+        // silently degrades to the user's personal credentials.
+        if let Some(error) = crate::domains::agents::route_auth::launch_route_selection_failure(
+            &self.runtime_home,
+            &record.agent_kind,
+        ) {
+            tracing::warn!(
+                session_id = %record.id,
+                workspace_id = %record.workspace_id,
+                agent_kind = %record.agent_kind,
+                code = error.code(),
+                error = %error,
+                "agent-auth selection is unsatisfiable; refusing live session start"
+            );
+            return Err(StartSessionError::RouteAuth(error));
+        }
         let agent_resolution_started = Instant::now();
         // Route-aware launch readiness keeps the resolved agent's credential
         // state consistent with create/launch-options for gateway routes
@@ -358,7 +378,9 @@ impl SessionRuntime {
         // converge on the same typed condition create-time already enforces
         // — an agent whose readiness regressed after creation (e.g. revoked
         // credentials) is refused here instead of falling through to a spawn
-        // attempt and a generic ACP-start failure.
+        // attempt and a generic ACP-start failure. Runs AFTER the selection
+        // pre-check above, same order as create_session, so an unsatisfiable
+        // selection is never misreported as a readiness gap.
         if resolved_agent.status != ResolvedAgentStatus::Ready {
             tracing::warn!(
                 session_id = %record.id,
@@ -382,7 +404,9 @@ impl SessionRuntime {
         // Agent-auth render plane: read the declarative state file fresh and
         // render the route layer for this harness. Absent file = empty layer
         // (legacy/native); a scoped file with no selection fails the launch
-        // closed with a typed error (spec §3).
+        // closed with a typed error (spec §3). The pre-check above already
+        // ruled out the unsatisfiable-selection case; this still runs to
+        // materialize the actual route files for the spawn.
         let route_auth = resolve_launch_route_auth(
             &self.runtime_home,
             &record.agent_kind,

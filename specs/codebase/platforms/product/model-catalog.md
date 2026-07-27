@@ -821,11 +821,20 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       legacy routes it backed (`GET .../catalog/gateway-models`,
       `POST .../catalog/refresh-gateway`) now read/poke the model-snapshot
       service instead of the old resolver — same URLs, new backend, kept
-      because the desktop All-Models tab still calls them (A9). Two pieces
-      remain, both TODO: the `gatewayPolicy` seed fallback (still consumed
-      by `gateway_plan.rs`'s pre-probe floor and the legacy route's own
-      pre-probe floor — leaves when the catalog-side bullet above does),
-      and the 60-second
+      because the desktop All-Models tab still calls them (A9). The
+      refresh route's precondition NARROWED in the swap: the old handler
+      only required a gateway source with a non-empty baseUrl+key; the
+      new one runs `ModelSnapshotService::refresh_now`, which additionally
+      requires this runtime to own the probe engine (409 if another
+      runtime holds the lock) and the harness to be locally installed
+      (404 if not) before it will probe. A read-only or not-yet-installed
+      runtime that could refresh before A9 now gets a typed rejection
+      instead — the OpenAPI doc for the route lists the new response
+      codes (404/409/502) but not this reasoning, hence this note. Two
+      pieces remain, both TODO: the `gatewayPolicy` seed fallback (still
+      consumed by `gateway_plan.rs`'s pre-probe floor and the legacy
+      route's own pre-probe floor — leaves when the catalog-side bullet
+      above does), and the 60-second
       [useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
       poll, whose only real justification (keeping the cloud mirror fed
       while the runtime-side probe was gateway-only) is gone now that the
