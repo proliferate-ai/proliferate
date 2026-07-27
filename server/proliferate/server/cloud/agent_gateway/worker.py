@@ -1,8 +1,11 @@
 """Background enrollment backfill, usage-import, and top-up workers.
 
 All are started from the app lifespan (mirroring the anonymous-telemetry
-sender). The backfill worker retries pending/failed enrollments and enrolls
-active org memberships whose enroll hook was lost (org-only discovery) every
+sender). The backfill worker first runs the D-3 legacy-enrollment migration
+(re-parenting pre-org-only personal rows onto default orgs and re-minting
+pre-D-2 shared-identity keys — a no-op once nothing is left), then retries
+pending/failed enrollments and enrolls active org memberships whose enroll
+hook was lost (org-only discovery), every
 ``agent_gateway_backfill_interval_seconds``. The usage-import worker pages
 LiteLLM spend logs and enforces LLM-credit exhaustion every
 ``agent_gateway_usage_import_interval_seconds``. The top-up worker charges
@@ -21,6 +24,7 @@ from proliferate.config import settings
 from proliferate.db import session_ops as db_session
 from proliferate.integrations.sentry import report_critical
 from proliferate.server.cloud.agent_gateway.enrollment import backfill_enrollments
+from proliferate.server.cloud.agent_gateway.migration import migrate_legacy_enrollments
 from proliferate.server.cloud.agent_gateway.topups import (
     LlmTopupRunResult,
     run_llm_topups,
@@ -38,7 +42,12 @@ _BACKFILL_BATCH_LIMIT = 50
 
 async def run_enrollment_backfill_once(*, limit: int = _BACKFILL_BATCH_LIMIT) -> int:
     async with db_session.open_async_transaction() as db:
-        return await backfill_enrollments(db, limit=limit)
+        # The D-3 migration runs ahead of the ordinary backfill: personal
+        # residue converts to the org shape (so the sync pass below only ever
+        # sees org rows) and pre-D-2 shared-identity org rows re-mint. Both
+        # are idempotent and settle into a no-op once the backlog is drained.
+        migrated = await migrate_legacy_enrollments(db, limit=limit)
+        return migrated + await backfill_enrollments(db, limit=limit)
 
 
 async def _backfill_loop() -> None:

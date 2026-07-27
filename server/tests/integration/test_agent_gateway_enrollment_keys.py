@@ -15,8 +15,9 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
+from proliferate.db.models.organizations import Organization
 from proliferate.db.store import agent_gateway as store
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 
 
 async def _create_user(db_session: AsyncSession) -> uuid.UUID:
@@ -34,11 +35,14 @@ async def _create_user(db_session: AsyncSession) -> uuid.UUID:
 
 async def _create_enrollment(db_session: AsyncSession) -> uuid.UUID:
     user_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    organization = Organization(name=f"Key Store Org {uuid.uuid4().hex[:6]}")
+    db_session.add(organization)
+    await db_session.flush()
+    subject = await ensure_organization_billing_subject(db_session, organization.id)
     enrollment = await store.ensure_enrollment_row(
         db_session,
-        subject_kind="user",
         billing_subject_id=subject.id,
+        organization_id=organization.id,
         user_id=user_id,
     )
     return enrollment.id

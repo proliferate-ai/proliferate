@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute
 
 from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
@@ -26,46 +25,30 @@ from proliferate.db.store.agent_gateway.records import AgentGatewayEnrollmentRec
 from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
 
+# The per-(org, member) LiteLLM user id prefix. A pre-migration row whose
+# stored LiteLLM user does not carry it was provisioned under the old shared
+# `user-<uuid>` identity and still needs its keys re-minted (D-3).
+_ORG_SCOPED_LITELLM_USER_PREFIX = "org-%"
+
 
 async def ensure_enrollment_row(
     db: AsyncSession,
     *,
-    subject_kind: str,
     billing_subject_id: UUID,
-    user_id: UUID | None = None,
-    organization_id: UUID | None = None,
+    organization_id: UUID,
+    user_id: UUID,
 ) -> AgentGatewayEnrollmentRecord:
-    """Idempotently create the pending enrollment row for a subject."""
-    index_elements: list[InstrumentedAttribute[UUID | None]]
-    index_where: ColumnElement[bool]
-    if subject_kind == AGENT_GATEWAY_SUBJECT_KIND_USER:
-        if user_id is None or organization_id is not None:
-            raise ValueError("A user enrollment requires user_id and no organization_id.")
-        index_elements = [AgentGatewayEnrollment.user_id]
-        index_where = (
-            AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_USER
-        ) & AgentGatewayEnrollment.revoked_at.is_(None)
-    elif subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION:
-        if organization_id is None or user_id is None:
-            raise ValueError(
-                "An organization enrollment requires organization_id and user_id "
-                "(one virtual key per member, spec §2.3)."
-            )
-        index_elements = [
-            AgentGatewayEnrollment.organization_id,
-            AgentGatewayEnrollment.user_id,
-        ]
-        index_where = (
-            AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION
-        ) & AgentGatewayEnrollment.revoked_at.is_(None)
-    else:
-        raise ValueError(f"Unknown enrollment subject kind: {subject_kind}")
+    """Idempotently create the pending (org, member) enrollment row.
 
+    Org-only (model-gateway.md §Account model): there is no personal
+    (``subject_kind='user'``) insert path — the only remaining personal rows
+    are retired pre-migration residue, kept for spend attribution.
+    """
     now = utcnow()
     await db.execute(
         pg_insert(AgentGatewayEnrollment)
         .values(
-            subject_kind=subject_kind,
+            subject_kind=AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
             user_id=user_id,
             organization_id=organization_id,
             billing_subject_id=billing_subject_id,
@@ -73,11 +56,19 @@ async def ensure_enrollment_row(
             created_at=now,
             updated_at=now,
         )
-        .on_conflict_do_nothing(index_elements=index_elements, index_where=index_where)
+        .on_conflict_do_nothing(
+            index_elements=[
+                AgentGatewayEnrollment.organization_id,
+                AgentGatewayEnrollment.user_id,
+            ],
+            index_where=(
+                AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION
+            )
+            & AgentGatewayEnrollment.revoked_at.is_(None),
+        )
     )
-    row = await _load_active_row(
+    row = await _load_active_org_row(
         db,
-        subject_kind=subject_kind,
         user_id=user_id,
         organization_id=organization_id,
     )
@@ -86,24 +77,18 @@ async def ensure_enrollment_row(
     return enrollment_record(row)
 
 
-async def _load_active_row(
+async def _load_active_org_row(
     db: AsyncSession,
     *,
-    subject_kind: str,
-    user_id: UUID | None,
-    organization_id: UUID | None,
+    user_id: UUID,
+    organization_id: UUID,
 ) -> AgentGatewayEnrollment | None:
     query = select(AgentGatewayEnrollment).where(
-        AgentGatewayEnrollment.subject_kind == subject_kind,
+        AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
         AgentGatewayEnrollment.revoked_at.is_(None),
+        AgentGatewayEnrollment.organization_id == organization_id,
+        AgentGatewayEnrollment.user_id == user_id,
     )
-    if subject_kind == AGENT_GATEWAY_SUBJECT_KIND_USER:
-        query = query.where(AgentGatewayEnrollment.user_id == user_id)
-    else:
-        query = query.where(
-            AgentGatewayEnrollment.organization_id == organization_id,
-            AgentGatewayEnrollment.user_id == user_id,
-        )
     return (await db.execute(query)).scalar_one_or_none()
 
 
@@ -124,20 +109,6 @@ async def get_enrollment_by_id(
     return enrollment_record(row) if row is not None else None
 
 
-async def get_enrollment_for_user(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-) -> AgentGatewayEnrollmentRecord | None:
-    row = await _load_active_row(
-        db,
-        subject_kind=AGENT_GATEWAY_SUBJECT_KIND_USER,
-        user_id=user_id,
-        organization_id=None,
-    )
-    return enrollment_record(row) if row is not None else None
-
-
 async def get_enrollment_for_organization(
     db: AsyncSession,
     *,
@@ -145,13 +116,78 @@ async def get_enrollment_for_organization(
     user_id: UUID,
 ) -> AgentGatewayEnrollmentRecord | None:
     """Fetch a single member's org enrollment (one virtual key per member)."""
-    row = await _load_active_row(
+    row = await _load_active_org_row(
         db,
-        subject_kind=AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
         user_id=user_id,
         organization_id=organization_id,
     )
     return enrollment_record(row) if row is not None else None
+
+
+async def list_active_personal_enrollments(
+    db: AsyncSession,
+    *,
+    limit: int = 50,
+) -> list[AgentGatewayEnrollmentRecord]:
+    """Pre-migration ``subject_kind='user'`` rows not yet retired.
+
+    Feed for the D-3 migration only: no other read path resolves personal
+    enrollments anymore, and no write path creates them. Regardless of sync
+    status — a personal row is converted, never re-synced.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayEnrollment)
+                .where(
+                    AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_USER,
+                    AgentGatewayEnrollment.revoked_at.is_(None),
+                )
+                .order_by(AgentGatewayEnrollment.created_at)
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [enrollment_record(row) for row in rows]
+
+
+async def list_stale_identity_org_enrollments(
+    db: AsyncSession,
+    *,
+    limit: int = 50,
+) -> list[AgentGatewayEnrollmentRecord]:
+    """Synced org rows still provisioned under the shared ``user-<uuid>`` id.
+
+    Feed for the D-3 migration's org sweep: these rows were minted before the
+    per-(org, member) LiteLLM identity (``org-<org>-user-<id>``) existed, so
+    their key-set fingerprint can never match today's expected material —
+    running them through ``ensure_org_enrollment`` reopens them and re-mints
+    their keys. Pending/failed rows are excluded: the ordinary backfill pass
+    already re-syncs those.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayEnrollment)
+                .where(
+                    AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
+                    AgentGatewayEnrollment.revoked_at.is_(None),
+                    AgentGatewayEnrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED,
+                    AgentGatewayEnrollment.litellm_user_id.is_not(None),
+                    AgentGatewayEnrollment.litellm_user_id.not_like(
+                        _ORG_SCOPED_LITELLM_USER_PREFIX
+                    ),
+                )
+                .order_by(AgentGatewayEnrollment.created_at)
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [enrollment_record(row) for row in rows]
 
 
 async def mark_enrollment_synced(
@@ -234,11 +270,19 @@ async def list_enrollments_needing_sync(
     *,
     limit: int = 50,
 ) -> list[AgentGatewayEnrollmentRecord]:
+    """Org rows awaiting (re-)sync.
+
+    Restricted to ``subject_kind='organization'``: the backfill worker has no
+    sync path for personal residue — an unconverted personal row (e.g. its
+    user still lacks a default org) must not consume the sync budget every
+    tick; the D-3 migration pass owns it.
+    """
     rows = (
         (
             await db.execute(
                 select(AgentGatewayEnrollment)
                 .where(
+                    AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
                     AgentGatewayEnrollment.revoked_at.is_(None),
                     AgentGatewayEnrollment.sync_status.in_(
                         [

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select, text
+from sqlalchemy import update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -236,6 +237,34 @@ async def ensure_agent_gateway_free_credit_allocation(
         period_key=period_key,
         claimant_user_id=user_id,
     )
+
+
+async def move_agent_gateway_free_credit_allocation(
+    db: AsyncSession,
+    *,
+    from_billing_subject_id: UUID,
+    to_billing_subject_id: UUID,
+) -> int:
+    """Re-point a claimed agent-gateway free-credit allocation at a new subject.
+
+    D-3 migration primitive: a pre-migration allocation claimed by the user's
+    PERSONAL billing subject blocks the org-path grant forever ("claimed
+    elsewhere"). Converting the claim to the default org's subject — together
+    with moving the grant itself (``move_llm_credit_ledger``) — is what turns
+    "personal claim blocks" into "personal claim converted": the identity
+    stays claimed exactly once, now by the org subject. Idempotent: a second
+    call matches no rows. Returns the number of allocations moved.
+    """
+    result = await db.execute(
+        sa_update(FreeCloudAllocation)
+        .where(
+            FreeCloudAllocation.allocation_kind
+            == FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+            FreeCloudAllocation.billing_subject_id == from_billing_subject_id,
+        )
+        .values(billing_subject_id=to_billing_subject_id, updated_at=utcnow())
+    )
+    return result.rowcount or 0
 
 
 async def _linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> str | None:

@@ -60,6 +60,26 @@ async def _create_user(db_session: AsyncSession) -> uuid.UUID:
     return user.id
 
 
+async def _no_personal_enrollment(db_session: AsyncSession, user_id: uuid.UUID) -> bool:
+    """True when no active pre-migration personal row exists for the user.
+
+    The store has no personal lookup anymore (the resolver is org-only), so
+    tests assert the row's absence against the table directly.
+    """
+    from sqlalchemy import select
+
+    row = (
+        await db_session.execute(
+            select(AgentGatewayEnrollment).where(
+                AgentGatewayEnrollment.subject_kind == "user",
+                AgentGatewayEnrollment.user_id == user_id,
+                AgentGatewayEnrollment.revoked_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    return row is None
+
+
 async def _link_github_identity(db_session: AsyncSession, *, user_id: uuid.UUID) -> None:
     subject = f"gh-{uuid.uuid4().hex[:12]}"
     db_session.add(
@@ -276,9 +296,9 @@ async def test_d1_signup_produces_the_org_only_shape(
     personal_balance = await store.get_remaining_credit_usd(db_session, personal_subject.id)
     assert personal_balance.granted_usd == Decimal("0")
 
-    # No personal enrollment row exists, so the resolver can never take the
-    # pre-migration personal fallback for this user.
-    assert await store.get_enrollment_for_user(db_session, user_id=user_id) is None
+    # No personal enrollment row exists anywhere for this user — the whole
+    # account shape has exactly one form.
+    assert await _no_personal_enrollment(db_session, user_id)
     resolved = await get_gateway_enrollment_for_user(db_session, user_id)
     assert resolved is not None
     assert resolved.id == enrollment.id
@@ -310,7 +330,7 @@ async def test_signup_enrollment_without_default_org_creates_nothing(
     enrollment = await ensure_signup_enrollment(db_session, user_id)
 
     assert enrollment is None
-    assert await store.get_enrollment_for_user(db_session, user_id=user_id) is None
+    assert await _no_personal_enrollment(db_session, user_id)
     assert stub_litellm.minted == []
     assert stub_litellm.users == set()
 
@@ -671,7 +691,7 @@ async def test_backfill_creates_no_rows_for_org_less_users(
 
     assert processed == 0
     for user_id in (first, second):
-        assert await store.get_enrollment_for_user(db_session, user_id=user_id) is None
+        assert await _no_personal_enrollment(db_session, user_id)
     assert stub_litellm.minted == []
 
 
@@ -700,7 +720,7 @@ async def test_backfill_recovers_org_members_without_enrollment(
     assert enrollment.user_id == member_id
     assert enrollment.litellm_user_id == f"org-{org_id}-user-{member_id}"
     # No personal row was minted along the way.
-    assert await store.get_enrollment_for_user(db_session, user_id=member_id) is None
+    assert await _no_personal_enrollment(db_session, member_id)
 
 
 @pytest.mark.asyncio
@@ -716,40 +736,3 @@ async def test_backfill_bounds_work_per_tick(
 
     processed = await backfill_enrollments(db_session, limit=2)
     assert processed == 2
-
-
-@pytest.mark.asyncio
-async def test_pre_migration_personal_row_still_resyncs(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-    stub_litellm: StubLiteLLM,
-) -> None:
-    """Existing personal enrollments (pre-D-2 residue) keep working.
-
-    The backfill's first pass still re-syncs a pending ``subject_kind='user'``
-    row through the legacy path — untouched until the D-3 migration
-    re-parents it — but grants no free credit anywhere in doing so.
-    """
-    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
-    user_id = await _create_user(db_session)
-    await _link_github_identity(db_session, user_id=user_id)
-    subject = await ensure_personal_billing_subject(db_session, user_id)
-    await store.ensure_enrollment_row(
-        db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
-        user_id=user_id,
-    )
-
-    processed = await backfill_enrollments(db_session, limit=10)
-
-    assert processed >= 1
-    resynced = await store.get_enrollment_for_user(db_session, user_id=user_id)
-    assert resynced is not None
-    assert resynced.sync_status == "synced"
-    assert resynced.litellm_team_id == f"team-user-{user_id}"
-    # The legacy path never grants: the signup free credit belongs to the
-    # org-only path (and to the default org's billing subject).
-    balance = await store.get_remaining_credit_usd(db_session, subject.id)
-    assert balance.granted_usd == Decimal("0")

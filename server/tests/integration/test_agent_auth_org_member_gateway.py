@@ -4,8 +4,9 @@ v1 payer law: the subject that pays for a user's gateway sessions is their
 DEFAULT org — the org their identity was placed into at signup, i.e. the
 earliest active membership — always. The interim funding-follows-attribution
 guard (org governs only when funded, else fall back to the personal
-enrollment) and the name-ordered org choice are deleted; funding never
-re-routes payment to a different subject.
+enrollment), the name-ordered org choice, and the personal-enrollment
+fallback itself are all deleted; funding never re-routes payment to a
+different subject, and the resolver is org-only.
 
 Unfunded fails closed instead: a subject with no active credit grant and no
 explicitly configured positive default budget gets no gateway — the budget
@@ -13,7 +14,10 @@ gate refuses, the state renderer withholds key material, and the mirrored
 LiteLLM team budget sits at the exhausted floor (see the enrollment tests).
 
 Proof ledger: D8 (default-org resolution, guard + name-ordered choice gone)
-and the gate/renderer halves of D3 (unfunded fails closed) live here.
+and the gate/renderer halves of D3 (unfunded fails closed) live here. Legacy
+personal rows appearing below are fabricated at the model level: they are the
+pre-migration residue the D-3 migration retires, kept here only to prove the
+resolver never returns them.
 """
 
 from __future__ import annotations
@@ -23,15 +27,18 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_ADMIN
 from proliferate.db.models.auth import User
+from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.agent_gateway import DesiredAuthSource
 from proliferate.db.store.agent_gateway.selections import put_auth_selections
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.server.cloud.agent_gateway import service as gateway_service
 from proliferate.server.cloud.agent_gateway.budget import (
     get_gateway_enrollment_for_user,
@@ -40,11 +47,11 @@ from proliferate.server.cloud.agent_gateway.budget import (
 from proliferate.server.cloud.agent_gateway.enrollment import (
     ensure_org_enrollment,
     ensure_signup_enrollment,
-    ensure_user_enrollment,
 )
 from proliferate.server.cloud.materialization.materialize.agent_auth import (
     build_agent_auth_state,
 )
+from proliferate.utils.time import utcnow
 from tests.integration.agent_gateway_topups_shared import StubLiteLLM
 
 
@@ -85,6 +92,45 @@ async def _create_org_with_active_member(
     return organization.id
 
 
+async def _legacy_personal_enrollment(
+    db_session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    with_claude_key: bool = False,
+) -> AgentGatewayEnrollment:
+    """Fabricate pre-D-2 personal residue directly at the model level.
+
+    No store or service path can create this shape anymore (org-only account
+    model); tests build it raw to prove the resolver and renderer ignore it
+    until the D-3 migration retires it.
+    """
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    now = utcnow()
+    row = AgentGatewayEnrollment(
+        subject_kind="user",
+        user_id=user_id,
+        organization_id=None,
+        billing_subject_id=subject.id,
+        litellm_team_id=f"team-user-{user_id}",
+        litellm_user_id=f"user-{user_id}",
+        sync_status="synced",
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(row)
+    await db_session.flush()
+    if with_claude_key:
+        await store.upsert_enrollment_key(
+            db_session,
+            enrollment_id=row.id,
+            harness_kind="claude",
+            virtual_key_id=f"token-personal-{uuid.uuid4().hex[:6]}",
+            virtual_key="sk-litellm-personal",
+            sync_fingerprint="legacy-fp",
+        )
+    return row
+
+
 async def _grant(db_session: AsyncSession, *, billing_subject_id: uuid.UUID, amount: str) -> None:
     await store.create_llm_credit_grant(
         db_session,
@@ -114,14 +160,15 @@ async def test_default_org_governs_unconditionally_even_when_unfunded(
 
     The deleted guard resolved the PERSONAL enrollment here (org subject
     unfunded). Funding never re-routes payment; it is enforced by the budget
-    gate instead.
+    gate instead — even while an unretired, funded personal residue row still
+    exists.
     """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
     user_id = await _create_user(db_session)
     org_id = await _create_org_with_active_member(db_session, user_id=user_id)
 
-    personal = await ensure_user_enrollment(db_session, user_id)
+    personal = await _legacy_personal_enrollment(db_session, user_id=user_id)
     org_enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
     assert personal.id != org_enrollment.id
     # A personal grant must not pull resolution back to the personal subject.
@@ -151,9 +198,9 @@ async def test_unfunded_org_fails_closed_at_the_gate(
     user_id = await _create_user(db_session)
     org_id = await _create_org_with_active_member(db_session, user_id=user_id)
 
-    personal = await ensure_user_enrollment(db_session, user_id)
+    personal_subject = await ensure_personal_billing_subject(db_session, user_id)
     await ensure_org_enrollment(db_session, org_id, user_id)
-    await _grant(db_session, billing_subject_id=personal.billing_subject_id, amount="5")
+    await _grant(db_session, billing_subject_id=personal_subject.id, amount="5")
 
     assert await is_gateway_budget_available(db_session, user_id) is False
 
@@ -221,42 +268,39 @@ async def test_explicit_org_budget_keeps_a_grantless_org_open(
 
 
 @pytest.mark.asyncio
-async def test_org_less_user_still_resolves_personal_enrollment(
+async def test_resolver_is_org_only_even_with_unretired_personal_residue(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """Pre-migration residue only: an EXISTING personal row still resolves.
+    """The personal fallback is GONE: residue resolves to nothing, never itself.
 
-    ``ensure_user_enrollment`` here fabricates the pre-D-2 shape directly —
-    no signup path creates it anymore. The fallback (and this test) is
-    deleted with the D-3 migration.
+    An org-less user holding a pre-migration personal row (the shape the D-3
+    migration retires; here fabricated raw and not yet converted because the
+    user has no default org) gets ``None`` from the resolver — the fallback
+    that used to hand this row out is deleted, and only the migration giving
+    the user an org enrollment can restore gateway access.
     """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     user_id = await _create_user(db_session)
 
-    personal = await ensure_user_enrollment(db_session, user_id)
+    await _legacy_personal_enrollment(db_session, user_id=user_id)
 
-    resolved = await get_gateway_enrollment_for_user(db_session, user_id)
-    assert resolved is not None
-    assert resolved.id == personal.id
-    assert resolved.subject_kind == "user"
+    assert await get_gateway_enrollment_for_user(db_session, user_id) is None
+    with pytest.raises(gateway_service.CloudApiError):
+        await gateway_service.get_enrollment(db_session, user_id=user_id)
 
 
 @pytest.mark.asyncio
-async def test_new_signup_never_creates_or_takes_the_personal_fallback(
+async def test_new_signup_never_creates_or_takes_a_personal_shape(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """D-2 fallback tightening: a new signup can never reach the personal path.
-
-    The org-only signup shape creates no ``subject_kind='user'`` row at all,
-    so the resolver's pre-migration fallback has nothing to return — the
-    default org's enrollment governs whether funded or not (an unfunded org
-    fails closed at the budget gate; it never re-routes to a personal
-    subject).
-    """
+    """The org-only signup shape creates no ``subject_kind='user'`` row at all,
+    and the default org's enrollment governs whether funded or not (an
+    unfunded org fails closed at the budget gate; it never re-routes to a
+    personal subject)."""
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
     user_id = await _create_user(db_session)
@@ -267,8 +311,20 @@ async def test_new_signup_never_creates_or_takes_the_personal_fallback(
     assert enrollment is not None
     assert enrollment.subject_kind == "organization"
     assert enrollment.organization_id == org_id
-    # No personal row exists for the fallback to find.
-    assert await store.get_enrollment_for_user(db_session, user_id=user_id) is None
+    # No personal row exists anywhere.
+    personal_rows = (
+        (
+            await db_session.execute(
+                select(AgentGatewayEnrollment).where(
+                    AgentGatewayEnrollment.subject_kind == "user",
+                    AgentGatewayEnrollment.user_id == user_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert personal_rows == []
     resolved = await get_gateway_enrollment_for_user(db_session, user_id)
     assert resolved is not None
     assert resolved.id == enrollment.id
@@ -295,12 +351,12 @@ async def test_org_gate_follows_only_the_org_ledger(
     user_id = await _create_user(db_session)
     org_id = await _create_org_with_active_member(db_session, user_id=user_id)
 
-    personal = await ensure_user_enrollment(db_session, user_id)
+    personal_subject = await ensure_personal_billing_subject(db_session, user_id)
     org_enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
     await _grant(db_session, billing_subject_id=org_enrollment.billing_subject_id, amount="50")
-    await _grant(db_session, billing_subject_id=personal.billing_subject_id, amount="1")
+    await _grant(db_session, billing_subject_id=personal_subject.id, amount="1")
 
-    await _drain(db_session, billing_subject_id=personal.billing_subject_id)
+    await _drain(db_session, billing_subject_id=personal_subject.id)
     assert await is_gateway_budget_available(db_session, user_id) is True
 
     await _drain(db_session, billing_subject_id=org_enrollment.billing_subject_id)
@@ -314,7 +370,8 @@ async def test_org_member_state_render_uses_org_enrollment_key(
     stub_litellm: StubLiteLLM,
 ) -> None:
     """The rendered gateway source's key comes from the default org
-    enrollment's per-harness child key, not the member's personal one."""
+    enrollment's per-harness child key — never from unretired personal
+    residue holding a key of its own."""
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(
         settings,
@@ -324,7 +381,7 @@ async def test_org_member_state_render_uses_org_enrollment_key(
     user_id = await _create_user(db_session)
     org_id = await _create_org_with_active_member(db_session, user_id=user_id)
 
-    await ensure_user_enrollment(db_session, user_id)
+    await _legacy_personal_enrollment(db_session, user_id=user_id, with_claude_key=True)
     org_enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
     await _grant(db_session, billing_subject_id=org_enrollment.billing_subject_id, amount="50")
     org_claude_key = await store.get_active_enrollment_key(
@@ -373,7 +430,7 @@ async def test_every_gateway_key_reader_resolves_the_same_enrollment(
     user_id = await _create_user(db_session)
     org_id = await _create_org_with_active_member(db_session, user_id=user_id)
 
-    personal = await ensure_user_enrollment(db_session, user_id)
+    personal = await _legacy_personal_enrollment(db_session, user_id=user_id, with_claude_key=True)
     org_enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
     await _grant(db_session, billing_subject_id=org_enrollment.billing_subject_id, amount="50")
 
@@ -382,9 +439,8 @@ async def test_every_gateway_key_reader_resolves_the_same_enrollment(
     assert governing.id == org_enrollment.id
 
     # Every remaining reader of gateway key material resolves off this same
-    # enrollment (the state renderer and the budget gate); the server-side
-    # catalog prober that used to be the third such reader is deleted (B4).
-    # Assert on the key they resolve for a harness.
+    # enrollment (the state renderer and the budget gate). Assert on the key
+    # they resolve for a harness — distinct from the residue row's key.
     org_key = await store.get_active_enrollment_key(
         db_session, enrollment_id=governing.id, harness_kind="claude"
     )
@@ -451,7 +507,6 @@ async def test_multi_org_membership_resolves_the_default_org_not_the_name_order(
         membership_created_at=base + timedelta(days=1),
     )
 
-    await ensure_user_enrollment(db_session, user_id)
     zulu_enrollment = await ensure_org_enrollment(db_session, zulu_id, user_id)
     alpha_enrollment = await ensure_org_enrollment(db_session, alpha_id, user_id)
     # Only the later, name-first org is funded — and it still must not govern.
