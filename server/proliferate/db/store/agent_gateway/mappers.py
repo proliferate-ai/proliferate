@@ -8,6 +8,7 @@ from proliferate.db.models.cloud.agent_gateway import (
     AgentCatalogOverride,
     AgentCatalogSnapshot,
     AgentGatewayEnrollment,
+    AgentGatewayEnrollmentKey,
     AgentLlmUsageImportCursor,
     LlmCreditGrant,
     OrgAgentPolicy,
@@ -17,6 +18,7 @@ from proliferate.db.store.agent_gateway.records import (
     AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
     AgentCatalogSnapshotRecord,
+    AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
     LlmCreditGrantRecord,
@@ -67,6 +69,19 @@ def enrollment_record(row: AgentGatewayEnrollment) -> AgentGatewayEnrollmentReco
         sync_fingerprint=row.sync_fingerprint,
         last_error_code=row.last_error_code,
         last_error_message=row.last_error_message,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        revoked_at=row.revoked_at,
+    )
+
+
+def enrollment_key_record(row: AgentGatewayEnrollmentKey) -> AgentGatewayEnrollmentKeyRecord:
+    return AgentGatewayEnrollmentKeyRecord(
+        id=row.id,
+        enrollment_id=row.enrollment_id,
+        harness_kind=row.harness_kind,
+        virtual_key_id=row.virtual_key_id,
+        sync_fingerprint=row.sync_fingerprint,
         created_at=row.created_at,
         updated_at=row.updated_at,
         revoked_at=row.revoked_at,

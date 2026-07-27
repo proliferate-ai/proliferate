@@ -268,6 +268,58 @@ class AgentGatewayEnrollment(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class AgentGatewayEnrollmentKey(Base):
+    """One per-(enrollment, harness) LiteLLM virtual key (model-gateway.md §Account model).
+
+    Child of ``agent_gateway_enrollment``: an enrollment's LiteLLM team stays
+    the single money/attribution boundary, but each gateway-capable
+    harness_kind gets its own virtual key scoped to that harness's access
+    group (``{"models": [harness_kind]}`` at ``/key/generate``). Keys never
+    carry a budget — the team is the only budget layer
+    (model-gateway.md "Account model" table); ``max_budget`` is not a column
+    on this table by design, unlike the parent enrollment row which still
+    tracks the team's budget separately.
+    """
+
+    __tablename__ = "agent_gateway_enrollment_key"
+    __table_args__ = (
+        UniqueConstraint(
+            "enrollment_id",
+            "harness_kind",
+            name="uq_agent_gateway_enrollment_key_scope",
+        ),
+        Index(
+            "ux_agent_gateway_enrollment_key_active_scope",
+            "enrollment_id",
+            "harness_kind",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+        Index("ix_agent_gateway_enrollment_key_virtual_key_id", "virtual_key_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    enrollment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agent_gateway_enrollment.id", ondelete="CASCADE"),
+        index=True,
+    )
+    harness_kind: Mapped[str] = mapped_column(String(64))
+    virtual_key_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    virtual_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    virtual_key_ciphertext_key_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    sync_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AgentCatalogSnapshot(Base):
     """Probed (or seeded) model catalog per (harness, surface, route, owner)."""
 

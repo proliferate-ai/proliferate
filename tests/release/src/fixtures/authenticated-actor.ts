@@ -135,7 +135,7 @@ export interface AuthenticatedActorOptions {
    * durable intent after the exact enrollment resolves.
    */
   beginActorEnrollmentCustody?(params: { email: string }): Promise<{
-    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+    resolveAndTrack(params: { userId: string; enrollmentId: string; harnessKind: string }): Promise<ActorKeyIdentity>;
   }>;
   /**
    * Managed-cloud custody seam. Once the synced enrollment exposes the exact
@@ -147,6 +147,7 @@ export interface AuthenticatedActorOptions {
   resolveAndTrackActorSubjects?(params: {
     userId: string;
     enrollmentId: string;
+    harnessKind: string;
   }): Promise<ActorKeyIdentity>;
 }
 
@@ -357,7 +358,7 @@ export async function authenticatedActor(
   const setupCommitPollMs = options.setupCommitPollMs ?? 250;
 
   let enrollmentCustody: {
-    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+    resolveAndTrack(params: { userId: string; enrollmentId: string; harnessKind: string }): Promise<ActorKeyIdentity>;
   } | undefined;
   let claim: Promise<{ email: string; password: string }>;
   if (explicitEmail !== undefined) {
@@ -435,6 +436,7 @@ export async function authenticatedActor(
   const gatewayKey = await (enrollmentCustody?.resolveAndTrack ?? options.resolveAndTrackActorSubjects ?? ((params) => world.gateway.resolveActorKey(params)))({
     userId: session.user_id,
     enrollmentId: enrollment.id,
+    harnessKind,
   });
 
   if (options.selectGatewayRoute !== false) {

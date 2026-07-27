@@ -273,9 +273,6 @@ change detection and the promote flow.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Enrollment mints one unscoped key per subject (it sees all models)
-      instead of per-harness group-scoped keys; existing enrollments need
-      rotation at migration.
 - [ ] Harness-to-model filtering is client-side (the Rust
       `provider_for_model` prefix-matcher and catalog
       `gatewayPolicy.providers`); both delete once proxy-side grants land.
@@ -284,9 +281,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
       state, org policy, and catalog routes; `api.py`/`service.py`/
       `models.py` split along the same three-domain line.
-- [ ] Enrollment copies `max_budget` onto the virtual key as well as the
-      team; keys must stop carrying budgets (the team cap already
-      aggregates, and N per-key copies of the mirror would drift).
 - [ ] Sessions for org members hand out the personal enrollment's key (the
       state renderer and budget gate both resolve the personal
       enrollment), so org members' gateway spend lands on their personal

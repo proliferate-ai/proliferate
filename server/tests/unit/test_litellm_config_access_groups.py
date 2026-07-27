@@ -17,12 +17,13 @@ from typing import Any
 
 import yaml
 
-from proliferate.constants.agent_gateway import AGENT_AUTH_HARNESS_KINDS
+from proliferate.constants.agent_gateway import AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "litellm" / "config.yaml"
 
-# cursor is explicitly excluded from AGENT_AUTH_HARNESS_KINDS (no gateway
-# route exists for it); the config must never grant it a model access group.
+# cursor is explicitly excluded from AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS
+# (no gateway route exists for it); the config must never grant it a model
+# access group.
 _CURSOR_HARNESS_KIND = "cursor"
 
 
@@ -48,7 +49,7 @@ class TestLitellmConfigAccessGroups:
             )
 
     def test_access_group_names_are_exactly_harness_kinds(self) -> None:
-        allowed = set(AGENT_AUTH_HARNESS_KINDS)
+        allowed = set(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
         for entry in _load_model_list():
             access_groups = entry["model_info"]["access_groups"]
             unknown = set(access_groups) - allowed
@@ -68,11 +69,11 @@ class TestLitellmConfigAccessGroups:
             )
 
     def test_every_supported_harness_has_at_least_one_model(self) -> None:
-        # Every gateway-capable harness_kind (all of AGENT_AUTH_HARNESS_KINDS,
-        # since cursor is excluded from that tuple already) must be able to
+        # Every gateway-capable harness_kind (AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
+        # which excludes cursor — it has no gateway recipe) must be able to
         # resolve at least one model once it is granted its group.
         granted: set[str] = set()
         for entry in _load_model_list():
             granted.update(entry["model_info"]["access_groups"])
-        missing = set(AGENT_AUTH_HARNESS_KINDS) - granted
+        missing = set(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS) - granted
         assert not missing, f"harness kinds with zero gateway models: {missing}"

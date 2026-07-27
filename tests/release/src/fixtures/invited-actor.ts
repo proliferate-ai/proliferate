@@ -132,12 +132,13 @@ export interface InvitedActorOptions {
   selectGatewayRoute?: boolean;
   /** Durable managed-cloud enrollment intent, persisted before invite/register. */
   beginActorEnrollmentCustody?(params: { email: string }): Promise<{
-    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+    resolveAndTrack(params: { userId: string; enrollmentId: string; harnessKind: string }): Promise<ActorKeyIdentity>;
   }>;
   /** Managed-cloud cleanup custody, invoked before selection or return. */
   resolveAndTrackActorSubjects?(params: {
     userId: string;
     enrollmentId: string;
+    harnessKind: string;
   }): Promise<ActorKeyIdentity>;
 }
 
@@ -179,6 +180,7 @@ export async function invitedActor(
   const gatewayKey = await (enrollmentCustody?.resolveAndTrack ?? options.resolveAndTrackActorSubjects ?? ((params) => world.gateway.resolveActorKey(params)))({
     userId: session.user_id,
     enrollmentId: enrollment.id,
+    harnessKind,
   });
 
   if (options.selectGatewayRoute !== false) {
