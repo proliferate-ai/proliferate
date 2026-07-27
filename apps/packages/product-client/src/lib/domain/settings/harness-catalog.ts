@@ -222,3 +222,54 @@ export function catalogRouteForSurface(
   }
   return defaultRouteForSurface(surface);
 }
+
+/** The enabled api_key selection's provider hint for (harness, surface), if any. */
+export function apiKeyProviderHintForSurface(
+  harnessKind: string,
+  surface: AgentAuthSurface,
+  selections: readonly AgentAuthSelection[],
+): string | null {
+  const match = selections.find(
+    (entry) =>
+      entry.harnessKind === harnessKind
+      && entry.surface === surface
+      && entry.enabled
+      && entry.sourceKind === "api_key",
+  );
+  return match?.providerHint ?? null;
+}
+
+// The B4 cloud snapshot re-key (model-catalog.md §Cloud routes) keys the
+// layered read by the catalog's own auth-context id ("anthropic-api",
+// "gateway", "baseline", …), not the coarse native/api_key/gateway route this
+// pane already tracks for its route cards. There is no per-machine
+// classification wired into product-client yet (Current gaps: the
+// `model_snapshot/` reconciler that would report the ACTIVE context doesn't
+// exist), so this is a best-effort static mapping, not a real classification:
+// the gateway route has an exact 1:1 context id; the api_key route derives the
+// catalog's "<provider>-api" convention from the bound key's provider hint;
+// native (no key bound; the CLI's own login) falls back to a harness's
+// declared oauth/native context. An id that turns out wrong for a given
+// harness degrades gracefully — the server tolerates unknown context ids by
+// serving an empty catalog rather than erroring (model-catalog.md
+// §Storage/§Cloud routes) — it never breaks the pane.
+const NATIVE_AUTH_CONTEXT_ID_BY_HARNESS: Readonly<Record<string, string>> = {
+  claude: "anthropic-oauth",
+  codex: "openai-oauth",
+  cursor: "cursor-login",
+  opencode: "baseline",
+};
+
+export function authContextIdForRoute(
+  harnessKind: string,
+  route: AgentAuthRoute,
+  apiKeyProviderHint: string | null,
+): string {
+  if (route === "gateway") {
+    return "gateway";
+  }
+  if (route === "api_key" && apiKeyProviderHint) {
+    return `${apiKeyProviderHint}-api`;
+  }
+  return NATIVE_AUTH_CONTEXT_ID_BY_HARNESS[harnessKind] ?? "baseline";
+}

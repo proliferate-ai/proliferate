@@ -279,6 +279,17 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
       state, org policy, and catalog routes; `api.py`/`service.py`/
       `models.py` split along the same three-domain line.
+- [ ] No product-server route emits `agent_gateway_credits_exhausted`
+      ([budget.py](../../../../server/proliferate/server/cloud/agent_gateway/budget.py)).
+      Exhaustion is enforced — the usage importer disables the LiteLLM virtual
+      keys, and the agent-auth state render withholds key material so the
+      runtime fails closed at launch — but neither wall answers a request with
+      that code, so a client cannot distinguish "exhausted" from a generic
+      gateway failure on the product surface. The release scenarios still
+      classify the string off the proxy response
+      (`managed-cloud-fixture-smoke-1.ts`, `t3-bill-4.ts`). The code's only
+      product-server producer was the server-side catalog prober, which the
+      model-catalog re-key deleted.
 - [ ] Which subject pays for an org member is decided by an interim
       funding-follows-attribution guard, not a ruled policy. A member's org
       enrollment governs their gateway sessions only when the org billing

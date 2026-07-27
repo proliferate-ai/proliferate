@@ -42,13 +42,12 @@ const state = vi.hoisted(() => ({
   },
 }));
 
-const refreshCatalog = vi.hoisted(() => vi.fn());
 const upsertOverride = vi.hoisted(() => vi.fn());
 const refreshGatewayModels = vi.hoisted(() => vi.fn());
 const refetchLaunchOptions = vi.hoisted(() => vi.fn());
 const showToast = vi.hoisted(() => vi.fn());
 const authSelectionsQuery = vi.hoisted(() => vi.fn());
-const cloudCatalogQuery = vi.hoisted(() => vi.fn());
+const cloudAgentModelsQuery = vi.hoisted(() => vi.fn());
 const gatewayModelsQuery = vi.hoisted(() => vi.fn());
 const launchOptionsQuery = vi.hoisted(() => vi.fn());
 
@@ -57,12 +56,11 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
     authSelectionsQuery(...args);
     return state.selections;
   },
-  useAgentCatalog: (...args: unknown[]) => {
-    cloudCatalogQuery(...args);
+  useAgentModels: (...args: unknown[]) => {
+    cloudAgentModelsQuery(...args);
     return { data: undefined, isLoading: false };
   },
-  useRefreshAgentCatalog: () => ({ mutate: refreshCatalog, isPending: false }),
-  useUpsertCatalogOverride: () => ({ mutate: upsertOverride, isPending: false }),
+  useUpsertAgentModelOverride: () => ({ mutate: upsertOverride, isPending: false }),
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
@@ -112,8 +110,8 @@ describe("HarnessAllModelsSection signed-out behavior", () => {
     expect(screen.queryByText("Cloud-only model")).toBeNull();
     expect((screen.getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
     expect(authSelectionsQuery).toHaveBeenCalledWith(null, false);
-    expect(cloudCatalogQuery).toHaveBeenCalledWith(
-      { harnessKind: "codex", surface: "local", route: "native" },
+    expect(cloudAgentModelsQuery).toHaveBeenCalledWith(
+      { harnessKind: "codex", authContextId: "openai-oauth" },
       false,
     );
     expect(gatewayModelsQuery).toHaveBeenCalledWith("codex", { enabled: false });
@@ -122,7 +120,6 @@ describe("HarnessAllModelsSection signed-out behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 
     expect(refetchLaunchOptions).toHaveBeenCalledTimes(1);
-    expect(refreshCatalog).not.toHaveBeenCalled();
     expect(upsertOverride).not.toHaveBeenCalled();
     expect(refreshGatewayModels).not.toHaveBeenCalled();
   });
@@ -142,8 +139,8 @@ describe("HarnessAllModelsSection signed-out behavior", () => {
         "Sign in to Proliferate Cloud to manage how Codex authenticates to models.",
       ),
     ).not.toBeNull();
-    expect(cloudCatalogQuery).toHaveBeenCalledWith(
-      { harnessKind: "codex", surface: "cloud", route: "gateway" },
+    expect(cloudAgentModelsQuery).toHaveBeenCalledWith(
+      { harnessKind: "codex", authContextId: "gateway" },
       false,
     );
     expect(gatewayModelsQuery).toHaveBeenCalledWith("codex", { enabled: false });

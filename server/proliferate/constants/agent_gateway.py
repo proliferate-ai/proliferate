@@ -83,20 +83,24 @@ AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY = "registration"
 AGENT_USAGE_EVENT_STATUS_IMPORTED = "imported"
 AGENT_USAGE_EVENT_STATUS_NEEDS_REVIEW = "needs_review"
 
-AGENT_CATALOG_SNAPSHOT_SOURCE_RUNTIME_MIRROR = "runtime-mirror"
-AGENT_CATALOG_SNAPSHOT_SOURCES = (
-    "probe",
-    "seed",
-    "override",
-    AGENT_CATALOG_SNAPSHOT_SOURCE_RUNTIME_MIRROR,
-)
-AGENT_CATALOG_SNAPSHOT_STATUS_ACTIVE = "active"
-AGENT_CATALOG_SNAPSHOT_STATUS_INACTIVE = "inactive"
+# The snapshot table has no ``source`` column (model-catalog.md §Storage): every
+# row is a machine observation the Worker uploaded, so there is nothing to
+# discriminate. Only the soft-versioning status survives.
+AGENT_MODEL_SNAPSHOT_STATUS_ACTIVE = "active"
+AGENT_MODEL_SNAPSHOT_STATUS_INACTIVE = "inactive"
 
 # harness_kind is a free-form slug (selections accept arbitrary kinds),
 # but it is bounded to keep snapshot cardinality sane and to stay within the
 # String(64) column (an over-long value would otherwise 500 on insert).
 AGENT_HARNESS_KIND_MAX_LENGTH = 64
+
+# auth_context_id is a catalog-declared slug ('anthropic-api', 'gateway',
+# 'baseline', …). Bounded for the same reason as harness_kind: the column is
+# String(64) and unbounded distinct values inflate snapshot cardinality. It is
+# deliberately NOT validated against the shipped catalog — a harness whose
+# catalog entry is newer than the server's document must still be able to upload
+# its observation (the read-side enrichment join tolerates unknown contexts).
+AGENT_AUTH_CONTEXT_ID_MAX_LENGTH = 64
 
 AGENT_USAGE_IMPORT_CURSOR_ID = "default"
 

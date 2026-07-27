@@ -28,10 +28,24 @@ from proliferate.db.store.billing_runtime_usage import resolve_organization_id_f
 
 _ZERO = Decimal("0")
 
-# Stable machine code on the 402 detail body when the gate blocks — the
-# LLM-credit sibling of ``billing_credits_exhausted`` (the compute-side code
-# in ``server.billing.authorization``). Part of the client contract; do not
-# rename without updating consumers.
+# The LLM-credit sibling of ``billing_credits_exhausted`` (the compute-side code
+# in ``server.billing.authorization``).
+#
+# NO PRODUCT-SERVER ROUTE EMITS THIS TODAY. Its only producer was the 402 on the
+# server-side catalog prober, deleted in B4 (the server no longer generates
+# snapshots, so it has no gateway call to gate). The constant is kept, not
+# deleted, because it is still a live *client* contract: the release scenarios
+# classify it off the LiteLLM proxy response
+# (``managed-cloud-fixture-smoke-1.ts``'s ``PRODUCT_LLM_CREDIT_DENIAL_CODE``,
+# and ``t3-bill-4.ts``), and deleting the name would leave those string literals
+# with nothing in the server to anchor them to.
+#
+# Exhaustion itself is still enforced, by the two walls that always did the real
+# work: the usage importer disables the LiteLLM virtual keys, and the agent-auth
+# state render withholds key material from an exhausted subject
+# (``materialization/materialize/agent_auth.py``) so the runtime fails closed at
+# launch. What is missing is a product-server 402 carrying this code — tracked as
+# a model-gateway gap, not silently dropped.
 AGENT_GATEWAY_CREDITS_EXHAUSTED_CODE = "agent_gateway_credits_exhausted"
 
 

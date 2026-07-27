@@ -496,46 +496,6 @@ async def test_exhausted_budget_withholds_gateway_key_from_state_render(
 
 
 @pytest.mark.asyncio
-async def test_exhausted_budget_blocks_gateway_catalog_refresh_with_402(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-    stub_litellm: StubLiteLLM,
-) -> None:
-    from proliferate.server.cloud.agent_gateway import catalog as catalog_service
-    from proliferate.server.cloud.errors import CloudApiError
-
-    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
-    user_id = await _create_user(db_session)
-    await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is None
-    claude_key_id = await _claude_key_id(db_session, enrollment.id)
-
-    stub_litellm.spend_rows = [
-        _spend_row(
-            request_id="req-catalog-drain",
-            api_key=claude_key_id,
-            spend=6.0,
-            occurred_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
-        )
-    ]
-    await run_usage_import(db_session, now=datetime(2026, 7, 1, 12, 10, tzinfo=UTC))
-
-    with pytest.raises(CloudApiError) as excinfo:
-        await catalog_service.refresh_catalog(
-            db_session,
-            user_id=user_id,
-            harness_kind="claude",
-            surface="local",
-            route="gateway",
-            models_json=None,
-        )
-    assert excinfo.value.code == "agent_gateway_credits_exhausted"
-    assert excinfo.value.status_code == 402
-
-
-@pytest.mark.asyncio
 async def test_available_budget_leaves_state_render_and_no_grant_unblocked(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,

@@ -312,8 +312,10 @@ async def test_every_gateway_key_reader_resolves_the_same_enrollment(
     assert governing is not None
     assert governing.id == org_enrollment.id
 
-    # The probe path (catalog._probe_gateway_models) reads its key off the same
-    # enrollment; assert on the key it would resolve for a harness.
+    # Every remaining reader of gateway key material resolves off this same
+    # enrollment (the state renderer and the budget gate); the server-side
+    # catalog prober that used to be the third such reader is deleted (B4).
+    # Assert on the key they resolve for a harness.
     org_key = await store.get_active_enrollment_key(
         db_session, enrollment_id=governing.id, harness_kind="claude"
     )

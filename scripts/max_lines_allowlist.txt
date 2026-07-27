@@ -40,8 +40,7 @@ anyharness/sdk/src/reducer/transcript.ts 1528 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
 server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
 server/proliferate/config.py 618 managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending
-server/proliferate/db/models/cloud/agent_gateway.py 556 agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2); a module split is deferred to the model-taxonomy pass rather than done mid-stack
-server/proliferate/server/cloud/agent_gateway/api.py 405 harness-settings GET/PUT routes added for catalog-driven per-harness settings
+server/proliferate/db/models/cloud/agent_gateway.py 569 agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); a module split is deferred to the model-taxonomy pass rather than done mid-stack
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
 server/proliferate/server/cloud/workspaces/service.py 1040 workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path; AnyHarness provisioning handoff split out per guides/domains.md
 server/tests/integration/test_agent_gateway_api.py 665 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model; state coverage now seeds a per-harness child key (B3 renderer)
@@ -57,7 +56,7 @@ apps/packages/ui/src/icons/core.tsx 413 existing consolidated icon barrel pendin
 # gate-weakening; product-client/src is now a check_max_lines scan root. Entries
 # that fell under the 600 general cap at the deeper path (SplitDiffViewer 540,
 # HomeNextScreen.test 530 — desktop component cap was 500) are dropped, not moved.
-apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 932 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases
+apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 885 P3 runtime catalog extends All-Models coverage + add-key modal flow + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases; F-040 dropped the client-refresh-with-payload cases (no callable cloud refresh remains)
 apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 840 managed sandbox cloud workspace indicators + PR 5 explicit-materialization attachment cases extend existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 648 existing desktop oversized test file

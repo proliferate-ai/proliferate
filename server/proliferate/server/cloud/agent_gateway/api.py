@@ -1,4 +1,9 @@
-"""HTTP routes for agent gateway auth: key vault, selections, state, catalog."""
+"""HTTP routes for agent gateway auth: key vault, selections, state, policy.
+
+Model catalogs moved out: the cloud snapshot's routes live in their own
+``agent_models`` namespace (model-catalog.md §Cloud routes), named off both
+"gateway" (they serve every auth context) and "catalog".
+"""
 
 from __future__ import annotations
 
@@ -11,22 +16,15 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.permissions import CurrentOrgUser, current_path_org_admin
-from proliferate.server.cloud.agent_gateway import catalog as catalog_service
 from proliferate.server.cloud.agent_gateway import service
 from proliferate.server.cloud.agent_gateway.models import (
     AgentApiKeyCreateRequest,
     AgentApiKeyResponse,
-    AgentAuthRoute,
     AgentAuthSelectionResponse,
     AgentAuthSelectionsPutRequest,
     AgentAuthStateResponse,
     AgentAuthSurface,
     AgentGatewayCapabilitiesResponse,
-    AgentGatewayCatalogMirrorRequest,
-    AgentGatewayCatalogOverrideResponse,
-    AgentGatewayCatalogOverrideUpsertRequest,
-    AgentGatewayCatalogRefreshRequest,
-    AgentGatewayCatalogResponse,
     AgentGatewayEnrollmentResponse,
     OrgAgentPolicyResponse,
     OrgAgentPolicyUpdateRequest,
@@ -34,8 +32,6 @@ from proliferate.server.cloud.agent_gateway.models import (
     agent_auth_state_payload,
     api_key_payload,
     auth_selection_payload,
-    catalog_override_payload,
-    catalog_payload,
     desired_source,
     enrollment_payload,
     org_agent_policy_payload,
@@ -188,135 +184,6 @@ async def get_agent_auth_state_endpoint(
     """
     state = await service.get_auth_state(db, user_id=user.id, surface=surface)
     return agent_auth_state_payload(state)
-
-
-# --------------------------------------------------------------------------- #
-# Catalog
-# --------------------------------------------------------------------------- #
-
-
-@router.get("/catalog/{harness_kind}", response_model=AgentGatewayCatalogResponse)
-async def get_agent_catalog_endpoint(
-    harness_kind: str,
-    surface: AgentAuthSurface = Query(...),
-    route: AgentAuthRoute = Query("gateway"),
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayCatalogResponse:
-    snapshot, override, models = await catalog_service.get_catalog(
-        db,
-        user_id=user.id,
-        harness_kind=harness_kind,
-        surface=surface,
-        route=route,
-    )
-    return catalog_payload(
-        harness_kind=harness_kind,
-        surface=surface,
-        route=route,
-        models=models,
-        snapshot=snapshot,
-        override=override,
-    )
-
-
-@router.post("/catalog/{harness_kind}/refresh", response_model=AgentGatewayCatalogResponse)
-async def refresh_agent_catalog_endpoint(
-    harness_kind: str,
-    body: AgentGatewayCatalogRefreshRequest,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayCatalogResponse:
-    try:
-        snapshot, override, models = await catalog_service.refresh_catalog(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-            surface=body.surface,
-            route=body.route,
-            models_json=body.models_json,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return catalog_payload(
-        harness_kind=harness_kind,
-        surface=body.surface,
-        route=body.route,
-        models=models,
-        snapshot=snapshot,
-        override=override,
-    )
-
-
-@router.post("/catalog/{harness_kind}/mirror", response_model=AgentGatewayCatalogResponse)
-async def mirror_agent_catalog_endpoint(
-    harness_kind: str,
-    body: AgentGatewayCatalogMirrorRequest,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayCatalogResponse:
-    """Store the caller's own runtime-probed catalog as a read-model snapshot.
-
-    Distinct from ``.../refresh``: the runtime already did the probing (a
-    harness/gateway reachability check, possibly server-side via LiteLLM) and
-    is pushing the result here fire-and-forget, so this endpoint never talks
-    to an upstream itself.
-    """
-    try:
-        snapshot, override, models = await catalog_service.mirror_catalog(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-            surface=body.surface,
-            route=body.route,
-            models_json=body.models_json,
-            probed_at=body.probed_at,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return catalog_payload(
-        harness_kind=harness_kind,
-        surface=body.surface,
-        route=body.route,
-        models=models,
-        snapshot=snapshot,
-        override=override,
-    )
-
-
-@router.put("/catalog/{harness_kind}/override", response_model=AgentGatewayCatalogOverrideResponse)
-async def upsert_agent_catalog_override_endpoint(
-    harness_kind: str,
-    body: AgentGatewayCatalogOverrideUpsertRequest,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayCatalogOverrideResponse:
-    try:
-        record = await catalog_service.upsert_override(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-            patch_json=body.patch_json,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return catalog_override_payload(record)
-
-
-@router.delete("/catalog/{harness_kind}/override", status_code=204)
-async def delete_agent_catalog_override_endpoint(
-    harness_kind: str,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> None:
-    try:
-        await catalog_service.delete_override(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
 
 
 # --------------------------------------------------------------------------- #

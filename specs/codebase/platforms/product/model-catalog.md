@@ -418,7 +418,7 @@ shaped like the other per-tick convergence steps:
 machine: the desktop picker always has its runtime attached and reads the
 document live, and no machineless surface consumes a local observation —
 they all pick models for cloud execution. Today's 60-second
-[useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
+`useGatewayCatalogMirrorSync` (deleted)
 polling loop deletes with no replacement.
 
 ## Serving and merge
@@ -559,10 +559,12 @@ word belongs to the agent-distribution document):
 Snapshot identity on the wire matches the tables: harness, auth
 context id, `probedAt`. Renames are hard cutovers with no alias windows;
 all consumers are first-party (pre-launch ruling): the cloud SDK's
-agent-gateway catalog functions, the sdk-react hooks
-(`useAgentCatalog`, `useRefreshAgentCatalog`, `useMirrorAgentCatalog`,
-`useUpsertCatalogOverride`, `useDeleteCatalogOverride`), the mirror-sync
-hook, and the settings All Models surface.
+agent-models functions (`getAgentModels`, `upsertAgentModelOverride`,
+`deleteAgentModelOverride` — no product-client refresh/mirror function,
+since the single ingest route is Worker-authenticated only), the
+sdk-react hooks (`useAgentModels`, `useUpsertAgentModelOverride`,
+`useDeleteAgentModelOverride`), the mirror-sync hook (deleted with no
+replacement — see below), and the settings All Models surface.
 
 ### Runtime routes
 
@@ -616,7 +618,7 @@ and
 (with the `gateway_model_probe` sqlite
 table), the `gatewayPolicy` seed fallback (agent-distribution gap), and
 the frontend
-[useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
+`useGatewayCatalogMirrorSync` (deleted)
 polling hook.
 
 ## Failure modes
@@ -665,25 +667,17 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       checks the
       shipped catalog's model list only; probed capability never enters
       the universe.
-- [ ] The cloud snapshot exists (`agent_catalog_snapshot` in
-      [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py))
-      but is keyed by
-      coarse route (`native`/`api_key`/`gateway`) instead of auth context,
-      stores a models-only payload, carries ownerless seed rows and a
-      `source` column (both leave: seed becomes a read-time fallback to
-      the served shipped catalog), and is read only by the settings "All
-      Models" tab. Composer, web, mobile, automations, and workflows all
-      read the shipped catalog instead. The re-key (route →
-      `auth_context_id`, `models_json` → `snapshot_json`, table rename)
-      is one migration; the soft-versioning write pattern is kept.
-- [ ] The server has three catalog write paths (`refresh` with optional
-      payload, `mirror` with `source="runtime-mirror"`, and overrides —
-      all in
-      [agent_gateway/api.py](../../../../server/proliferate/server/cloud/agent_gateway/api.py));
-      the first two collapse into the single ingest route, and the
-      server-side gateway discovery inside `refresh` (enrollment lookup,
-      virtual-key decrypt, `GET /v1/models`) deletes — the server never
-      generates snapshots.
+- [ ] The cloud snapshot is read only by the settings "All Models" tab.
+      Composer, web, mobile, automations, and workflows all read the shipped
+      catalog instead. (The store itself is re-keyed: `agent_model_snapshot`
+      in
+      [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py).)
+- [ ] The retained `inactive` snapshot rows have no retention bound. They are
+      the audit trail this document relies on to answer "what changed between
+      refreshes", so they must not simply be deleted on write — but nothing
+      prunes them either, and every Worker upload for every (user, harness,
+      auth context) appends one forever. The document owes a retention rule
+      (keep N per scope, or an age bound) and the sweep that enforces it.
 - [ ] The gateway model plan chain —
       [gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs),
       [gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)
@@ -691,7 +685,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       (keyed on the global `state.json` revision, so any harness's auth
       change invalidates every harness's probe), the `gatewayPolicy` seed
       fallback, and the 60-second
-      [useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
+      `useGatewayCatalogMirrorSync` (deleted)
       poll — is
       the gateway-context special case of the machine snapshot and is
       replaced by it (jointly ruled with the agent-distribution and
@@ -701,14 +695,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       and no auth fingerprint exists to compute staleness from.
 - [ ] Model entries do not carry provider namespace or serving-context as
       explicit fields; the frontend derives what it can from ids.
-- [ ] Route rename `/v1/cloud/agent-gateway/catalog/*` →
-      `/v1/cloud/agent-models/*` (hard cutover; first-party consumers:
-      the catalog functions in
-      [cloud/sdk/src/client/agent-gateway.ts](../../../../cloud/sdk/src/client/agent-gateway.ts),
-      the sdk-react agent-gateway catalog hooks in
-      [cloud/sdk-react/src/hooks/agent-gateway.ts](../../../../cloud/sdk-react/src/hooks/agent-gateway.ts),
-      the mirror-sync hook, and
-      [HarnessAllModelsSection](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAllModelsSection.tsx)).
 - [ ] Onboarding contains no "checking for latest models" step (the
       surface rendering the install-completed and auth-applied pokes).
 - [ ] Probe status is not pollable: no runtime endpoint exposes

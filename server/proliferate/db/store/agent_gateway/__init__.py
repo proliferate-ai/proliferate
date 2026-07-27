@@ -7,11 +7,9 @@ from proliferate.db.store.agent_gateway.api_keys import (
     list_agent_api_keys,
     revoke_agent_api_key,
 )
-from proliferate.db.store.agent_gateway.catalog import (
-    create_catalog_snapshot,
+from proliferate.db.store.agent_gateway.catalog_overrides import (
     delete_catalog_override,
     get_catalog_override,
-    get_latest_catalog_snapshot,
     upsert_catalog_override,
 )
 from proliferate.db.store.agent_gateway.credits import (
@@ -53,6 +51,10 @@ from proliferate.db.store.agent_gateway.harness_settings import (
     list_harness_settings_for_surface,
     put_harness_settings,
 )
+from proliferate.db.store.agent_gateway.model_snapshots import (
+    create_model_snapshot,
+    get_active_model_snapshot,
+)
 from proliferate.db.store.agent_gateway.policy import (
     OrgMemberRouteSelectionRecord,
     get_org_agent_policy,
@@ -63,10 +65,10 @@ from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
     AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
-    AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
+    AgentModelSnapshotRecord,
     DesiredAuthSource,
     LlmCreditBalanceRecord,
     LlmCreditGrantRecord,
@@ -95,10 +97,10 @@ __all__ = [
     "AgentApiKeyRecord",
     "AgentAuthSelectionRecord",
     "AgentCatalogOverrideRecord",
-    "AgentCatalogSnapshotRecord",
     "AgentGatewayEnrollmentKeyRecord",
     "AgentGatewayEnrollmentRecord",
     "AgentLlmUsageImportCursorRecord",
+    "AgentModelSnapshotRecord",
     "DesiredAuthSource",
     "LlmCreditBalanceRecord",
     "LlmCreditGrantRecord",
@@ -109,11 +111,12 @@ __all__ = [
     "clear_auth_selections",
     "count_topup_grants",
     "create_agent_api_key",
-    "create_catalog_snapshot",
     "create_llm_credit_grant",
+    "create_model_snapshot",
     "delete_catalog_override",
     "ensure_enrollment_row",
     "get_active_enrollment_key",
+    "get_active_model_snapshot",
     "get_agent_api_key_decrypted",
     "get_catalog_override",
     "get_enrollment_by_id",
@@ -123,7 +126,6 @@ __all__ = [
     "get_enrollment_key_by_virtual_key_id",
     "get_enrollment_key_virtual_key_decrypted",
     "get_enrollment_virtual_key_decrypted",
-    "get_latest_catalog_snapshot",
     "get_org_agent_policy",
     "get_harness_settings",
     "get_remaining_credit_usd",

@@ -320,28 +320,41 @@ class AgentGatewayEnrollmentKey(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class AgentCatalogSnapshot(Base):
-    """Probed (or seeded) model catalog per (harness, surface, route, owner)."""
+class AgentModelSnapshot(Base):
+    """One cloud-sandbox machine observation per (harness, auth context, owner).
 
-    __tablename__ = "agent_catalog_snapshot"
+    Every row is a machine's observation at rest, uploaded by the Worker
+    (model-catalog.md §The cloud snapshot). Three consequences are in the schema:
+    no ``surface`` (only the cloud sandbox's document syncs); no ``source`` and
+    ``owner_user_id`` NOT NULL (the server never generates snapshots, so there is
+    no ownerless seed row — the seed tier is a read-time fallback to the served
+    shipped catalog); and ``snapshot_json`` holding one machine-document entry
+    verbatim (models, modes, attestation, warnings), not a models-only payload.
+
+    Soft-versioned: a write deactivates prior active rows for the scope and
+    inserts the new one, so retained inactive rows are the audit trail that makes
+    "what changed between refreshes" answerable without storing diffs.
+
+    Deliberately **no unique key on the scope** (model-catalog.md §Storage: "the
+    soft-versioning discipline is kept as-is"). A partial unique index over
+    ``status = 'active'`` was built here first and withdrawn: uploads are
+    fire-and-forget from the Worker's convergence tick, so two racing ticks would
+    turn a benign duplicate into a 500 the Worker cannot act on. Consequence the
+    reader must know: "the active row" is plural in principle, so reads order by
+    ``(probed_at DESC, id DESC)`` — the tie-break is required, not cosmetic,
+    since a re-sent entry repeats its ``probedAt``. The next write collapses it.
+    """
+
+    __tablename__ = "agent_model_snapshot"
     __table_args__ = (
         CheckConstraint(
-            "surface IN ('local', 'cloud')",
-            name="ck_agent_catalog_snapshot_surface",
-        ),
-        CheckConstraint(
-            "route IN ('native', 'api_key', 'gateway')",
-            name="ck_agent_catalog_snapshot_route",
-        ),
-        CheckConstraint(
-            "source IN ('probe', 'seed', 'override', 'runtime-mirror')",
-            name="ck_agent_catalog_snapshot_source",
+            "status IN ('active', 'inactive')",
+            name="ck_agent_model_snapshot_status",
         ),
         Index(
-            "ix_agent_catalog_snapshot_scope",
+            "ix_agent_model_snapshot_scope",
             "harness_kind",
-            "surface",
-            "route",
+            "auth_context_id",
             "owner_user_id",
             "probed_at",
         ),
@@ -349,16 +362,16 @@ class AgentCatalogSnapshot(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     harness_kind: Mapped[str] = mapped_column(String(64))
-    surface: Mapped[str] = mapped_column(String(16))
-    route: Mapped[str] = mapped_column(String(16))
-    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    # Catalog auth-context id ('anthropic-api', 'gateway', 'baseline', …) — the
+    # exact strings the shipped catalog declares and the runtime's snapshot
+    # document is keyed by, never a new vocabulary.
+    auth_context_id: Mapped[str] = mapped_column(String(64))
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
-        nullable=True,
     )
-    models_json: Mapped[str] = mapped_column(Text)
+    snapshot_json: Mapped[str] = mapped_column(Text)
     probed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    source: Mapped[str] = mapped_column(String(16), default="probe")
     status: Mapped[str] = mapped_column(String(16), default="active")
 
 

@@ -6,6 +6,7 @@ from proliferate.server.cloud.agent_gateway.api import (
     organization_router as agent_gateway_organization_router,
 )
 from proliferate.server.cloud.agent_gateway.api import router as agent_gateway_router
+from proliferate.server.cloud.agent_models.api import router as agent_models_router
 from proliferate.server.cloud.agent_run_config.api import router as agent_run_config_router
 from proliferate.server.cloud.cloud_sandboxes.api import router as cloud_sandboxes_router
 from proliferate.server.cloud.github_app.api import (
@@ -49,6 +50,7 @@ router.include_router(workspaces_router)
 router.include_router(worktree_policy_router)
 router.include_router(agent_gateway_router)
 router.include_router(agent_gateway_organization_router)
+router.include_router(agent_models_router)
 router.include_router(agent_run_config_router)
 router.include_router(runtime_workers_router)
 router.include_router(runtime_worker_router)
