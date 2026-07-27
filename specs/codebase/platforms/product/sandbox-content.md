@@ -481,18 +481,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       with a runtime default-placement branch (the workflow-placement
       pattern); nothing downstream depends on the path — the server keeps
       only workspace and repo-root ids after creation.
-- [ ] The managed-root fence excludes every cloud worktree:
-      `ANYHARNESS_WORKTREES_ROOT` is never set in the cloud launch env
-      ([bootstrap.py](../../../../server/proliferate/server/cloud/runtime/bootstrap.py)),
-      so the root defaults to `/home/user/.proliferate/worktrees` while
-      worktrees live under `/home/user/workspace/worktrees` — retire
-      refuses them and retention skips them ("outside managed worktrees
-      root"). Set the env var; this alone makes reclaim operable in cloud.
-- [ ] Retention never runs in cloud: the enabling env
-      (`ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION`) is never set (only
-      the defer flag is), and the server-side trigger clients
-      ([worktrees.py](../../../../server/proliferate/integrations/anyharness/worktrees.py))
-      have zero callers. Enable the pass in the cloud launch env.
 - [ ] Repository-environment delete reclaims nothing and no clone-delete
       primitive exists anywhere in AnyHarness (no route, no store method).
       Build the clone-delete primitive under the same fence discipline as
