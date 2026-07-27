@@ -47,15 +47,14 @@ pub async fn put_agent_auth_state(
         ));
     }
     apply_state_file(&state.runtime_home, &document).map_err(map_route_auth_error)?;
-    // Auth-applied poke (model-catalog.md, "The snapshot reconciler"). This
-    // REPLACES the old gateway-only probe scheduler, and the difference is the
-    // point: the poke names every harness the applied document mentions, and the
-    // per-(harness, context) FINGERPRINT gate — not this handler — decides which
-    // actually re-probe. That makes invalidation "exactly as wide as the change"
-    // instead of as wide as the trigger, which the old global-revision keying
-    // could not do.
+    // Auth-applied poke — the primary trigger (model-catalog.md, "Freshness is
+    // event-driven"): an applied `state.json` re-probes every harness the applied
+    // document names, unconditionally. There is no fingerprint gate deciding
+    // which "actually" changed; the event IS the invalidation, and the engine's
+    // single-flight coalescing bounds the cost.
     //
-    // Fire-and-forget: the apply response never waits for a probe.
+    // Fire-and-forget: the apply response never waits for a probe; the picker
+    // shows a refreshing state rather than stale data presented as current.
     ModelSnapshotService::poke_harnesses_optional(
         &state.automatic_poke_engine,
         &applied_harness_kinds(&document),
@@ -80,14 +79,11 @@ pub async fn delete_agent_auth_state(
     State(state): State<AppState>,
 ) -> Result<StatusCode, ApiError> {
     clear_state_file(&state.runtime_home).map_err(map_route_auth_error)?;
-    // Clearing the state file removes EVERY harness's selection, so it is the
-    // widest possible fingerprint change — wider than any apply. Without a poke
-    // here every harness's entries stay pinned to credentials that no longer
-    // exist, and the picker keeps serving models the machine can no longer reach.
-    ModelSnapshotService::poke_all_optional(
-        &state.automatic_poke_engine,
-        PokeReason::AuthCleared,
-    );
+    // Clearing the state file removes EVERY harness's selection — the widest
+    // possible auth application. Without a poke here every harness's observation
+    // stays pinned to an auth world that no longer exists, and the picker keeps
+    // serving models the machine can no longer reach.
+    ModelSnapshotService::poke_all_optional(&state.automatic_poke_engine, PokeReason::AuthApplied);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -99,8 +95,8 @@ pub async fn delete_agent_auth_state(
 /// gateway route to a raw provider key, or that drops its sources entirely, changes
 /// that harness's credential material just as much as landing a gateway key does. The
 /// old code skipped every such harness, so its snapshot stayed pinned to credentials
-/// the machine no longer uses. Naming them all is safe precisely because the
-/// fingerprint gate, not this list, decides what re-probes.
+/// the machine no longer uses. Naming them all is exactly the spec's trigger: "the
+/// ack fires a probe for every harness whose entry the applied document changed".
 fn applied_harness_kinds(document: &AgentAuthState) -> Vec<String> {
     document
         .harnesses
@@ -153,8 +149,8 @@ mod tests {
     /// raw provider key, or that empties its sources entirely, changes that harness's
     /// credential material exactly as much as landing a gateway key does. The old code
     /// skipped all three of those cases, leaving the snapshot pinned to credentials the
-    /// machine no longer uses. Widening is safe because the fingerprint gate — not this
-    /// list — decides what re-probes.
+    /// machine no longer uses. Naming them all is the spec's trigger — every harness
+    /// the applied document mentions re-probes.
     #[test]
     fn every_harness_in_the_applied_document_is_named() {
         let applied = document(&[

@@ -2,71 +2,83 @@ use super::*;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-fn context(auth_context_id: &str, probed_at: Option<&str>) -> RuntimeContextStatus {
-    RuntimeContextStatus {
-        auth_context_id: auth_context_id.to_string(),
+fn status(probed_at: Option<&str>) -> RuntimeModelSnapshotStatus {
+    RuntimeModelSnapshotStatus {
+        agent: Some("opencode".to_string()),
+        schema_version: Some(2),
         probed_at: probed_at.map(str::to_string),
+        attestation: None,
+        install_identity: Some(serde_json::json!({"role": "agent_process", "source": "pinned_archive"})),
+        state_revision: Some(7),
         models: vec![serde_json::json!({"id": "m1"})],
         modes: vec![serde_json::json!({"id": "default", "name": "Default"})],
-        attestation: None,
         warnings: Vec::new(),
+        last_attempt: Some(serde_json::json!({"at": "2026-07-27T00:00:00Z", "outcome": "ok"})),
     }
 }
 
-// ── plan_pushes: pure decision tests ────────────────────────────────
+// ── plan_push: pure decision tests ────────────────────────────────
 
 #[test]
-fn plan_pushes_uploads_when_probed_at_advances() {
-    let contexts = vec![context("gateway", Some("2026-07-27T00:00:00Z"))];
+fn plan_push_uploads_when_probed_at_advances() {
     let mut last_pushed = HashMap::new();
-    last_pushed.insert(
-        ("opencode".to_string(), "gateway".to_string()),
-        "2026-07-26T00:00:00Z".to_string(),
-    );
-    let pushes = plan_pushes("opencode", &contexts, &last_pushed);
-    assert_eq!(pushes.len(), 1);
-    assert_eq!(pushes[0].auth_context_id, "gateway");
-    assert_eq!(pushes[0].probed_at, "2026-07-27T00:00:00Z");
-    assert!(pushes[0].snapshot_json.contains("\"m1\""));
+    last_pushed.insert("opencode".to_string(), "2026-07-26T00:00:00Z".to_string());
+    let push = plan_push(
+        "opencode",
+        &status(Some("2026-07-27T00:00:00Z")),
+        &last_pushed,
+    )
+    .expect("a changed probedAt must push");
+    assert_eq!(push.harness_kind, "opencode");
+    assert_eq!(push.probed_at, "2026-07-27T00:00:00Z");
+    // The uploaded payload is the machine document's wire shape: one composed
+    // observation with its provenance fields, no entries map and no context.
+    let document: serde_json::Value =
+        serde_json::from_str(&push.snapshot_json).expect("valid json");
+    assert_eq!(document["schemaVersion"], serde_json::json!(2));
+    assert_eq!(document["agent"], serde_json::json!("opencode"));
+    assert_eq!(document["stateRevision"], serde_json::json!(7));
+    assert_eq!(document["models"][0]["id"], serde_json::json!("m1"));
+    assert!(document.get("entries").is_none());
+    assert!(!push.snapshot_json.contains("authContextId"));
+    assert!(!push.snapshot_json.contains("authFingerprint"));
 }
 
 #[test]
-fn plan_pushes_does_not_repush_unchanged_probed_at() {
-    let contexts = vec![context("gateway", Some("2026-07-27T00:00:00Z"))];
+fn plan_push_does_not_repush_unchanged_probed_at() {
     let mut last_pushed = HashMap::new();
-    last_pushed.insert(
-        ("opencode".to_string(), "gateway".to_string()),
-        "2026-07-27T00:00:00Z".to_string(),
+    last_pushed.insert("opencode".to_string(), "2026-07-27T00:00:00Z".to_string());
+    assert!(
+        plan_push(
+            "opencode",
+            &status(Some("2026-07-27T00:00:00Z")),
+            &last_pushed
+        )
+        .is_none(),
+        "unchanged probedAt must not re-push"
     );
-    let pushes = plan_pushes("opencode", &contexts, &last_pushed);
-    assert!(pushes.is_empty(), "unchanged probedAt must not re-push");
 }
 
 #[test]
-fn plan_pushes_skips_a_context_with_no_snapshot_yet() {
-    let contexts = vec![context("gateway", None)];
-    let pushes = plan_pushes("opencode", &contexts, &HashMap::new());
-    assert!(pushes.is_empty(), "no probedAt means no entry to upload");
+fn plan_push_skips_a_harness_with_no_observation_yet() {
+    assert!(
+        plan_push("opencode", &status(None), &HashMap::new()).is_none(),
+        "no probedAt means no observation to upload"
+    );
 }
 
 #[test]
-fn plan_pushes_treats_each_harness_independently() {
-    let contexts = vec![context("gateway", Some("2026-07-27T00:00:00Z"))];
+fn plan_push_treats_each_harness_independently() {
     let mut last_pushed = HashMap::new();
     // Same probedAt, but recorded under a DIFFERENT harness — must not
     // suppress this harness's push.
-    last_pushed.insert(
-        ("grok".to_string(), "gateway".to_string()),
-        "2026-07-27T00:00:00Z".to_string(),
-    );
-    let pushes = plan_pushes("opencode", &contexts, &last_pushed);
-    assert_eq!(pushes.len(), 1);
-}
-
-#[test]
-fn plan_pushes_handles_no_contexts_at_all() {
-    let pushes = plan_pushes("opencode", &[], &HashMap::new());
-    assert!(pushes.is_empty());
+    last_pushed.insert("grok".to_string(), "2026-07-27T00:00:00Z".to_string());
+    assert!(plan_push(
+        "opencode",
+        &status(Some("2026-07-27T00:00:00Z")),
+        &last_pushed
+    )
+    .is_some());
 }
 
 // ── resolve_runtime_bearer_token ─────────────────────────────────────
@@ -182,7 +194,7 @@ fn spawn_fake_server(
 
 fn runtime_responses(
     harness_kind: &str,
-    contexts_json: &str,
+    status_json: String,
 ) -> Vec<(u16, &'static str, String)> {
     vec![
         (
@@ -190,8 +202,24 @@ fn runtime_responses(
             "OK",
             serde_json::json!([{ "kind": harness_kind }]).to_string(),
         ),
-        (200, "OK", format!("{{\"contexts\":{contexts_json}}}")),
+        (200, "OK", status_json),
     ]
+}
+
+fn observed_status_json() -> String {
+    serde_json::json!({
+        "agent": "opencode",
+        "schemaVersion": 2,
+        "probeEngine": "owner",
+        "state": "idle",
+        "probedAt": "2026-07-27T00:00:00Z",
+        "stateRevision": 7,
+        "models": [{"id": "m1"}],
+        "modes": [{"id": "default", "name": "Default"}],
+        "warnings": [],
+        "lastAttempt": {"at": "2026-07-27T00:00:00Z", "outcome": "ok"}
+    })
+    .to_string()
 }
 
 fn cloud_config_for(
@@ -205,19 +233,9 @@ fn cloud_config_for(
 }
 
 #[tokio::test]
-async fn maybe_sync_uploads_a_changed_context_with_the_workers_bearer() {
-    let contexts_json = serde_json::json!([
-        {
-            "authContextId": "gateway",
-            "probedAt": "2026-07-27T00:00:00Z",
-            "models": [{"id": "m1"}],
-            "modes": [{"id": "default", "name": "Default"}],
-            "warnings": []
-        }
-    ])
-    .to_string();
+async fn maybe_sync_uploads_a_changed_document_with_the_workers_bearer() {
     let (runtime_addr, runtime_handle) =
-        spawn_fake_server(runtime_responses("opencode", &contexts_json));
+        spawn_fake_server(runtime_responses("opencode", observed_status_json()));
     let (cloud_addr, cloud_handle) = spawn_fake_server(vec![(
         200,
         "OK",
@@ -238,7 +256,7 @@ async fn maybe_sync_uploads_a_changed_context_with_the_workers_bearer() {
     );
 
     let cloud_requests = cloud_handle.join().expect("cloud server thread");
-    assert_eq!(cloud_requests.len(), 1, "exactly one context changed");
+    assert_eq!(cloud_requests.len(), 1, "exactly one document changed");
     let push = &cloud_requests[0];
     assert_eq!(push.method, "POST");
     assert_eq!(push.path, "/v1/cloud/agent-models/opencode/refresh");
@@ -247,32 +265,25 @@ async fn maybe_sync_uploads_a_changed_context_with_the_workers_bearer() {
         Some("Bearer worker-secret-token"),
         "the worker's own bearer must authenticate the cloud upload"
     );
-    assert!(push.body.contains("\"authContextId\":\"gateway\""));
     assert!(push.body.contains("\"probedAt\":\"2026-07-27T00:00:00Z\""));
+    assert!(
+        !push.body.contains("authContextId"),
+        "the composed upload carries no context key"
+    );
 
     // Success is recorded, so an identical status next tick would not
     // re-push (verified against the pure decision fn directly).
     let recorded = state.snapshot();
     assert_eq!(
-        recorded.get(&("opencode".to_string(), "gateway".to_string())),
+        recorded.get("opencode"),
         Some(&"2026-07-27T00:00:00Z".to_string())
     );
 }
 
 #[tokio::test]
 async fn maybe_sync_does_not_wedge_on_a_cloud_error_and_leaves_the_push_pending() {
-    let contexts_json = serde_json::json!([
-        {
-            "authContextId": "gateway",
-            "probedAt": "2026-07-27T00:00:00Z",
-            "models": [{"id": "m1"}],
-            "modes": [],
-            "warnings": []
-        }
-    ])
-    .to_string();
     let (runtime_addr, runtime_handle) =
-        spawn_fake_server(runtime_responses("opencode", &contexts_json));
+        spawn_fake_server(runtime_responses("opencode", observed_status_json()));
     let (cloud_addr, cloud_handle) = spawn_fake_server(vec![(
         500,
         "Internal Server Error",
@@ -290,14 +301,13 @@ async fn maybe_sync_does_not_wedge_on_a_cloud_error_and_leaves_the_push_pending(
     let cloud_requests = cloud_handle.join().expect("cloud server thread");
     assert_eq!(cloud_requests.len(), 1, "the push was attempted");
 
-    // Not recorded on failure, so the next tick's plan_pushes sees the
-    // same context as still needing an upload.
+    // Not recorded on failure, so the next tick's plan_push sees the
+    // same document as still needing an upload.
     let recorded = state.snapshot();
     assert!(
         recorded.is_empty(),
         "a failed push must not be recorded as pushed"
     );
-    let contexts = vec![context("gateway", Some("2026-07-27T00:00:00Z"))];
-    let retry = plan_pushes("opencode", &contexts, &recorded);
-    assert_eq!(retry.len(), 1, "the next tick must retry the failed push");
+    let retry = plan_push("opencode", &status(Some("2026-07-27T00:00:00Z")), &recorded);
+    assert!(retry.is_some(), "the next tick must retry the failed push");
 }

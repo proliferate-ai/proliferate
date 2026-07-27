@@ -1,27 +1,20 @@
-//! T-20..T-23: coalescing, per-harness serialization, the machine-wide cap, and
-//! idempotence.
+//! Proof B7's first leg: concurrent triggers coalesce to one spawn, the
+//! machine-wide cap holds, and a dropped refresh cannot wedge a harness.
 
 use super::*;
 
-// ---------------------------------------------------------------------------
-// T-20..T-23: coalescing, serialization, the cap, idempotence
-// ---------------------------------------------------------------------------
-
-/// T-20 — **the coalescing proof.** Eight concurrent pokes for one key against a
-/// runner that blocks on a barrier produce exactly ONE invocation, and every caller
-/// ends up observing the written entry.
-///
-/// Today's shipped code has no dedupe at all: an apply, a launch and a manual
-/// refresh landing together each hit the gateway independently.
+/// **Proof B7 (coalescing).** Eight concurrent pokes for one harness against a
+/// runner that blocks on a barrier produce exactly ONE invocation, and every
+/// caller ends up observing the winner's written document.
 #[tokio::test]
-async fn eight_concurrent_pokes_for_one_key_produce_one_probe() {
+async fn eight_concurrent_pokes_for_one_harness_produce_one_probe() {
     let home = seeded_home("coalesce", "opencode");
     let (runner, release) = FakeRunner::gated();
     let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
     let service = Arc::new(ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
         plan,
-        Arc::new(FixedTargets::single("opencode", vec![gateway_context()])),
+        Arc::new(FixedTargets::single("opencode")),
         runner.clone(),
         test_config(),
     ));
@@ -30,7 +23,7 @@ async fn eight_concurrent_pokes_for_one_key_produce_one_probe() {
     for _ in 0..8 {
         let service = service.clone();
         handles.push(tokio::spawn(async move {
-            service.probe_if_stale("opencode", "gateway", PokeReason::Startup).await;
+            service.probe_on_event("opencode", PokeReason::Startup).await;
         }));
     }
     // Let all eight reach the gate before the single winner is allowed to finish.
@@ -46,94 +39,88 @@ async fn eight_concurrent_pokes_for_one_key_produce_one_probe() {
         "eight simultaneous pokes must produce exactly one spawn"
     );
     let document = read_document(home.path(), "opencode").expect("document written");
-    let entry = document.entries.get("gateway").expect("gateway entry");
     assert!(
-        !entry.models.is_empty(),
-        "every caller observes the winner's written entry"
+        !document.models.is_empty(),
+        "every caller observes the winner's written observation"
     );
-    assert_eq!(entry.last_attempt.outcome, AttemptOutcome::Ok);
+    assert_eq!(document.last_attempt.outcome, AttemptOutcome::Ok);
 }
 
-/// A probe waiting for a slot reports `queued`, never `idle`.
+/// A probe admitted but still waiting for the machine-wide semaphore reports
+/// `queued`, never `idle`.
 ///
-/// At `max_concurrent_probes = 1` that wait is the COMMON case, not an edge one: the
-/// second context of any harness spends its whole admitted life behind the per-harness
-/// gate. Reporting `idle` there would tell a polling UI "nothing is happening" about
-/// work the engine has already accepted — so the surface would hide its own spinner
-/// and a user would press Refresh again.
+/// At `max_concurrent_probes = 1` that wait is the COMMON case: the second
+/// harness of any startup pass spends its whole admitted life behind the
+/// semaphore. Reporting `idle` there would tell a polling UI "nothing is
+/// happening" about work the engine has already accepted — so the surface would
+/// hide its own spinner and a user would press Refresh again.
 #[tokio::test]
-async fn a_probe_waiting_for_a_slot_reports_queued_not_idle() {
+async fn a_probe_waiting_for_the_semaphore_reports_queued_not_idle() {
     let home = TempRuntimeHome::new("queued");
-    home.write_state_json(&serde_json::json!({
-        "version": 2,
-        "revision": 4,
-        "harnesses": [{
-            "harness_kind": "opencode",
-            "sources": [
-                { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-vk" },
-                { "kind": "api_key", "env_var_name": "ANTHROPIC_API_KEY", "value": "sk-ant" },
-            ],
-        }],
-    }));
-    home.write_manifest("opencode", Some("1.0.0"), Some("sha-1"), "pinned_archive");
+    home.write_state_json(&gateway_state(
+        4,
+        &[("opencode", "sk-vk"), ("grok", "sk-vk")],
+    ));
+    for kind in ["opencode", "grok"] {
+        home.write_manifest(kind, Some("1.0.0"), Some("sha-1"), "pinned_archive");
+    }
 
     let (runner, release) = FakeRunner::gated();
+    let mut targets = FixedTargets::single("opencode");
+    targets.harnesses.push("grok".to_string());
+    targets.installed.push("grok".to_string());
     let service = Arc::new(ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
         Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"])),
-        Arc::new(FixedTargets::single(
-            "opencode",
-            vec![
-                gateway_context(),
-                env_context("anthropic-api", "anthropic", &["ANTHROPIC_API_KEY"]),
-            ],
-        )),
+        Arc::new(targets),
         runner.clone(),
         test_config(),
     ));
 
-    // Two contexts, one harness: the second cannot run until the first releases.
+    // Two harnesses, a semaphore of one: the second cannot run until the first
+    // releases.
     let first = {
         let service = service.clone();
         tokio::spawn(async move {
-            service.probe_if_stale("opencode", "gateway", PokeReason::Startup).await;
+            service.probe_on_event("opencode", PokeReason::Startup).await;
         })
     };
     let second = {
         let service = service.clone();
         tokio::spawn(async move {
-            service
-                .probe_if_stale("opencode", "anthropic-api", PokeReason::Startup)
-                .await;
+            service.probe_on_event("grok", PokeReason::Startup).await;
         })
     };
     // Wait for both to reach the engine while the runner is still gated. A fixed
     // yield count cannot do this: the spawns above may be on other workers.
-    wait_until("both contexts admitted", || {
-        let status = service.status("opencode", chrono::Utc::now());
-        status
-            .contexts
+    wait_until("both harnesses admitted", || {
+        let states = [
+            service.status("opencode", chrono::Utc::now()).state,
+            service.status("grok", chrono::Utc::now()).state,
+        ];
+        states
             .iter()
-            .filter(|context| context.state != super::super::status::LiveState::Idle)
+            .filter(|state| **state != super::super::status::LiveState::Idle)
             .count()
             == 2
     })
     .await;
 
-    let status = service.status("opencode", chrono::Utc::now());
-    let states: Vec<super::super::status::LiveState> =
-        status.contexts.iter().map(|context| context.state).collect();
+    let states = [
+        service.status("opencode", chrono::Utc::now()).state,
+        service.status("grok", chrono::Utc::now()).state,
+    ];
     assert!(
         states
             .iter()
             .any(|state| *state == super::super::status::LiveState::Running),
-        "one context must be running: {states:?}"
+        "one harness must be running: {states:?}"
     );
     assert!(
         states
             .iter()
             .any(|state| *state == super::super::status::LiveState::Queued),
-        "the context waiting for the harness gate must report queued, not idle: {states:?}"
+        "the harness waiting for the semaphore must report queued, not idle: {states:?}"
     );
 
     release.send(true).expect("release");
@@ -141,97 +128,32 @@ async fn a_probe_waiting_for_a_slot_reports_queued_not_idle() {
     second.await.expect("join");
 
     // And both settle back to idle once the work is done.
-    let settled = service.status("opencode", chrono::Utc::now());
-    for context in &settled.contexts {
+    for kind in ["opencode", "grok"] {
         assert_eq!(
-            context.state,
+            service.status(kind, chrono::Utc::now()).state,
             super::super::status::LiveState::Idle,
-            "{} must settle to idle",
-            context.auth_context_id
+            "{kind} must settle to idle"
         );
     }
 }
 
-/// T-21 — distinct keys do not coalesce, AND they are serialized for one harness:
-/// two contexts produce two invocations that never overlap.
-#[tokio::test]
-async fn distinct_contexts_probe_separately_but_never_concurrently() {
-    let home = TempRuntimeHome::new("serialize");
-    home.write_state_json(&serde_json::json!({
-        "version": 2,
-        "revision": 4,
-        "harnesses": [{
-            "harness_kind": "opencode",
-            "sources": [
-                { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-vk" },
-                { "kind": "api_key", "env_var_name": "ANTHROPIC_API_KEY", "value": "sk-ant" },
-            ],
-        }],
-    }));
-    home.write_manifest("opencode", Some("1.0.0"), Some("sha-1"), "pinned_archive");
-
-    let (service, runner, _plan) = engine(
-        &home,
-        "opencode",
-        vec![
-            gateway_context(),
-            env_context("anthropic-api", "anthropic", &["ANTHROPIC_API_KEY"]),
-        ],
-        test_config(),
-    );
-
-    let gateway = {
-        let service = service.clone();
-        tokio::spawn(async move {
-            service.probe_if_stale("opencode", "gateway", PokeReason::Startup).await;
-        })
-    };
-    let anthropic = {
-        let service = service.clone();
-        tokio::spawn(async move {
-            service
-                .probe_if_stale("opencode", "anthropic-api", PokeReason::Startup)
-                .await;
-        })
-    };
-    gateway.await.expect("join");
-    anthropic.await.expect("join");
-
-    assert_eq!(runner.count(), 2, "two distinct keys must not coalesce");
-    assert_eq!(
-        runner.peak_concurrency(),
-        1,
-        "probes for one harness must run serially"
-    );
-    let document = read_document(home.path(), "opencode").expect("document");
-    assert_eq!(document.entries.len(), 2, "both contexts get entries");
-}
-
-/// T-22 — the machine-wide cap holds ACROSS harnesses, not just within one. Every
-/// probe is a real harness process, so this is a memory bound, not a nicety.
+/// The machine-wide cap holds ACROSS harnesses. Every probe is a real harness
+/// process, so this is a memory bound, not a nicety — and simultaneous pokes per
+/// harness still coalesce to one spawn each.
 #[tokio::test]
 async fn the_global_cap_bounds_concurrency_across_harnesses() {
     let home = TempRuntimeHome::new("global-cap");
     let harnesses = ["claude", "codex", "grok", "opencode"];
-    home.write_state_json(&gateway_state(
-        2,
-        &harnesses.map(|kind| (kind, "sk-vk")),
-    ));
+    home.write_state_json(&gateway_state(2, &harnesses.map(|kind| (kind, "sk-vk"))));
     for kind in harnesses {
         home.write_manifest(kind, Some("1.0.0"), Some("sha-1"), "pinned_archive");
     }
     let runner = Arc::new(FakeRunner::new());
     let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
-    let mut targets = FixedTargets::single("claude", vec![gateway_context()]);
+    let mut targets = FixedTargets::single("claude");
     for kind in &harnesses[1..] {
         targets.harnesses.push(kind.to_string());
         targets.installed.push(kind.to_string());
-        targets
-            .contexts
-            .insert(kind.to_string(), vec!["gateway".to_string()]);
-        targets
-            .catalog_contexts
-            .insert(kind.to_string(), vec![gateway_context()]);
     }
     let service = Arc::new(ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
@@ -247,7 +169,7 @@ async fn the_global_cap_bounds_concurrency_across_harnesses() {
             let service = service.clone();
             let kind = kind.to_string();
             handles.push(tokio::spawn(async move {
-                service.probe_if_stale(&kind, "gateway", PokeReason::Startup).await;
+                service.probe_on_event(&kind, PokeReason::Startup).await;
             }));
         }
     }
@@ -263,87 +185,44 @@ async fn the_global_cap_bounds_concurrency_across_harnesses() {
     assert_eq!(
         runner.count(),
         4,
-        "one probe per harness: the three pokes per harness coalesce"
+        "one probe per harness: the three simultaneous pokes per harness coalesce"
     );
 }
 
-/// T-23 — idempotence: "running it twice does nothing twice". A second poke against
-/// a fresh entry probes zero times.
-///
-/// Uses `min_reprobe_interval: 0` so the STALENESS GATE is what refuses, not the
-/// floor — otherwise this test would pass even with a broken gate.
-#[tokio::test]
-async fn a_second_poke_against_a_fresh_entry_does_nothing() {
-    let home = seeded_home("idempotent", "opencode");
-    let (service, runner, _plan) = engine(
-        &home,
-        "opencode",
-        vec![gateway_context()],
-        ProbeEngineConfig {
-            min_reprobe_interval: Duration::ZERO,
-            ..test_config()
-        },
-    );
-
-    service.probe_if_stale("opencode", "gateway", PokeReason::Startup).await;
-    assert_eq!(runner.count(), 1);
-    service.probe_if_stale("opencode", "gateway", PokeReason::SessionLaunch).await;
-    assert_eq!(
-        runner.count(),
-        1,
-        "the staleness gate alone must refuse the second poke"
-    );
-}
-
-/// F-036 — a dropped `refresh_now` must not wedge the slot at `Running` forever.
-///
-/// Before the RAII guard, the live state was three bare `set_live_state` calls
-/// straddling three await points. Aborting the task that runs `refresh_now`
-/// drops the whole future — including the local frame that would have run the
-/// final `Idle` write — anywhere inside that span, and `gate_admits`
-/// (`mod.rs`) treats `Queued`/`Running` as in-flight and refuses every
-/// subsequent poke for that key. That is exactly what a client disconnecting
-/// mid-refresh does to an axum handler future: "the user closed the settings
-/// pane while it was refreshing" is not exotic, it is the common case for a
-/// 240s-timeout probe behind a semaphore of one.
+/// **Proof B7 (no wedge).** F-036 — a dropped `refresh_now` must not wedge the
+/// slot at `Running` forever.
 ///
 /// This spawns a `refresh_now` against a gated fake runner, waits for the
-/// attempt to actually be `Running` (inside the probe, past both concurrency
-/// gates), aborts the task, and asserts both halves of the fix: (a) the slot's
-/// live state settles back to `Idle`, not stuck `Running`; and (b) the key is
-/// not wedged — a subsequent `probe_if_stale` still reaches the runner.
+/// attempt to actually be `Running` (inside the probe, past the semaphore),
+/// aborts the task, and asserts both halves of the fix: (a) the slot's live
+/// state settles back to `Idle`, not stuck `Running`; and (b) the harness is not
+/// wedged — a subsequent poke still reaches the runner.
 #[tokio::test]
-async fn an_aborted_refresh_settles_to_idle_and_leaves_the_key_pokeable() {
+async fn an_aborted_refresh_settles_to_idle_and_leaves_the_harness_pokeable() {
     let home = seeded_home("abort-wedge", "opencode");
     let (runner, release) = FakeRunner::gated();
     let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
     let service = Arc::new(ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
         plan,
-        Arc::new(FixedTargets::single("opencode", vec![gateway_context()])),
+        Arc::new(FixedTargets::single("opencode")),
         runner.clone(),
-        ProbeEngineConfig {
-            min_reprobe_interval: Duration::ZERO,
-            ..test_config()
-        },
+        test_config(),
     ));
 
     // Mirrors the axum handler: a manual refresh, spawned so it can be
     // cancelled independently, exactly as a dropped request future would be.
     let refresh_service = service.clone();
     let handle = tokio::spawn(async move {
-        let _ = refresh_service.refresh_now("opencode", "gateway").await;
+        let _ = refresh_service.refresh_now("opencode").await;
     });
 
-    // Wait for the attempt to be genuinely IN the probe — past the harness gate
-    // and the semaphore — not merely queued, so the abort lands inside the
-    // window F-036 identified as droppable.
+    // Wait for the attempt to be genuinely IN the probe — past the semaphore —
+    // not merely queued, so the abort lands inside the window F-036 identified
+    // as droppable.
     wait_until("the refresh reaches the gated runner as Running", || {
-        service
-            .status("opencode", chrono::Utc::now())
-            .contexts
-            .iter()
-            .any(|context| context.state == super::super::status::LiveState::Running)
+        service.status("opencode", chrono::Utc::now()).state
+            == super::super::status::LiveState::Running
     })
     .await;
 
@@ -358,29 +237,20 @@ async fn an_aborted_refresh_settles_to_idle_and_leaves_the_key_pokeable() {
         "the aborted attempt reached the runner exactly once"
     );
 
-    let settled = service.status("opencode", chrono::Utc::now());
-    let gateway = settled
-        .contexts
-        .iter()
-        .find(|context| context.auth_context_id == "gateway")
-        .expect("gateway context in status");
     assert_eq!(
-        gateway.state,
+        service.status("opencode", chrono::Utc::now()).state,
         super::super::status::LiveState::Idle,
-        "a dropped refresh must not leave the context pinned at Running (F-036)"
+        "a dropped refresh must not leave the harness pinned at Running (F-036)"
     );
 
-    // The key must not be wedged: release the (now-abandoned) gate and poke
-    // again — a real probe has to land, proving `gate_admits` does not still
-    // see this key as in-flight.
+    // The harness must not be wedged: release the (now-abandoned) gate and poke
+    // again — a real probe has to land, proving the single-flight gate does not
+    // still see this harness as in-flight.
     release.send(true).expect("release");
-    service
-        .probe_if_stale("opencode", "gateway", PokeReason::Startup)
-        .await;
+    service.probe_on_event("opencode", PokeReason::Startup).await;
     assert_eq!(
         runner.count(),
         2,
-        "subsequent pokes for this key must still reach the runner after the abort"
+        "subsequent pokes for this harness must still reach the runner after the abort"
     );
 }
-

@@ -1,18 +1,17 @@
-//! Heartbeat-driven model-snapshot cloud sync (model-catalog.md "Write paths").
+//! Heartbeat-driven model-snapshot cloud sync (model-catalog.md "Write path").
 //!
-//! Replaces the deleted gateway-catalog mirror push. On every successful
-//! heartbeat tick:
+//! On every successful heartbeat tick:
 //!
 //! 1. GET the runtime's list of agents (`GET /v1/agents`), then GET each
 //!    harness's polled model-snapshot status (`GET /v1/agents/{kind}/model-snapshot`)
 //!    over the same narrow local AnyHarness surface `catalog_sync.rs` used
 //!    (localhost + optional runtime bearer).
-//! 2. Compare each context's `probedAt` against the last-uploaded value held
+//! 2. Compare each harness's `probedAt` against the last-uploaded value held
 //!    in memory (this module's state, the `probedAt` analogue of
 //!    `catalog_sync`'s ETag cache) — worth at most one redundant upload after
 //!    a Worker restart, which the server's soft-versioned write absorbs
 //!    idempotently.
-//! 3. POST changed contexts to the cloud ingest route
+//! 3. POST changed documents to the cloud ingest route
 //!    (`POST /v1/cloud/agent-models/{harness}/refresh`) with the Worker's own
 //!    bearer; the server resolves the owner from the Worker's sandbox row, so
 //!    the payload carries no user identity.
@@ -20,23 +19,18 @@
 //!    the next heartbeat tick retries — this module never wedges the loop and
 //!    never propagates an error upward.
 //!
-//! **Uploaded fields are a strict subset of the machine document's entry.**
-//! The runtime's status route deliberately never serves `authFingerprint`
-//! (model-catalog.md: "never on the wire ... the boolean `stale` plus its
-//! reason is the whole client contract") and has no per-context `mechanism`,
-//! `installIdentity`, or `lastAttempt` fields either — those stay local
-//! diagnostics. What IS uploaded — `probedAt`, `models`, `modes`,
-//! `attestation`, `warnings` — is exactly the list model-catalog.md's
-//! "Storage" section names for `snapshot_json`, so this is not a narrowed
-//! upload; it is the whole of what the wire projection ever carried.
+//! **One observation per harness.** The uploaded `snapshot_json` is the machine
+//! document's wire shape — the composed observation plus its provenance fields
+//! (`attestation`, `installIdentity`, `stateRevision`) and `lastAttempt` — read
+//! off the status route rather than off disk, so the Worker never learns the
+//! runtime home's layout. There is no `authContextId`: the per-context keying is
+//! superseded by the composed observation.
 //!
-//! **Cloud-sandbox scoped.** The cloud ingest route's `resolve_upload_owner`
-//! refuses any worker whose `runtime_kind != "cloud_sandbox"` with a 403
-//! (server/proliferate/server/cloud/agent_models/snapshots.py). A desktop
-//! worker therefore always gets a 403 here — logged and swallowed like any
-//! other push failure, never a special case in this module. The desktop's
-//! local-surface document never needed to sync in the first place
-//! (model-catalog.md: "Desktop does not sync").
+//! **Cloud-sandbox scoped.** The cloud ingest route refuses any worker whose
+//! `runtime_kind != "cloud_sandbox"`. A desktop worker therefore always gets a
+//! 403 here — logged and swallowed like any other push failure, never a special
+//! case in this module. The desktop's local-surface document never needed to
+//! sync in the first place (model-catalog.md: "the desktop's never does").
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -51,10 +45,10 @@ use crate::{
 };
 
 /// In-memory state kept across heartbeats: the last successfully-uploaded
-/// `probedAt` per (harness_kind, auth_context_id). A restart loses this and
-/// re-uploads once — the server's soft-versioned write absorbs the repeat.
+/// `probedAt` per harness kind. A restart loses this and re-uploads once — the
+/// server's soft-versioned write absorbs the repeat.
 pub struct ModelSnapshotSyncState {
-    last_pushed: Mutex<HashMap<(String, String), String>>,
+    last_pushed: Mutex<HashMap<String, String>>,
 }
 
 impl ModelSnapshotSyncState {
@@ -64,15 +58,15 @@ impl ModelSnapshotSyncState {
         }
     }
 
-    fn snapshot(&self) -> HashMap<(String, String), String> {
+    fn snapshot(&self) -> HashMap<String, String> {
         self.last_pushed.lock().unwrap().clone()
     }
 
-    fn record_pushed(&self, harness_kind: &str, auth_context_id: &str, probed_at: &str) {
-        self.last_pushed.lock().unwrap().insert(
-            (harness_kind.to_string(), auth_context_id.to_string()),
-            probed_at.to_string(),
-        );
+    fn record_pushed(&self, harness_kind: &str, probed_at: &str) {
+        self.last_pushed
+            .lock()
+            .unwrap()
+            .insert(harness_kind.to_string(), probed_at.to_string());
     }
 }
 
@@ -96,74 +90,75 @@ struct RuntimeAgentSummary {
 /// not shared with anyharness-lib's type — the worker binary does not depend
 /// on anyharness-lib, mirroring how `catalog_sync.rs` declared its own
 /// `RuntimeCatalogVersion` rather than importing one.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RuntimeModelSnapshotStatus {
     #[serde(default)]
-    contexts: Vec<RuntimeContextStatus>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RuntimeContextStatus {
-    auth_context_id: String,
-    /// Absent (`None`) means no entry has ever been probed for this context —
-    /// the "skip harnesses with no snapshot" case.
+    agent: Option<String>,
+    #[serde(default)]
+    schema_version: Option<u32>,
+    /// Absent (`None`) means no observation has ever been recorded for this
+    /// harness — the "skip harnesses with no snapshot" case.
     #[serde(default)]
     probed_at: Option<String>,
+    #[serde(default)]
+    attestation: Option<serde_json::Value>,
+    #[serde(default)]
+    install_identity: Option<serde_json::Value>,
+    #[serde(default)]
+    state_revision: Option<i64>,
     #[serde(default)]
     models: Vec<serde_json::Value>,
     #[serde(default)]
     modes: Vec<serde_json::Value>,
     #[serde(default)]
-    attestation: Option<serde_json::Value>,
-    #[serde(default)]
     warnings: Vec<String>,
+    #[serde(default)]
+    last_attempt: Option<serde_json::Value>,
 }
 
 // ─── Decision logic (pure, testable) ───────────────────────────────────────
 
-/// One upload this tick should perform.
+/// The upload this tick should perform for one harness, or `None`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PendingPush {
     pub harness_kind: String,
-    pub auth_context_id: String,
     pub probed_at: String,
     pub snapshot_json: String,
 }
 
-/// Decide which contexts of one harness need an upload this tick: a context
-/// with no entry yet (`probed_at: None`) is skipped, and a context whose
-/// `probedAt` already matches the last-pushed value is skipped too. Order is
-/// the input order, so callers get deterministic push ordering for logging.
-fn plan_pushes(
+/// Decide whether one harness needs an upload this tick: a harness with no
+/// observation yet (`probed_at: None`) is skipped, and one whose `probedAt`
+/// already matches the last-pushed value is skipped too.
+fn plan_push(
     harness_kind: &str,
-    contexts: &[RuntimeContextStatus],
-    last_pushed: &HashMap<(String, String), String>,
-) -> Vec<PendingPush> {
-    contexts
-        .iter()
-        .filter_map(|context| {
-            let probed_at = context.probed_at.as_deref()?;
-            let key = (harness_kind.to_string(), context.auth_context_id.clone());
-            if last_pushed.get(&key).map(String::as_str) == Some(probed_at) {
-                return None;
-            }
-            let entry = serde_json::json!({
-                "probedAt": probed_at,
-                "models": context.models,
-                "modes": context.modes,
-                "attestation": context.attestation,
-                "warnings": context.warnings,
-            });
-            Some(PendingPush {
-                harness_kind: harness_kind.to_string(),
-                auth_context_id: context.auth_context_id.clone(),
-                probed_at: probed_at.to_string(),
-                snapshot_json: entry.to_string(),
-            })
-        })
-        .collect()
+    status: &RuntimeModelSnapshotStatus,
+    last_pushed: &HashMap<String, String>,
+) -> Option<PendingPush> {
+    let probed_at = status.probed_at.as_deref()?;
+    if last_pushed.get(harness_kind).map(String::as_str) == Some(probed_at) {
+        return None;
+    }
+    // The machine document's wire shape, reassembled from the status projection
+    // (the status route serves the models/modes/provenance fields off the same
+    // document read precisely so this uploader exists without disk access).
+    let document = serde_json::json!({
+        "schemaVersion": status.schema_version.unwrap_or(2),
+        "agent": status.agent.as_deref().unwrap_or(harness_kind),
+        "probedAt": probed_at,
+        "attestation": status.attestation,
+        "installIdentity": status.install_identity,
+        "stateRevision": status.state_revision.unwrap_or(0),
+        "models": status.models,
+        "modes": status.modes,
+        "warnings": status.warnings,
+        "lastAttempt": status.last_attempt,
+    });
+    Some(PendingPush {
+        harness_kind: harness_kind.to_string(),
+        probed_at: probed_at.to_string(),
+        snapshot_json: document.to_string(),
+    })
 }
 
 // ─── Execution (async, side-effecting) ─────────────────────────────────────
@@ -206,9 +201,9 @@ pub async fn maybe_sync(
     }
 }
 
-/// Sync one harness's contexts. Isolated per harness so one harness's
-/// failure (a 409 non-owner runtime, a probe never having run yet) never
-/// blocks another harness's upload this tick.
+/// Sync one harness's observation. Isolated per harness so one harness's
+/// failure (a probe never having run yet, an ingest 4xx) never blocks another
+/// harness's upload this tick.
 async fn sync_one_harness(
     cloud: &CloudClient,
     worker_token: &str,
@@ -229,35 +224,32 @@ async fn sync_one_harness(
     };
 
     let last_pushed = state.snapshot();
-    let pushes = plan_pushes(harness_kind, &status.contexts, &last_pushed);
-    for push in pushes {
-        let request = IngestModelSnapshotRequest {
-            auth_context_id: push.auth_context_id.clone(),
-            snapshot_json: push.snapshot_json,
-            probed_at: push.probed_at.clone(),
-        };
-        match cloud
-            .ingest_model_snapshot(worker_token, &push.harness_kind, &request)
-            .await
-        {
-            Ok(()) => {
-                state.record_pushed(&push.harness_kind, &push.auth_context_id, &push.probed_at);
-                info!(
-                    harness_kind = %push.harness_kind,
-                    auth_context_id = %push.auth_context_id,
-                    "model snapshot sync: uploaded changed entry"
-                );
-            }
-            Err(error) => {
-                // Not recorded: the next tick's plan_pushes sees the same
-                // stale last_pushed value and retries this exact push.
-                warn!(
-                    ?error,
-                    harness_kind = %push.harness_kind,
-                    auth_context_id = %push.auth_context_id,
-                    "model snapshot sync: cloud upload failed; retrying next tick"
-                );
-            }
+    let Some(push) = plan_push(harness_kind, &status, &last_pushed) else {
+        return;
+    };
+    let request = IngestModelSnapshotRequest {
+        snapshot_json: push.snapshot_json,
+        probed_at: push.probed_at.clone(),
+    };
+    match cloud
+        .ingest_model_snapshot(worker_token, &push.harness_kind, &request)
+        .await
+    {
+        Ok(()) => {
+            state.record_pushed(&push.harness_kind, &push.probed_at);
+            info!(
+                harness_kind = %push.harness_kind,
+                "model snapshot sync: uploaded changed observation"
+            );
+        }
+        Err(error) => {
+            // Not recorded: the next tick's plan sees the same stale
+            // last_pushed value and retries this exact push.
+            warn!(
+                ?error,
+                harness_kind = %push.harness_kind,
+                "model snapshot sync: cloud upload failed; retrying next tick"
+            );
         }
     }
 }
@@ -293,7 +285,7 @@ async fn list_runtime_agent_kinds(
 }
 
 /// `GET /v1/agents/{kind}/model-snapshot`: one harness's polled status,
-/// including the models/modes lists this sync uploads.
+/// including the models/modes lists and provenance fields this sync uploads.
 async fn fetch_runtime_status(
     runtime_base: &str,
     bearer_token: Option<&str>,

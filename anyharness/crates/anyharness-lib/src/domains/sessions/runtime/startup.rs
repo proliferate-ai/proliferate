@@ -5,7 +5,6 @@ use std::time::Instant;
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::settings::resolve_settings_deltas;
 use crate::domains::agents::model::ResolvedAgentStatus;
-use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
@@ -431,20 +430,11 @@ impl SessionRuntime {
         let session_launch_env =
             build_session_launch_env(&resolved_agent, record.requested_model_id.as_deref())
                 .map_err(StartSessionError::Internal)?;
-        // Session-launch BACKSTOP (model-catalog.md, "The snapshot reconciler"):
-        // any probe a machine missed self-heals at the next launch. Fire-and-forget,
-        // placed after route resolution and before the spawn, exactly where the old
-        // gateway-only trigger sat — this launch already validated against whatever
-        // is fresh now and never waits for the probe.
-        //
-        // Unlike its predecessor this is staleness-gated per (harness, auth context)
-        // rather than per gateway revision, so a launch on a machine with fresh
-        // entries costs one in-memory gate evaluation and no spawn.
-        ModelSnapshotService::poke_optional(
-            &self.model_snapshot,
-            &record.agent_kind,
-            PokeReason::SessionLaunch,
-        );
+        // No probe poke here, deliberately (model-catalog.md, "Freshness is
+        // event-driven"): a session launch is not one of the closed trigger set.
+        // The gate-driven launch backstop of the superseded design deleted with
+        // the staleness machinery; anything a machine missed while the runtime
+        // was down is the unconditional startup pass's job.
         // Catalog settings: resolve persisted toggle values into launch-time
         // deltas (extra CLI args, extra env vars). The surface is always "local"
         // for local runtime launches (cloud sandboxes use their own surface).
