@@ -4,17 +4,16 @@
  * Shiki/Monaco palettes are all projections of these records; no CSS source
  * file may introduce a second global token value.
  *
- * Provenance tags cite the frozen retune specification
- * (`origin/ui-foundation-pass:.foundation-scout/retune-spec.md`):
- *   [SHIPPED]                 §2 — current rendered winner survives verbatim
- *   [SHIPPED:raw-hex-move]    §5.5 — shipped literal relocated into authority
- *   [SHIPPED:motion/authority] §5.4 — shipped cadence, value now owned by motion.ts
- *   [RETUNE:<ruling>]         §8 — enumerated deliberate change
+ * Provenance tags record each value's disposition during the 2026-07
+ * foundation consolidation:
+ *   [SHIPPED]                 current rendered winner survives verbatim
+ *   [SHIPPED:raw-hex-move]    shipped literal relocated into authority
+ *   [SHIPPED:motion/authority] shipped cadence, value now owned by motion.ts
+ *   [RETUNE:<ruling>]         enumerated deliberate change
  * Removed names are recorded in `currentTokenDispositions` with a `null`
- * disposition (§1: 59 census-dead globals + 10 generic text properties +
- * `--shadow-keystone` = 70 removals).
- *
- * See also `ui-foundation-target.md` (v1) and `ui-foundation-target-v2.md`.
+ * disposition (59 census-dead globals + 10 generic text properties +
+ * `--shadow-keystone` = 70 removals). The dispositions map preserves the
+ * frozen pre-consolidation name census.
  */
 import { motion } from "./motion.js";
 
@@ -35,13 +34,13 @@ export const currentTokenDispositions = {
   "--animate-blink-cursor": null,
   "--animate-popover-in": "--animate-popover-in",
   "--codex-diffs-addition-number": null,
-  "--codex-diffs-context-number": "--codex-diffs-context-number",
-  "--codex-diffs-context-surface": "--codex-diffs-context-surface",
+  "--codex-diffs-context-number": "--diff-view-context-number",
+  "--codex-diffs-context-surface": "--diff-view-context-surface",
   "--codex-diffs-deletion-number": null,
-  "--codex-diffs-header-surface": "--codex-diffs-header-surface",
-  "--codex-diffs-hover-surface": "--codex-diffs-hover-surface",
-  "--codex-diffs-separator-surface": "--codex-diffs-separator-surface",
-  "--codex-diffs-surface": "--codex-diffs-surface",
+  "--codex-diffs-header-surface": "--diff-view-header-surface",
+  "--codex-diffs-hover-surface": "--diff-view-hover-surface",
+  "--codex-diffs-separator-surface": "--diff-view-separator-surface",
+  "--codex-diffs-surface": "--diff-view-surface",
   "--color-accent": "--color-accent",
   "--color-accent-foreground": "--color-accent-foreground",
   "--color-app-switcher-bg": null,
@@ -336,36 +335,36 @@ export const themeTokens = {
     light: "popover-in var(--duration-enter) var(--ease-out-quint)",
     provenance: "[RETUNE:motion/roles]",
   },
-  "--codex-diffs-context-number": {
-    dark: "color-mix(in lab, var(--codex-diffs-surface) 98.5%, var(--diffs-mixer))",
-    light: "color-mix(in lab, var(--codex-diffs-surface) 98.5%, var(--diffs-mixer))",
+  "--diff-view-context-number": {
+    dark: "color-mix(in lab, var(--diff-view-surface) 98.5%, var(--diffs-mixer))",
+    light: "color-mix(in lab, var(--diff-view-surface) 98.5%, var(--diffs-mixer))",
     themeFallback: "#292929",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-context-surface": {
-    dark: "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-diff-main-surface))",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-diff-main-surface))",
+  "--diff-view-context-surface": {
+    dark: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-diff-main-surface))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-diff-main-surface))",
     themeFallback: "#252525",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-header-surface": {
+  "--diff-view-header-surface": {
     dark: "var(--color-diff-header-surface)",
     light: "var(--color-diff-header-surface)",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-hover-surface": {
-    dark: "color-mix(in srgb, var(--codex-diffs-surface) 92%, var(--color-diff-main-surface))",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 92%, var(--color-diff-main-surface))",
+  "--diff-view-hover-surface": {
+    dark: "color-mix(in srgb, var(--diff-view-surface) 92%, var(--color-diff-main-surface))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 92%, var(--color-diff-main-surface))",
     themeFallback: "#252525",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-separator-surface": {
-    dark: "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-foreground))",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-foreground))",
+  "--diff-view-separator-surface": {
+    dark: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-foreground))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-foreground))",
     themeFallback: "#333333",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-surface": {
+  "--diff-view-surface": {
     dark: "var(--color-diff-surface)",
     light: "var(--color-diff-surface)",
     provenance: "[SHIPPED]",
@@ -431,33 +430,20 @@ export const themeTokens = {
   },
   "--color-composer-backdrop-filter": {
     dark: "none",
-    light: "blur(16px)",
-    provenance: "[SHIPPED]",
+    light: "none",
+    provenance: "[RETUNE:surface/composer-opaque]",
   },
   /**
-   * [CHAT-01] The composer is a translucent input surface floating over the app
-   * background, not an opaque card. The dark half is Codex's own input-surface
-   * role verbatim — `--color-token-input-background` → `rgba(45,45,45,.96)`
-   * (`reference/codex/tokens.md` "Input surface";
-   * `ui-foundation-chat-addendum.md` [CHAT-01] surface row, the gap that retune
-   * exists to close) — expressed in the house `color-mix()` form and landing on
-   * the same 96%-of-a-lifted-gray treatment `--color-surface-control` already
-   * uses in dark.
-   *
-   * The light half keeps its shipped `rgba(255,255,255,0.864)`: light was
-   * already translucent, so the addendum found no light-mode gap, and light is
-   * the only mode that carries `--color-composer-backdrop-filter: blur(16px)`
-   * (dark stays `none` on purpose — WKWebView re-blurs the whole transcript on
-   * every keystroke; see ChatComposerDock's PERF note). Raising light's alpha to
-   * match dark's 96% would cancel that blur rather than derive from it, so the
-   * ruled translucency law applies per mode at the alpha each mode's backdrop
-   * treatment was tuned for.
+   * The composer is a fully opaque input surface — no transcript bleed-
+   * through, in either mode. Dark keeps the lifted-gray `#2d2d2d` hue
+   * `--color-surface-control` already uses; light keeps its shipped white.
+   * Both render at 100% alpha now, so `--color-composer-backdrop-filter`
+   * (below) has nothing left to blur and is set to `none` in both modes.
    */
   "--color-composer-background": {
-    dark: "color-mix(in oklab, #2d2d2d 96%, transparent)",
-    light: "rgba(255, 255, 255, 0.864)",
-    themeFallback: "rgba(45, 45, 45, 0.96)",
-    provenance: "[RETUNE:surface/composer-translucent]",
+    dark: "#2d2d2d",
+    light: "#ffffff",
+    provenance: "[RETUNE:surface/composer-opaque]",
   },
   "--color-composer-border": {
     dark: "var(--color-border) /* legacy-alias */",
@@ -600,9 +586,9 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--color-diff-added": {
-    dark: "#00a240",
-    light: "#00a240",
-    provenance: "[SHIPPED]",
+    dark: "var(--color-git-green)",
+    light: "var(--color-git-green)",
+    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
   },
   "--color-diff-chat-file-header-hover-surface": {
     dark: "color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground))",
@@ -645,9 +631,9 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--color-diff-deleted": {
-    dark: "#e02e2a",
-    light: "#ba2623",
-    provenance: "[SHIPPED]",
+    dark: "var(--color-git-red)",
+    light: "var(--color-git-red)",
+    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
   },
   "--color-diff-header-surface": {
     dark: "var(--color-diff-surface)",
@@ -867,9 +853,13 @@ export const themeTokens = {
     provenance: "[RETUNE:state/overlay]",
   },
   "--color-sidebar": {
-    dark: "#1d1d1d",
+    // Round-2 measurement against the reference app's dark capture: the
+    // sidebar rail reads rgb(34, 34, 34) — one step LIGHTER than the root
+    // surface, not recessed to --color-surface-under. Supersedes the
+    // surface-recess ruling from the prior retune.
+    dark: "#222222",
     light: "var(--color-surface-under)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:sidebar/reference-surface]",
   },
   "--color-sidebar-accent": {
     dark: "var(--color-hover) /* legacy-alias */",
@@ -1085,23 +1075,33 @@ export const themeTokens = {
     provenance: "[SHIPPED:raw-hex-move]",
   },
   /**
-   * [CHAT-04] Transcript measure. Codex caps readable Markdown prose at
-   * `--thread-content-max-width: 40rem` and lets wide blocks (tables, images,
-   * code) spill to `--markdown-wide-block-max-width: 64rem`
-   * (`reference/codex/css/26.721.31836.css:284` / `:7374`, tabled in
-   * `ui-foundation-chat-addendum.md` [CHAT-04]; ADOPTED by that doc's RULED
-   * block). Named in Tailwind's `--container-*` namespace so consumers write
+   * Transcript measure. Readable Markdown prose is capped at
+   * `--thread-content-max-width: 40rem`, and wide blocks (tables, images,
+   * code) are allowed to spill to `--markdown-wide-block-max-width: 64rem`.
+   * Named in Tailwind's `--container-*` namespace so consumers write
    * `max-w-transcript-readable` / `max-w-transcript-wide` instead of an
-   * arbitrary bracket width — which the appearance gate bans.
+   * arbitrary bracket width — a consistency choice, not something the
+   * appearance gate forces (the gate has no max-w rule).
    */
   "--container-transcript-readable": {
     dark: "40rem",
     light: "40rem",
     provenance: "[RETUNE:layout/transcript-measure]",
   },
+  /**
+   * Two-tier measure: the thread column itself (avatars, action rows, wide
+   * blocks) widens to 48rem while readable prose stays capped at
+   * `--container-transcript-readable` (40rem, applied directly on the
+   * Markdown body). See ChatColumn.ts and MarkdownBody.tsx.
+   */
+  "--container-transcript-thread": {
+    dark: "48rem",
+    light: "48rem",
+    provenance: "[RETUNE:layout/transcript-measure]",
+  },
   "--container-transcript-wide": {
-    dark: "64rem",
-    light: "64rem",
+    dark: "56rem",
+    light: "56rem",
     provenance: "[RETUNE:layout/transcript-measure]",
   },
   "--diffs-addition-color-override": {
@@ -1110,49 +1110,49 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--diffs-bg-addition-hover-override": {
-    dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, #00a240)",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 78%, var(--diffs-addition-color-override))",
+    dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-diff-added))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 78%, var(--diffs-addition-color-override))",
     themeFallback: "#14311f",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
   },
   "--diffs-bg-addition-number-override": {
-    dark: "color-mix(in srgb, var(--color-diff-main-surface) 91%, #00a240)",
-    light: "color-mix(in srgb, var(--color-diff-main-surface) 91%, #00a240)",
+    dark: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-added))",
+    light: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-added))",
     themeFallback: "#16241c",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
   },
   "--diffs-bg-addition-override": {
-    dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, #00a240)",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override))",
+    dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, var(--color-diff-added))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 84%, var(--diffs-addition-color-override))",
     themeFallback: "#15291d",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
   },
   "--diffs-bg-context-override": {
-    dark: "var(--codex-diffs-context-surface)",
-    light: "var(--codex-diffs-context-surface)",
+    dark: "var(--diff-view-context-surface)",
+    light: "var(--diff-view-context-surface)",
     provenance: "[SHIPPED]",
   },
   "--diffs-bg-deletion-hover-override": {
-    dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, #e02e2a)",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 78%, var(--diffs-deletion-color-override))",
+    dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-diff-deleted))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 78%, var(--diffs-deletion-color-override))",
     themeFallback: "#3c1c1b",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
   },
   "--diffs-bg-deletion-number-override": {
-    dark: "color-mix(in srgb, var(--color-diff-main-surface) 91%, #e02e2a)",
-    light: "color-mix(in srgb, var(--color-diff-main-surface) 91%, #e02e2a)",
+    dark: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-deleted))",
+    light: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-deleted))",
     themeFallback: "#2a1a1a",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
   },
   "--diffs-bg-deletion-override": {
-    dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, #e02e2a)",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override))",
+    dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, var(--color-diff-deleted))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 84%, var(--diffs-deletion-color-override))",
     themeFallback: "#301b1a",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
   },
   "--diffs-bg-separator-override": {
-    dark: "var(--codex-diffs-separator-surface)",
-    light: "var(--codex-diffs-separator-surface)",
+    dark: "var(--diff-view-separator-surface)",
+    light: "var(--diff-view-separator-surface)",
     provenance: "[SHIPPED]",
   },
   "--diffs-deletion-color-override": {
@@ -1248,7 +1248,16 @@ export const themeTokens = {
   "--font-sans": {
     dark: "-apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, \"Segoe UI\", sans-serif",
     light: "-apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, \"Segoe UI\", sans-serif",
-    provenance: "[RETUNE:type/Geist] — trial: Codex native system stack per reference/codex (computed fontFamily: -apple-system, system-ui, Segoe UI); Geist variant preserved in git history, swap back = revert this value",
+    provenance: "[RETUNE:type/Geist] — trial: native system stack; Geist variant preserved in git history, swap back = revert this value",
+  },
+  /**
+   * Base document weight. `product.css`'s `body` rule reads this token
+   * instead of a bare literal so the value stays single-sourced here.
+   */
+  "--font-weight-body": {
+    dark: "445",
+    light: "445",
+    provenance: "[RETUNE:type/body-weight]",
   },
   "--font-weight-control": {
     dark: "450",
@@ -1270,6 +1279,19 @@ export const themeTokens = {
     light: "2em",
     provenance: "[SHIPPED]",
   },
+  /**
+   * [RETUNE:icons/sidebar-indicator] — the sidebar row's trailing activity
+   * glyphs (waiting clock, running spinner, error/warning badge) render at
+   * 14px inside a 20px centered cell in the reference, against the same 12px
+   * row text. 1.166667em is exactly 14px at that base — between
+   * `--icon-compact` (12px, too small) and `--icon-control` (16px, visibly
+   * too big), neither of which matches on screen.
+   */
+  "--icon-indicator": {
+    dark: "1.166667em",
+    light: "1.166667em",
+    provenance: "[RETUNE:icons/sidebar-indicator]",
+  },
   "--icon-large": {
     dark: "1.666667em",
     light: "1.666667em",
@@ -1285,6 +1307,21 @@ export const themeTokens = {
     light: "0.55em",
     provenance: "[SHIPPED]",
   },
+  /**
+   * [RETUNE:icons/sidebar-trailing-tight] — round-4 sidebar feedback: the
+   * trailing plus/three-dots row controls (`SidebarActionButton`, the
+   * sidebar's `RowActionIconButton` kebab) rendered their glyph at
+   * `--icon-control` (16px), which read 50-60% too big against the
+   * reference sidebar on screen even though the ratio math looked correct.
+   * `0.875em` lands at 10.5px against the sidebar row's 12px text — the
+   * smallest inline-glyph tier, reserved for these row-trailing controls
+   * whose 24px hit box is unusually large relative to their glyph.
+   */
+  "--icon-tight": {
+    dark: "0.875em",
+    light: "0.875em",
+    provenance: "[RETUNE:icons/sidebar-trailing-tight]",
+  },
   "--radius": {
     dark: "0.5rem",
     light: "0.5rem",
@@ -1293,12 +1330,12 @@ export const themeTokens = {
   "--radius-2xl": {
     dark: "1rem",
     light: "1rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-composer": {
-    dark: "0.75rem",
-    light: "0.75rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    dark: "1.25rem",
+    light: "1.25rem",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-full": {
     dark: "9999px",
@@ -1308,17 +1345,17 @@ export const themeTokens = {
   "--radius-lg": {
     dark: "0.625rem",
     light: "0.625rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-md": {
     dark: "0.5rem",
     light: "0.5rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-sm": {
     dark: "0.375rem",
     light: "0.375rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-xl": {
     dark: "0.75rem",
@@ -1411,21 +1448,29 @@ export const themeTokens = {
     provenance: "[RETUNE:icons/control-boxes]",
   },
   /**
-   * [CHAT-04] Vertical rhythm between top-level transcript turns. Codex renders
-   * its virtualized turn stack at an inline `gap: 12px`
-   * (`reference/codex/pages/thread/dom.html:4307`), sitting between its own
-   * authored 16px/4px conversation-item roles; the addendum's RULED block adds
-   * it as a token rather than leaving inter-turn spacing to each consuming
-   * layout. Lives in Tailwind's `--spacing-*` namespace so
-   * `gap-transcript-turn` (and `mt-`/`p-`/`py-` on the same name) resolves
-   * without an arbitrary gap value, which the appearance gate bans. Note
-   * Tailwind v4 does NOT derive `space-y-*` from the spacing namespace, so a
-   * `space-y-4` turn stack converts to a flex column with
-   * `gap-transcript-turn`, not to a `space-y-` variant of this name.
+   * Vertical rhythm between top-level transcript turns: a 16px gap, tokenized
+   * rather than left to each consuming layout. Lives in Tailwind's
+   * `--spacing-*` namespace so `gap-transcript-turn` (and `mt-`/`p-`/`py-` on
+   * the same name) resolves without an arbitrary gap value, which the
+   * appearance gate bans. Note Tailwind v4 does NOT derive `space-y-*` from
+   * the spacing namespace, so a `space-y-4` turn stack converts to a flex
+   * column with `gap-transcript-turn`, not to a `space-y-` variant of this
+   * name.
    */
   "--spacing-transcript-turn": {
-    dark: "0.75rem",
-    light: "0.75rem",
+    dark: "1rem",
+    light: "1rem",
+    provenance: "[RETUNE:layout/transcript-measure]",
+  },
+  /**
+   * Tight intra-turn grouping (e.g. a prose block and its immediately
+   * following action row) — deliberately smaller than
+   * `--spacing-transcript-turn` so turn-to-turn rhythm and within-turn
+   * rhythm read as two distinct rungs, not one shared gap.
+   */
+  "--spacing-transcript-turn-tight": {
+    dark: "0.25rem",
+    light: "0.25rem",
     provenance: "[RETUNE:layout/transcript-measure]",
   },
   "--text-body": {
@@ -1537,6 +1582,36 @@ export const themeTokens = {
     dark: "var(--text-composer--line-height)",
     light: "var(--text-composer--line-height)",
     provenance: "[SHIPPED]",
+  },
+  /**
+   * Inline code sits slightly under its surrounding prose. Expressed in `em`
+   * (not a fixed px size) so it scales with whatever `--markdown-font-size`
+   * the enclosing message has set, instead of pinning a literal size the
+   * appearance gate would flag.
+   */
+  "--text-markdown-inline-code": {
+    dark: "0.92em",
+    light: "0.92em",
+    provenance: "[RETUNE:type/markdown-heading-ramp]",
+  },
+  /**
+   * Markdown heading ramp multipliers consumed by authenticated.css's
+   * `.chat-markdown` scope. h1 stays anchored on the semantic `--text-title`
+   * role and h2 stays the midpoint of `--text-title`/body (no magic
+   * literal in either); h3/h4 are unitless multipliers of
+   * `--markdown-font-size`, tokenized here instead of living as bare
+   * literals in authenticated.css. h5/h6 stay at 1x (no additional
+   * scale-up), matching the reference's compact micro-heading treatment.
+   */
+  "--markdown-heading-h3-scale": {
+    dark: "1.1667",
+    light: "1.1667",
+    provenance: "[RETUNE:type/markdown-heading-ramp]",
+  },
+  "--markdown-heading-h4-scale": {
+    dark: "1.0833",
+    light: "1.0833",
+    provenance: "[RETUNE:type/markdown-heading-ramp]",
   },
   "--text-readable-code": {
     dark: "var(--readable-code-font-size)",
@@ -1719,14 +1794,14 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--workspace-shell-tab-active-background": {
-    dark: "var(--color-active) /* legacy-alias */",
-    light: "var(--color-active) /* legacy-alias */",
-    provenance: "[RETUNE:state/overlay]",
+    dark: "var(--color-selected) /* legacy-alias */",
+    light: "var(--color-selected) /* legacy-alias */",
+    provenance: "[RETUNE:header/quiet-active-tab]",
   },
   "--workspace-shell-tab-active-border": {
-    dark: "var(--color-border-heavy)",
-    light: "var(--color-border-heavy)",
-    provenance: "[SHIPPED]",
+    dark: "var(--color-border)",
+    light: "var(--color-border)",
+    provenance: "[RETUNE:header/quiet-active-tab]",
   },
   "--workspace-shell-tab-content-gap": {
     dark: "0.5rem",
@@ -1761,7 +1836,7 @@ export const themeTokens = {
   "--workspace-shell-tab-radius": {
     dark: "0.375rem",
     light: "0.375rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--workspace-shell-tab-selected-background": {
     dark: "var(--color-selected) /* legacy-alias */",

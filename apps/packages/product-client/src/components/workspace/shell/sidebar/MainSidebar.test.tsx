@@ -200,6 +200,8 @@ const workspaceUiState = vi.hoisted(() => ({
   unarchiveWorkspaces: vi.fn(),
   workspaceTypes: ["local", "worktree", "cloud"],
   toggleSidebarWorkspaceType: vi.fn(),
+  repositoriesCollapsed: false,
+  setRepositoriesCollapsed: vi.fn(),
 }));
 
 vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
@@ -250,13 +252,10 @@ vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
 
 vi.mock("#product/hooks/workspaces/facade/use-sidebar-repo-group-state", () => ({
   useSidebarRepoGroupState: () => ({
-    allRepoKeys: [],
-    allRepoGroupsCollapsed: false,
     collapsedRepoGroupKeys: new Set<string>(),
     repoGroupsShownMoreKeys: new Set<string>(),
     handleToggleRepoShowMore: vi.fn(),
     handleToggleRepoCollapsed: vi.fn(),
-    handleToggleAllRepoGroups: vi.fn(),
     clearRepoGroupShowMore: vi.fn(),
   }),
 }));

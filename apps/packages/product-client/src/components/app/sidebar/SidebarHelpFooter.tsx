@@ -44,7 +44,7 @@ export function SidebarHelpFooter() {
           size="unstyled"
           aria-label="Open help menu"
           title="Help and support"
-          className="size-10 rounded-lg text-sidebar-muted-foreground hover:bg-hover active:bg-active hover:text-sidebar-foreground data-[state=open]:bg-active data-[state=open]:text-sidebar-foreground"
+          className="size-8 rounded-lg text-sidebar-muted-foreground hover:bg-hover active:bg-active hover:text-sidebar-foreground data-[state=open]:bg-active data-[state=open]:text-sidebar-foreground"
         >
           <CircleHelp className="icon-paired" />
         </Button>

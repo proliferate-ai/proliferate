@@ -29,11 +29,11 @@ export function SidebarRowSurface({
       ? "text-sidebar-muted-foreground"
       : "text-sidebar-foreground hover:bg-hover active:bg-active";
 
-  // Codex sidebar row geometry (UX spec §0.1): 30px rows, 10px radius.
+  // Sidebar row geometry (retune): 30px rows, 10px radius (--radius-lg).
   // twMerge so a caller-provided size token (text-sidebar-nav etc.) actually
   // replaces a baseline size instead of fighting it on stylesheet order.
   const rowClassName = twMerge(
-    `group relative flex w-full min-w-0 items-center rounded-sm text-left font-control transition-[background-color,color,opacity] duration-hover ${
+    `group relative flex w-full min-w-0 items-center rounded-lg text-left font-control transition-[background-color,color,opacity] duration-hover ${
       interactive ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring" : ""
     } ${
       disabled ? "cursor-not-allowed opacity-60" : ""
