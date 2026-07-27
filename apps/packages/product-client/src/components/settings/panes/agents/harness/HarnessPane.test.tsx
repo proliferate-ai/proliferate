@@ -719,6 +719,24 @@ describe("HarnessPane authentication", () => {
     expect(cli.disabled).toBe(true);
   });
 
+  it("opencode: the zero-rows empty state offers Add provider as primary CTA alongside Add API key", async () => {
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: "API key" }));
+    expect(screen.getByText("No API key configured.")).toBeTruthy();
+
+    // Multi-source empty state: "Add provider" is the primary CTA, "Add API
+    // key" is still offered as a secondary way in.
+    const addProvider = screen.getByRole("button", { name: /Add provider/ });
+    expect(screen.getByRole("button", { name: /Add API key/ })).toBeTruthy();
+
+    // Clicking "Add provider" opens the provider picker modal, not the
+    // single-key creator modal.
+    fireEvent.click(addProvider);
+    expect(await screen.findByRole("button", { name: "pick-openrouter" })).toBeTruthy();
+    expect(screen.queryByTestId("add-key-modal")).toBeNull();
+  });
+
   it("opencode: toggling API key off darkens the card and hides the empty state", () => {
     renderPane("opencode");
 
