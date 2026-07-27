@@ -108,6 +108,10 @@ class StubLiteLLM:
 
     def __init__(self) -> None:
         self.teams: dict[str, str] = {}
+        # ensure_team's max_budget arg per call, in call order — the team is
+        # the only budget layer post-B2 (keys never carry one), so assertions
+        # on the ensure-time budget read this rather than a minted key.
+        self.ensure_team_budgets: list[float | None] = []
         self.users: set[str] = set()
         self.minted: list[dict[str, Any]] = []
         self.enabled_keys: list[str] = []
@@ -140,6 +144,7 @@ class StubLiteLLM:
         max_budget: float | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> str:
+        self.ensure_team_budgets.append(max_budget)
         return self.teams.setdefault(alias, f"team-{alias}")
 
     async def ensure_user(self, *, user_id: str, metadata: dict[str, Any] | None = None) -> str:
@@ -154,6 +159,7 @@ class StubLiteLLM:
         alias: str | None = None,
         max_budget: float | None = None,
         metadata: dict[str, Any] | None = None,
+        models: list[str] | None = None,
     ) -> LiteLLMVirtualKey:
         self.token_counter += 1
         self.minted.append(
@@ -162,6 +168,7 @@ class StubLiteLLM:
                 "team_id": team_id,
                 "max_budget": max_budget,
                 "metadata": metadata or {},
+                "models": models,
             }
         )
         return LiteLLMVirtualKey(
@@ -187,6 +194,7 @@ class StubLiteLLM:
         alias: str | None = None,
         max_budget: float | None = None,
         metadata: dict[str, Any] | None = None,
+        models: list[str] | None = None,
     ) -> LiteLLMVirtualKey:
         self.rotated.append(key_or_token_id)
         return await self.mint_virtual_key(
@@ -195,6 +203,7 @@ class StubLiteLLM:
             alias=alias,
             max_budget=max_budget,
             metadata=metadata,
+            models=models,
         )
 
     async def update_team_budget(self, *, team_id: str, max_budget: float | None) -> None:

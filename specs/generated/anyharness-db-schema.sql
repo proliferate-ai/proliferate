@@ -111,15 +111,6 @@ CREATE TABLE feed_bindings (
     updated_at TEXT NOT NULL
 );
 
--- table: gateway_model_probe
-CREATE TABLE gateway_model_probe (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    harness_kind TEXT NOT NULL,
-    revision INTEGER NOT NULL,
-    models_json TEXT NOT NULL,
-    probed_at TEXT NOT NULL
-);
-
 -- table: goals
 CREATE TABLE goals (
     id TEXT PRIMARY KEY,
@@ -739,10 +730,6 @@ CREATE INDEX idx_cowork_threads_workspace_id ON cowork_threads(workspace_id);
 -- index: idx_feed_bindings_owner
 CREATE UNIQUE INDEX idx_feed_bindings_owner
     ON feed_bindings(session_id, owner_kind, owner_id);
-
--- index: idx_gateway_model_probe_lookup
-CREATE INDEX idx_gateway_model_probe_lookup
-    ON gateway_model_probe(harness_kind, revision, probed_at);
 
 -- index: idx_goals_session_created
 CREATE INDEX idx_goals_session_created

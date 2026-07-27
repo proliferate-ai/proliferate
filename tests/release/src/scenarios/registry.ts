@@ -7,7 +7,6 @@ import { t3Wt1 } from "./t3-wt-1.js";
 import { t3Chat1 } from "./t3-chat-1.js";
 import { t3Gw1 } from "./t3-gw-1.js";
 import { t3Cfg1 } from "./t3-cfg-1.js";
-import { t3Update1 } from "./t3-update-1.js";
 import { t3SecMat1 } from "./t3-sec-mat-1.js";
 import { t3Repo1 } from "./t3-repo-1.js";
 import { t3Int1 } from "./t3-int-1.js";
@@ -52,6 +51,16 @@ import { selfhostCfn1 } from "./selfhost-cfn-1.js";
  * `t3-sh-2/3/4/5` remain registered as-is — their broader reconciliation is a
  * later pass; `t3-sh-5`'s ref stays `T3-SH-5` (reserved for the cloud/E2B
  * add-on).
+ *
+ * `T3-UPDATE-1` (heartbeat catalog convergence) is DELETED, not retired-in-place:
+ * its whole subject — the server advertising a served catalog version and the
+ * worker pushing the document into the runtime — no longer exists. The runtime
+ * binary is the only catalog transport (agent-distribution.md, "Convergence"),
+ * so "bump the served catalog version → heartbeat → reinstall" is not a behavior
+ * with an owner. Its real content is already reassigned by
+ * `core-release-validation.md`'s legacy-claim table: steady-state install/catalog
+ * proof to `T3-AGENT-1`/`T3-MODELREG-1`, and real N-1→N runtime convergence to
+ * `T4-RUNTIME-1` with `T4-CATALOG-1`.
  */
 export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Prov1,
@@ -60,7 +69,6 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Chat1,
   t3Gw1,
   t3Cfg1,
-  t3Update1,
   t3SecMat1,
   t3Repo1,
   t3Int1,

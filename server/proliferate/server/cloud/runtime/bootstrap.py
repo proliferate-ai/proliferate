@@ -19,6 +19,8 @@ _ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV = (
     "ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION"
 )
 _CLOUD_MANAGED_WORKTREES_ROOT = "/home/user/workspace/worktrees"
+# Consumed by `RuntimeSurface::from_env` (anyharness-lib domains/agents/runtime.rs).
+_ANYHARNESS_RUNTIME_SURFACE_ENV = "ANYHARNESS_RUNTIME_SURFACE"
 
 
 def _runtime_sentry_dsn() -> str:
@@ -113,6 +115,13 @@ def build_runtime_env(
         _ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: "1",
         _ANYHARNESS_WORKTREES_ROOT_ENV: _CLOUD_MANAGED_WORKTREES_ROOT,
         _ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV: "1",
+        # Declare the surface so the runtime's auto-install startup pass can apply
+        # the one surface-dependent carve-out: cursor never installs in cloud
+        # (login-only, no headless credential path, so it could never reach
+        # `Ready` — agent-distribution.md, "Installation"). Absent means local,
+        # which is the safe default: it can only ever enable a cursor install that
+        # then fails to become Ready, never suppress an install a surface needs.
+        _ANYHARNESS_RUNTIME_SURFACE_ENV: "cloud",
     }
     if is_vendor_telemetry_enabled() and _runtime_sentry_dsn():
         env["ANYHARNESS_SENTRY_DSN"] = _runtime_sentry_dsn()

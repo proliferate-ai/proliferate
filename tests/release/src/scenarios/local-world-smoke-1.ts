@@ -296,16 +296,14 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
     let last: Awaited<ReturnType<typeof client.getAgent>> | undefined;
     let launchable = false;
     // Launchability is judged by `GET /v1/agents/launch-options` — the exact
-    // source Desktop's composer reads. That endpoint uses AnyHarness's
-    // LAUNCH-time readiness (`resolve_launch_agent`), where an enrolled gateway
-    // route supplies the credential injected at spawn. `GET /v1/agents/{kind}`
-    // readiness is deliberately the NATIVE question ("is the vendor CLI
-    // installed and logged in") and reports `login_required` for a pure
-    // gateway-route actor — on a developer machine an ambient `~/.claude` login
-    // masks that, on a fresh CI runner it never clears. Gating on native
-    // readiness here made the cell green only where a human was logged in,
-    // which is exactly the ambient-credential leak the spec forbids. `getAgent`
-    // is still polled for install triggering and failure diagnostics.
+    // source Desktop's composer reads, and the one that resolves credentials
+    // against the WORKSPACE's composed env (`resolve_launch_agent`).
+    // `GET /v1/agents/{kind}` is also route-aware now, but it resolves against
+    // the HOST env, so on a developer machine an ambient `~/.claude` login can
+    // make it ready where a fresh CI runner's would not. Gating on it made the
+    // cell green only where a human was logged in — exactly the
+    // ambient-credential leak the spec forbids. `getAgent` is still polled for
+    // install triggering and failure diagnostics.
     // Claude's ACP process builds from git and can still be installing after
     // gateway state syncs, so this is generously bounded.
     while (Date.now() < deadline) {
@@ -847,10 +845,10 @@ async function dumpServerGatewayState(actor: AuthenticatedActor, label: string):
   const nodePath = await import("node:path");
   const diag: Record<string, unknown> = {};
   diag.stateLocal = await actor.api
-    .get("/v1/cloud/agent-gateway/state?surface=local")
+    .get("/v1/cloud/agent-auth/state?surface=local")
     .catch((e) => `err: ${describe(e)}`);
   diag.selectionsLocal = await actor.api
-    .get("/v1/cloud/agent-gateway/selections?surface=local")
+    .get("/v1/cloud/agent-auth/selections?surface=local")
     .catch((e) => `err: ${describe(e)}`);
   diag.capabilities = await actor.api
     .get("/v1/cloud/agent-gateway/capabilities")

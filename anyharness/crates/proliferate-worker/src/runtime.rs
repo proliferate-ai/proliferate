@@ -3,13 +3,13 @@ use tracing::{info, warn};
 
 use crate::{
     anyharness_update,
-    catalog_sync::{self, CatalogSyncState},
     cloud_client::CloudClient,
     config::WorkerConfig,
     error::WorkerError,
     identity,
     identity::credentials::WorkerIdentity,
     integration_gateway, lifecycle,
+    model_snapshot_sync::{self, ModelSnapshotSyncState},
     process_lock::WorkerProcessLock,
     self_update,
     store::WorkerStore,
@@ -43,14 +43,14 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
         );
     }
 
-    let catalog_state = CatalogSyncState::new();
+    let model_snapshot_sync_state = ModelSnapshotSyncState::new();
     if heartbeat_and_converge(
         &config,
         &cloud,
         &store,
         &identity,
         integration_gateway.as_ref(),
-        &catalog_state,
+        &model_snapshot_sync_state,
         once,
     )
     .await
@@ -69,7 +69,7 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
             &store,
             &identity,
             integration_gateway.as_ref(),
-            &catalog_state,
+            &model_snapshot_sync_state,
             false,
         )
         .await
@@ -90,7 +90,7 @@ async fn heartbeat_and_converge(
     store: &WorkerStore,
     identity: &WorkerIdentity,
     gateway: Option<&crate::cloud_client::IntegrationGatewayConfig>,
-    catalog_state: &CatalogSyncState,
+    model_snapshot_sync_state: &ModelSnapshotSyncState,
     dry_run: bool,
 ) -> TickControl {
     let anyharness_version = anyharness_update::running_anyharness_version(store);
@@ -118,14 +118,13 @@ async fn heartbeat_and_converge(
         }
     }
 
-    // Catalog sync: non-fatal, runs first (a worker binary swap exec's and
-    // never returns, so anything on this tick must precede it).
-    catalog_sync::maybe_sync(
+    // Model-snapshot sync: non-fatal, runs first (a worker binary swap
+    // exec's and never returns, so anything on this tick must precede it).
+    model_snapshot_sync::maybe_sync(
         config,
         cloud,
         &identity.worker_token,
-        &response,
-        catalog_state,
+        model_snapshot_sync_state,
     )
     .await;
 

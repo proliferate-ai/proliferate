@@ -66,7 +66,7 @@ async def test_key_create_commit_finishes_before_response_starts(
         base_url="http://test",
     ) as client:
         response = await client.post(
-            "/v1/cloud/agent-gateway/keys",
+            "/v1/cloud/agent-auth/keys",
             json={"title": "Qualification key", "value": "secret"},
         )
 

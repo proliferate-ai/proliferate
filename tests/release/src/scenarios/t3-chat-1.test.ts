@@ -150,7 +150,7 @@ test("one shared workspace yields green/failed/blocked cells with exactly one cr
     attemptModel: async (workspaceId, choice) => {
       assert.equal(workspaceId, "ws-1");
       if (choice.harnessKind === "codex") {
-        throw new Error("turn failed: SESSION_MODEL_GATED");
+        throw new Error("turn failed: SESSION_MODEL_UNSUPPORTED");
       }
     },
   });
@@ -160,7 +160,7 @@ test("one shared workspace yields green/failed/blocked cells with exactly one cr
   const byId = new Map(outcomes.map((outcome) => [outcome.cellId, outcome]));
   assert.equal(byId.get("T3-CHAT-1/local/harness=claude")?.status, "green");
   assert.equal(byId.get("T3-CHAT-1/local/harness=codex")?.status, "failed");
-  assert.match(byId.get("T3-CHAT-1/local/harness=codex")?.reason?.message ?? "", /SESSION_MODEL_GATED/);
+  assert.match(byId.get("T3-CHAT-1/local/harness=codex")?.reason?.message ?? "", /SESSION_MODEL_UNSUPPORTED/);
   assert.equal(byId.get("T3-CHAT-1/local/harness=grok")?.status, "blocked");
   assert.equal(outcomes.length, 3);
 });

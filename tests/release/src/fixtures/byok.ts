@@ -11,10 +11,10 @@ import type { ProductPage } from "./product-page.js";
  * controller-local candidate AnyHarness, which spawns the harness with the raw
  * key. No LiteLLM/E2B is involved — BYOK is a direct-provider call.
  *
- *   POST /v1/cloud/agent-gateway/keys            { title, value: <rawKey> } -> { id }
- *   PUT  /v1/cloud/agent-gateway/selections/{harness}?surface=local
+ *   POST /v1/cloud/agent-auth/keys            { title, value: <rawKey> } -> { id }
+ *   PUT  /v1/cloud/agent-auth/selections/{harness}?surface=local
  *          { sources: [{ sourceKind: "api_key", apiKeyId, envVarName, enabled: true }] }
- *   GET  /v1/cloud/agent-gateway/state?surface=local   (Desktop fetches + pushes)
+ *   GET  /v1/cloud/agent-auth/state?surface=local   (Desktop fetches + pushes)
  *
  * The raw provider key and setup token are NEVER stored in evidence — only a
  * hash of the created key id is (stamped by workstream D). `envVarName` defaults
@@ -129,10 +129,10 @@ export interface ByokStoreTransport {
 
 export const defaultByokStoreTransport: ByokStoreTransport = {
   async createKey(api, body) {
-    return api.post<{ id: string }>("/v1/cloud/agent-gateway/keys", body);
+    return api.post<{ id: string }>("/v1/cloud/agent-auth/keys", body);
   },
   async putSelection(api, harnessKind, body) {
-    await api.put(`/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}?surface=local`, body);
+    await api.put(`/v1/cloud/agent-auth/selections/${encodeURIComponent(harnessKind)}?surface=local`, body);
   },
 };
 

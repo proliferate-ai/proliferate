@@ -87,6 +87,7 @@ class _StubLiteLLM:
         alias: str | None = None,
         max_budget: float | None = None,
         metadata: dict[str, Any] | None = None,
+        models: list[str] | None = None,
     ) -> LiteLLMVirtualKey:
         self.token_counter += 1
         return LiteLLMVirtualKey(
@@ -168,7 +169,13 @@ async def _enroll_member(db_session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID
 async def _enroll_member_in_org(
     db_session: AsyncSession, organization_id: uuid.UUID
 ) -> tuple[uuid.UUID, uuid.UUID, str]:
-    """Add one more member (own virtual key) to an already-seeded org."""
+    """Add one more member to an already-seeded org; returns their "claude" key.
+
+    Post-B2 the parent enrollment row carries no key of its own — every
+    gateway-capable harness gets its own child key (model-gateway.md
+    §Account model). Tests here drive spend rows tagged ``claude-sonnet-4-5``,
+    so "claude" is the representative per-harness key.
+    """
     user = User(
         email=f"member-{uuid.uuid4().hex[:10]}@example.com",
         hashed_password="unused-oauth-only",
@@ -180,8 +187,27 @@ async def _enroll_member_in_org(
     await db_session.flush()
     user_id = user.id
     enrollment = await ensure_org_enrollment(db_session, organization_id, user_id)
-    assert enrollment.virtual_key_id is not None
-    return organization_id, user_id, enrollment.virtual_key_id
+    assert enrollment.virtual_key_id is None
+    claude_key = await store.get_active_enrollment_key(
+        db_session, enrollment_id=enrollment.id, harness_kind="claude"
+    )
+    assert claude_key is not None
+    assert claude_key.virtual_key_id is not None
+    return organization_id, user_id, claude_key.virtual_key_id
+
+
+async def _resolve_enrollment_id(db_session: AsyncSession, virtual_key_id: str) -> uuid.UUID:
+    """Resolve a per-harness child key's token hash to its parent enrollment id.
+
+    Post-B2 the spend-log ``api_key`` field is a child key's token hash, not
+    the (now key-less) parent enrollment row's — mirrors
+    ``usage_import._resolve_enrollment_for_spend_key``.
+    """
+    enrollment_key = await store.get_enrollment_key_by_virtual_key_id(
+        db_session, virtual_key_id=virtual_key_id
+    )
+    assert enrollment_key is not None
+    return enrollment_key.enrollment_id
 
 
 @pytest.mark.asyncio
@@ -192,9 +218,7 @@ async def test_llm_over_cap_disables_key_then_cap_raise_reenables(
 ) -> None:
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     org_id, _subject_id, user_id, virtual_key_id = await _enroll_member(db_session)
-    enrollment_id = (
-        await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=virtual_key_id)
-    ).id
+    enrollment_id = await _resolve_enrollment_id(db_session, virtual_key_id)
 
     await billing_store.replace_budget_limits(
         db_session,
@@ -248,9 +272,7 @@ async def test_llm_topup_reactivation_never_clears_limit_reached(
     """A credit top-up must not unblock a key its admin capped (§4.1 confusion)."""
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     org_id, subject_id, user_id, virtual_key_id = await _enroll_member(db_session)
-    enrollment_id = (
-        await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=virtual_key_id)
-    ).id
+    enrollment_id = await _resolve_enrollment_id(db_session, virtual_key_id)
 
     await billing_store.replace_budget_limits(
         db_session,
@@ -298,9 +320,7 @@ async def test_per_user_daily_cap_does_not_mask_org_wide_monthly_cap(
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     org_id, subject_id, user_a, key_a = await _enroll_member(db_session)
     _, _user_b, key_b = await _enroll_member_in_org(db_session, org_id)
-    enrollment_a_id = (
-        await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=key_a)
-    ).id
+    enrollment_a_id = await _resolve_enrollment_id(db_session, key_a)
     # Headroom well above the org-wide budget cap being tested, so the
     # separate LLM-credit-exhaustion path (a different mechanism) never
     # fires and masks the budget-cap enforcement this test targets.
@@ -363,12 +383,8 @@ async def test_org_wide_cap_reenables_on_zero_new_spend_tick(
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     org_id, subject_id, user_a, key_a = await _enroll_member(db_session)
     _, user_b, key_b = await _enroll_member_in_org(db_session, org_id)
-    enrollment_a_id = (
-        await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=key_a)
-    ).id
-    enrollment_b_id = (
-        await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=key_b)
-    ).id
+    enrollment_a_id = await _resolve_enrollment_id(db_session, key_a)
+    enrollment_b_id = await _resolve_enrollment_id(db_session, key_b)
 
     # Org-wide cap (user_id=None): applies to the subject's combined spend.
     await billing_store.replace_budget_limits(

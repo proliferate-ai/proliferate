@@ -31,11 +31,6 @@ update should happen, and it does not write the local store.
 
 There is no general `anyharness_client` module in the current Worker.
 
-- `catalog_sync.rs` directly owns its focused catalog version GET and catalog
-  PUT, including optional runtime bearer auth — deletion-pending with the
-  rest of the heartbeat catalog transport
-  ([agent-distribution.md](../../../platforms/product/agent-distribution.md)
-  Current gaps).
 - `anyharness_update.rs` directly owns the post-relaunch `/health` probe
   (legacy-target path only).
 

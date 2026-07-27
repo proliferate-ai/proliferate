@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use super::launch_env::build_session_launch_env;
 use crate::domains::agents::model::{
@@ -35,63 +35,14 @@ fn resolved_agent(kind: AgentKind, native_path: Option<&str>) -> ResolvedAgent {
             message: None,
         },
         spawn: None,
-    }
-}
-
-struct TempDirGuard {
-    path: PathBuf,
-}
-
-impl TempDirGuard {
-    fn new(prefix: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "anyharness-session-runtime-{prefix}-{}",
-            uuid::Uuid::new_v4()
-        ));
-        std::fs::create_dir_all(&path).expect("create temp dir");
-        Self { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempDirGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
-}
-
-struct EnvVarGuard {
-    key: &'static str,
-    previous: Option<std::ffi::OsString>,
-}
-
-impl EnvVarGuard {
-    fn set(key: &'static str, value: &Path) -> Self {
-        let previous = std::env::var_os(key);
-        std::env::set_var(key, value);
-        Self { key, previous }
-    }
-}
-
-impl Drop for EnvVarGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => std::env::set_var(self.key, value),
-            None => std::env::remove_var(self.key),
-        }
+        credentials_from_route: false,
     }
 }
 
 #[test]
 fn build_session_launch_env_sets_claude_code_executable_for_claude() {
-    let runtime_home = TempDirGuard::new("claude-home");
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
-        runtime_home.path(),
-        None,
         None,
     )
     .expect("build env");
@@ -104,12 +55,9 @@ fn build_session_launch_env_sets_claude_code_executable_for_claude() {
 
 #[test]
 fn build_session_launch_env_sets_requested_model_for_claude() {
-    let runtime_home = TempDirGuard::new("claude-model-home");
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
-        runtime_home.path(),
         Some("opus[1m]"),
-        None,
     )
     .expect("build env");
 
@@ -125,28 +73,16 @@ fn build_session_launch_env_sets_requested_model_for_claude() {
 
 #[test]
 fn build_session_launch_env_ignores_claude_without_native_path() {
-    let runtime_home = TempDirGuard::new("claude-missing-native-home");
-    let env = build_session_launch_env(
-        &resolved_agent(AgentKind::Claude, None),
-        runtime_home.path(),
-        None,
-        None,
-    )
-    .expect("build env");
+    let env = build_session_launch_env(&resolved_agent(AgentKind::Claude, None), None)
+        .expect("build env");
 
     assert!(env.is_empty());
 }
 
 #[test]
 fn build_session_launch_env_sets_requested_model_without_claude_native_path() {
-    let runtime_home = TempDirGuard::new("claude-model-only-home");
-    let env = build_session_launch_env(
-        &resolved_agent(AgentKind::Claude, None),
-        runtime_home.path(),
-        Some("sonnet"),
-        None,
-    )
-    .expect("build env");
+    let env = build_session_launch_env(&resolved_agent(AgentKind::Claude, None), Some("sonnet"))
+        .expect("build env");
 
     assert_eq!(
         env.get("ANTHROPIC_MODEL").map(String::as_str),
@@ -155,79 +91,42 @@ fn build_session_launch_env_sets_requested_model_without_claude_native_path() {
     assert!(!env.contains_key("CLAUDE_CODE_EXECUTABLE"));
 }
 
+/// Codex's isolated home is no longer built here — it is route-auth's native
+/// recipe, rendered from the catalog. This layer must therefore contribute
+/// NOTHING for codex, or it would write a second `CODEX_HOME` that competes with
+/// the route layer's (the bug this replaces: the loser was silently shadowed, and
+/// on a routed launch the shadowed home still held a copy of the user's
+/// `auth.json`).
 #[test]
-fn build_session_launch_env_sets_clean_codex_home_for_local_codex() {
-    let runtime_home = TempDirGuard::new("codex-runtime");
-    let source_codex_home = TempDirGuard::new("codex-source");
-    std::fs::write(
-        source_codex_home.path().join("auth.json"),
-        r#"{"OPENAI_API_KEY":"sk-test"}"#,
-    )
-    .expect("write source auth");
-    let _codex_home_guard = EnvVarGuard::set("CODEX_HOME", source_codex_home.path());
-
+fn build_session_launch_env_contributes_no_codex_home() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Codex, Some("/tmp/managed/codex")),
-        runtime_home.path(),
-        None,
-        None,
+        Some("gpt-5.2"),
     )
     .expect("build env");
 
-    let codex_home = runtime_home.path().join("agent-auth").join("codex-local");
-    assert_eq!(
-        env.get("CODEX_HOME").map(String::as_str),
-        Some(codex_home.to_string_lossy().as_ref())
+    assert!(
+        env.is_empty(),
+        "codex's home + config.toml belong to route_auth's recipe table, got {env:?}"
     );
-    let auth_json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(codex_home.join("auth.json")).expect("read auth"))
-            .expect("parse auth");
-    assert_eq!(auth_json["OPENAI_API_KEY"], "sk-test");
-
-    let config_toml = std::fs::read_to_string(codex_home.join("config.toml")).expect("read config");
-    assert!(config_toml.contains(r#"model = "gpt-5.5""#));
-    assert!(config_toml.contains(r#"model_reasoning_effort = "medium""#));
-    assert!(config_toml.contains("plugins = false"));
-    assert!(!codex_home.join("hooks.json").exists());
 }
 
+/// The same for every remaining harness: this layer is claude-only now, so no
+/// harness can pick up launch env from here by accident.
 #[test]
-fn build_session_launch_env_prefers_selected_codex_route_api_key() {
-    let runtime_home = TempDirGuard::new("codex-route-runtime");
-    let source_codex_home = TempDirGuard::new("codex-route-source");
-    std::fs::write(
-        source_codex_home.path().join("auth.json"),
-        r#"{"OPENAI_API_KEY":"sk-ambient"}"#,
-    )
-    .expect("write source auth");
-    let _codex_home_guard = EnvVarGuard::set("CODEX_HOME", source_codex_home.path());
-
-    let env = build_session_launch_env(
-        &resolved_agent(AgentKind::Codex, Some("/tmp/managed/codex")),
-        runtime_home.path(),
-        None,
-        Some("sk-selected"),
-    )
-    .expect("build env");
-
-    let codex_home = env.get("CODEX_HOME").expect("CODEX_HOME");
-    let auth_json: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(std::path::Path::new(codex_home).join("auth.json")).expect("read auth"),
-    )
-    .expect("parse auth");
-    assert_eq!(auth_json["OPENAI_API_KEY"], "sk-selected");
-}
-
-#[test]
-fn build_session_launch_env_ignores_other_agents() {
-    let runtime_home = TempDirGuard::new("other-agent-runtime");
-    let env = build_session_launch_env(
-        &resolved_agent(AgentKind::Cursor, Some("/tmp/managed/cursor-agent")),
-        runtime_home.path(),
-        Some("ignored"),
-        None,
-    )
-    .expect("build env");
-
-    assert!(env.is_empty());
+fn build_session_launch_env_is_empty_for_every_non_claude_harness() {
+    for kind in [
+        AgentKind::Codex,
+        AgentKind::OpenCode,
+        AgentKind::Cursor,
+        AgentKind::Grok,
+    ] {
+        let label = kind.as_str().to_string();
+        let env = build_session_launch_env(
+            &resolved_agent(kind, Some("/tmp/managed/agent")),
+            Some("ignored"),
+        )
+        .expect("build env");
+        assert!(env.is_empty(), "{label} should contribute nothing: {env:?}");
+    }
 }

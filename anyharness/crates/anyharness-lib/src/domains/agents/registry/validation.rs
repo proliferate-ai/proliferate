@@ -7,6 +7,12 @@ use crate::domains::agents::model::AgentKind;
 
 const VALID_CREDENTIAL_PROVIDER_IDS: &[&str] = &["anthropic", "openai", "gemini", "cursor", "xai"];
 
+// The closed vocabulary of storable vault-entry shapes (agent-auth.md's "The
+// vault" table); mirrors constants/agent_gateway.py's AGENT_API_KEY_TYPED_KINDS
+// on the Python side. Which harness may declare which kind is registry data,
+// not a Rust constant — this list only bounds what a `kind` string may be.
+const VALID_PROVIDER_CONFIG_KINDS: &[&str] = &["aws_bedrock", "azure_openai"];
+
 pub fn validate_agent_registry_document(registry: &AgentRegistryDocument) -> anyhow::Result<()> {
     if registry.schema_version != 1 {
         anyhow::bail!("agent registry schema version is not supported");
@@ -48,7 +54,78 @@ fn validate_agent(
             agent.kind
         );
     }
-    validate_auth(&agent.kind, &agent.auth)
+    validate_auth(&agent.kind, &agent.auth)?;
+    validate_provider_config(&agent.kind, &agent.provider_config)
+}
+
+fn validate_provider_config(
+    agent_kind: &str,
+    provider_config: &[crate::domains::agents::registry::schema::AgentRegistryProviderConfig],
+) -> anyhow::Result<()> {
+    let mut seen_kinds = HashSet::new();
+    for entry in provider_config {
+        if !VALID_PROVIDER_CONFIG_KINDS.contains(&entry.kind.as_str()) {
+            anyhow::bail!(
+                "agent registry agent '{}' providerConfig kind '{}' is not supported",
+                agent_kind,
+                entry.kind
+            );
+        }
+        if !seen_kinds.insert(entry.kind.clone()) {
+            anyhow::bail!(
+                "agent registry agent '{}' providerConfig kind '{}' is duplicated",
+                agent_kind,
+                entry.kind
+            );
+        }
+        if entry.label.trim().is_empty() {
+            anyhow::bail!(
+                "agent registry agent '{}' providerConfig kind '{}' label is empty",
+                agent_kind,
+                entry.kind
+            );
+        }
+        if entry.env_vars.is_empty() {
+            anyhow::bail!(
+                "agent registry agent '{}' providerConfig kind '{}' has no env vars",
+                agent_kind,
+                entry.kind
+            );
+        }
+        if entry.pending
+            && entry
+                .pending_reason
+                .as_deref()
+                .unwrap_or("")
+                .trim()
+                .is_empty()
+        {
+            anyhow::bail!(
+                "agent registry agent '{}' providerConfig kind '{}' is pending but has no pendingReason",
+                agent_kind,
+                entry.kind
+            );
+        }
+        let mut seen_env_vars = HashSet::new();
+        for env_var in &entry.env_vars {
+            if env_var.name().trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{}' providerConfig kind '{}' has empty env var name",
+                    agent_kind,
+                    entry.kind
+                );
+            }
+            if !seen_env_vars.insert(env_var.name().to_string()) {
+                anyhow::bail!(
+                    "agent registry agent '{}' providerConfig kind '{}' env var '{}' is duplicated",
+                    agent_kind,
+                    entry.kind,
+                    env_var.name()
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_auth(agent_kind: &str, auth: &AgentRegistryAuth) -> anyhow::Result<()> {
@@ -217,6 +294,117 @@ mod tests {
 
         assert!(
             error.to_string().contains("has empty discovery kind"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn bundled_registry_provider_config_validates() {
+        // The bundled document's claude/codex/opencode providerConfig blocks
+        // must already pass — this pins that Track D's declarations are
+        // valid, not just parseable.
+        validate_agent_registry_document(bundled_agent_registry_document())
+            .expect("bundled registry with providerConfig must validate");
+    }
+
+    #[test]
+    fn registry_rejects_unsupported_provider_config_kind() {
+        use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
+
+        let mut registry = bundled_agent_registry_document().clone();
+        registry.agents[0]
+            .provider_config
+            .push(AgentRegistryProviderConfig {
+                kind: "google_vertex".to_string(),
+                label: "Google Vertex".to_string(),
+                env_vars: vec![AgentRegistryAuthSlotEnvVar::Name(
+                    "ANTHROPIC_VERTEX_PROJECT_ID".to_string(),
+                )],
+                pending: false,
+                pending_reason: None,
+            });
+
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("unsupported providerConfig kind must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("providerConfig kind 'google_vertex' is not supported"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn registry_rejects_duplicate_provider_config_kind() {
+        use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
+
+        let mut registry = bundled_agent_registry_document().clone();
+        let duplicate = registry.agents[0].provider_config[0].clone();
+        registry.agents[0]
+            .provider_config
+            .push(AgentRegistryProviderConfig {
+                kind: duplicate.kind.clone(),
+                label: duplicate.label.clone(),
+                env_vars: duplicate.env_vars.clone(),
+                pending: duplicate.pending,
+                pending_reason: duplicate.pending_reason.clone(),
+            });
+
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("duplicate providerConfig kind must fail");
+
+        assert!(
+            error.to_string().contains("is duplicated"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn registry_rejects_provider_config_with_no_env_vars() {
+        use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
+
+        let mut registry = bundled_agent_registry_document().clone();
+        registry.agents[0].provider_config = vec![AgentRegistryProviderConfig {
+            kind: "aws_bedrock".to_string(),
+            label: "AWS Bedrock".to_string(),
+            env_vars: vec![],
+            pending: false,
+            pending_reason: None,
+        }];
+
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("providerConfig with no env vars must fail");
+
+        assert!(
+            error.to_string().contains("has no env vars"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn registry_rejects_provider_config_duplicate_env_var() {
+        use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
+
+        let mut registry = bundled_agent_registry_document().clone();
+        registry.agents[0].provider_config = vec![AgentRegistryProviderConfig {
+            kind: "aws_bedrock".to_string(),
+            label: "AWS Bedrock".to_string(),
+            env_vars: vec![
+                AgentRegistryAuthSlotEnvVar::Name("AWS_REGION".to_string()),
+                AgentRegistryAuthSlotEnvVar::Name("AWS_REGION".to_string()),
+            ],
+            pending: false,
+            pending_reason: None,
+        }];
+
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("duplicate providerConfig env var must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("env var 'AWS_REGION' is duplicated"),
             "unexpected error: {error}"
         );
     }

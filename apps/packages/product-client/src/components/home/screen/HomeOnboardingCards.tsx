@@ -10,6 +10,7 @@ import type {
   HomeOnboardingCardModel,
   HomeOnboardingIcon,
 } from "#product/lib/domain/home/home-screen";
+import type { AuthSetupStepState } from "#product/lib/domain/agents/auth-onboarding";
 
 function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
   switch (icon) {
@@ -95,6 +96,33 @@ function OnboardingCard({
   );
 }
 
+/**
+ * Ack-gated onboarding "setting up" step (agent-auth.md, Proof C7): visible
+ * only while the first-run adoption's gateway selections await the runtime's
+ * delivery ack (or the enrollment's keys). Resolution or the ~20s grace
+ * window removes the card — pending beyond the grace lives on the harness
+ * panes' ordinary indicator, never here, and there is no error state.
+ */
+function AuthSetupCard({ state }: { state: AuthSetupStepState }) {
+  if (state !== "settingUp") {
+    return null;
+  }
+  return (
+    <OnboardingCard
+      icon={<Settings className="icon-paired" />}
+      title={(
+        <ThinkingText
+          text={HOME_SCREEN_LABELS.authSetupTitle}
+          className="text-ui font-medium"
+        />
+      )}
+      description={HOME_SCREEN_LABELS.authSetupDescription}
+      trailing={<Spinner className="icon-paired text-muted-foreground" />}
+      selectLabel={HOME_SCREEN_LABELS.authSetupTitle}
+    />
+  );
+}
+
 function ModelProbeCard({
   state,
   onOpenAgents,
@@ -173,6 +201,7 @@ export function HomeOnboardingCards({
   cards,
   isAddingRepo,
   onSelect,
+  authSetup,
   modelProbe,
   onOpenAgents,
   onDismissModelProbe,
@@ -180,20 +209,25 @@ export function HomeOnboardingCards({
   cards: HomeOnboardingCardModel[];
   isAddingRepo: boolean;
   onSelect: (card: HomeOnboardingCardModel) => void;
+  authSetup?: AuthSetupStepState;
   modelProbe?: HomeModelProbeCardState;
   onOpenAgents?: () => void;
   onDismissModelProbe?: () => void;
 }) {
+  const hasAuthSetupCard = authSetup === "settingUp";
   const hasProbeCard = modelProbe !== undefined && modelProbe.kind !== "hidden";
-  if (cards.length === 0 && !hasProbeCard) {
+  if (cards.length === 0 && !hasProbeCard && !hasAuthSetupCard) {
     return null;
   }
 
-  // Max 3 cards (spec §10): setup cards take priority, probe card fills last.
-  const visibleCards = cards.slice(0, hasProbeCard ? 2 : 3);
+  // Max 3 cards (spec §10): the transient auth-setup step leads, setup cards
+  // take priority over the probe card, which fills last.
+  const reservedSlots = (hasAuthSetupCard ? 1 : 0) + (hasProbeCard ? 1 : 0);
+  const visibleCards = cards.slice(0, 3 - reservedSlots);
 
   return (
     <div className="mt-4 grid w-full grid-cols-1 gap-2 empty:hidden sm:grid-cols-3">
+      {hasAuthSetupCard && authSetup ? <AuthSetupCard state={authSetup} /> : null}
       {visibleCards.map((card) => (
         <OnboardingCard
           key={card.id}

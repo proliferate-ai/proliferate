@@ -35,33 +35,45 @@ const SRC_DIR = join(PKG_DIR, "src");
 const DIST_DIR = join(PKG_DIR, "dist");
 
 const CATALOG_SOURCE = join(REPO_ROOT, "catalogs", "agents", "catalog.json");
+const REGISTRY_SOURCE = join(REPO_ROOT, "catalogs", "agents", "registry.json");
 const GENERATED_DIR = join(SRC_DIR, "generated");
 const CATALOG_DEST = join(GENERATED_DIR, "agent-catalog.json");
+const REGISTRY_DEST = join(GENERATED_DIR, "agent-registry.json");
 
 const emitDist = process.argv.includes("--dist");
 
-function syncGeneratedCatalog() {
-  if (!existsSync(CATALOG_SOURCE)) {
+function syncGeneratedDocument(source, dest, label) {
+  if (!existsSync(source)) {
     // Pruned build contexts (e.g. the Vercel web deploy ignores /catalogs)
     // install workspace packages without needing product-client's assets.
     // Keep an already-synced copy if present; otherwise skip with a warning —
     // the desktop/browser host builds always run from a full checkout.
-    if (existsSync(CATALOG_DEST)) return;
+    if (existsSync(dest)) return;
     console.warn(
-      `[copy-product-client-assets] catalog source missing (pruned checkout?): ${CATALOG_SOURCE} — skipping sync`,
+      `[copy-product-client-assets] ${label} source missing (pruned checkout?): ${source} — skipping sync`,
     );
     return;
   }
   mkdirSync(GENERATED_DIR, { recursive: true });
-  // Minify: the copy is inlined `?raw` into the /login entry chunk, and the
-  // pretty-printed source costs ~2.6KB extra gzip against the WDU-1247-D1 cap.
+  // Minify: the copies are inlined `?raw` into the /login entry chunk, and the
+  // pretty-printed sources cost ~2.6KB extra gzip against the WDU-1247-D1 cap.
   writeFileSync(
-    CATALOG_DEST,
-    JSON.stringify(JSON.parse(readFileSync(CATALOG_SOURCE, "utf8"))),
+    dest,
+    JSON.stringify(JSON.parse(readFileSync(source, "utf8"))),
   );
   console.log(
-    `[copy-product-client-assets] synced agent catalog (minified) -> ${relative(REPO_ROOT, CATALOG_DEST)}`,
+    `[copy-product-client-assets] synced ${label} (minified) -> ${relative(REPO_ROOT, dest)}`,
   );
+}
+
+function syncGeneratedCatalog() {
+  syncGeneratedDocument(CATALOG_SOURCE, CATALOG_DEST, "agent catalog");
+  // The registry is the method document (agent-distribution.md's "two
+  // documents") — bundled the same way as the catalog so the client can read
+  // registry-declared vocabulary (e.g. Track D's `providerConfig` kinds)
+  // without a network round trip. Nothing reads this copy yet; it is
+  // plumbing for a later PR's flip, not a behavior change on its own.
+  syncGeneratedDocument(REGISTRY_SOURCE, REGISTRY_DEST, "agent registry");
 }
 
 function mirrorNonCodeAssetsToDist() {
