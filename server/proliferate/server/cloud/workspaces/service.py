@@ -1031,9 +1031,9 @@ def _runtime_status(sandbox: CloudSandboxValue | None) -> CloudRuntimeStatus:
         return "disabled"
     if sandbox.status == "ready":
         return "running"
-    if sandbox.status in {"creating", "provisioning"}:
+    if sandbox.status == "creating":
         return "pending"
-    if sandbox.status in {"paused", "stopped"}:
+    if sandbox.status == "paused":
         return "paused"
     if sandbox.status in {"error", "destroyed"}:
         return "error"

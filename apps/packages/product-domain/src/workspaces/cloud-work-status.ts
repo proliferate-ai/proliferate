@@ -56,8 +56,6 @@ export function recentWorkStatusIndicatorForSession(
 
 export type CloudWorkspaceStatusIndicatorFacts = Pick<
   CloudWorkspaceSummary,
-  | "actionBlockKind"
-  | "actionBlockReason"
   | "billing"
   | "exposure"
   | "exposureState"
@@ -76,8 +74,6 @@ export type CloudWorkspaceStatusIndicatorFacts = Pick<
 export function cloudWorkStatusForWorkspace(
   workspace: Pick<
     CloudWorkspaceSummary,
-    | "actionBlockKind"
-    | "actionBlockReason"
     | "exposure"
     | "exposureState"
     | "lastError"
@@ -100,9 +96,6 @@ export function cloudWorkStatusForWorkspace(
     return "error";
   }
   if (workspaceHasPendingSessionInput(workspace)) {
-    return "blocked";
-  }
-  if (workspace.actionBlockKind || workspace.actionBlockReason) {
     return "blocked";
   }
   if (workspace.lastSessionSummary?.status === "running") {
@@ -182,8 +175,6 @@ function workspaceHasErrorStatus(
 function workspaceNeedsInput(
   workspace: Pick<
     CloudWorkspaceSummary,
-    | "actionBlockKind"
-    | "actionBlockReason"
     | "billing"
     | "lastSessionSummary"
     | "visibility"
@@ -192,7 +183,6 @@ function workspaceNeedsInput(
 ): boolean {
   return workspace.visibility === "shared_unclaimed"
     || sessionHasPendingInput(sessionInteraction)
-    || Boolean(workspace.actionBlockKind || workspace.actionBlockReason)
     || workspace.billing?.blockStatus === "blocked"
     || workspace.billing?.startBlocked === true
     || workspace.billing?.activeSpendHold === true;

@@ -21,8 +21,6 @@ function makeCloudWorkspace(
   return {
     id: "cloud-1",
     displayName: null,
-    actionBlockKind: null,
-    actionBlockReason: null,
     postReadyPhase: "idle",
     postReadyFilesApplied: 0,
     postReadyFilesTotal: 0,
@@ -34,8 +32,6 @@ function makeCloudWorkspace(
       environmentId: null,
       status: "pending",
       generation: 0,
-      actionBlockKind: null,
-      actionBlockReason: null,
     },
     statusDetail: null,
     lastError: null,
@@ -75,21 +71,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
     expect("steps" in model).toBe(false);
   });
 
-  it("returns a passive status footer for billing blocks", () => {
-    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
-      actionBlockKind: "credits_exhausted",
-      actionBlockReason: "Cloud usage is paused because your included sandbox hours are exhausted.",
-    }));
-
-    expect(model.footer).toEqual({
-      kind: "status",
-      message: "Cloud usage is paused because your included sandbox hours are exhausted.",
-    });
-    expect(model.description).toBe(
-      "Cloud usage is paused because your included sandbox hours are exhausted.",
-    );
-  });
-
   it.each<CloudWorkspaceStatus>(["pending", "materializing"])(
     "shows first-runtime setup copy for %s with generation zero",
     (status) => {
@@ -99,8 +80,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
           environmentId: "runtime-1",
           status: "provisioning",
           generation: 0,
-          actionBlockKind: null,
-          actionBlockReason: null,
         },
       }));
 
@@ -118,8 +97,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
         environmentId: "runtime-1",
         status: "running",
         generation: 2,
-        actionBlockKind: null,
-        actionBlockReason: null,
       },
     }));
 
@@ -150,8 +127,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
         environmentId: "runtime-1",
         status: "running",
         generation: 0,
-        actionBlockKind: null,
-        actionBlockReason: null,
       },
     }));
 
@@ -168,7 +143,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
   it.each<Partial<CloudWorkspaceSummary>>([
     { status: "error" },
     { status: "archived" },
-    { actionBlockKind: "credits_exhausted" },
   ])("does not show first-runtime copy for non-provisioning states", (overrides) => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
       ...overrides,
@@ -176,8 +150,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
         environmentId: "runtime-1",
         status: "provisioning",
         generation: 0,
-        actionBlockKind: null,
-        actionBlockReason: null,
       },
     }));
 
@@ -188,11 +160,10 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
 });
 
 describe("shouldShowCloudWorkspaceStatusScreen", () => {
-  it("does not show the full status screen when optional block fields are omitted", () => {
-    const { actionBlockKind: _actionBlockKind, actionBlockReason: _actionBlockReason, ...workspace } =
-      makeCloudWorkspace({ status: "ready" });
-
-    expect(shouldShowCloudWorkspaceStatusScreen(workspace)).toBe(false);
+  it("does not show the full status screen for a ready workspace", () => {
+    expect(shouldShowCloudWorkspaceStatusScreen(
+      makeCloudWorkspace({ status: "ready" }),
+    )).toBe(false);
   });
 });
 
@@ -288,7 +259,6 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
       makeCloudWorkspace({ status: "ready", postReadyPhase: "applying_files" }),
       makeCloudWorkspace({ status: "archived" }),
       makeCloudWorkspace({ status: "error" }),
-      makeCloudWorkspace({ actionBlockKind: "billing_quota" }),
     ].map((workspace) => buildCloudWorkspaceStatusScreenModel(workspace));
 
     expect(models.map((model) => buildCloudWorkspaceCompactStatusView(model).tone))

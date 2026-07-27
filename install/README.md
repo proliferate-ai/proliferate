@@ -64,8 +64,7 @@ implemented; the remaining gate is operational — do not flip
 
 Enrollment only registers the target and worker. It does not carry GitHub,
 agent, MCP, or model credentials. Those are materialized later through
-worker-authenticated Cloud commands such as `configure_git_identity` and
-`materialize_environment`.
+worker-authenticated Cloud commands such as `materialize_environment`.
 
 ## Local SSH Worker Smoke Test
 
@@ -98,7 +97,6 @@ worker heartbeat, and version reporting. A full automation smoke has additional
 requirements:
 
 - the local Cloud profile must have GitHub OAuth configured for the run creator
-- the target must receive `configure_git_identity`
 - the target must clone/fetch the repo through `ensure_repo_checkout`
 - the requested agent must be installed/readied before `start_session`
 
