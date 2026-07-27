@@ -184,8 +184,8 @@ async def test_gateway_access_rechecks_billing_before_runtime_cache_expires(
         assert_billing,
     )
     monkeypatch.setattr(service.time, "monotonic", lambda: now)
-    monkeypatch.setattr(service, "ensure_personal_cloud_sandbox_exists", ensure_sandbox)
-    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
+    monkeypatch.setattr(service, "ensure_cloud_sandbox_ready", ensure_sandbox)
+    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access_or_repair", load_access)
 
     await service.ensure_cloud_sandbox_gateway_access(
         cast(AsyncSession, object()),
@@ -244,13 +244,13 @@ async def test_gateway_access_forwards_paused_sandbox_with_stamped_access(
     async def ensure_sandbox(*_args: object, **_kwargs: object) -> object:
         return paused_sandbox
 
-    async def load_access(sandbox: object) -> tuple[str, str, str]:
+    async def load_access(sandbox: object, **_kwargs: object) -> tuple[str, str, str]:
         assert sandbox is paused_sandbox
         return ("https://paused.example.test", "paused-token", "data-key")
 
     _patch_gateway_prerequisites(monkeypatch)
-    monkeypatch.setattr(service, "ensure_personal_cloud_sandbox_exists", ensure_sandbox)
-    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
+    monkeypatch.setattr(service, "ensure_cloud_sandbox_ready", ensure_sandbox)
+    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access_or_repair", load_access)
 
     access = await service.ensure_cloud_sandbox_gateway_access(
         cast(AsyncSession, object()),
