@@ -192,13 +192,18 @@ for (const [currentName, finalName] of Object.entries(currentTokenDispositions))
 // `--color-diff-added`/`--color-diff-deleted` and their six
 // `--diffs-bg-*-override` dark-mode literals onto `--color-git-green`/
 // `--color-git-red` so the diff pane matches the reference's addition/
-// deletion hues instead of a separate, unreferenced green/red pair; that
-// moves eight more dispositions from shipped into retuned — eleven
-// crossings in total. The 285-name disposition census itself is unchanged:
-// the three transcript-measure/turn-rhythm additions are net-new tokens,
-// and this map is frozen to the names that existed BEFORE the retune.
-assert(shipped === 165, `expected 165 shipped dispositions, got ${shipped}`);
-assert(retuned === 50, `expected 50 retuned dispositions, got ${retuned}`);
+// deletion hues instead of a separate, unreferenced green/red pair. The
+// session-header retune ([RETUNE:header/quiet-active-tab]) aliases
+// `--workspace-shell-tab-active-background` onto `--color-selected` (it
+// was already in the retuned tally as [RETUNE:state/overlay], so the tag
+// changes but no disposition crosses) and `--workspace-shell-tab-active-border`
+// onto `--color-border`, moving one more disposition from shipped into
+// retuned — twelve crossings in total.
+// The 285-name disposition census itself is unchanged: the three
+// transcript-measure/turn-rhythm additions are net-new tokens, and this map
+// is frozen to the names that existed BEFORE the retune.
+assert(shipped === 164, `expected 164 shipped dispositions, got ${shipped}`);
+assert(retuned === 51, `expected 51 retuned dispositions, got ${retuned}`);
 
 for (const [name, value] of tokenEntries) {
   assert(value.provenance.length > 0, `${name} is missing provenance`);

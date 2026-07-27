@@ -1794,14 +1794,14 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--workspace-shell-tab-active-background": {
-    dark: "var(--color-active) /* legacy-alias */",
-    light: "var(--color-active) /* legacy-alias */",
-    provenance: "[RETUNE:state/overlay]",
+    dark: "var(--color-selected) /* legacy-alias */",
+    light: "var(--color-selected) /* legacy-alias */",
+    provenance: "[RETUNE:header/quiet-active-tab]",
   },
   "--workspace-shell-tab-active-border": {
-    dark: "var(--color-border-heavy)",
-    light: "var(--color-border-heavy)",
-    provenance: "[SHIPPED]",
+    dark: "var(--color-border)",
+    light: "var(--color-border)",
+    provenance: "[RETUNE:header/quiet-active-tab]",
   },
   "--workspace-shell-tab-content-gap": {
     dark: "0.5rem",
