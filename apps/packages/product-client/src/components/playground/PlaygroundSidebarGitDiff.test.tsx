@@ -26,7 +26,7 @@ describe("PlaygroundSidebarGitDiff", () => {
     expect(html).toContain("data-thread-find-target=\"review\"");
     expect(html).toContain("data-app-action-review-metrics-probe=\"\"");
     expect(html).toContain("data-review-path=");
-    expect(html).toContain("codex-review-diff-card");
+    expect(html).toContain("review-diff-card");
     expect(html).toContain("px-2 pb-3");
     expect(html).toContain("pt-2");
     expect(html).not.toContain("px-2 py-2");

@@ -534,7 +534,7 @@ body {
   color: var(--diffs-fg);
 }
 
-mark.codex-thread-find-match {
+mark.transcript-find-match {
   background-color: var(--color-terminal-yellow);
   color: var(--color-background);
   border-radius: calc(var(--radius) / 4);
@@ -548,7 +548,7 @@ mark.codex-thread-find-match {
   vertical-align: baseline;
 }
 
-mark.codex-thread-find-active {
+mark.transcript-find-active {
   background-color: hsl(30 95% 65%);
 }
 

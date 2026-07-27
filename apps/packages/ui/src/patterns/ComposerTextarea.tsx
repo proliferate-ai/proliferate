@@ -4,7 +4,7 @@ import { Textarea } from "../primitives/Textarea";
 type ComposerTextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 // UX_SPEC §5 + owner rev 2026-07-01: the input reads LARGER than the 13px
-// composer controls (codex hierarchy: input > controls), with codex's font+8
+// composer controls (the hierarchy is input > controls), at font size + 8
 // leading.
 //
 // ui-foundation-escalation: [CHAT-03] rules composer placeholders onto the

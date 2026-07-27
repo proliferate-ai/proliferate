@@ -9,9 +9,9 @@ import {
 } from "@proliferate/ui/primitives/tooltip-primitive";
 
 /**
- * The codex card anatomy (reference/codex/status/card.html), extracted from
- * the workspace-status card so every composer ambient surface — status card,
- * environment popover — shares one section/row recipe.
+ * The ambient card anatomy, extracted from the workspace-status card so
+ * every composer ambient surface — status card, environment popover —
+ * shares one section/row anatomy.
  */
 
 export type WorkspaceStatusDetailState =
@@ -29,8 +29,8 @@ export interface WorkspaceStatusDetailItem {
   meta?: string;
 }
 
-/* Codex section anatomy (card.html): hairline via ::after inset-x-4,
-   sticky h-7 header in card background, rows in a gap-0.5 px-4 column. */
+/* Section anatomy: hairline via ::after inset-x-4, sticky h-7 header in
+   card background, rows in a gap-0.5 px-4 column. */
 export function StatusSection({
   title,
   detail,
@@ -51,9 +51,9 @@ export function StatusSection({
   );
 }
 
-/* Codex row recipe (group/summary-panel-row): h-7, icon in a fixed slot,
-   truncating label, trailing meta, full-row hover paint via ::before that
-   outsets 8px past the row box. */
+/* Summary-panel row anatomy: h-7, icon in a fixed slot, truncating label,
+   trailing meta, full-row hover paint via ::before that outsets 8px past the
+   row box. */
 const STATUS_ROW_CLASS =
   "group/status-row relative isolate flex h-7 w-full min-w-0 items-center gap-2 rounded-md py-1 text-left text-ui text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-md before:content-['']";
 
@@ -69,14 +69,14 @@ export function StatusRow({
   title,
 }: {
   icon?: ReactNode;
-  /** Replaces the fixed-width icon slot — for codex avatar-group clusters. */
+  /** Replaces the fixed-width icon slot — for avatar-group clusters. */
   leading?: ReactNode;
   label: string;
   meta?: string;
   trailing?: ReactNode;
   hoverItems?: WorkspaceStatusDetailItem[];
   onSelect?: () => void;
-  /** Codex cmdk disabled recipe: dimmed, no hover paint, no action. */
+  /** Disabled command-row treatment: dimmed, no hover paint, no action. */
   disabled?: boolean;
   title?: string;
 }) {
@@ -120,7 +120,7 @@ export function StatusRow({
     return row;
   }
 
-  /* Leaf detail on hover, codex tooltip recipe (tooltip1.html): rounded-xl,
+  /* Leaf detail on hover, canonical tooltip chrome: rounded-xl,
      translucent popover bg, 0.5px ring, backdrop blur; radix-portaled so the
      card's scroll container can't clip it; opens leftward over the
      transcript — the free side next to a right-anchored card. */

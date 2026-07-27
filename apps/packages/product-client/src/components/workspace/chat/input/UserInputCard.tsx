@@ -20,7 +20,7 @@ import {
 
 // Agent question wizard on the shared interaction-card anatomy: header/type
 // grammar from ComposerAttachedPanel (text-ui title + text-ui-sm progress
-// context), codex-style option rows with number-key badges (1–9 selects), an
+// context), compact option rows with number-key badges (1–9 selects), an
 // inset free-text row on --control with an inset ring, and the shared
 // ComposerCardFooter (secondary chips left, primary chip right).
 //

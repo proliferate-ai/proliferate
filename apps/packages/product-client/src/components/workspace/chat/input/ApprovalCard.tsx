@@ -17,7 +17,7 @@ import type { PermissionOptionAction } from "#product/lib/domain/chat/composer/c
 // MCP tool call) renders as a wrapping mono snippet in the body instead of a
 // truncating one-line title, so long commands stay fully readable.
 //
-// Options follow the codex popover-row anatomy (ComposerOptionRow): rounded
+// Options follow the popover-row anatomy (ComposerOptionRow): rounded
 // hover rows without hairlines, leading number-key badges, 1–9 selects. The
 // harness-provided options and the fallback Allow/Deny path render through the
 // exact same rows so the two paths are visually identical; destructive kinds

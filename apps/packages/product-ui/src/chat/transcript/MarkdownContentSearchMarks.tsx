@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from "react";
 
 /**
  * Wraps content-search query matches inside a markdown text node with
- * `<mark class="codex-thread-find-match">` (the same class the diff/file
+ * `<mark class="transcript-find-match">` (the same class the diff/file
  * highlighters use, so styling is shared). Marks carry only the row unit id —
  * no per-match id — because the active match is resolved by DOM ordinal at
  * jump time, not encoded at render (see the desktop jump-to-match effect).
@@ -48,7 +48,7 @@ function markString(text: string, query: string, rowUnitId: string): ReactNode {
     nodes.push(
       <mark
         key={`m-${index}`}
-        className="codex-thread-find-match"
+        className="transcript-find-match"
         data-content-search-row={rowUnitId}
       >
         {text.slice(range.start, range.end)}

@@ -12,9 +12,8 @@ import { ArrowUp, GitCommit, GitHub, GitPullRequest, Spinner } from "@proliferat
 import { useWorkspacePublishWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-publish-workflow";
 import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
-/* Codex git-modal anatomy (reference/codex/git_modal/git_modal.html): no
- * intent tabs and no Cancel/Submit footer — the bottom of the card is a
- * command list. The row for the current intent is the primary action and
+/* Git-modal anatomy: no intent tabs and no Cancel/Submit footer — the
+ * bottom of the card is a command list. The row for the current intent is the primary action and
  * carries the ⌘⏎ hint; clicking another row switches intent. */
 const PUBLISH_INTENTS: ReadonlyArray<{
   id: PublishIntent;
@@ -228,7 +227,7 @@ export function PublishDialog({
                 placeholder="Commit message (leave blank to generate)…"
                 disabled={isSubmitting}
                 variant="flush"
-                // Codex git-modal field: bare textarea, no focus ring — the
+                // Git-modal field: bare textarea, no focus ring — the
                 // section hairlines already frame it.
                 className="h-20 focus:ring-0"
               />
@@ -317,7 +316,7 @@ export function PublishDialog({
   );
 }
 
-/* Codex cmdk-item recipe: rounded-lg row, icon slot + truncating label,
+/* Command-row anatomy: rounded-lg row, icon slot + truncating label,
  * hover paint on the selected/primary row, disabled rows dimmed, and
  * the primary row carries the ⌘⏎ hint. */
 function PublishActionRow({

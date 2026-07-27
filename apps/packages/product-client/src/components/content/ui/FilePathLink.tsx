@@ -18,7 +18,7 @@ interface FilePathLinkProps {
  *  - Click -> open the file in the workspace right-sidebar viewer.
  *  - Context menu -> external open targets, copy path, reveal in Finder.
  *
- * Style: Codex-style local file/doc link in `text-link-foreground`, no pill,
+ * Style: local file/doc link in `text-link-foreground`, no pill,
  * no border, underline on hover only.
  */
 export const FilePathLink = memo(function FilePathLink({

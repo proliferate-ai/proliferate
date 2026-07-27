@@ -61,7 +61,7 @@ export interface DeriveGoalTranscriptEventsOptions {
   /**
    * Whether to emit a standalone `met` row. False for the transcript row
    * model, where the "goal met" outcome is surfaced inline in the final
-   * completed message's action footer (a codex-style "✓ Goal achieved in
+   * completed message's action footer (an inline "✓ Goal achieved in
    * Xs" marker) instead of a standalone system row. Failed/blocked/cleared
    * always keep their standalone rows. Defaults to true so non-transcript
    * callers (playground fixtures, tests) still see the met row.

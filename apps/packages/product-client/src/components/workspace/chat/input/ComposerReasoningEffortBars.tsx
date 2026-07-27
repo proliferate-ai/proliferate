@@ -11,7 +11,7 @@ import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { LevelBarsButton } from "@proliferate/ui/patterns/LevelBarsButton";
 
 // Tier-label tint ladder for ultra-capable ladders. Ultra keeps the
-// codex-convention purple (same hue as --color-pr-merged); max keeps the app
+// convention purple (same hue as --color-pr-merged); max keeps the app
 // special blue. Tinted tiers pin their color through hover (the control
 // button's base `hover:text-current` would otherwise wash the tint back to
 // plain ink); gray tiers keep the standard muted→full hover promotion.

@@ -237,8 +237,8 @@ export function WorkspaceItem({
     />
   ) : null;
 
-  // Git/PR state lives in the right-side detail cluster, matching the compact
-  // Codex row treatment and keeping the left edge free of stacked glyphs.
+  // Git/PR state lives in the right-side detail cluster, matching the
+  // compact row treatment and keeping the left edge free of stacked glyphs.
   // Activity indicators live in the row's RIGHT slot (trailingStatus).
   // Relative timestamp (trailingLabel) is also in the RIGHT slot, with lower
   // precedence than trailingStatus and unreadDot.

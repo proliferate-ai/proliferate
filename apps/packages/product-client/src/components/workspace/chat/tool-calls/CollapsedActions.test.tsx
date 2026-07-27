@@ -391,7 +391,7 @@ describe("CollapsedActions", () => {
     expect(ledger.scrollTop).toBe(24);
   });
 
-  it("uses the same Codex ink for command and plain ledger rows", () => {
+  it("uses the same ink for command and plain ledger rows", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),

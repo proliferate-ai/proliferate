@@ -1,8 +1,8 @@
 import type { IconProps } from "./types";
 
-/* Codex-style pixel agent sprite (reference/codex/status/card.html): a
-   deterministic symmetric grid of 4px cells on the -2 -1 24 24 viewBox with
-   crisp edges. Color comes from currentColor so callers pick the agent tint. */
+/* Pixel agent sprite: a deterministic symmetric grid of 4px cells on the
+   -2 -1 24 24 viewBox with crisp edges. Color comes from currentColor so
+   callers pick the agent tint. */
 export function PixelAgentSprite({ seed, className, ...props }: IconProps & { seed: string }) {
   let hash = 2166136261;
   for (let i = 0; i < seed.length; i += 1) {

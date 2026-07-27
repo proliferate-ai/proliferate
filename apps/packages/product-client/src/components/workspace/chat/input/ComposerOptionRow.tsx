@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 /**
- * Codex popover-row anatomy for composer option lists: full-width rows with
+ * Popover-row anatomy for composer option lists: full-width rows with
  * a rounded-lg hover fill and NO hairline separators (spacing does the
  * separation, so the hover pill never overlaps a border), leading number-key
  * badge (mono text-ui-sm on control bg, 4px radius), text-ui labels that

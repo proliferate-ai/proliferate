@@ -48,7 +48,7 @@ describe("DiffViewer chat variant", () => {
     expect(sharedSurfaceRule).toContain("background-color: var(--color-diff-code-surface);");
   });
 
-  it("renders Codex-style data attributes and dynamic gutter width", () => {
+  it("renders stable data attributes and dynamic gutter width", () => {
     const html = renderToStaticMarkup(
       createElement(DiffViewer, {
         patch: PATCH,
@@ -145,7 +145,7 @@ describe("DiffViewer chat variant", () => {
     expect(splitHtml).toContain("overscroll-behavior-y:none");
   });
 
-  it("renders split diffs with Codex-style paired code columns", () => {
+  it("renders split diffs with paired code columns", () => {
     const html = renderToStaticMarkup(
       createElement(DiffViewer, {
         patch: PATCH,

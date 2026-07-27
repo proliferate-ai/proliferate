@@ -145,11 +145,11 @@ export function ComposerRichTextEditor({
             />
           )}
           placeholder={(
-            // ui-foundation-escalation: [CHAT-03] wants Codex's placeholder ink,
-            // but neither Codex reading is expressible in the ruled vocabulary.
-            // Codex's prose target is its tertiary/description role (~49.8%
-            // white) while its actual ProseMirror implementation is a separate
-            // `--color-token-input-placeholder-foreground` further multiplied by
+            // ui-foundation-escalation: [CHAT-03] wants the reference
+            // placeholder ink, but neither reading of it is expressible in the
+            // ruled vocabulary. The prose target is a tertiary/description
+            // role (~49.8% white) while the actual implementation is a separate
+            // placeholder-foreground token further multiplied by
             // `opacity: .5` (~25-35% effective) —
             // ui-foundation-chat-addendum.md [CHAT-03] flags exactly this split.
             // `text-foreground-tertiary` (--color-foreground-tertiary, 50%) is

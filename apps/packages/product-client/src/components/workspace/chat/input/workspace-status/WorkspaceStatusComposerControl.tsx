@@ -30,9 +30,9 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 /**
  * Workspace status: the single ambient-state surface for a session.
  * One icon-only trigger in the composer's trailing cluster opens a
- * codex-anatomy card (reference/codex/status/card.html):
+ * status card:
  *   - Source control first (review / commit-push / compare / checks)
- *   - Subagents (ours), codex-format: pixel sprite + name rows
+ *   - Subagents (ours): pixel sprite + name rows
  *   - Native agents & terminals as count rows with hover detail cards
  *   - Resources (worktrees summary → searchable modal, cloud CPU/RAM)
  *   - Advanced session config (absorbed from the removed "..." overflow)
@@ -79,7 +79,7 @@ export interface WorkspaceStatusModel {
       items: WorkspaceStatusDetailItem[];
     } | null;
   } | null;
-  /** Codex format: one row per state group — sprite cluster + "N working". */
+  /** One row per state group — sprite cluster + "N working". */
   subagents: {
     working: WorkspaceStatusSubagentRow[];
     done: WorkspaceStatusSubagentRow[];
@@ -168,7 +168,7 @@ export function WorkspaceStatusCard({
   };
 
   return (
-    // Codex card surface: 300px, 20px radius (their rounded-3xl base is
+    // Card surface: 300px, 20px radius (the rounded-3xl base is
     // 1.25rem), solid dropdown background, elevation-prominent = 0.5px
     // stroke painted in the shadow stack + two soft shadows — no ring.
     <ComposerPopoverSurface
@@ -286,7 +286,7 @@ export function WorkspaceStatusCard({
   );
 }
 
-/* One state group of our agents, codex-format: sprite cluster + "N working".
+/* One state group of our agents: sprite cluster + "N working".
    Clicking focuses the group's first agent session (tab activation) — the
    hover card lists every member. */
 function SubagentGroupRow({
@@ -324,8 +324,8 @@ function SubagentGroupRow({
   );
 }
 
-/* Codex avatar-group (thread-summary-panel-item-avatar-group): the group's
-   sprites sit side by side ahead of the "N working" label, capped at four. */
+/* Avatar group: the group's sprites sit side by side ahead of the
+   "N working" label, capped at four. */
 function SubagentSpriteCluster({ rows }: { rows: WorkspaceStatusSubagentRow[] }) {
   return (
     <span className="flex shrink-0 items-center gap-0.5">

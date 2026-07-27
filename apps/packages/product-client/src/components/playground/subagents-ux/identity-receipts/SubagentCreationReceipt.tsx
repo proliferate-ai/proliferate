@@ -41,7 +41,7 @@ export function SubagentCreationReceipt({
       aria-label={`${model.title} subagent created`}
       className="flex min-w-0 flex-col items-start"
     >
-      {/* Codex-style inline chip row: pill with glyph + authored task label,
+      {/* Inline chip row: pill with glyph + authored task label,
           then a quiet verb. The chip itself is the disclosure trigger. */}
       <div className={`flex min-w-0 max-w-full items-center ${compact ? "gap-1.5" : "gap-2"}`}>
         <Button

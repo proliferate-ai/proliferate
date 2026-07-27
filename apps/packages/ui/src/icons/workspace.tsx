@@ -330,7 +330,7 @@ export function GitBranchIcon({ className, ...props }: IconProps) {
   );
 }
 
-/** Codex-style spiral-bound notebook — the "project" glyph (16 viewBox, filled). */
+/** Spiral-bound notebook — the "project" glyph (16 viewBox, filled). */
 export function ProjectNotebook({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -363,7 +363,7 @@ export function FolderRemote({ className, ...props }: IconProps) {
   );
 }
 
-/** Codex's thread-row PR glyph: muted branch pipe + inbound arrow; the
+/** Thread-row PR glyph: muted branch pipe + inbound arrow; the
  * status dot is part of the SVG and colored via --pr-status-dot-color
  * (rendered only when `dot` is set). */
 export function PrBranchGlyph({ className, dot = false, ...props }: IconProps & { dot?: boolean }) {

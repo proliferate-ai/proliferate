@@ -83,6 +83,14 @@ Use [`specs/developing/README.md`](specs/developing/README.md) for procedures.
 - Do not use destructive Git commands such as `git reset --hard` or
   `git checkout --` unless the user explicitly requests them.
 - Record unrelated defects as follow-ups instead of expanding the current PR.
+- Describe our design in our own vocabulary. When another product's UI informs
+  a treatment, state what the treatment IS — sizes, colors, roles, states —
+  never that it came from that product. No other product's name in comments,
+  class names, commit messages, branch names, or pull request text. This is
+  about attribution only: names that are real product vocabulary here (`codex`
+  as an agent harness, `codex-mini` as a model id, `cursor` as a CSS property
+  or an editor target) stay. `python3 scripts/check_design_attribution.py`
+  enforces the distinction.
 
 Run `python3 scripts/check_docs.py` after changing repository documentation.
 

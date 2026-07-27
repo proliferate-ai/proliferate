@@ -1,5 +1,5 @@
 /**
- * PR status rendered as a codex-style dot (UX spec §2/§3).
+ * PR status rendered as a dot (UX spec §2/§3).
  *
  * The dot is 6px, colored per PR state, and carries a tooltip with the PR
  * number + state. Two render modes:
@@ -97,7 +97,7 @@ export function PrStatusDot({
 }
 
 /**
- * Anchors the PR dot on the bottom-right of a row icon (codex dot-on-icon).
+ * Anchors the PR dot on the bottom-right of a row icon.
  * Renders children unchanged when no status is present. The dot sits fully
  * off the 14px glyph's strokes as a bare opaque dot — no ring halo, which
  * reads wrong on hovered/active alpha-overlay rows.
