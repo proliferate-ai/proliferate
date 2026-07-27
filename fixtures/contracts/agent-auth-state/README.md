@@ -79,10 +79,13 @@ conflicts on `v2.json`, this `README.md`, and
 created these paths independently — git cannot even three-way-merge them);
 and ordinary content conflicts (both sides modified the same lines since the
 merge-base) on `scripts/max_lines_allowlist.txt`,
-`server/proliferate/server/catalogs/service.py`, and
-`specs/codebase/platforms/product/agent-auth.md`. None of these are resolved
-by this PR — they are the concrete shape of the reconciliation work, recorded
-here so the operator doing it isn't discovering the scope from scratch.
+`server/proliferate/server/catalogs/service.py`,
+`specs/codebase/platforms/product/agent-auth.md`,
+`server/tests/unit/test_agent_catalog_endpoint.py`, and
+`specs/codebase/platforms/product/model-catalog.md`. None of these are
+resolved by this PR — they are the concrete shape of the reconciliation work,
+recorded here so the operator doing it isn't discovering the scope from
+scratch.
 
 ## What `v2.json` pins
 

@@ -362,12 +362,21 @@ def _translate_provider_config_env(
     pending combination so the caller drops the source (same as an
     unsatisfiable gateway/api_key source -- never raises).
 
-    D3 brief §4.2's ruled table. Two mappings are explicitly flagged as
-    unverified judgment calls pending Gate 4 live runs (not solved problems
-    inherited from D1/D2): claude's azure_openai (Foundry) row, whose vault
-    entry has no field distinct from "resource" or "auth token" (see the
-    brief's §0 contradiction writeup); and this correction path is a
-    one-line fix if the live run shows the mapping backwards.
+    D3 brief §4.2's ruled table. One mapping — claude's ``azure_openai``
+    (Foundry) row — is explicitly flagged as an unverified judgment call
+    pending a Gate 4 live run (not a solved problem inherited from D1/D2):
+    its vault entry has no field distinct from "resource" or "auth token"
+    (see the brief's §0 contradiction writeup), so this row bundles two
+    judgment calls rather than one settled fact — (1) the resource name is
+    derived from `endpoint`'s hostname by analogy to opencode's
+    live-test-proven `AZURE_RESOURCE_NAME` rule below, applied here to
+    claude's `ANTHROPIC_FOUNDRY_RESOURCE` without its own live test, and
+    (2) `ANTHROPIC_FOUNDRY_AUTH_TOKEN` is left unset, treating it and
+    `ANTHROPIC_FOUNDRY_API_KEY` as alternatives (mirroring the existing
+    `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` pair) rather than populating
+    both. Gate 4's live claude×azure_openai run is what settles both; each
+    is a one-line fix in the block below if the live run shows either
+    backwards.
     """
     if config_kind == AGENT_API_KEY_KIND_AWS_BEDROCK:
         region = fields.get("region")

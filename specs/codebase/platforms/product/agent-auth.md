@@ -537,24 +537,34 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       and a resolved typed entry renders into the harness's own real env set
       (claude/codex/opencode × aws_bedrock/azure_openai, per the harness's
       registry declaration) rather than the vault's generic field names.
-      But the selection WRITE path still structurally rejects referencing a
-      typed entry through THREE independent gates, not just the two Python
-      checks: `selections.py`'s `_validate_source` requires `env_var_name`
-      on every `api_key` source, `_assert_keys_usable` only accepts
-      bare-secret (`kind='api_key'`) rows, and — beneath both — the DB
-      `ck_agent_auth_selection_api_key_shape` CHECK constraint on
-      `agent_auth_selection` independently requires `env_var_name IS NOT
-      NULL` for any `api_key` row, plus `selection_rules.py`'s
-      `ENV_VAR_NAME_RE` validates whatever name is supplied. A typed entry
-      can never pass any of the four checks today
-      (`test_put_rejects_typed_provider_config_as_api_key_source`, D1,
-      confirmed still passing unmodified). The render path this PR added is
-      consequently unreachable by any real user selection until a follow-up
-      relaxes the write-path gate to admit a typed-entry reference with no
-      `env_var_name` — which needs a migration (dropping or loosening
-      `ck_agent_auth_selection_api_key_shape`), not just an application-code
-      change. (The old Bifrost `provider_kind` tables were dropped outright
-      and are not a starting point.)
+      The selection WRITE path today has exactly ONE gate that actually
+      inspects the referenced vault row's `kind`: `_assert_keys_usable`
+      (`selections.py:63-92`) queries for `kind ==
+      'api_key'` and rejects the whole write if any referenced id misses —
+      this is what makes
+      `test_put_rejects_typed_provider_config_as_api_key_source` (D1) pass
+      today. The other checks a typed-entry write must also clear are
+      NOT kind-aware and do not by themselves block one: `_validate_source`
+      only requires that `env_var_name` be present (any non-null string
+      satisfies it), the DB `ck_agent_auth_selection_api_key_shape` CHECK
+      constraint on `agent_auth_selection` likewise only requires
+      `env_var_name IS NOT NULL`, and `selection_rules.py`'s
+      `ENV_VAR_NAME_RE` only validates the shape of whatever name is
+      supplied — none of the three looks at the vault row at all, so a
+      typed-entry selection carrying a placeholder `env_var_name` passes
+      all three (this PR's own
+      `TestBuildAgentAuthStateTypedProviderConfig` integration test proves
+      it, by construction, to exercise the render path against a real typed
+      selection row inserted directly). The render path this PR added is
+      consequently unreachable by any real user selection only because of
+      `_assert_keys_usable`'s single kind check — until a follow-up relaxes
+      it to admit a typed-entry reference, which needs a migration
+      (dropping or loosening `ck_agent_auth_selection_api_key_shape`'s
+      `env_var_name IS NOT NULL` requirement, since a typed entry has no
+      `env_var_name` by the vault's own convention) alongside the
+      application-code relaxation, not an application-code change alone.
+      (The old Bifrost `provider_kind` tables were dropped outright and are
+      not a starting point.)
 - [ ] **Codex's `azure_openai` provider-config is declared but pending.**
       The registry names codex x `azure_openai`'s env-var vocabulary
       (`AZURE_OPENAI_API_KEY`) for Track D's full-scope intent, but the
