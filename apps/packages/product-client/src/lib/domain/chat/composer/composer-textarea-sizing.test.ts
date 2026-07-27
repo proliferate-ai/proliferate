@@ -17,7 +17,7 @@ describe("computeComposerTextareaAutosize", () => {
       maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
       minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
     })).toEqual({
-      heightPx: 40,
+      heightPx: 44,
       overflowY: "hidden",
     });
   });

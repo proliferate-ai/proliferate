@@ -50,7 +50,7 @@ describe("ChatInputDraftArea", () => {
     expect(viewport.classList.contains("overflow-y-auto")).toBe(true);
     expect(viewport.style.minHeight).toBe(`${WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem}rem`);
     expect(viewport.style.maxHeight).toBe(
-      `calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows})`,
+      `min(calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows}), 25dvh)`,
     );
   });
 });

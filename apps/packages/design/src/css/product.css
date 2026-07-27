@@ -372,7 +372,7 @@ body {
   background: transparent;
   color: var(--color-foreground);
   font-family: var(--font-sans);
-  font-weight: 430;
+  font-weight: var(--font-weight-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -562,6 +562,71 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .composer-level-bar-wave {
+    animation: none;
+  }
+}
+
+/* Step transitions: stepping the reasoning-effort control up lights bars
+   bottom-to-top in a slight stagger (LevelBarsButton.tsx computes the
+   per-bar delay); stepping down drains them the same way. Wrapping past the
+   top level back to the bottom plays a quick transform-based "flip" on the
+   whole icon instead — a deliberate reset, not an error. Compositor-only
+   (transform/opacity), disabled under reduced motion. */
+.composer-level-bar-fill-in,
+.composer-level-bar-drain-out {
+  transform-origin: bottom;
+}
+
+.composer-level-bar-fill-in {
+  animation: composer-level-bar-fill-in var(--duration-hover) var(--ease-out-quint) both;
+}
+
+.composer-level-bar-drain-out {
+  animation: composer-level-bar-drain-out var(--duration-hover) var(--ease-standard) both;
+}
+
+@keyframes composer-level-bar-fill-in {
+  0% {
+    transform: scaleY(0.4);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes composer-level-bar-drain-out {
+  0% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.3;
+  }
+}
+
+.composer-level-bars-wrap {
+  animation: composer-level-bars-wrap var(--duration-disclosure) var(--ease-spring) both;
+}
+
+@keyframes composer-level-bars-wrap {
+  0% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-16deg) scaleY(0.85);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-level-bar-fill-in,
+  .composer-level-bar-drain-out,
+  .composer-level-bars-wrap {
     animation: none;
   }
 }
