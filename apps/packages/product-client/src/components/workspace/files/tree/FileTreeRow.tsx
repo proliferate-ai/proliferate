@@ -28,7 +28,9 @@ export function FileTreeRow({
   onClick,
 }: FileTreeRowProps) {
   const isDirectory = kind === "directory";
-  const paddingLeft = isDirectory ? 6 + level * 14 : 28 + level * 14;
+  // Directories show a chevron and files show a type icon in the same
+  // leading slot (see render below), so both kinds share one indent formula.
+  const paddingLeft = 6 + level * 14;
   const iconTone = fileTreeIconToneClass(name, path, kind);
 
   return (
@@ -43,30 +45,34 @@ export function FileTreeRow({
       aria-busy={busy || undefined}
       title={path}
       className={twMerge(
-        // Codex tree rows read at chat-body size; ours follows --text-message
-        // so the tree tracks transcript prose across appearance presets.
+        // The reference tree rows read at chat-body size; ours follows
+        // --text-message so the tree tracks transcript prose across
+        // appearance presets.
         "flex h-7 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-sidebar-row leading-none text-sidebar-foreground transition-colors duration-hover hover:bg-hover active:bg-active",
         selected && "bg-selected",
       )}
       style={{ paddingLeft }}
       onClick={onClick}
     >
-      {isDirectory && (
+      {isDirectory ? (
+        // Reference tree rows mark directories with a disclosure chevron only
+        // — no folder glyph. Files keep their per-type icon in that same
+        // leading slot, so the two kinds never both show a leading icon.
         <ChevronRight
           className={twMerge(
             "icon-compact shrink-0 text-sidebar-muted-foreground transition-transform duration-disclosure",
             expanded && "rotate-90",
           )}
         />
+      ) : (
+        <FileTreeEntryIcon
+          name={name}
+          path={path}
+          kind={kind}
+          className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]"
+          toneClassName={iconTone}
+        />
       )}
-      <FileTreeEntryIcon
-        name={name}
-        path={path}
-        kind={kind}
-        isExpanded={isDirectory ? expanded : undefined}
-        className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]"
-        toneClassName={iconTone}
-      />
       <span className="min-w-0 flex-1 truncate">
         {name}
       </span>
