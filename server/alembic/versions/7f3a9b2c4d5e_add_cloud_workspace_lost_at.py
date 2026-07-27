@@ -1,7 +1,7 @@
 """add cloud workspace lost timestamp
 
 Revision ID: 7f3a9b2c4d5e
-Revises: 35fa0038d703
+Revises: d6e8f0a2b4c6
 Create Date: 2026-07-26 00:00:00.000000
 """
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "7f3a9b2c4d5e"
-down_revision: str | Sequence[str] | None = "35fa0038d703"
+down_revision: str | Sequence[str] | None = "d6e8f0a2b4c6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
