@@ -25,7 +25,7 @@ import {
 } from "#product/lib/domain/chat/__fixtures__/playground/git-review-v2-fixtures";
 
 /**
- * Visual spec for the git review redesign (Codex diff-pane parity, our
+ * Visual spec for the git review redesign (reference diff-pane parity, our
  * tokens). Playground-only: static fixtures, no production imports beyond
  * shared atoms. The pane is one flat review document — per-file sections
  * with sticky headers, expanded by default — replacing the card grid and
@@ -39,7 +39,7 @@ const PANE_WIDTHS = [320, 380, 480, 640] as const;
 // compositor).
 const SECTION_STYLE = {
   // Unchanged lines sit on the plain pane background — only +/- rows carry a
-  // tint (Pablo ruling, diverges from Codex's 94% context mix). In mono dark
+  // tint (Pablo ruling, diverges from the reference's 94% context mix). In mono dark
   // --color-diff-surface is itself the light context mix; the dominant dark
   // everything else uses is --color-background.
   backgroundColor: "var(--color-background)",
@@ -49,7 +49,7 @@ const SECTION_STYLE = {
 const STICKY_HEADER_CLASS =
   "sticky top-0 z-10 cursor-pointer select-none bg-[color-mix(in_srgb,var(--color-diff-sidebar-file-header-surface)_97%,transparent)]";
 
-// Codex-style hunk-gap separator (diff.html [data-separator='line-info']):
+// reference-style hunk-gap separator (diff.html [data-separator='line-info']):
 // not a full-width band — a slim strip inset from the pane edges with 6px
 // radii, drawn as ::before so the gutter and content grid cells form one
 // continuous bar. Playground-scoped; production would restyle
@@ -343,7 +343,7 @@ function ReviewFileSection({
         className={STICKY_HEADER_CLASS}
       >
         <div className="group/diff-header @container/diff-header flex min-h-8 items-center gap-2 px-3 py-1 text-chat hover:bg-[var(--color-diff-sidebar-file-header-hover-surface)]">
-          {/* Codex path recipe (mirrors FileDiffCard): the GROWING flex item
+          {/* reference path recipe (mirrors FileDiffCard): the GROWING flex item
               is this container; the name span inside is content-sized, so
               every row's name is left-anchored beside the icon. The name's
               [direction:rtl] front-truncates overflow so the basename (the

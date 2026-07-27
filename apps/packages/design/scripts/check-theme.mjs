@@ -187,13 +187,18 @@ for (const [currentName, finalName] of Object.entries(currentTokenDispositions))
 // followed it (the composer-goes-opaque follow-on: light's blur has nothing
 // left to blur once the surface is opaque), and `--color-sidebar` moved from
 // [SHIPPED] to [RETUNE:sidebar/reference-surface] (round-2 sidebar retune,
-// previously [RETUNE:sidebar/surface-recess]) — so three dispositions cross
-// from the shipped tally into the retuned one. The 285-name disposition
-// census itself is unchanged: the three transcript-measure/turn-rhythm
-// additions are net-new tokens, and this map is frozen to the names that
-// existed BEFORE the retune.
-assert(shipped === 173, `expected 173 shipped dispositions, got ${shipped}`);
-assert(retuned === 42, `expected 42 retuned dispositions, got ${retuned}`);
+// previously [RETUNE:sidebar/surface-recess]). The diffs retune
+// ([RETUNE:diffs/addition-deletion-color-alias]) aliases
+// `--color-diff-added`/`--color-diff-deleted` and their six
+// `--diffs-bg-*-override` dark-mode literals onto `--color-git-green`/
+// `--color-git-red` so the diff pane matches the reference's addition/
+// deletion hues instead of a separate, unreferenced green/red pair; that
+// moves eight more dispositions from shipped into retuned — eleven
+// crossings in total. The 285-name disposition census itself is unchanged:
+// the three transcript-measure/turn-rhythm additions are net-new tokens,
+// and this map is frozen to the names that existed BEFORE the retune.
+assert(shipped === 165, `expected 165 shipped dispositions, got ${shipped}`);
+assert(retuned === 50, `expected 50 retuned dispositions, got ${retuned}`);
 
 for (const [name, value] of tokenEntries) {
   assert(value.provenance.length > 0, `${name} is missing provenance`);
