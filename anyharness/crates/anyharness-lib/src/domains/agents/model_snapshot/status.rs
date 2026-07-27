@@ -22,7 +22,9 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use super::document::{InstallIdentity, SnapshotAttempt, SnapshotEntry};
+use super::document::{
+    InstallIdentity, SnapshotAttempt, SnapshotEntry, SnapshotMode, SnapshotModel,
+};
 use super::staleness::{self, IdentityComparison};
 use super::ProbeEngineMode;
 
@@ -128,6 +130,20 @@ pub struct ContextStatus {
     pub attestation: Option<super::document::SnapshotAttestation>,
     pub model_count: usize,
     pub mode_count: usize,
+    /// The full model list off the same document read as `modelCount`. Added
+    /// alongside the count (never replacing it — model-catalog.md:660 always
+    /// said this route serves "model and mode lists off the same document
+    /// read"; the count-only shape undershot that, and this is the fix) so a
+    /// machineless-surface uploader (the Worker's `model_snapshot_sync`) has
+    /// something to read besides raw disk access to a document it should not
+    /// know the layout of.
+    #[serde(default)]
+    #[schema(value_type = Vec<Object>)]
+    pub models: Vec<SnapshotModel>,
+    /// The full mode list, same rationale as `models` above.
+    #[serde(default)]
+    #[schema(value_type = Vec<Object>)]
+    pub modes: Vec<SnapshotMode>,
     #[serde(default)]
     pub warnings: Vec<String>,
 }
@@ -177,7 +193,10 @@ pub fn context_status(inputs: ContextStatusInputs) -> ContextStatus {
     let snapshot_age_seconds = entry.as_ref().and_then(|entry| {
         DateTime::parse_from_rfc3339(&entry.probed_at)
             .ok()
-            .map(|parsed| now.signed_duration_since(parsed.with_timezone(&Utc)).num_seconds())
+            .map(|parsed| {
+                now.signed_duration_since(parsed.with_timezone(&Utc))
+                    .num_seconds()
+            })
     });
     let last_error = entry.as_ref().and_then(|entry| {
         matches!(
@@ -206,6 +225,14 @@ pub fn context_status(inputs: ContextStatusInputs) -> ContextStatus {
         attestation: entry.as_ref().and_then(|entry| entry.attestation.clone()),
         model_count: entry.as_ref().map(|entry| entry.models.len()).unwrap_or(0),
         mode_count: entry.as_ref().map(|entry| entry.modes.len()).unwrap_or(0),
+        models: entry
+            .as_ref()
+            .map(|entry| entry.models.clone())
+            .unwrap_or_default(),
+        modes: entry
+            .as_ref()
+            .map(|entry| entry.modes.clone())
+            .unwrap_or_default(),
         warnings: entry.map(|entry| entry.warnings).unwrap_or_default(),
     }
 }

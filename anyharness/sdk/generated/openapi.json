@@ -9248,6 +9248,20 @@
             "type": "integer",
             "minimum": 0
           },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The full model list off the same document read as `modelCount`. Added\nalongside the count (never replacing it — model-catalog.md:660 always\nsaid this route serves \"model and mode lists off the same document\nread\"; the count-only shape undershot that, and this is the fix) so a\nmachineless-surface uploader (the Worker's `model_snapshot_sync`) has\nsomething to read besides raw disk access to a document it should not\nknow the layout of."
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The full mode list, same rationale as `models` above."
+          },
           "nextAttemptAt": {
             "type": [
               "string",

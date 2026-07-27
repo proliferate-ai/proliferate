@@ -113,6 +113,21 @@ pub struct HeartbeatResponse {
     pub supervisor_bridge: Option<SupervisorBridgeInputs>,
 }
 
+/// A Worker's upload of one changed model-snapshot entry (model-catalog.md
+/// "Write paths"/"Storage"): the ingest route absorbs today's separate
+/// `refresh`-with-payload and `mirror` routes. `snapshot_json` deliberately
+/// carries only the subset of the machine-document entry the cloud tier
+/// documents reading (`models`, `modes`, `attestation`, `warnings`) — see
+/// `model_snapshot_sync.rs` for why `authFingerprint`/`mechanism`/
+/// `installIdentity`/`lastAttempt` are never assembled here.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IngestModelSnapshotRequest {
+    pub auth_context_id: String,
+    pub snapshot_json: String,
+    pub probed_at: String,
+}
+
 /// Server-delivered D5 bridge inputs (R9R-002). Carried on the heartbeat ack so
 /// an already-provisioned legacy Worker — whose on-disk config predates the
 /// supervisor-owned shape — can materialize the Supervisor config AND a
@@ -183,6 +198,41 @@ impl CloudClient {
             .send()
             .await?;
         parse_json_response(response).await
+    }
+
+    /// Upload one changed model-snapshot entry to the cloud ingest route
+    /// (model-catalog.md "Cloud routes": `POST /v1/cloud/agent-models/{harness}/refresh`).
+    /// The server resolves the owner from the Worker's own sandbox row, so the
+    /// request body carries no user identity — only the Worker's bearer proves
+    /// which sandbox this is. Non-2xx (including a 403 from a desktop worker,
+    /// or a 404 against a server that predates this route) surfaces as
+    /// `WorkerError::Cloud` for the caller to log-and-swallow; this method
+    /// itself never retries.
+    pub async fn ingest_model_snapshot(
+        &self,
+        worker_token: &str,
+        harness_kind: &str,
+        request: &IngestModelSnapshotRequest,
+    ) -> Result<(), WorkerError> {
+        let response = self
+            .http
+            .post(format!(
+                "{}/v1/cloud/agent-models/{harness_kind}/refresh",
+                self.base_url
+            ))
+            .header(
+                reqwest::header::AUTHORIZATION,
+                auth::bearer_header(worker_token),
+            )
+            .json(request)
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(WorkerError::Cloud { status, body });
+        }
+        Ok(())
     }
 
     /// Fetch a pinned worker artifact via the server's redirect endpoint,
@@ -345,7 +395,6 @@ impl CloudClient {
             size_bytes,
         })
     }
-
 }
 
 /// A downloaded worker artifact plus the CDN URL the server's redirect

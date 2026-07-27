@@ -666,7 +666,12 @@ replace the runtime's gateway-models-only endpoints:
   per-context `probedAt`, `snapshotAgeSeconds`, `lastAttempt`, `lastError`,
   `stale`/`staleReason`, `identityComparable`, the engine's `state` and
   `nextAttemptAt`, the manifest-derived `installIdentity`, and the engine's
-  ownership mode. Model and mode lists come off the same document read.
+  ownership mode. Model and mode lists come off the same document read — the
+  `models`/`modes` arrays ride alongside `modelCount`/`modeCount` (S2b added
+  the arrays; the counts predate them and stay for whatever already reads
+  just a badge). The Worker's `model_snapshot_sync.rs` is this route's first
+  consumer of the arrays: it has no other local surface to read the full
+  entry from.
 - `POST /v1/agents/{kind}/model-snapshot/refresh?authContextId=`: force a
   re-probe of ONE context (the manual-refresh poke), awaiting it. The
   parameter is required: a forced refresh of every active context would hold
@@ -884,3 +889,26 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       the remaining step.
 - [ ] Onboarding contains no "checking for latest models" step (the
       surface rendering the install-completed and auth-applied pokes).
+- [x] ~~Nothing uploads the cloud sandbox's fresh machine snapshot yet: the
+      Worker's heartbeat tick has no~~
+      [model_snapshot_sync.rs](../../../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs)
+      ~~step, so every machineless consumer (web new-chat, mobile,
+      automations, workflow editors) serves whatever the cloud snapshot last
+      held — stale or entirely absent for a harness that has never been
+      manually refreshed through the legacy route. Closing this means the
+      module this doc already names in "Write paths"/"Code map".~~ **Closed
+      by S2b**: the module now runs on every heartbeat tick, GETs the
+      runtime's model-snapshot status per harness
+      (`GET /v1/agents/{kind}/model-snapshot`, whose response this same PR
+      extends with the `models`/`modes` arrays the route's own doc comment
+      always promised — see the "Runtime routes" note below), diffs
+      `probedAt` against an in-memory last-pushed cache, and POSTs changed
+      contexts to `POST /v1/cloud/agent-models/{harness}/refresh` with the
+      Worker's bearer. **Narrowing, not fully closing**: the cloud route
+      itself ships on a separate branch (B4/C2) not yet merged as of this
+      PR, so against today's `main` the POST 404s and is logged-and-swallowed
+      like any other convergence failure — the sync is inert, not broken,
+      until that route lands. It is also inherently cloud-sandbox-only: the
+      ingest route's `resolve_upload_owner` refuses `runtime_kind !=
+      "cloud_sandbox"` with a 403, so a desktop Worker's attempt always logs
+      a swallowed 403, which is correct — "Desktop does not sync" above.
