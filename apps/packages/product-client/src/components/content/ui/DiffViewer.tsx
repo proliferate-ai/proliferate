@@ -23,7 +23,7 @@ interface DiffViewerProps {
   chainVerticalWheel?: boolean;
   /**
    * Full file content (new-side) split into lines. When provided, enables
-   * Codex-style per-gap context expansion. Without this, gap separators
+   * reference-style per-gap context expansion. Without this, gap separators
    * are still rendered but expansion is disabled.
    */
   fileLines?: string[];

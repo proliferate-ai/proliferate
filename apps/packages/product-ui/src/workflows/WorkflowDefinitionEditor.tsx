@@ -9,12 +9,12 @@ import {
   type WorkflowValidationIssue,
 } from "@proliferate/product-domain/workflows/definition";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { ProductPageShell } from "../layout/ProductPageShell";
+import { ProductPageShell } from "../patterns/ProductPageShell";
 import { WorkflowInputEditor } from "./WorkflowInputEditor";
 import { createPromptStep, WorkflowStageEditor } from "./WorkflowStageEditor";
 

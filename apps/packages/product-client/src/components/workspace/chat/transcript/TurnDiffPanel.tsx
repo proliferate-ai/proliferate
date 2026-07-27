@@ -107,7 +107,7 @@ export function TurnDiffPanel({
     >
       <ChatDiffLineWrapContextMenu trigger={header} />
       {!singleFile && (
-        <div className="flex flex-col border-t border-border [--codex-diffs-header-padding-x:var(--turn-diff-row-padding-x)] [--codex-diffs-header-padding-y:var(--turn-diff-row-padding-y)]">
+        <div className="flex flex-col border-t border-border [--diff-view-header-padding-x:var(--turn-diff-row-padding-x)] [--diff-view-header-padding-y:var(--turn-diff-row-padding-y)]">
           {visibleFiles.map((file) => (
             <TurnDiffFileCard
               key={file.key}

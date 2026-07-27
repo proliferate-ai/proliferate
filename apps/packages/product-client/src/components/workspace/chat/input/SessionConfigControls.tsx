@@ -9,7 +9,7 @@ import { Brain, Check, Zap } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { SessionModeControl } from "#product/components/workspace/chat/input/SessionModeControl";
 
@@ -146,7 +146,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
       side="top"
       className={`w-56 ${POPOVER_SURFACE_CLASS}`}
     >
-      {(close) => (
+      {() => (
         <>
           {control.options.map((option) => (
             <PopoverMenuItem
@@ -154,9 +154,13 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
               data-session-config-option={`${control.key}:${option.value}`}
               label={option.label}
               trailing={option.selected ? <Check className="icon-paired shrink-0 text-foreground/60" /> : null}
+              // Intentionally does not close the surface: with a
+              // multi-level ladder (e.g. reasoning effort) the user needs
+              // to see which level they landed on before dismissing —
+              // same contract as AdvancedControlSections' StatusRow options.
+              // Outside click / Escape still close as normal.
               onClick={() => {
                 control.onSelect(option.value);
-                close();
               }}
             />
           ))}

@@ -96,7 +96,7 @@ if [[ $FAIL -eq 1 ]]; then
   echo "Design-system check failed. Spell type through the semantic tokens"
   echo "(text-ui / text-ui-sm / text-composer / text-title / text-hero and the"
   echo "base scale), route settings markup through the shared primitives in"
-  echo "@proliferate/product-ui/settings, or add a justified one-off to the"
+  echo "@proliferate/product-ui/patterns, or add a justified one-off to the"
   echo "relevant allowlist in $0."
   exit 1
 fi

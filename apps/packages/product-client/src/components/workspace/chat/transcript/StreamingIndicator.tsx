@@ -1,12 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
-
-// Start the elapsed suffix after the first full second so active work exposes
-// useful progress immediately without flashing a misleading zero.
-const ELAPSED_SUFFIX_THRESHOLD_SECONDS = 1;
 
 interface StreamingIndicatorProps {
   startedAt?: string | null;
@@ -20,60 +16,22 @@ export function StreamingIndicator({
 }: StreamingIndicatorProps) {
   useDebugRenderCount("streaming-indicator");
   const startedMs = useMemo(() => parseStartedAtMs(startedAt), [startedAt]);
-  const elapsedSeconds = useStreamingElapsedSeconds(startedMs);
 
   return (
     <DebugProfiler id="streaming-indicator">
-      {/* items-baseline, not items-end: the label (20px line box) and the
-          smaller suffix (14px line box) must share a text baseline — bottom-
-          aligning the boxes leaves the suffix visually sunk below the label. */}
       <div className="flex min-h-5 items-baseline gap-1.5 py-1 text-muted-foreground">
         <ThinkingText
           text={label}
           motionOriginMs={startedMs}
           className="text-message"
         />
-        {elapsedSeconds !== null && (
-          <span className="text-ui-sm tabular-nums text-faint">
-            {"· "}
-            {elapsedSeconds}s
-          </span>
-        )}
       </div>
     </DebugProfiler>
   );
-}
-
-// Ticks once per second while mounted; returns null until the wait crosses the
-// threshold so the suffix appears — and then advances — in step with the clock.
-function useStreamingElapsedSeconds(startedMs: number | null): number | null {
-  const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(() =>
-    computeElapsedSuffixSeconds(startedMs),
-  );
-
-  useEffect(() => {
-    if (startedMs === null) {
-      setElapsedSeconds(null);
-      return;
-    }
-    setElapsedSeconds(computeElapsedSuffixSeconds(startedMs));
-    const interval = window.setInterval(() => {
-      setElapsedSeconds(computeElapsedSuffixSeconds(startedMs));
-    }, 1000);
-    return () => window.clearInterval(interval);
-  }, [startedMs]);
-
-  return elapsedSeconds;
 }
 
 function parseStartedAtMs(startedAt: string | null): number | null {
   if (!startedAt) return null;
   const parsed = Date.parse(startedAt);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function computeElapsedSuffixSeconds(startedMs: number | null): number | null {
-  if (startedMs === null) return null;
-  const seconds = Math.floor((Date.now() - startedMs) / 1000);
-  return seconds >= ELAPSED_SUFFIX_THRESHOLD_SECONDS ? seconds : null;
 }

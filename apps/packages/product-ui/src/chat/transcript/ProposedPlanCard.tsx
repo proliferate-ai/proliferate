@@ -5,7 +5,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@proliferate/ui/kit/DropdownMenu";
+} from "@proliferate/ui/primitives/DropdownMenu";
 import {
   Check,
   FileText,

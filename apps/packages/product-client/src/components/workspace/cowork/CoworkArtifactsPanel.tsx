@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "@proliferate/ui/icons";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { EmptyState } from "@proliferate/ui/layout/EmptyState";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
+import { EmptyState } from "@proliferate/ui/patterns/EmptyState";
 import { useCoworkArtifactDetail } from "#product/hooks/access/anyharness/cowork/use-cowork-artifact-detail";
 import { useCoworkArtifactManifest } from "#product/hooks/access/anyharness/cowork/use-cowork-artifact-manifest";
 import { useCoworkArtifactRefresh } from "#product/hooks/cowork/lifecycle/use-cowork-artifact-refresh";

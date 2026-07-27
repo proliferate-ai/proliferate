@@ -3,7 +3,7 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   PickerEmptyRow,
   PickerPopoverContent,
-} from "@proliferate/ui/primitives/PickerPopoverContent";
+} from "@proliferate/ui/patterns/PickerPopoverContent";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,

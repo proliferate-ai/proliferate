@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { Robot } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";

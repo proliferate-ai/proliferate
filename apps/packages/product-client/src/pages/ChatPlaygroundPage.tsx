@@ -65,7 +65,7 @@ export function ChatPlaygroundPage() {
               isActive
               width={256}
               icon={<MessageSquare className="icon-paired" />}
-              label="Typography hierarchy review"
+              label="Chat playground"
               onSelect={() => {}}
               onClose={() => {}}
             />

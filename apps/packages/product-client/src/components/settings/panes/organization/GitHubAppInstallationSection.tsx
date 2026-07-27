@@ -1,7 +1,7 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 
 export function GitHubAppInstallationSection({
   loading,

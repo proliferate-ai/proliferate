@@ -3,7 +3,7 @@ import type {
   WorkflowRunPresentation,
 } from "@proliferate/product-domain/workflows/run-presentation";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ProductPageShell } from "../layout/ProductPageShell";
+import { ProductPageShell } from "../patterns/ProductPageShell";
 
 export interface WorkflowRunDetailProps {
   run: WorkflowRun;

@@ -37,7 +37,9 @@ jobs:
         run: python3 scripts/check_proliferate_worker_structure.py
 
       - name: Check frontend layer boundaries
-        run: python3 scripts/check_frontend_boundaries.py
+        run: |
+          python3 -m unittest scripts/test_check_frontend_boundaries.py
+          python3 scripts/check_frontend_boundaries.py
 
       - name: Check appearance scaling ownership
         run: |
