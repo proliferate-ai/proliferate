@@ -89,7 +89,11 @@ pub(super) fn scope_profile_to_context(
                 .iter()
                 .filter(|source| match source {
                     ResolvedSource::ApiKey(profile) => names.contains(&profile.env_var_name),
-                    ResolvedSource::Gateway(_) => false,
+                    // A provider_config source has no env_var_name (it carries
+                    // a whole resolved env map under a config_kind) and no
+                    // per-context probe materializes it today — same "no
+                    // match" answer as Gateway, not a new scoping policy.
+                    ResolvedSource::Gateway(_) | ResolvedSource::ProviderConfig(_) => false,
                 })
                 .cloned()
                 .collect();

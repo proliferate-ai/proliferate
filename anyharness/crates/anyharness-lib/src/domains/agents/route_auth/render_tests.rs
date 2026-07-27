@@ -180,6 +180,55 @@ fn claude_api_key_sets_its_var_and_still_sanitizes_ambient() {
     assert!(rendered.remove.contains(&"ANTHROPIC_BASE_URL".to_string()));
 }
 
+/// SECURITY REGRESSION GUARD (review B1). The `api_key` arm sets an ARBITRARY,
+/// user-chosen env var name — the only server-side gate is a shape regex
+/// (`^[A-Z][A-Z0-9_]{0,127}$`), no denylist. So a claude `api_key` row can be
+/// named `CLAUDE_CODE_USE_BEDROCK` with value `1`. If sanitization's rerouting-
+/// flag exemption keyed off `rendered.set` at large, that row would SURVIVE and
+/// silently reroute the launch to Bedrock with no Bedrock credential selected.
+/// The exemption is therefore scoped to the keys the `provider_config` arm
+/// composed; for `api_key`-named vars the removal stays unconditional.
+#[test]
+fn claude_api_key_named_like_a_rerouting_flag_is_still_stripped() {
+    let home = TempHome::new("claude-key-named-bedrock");
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness(
+            "claude",
+            vec![api_key_source("CLAUDE_CODE_USE_BEDROCK", "1")],
+        )],
+    ));
+
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+
+    assert!(
+        rendered
+            .remove
+            .contains(&"CLAUDE_CODE_USE_BEDROCK".to_string()),
+        "an api_key-named rerouting flag must still be stripped, got removals {:?}",
+        rendered.remove
+    );
+    // Same shape for the Bedrock bearer token: an api_key row named that was
+    // neutralized before Track D and must stay neutralized.
+    let home = TempHome::new("claude-key-named-bearer");
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness(
+            "claude",
+            vec![api_key_source(
+                "AWS_BEARER_TOKEN_BEDROCK",
+                "not-a-real-token",
+            )],
+        )],
+    ));
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+    assert!(rendered
+        .remove
+        .contains(&"AWS_BEARER_TOKEN_BEDROCK".to_string()));
+}
+
 /// Sanitization is claude-specific: no other harness's CLI reroutes on those
 /// flags, and adding removals for them would be an unexplained env change.
 #[test]
@@ -487,3 +536,6 @@ mod native_render;
 
 #[path = "opencode_render_tests.rs"]
 mod opencode_render;
+
+#[path = "provider_config_render_tests.rs"]
+mod provider_config_render;

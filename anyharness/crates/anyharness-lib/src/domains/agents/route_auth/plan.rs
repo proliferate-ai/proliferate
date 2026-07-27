@@ -30,6 +30,15 @@ pub struct GatewayModelPlan {
     /// A Rust constant here would be the model-name-in-code violation this
     /// field exists to remove.
     pub native_default_model: Option<String>,
+    /// The default model id for a `provider_config` × `aws_bedrock` launch
+    /// (Track D). From `session.defaults["bedrock"]` — deliberately its own
+    /// catalog key, NOT `native_default_model`: the native precedence chain
+    /// explicitly excludes `bedrock`/`azure` contexts (their defaults belong
+    /// to the typed provider-config route, not to "the user's own login" —
+    /// see `gateway_resolver.rs`'s `NATIVE_CONTEXT_PRECEDENCE` doc comment),
+    /// and for codex specifically `native_default_model` resolves to an
+    /// OpenAI-native id that is invalid on Bedrock.
+    pub bedrock_default_model: Option<String>,
     /// The small/fast sidecar model id (claude only). From
     /// `gatewayPolicy.roles["small_fast"]`.
     pub small_fast_model: Option<String>,

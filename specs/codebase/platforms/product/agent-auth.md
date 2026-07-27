@@ -598,6 +598,13 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       and a resolved typed entry renders into the harness's own real env set
       (claude/codex/opencode × aws_bedrock/azure_openai, per the harness's
       registry declaration) rather than the vault's generic field names.
+      D3's rust arm built the runtime half: `route_auth/`'s `AuthSource`
+      carries the `config_kind`/`env` pair, a `provider_config` source
+      resolves into a typed `ProviderConfigProfile`, and the render plane
+      composes it per harness (claude/opencode set the resolved env map
+      generically, mode-switch flags included; codex×`aws_bedrock` renders
+      a real `config.toml` via codex's built-in `amazon-bedrock` provider,
+      model id from the catalog's `session.defaults["bedrock"]`).
       The selection WRITE path today has exactly ONE gate that actually
       inspects the referenced vault row's `kind`: `_assert_keys_usable`
       (`selections.py:63-92`) queries for `kind ==
@@ -627,14 +634,17 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       (The old Bifrost `provider_kind` tables were dropped outright and are
       not a starting point.)
 - [ ] **Codex's `azure_openai` provider-config is declared but pending.**
-      The registry names codex x `azure_openai`'s env-var vocabulary
-      (`AZURE_OPENAI_API_KEY`) for Track D's full-scope intent, but the
-      pinned codex binary has zero Azure env support — codex only reaches
-      Azure via `config.toml` `model_providers`, which needs A5's
-      config.toml injection mechanism (not built). The registry entry is
-      marked `pending` with a `pendingReason` naming that dependency, and
-      the server excludes it from `supported_provider_config_kinds` until
-      A5 lands (or the entry is dropped, pending a founder ruling).
+      D3-rust built the mechanism: codex×`azure_openai` renders a
+      `config.toml` `model_providers` injection (mirroring the gateway
+      recipe's `env_key` pattern), since the pinned codex binary has zero
+      Azure env support. The entry stays registry-`pending` because the
+      cell is live-unverified — nobody has exercised codex against real
+      Azure OpenAI, and the registry only declares `AZURE_OPENAI_API_KEY`
+      today, not the endpoint/deployment vars the render arm also
+      expects. The server excludes a pending kind from
+      `supported_provider_config_kinds`, so no real selection can reach
+      the arm until it is live-verified (or the entry is dropped, pending
+      a founder ruling).
 - [ ] **Module split.** The route prefix split landed (S1): vault,
       selections, state, and org policy now live under `/v1/cloud/agent-auth/`,
       and enrollment/capabilities stayed at `/v1/cloud/agent-gateway/`

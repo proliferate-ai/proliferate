@@ -47,6 +47,12 @@ use crate::domains::agents::route_auth::{load_state_file, GatewayModelPlan, Gate
 /// The gateway auth-context id the catalog uses for gateway-route curation.
 const GATEWAY_CONTEXT_ID: &str = "gateway";
 
+/// The catalog default-model context key for a Track D `provider_config` ×
+/// `aws_bedrock` launch (matches `defaults["bedrock"]`). See
+/// `projection.rs`'s `NATIVE_CONTEXT_PRECEDENCE` doc for why this is not
+/// folded into `native_default_model`.
+const BEDROCK_CONTEXT_ID: &str = "bedrock";
+
 /// How long a fetched model list stays usable before the next allowed fetch
 /// re-asks. Five minutes per the design of record: long enough that a burst of
 /// pokes across one harness's contexts asks once, short enough that a model added
@@ -166,7 +172,8 @@ impl GatewayModelPlanner {
         _revision: i64,
         allow_blocking_fetch: bool,
     ) -> (GatewayModelPlan, bool) {
-        let (policy, default_model, native_default_model) = self.policy_and_default(harness_kind);
+        let (policy, default_model, native_default_model, bedrock_default_model) =
+            self.policy_and_default(harness_kind);
         let small_fast_model = policy.roles.get("small_fast").cloned();
         let credentials = self.gateway_credentials(harness_kind);
 
@@ -190,6 +197,7 @@ impl GatewayModelPlanner {
             GatewayModelPlan {
                 default_model,
                 native_default_model,
+                bedrock_default_model,
                 small_fast_model,
                 models: raw_models,
             },
@@ -255,11 +263,17 @@ impl GatewayModelPlanner {
         }
     }
 
-    /// The catalog's gateway policy plus the gateway/native default models.
+    /// The catalog's gateway policy plus the gateway/native/bedrock default
+    /// models.
     fn policy_and_default(
         &self,
         harness_kind: &str,
-    ) -> (AgentCatalogGatewayPolicy, Option<String>, Option<String>) {
+    ) -> (
+        AgentCatalogGatewayPolicy,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) {
         let active = self.catalog_sync.active();
         let Some(agent) = active
             .document
@@ -267,12 +281,13 @@ impl GatewayModelPlanner {
             .iter()
             .find(|agent| agent.kind == harness_kind)
         else {
-            return (AgentCatalogGatewayPolicy::default(), None, None);
+            return (AgentCatalogGatewayPolicy::default(), None, None, None);
         };
         let policy = agent.session.gateway_policy.clone().unwrap_or_default();
         let default_model = agent.session.defaults.get(GATEWAY_CONTEXT_ID).cloned();
         let native_default_model = native_default_model(&agent.session.defaults);
-        (policy, default_model, native_default_model)
+        let bedrock_default_model = agent.session.defaults.get(BEDROCK_CONTEXT_ID).cloned();
+        (policy, default_model, native_default_model, bedrock_default_model)
     }
 
     /// The gateway (base_url, key) for a harness from the current state file, if a

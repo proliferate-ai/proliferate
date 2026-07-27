@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-07-17.3",
+  "registryVersion": "2026-07-17.4",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -262,7 +262,7 @@
             "AZURE_OPENAI_API_KEY"
           ],
           "pending": true,
-          "pendingReason": "codex reaches Azure OpenAI only via config.toml model_providers, not plain env vars; awaiting A5's config.toml injection mechanism before this kind can be applied at launch."
+          "pendingReason": "config.toml injection built, live-unverified: nobody has exercised codex against real Azure OpenAI yet (D3 brief \u00a75/\u00a76 Gate 4), and the registry only declares AZURE_OPENAI_API_KEY today \u2014 not yet the endpoint/deployment vars the render arm also needs."
         }
       ]
     },

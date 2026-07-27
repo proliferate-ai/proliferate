@@ -44,6 +44,7 @@ class TestAgentAuthStateContractFixture:
                 else:
                     assert set(source) == {"kind", "config_kind", "env"}
                     assert isinstance(source["env"], dict)
+                    assert source["env"], "a provider_config source must carry a non-empty env map"
                     assert all(isinstance(v, str) for v in source["env"].values())
 
     def test_this_renderer_produces_the_fixtures_empty_sources_semantics(self) -> None:

@@ -33,7 +33,11 @@ pub struct AgentRegistryAgent {
     /// (`getSupportedProviderConfigKinds`) is driven by this list, and a
     /// vault entry of an undeclared kind is rejected at selection-write time
     /// like any other invalid selection (agent-auth.md's "Two rules keep
-    /// typed kinds from sprawling").
+    /// typed kinds from sprawling"). Each declaration carries the env var
+    /// vocabulary of its config kind, INCLUDING the non-secret mode-switch
+    /// flags (e.g. claude's `CLAUDE_CODE_USE_FOUNDRY`) that only exist on
+    /// this side of the document — `auth.slots[]` does not repeat them.
+    /// Readers of the flag vocabulary must consult both.
     #[serde(default)]
     pub provider_config: Vec<AgentRegistryProviderConfig>,
 }
@@ -43,7 +47,8 @@ pub struct AgentRegistryAgent {
 /// a decrypted vault JSON document into the harness's own env set. `envVars`
 /// reuses [`AgentRegistryAuthSlotEnvVar`]'s plain/tagged form so a Bedrock
 /// mode-switch flag (`CLAUDE_CODE_USE_BEDROCK`) and its credential vars share
-/// one vocabulary with auth slots instead of inventing a second one.
+/// one vocabulary with auth slots instead of inventing a second one — a
+/// `flag`-kind entry here classifies exactly like one declared on a slot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentRegistryProviderConfig {
@@ -51,11 +56,11 @@ pub struct AgentRegistryProviderConfig {
     pub label: String,
     #[serde(default)]
     pub env_vars: Vec<AgentRegistryAuthSlotEnvVar>,
-    /// True when this declaration names envVars the pinned harness binary
-    /// cannot yet consume directly (e.g. codex's `azure_openai` support
-    /// requires config.toml `model_providers` injection, not plain env
-    /// vars) -- the kind/envVars vocabulary is settled, but launch-time
-    /// application awaits the dependency named in `pending_reason`.
+    /// True while the cell is built but live-unverified (e.g. codex's
+    /// `azure_openai` config.toml `model_providers` injection has never been
+    /// exercised against real Azure OpenAI): the server excludes a pending
+    /// kind from the selectable set, so no real selection can reach its
+    /// render arm until the dependency named in `pending_reason` clears.
     #[serde(default)]
     pub pending: bool,
     #[serde(default)]
