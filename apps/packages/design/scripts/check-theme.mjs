@@ -188,7 +188,7 @@ for (const [tokenName, expected] of [
 function literal(name) {
   const token = themeTokens[name];
   if (token.themeFallback) return token.themeFallback;
-  const alias = token.dark.match(/^var\((--[a-z0-9-]+)\)(?: \/\* legacy-alias \*\/)?$/);
+  const alias = token.dark.match(/^var\((--[a-z0-9-]+)\)$/);
   return alias?.[1] ? literal(alias[1]) : token.dark;
 }
 

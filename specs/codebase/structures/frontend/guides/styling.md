@@ -67,15 +67,17 @@ Theme decisions belong in tokens, not ad hoc callsite classes.
 ## Sidebar Tokens
 
 Components rendered inside the right panel or sidebar background
-(`bg-sidebar-background`) must use sidebar-specific tokens:
+(`bg-sidebar-background`) use the shared state tokens for interaction paint and
+sidebar-specific tokens for text:
 
-- `bg-sidebar-accent` / `hover:bg-sidebar-accent` for hover and active states
+- `bg-hover` / `hover:bg-hover` for hover and active states, `bg-selected` for
+  persistent selection — the same three state roles as everywhere else
 - `text-sidebar-foreground` / `text-sidebar-muted-foreground` for text
-- `border-sidebar-border` for borders
+- `border-border` for borders
 
-Do not use generic `bg-accent` or `hover:bg-muted` inside sidebar surfaces —
-those resolve to different colors and look wrong against the sidebar
-background.
+Do not use `hover:bg-muted` or ad-hoc overlays inside sidebar surfaces — the
+shared state tokens are what keep the shell, sidebar, lists and menus from
+drifting apart.
 
 ## No Partial-Opacity Hover Transitions on Glyphs
 
@@ -129,7 +131,7 @@ For card-like containers (diff cards, file entries, settings items):
 - Border radius: `rounded-lg` with `overflow-clip`
 - Spacing between cards: `gap-2`
 
-Do not use `bg-sidebar-accent/30` or similar opacity-based backgrounds that
+Do not use `bg-hover/30` or similar opacity-based backgrounds that
 shift meaning across themes. `bg-foreground/5` is theme-stable.
 
 ## RTL Truncation for File Paths

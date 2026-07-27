@@ -1,14 +1,12 @@
 import type { ButtonHTMLAttributes, MouseEvent, ReactNode, Ref } from "react";
 import { twMerge } from "../utils/tw-merge";
 
-export type PopoverMenuItemVariant = "default" | "sidebar";
 export type PopoverMenuItemDensity = "default" | "compact";
 
 export interface PopoverMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
   label: ReactNode;
   trailing?: ReactNode;
-  variant?: PopoverMenuItemVariant;
   density?: PopoverMenuItemDensity;
   iconClassName?: string;
   labelClassName?: string;
@@ -21,7 +19,6 @@ export function PopoverMenuItem({
   icon,
   label,
   trailing,
-  variant = "default",
   density = "default",
   iconClassName = "",
   labelClassName = "",
@@ -33,9 +30,7 @@ export function PopoverMenuItem({
   onClick,
   ...props
 }: PopoverMenuItemProps) {
-  const hoverClassName = variant === "sidebar"
-    ? "hover:bg-hover focus:bg-hover"
-    : "hover:bg-hover focus:bg-hover";
+  const hoverClassName = "hover:bg-hover focus:bg-hover";
   const hasDescription = children !== undefined && children !== null && children !== false;
   // Codex menu-row recipe (reference/codex main_chat_view + popover dumps):
   // 12px rows (text-ui-sm) in full row foreground, 11px muted hints

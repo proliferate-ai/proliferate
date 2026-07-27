@@ -7,10 +7,6 @@ import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
-const desktopCss = readFileSync(
-  resolve(testDir, "../../../../../packages/design/src/css/product.css"),
-  "utf8",
-);
 const productCss = readFileSync(
   resolve(testDir, "../../../../../packages/design/src/css/product.css"),
   "utf8",
@@ -74,7 +70,6 @@ describe("thinking gleam css contract", () => {
   it("is inert on hover — no hover rules on the gleam", () => {
     expect(thinkingSection()).not.toContain(":hover");
     expect(productCss).not.toContain(".thinking-text:hover");
-    expect(desktopCss).not.toContain(".thinking-text:hover");
   });
 
   it("keeps the duration/easing knobs", () => {
@@ -99,12 +94,10 @@ describe("thinking gleam css contract", () => {
   });
 
   it("has no resurrected dead streaming css", () => {
-    for (const css of [desktopCss, productCss]) {
-      expect(css).not.toContain("streaming-fade");
-      expect(css).not.toContain("streaming-tail-mask");
-      expect(css).not.toContain("pulse-running");
-      expect(css).not.toContain("pulse-dot");
-    }
+    expect(productCss).not.toContain("streaming-fade");
+    expect(productCss).not.toContain("streaming-tail-mask");
+    expect(productCss).not.toContain("pulse-running");
+    expect(productCss).not.toContain("pulse-dot");
   });
 });
 
