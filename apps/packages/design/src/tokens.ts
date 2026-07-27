@@ -897,6 +897,11 @@ export const themeTokens = {
     light: motion.ease.linear,
     provenance: "[RETUNE:motion/roles]",
   },
+  "--ease-out-cubic": {
+    dark: motion.ease.outCubic,
+    light: motion.ease.outCubic,
+    provenance: "[SHIPPED:motion/authority]",
+  },
   "--ease-out-quint": {
     dark: motion.ease.outQuint,
     light: motion.ease.outQuint,

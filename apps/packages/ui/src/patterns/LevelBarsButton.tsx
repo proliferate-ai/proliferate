@@ -167,21 +167,37 @@ function LevelBarsIcon({
       ? { [levelOptionAttribute]: levels[i]!.value }
       : undefined;
 
+    // Two elements per bar, not one. The outer span is the bar's full-height
+    // track and never animates, so the dim silhouette of the whole ladder stays
+    // put; the inner span is the lit fill, and it is the only thing that grows
+    // or drains. Scaling a single element instead (what this used to do) shrank
+    // the bar itself, so at a duration long enough to watch, the bar visibly
+    // disappeared and regrew rather than filling in place.
     return (
       <span
         key={i}
         {...optionAttr}
-        className={`block shrink-0 rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}${stepClass}`}
+        className="relative block shrink-0 overflow-hidden rounded-full"
         style={{
           height: `${proportionalHeight}%`,
           minHeight: formatEm(LEVEL_BAR_MIN_HEIGHT_EM),
           width: barWidthEm,
-          opacity: lit ? 1 : 0.3,
-          animationDelay: wave
-            ? `${i * LEVEL_BAR_WAVE_STAGGER_MS}ms`
-            : stepDelayMs !== undefined ? `${stepDelayMs}ms` : undefined,
         }}
-      />
+      >
+        {/* Sibling of the fill rather than its parent: as an ancestor its 30%
+            would multiply into the fill's own alpha and mute the lit ink. */}
+        <span className="absolute inset-0 rounded-full bg-current opacity-30" />
+        {lit || stepClass ? (
+          <span
+            className={`absolute inset-0 origin-bottom rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}${stepClass}`}
+            style={{
+              animationDelay: wave
+                ? `${i * LEVEL_BAR_WAVE_STAGGER_MS}ms`
+                : stepDelayMs !== undefined ? `${stepDelayMs}ms` : undefined,
+            }}
+          />
+        ) : null}
+      </span>
     );
   });
 

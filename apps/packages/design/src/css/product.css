@@ -987,36 +987,37 @@ body {
 
 /* Paced by the activity scale, not the hover role: this is the motion you are
    meant to watch a bar make, so it needs a duration you can follow rather than
-   the ~120ms of pointer feedback. --ease-standard keeps the bar travelling for
-   most of that span; a strong out-ease would cover the distance in the first
-   fraction and then idle, which defeats the longer duration. */
+   the ~120ms of pointer feedback. --ease-out-cubic spends that budget on a
+   quick departure that decelerates into the top -- not --ease-out-quint, which
+   is so front-loaded it arrives almost immediately and then visibly idles. */
 .composer-level-bar-fill-in {
-  animation: composer-level-bar-fill-in var(--activity-level-bar-step) var(--ease-standard) both;
+  animation: composer-level-bar-fill-in var(--activity-level-bar-step) var(--ease-out-cubic) both;
 }
 
 .composer-level-bar-drain-out {
-  animation: composer-level-bar-drain-out var(--activity-level-bar-step) var(--ease-standard) both;
+  animation: composer-level-bar-drain-out var(--activity-level-bar-step) var(--ease-out-cubic) both;
 }
 
+/* The fill travels the bar's whole height: it is clipped by the track above it,
+   so scaling from 0 reads as ink rising inside a bar that stays where it is,
+   not as the bar itself growing. Opacity is left alone -- the fill is fully
+   opaque the entire way, and the unfilled remainder is the track's own dim
+   tone showing through. */
 @keyframes composer-level-bar-fill-in {
   0% {
-    transform: scaleY(0.4);
-    opacity: 0.3;
+    transform: scaleY(0);
   }
   100% {
     transform: scaleY(1);
-    opacity: 1;
   }
 }
 
 @keyframes composer-level-bar-drain-out {
   0% {
     transform: scaleY(1);
-    opacity: 1;
   }
   100% {
-    transform: scaleY(0.4);
-    opacity: 0.3;
+    transform: scaleY(0);
   }
 }
 

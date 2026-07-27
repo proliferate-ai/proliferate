@@ -31,6 +31,14 @@ export const motion = {
   },
   ease: {
     outQuint: "cubic-bezier(0.19, 1, 0.22, 1)",
+    /**
+     * Moderate deceleration: leaves quickly, then eases into the end. Sits
+     * between `standard` (symmetric, no initial urgency) and `outQuint` (so
+     * front-loaded it covers almost all the distance immediately and then
+     * visibly idles). For motion long enough to watch, where the eye should
+     * read a fast departure *and* a settle rather than one or the other.
+     */
+    outCubic: "cubic-bezier(0.22, 0.61, 0.36, 1)",
     spring: "cubic-bezier(0.16, 1, 0.3, 1)",
     standard: "cubic-bezier(0.4, 0, 0.2, 1)",
     linear: "linear",
@@ -50,9 +58,10 @@ export const motion = {
      * eye caught it, and the ask is explicitly to watch a bar travel from the
      * bottom to its full height. A single-level step -- the common case -- is
      * therefore exactly this long; multi-level steps add the per-bar stagger on
-     * top.
+     * top. Paired with `ease.outCubic`, which spends this budget on a quick
+     * departure that then decelerates into the top.
      */
-    levelBarStepMs: 1000,
+    levelBarStepMs: 500,
   },
   /** UI choreography delays; these are not animation durations. */
   delay: {
