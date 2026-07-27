@@ -402,19 +402,32 @@ def build_detached_supervisor_launch_command(
     # A paused VM instantiated from a template that predates the baked
     # supervisor binary would otherwise fail this launch with only a generic
     # health-timeout downstream. The guard keeps the command exiting 0
-    # (matching the legacy worker sidecar's `test -x` guard) without
+    # (matching the legacy worker sidecar's `test -x` intent) without
     # half-starting anything; the health probe then fails with a clean
     # missing-binary signal instead of a silent timeout.
+    #
+    # The guard MUST be an `if` block, not `test -x ... && nohup ... &`: in
+    # the and-list form the trailing `&` backgrounds the whole and-list, so
+    # the shell forks a subshell in which the nohup'd supervisor (which runs
+    # forever) is the foreground child. That subshell holds the provider's
+    # command stream open for the supervisor's lifetime, so the launch call
+    # times out (E2B: deadline_exceeded after timeout_seconds) even though
+    # the supervisor actually started -- materialization fails while the
+    # runtime silently boots. Inside the `if` body the `&` binds to the
+    # nohup simple command, the launcher shell exits immediately, and a
+    # missing binary still exits 0 (an `if` whose condition is false and has
+    # no else succeeds, also under `set -eu`).
     script = "\n".join(
         [
             "set -eu",
             *kill_lines,
             *target_env_lines,
+            f"if test -x {quoted_supervisor_binary}; then",
             (
-                f"test -x {quoted_supervisor_binary} && "
-                f"nohup {quoted_supervisor_binary} --config {shlex.quote(config_path)} run "
+                f"  nohup {quoted_supervisor_binary} --config {shlex.quote(config_path)} run "
                 f"> {shlex.quote(log_path)} 2>&1 < /dev/null &"
             ),
+            "fi",
         ]
     )
     return "bash -lc " + shlex.quote(script)
