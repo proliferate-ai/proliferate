@@ -15,11 +15,14 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_TOPUP
+from proliferate.constants.agent_gateway import (
+    LLM_CREDIT_SOURCE_FREE_SIGNUP,
+    LLM_CREDIT_SOURCE_TOPUP,
+)
 from proliferate.db.models.cloud.agent_gateway import (
     AgentLlmUsageEvent,
     LlmCreditGrant,
@@ -91,6 +94,55 @@ async def create_llm_credit_grant(
     db.add(row)
     await db.flush()
     return llm_credit_grant_record(row)
+
+
+async def move_llm_credit_ledger(
+    db: AsyncSession,
+    *,
+    from_billing_subject_id: UUID,
+    to_billing_subject_id: UUID,
+) -> tuple[int, int]:
+    """Re-parent one subject's whole LLM ledger onto another subject.
+
+    D-3 migration primitive: BOTH sides move — every credit grant and every
+    imported usage debit — so the destination's remaining credit
+    (``sum(grants) - sum(usage)``) equals the source's exactly. Moving only
+    the grants would inflate the converted balance by the spend left behind.
+    Idempotent by construction: a second call finds no rows on the source.
+
+    The free-signup grant's ``source_ref`` is rewritten from
+    ``free_signup:<from-subject>`` to ``free_signup:<to-subject>`` (when that
+    ref is still free) so the org-path grant
+    (``ensure_signup_free_credit_grant``, whose insert dedupes on exactly that
+    ref) converges on the converted grant instead of inserting a second one —
+    the "personal claim converts rather than duplicates" half of the
+    GitHub-identity dedupe.
+
+    Returns ``(moved_grants, moved_usage_events)``.
+    """
+    old_free_signup_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{from_billing_subject_id}"
+    new_free_signup_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{to_billing_subject_id}"
+    await db.execute(
+        update(LlmCreditGrant)
+        .where(
+            LlmCreditGrant.source_ref == old_free_signup_ref,
+            ~exists(
+                select(LlmCreditGrant.id).where(LlmCreditGrant.source_ref == new_free_signup_ref)
+            ),
+        )
+        .values(source_ref=new_free_signup_ref)
+    )
+    moved_grants = await db.execute(
+        update(LlmCreditGrant)
+        .where(LlmCreditGrant.billing_subject_id == from_billing_subject_id)
+        .values(billing_subject_id=to_billing_subject_id)
+    )
+    moved_usage = await db.execute(
+        update(AgentLlmUsageEvent)
+        .where(AgentLlmUsageEvent.billing_subject_id == from_billing_subject_id)
+        .values(billing_subject_id=to_billing_subject_id)
+    )
+    return (moved_grants.rowcount or 0, moved_usage.rowcount or 0)
 
 
 async def count_topup_grants(

@@ -524,20 +524,22 @@ async def _load_state_inputs(
         if selection.source_kind == AGENT_AUTH_SOURCE_GATEWAY
     }
     if gateway_harness_kinds:
-        # Org-member gap fix (model-gateway.md): an org member's gateway
-        # sessions are governed by their ORG enrollment, not their personal
-        # one — same resolution `is_gateway_budget_available` uses below, so
-        # the gate and the keys it guards always agree on the paying subject.
+        # v1 payer law (model-gateway.md §Account model): gateway sessions are
+        # governed by the user's DEFAULT org's enrollment, unconditionally —
+        # same resolution `is_gateway_budget_available` uses below, so the
+        # gate and the keys it guards always agree on the paying subject.
         enrollment = await get_gateway_enrollment_for_user(db, user_id)
         if enrollment is not None:
             enrollment_sync_status = enrollment.sync_status
             if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
-                # Second enforcement wall for LLM-credit exhaustion (the first
-                # is the importer disabling the LiteLLM virtual keys): an
-                # exhausted subject stops being handed any key at all, so a
-                # lagging or failed key-disable cannot leak gateway access.
-                # The gateway source then renders unsatisfiable and is dropped;
-                # the runtime fails closed at launch.
+                # Second enforcement wall for exhausted AND unfunded subjects
+                # (the first is the importer disabling the LiteLLM virtual
+                # keys, backstopped by the mirrored team budget sitting at the
+                # exhausted floor): such a subject stops being handed any key
+                # at all, so a lagging or failed key-disable cannot leak
+                # gateway access. The gateway source then renders
+                # unsatisfiable and is dropped; the runtime fails closed at
+                # launch.
                 if await is_gateway_budget_available(db, user_id):
                     for harness_kind in gateway_harness_kinds:
                         enrollment_key = await agent_gateway_store.get_active_enrollment_key(
@@ -558,7 +560,7 @@ async def _load_state_inputs(
                 else:
                     logger.warning(
                         "Withholding gateway virtual keys: LLM credit exhausted "
-                        "(user=%s, surface=%s)",
+                        "or subject unfunded (user=%s, surface=%s)",
                         user_id,
                         surface,
                     )

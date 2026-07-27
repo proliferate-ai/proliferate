@@ -11,9 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey
+from proliferate.db.models.organizations import Organization
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.agent_gateway import DesiredAuthSource
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
+
+
+async def _create_org_subject(db_session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID]:
+    """(organization_id, billing_subject_id) — enrollment rows are org-only."""
+    organization = Organization(name=f"Store Org {uuid.uuid4().hex[:6]}")
+    db_session.add(organization)
+    await db_session.flush()
+    subject = await ensure_organization_billing_subject(db_session, organization.id)
+    return organization.id, subject.id
 
 
 async def _create_user(db_session: AsyncSession, *, email: str | None = None) -> uuid.UUID:
@@ -442,24 +452,27 @@ async def test_user_hard_delete_with_selection_succeeds(db_session: AsyncSession
 @pytest.mark.asyncio
 async def test_ensure_enrollment_row_is_idempotent(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    org_id, subject_id = await _create_org_subject(db_session)
 
     first = await store.ensure_enrollment_row(
         db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
+        billing_subject_id=subject_id,
+        organization_id=org_id,
         user_id=user_id,
     )
     second = await store.ensure_enrollment_row(
         db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
+        billing_subject_id=subject_id,
+        organization_id=org_id,
         user_id=user_id,
     )
     assert first.id == second.id
     assert first.sync_status == "pending"
+    assert first.subject_kind == "organization"
 
-    fetched = await store.get_enrollment_for_user(db_session, user_id=user_id)
+    fetched = await store.get_enrollment_for_organization(
+        db_session, organization_id=org_id, user_id=user_id
+    )
     assert fetched is not None
     assert fetched.id == first.id
 
@@ -467,11 +480,11 @@ async def test_ensure_enrollment_row_is_idempotent(db_session: AsyncSession) -> 
 @pytest.mark.asyncio
 async def test_enrollment_sync_lifecycle(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    org_id, subject_id = await _create_org_subject(db_session)
     enrollment = await store.ensure_enrollment_row(
         db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
+        billing_subject_id=subject_id,
+        organization_id=org_id,
         user_id=user_id,
     )
 
@@ -492,7 +505,7 @@ async def test_enrollment_sync_lifecycle(db_session: AsyncSession) -> None:
         db_session,
         enrollment_id=enrollment.id,
         litellm_team_id="team-1",
-        litellm_user_id=f"user-{user_id}",
+        litellm_user_id=f"org-{org_id}-user-{user_id}",
         virtual_key_id="token-1",
         virtual_key="sk-litellm-secret",
         sync_fingerprint="fp",
@@ -513,24 +526,12 @@ async def test_enrollment_sync_lifecycle(db_session: AsyncSession) -> None:
     revoked = await store.revoke_enrollment(db_session, enrollment_id=enrollment.id)
     assert revoked is not None
     assert revoked.revoked_at is not None
-    assert await store.get_enrollment_for_user(db_session, user_id=user_id) is None
-
-
-@pytest.mark.asyncio
-async def test_list_user_ids_missing_enrollment(db_session: AsyncSession) -> None:
-    enrolled_id = await _create_user(db_session)
-    missing_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, enrolled_id)
-    await store.ensure_enrollment_row(
-        db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
-        user_id=enrolled_id,
+    assert (
+        await store.get_enrollment_for_organization(
+            db_session, organization_id=org_id, user_id=user_id
+        )
+        is None
     )
-
-    missing = await store.list_user_ids_missing_enrollment(db_session, limit=100)
-    assert missing_id in missing
-    assert enrolled_id not in missing
 
 
 @pytest.mark.asyncio
@@ -541,14 +542,14 @@ async def test_list_billing_subject_ids_paginates_past_a_page(
     subject_ids: set[uuid.UUID] = set()
     for _ in range(5):
         user_id = await _create_user(db_session)
-        subject = await ensure_personal_billing_subject(db_session, user_id)
+        org_id, subject_id = await _create_org_subject(db_session)
         await store.ensure_enrollment_row(
             db_session,
-            subject_kind="user",
-            billing_subject_id=subject.id,
+            billing_subject_id=subject_id,
+            organization_id=org_id,
             user_id=user_id,
         )
-        subject_ids.add(subject.id)
+        subject_ids.add(subject_id)
 
     seen: list[uuid.UUID] = []
     after: uuid.UUID | None = None
