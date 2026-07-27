@@ -16,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db.models.cloud.agent_gateway import AgentAuthSelection
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.store import agent_gateway as agent_gateway_store
+from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.db.store.agent_gateway import DesiredAuthSource
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.server.cloud.materialization import service as materialization_service
@@ -25,11 +27,16 @@ from tests.integration.test_agent_gateway_api import _authed_user, _put_selectio
 
 
 @pytest.fixture
-def scheduled(monkeypatch: pytest.MonkeyPatch) -> list[uuid.UUID]:
-    calls: list[uuid.UUID] = []
+def scheduled(monkeypatch: pytest.MonkeyPatch) -> list[tuple[uuid.UUID, bool]]:
+    calls: list[tuple[uuid.UUID, bool]] = []
 
-    async def fake_schedule(db: object, *, user_id: uuid.UUID) -> None:
-        calls.append(user_id)
+    async def fake_schedule(
+        db: object,
+        *,
+        user_id: uuid.UUID,
+        ensure_sandbox: bool = False,
+    ) -> None:
+        calls.append((user_id, ensure_sandbox))
 
     monkeypatch.setattr(
         materialization_service,
@@ -41,11 +48,15 @@ def scheduled(monkeypatch: pytest.MonkeyPatch) -> list[uuid.UUID]:
 
 class TestAgentAuthMaterializationTriggers:
     @pytest.mark.asyncio
-    async def test_cloud_selection_put_and_clear_trigger_scheduler(
+    async def test_cloud_selection_put_and_clear_schedule_with_ensure(
         self,
         client: AsyncClient,
-        scheduled: list[uuid.UUID],
+        scheduled: list[tuple[uuid.UUID, bool]],
     ) -> None:
+        # Proof C2 (agent-auth.md), trigger side: a cloud switch schedules an
+        # ENSURE-flavored materialization (provision-or-wake) rather than the
+        # plain refresh that no-ops against an unbooted sandbox. The route
+        # returns before any sandbox work — scheduling is the whole contract.
         user_id, headers = await _authed_user(client)
 
         put = await _put_selections(
@@ -56,9 +67,10 @@ class TestAgentAuthMaterializationTriggers:
             sources=[{"sourceKind": "gateway", "enabled": True}],
         )
         assert put.status_code == 200, put.text
-        assert scheduled == [uuid.UUID(user_id)]
+        assert scheduled == [(uuid.UUID(user_id), True)]
 
-        # A full-desired-state clear (empty sources) is still a cloud write.
+        # A full-desired-state clear (empty sources) is still a cloud write:
+        # the stale document must leave the sandbox now, not at the next wake.
         cleared = await _put_selections(
             client,
             headers,
@@ -67,13 +79,13 @@ class TestAgentAuthMaterializationTriggers:
             sources=[],
         )
         assert cleared.status_code == 200, cleared.text
-        assert scheduled == [uuid.UUID(user_id)] * 2
+        assert scheduled == [(uuid.UUID(user_id), True)] * 2
 
     @pytest.mark.asyncio
     async def test_local_selection_changes_do_not_trigger_scheduler(
         self,
         client: AsyncClient,
-        scheduled: list[uuid.UUID],
+        scheduled: list[tuple[uuid.UUID, bool]],
     ) -> None:
         _, headers = await _authed_user(client)
 
@@ -99,6 +111,163 @@ class TestAgentAuthMaterializationTriggers:
 async def _register_user_id(client: AsyncClient) -> uuid.UUID:
     user_id, _ = await _authed_user(client)
     return uuid.UUID(user_id)
+
+
+@pytest.fixture
+def sandbox_operations(monkeypatch: pytest.MonkeyPatch) -> list[tuple[uuid.UUID, str]]:
+    """Spy on the shared sandbox-operation entrypoint the materializer runs.
+
+    The provider connect itself (resume an asleep sandbox, create a missing
+    one) is ``connect_ready_sandbox``'s already-covered provision-or-wake
+    contract; these tests pin exactly WHEN the agent-auth task engages it.
+    """
+    calls: list[tuple[uuid.UUID, str]] = []
+
+    async def fake_run(
+        db: object,
+        *,
+        sandbox: CloudSandboxValue,
+        operation_key: str,
+        run: object,
+        **kwargs: object,
+    ) -> None:
+        calls.append((sandbox.id, operation_key))
+
+    monkeypatch.setattr(agent_auth.operation, "run_cloud_sandbox_operation", fake_run)
+    return calls
+
+
+async def _seed_sandbox(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    provider_sandbox_id: str | None,
+    status: str,
+) -> uuid.UUID:
+    await ensure_personal_billing_subject(db, user_id)
+    sandbox = CloudSandbox(
+        owner_user_id=user_id,
+        sandbox_type="e2b",
+        provider_sandbox_id=provider_sandbox_id,
+        status=status,
+    )
+    db.add(sandbox)
+    await db.flush()
+    return sandbox.id
+
+
+async def _seed_cloud_gateway_selection(db: AsyncSession, *, user_id: uuid.UUID) -> None:
+    await agent_gateway_store.put_auth_selections(
+        db,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="cloud",
+        sources=[DesiredAuthSource(source_kind="gateway")],
+    )
+
+
+class TestEnsureOnSwitchMaterialization:
+    """Proof C2 (agent-auth.md): a cloud switch ensures the sandbox.
+
+    A switch against an asleep (or provisioned-but-unbooted) sandbox runs the
+    materialization operation now — provision-or-wake through the canonical
+    connect path — while the never-provisioned case still falls to bootstrap.
+    The ack half of C2 is the runtime/UI corridor (C-2), not this server test.
+    """
+
+    @pytest.mark.asyncio
+    async def test_asleep_sandbox_is_woken_and_materialized(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        sandbox_operations: list[tuple[uuid.UUID, str]],
+    ) -> None:
+        user_id = await _register_user_id(client)
+        sandbox_id = await _seed_sandbox(
+            db_session,
+            user_id=user_id,
+            provider_sandbox_id="ext-asleep-1",
+            status="paused",
+        )
+        await _seed_cloud_gateway_selection(db_session, user_id=user_id)
+
+        await agent_auth.materialize_agent_auth_for_user(
+            db_session, user_id=user_id, ensure_sandbox=True
+        )
+
+        assert sandbox_operations == [(sandbox_id, "agent-auth")]
+
+    @pytest.mark.asyncio
+    async def test_unbooted_sandbox_is_provisioned_only_on_ensure(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        sandbox_operations: list[tuple[uuid.UUID, str]],
+    ) -> None:
+        # A provisioned row whose provider never booted: the plain refresh
+        # (enrollment sync, top-up) keeps deferring to bootstrap, but the
+        # ensure-on-switch task boots it so the switch lands now.
+        user_id = await _register_user_id(client)
+        sandbox_id = await _seed_sandbox(
+            db_session,
+            user_id=user_id,
+            provider_sandbox_id=None,
+            status="creating",
+        )
+        await _seed_cloud_gateway_selection(db_session, user_id=user_id)
+
+        await agent_auth.materialize_agent_auth_for_user(db_session, user_id=user_id)
+        assert sandbox_operations == []
+
+        await agent_auth.materialize_agent_auth_for_user(
+            db_session, user_id=user_id, ensure_sandbox=True
+        )
+        assert sandbox_operations == [(sandbox_id, "agent-auth")]
+
+    @pytest.mark.asyncio
+    async def test_never_provisioned_falls_to_bootstrap(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        sandbox_operations: list[tuple[uuid.UUID, str]],
+    ) -> None:
+        # No sandbox row at all: even the ensure-flavored task defers — the
+        # first document is bootstrap's job (materialize_sandbox runs the
+        # agent-auth step unconditionally).
+        user_id = await _register_user_id(client)
+        await _seed_cloud_gateway_selection(db_session, user_id=user_id)
+
+        await agent_auth.materialize_agent_auth_for_user(
+            db_session, user_id=user_id, ensure_sandbox=True
+        )
+
+        assert sandbox_operations == []
+
+    @pytest.mark.asyncio
+    async def test_unbooted_sandbox_with_nothing_to_deliver_is_not_booted(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        sandbox_operations: list[tuple[uuid.UUID, str]],
+    ) -> None:
+        # A cloud clear against a provider that never existed has nothing to
+        # remove (absent already means native on a fresh boot), so ensure must
+        # not spin up a VM just to deliver "no file". An ASLEEP sandbox with a
+        # previously-written file is the opposite case, covered above — it
+        # must wake so the stale document leaves.
+        user_id = await _register_user_id(client)
+        await _seed_sandbox(
+            db_session,
+            user_id=user_id,
+            provider_sandbox_id=None,
+            status="creating",
+        )
+
+        await agent_auth.materialize_agent_auth_for_user(
+            db_session, user_id=user_id, ensure_sandbox=True
+        )
+
+        assert sandbox_operations == []
 
 
 class TestBuildAgentAuthStateSyncedGateway:

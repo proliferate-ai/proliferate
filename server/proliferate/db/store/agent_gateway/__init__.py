@@ -84,6 +84,7 @@ from proliferate.db.store.agent_gateway.selections import (
     list_enabled_auth_selections,
     list_enabled_selections_referencing_key,
     put_auth_selections,
+    touch_auth_selection_revisions,
 )
 from proliferate.db.store.agent_gateway.usage import (
     advance_usage_import_cursor,
@@ -164,6 +165,7 @@ __all__ = [
     "set_org_agent_policy",
     "sum_active_grants_usd",
     "sum_usage_cost_usd",
+    "touch_auth_selection_revisions",
     "upsert_catalog_override",
     "upsert_enrollment_key",
 ]

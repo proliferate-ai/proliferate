@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 import pytest
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -17,11 +18,13 @@ from proliferate.constants.agent_gateway import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import (
+    AgentAuthSelection,
     AgentGatewayEnrollment,
     AgentGatewayEnrollmentKey,
 )
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
+from proliferate.db.store.agent_gateway import DesiredAuthSource
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
 from proliferate.server.cloud.agent_gateway import enrollment as enrollment_service
@@ -32,6 +35,10 @@ from proliferate.server.cloud.agent_gateway.enrollment import (
     ensure_org_enrollment,
     ensure_user_enrollment,
 )
+from proliferate.server.cloud.materialization.materialize.agent_auth import (
+    build_agent_auth_state,
+)
+from proliferate.utils.time import utcnow
 
 
 async def _create_user(db_session: AsyncSession) -> uuid.UUID:
@@ -239,6 +246,138 @@ async def test_qualification_enrollment_stamps_exact_run_ownership(
     assert stub_litellm.team_metadata == [expected]
     assert stub_litellm.user_metadata == [expected]
     assert all(stub_litellm.minted[0]["metadata"][key] == value for key, value in expected.items())
+
+
+@pytest.mark.asyncio
+async def test_enrollment_sync_completion_pokes_both_delivery_surfaces(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """Proof C5 (agent-auth.md): a state pulled before enrollment sync lacks
+    the key; sync completion re-renders both surfaces with no unrelated
+    mutation needed.
+
+    Cloud poke: reaching ``synced`` schedules agent-auth materialization into
+    the user's sandbox. Local poke: the local surface's revision seam is
+    bumped, so the desktop's next pull renders WITH the key at a strictly
+    newer revision than the keyless document it pulled mid-sync — no
+    selection edit, vault mutation, or app restart in between.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(
+        settings,
+        "agent_gateway_litellm_public_base_url",
+        "https://llm.proliferate.ai",
+    )
+    user_id = await _create_user(db_session)
+
+    # Gateway selections on BOTH surfaces, made BEFORE enrollment sync lands
+    # (the desktop's "pulled too early" race). Backdate the rows so the
+    # revision comparison below cannot collapse into the same millisecond.
+    for surface in ("local", "cloud"):
+        await store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface=surface,
+            sources=[DesiredAuthSource(source_kind="gateway")],
+        )
+    await db_session.execute(
+        update(AgentAuthSelection)
+        .where(AgentAuthSelection.user_id == user_id)
+        .values(updated_at=utcnow() - timedelta(seconds=5))
+    )
+
+    pre_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
+    assert pre_state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+    pre_revision = pre_state["revision"]
+    assert isinstance(pre_revision, int) and pre_revision > 0
+
+    scheduled: list[tuple[uuid.UUID, bool]] = []
+
+    async def record_schedule(
+        db: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        ensure_sandbox: bool = False,
+    ) -> None:
+        scheduled.append((user_id, ensure_sandbox))
+
+    monkeypatch.setattr(
+        enrollment_service.materialization_service,
+        "schedule_materialize_agent_auth",
+        record_schedule,
+    )
+
+    enrollment = await ensure_user_enrollment(db_session, user_id)
+    assert enrollment.sync_status == "synced"
+
+    # Cloud surface: one plain (non-ensure) materialization pass scheduled —
+    # a user who never provisioned a sandbox still falls to bootstrap.
+    assert scheduled == [(user_id, False)]
+
+    # Local surface: the SAME pull the desktop loops on now renders the key,
+    # at a strictly newer revision, with no unrelated mutation.
+    post_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
+    [harness] = post_state["harnesses"]
+    [source] = harness["sources"]
+    assert source["kind"] == "gateway"
+    assert source["base_url"] == "https://llm.proliferate.ai"
+    assert source["key"].startswith("sk-litellm-")
+    post_revision = post_state["revision"]
+    assert isinstance(post_revision, int)
+    assert post_revision > pre_revision
+
+
+@pytest.mark.asyncio
+async def test_already_synced_enrollment_does_not_re_poke(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """The pokes fire on the pending→synced TRANSITION, not on every ensure
+    pass — an already-synced enrollment (every login) must not churn the
+    local revision or schedule redundant sandbox writes."""
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    user_id = await _create_user(db_session)
+    await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        sources=[DesiredAuthSource(source_kind="gateway")],
+    )
+    first = await ensure_user_enrollment(db_session, user_id)
+    assert first.sync_status == "synced"
+    await db_session.execute(
+        update(AgentAuthSelection)
+        .where(AgentAuthSelection.user_id == user_id)
+        .values(updated_at=utcnow() - timedelta(seconds=5))
+    )
+    pre_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
+
+    scheduled: list[uuid.UUID] = []
+
+    async def record_schedule(
+        db: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        ensure_sandbox: bool = False,
+    ) -> None:
+        scheduled.append(user_id)
+
+    monkeypatch.setattr(
+        enrollment_service.materialization_service,
+        "schedule_materialize_agent_auth",
+        record_schedule,
+    )
+
+    again = await ensure_user_enrollment(db_session, user_id)
+    assert again.sync_status == "synced"
+    assert scheduled == []
+    post_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
+    assert post_state["revision"] == pre_state["revision"]
 
 
 @pytest.mark.asyncio

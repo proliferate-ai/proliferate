@@ -637,18 +637,38 @@ async def materialize_agent_auth(
     )
 
 
-async def materialize_agent_auth_for_user(db: AsyncSession, *, user_id: UUID) -> None:
+async def materialize_agent_auth_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    ensure_sandbox: bool = False,
+) -> None:
     """Refresh agent-auth state in the user's active personal sandbox.
 
-    Only sandboxes that already have a provider sandbox are refreshed; a
-    sandbox that has never booted picks the state up during its full
-    bootstrap (``materialize_sandbox``).
+    By default only a sandbox that already has a provider sandbox is refreshed
+    (an asleep provider is resumed by ``connect_ready_sandbox``'s canonical
+    provision-or-wake); one that has never booted picks the state up during
+    its full bootstrap (``materialize_sandbox``).
+
+    ``ensure_sandbox=True`` is the ensure-on-switch path (agent-auth.md "A
+    cloud switch ensures the sandbox"): a provisioned-but-never-booted sandbox
+    is booted through the same operation/connect path every materializer uses,
+    so the switched document lands now instead of at the next unrelated wake —
+    but only when the rendered document has something to deliver (booting a
+    provider to deliver "no file" would be waste: a provider that never
+    existed holds no stale file, and absent already means native). The
+    never-provisioned case (no sandbox row at all) still falls to bootstrap
+    on every path.
     """
     sandbox = await cloud_sandboxes_store.load_personal_cloud_sandbox(db, user_id)
     if sandbox is None or sandbox.destroyed_at is not None or sandbox.status == "destroyed":
         return
     if sandbox.e2b_sandbox_id is None:
-        return
+        if not ensure_sandbox:
+            return
+        state, _ = await build_agent_auth_state(db, user_id)
+        if not state["harnesses"]:
+            return
     await operation.run_cloud_sandbox_operation(
         db,
         sandbox=sandbox,

@@ -340,7 +340,15 @@ async def put_auth_selections(
         enabled_count=sum(1 for row in rows if row.enabled),
     )
     if surface == AGENT_AUTH_SURFACE_CLOUD:
-        await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
+        # Ensure-on-switch (agent-auth.md "A cloud switch ensures the
+        # sandbox"): the scheduled task provisions-or-wakes the user's
+        # existing sandbox through the canonical connect path so the new
+        # document lands now, not at the next unrelated wake. Schedule only —
+        # the write never blocks on sandbox boot (the ack pipeline observes
+        # arrival), and the never-provisioned case still falls to bootstrap.
+        await materialization_service.schedule_materialize_agent_auth(
+            db, user_id=user_id, ensure_sandbox=True
+        )
     return rows
 
 
