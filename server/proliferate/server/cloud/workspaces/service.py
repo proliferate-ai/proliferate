@@ -38,6 +38,9 @@ from proliferate.server.cloud.github_app.repo_authority import require_github_cl
 from proliferate.server.cloud.materialization import paths as materialization_paths
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.materialization.locks import CloudMaterializationLockTimeout
+from proliferate.server.cloud.materialization.materialize.git_identity import (
+    GitIdentityUnresolvedError,
+)
 from proliferate.server.cloud.materialization.materialize.repo_environment import (
     CloudRepoCheckoutError,
 )
@@ -324,6 +327,12 @@ async def create_cloud_workspace_for_user(
             "The cloud sandbox runtime could not be reached. Please retry in a moment.",
             status_code=502,
         ) from exc
+    except GitIdentityUnresolvedError as exc:
+        raise CloudApiError(
+            "git_identity_required",
+            "Set an email address on your Proliferate account, then try again.",
+            status_code=409,
+        ) from exc
     except CloudRepoCheckoutError as exc:
         # The shared cloud checkout for this repo cannot be safely reset for a
         # new workspace — a prior checkout holds user work or is not a clean git
@@ -503,6 +512,12 @@ async def _create_cloud_workspace_at_exact_ref(
             "cloud_sandbox_reconnect_failed",
             "The cloud sandbox runtime could not be reached. Please retry in a moment.",
             status_code=502,
+        ) from exc
+    except GitIdentityUnresolvedError as exc:
+        raise CloudApiError(
+            "git_identity_required",
+            "Set an email address on your Proliferate account, then try again.",
+            status_code=409,
         ) from exc
     except CloudRepoCheckoutError as exc:
         raise CloudApiError(
