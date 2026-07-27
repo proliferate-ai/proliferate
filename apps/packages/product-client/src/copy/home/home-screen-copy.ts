@@ -5,6 +5,11 @@ export const HOME_SCREEN_LABELS = {
   configureDefaultHarnessesDescription: "Pick the coding agents and models you want to use.",
   configureRepositoryTitle: "Configure your repo",
   configureRepositoryDescription: "Finish setting up this repo for cloud workspaces.",
+  // Ack-gated onboarding step (agent-auth.md): shown from first-run adoption's
+  // gateway writes until the runtime acks the delivered auth state (or the
+  // ~20s grace window passes and the step auto-advances).
+  authSetupTitle: "Setting up your agents…",
+  authSetupDescription: "Connecting your agents to managed model access.",
   modelProbeProbingTitle: "Processing your models…",
   modelProbeDoneDescription: "Check out which models you already have access to.",
   modelProbeNoneTitle: "Connect a provider to get started",
