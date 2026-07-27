@@ -24,6 +24,22 @@ const AuthenticatedProductClient = lazy(
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
 // nor any of its fixtures / transitive deps land in production bundles.
+const PlaygroundIndexPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("#product/pages/PlaygroundIndexPage").then((m) => ({
+        default: m.PlaygroundIndexPage,
+      })),
+    )
+  : null
+
+const PlaygroundLibraryPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("#product/pages/PlaygroundLibraryPage").then((m) => ({
+        default: m.PlaygroundLibraryPage,
+      })),
+    )
+  : null
+
 const ChatPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("#product/pages/ChatPlaygroundPage").then((m) => ({
@@ -129,9 +145,29 @@ export function App({ RoutesComponent }: AppProps) {
               />
             </Route>
           </Route>
-          {import.meta.env.DEV && ChatPlaygroundPage && (
+          {import.meta.env.DEV && PlaygroundIndexPage && (
             <Route
               path="/playground"
+              element={
+                <Suspense fallback={null}>
+                  <PlaygroundIndexPage />
+                </Suspense>
+              }
+            />
+          )}
+          {import.meta.env.DEV && PlaygroundLibraryPage && (
+            <Route
+              path="/playground/library"
+              element={
+                <Suspense fallback={null}>
+                  <PlaygroundLibraryPage />
+                </Suspense>
+              }
+            />
+          )}
+          {import.meta.env.DEV && ChatPlaygroundPage && (
+            <Route
+              path="/playground/chat"
               element={
                 <Suspense fallback={null}>
                   <ChatPlaygroundPage />

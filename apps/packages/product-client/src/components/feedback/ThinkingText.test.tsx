@@ -109,26 +109,16 @@ describe("thinking gleam css contract", () => {
 });
 
 describe("StreamingIndicator", () => {
-  it("shows elapsed work after the first full second", () => {
-    const html = renderToStaticMarkup(
-      <StreamingIndicator startedAt={new Date(Date.now() - 2_000).toISOString()} />,
-    );
-
-    expect(html).toContain("Thinking");
-    expect(html).toContain("·");
-    expect(html).toContain("2s");
-    expect(html).not.toContain("data-jank-canary=\"braille\"");
-  });
-
-  it("keeps advancing the elapsed suffix for longer work", () => {
+  it("renders the gleam without an elapsed-seconds suffix", () => {
     const html = renderToStaticMarkup(
       <StreamingIndicator startedAt={new Date(Date.now() - 34_000).toISOString()} />,
     );
 
     expect(html).toContain("Thinking");
-    expect(html).toContain("34s");
-    expect(html).toContain("tabular-nums");
     expect(html).toContain("items-baseline");
+    expect(html).not.toContain("·");
+    expect(html).not.toContain("34s");
+    expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
 
   it("threads a context label instead of the universal Thinking", () => {

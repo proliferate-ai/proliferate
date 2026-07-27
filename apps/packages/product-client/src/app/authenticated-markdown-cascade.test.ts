@@ -147,12 +147,13 @@ describe("authenticated Markdown stylesheet cascade", () => {
       expect(result.proposalHeadings).toEqual([11, 11, 10]);
 
       expect(result.defaultTranscript.prose).toBe(12);
-      expect(result.defaultTranscript.inlineCode).toBe(12);
+      // Inline code sits at the new 0.92em tier, slightly under prose.
+      expect(result.defaultTranscript.inlineCode).toBeCloseTo(12 * 0.92, 2);
       expect(result.defaultTranscript.fencedCode).toBe(12);
       expect(result.highlightedDefault.fencedCode).toBe(12);
 
       expect(result.largeTranscript.prose).toBe(13);
-      expect(result.largeTranscript.inlineCode).toBe(13);
+      expect(result.largeTranscript.inlineCode).toBeCloseTo(13 * 0.92, 2);
       expect(result.largeTranscript.fencedCode).toBe(13);
       expect(result.highlightedLarge.fencedCode).toBe(13);
 

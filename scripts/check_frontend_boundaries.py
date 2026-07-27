@@ -22,7 +22,7 @@ ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
 GENERATED_PREFIXES: set[str] = set()
 
-# Component-library taxonomy (specs/codebase/platforms/product/component-library.md):
+# Component-library taxonomy (specs/codebase/platforms/product/design-system.md):
 # apps/packages/ui/src is base primitives + one-level-up compositions only.
 UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES = {
     "primitives",
@@ -357,7 +357,7 @@ def check_file(path: Path) -> list[Violation]:
 def find_radix_import_violations() -> list[Violation]:
     """Rule: `@radix-ui/*` imports are legal only under the ui component
     library's base tiers (`primitives/`, `patterns/`) per the component-library
-    taxonomy in specs/codebase/platforms/product/component-library.md.
+    taxonomy in specs/codebase/platforms/product/design-system.md.
     """
     violations: list[Violation] = []
     for path in iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS):
@@ -388,7 +388,7 @@ def find_radix_import_violations() -> list[Violation]:
 
 def find_ui_src_top_level_violations() -> list[Violation]:
     """Rule: apps/packages/ui/src may only contain the top-level entries named
-    in the component-library taxonomy (specs/codebase/platforms/product/component-library.md):
+    in the component-library taxonomy (specs/codebase/platforms/product/design-system.md):
     primitives/, patterns/, icons/, lib/, utils/, overlays/.
     """
     violations: list[Violation] = []
@@ -409,7 +409,7 @@ def find_ui_src_top_level_violations() -> list[Violation]:
                 (
                     f"apps/packages/ui/src/{entry.name} is not an allowed top-level "
                     "entry per the component-library taxonomy in "
-                    "specs/codebase/platforms/product/component-library.md "
+                    "specs/codebase/platforms/product/design-system.md "
                     f"(allowed: {', '.join(sorted(UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES))})"
                 ),
             )

@@ -214,7 +214,7 @@ reintroduce scroll/layout bumps.
 ### Spacing Rhythm
 
 Sibling spacing inside a turn comes solely from the shared turn-container
-`gap-4` (16px, matching Codex's conversation-item rhythm), and turn rows are
+`gap-4` (16px conversation-item rhythm), and turn rows are
 separated by `TurnShell`'s `pt-2 pb-2` (`pt-0` for the first row). Pending
 prompt rows use the same shared gap so materialization is layout-stable. Blocks
 must not carry external vertical padding of their own
@@ -250,7 +250,7 @@ Completed activity headers use short, count-free verb phrases such as
 `Edited files, read files, ran a command`; exact counts stay in the expanded
 ledger. One representative phrase summarizes exploration work so mixed
 read/search/list/fetch batches stay concise. The dominant semantic icon follows
-Codex's `edit > search/list > read/fetch > command` hierarchy (so a mixed
+an `edit > search/list > read/fetch > command` hierarchy (so a mixed
 search/read row may say `Read files` while using the search glyph). Semantic
 icons and labels share the same 60%-foreground ink, and the icon box scales
 with transcript text instead of using a fixed pixel size. The disclosure
@@ -275,11 +275,11 @@ inline diff, while the trailing arrow opens that file without toggling. The
 aggregate `Edited N files` header opens Changes and immediately swaps aggregate
 stats for `Review changes` on hover/focus. File headers retain the shared diff
 line-wrap context menu. Aggregate and file-row stats use the semantic dark-theme
-Codex green/red tokens (`#40c977` and `#fa423e`) and roll changed digits over 300ms
-with the Codex enter curve; reduced-motion users receive no digit transition.
+green/red tokens (`#40c977` and `#fa423e`) and roll changed digits over 300ms
+with the standard enter curve; reduced-motion users receive no digit transition.
 Single-file cards put the filename in the header and do not duplicate a file
 row underneath. Expanded multi-file cards collapse through `Collapse files`.
-The shell follows Codex's restrained three-level surface hierarchy: its header
+The shell follows a restrained three-level surface hierarchy: its header
 and show-more row share a low-contrast raised surface, the file rows use the
 main transcript surface at partial opacity, and one standard hairline separates
 the header from the rows. Do not substitute higher-contrast stacked bands.
@@ -320,7 +320,7 @@ jump instead of a visible crawl.
 
 When the transcript is shorter than the viewport, both row-list paths
 top-align the conversation (no `mt-auto` bottom anchor): a fresh conversation
-reads from the top like Codex, and unused viewport height sits below it,
+reads from the top, and unused viewport height sits below it,
 between the last row and the composer. Content grows downward until it fills
 the viewport; only from that point on does the composer-relative frontier
 contract above take over (pinning, re-stick, stable frontier coordinates).
@@ -450,7 +450,7 @@ Additional dependencies:
   even before assistant prose exists. The latest materialized turn and pending
   prompt both reserve it; a completion without copyable prose keeps it reserved.
   The reserved frame remains `h-6`, but the row uses a `-mt-2.5` offset against
-  the ordinary 16px transcript sibling gap, yielding Codex's 6px visual gap
+  the ordinary 16px transcript sibling gap, yielding a 6px visual gap
   between final content and assistant actions without changing handoff height.
 - Completion-only surfaces such as file-diff and artifact cards mount before
   the frontier item. They may grow upward as data arrives, but must never be

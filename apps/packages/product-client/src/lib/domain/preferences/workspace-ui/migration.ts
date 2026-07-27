@@ -92,6 +92,11 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
+  if (typeof state.repositoriesCollapsed !== "boolean") {
+    state.repositoriesCollapsed = WORKSPACE_UI_DEFAULTS.repositoriesCollapsed;
+    didMigrate = true;
+  }
+
   if (typeof state.sidebarWidth !== "number" || Number.isNaN(state.sidebarWidth)) {
     state.sidebarWidth = WORKSPACE_UI_DEFAULTS.sidebarWidth;
     didMigrate = true;

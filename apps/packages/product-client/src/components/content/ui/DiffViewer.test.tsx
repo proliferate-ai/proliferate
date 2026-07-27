@@ -42,8 +42,8 @@ describe("DiffViewer chat variant", () => {
       desktopCss.match(/\[data-diff-surface="chat"\] \.composer-diff-simple-line,\s*\[data-diff-surface="sidebar"\] \.composer-diff-simple-line \{(?<body>[\s\S]*?)\}/)
         ?.groups?.body ?? "";
 
-    expect(sharedSurfaceRule).toContain("--codex-diffs-surface: var(--color-diff-main-surface);");
-    expect(sharedSurfaceRule).toContain("--codex-diffs-context-number: transparent;");
+    expect(sharedSurfaceRule).toContain("--diff-view-surface: var(--color-diff-main-surface);");
+    expect(sharedSurfaceRule).toContain("--diff-view-context-number: transparent;");
     expect(sharedSurfaceRule).toContain("--diffs-bg-context-override: transparent;");
     expect(sharedSurfaceRule).toContain("background-color: var(--color-diff-code-surface);");
   });

@@ -32,11 +32,11 @@ export function SidebarNavRow({
       active={active}
       disabled={disabled}
       onPress={onPress}
-      className={`h-[28px] gap-2 px-2 py-1 text-ui leading-5 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`h-[30px] gap-2 pl-2 pr-1 py-1 text-ui leading-5 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      {/* Codex parity: the icon carries the row ink, not a dimmer tier, and
-          scales with the label (codex runs 16px icons on 14px text — 1.15em).
+      {/* The icon carries the row ink, not a dimmer tier, and scales with
+          the label (~1.15em icon-to-text).
           The well matches the icon exactly — a fixed w-4 well leaves more
           slack around smaller icons, silently widening the icon→label gap on
           smaller-text surfaces (settings) vs the main sidebar. */}
