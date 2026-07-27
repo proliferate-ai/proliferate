@@ -16,6 +16,12 @@ import {
 export const CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS = 750;
 export const CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES = 8;
 
+// A 409 `cloud_sandbox_runtime_not_ready` means the server scheduled a cold
+// access repair that reprovisions the sandbox VM in the background; retries
+// must span that provision (30-60s), far beyond the generic budget above.
+export const CLOUD_SANDBOX_RUNTIME_PROVISIONING_RETRY_DELAY_MS = 2_000;
+export const CLOUD_SANDBOX_RUNTIME_PROVISIONING_MAX_RETRIES = 45;
+
 const BILLING_BLOCK_CODES = new Set([
   "billing_credits_exhausted",
   "billing_start_blocked",
@@ -36,9 +42,17 @@ function isRetryableNetworkError(error: unknown): boolean {
   return error instanceof TypeError;
 }
 
+export function isCloudSandboxRuntimeProvisioningError(error: unknown): boolean {
+  return error instanceof ProliferateClientError
+    && error.code === "cloud_sandbox_runtime_not_ready";
+}
+
 export function isCloudWorkspaceNotReadyError(error: unknown): boolean {
   return error instanceof ProliferateClientError
-    && error.code === "workspace_not_ready";
+    && (
+      error.code === "workspace_not_ready"
+      || isCloudSandboxRuntimeProvisioningError(error)
+    );
 }
 
 export function isRetryableCloudWorkspaceConnectionError(error: unknown): boolean {
@@ -47,6 +61,22 @@ export function isRetryableCloudWorkspaceConnectionError(error: unknown): boolea
   }
 
   return isRetryableNetworkError(error);
+}
+
+export function cloudWorkspaceConnectionRetryBudget(error: unknown): {
+  maxRetries: number;
+  delayMs: number;
+} {
+  if (isCloudSandboxRuntimeProvisioningError(error)) {
+    return {
+      maxRetries: CLOUD_SANDBOX_RUNTIME_PROVISIONING_MAX_RETRIES,
+      delayMs: CLOUD_SANDBOX_RUNTIME_PROVISIONING_RETRY_DELAY_MS,
+    };
+  }
+  return {
+    maxRetries: CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES,
+    delayMs: CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS,
+  };
 }
 
 export function getCloudWorkspaceBillingBlockFromError(
@@ -87,25 +117,20 @@ export async function retryCloudWorkspaceRequest<T>(
   request: () => Promise<T>,
   fallbackMessage: string,
 ): Promise<T> {
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt <= CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES; attempt += 1) {
+  for (let attempt = 0; ; attempt += 1) {
     try {
       return await request();
     } catch (error) {
-      lastError = error;
+      const { maxRetries, delayMs } = cloudWorkspaceConnectionRetryBudget(error);
       if (
-        attempt >= CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES
+        attempt >= maxRetries
         || !isRetryableCloudWorkspaceConnectionError(error)
       ) {
-        throw error;
+        throw error instanceof Error ? error : new Error(fallbackMessage);
       }
-      await wait(CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS);
+      await wait(delayMs);
     }
   }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(fallbackMessage);
 }
 
 export function getCloudWorkspaceWithRetry(

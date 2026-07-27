@@ -14,8 +14,8 @@ from proliferate.server.billing.authorization import (
     assert_cloud_sandbox_resume_allowed_for_owner,
 )
 from proliferate.server.cloud.cloud_sandboxes.service import (
-    ensure_personal_cloud_sandbox_exists,
-    load_cloud_sandbox_runtime_access,
+    ensure_cloud_sandbox_ready,
+    load_cloud_sandbox_runtime_access_or_repair,
     require_cloud_provisioning_configured,
 )
 
@@ -152,8 +152,16 @@ async def _resolve_cloud_sandbox_gateway_access(
     db: AsyncSession,
     user: _UserWithId,
 ) -> CloudSandboxGatewayAccess:
-    sandbox = await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
-    upstream_base_url, upstream_token, _data_key = await load_cloud_sandbox_runtime_access(sandbox)
+    # Reached only on a cache miss (the caller holds the per-user lock), which is
+    # exactly where a cold row must trigger its own repair: a cached hit by
+    # definition already resolved. ``ensure_cloud_sandbox_ready`` above has
+    # already run the billing gate, so the repair cannot bypass it.
+    sandbox = await ensure_cloud_sandbox_ready(db, user)
+    (
+        upstream_base_url,
+        upstream_token,
+        _data_key,
+    ) = await load_cloud_sandbox_runtime_access_or_repair(sandbox, reason="gateway_access")
     return CloudSandboxGatewayAccess(
         upstream_base_url=upstream_base_url,
         upstream_token=upstream_token,
