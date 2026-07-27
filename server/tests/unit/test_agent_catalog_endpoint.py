@@ -85,11 +85,15 @@ def test_catalogs_service_exposes_no_heartbeat_version_advertiser() -> None:
 def test_supported_provider_config_kinds_matches_track_d_scope() -> None:
     # R9's full scope: claude/codex/opencode x {aws_bedrock, azure_openai};
     # cursor/grok excluded (structural — no gateway recipe / no BYOK-cloud path).
-    # codex's azure_openai entry is declared but `pending` (agent-auth.md's
-    # Current-gaps: codex only reaches Azure via config.toml model_providers,
-    # which needs A5's injection mechanism), so it is excluded from "usable
-    # today" — codex reports only aws_bedrock until that lands.
-    assert supported_provider_config_kinds("claude") == ("aws_bedrock", "azure_openai")
+    # Two azure_openai cells are declared but `pending` and therefore excluded
+    # from "usable today" (agent-auth.md's Current-gaps):
+    # - codex x azure_openai: only reachable via config.toml model_providers
+    #   injection, live-unverified;
+    # - claude x azure_openai (Foundry, R5/R11): the renderer's Foundry
+    #   translation is an unverified judgment call awaiting its Gate 4 live
+    #   run, so the write gate stays closed for it — this assertion is the
+    #   pin for that exclusion.
+    assert supported_provider_config_kinds("claude") == ("aws_bedrock",)
     assert supported_provider_config_kinds("codex") == ("aws_bedrock",)
     assert supported_provider_config_kinds("opencode") == ("aws_bedrock", "azure_openai")
     assert supported_provider_config_kinds("cursor") == ()

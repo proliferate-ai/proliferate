@@ -155,6 +155,29 @@ async def _put_selections(
     )
 
 
+async def _create_provider_config(
+    client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    title: str = "Personal Bedrock",
+    kind: str = "aws_bedrock",
+    value: dict[str, str] | None = None,
+) -> dict[str, object]:
+    if value is None:
+        value = (
+            {"region": "us-east-1", "bearerToken": "bedrock-token-abcd"}
+            if kind == "aws_bedrock"
+            else {"endpoint": "https://my-res.openai.azure.com", "apiKey": "azure-key-abcd"}
+        )
+    response = await client.post(
+        "/v1/cloud/agent-auth/keys/provider-config",
+        headers=headers,
+        json={"title": title, "kind": kind, "value": value},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 class TestAgentApiKeys:
     @pytest.mark.asyncio
     async def test_create_list_revoke_happy_path(
@@ -313,6 +336,48 @@ class TestAgentApiKeys:
         )
         assert response.status_code == 422
         assert response.json()["detail"]["code"] == "invalid_agent_provider_config_fields"
+
+    @pytest.mark.asyncio
+    async def test_create_azure_provider_config_takes_endpoint_and_key_only(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """R5 (founder-ruled): the azure_openai vault entry collects endpoint +
+        apiKey only. `deployment` is DROPPED — the renderer deliberately never
+        translated it, so submitting it is an unknown field, not a tolerated
+        legacy one."""
+        _, headers = await _authed_user(client)
+
+        ok = await client.post(
+            "/v1/cloud/agent-auth/keys/provider-config",
+            headers=headers,
+            json={
+                "title": "Personal Azure",
+                "kind": "azure_openai",
+                "value": {
+                    "endpoint": "https://my-res.openai.azure.com",
+                    "apiKey": "azure-key-abcd",
+                },
+            },
+        )
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["kind"] == "azure_openai"
+
+        with_deployment = await client.post(
+            "/v1/cloud/agent-auth/keys/provider-config",
+            headers=headers,
+            json={
+                "title": "Azure with deployment",
+                "kind": "azure_openai",
+                "value": {
+                    "endpoint": "https://my-res.openai.azure.com",
+                    "deployment": "gpt-4o",
+                    "apiKey": "azure-key-abcd",
+                },
+            },
+        )
+        assert with_deployment.status_code == 422
+        assert with_deployment.json()["detail"]["code"] == "invalid_agent_provider_config_fields"
 
     @pytest.mark.asyncio
     async def test_create_rejects_empty_title_and_value(self, client: AsyncClient) -> None:
@@ -603,6 +668,181 @@ class TestAgentAuthSelections:
         assert marker_row["enabled"] is False
 
     @pytest.mark.asyncio
+    async def test_typed_provider_config_selection_put_succeeds(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """The typed-config write gate, open end to end (proof A5's write
+        half): a declared (harness, kind) combo — claude x aws_bedrock —
+        persists as an api_key row referencing the typed entry with NO
+        envVarName (the typed kind carries its own env mapping)."""
+        _, headers = await _authed_user(client)
+        entry = await _create_provider_config(client, headers)
+
+        response = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": entry["id"],
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 200, response.text
+        typed_row = next(r for r in response.json() if r["sourceKind"] == "api_key")
+        assert typed_row["apiKeyId"] == entry["id"]
+        assert typed_row["envVarName"] is None
+        assert typed_row["keyTitle"] == "Personal Bedrock"
+
+    @pytest.mark.asyncio
+    async def test_typed_selection_with_env_var_name_is_400(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        # Proof A6: a typed-entry selection naming an env var is an illegal
+        # shape (the kind carries its own env mapping).
+        _, headers = await _authed_user(client)
+        entry = await _create_provider_config(client, headers)
+
+        response = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": entry["id"],
+                    "envVarName": "AWS_REGION",
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
+
+    @pytest.mark.asyncio
+    async def test_bare_key_selection_without_env_var_name_is_400(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        # Proof A6's twin: a bare-key selection must name an env var.
+        _, headers = await _authed_user(client)
+        created = await _create_key(client, headers)
+
+        response = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
+
+    @pytest.mark.asyncio
+    async def test_pending_azure_claude_combo_is_refused(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """The claude x azure_openai (Foundry) cell stays CLOSED: its registry
+        declaration is `pending` its Gate 4 live verification (R5/R11), so the
+        registry-driven write gate refuses it even though a renderer arm
+        exists. This is the pin for that exclusion."""
+        _, headers = await _authed_user(client)
+        entry = await _create_provider_config(
+            client,
+            headers,
+            title="Personal Azure",
+            kind="azure_openai",
+        )
+
+        response = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": entry["id"],
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_agent_auth_selection"
+        assert "azure_openai" in detail["message"]
+
+    @pytest.mark.asyncio
+    async def test_pending_azure_codex_combo_is_refused(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        # codex x azure_openai is registry-`pending` (config.toml injection
+        # live-unverified) — same refusal as claude's Foundry cell.
+        _, headers = await _authed_user(client)
+        entry = await _create_provider_config(
+            client,
+            headers,
+            title="Personal Azure",
+            kind="azure_openai",
+        )
+
+        response = await _put_selections(
+            client,
+            headers,
+            harness="codex",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": entry["id"],
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
+
+    @pytest.mark.asyncio
+    async def test_undeclared_harness_typed_combo_is_refused(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        # grok declares no providerConfig kinds at all — any typed reference
+        # is refused by the same registry-driven gate.
+        _, headers = await _authed_user(client)
+        entry = await _create_provider_config(client, headers)
+
+        response = await _put_selections(
+            client,
+            headers,
+            harness="grok",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": entry["id"],
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
+
+    @pytest.mark.asyncio
     async def test_unknown_harness_is_400(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
         # A gateway source for a non-gateway-capable harness is rejected by the
@@ -870,6 +1110,53 @@ class TestAgentAuthState:
         cloud = await _get_state(client, headers, "cloud")
         assert cloud.status_code == 200
         assert cloud.json()["harnesses"] == []
+
+    @pytest.mark.asyncio
+    async def test_typed_selection_renders_provider_config_source_end_to_end(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """Proof A5's write→render corridor through the REAL write path: a
+        typed vault entry + a selection with no env var, written through PUT
+        /selections (the now-open gate), renders on GET /state as the
+        `provider_config` wire source carrying the harness's own env set."""
+        _, headers = await _authed_user(client)
+        entry = await _create_provider_config(client, headers)
+
+        put = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": entry["id"],
+                    "enabled": True,
+                }
+            ],
+        )
+        assert put.status_code == 200, put.text
+
+        response = await _get_state(client, headers, "local")
+        assert response.status_code == 200, response.text
+        doc = response.json()
+        assert doc["harnesses"] == [
+            {
+                "harness_kind": "claude",
+                "sources": [
+                    {
+                        "kind": "provider_config",
+                        "config_kind": "aws_bedrock",
+                        "env": {
+                            "CLAUDE_CODE_USE_BEDROCK": "1",
+                            "AWS_BEARER_TOKEN_BEDROCK": "bedrock-token-abcd",
+                            "AWS_REGION": "us-east-1",
+                        },
+                    }
+                ],
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_requires_authentication(self, client: AsyncClient) -> None:

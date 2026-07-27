@@ -30,6 +30,10 @@ if TYPE_CHECKING:
 
 AgentAuthSurface = Literal["local", "cloud"]
 AgentAuthSourceKind = Literal["gateway", "api_key"]
+# state.json WIRE source kinds: the DB source kinds plus `provider_config`,
+# the render-time wire shape of an api_key selection referencing a typed
+# vault entry (constants.agent_gateway.AGENT_AUTH_SOURCE_PROVIDER_CONFIG).
+AgentAuthStateSourceKind = Literal["gateway", "api_key", "provider_config"]
 # The vault's closed kind vocabulary (agent-auth.md's "The vault" table);
 # mirrors constants.agent_gateway.AGENT_API_KEY_KINDS.
 AgentApiKeyKind = Literal["api_key", "aws_bedrock", "azure_openai"]
@@ -121,13 +125,21 @@ class AgentAuthSelectionsPutRequest(AgentGatewayBaseModel):
 
 
 class AgentAuthStateSource(BaseModel):
-    """A single credential source (contract §3). Key material for the caller."""
+    """A single credential source (contract §3). Key material for the caller.
 
-    kind: AgentAuthSourceKind
+    ``kind`` is the WIRE kind, which is wider than the DB source_kind: a
+    selection referencing a typed vault entry renders as
+    ``provider_config`` (``config_kind`` + the harness's resolved ``env``
+    map), decided at render time by the referenced vault row's kind.
+    """
+
+    kind: AgentAuthStateSourceKind
     base_url: str | None = None
     key: str | None = None
     env_var_name: str | None = None
     value: str | None = None
+    config_kind: AgentProviderConfigKind | None = None
+    env: dict[str, str] | None = None
 
 
 class AgentAuthStateHarness(BaseModel):

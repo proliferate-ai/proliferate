@@ -3362,13 +3362,18 @@ export interface components {
         /**
          * AgentAuthStateSource
          * @description A single credential source (contract §3). Key material for the caller.
+         *
+         *     ``kind`` is the WIRE kind, which is wider than the DB source_kind: a
+         *     selection referencing a typed vault entry renders as
+         *     ``provider_config`` (``config_kind`` + the harness's resolved ``env``
+         *     map), decided at render time by the referenced vault row's kind.
          */
         AgentAuthStateSource: {
             /**
              * Kind
              * @enum {string}
              */
-            kind: "gateway" | "api_key";
+            kind: "gateway" | "api_key" | "provider_config";
             /** Base Url */
             base_url?: string | null;
             /** Key */
@@ -3377,6 +3382,12 @@ export interface components {
             env_var_name?: string | null;
             /** Value */
             value?: string | null;
+            /** Config Kind */
+            config_kind?: ("aws_bedrock" | "azure_openai") | null;
+            /** Env */
+            env?: {
+                [key: string]: string;
+            } | null;
         };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
