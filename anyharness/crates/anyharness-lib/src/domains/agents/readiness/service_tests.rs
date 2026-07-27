@@ -13,67 +13,10 @@ fn make_temp_dir(prefix: &str) -> PathBuf {
     path
 }
 
-struct PathEnvGuard {
-    original: Option<std::ffi::OsString>,
-}
-
-impl PathEnvGuard {
-    fn set(path: &Path) -> Self {
-        let original = std::env::var_os("PATH");
-        let paths = vec![path.to_path_buf()];
-        let joined = std::env::join_paths(paths).expect("join PATH");
-        std::env::set_var("PATH", joined);
-        Self { original }
-    }
-}
-
-impl Drop for PathEnvGuard {
-    fn drop(&mut self) {
-        if let Some(original) = &self.original {
-            std::env::set_var("PATH", original);
-        } else {
-            std::env::remove_var("PATH");
-        }
-    }
-}
-
-struct EnvVarGuard {
-    name: &'static str,
-    original: Option<std::ffi::OsString>,
-}
-
-impl EnvVarGuard {
-    fn set(name: &'static str, value: &Path) -> Self {
-        let original = std::env::var_os(name);
-        std::env::set_var(name, value);
-        Self { name, original }
-    }
-
-    fn set_str(name: &'static str, value: &str) -> Self {
-        let original = std::env::var_os(name);
-        std::env::set_var(name, value);
-        Self { name, original }
-    }
-
-    /// Remove a var for the guard's lifetime (restored on drop). Used to
-    /// neutralize an ambient provider key so credential detection is
-    /// deterministic regardless of the host's environment.
-    fn remove(name: &'static str) -> Self {
-        let original = std::env::var_os(name);
-        std::env::remove_var(name);
-        Self { name, original }
-    }
-}
-
-impl Drop for EnvVarGuard {
-    fn drop(&mut self) {
-        if let Some(original) = &self.original {
-            std::env::set_var(self.name, original);
-        } else {
-            std::env::remove_var(self.name);
-        }
-    }
-}
+// The process-env guards + the lock that serializes their users.
+#[path = "test_env_guards.rs"]
+mod test_env_guards;
+use test_env_guards::{lock_env, EnvVarGuard, PathEnvGuard};
 
 #[test]
 fn parses_node_versions() {
@@ -255,6 +198,7 @@ fn registry_backed_binary_hint_launcher_requires_backing_binary() {
 
 #[test]
 fn registry_backed_binary_hint_does_not_resolve_superset_wrapper_as_agent_process() {
+    let _env = lock_env();
     let registry = built_in_registry();
     let cursor = registry
         .into_iter()
@@ -296,6 +240,9 @@ fn claude_compatibility_check_applies_to_direct_managed_npm_installs() {
 
 #[test]
 fn override_program_validation_requires_existing_executable() {
+    // Reads PATH (bare `sh` resolves through it), so it must not run while a
+    // PathEnvGuard has narrowed PATH to a temp dir.
+    let _env = lock_env();
     assert!(!is_override_program_valid(Path::new(
         "/definitely/missing/agent-binary"
     )));
@@ -304,6 +251,7 @@ fn override_program_validation_requires_existing_executable() {
 
 #[test]
 fn override_launch_prepends_catalog_default_args() {
+    let _env = lock_env();
     let registry = built_in_registry();
     let codex = registry
         .into_iter()
@@ -472,6 +420,7 @@ fn route_upgrade_clears_only_credential_gaps_never_install() {
 fn resolve_launch_agent_matches_native_readiness_when_no_route_enrolled() {
     // With no agent-auth state file, launch readiness must be byte-for-byte
     // native readiness — the route path never changes a routeless agent.
+    let _env = lock_env();
     let registry = built_in_registry();
     let claude = registry
         .into_iter()
@@ -491,6 +440,62 @@ fn resolve_launch_agent_matches_native_readiness_when_no_route_enrolled() {
 }
 
 #[test]
+fn opencode_provider_managed_readiness_follows_its_selection_set_not_already_ready() {
+    // A9 fix regression: before, ProviderManaged's Ready was unconditional,
+    // so `apply_launch_route_upgrade`'s `already_ready` guard never let an
+    // enrolled route (a selection) change opencode's readiness. Pins the fix:
+    // nothing selected -> a real gap; enrolling a route -> it clears.
+    let _env = lock_env();
+    let registry = built_in_registry();
+    let opencode = registry
+        .into_iter()
+        .find(|descriptor| descriptor.kind == AgentKind::OpenCode)
+        .expect("missing OpenCode descriptor");
+    let runtime_home = make_temp_dir("anyharness-opencode-provider-managed");
+    let bin = runtime_home.join("opencode-acp");
+    std::fs::write(&bin, "#!/bin/sh\nexit 0\n").expect("write override binary");
+    make_executable(&bin).expect("make override binary executable");
+    let _program_guard = EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", &bin);
+    // Neutralize the host's real credentials/local auth for determinism.
+    let empty_home = make_temp_dir("anyharness-opencode-empty-home");
+    let _home_guard = EnvVarGuard::set("HOME", &empty_home);
+    let _openai_guard = EnvVarGuard::remove("OPENAI_API_KEY");
+    let _anthropic_guard = EnvVarGuard::remove("ANTHROPIC_API_KEY");
+    let _anthropic_token_guard = EnvVarGuard::remove("ANTHROPIC_AUTH_TOKEN");
+    let _gemini_guard = EnvVarGuard::remove("GEMINI_API_KEY");
+    let _google_guard = EnvVarGuard::remove("GOOGLE_API_KEY");
+
+    // Precondition: nothing selected -> a real gap, not unconditional Ready.
+    let native = resolve_agent_with_env(&opencode, &runtime_home, &BTreeMap::new());
+    assert_eq!(
+        native.status,
+        ResolvedAgentStatus::CredentialsRequired,
+        "precondition: opencode with nothing selected must read a credential gap, got {:?}",
+        native.status
+    );
+
+    // Enroll a route (the runtime-side effect of a selection) -> clears.
+    let state_dir = runtime_home.join("agent-auth");
+    std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
+    std::fs::write(
+        state_dir.join("state.json"),
+        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"opencode","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+    )
+    .expect("write state");
+
+    let launch = resolve_launch_agent(&opencode, &runtime_home, &BTreeMap::new());
+    assert_eq!(
+        launch.status,
+        ResolvedAgentStatus::Ready,
+        "an enrolled route must clear opencode's now-reachable credential gap"
+    );
+    assert_eq!(launch.credential_state, CredentialState::ReadyViaLocalAuth);
+
+    let _ = std::fs::remove_dir_all(runtime_home);
+    let _ = std::fs::remove_dir_all(empty_home);
+}
+
+#[test]
 fn resolve_launch_agent_clears_a_gateway_routed_credential_gap() {
     // Issue #1106: a gateway route makes an agent whose ONLY gap is
     // credentials launch-ready with no credential in the workspace env (the
@@ -498,6 +503,7 @@ fn resolve_launch_agent_clears_a_gateway_routed_credential_gap() {
     // installed ACP process + absent XAI creds resolves to a CREDENTIAL gap
     // (LoginRequired), never InstallRequired — this exercises the credential
     // arm, not the install path.
+    let _env = lock_env();
     let registry = built_in_registry();
     let grok = registry
         .into_iter()
@@ -558,6 +564,7 @@ fn resolve_launch_agent_never_masks_a_missing_binary() {
     // enrolled gateway route must NOT flip that to Ready — the launcher still
     // has to exec a binary (Claude's ACP adapter shells out to the native
     // CLI via CLAUDE_CODE_EXECUTABLE).
+    let _env = lock_env();
     let registry = built_in_registry();
     let claude = registry
         .into_iter()
@@ -581,3 +588,6 @@ fn resolve_launch_agent_never_masks_a_missing_binary() {
 
     let _ = std::fs::remove_dir_all(runtime_home);
 }
+
+#[path = "route_aware_read_tests.rs"]
+mod route_aware_read;

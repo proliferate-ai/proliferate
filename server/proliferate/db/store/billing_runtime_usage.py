@@ -85,13 +85,12 @@ async def resolve_billing_subject_id_for_user(
 
     A user acting under a current org membership bills the org's billing subject
     (org Stripe customer + org grant pool); an org-less user bills their personal
-    subject. This mirrors the LLM track exactly: an org member's gateway
-    enrollment is minted against the org billing subject
-    (``ensure_org_enrollment``), an org-less user's against their personal one
-    (``ensure_user_enrollment``), and both keyed off the same current-membership
-    test. Deriving both the paying subject and ``organization_id`` from the one
-    membership lookup keeps compute attribution and enforcement scope from ever
-    disagreeing.
+    subject. The LLM track has no personal branch at all anymore — every gateway
+    enrollment is minted against an org billing subject
+    (``ensure_org_enrollment``, model-gateway.md §Account model) — so this
+    membership test only governs compute attribution. Deriving both the paying
+    subject and ``organization_id`` from the one membership lookup keeps compute
+    attribution and enforcement scope from ever disagreeing.
     """
     organization_id = await resolve_organization_id_for_user(db, user_id)
     if organization_id is not None:

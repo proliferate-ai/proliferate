@@ -175,7 +175,7 @@ async fn idempotent_create_reuses_only_the_original_workspace_and_agent() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn gated_create_preserves_context_without_a_session_row_or_live_process() {
+async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -232,24 +232,22 @@ async fn gated_create_preserves_context_without_a_session_row_or_live_process() 
             OriginContext::api_local_runtime(),
         )
         .await
-        .expect_err("xai-only model must be gated on a gateway route");
+        .expect_err("xai-only model must be refused on a gateway route");
 
-    let CreateAndStartSessionError::ModelGated(context) = error else {
-        panic!("expected model-gated context, got {error:?}");
+    let CreateAndStartSessionError::ModelUnsupported {
+        agent_kind,
+        model_id,
+        active_universe,
+    } = error
+    else {
+        panic!("expected the single unsupported-model refusal, got {error:?}");
     };
-    assert_eq!(context.workspace_id, "workspace-gated");
+    assert_eq!(agent_kind, "grok");
+    assert_eq!(model_id, "grok-4.3");
     assert_eq!(
-        context.attempted_session_id.as_deref(),
-        Some(attempted_session_id)
-    );
-    assert_eq!(context.agent_kind, "grok");
-    assert_eq!(context.requested_model_id, "grok-4.3");
-    assert_eq!(context.canonical_model_id, "grok-4.3");
-    assert_eq!(context.active_contexts, vec!["gateway".to_string()]);
-    assert_eq!(context.required_contexts, vec!["xai-api".to_string()]);
-    assert_eq!(
-        context.catalog_version,
-        state.catalog_sync_service.catalog_version()
+        active_universe,
+        crate::domains::agents::catalog::service::ActiveUniverse::CatalogSeed,
+        "no observation exists in this test, so the seed refused"
     );
     assert!(state
         .session_service

@@ -111,8 +111,8 @@ export function AttachedPaneShell({
       className={twMerge(
         "flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-sidebar-background",
         side === "right"
-          ? "border-l border-sidebar-border/70"
-          : "border-r border-sidebar-border/70",
+          ? "border-l border-border/70"
+          : "border-r border-border/70",
         attachedClassName,
       )}
       style={{ width: attachedWidth }}
@@ -157,8 +157,8 @@ function AttachedPaneResizeGutter({
     >
       <div
         className={twMerge(
-          "absolute inset-y-0 w-px bg-transparent transition-colors group-hover:bg-sidebar-border group-focus:bg-sidebar-border",
-          active && "bg-sidebar-border",
+          "absolute inset-y-0 w-px bg-transparent transition-colors group-hover:bg-border group-focus:bg-border",
+          active && "bg-border",
           side === "right" ? "right-0" : "left-0",
         )}
       />

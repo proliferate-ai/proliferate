@@ -1,7 +1,7 @@
 import type { AgentSummary, ReconcileAgentsResponse } from "@anyharness/sdk";
 import {
-  anyHarnessAgentGatewayModelsKey,
   anyHarnessAgentLaunchOptionsKey,
+  anyHarnessAgentModelSnapshotStatusKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
 } from "@anyharness/sdk-react";
@@ -11,8 +11,8 @@ import {
   agentAuthSelectionsKey,
   agentAuthStateKey,
   agentGatewayCapabilitiesKey,
-  agentGatewayCatalogKey,
   agentGatewayEnrollmentKey,
+  agentModelsKey,
   controlPlaneHealthKey,
 } from "@proliferate/cloud-sdk-react/lib/query-keys";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
@@ -130,6 +130,7 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
         {
           id: "key-1",
           title: "OpenRouter production",
+          kind: "api_key",
           redactedHint: "sk-or-...9f2",
           status: "active",
           createdAt: "2026-07-01T00:00:00Z",
@@ -137,6 +138,7 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
         {
           id: "key-2",
           title: "Anthropic personal",
+          kind: "api_key",
           redactedHint: "sk-ant-...3e1",
           status: "active",
           createdAt: "2026-06-15T00:00:00Z",
@@ -221,19 +223,34 @@ function seedHarnessQueries(
       }],
     },
   );
+  // The composed observation (model-catalog.md "Runtime routes"): one status
+  // document per harness, carrying the model/mode lists off the same document
+  // read that serves probedAt/lastAttempt and the provenance fields.
   client.setQueryData(
-    anyHarnessAgentGatewayModelsKey(
+    anyHarnessAgentModelSnapshotStatusKey(
       runtimeUrl,
       scenario.harnessKind,
       PLAYGROUND_CACHE_SCOPE,
     ),
     {
-      source: "probe",
+      agent: scenario.harnessKind,
+      schemaVersion: 2,
+      probeEngine: "owner",
+      state: "idle",
       probedAt: "2026-07-18T18:00:00Z",
+      snapshotAgeSeconds: 120,
+      modelCount: 2,
+      modeCount: 1,
       models: [
-        { id: "model-default", displayName: "Recommended", provider: "provider" },
-        { id: "model-fast", displayName: "Fast", provider: "provider" },
+        { id: "model-default", name: "Recommended", provider: "provider" },
+        { id: "model-fast", name: "Fast", provider: "provider" },
       ],
+      modes: [{ id: "build", name: "Build" }],
+      attestation: { name: scenario.harnessKind, version: "playground" },
+      installIdentity: { role: "agent_process", version: "playground", source: "pinned_archive" },
+      lastAttempt: { at: "2026-07-18T18:00:00Z", outcome: "ok", detail: null },
+      lastError: null,
+      warnings: [],
     },
   );
 }
@@ -303,26 +320,24 @@ function seedCloudQueries(
     user_id: "agents-playground",
     harnesses: [],
   });
-  for (const surface of ["local", "cloud"] as const) {
-    for (const route of ["native", "api_key", "gateway"] as const) {
-      client.setQueryData(
-        agentGatewayCatalogKey(scenario.harnessKind, surface, route),
-        {
-          harnessKind: scenario.harnessKind,
-          surface,
-          route,
-          models: [
-            { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
-            { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
-          ],
-          snapshotId: "playground-snapshot",
-          probedAt: "2026-07-18T18:00:00Z",
-          source: "probe",
-          overrideApplied: false,
-        },
-      );
-    }
-  }
+  // The composed re-key (model-catalog.md §Cloud routes): the layered read is
+  // keyed by harness alone — one composed document; the former per-context
+  // seeding (one entry per catalog auth-context id) is deleted.
+  client.setQueryData(
+    agentModelsKey(scenario.harnessKind),
+    {
+      harnessKind: scenario.harnessKind,
+      models: [
+        { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
+        { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
+      ],
+      modes: [{ id: "build" }],
+      origin: "snapshot",
+      snapshotId: "playground-snapshot",
+      probedAt: "2026-07-18T18:00:00Z",
+      overrideApplied: false,
+    },
+  );
 
   if (scenario.id === "api-keys-loading") {
     void client.prefetchQuery({

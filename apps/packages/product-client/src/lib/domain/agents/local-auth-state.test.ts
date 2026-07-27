@@ -114,6 +114,21 @@ describe("stampIssuingServerOrigin", () => {
     });
   });
 
+  it("strips the server's fingerprint rider before the runtime push", () => {
+    // `fingerprint` exists so the desktop can echo it through the delivery
+    // ack — it is NOT part of the state.json contract and must never be
+    // persisted by the runtime.
+    const stamped = stampIssuingServerOrigin(
+      { ...state(), fingerprint: "sha-abc" },
+      "https://proliferate.corp.example",
+    );
+    expect("fingerprint" in stamped).toBe(false);
+    expect(stamped).toEqual({
+      ...state(),
+      issuing_server_origin: "https://proliferate.corp.example",
+    });
+  });
+
   it("overwrites a previous stamp on re-push after a server switch", () => {
     const first = stampIssuingServerOrigin(state(), "https://old-server.example");
     const second = stampIssuingServerOrigin(first, "https://new-server.example");

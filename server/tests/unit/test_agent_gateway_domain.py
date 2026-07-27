@@ -20,7 +20,7 @@ def _gateway(*, enabled: bool = True) -> DesiredAuthSource:
 
 def _api_key(
     *,
-    env_var_name: str = "ANTHROPIC_API_KEY",
+    env_var_name: str | None = "ANTHROPIC_API_KEY",
     enabled: bool = True,
 ) -> DesiredAuthSource:
     return DesiredAuthSource(
@@ -32,11 +32,27 @@ def _api_key(
 
 
 class TestAuthSelectionRules:
-    def test_cursor_rejects_any_source(self) -> None:
-        with pytest.raises(SelectionRuleError, match="native login only"):
+    def test_cursor_rejects_gateway_but_allows_api_key(self) -> None:
+        # Cursor has no gateway recipe (agent-auth.md: "typed refusal, no
+        # gateway route exists for cursor") — a gateway source is illegal.
+        with pytest.raises(SelectionRuleError, match="no gateway recipe"):
             validate_auth_selection_set(harness_kind="cursor", sources=[_gateway()])
-        # Empty is fine — cursor is always the native empty state.
+        # Empty is fine — cursor's implicit native empty state.
         validate_auth_selection_set(harness_kind="cursor", sources=[])
+        # Its single api_key slot (CURSOR_API_KEY) IS a legal selection, same
+        # cardinality rule as any other single-source harness.
+        validate_auth_selection_set(
+            harness_kind="cursor",
+            sources=[_api_key(env_var_name="CURSOR_API_KEY")],
+        )
+        with pytest.raises(SelectionRuleError, match="at most one enabled"):
+            validate_auth_selection_set(
+                harness_kind="cursor",
+                sources=[
+                    _api_key(env_var_name="CURSOR_API_KEY"),
+                    _api_key(env_var_name="CURSOR_API_KEY_2"),
+                ],
+            )
 
     def test_single_source_harnesses_allow_at_most_one_enabled(self) -> None:
         for harness in ("claude", "codex", "grok"):
@@ -81,6 +97,16 @@ class TestAuthSelectionRules:
                     harness_kind="claude",
                     sources=[_api_key(env_var_name=bad)],
                 )
+
+    def test_env_var_name_is_optional_for_typed_vault_references(self) -> None:
+        # A source referencing a TYPED vault entry names no env var by law
+        # (agent-auth.md: the typed kind carries its own env mapping); the
+        # rules layer cannot see vault kinds, so a missing name must pass
+        # here — the store's kind-aware gate enforces bare-vs-typed shape.
+        validate_auth_selection_set(
+            harness_kind="claude",
+            sources=[_api_key(env_var_name=None)],
+        )
 
     def test_env_var_name_max_length_boundary(self) -> None:
         # 1 leading letter + 127 tail chars = 128, the inclusive maximum.

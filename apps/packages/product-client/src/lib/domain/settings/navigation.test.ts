@@ -106,6 +106,15 @@ describe("settings navigation", () => {
     });
   });
 
+  // C1 nav-wiring regression guard: agent-cursor must resolve as a real
+  // registered section, not fall through to general/agent-claude.
+  it("resolves the cursor harness section to itself, not a fallback", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "agent-cursor",
+      repositories: [],
+    }).activeSection).toBe("agent-cursor");
+  });
+
   it("resolves the organization limits admin section", () => {
     // organization-limits is a live admin section (budget/limits panes), so it
     // resolves to itself rather than falling back to general.

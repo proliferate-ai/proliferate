@@ -31,7 +31,7 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
       iconOnly
       disabled={!control.settable || !nextValue}
       active={!!control.isEnabled}
-      className={control.isEnabled ? "bg-[var(--color-composer-control-hover)]" : ""}
+      className={control.isEnabled ? "bg-hover" : ""}
       icon={
         <Zap
           className={`icon-control transition-[color,fill,opacity] ${

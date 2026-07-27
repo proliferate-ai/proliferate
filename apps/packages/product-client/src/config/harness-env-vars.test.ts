@@ -42,7 +42,13 @@ describe("getHarnessEnvVarSuggestions", () => {
     ]);
   });
 
+  it("suggests cursor's own account-key slot (CURSOR_API_KEY)", () => {
+    expect(getHarnessEnvVarSuggestions("cursor")).toEqual([
+      { envVarName: "CURSOR_API_KEY", providerHint: "cursor" },
+    ]);
+  });
+
   it("returns nothing for an unknown harness", () => {
-    expect(getHarnessEnvVarSuggestions("cursor")).toEqual([]);
+    expect(getHarnessEnvVarSuggestions("mystery-harness")).toEqual([]);
   });
 });

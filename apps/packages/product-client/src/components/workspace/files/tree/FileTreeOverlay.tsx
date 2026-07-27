@@ -82,7 +82,7 @@ export function FileTreeOverlay({
         ref={panelRef}
         role="dialog"
         aria-label="Browse files"
-        className="pointer-events-auto absolute bottom-2 right-2 top-2 flex min-w-0 flex-col overflow-hidden rounded-lg border border-sidebar-border bg-sidebar-background shadow-popover"
+        className="pointer-events-auto absolute bottom-2 right-2 top-2 flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-sidebar-background shadow-popover"
         style={{ width: `min(${width}px, calc(100% - 1rem))` }}
       >
         <div
@@ -99,7 +99,7 @@ export function FileTreeOverlay({
         >
           <span
             className={twMerge(
-              "absolute bottom-0 left-0 top-0 w-px bg-sidebar-border transition-colors",
+              "absolute bottom-0 left-0 top-0 w-px bg-border transition-colors",
               resizing && "w-0.5 bg-sidebar-ring",
             )}
           />

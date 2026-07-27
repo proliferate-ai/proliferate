@@ -581,12 +581,6 @@
   description: Timeout for LiteLLM management API requests
   tags: [local-dev, self-hosted, production]
 
-- name: AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD
-  secret: false
-  default: "5"
-  description: Default LiteLLM budget (USD) applied to a personal team and virtual key at enrollment; "0" means uncapped
-  tags: [local-dev, self-hosted, production]
-
 - name: AGENT_GATEWAY_DEFAULT_ORG_BUDGET_USD
   secret: false
   default: "0"

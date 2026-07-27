@@ -33,7 +33,7 @@ export function PlaygroundSidebarGitDiff() {
 
   return (
     <div className="flex h-full flex-col bg-sidebar-background text-sidebar-foreground">
-      <div className="shrink-0 border-b border-sidebar-border/70 px-3 py-2">
+      <div className="shrink-0 border-b border-border/70 px-3 py-2">
         <p className="text-ui-sm text-sidebar-muted-foreground">Git diff sidebar</p>
       </div>
       <div

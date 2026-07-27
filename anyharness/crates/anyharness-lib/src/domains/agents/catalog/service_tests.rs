@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::loader::parse_agent_catalog_json;
 use super::schema::draft_catalog_json;
-use super::service::{ActiveCatalog, ResolvedSelection, SelectionUnsupported};
+use super::service::{ActiveCatalog, ActiveUniverse, ResolvedSelection, SelectionUnsupported};
 use super::sync::CatalogSyncService;
 use crate::domains::agents::auth::context::ActiveAuthContexts;
 use crate::domains::agents::catalog::service::AgentCatalogService;
@@ -214,12 +214,12 @@ fn bedrock_account_gates_bare_ids_and_shows_only_region_prefixed_models() {
     let catalog = draft_catalog();
 
     for bare in ["default", "haiku", "opus", "sonnet", "claude-opus-4-8"] {
-        let gated = catalog
+        let refused = catalog
             .validate_launch("claude", &contexts(&["bedrock"]), Some(bare), None)
             .unwrap_err();
         assert!(
-            matches!(gated, SelectionUnsupported::ModelGated { .. }),
-            "bare id {bare:?} must be gated under bedrock, got {gated:?}"
+            matches!(refused, SelectionUnsupported::UnsupportedModel { .. }),
+            "bare id {bare:?} must be refused under bedrock, got {refused:?}"
         );
     }
 
@@ -268,8 +268,8 @@ fn oauth_account_keeps_bare_ids_unchanged() {
         assert_eq!(ok.model_id.as_deref(), Some(bare));
     }
 
-    // A us.anthropic.* id is gated for a first-party OAuth login.
-    let gated = catalog
+    // A us.anthropic.* id is refused for a first-party OAuth login.
+    let refused = catalog
         .validate_launch(
             "claude",
             &contexts(&["anthropic-oauth"]),
@@ -277,7 +277,10 @@ fn oauth_account_keeps_bare_ids_unchanged() {
             None,
         )
         .unwrap_err();
-    assert!(matches!(gated, SelectionUnsupported::ModelGated { .. }));
+    assert!(matches!(
+        refused,
+        SelectionUnsupported::UnsupportedModel { .. }
+    ));
 }
 
 #[test]
@@ -335,27 +338,35 @@ fn validate_launch_availability_beats_visibility() {
 }
 
 #[test]
-fn validate_launch_rejects_gated_and_unknown_models() {
+fn validate_launch_rejects_unavailable_and_unknown_models_alike() {
     let catalog = draft_catalog();
 
-    // opus[1m] is api-only: gated under oauth, with the unlock condition.
-    let gated = catalog
+    // opus[1m] is api-only: unservable under oauth. Same single refusal as an
+    // unknown id — there is no gated middle state and no unlock enumeration.
+    let refused = catalog
         .validate_launch(
             "claude",
             &contexts(&["anthropic-oauth"]),
             Some("opus[1m]"),
             None,
         )
-        .expect_err("api-only model must be gated under oauth");
-    assert!(matches!(gated, SelectionUnsupported::ModelGated { .. }));
+        .expect_err("api-only model must be refused under oauth");
+    assert_eq!(
+        refused,
+        SelectionUnsupported::UnsupportedModel {
+            model_id: "opus[1m]".into(),
+            active_universe: ActiveUniverse::CatalogSeed,
+        }
+    );
 
     let unknown = catalog
         .validate_launch("claude", &contexts(&["anthropic-api"]), Some("nope"), None)
         .expect_err("unknown model must be rejected");
     assert_eq!(
         unknown,
-        SelectionUnsupported::UnknownModel {
-            model_id: "nope".into()
+        SelectionUnsupported::UnsupportedModel {
+            model_id: "nope".into(),
+            active_universe: ActiveUniverse::CatalogSeed,
         }
     );
 
@@ -465,7 +476,7 @@ fn validate_launch_composes_variants_by_declared_syntax() {
         .expect_err("unsupported control value must not compose");
     assert!(matches!(
         unsupported,
-        SelectionUnsupported::UnknownModel { .. }
+        SelectionUnsupported::UnsupportedModel { .. }
     ));
 
     // slash-effort composition validates effort against the base model.
@@ -507,7 +518,7 @@ fn validate_launch_composes_variants_by_declared_syntax() {
         .expect_err("no variantSyntax, no composition");
     assert!(matches!(
         no_syntax,
-        SelectionUnsupported::UnknownModel { .. }
+        SelectionUnsupported::UnsupportedModel { .. }
     ));
 }
 
