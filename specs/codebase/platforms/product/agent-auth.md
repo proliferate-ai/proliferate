@@ -564,7 +564,7 @@ screen** — and to make changing that answer a two-click operation rather
 than a configuration exercise.
 
 The implementation anchor is the Conductor reference capture at
-[reference/conductor/](../../../../reference/conductor/): its setting-row
+`reference/conductor/` (a local, untracked capture set): its setting-row
 rhythm (label left, state and affordance right, hairline between rows) is
 what this pane is built out of. Two shape rules follow from it and hold
 everywhere below:
