@@ -44,6 +44,15 @@ export const motion = {
     streamRevealFadeMs: 320,
     streamRevealHandoffDelayMs: 160,
     updateReadySweepMs: 700,
+    /**
+     * One bar's grow/shrink when the reasoning-effort control steps. Not the
+     * `hover` role it used to borrow: at 120ms the climb was over before the
+     * eye caught it, and the ask is explicitly to watch a bar travel from the
+     * bottom to its full height. A single-level step -- the common case -- is
+     * therefore exactly this long; multi-level steps add the per-bar stagger on
+     * top.
+     */
+    levelBarStepMs: 1000,
   },
   /** UI choreography delays; these are not animation durations. */
   delay: {

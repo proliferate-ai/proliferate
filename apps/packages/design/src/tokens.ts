@@ -32,6 +32,11 @@ export const themeTokens = {
     light: motion.cssMs(motion.activity.streamRevealFadeMs),
     provenance: "[SHIPPED:motion/authority]",
   },
+  "--activity-level-bar-step": {
+    dark: motion.cssMs(motion.activity.levelBarStepMs),
+    light: motion.cssMs(motion.activity.levelBarStepMs),
+    provenance: "[SHIPPED:motion/authority]",
+  },
   "--activity-update-ready-sweep": {
     dark: motion.cssMs(motion.activity.updateReadySweepMs),
     light: motion.cssMs(motion.activity.updateReadySweepMs),

@@ -985,12 +985,17 @@ body {
   transform-origin: bottom;
 }
 
+/* Paced by the activity scale, not the hover role: this is the motion you are
+   meant to watch a bar make, so it needs a duration you can follow rather than
+   the ~120ms of pointer feedback. --ease-standard keeps the bar travelling for
+   most of that span; a strong out-ease would cover the distance in the first
+   fraction and then idle, which defeats the longer duration. */
 .composer-level-bar-fill-in {
-  animation: composer-level-bar-fill-in var(--duration-hover) var(--ease-out-quint) both;
+  animation: composer-level-bar-fill-in var(--activity-level-bar-step) var(--ease-standard) both;
 }
 
 .composer-level-bar-drain-out {
-  animation: composer-level-bar-drain-out var(--duration-hover) var(--ease-standard) both;
+  animation: composer-level-bar-drain-out var(--activity-level-bar-step) var(--ease-standard) both;
 }
 
 @keyframes composer-level-bar-fill-in {
