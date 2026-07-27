@@ -360,9 +360,61 @@ The picker joins them per model:
 
 Identity and presence always come from the observation side; prose and
 wiring always come from the catalog side. Defaults come from neither: the
-shipped catalog's curated default, with a user-set default on top. Provider
-badges read the model's own `provider` field — verbatim from the harness —
-never an inference from the model name or the harness kind.
+shipped catalog's curated default, with a user-set default on top.
+
+### Attribution
+
+Every model row in a listing or popover carries an origin icon. The rule is
+**never derived from the model's name or from the harness kind**; it is
+derived from the auth selection for single-source harnesses and from the
+observation for the multi-source one:
+
+| Harness kind | Attribution source | Rendered as |
+| --- | --- | --- |
+| single-source (claude, codex, grok, cursor) | the enabled selection ([agent-auth.md](agent-auth.md)'s `SINGLE_SOURCE_HARNESSES`) | bedrock-typed entry → AWS logo on every row; azure-typed → Microsoft logo; `gateway` → Proliferate logo; native (no rows) → no icon |
+| opencode | the observation's `provider` field, verbatim | that provider's logo, per row |
+
+Rationale: a single-source harness's whole list is served by one source, so
+the selection *is* the attribution and per-row inference would only add ways
+to be wrong. Opencode's list is genuinely mixed, and the observation already
+carries `provider` verbatim from the harness, which makes it the only honest
+per-row answer.
+
+The icon mapping is an explicit table with a **neutral fallback** for any
+provider that has none. And the hard rule: **attribution never gates
+anything** — an unknown provider, a missing logo, or an unmapped icon
+renders neutrally and changes nothing about whether a model is selectable,
+launchable, or visible.
+
+### Status and refresh in settings
+
+The per-harness settings pane's model section is specified in
+[agent-auth.md](agent-auth.md)'s pane anatomy (§7); two properties belong to
+this platform:
+
+- **The probe status indicator is the same component as the auth status
+  row** — probe status on the left, refresh on the right. Rationale: "when
+  was this last checked, and can I check again" is one question, whether the
+  subject is a credential or a model list, so it gets one control.
+- **The list is auto-collapsed by default.** It is reference material, not
+  the reason a user opened the pane.
+
+### Probing during a degraded apply
+
+An apply can land while gateway enrollment sync is incomplete, in which case
+the renderer has dropped the gateway source (possibly leaving no sources at
+all for that harness — [agent-auth.md](agent-auth.md)'s degraded-apply
+section). The ruling: **the probe still runs**, its results are served
+normally, and the surface shows a co-located *gateway setup in progress*
+pending badge; the enrollment-sync completion trigger then re-applies and
+the resulting ack fires a fresh probe.
+
+Rationale: this platform's law is that the observation is what a session
+would actually show, and during that window a session really would run
+without the gateway. Recording it honestly and labelling the window beats
+inventing a no-probe state for something that lasts seconds — and there is
+no third option in which the picker shows models the harness did not
+advertise.
 
 ### Launch validation
 
@@ -582,8 +634,23 @@ implements the superseded per-context design; these gaps are the re-cut.
       the [enrichment join](#enrichment-join); the pre-existing asymmetry is
       in the safe direction.
 - [ ] The composer's provider badge still calls
-      `getProviderDisplayName(harnessKind)` instead of reading the model's
-      own plumbed-through `provider` field.
+      `getProviderDisplayName(harnessKind)` instead of applying
+      [Attribution](#attribution)'s rule (selection-derived for
+      single-source harnesses, the model's own plumbed-through `provider`
+      field for opencode). The explicit icon table and its neutral fallback
+      do not exist yet either.
+- [ ] No settings surface renders the §7 model section as specified: the
+      probe status indicator does not reuse the auth status-row component,
+      and the list is not auto-collapsed.
+- [ ] The degraded-apply pending badge does not exist. A probe that runs
+      while gateway enrollment sync is incomplete serves its results with no
+      indication that the observed world was missing the gateway source.
+- [ ] Cursor's exclusion from unattended probing is correct but its stated
+      reason is stale in code: `targets.rs`'s
+      `AUTO_PROBE_EXCLUDED_HARNESSES` comment justifies the carve-out by
+      claiming `cursor-agent` ignores `CURSOR_API_KEY`, which a live test on
+      2026-07-26 refuted (fixed in `4ccbfc41a`). The keychain-prompt reason
+      is the real and sufficient one; the comment should say only that.
 - [ ] The retained `inactive` cloud rows have no retention bound; the
       document owes a retention rule (keep N per scope, or an age bound) and
       the sweep that enforces it.

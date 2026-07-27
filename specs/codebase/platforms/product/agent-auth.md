@@ -136,8 +136,24 @@ encrypted payload.
 | `kind` | The ciphertext decrypts to | Applied as |
 | --- | --- | --- |
 | `api_key` (default) | one opaque secret string | the single env var named by the referencing selection |
-| `aws_bedrock` | a JSON document: region + credentials (static access key pair or a role to assume) | the harness's own Bedrock env set (for claude: `CLAUDE_CODE_USE_BEDROCK=1`, `AWS_REGION`, credential vars) |
-| `azure_openai` | a JSON document: endpoint, deployment, key | the harness's own Azure env set |
+| `aws_bedrock` | a JSON document: `region` + `bearerToken` | the harness's own Bedrock env set (for claude: `CLAUDE_CODE_USE_BEDROCK=1`, `AWS_BEARER_TOKEN_BEDROCK`, `AWS_REGION`) |
+| `azure_openai` | a JSON document: `endpoint` + `apiKey` | the harness's own Azure env set (claude's Foundry vars; opencode's `AZURE_API_KEY` + `AZURE_RESOURCE_NAME`) |
+
+The typed kinds carry exactly the fields some harness's env set actually
+consumes, and no more. Two consequences worth stating, because both were
+once a third field:
+
+- **Bedrock is `region` + `bearerToken`**, not a static access-key pair and
+  not a role to assume; that is the shape every arm of
+  `_translate_provider_config_env` reads
+  ([agent_auth.py:395-411](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
+- **Azure has no `deployment` field.** The renderer deliberately does not
+  translate one: for opencode a deployment selection folds into a
+  `--model azure/<id>` launch argument, which is outside `state.json`'s
+  env-plus-files wire contract
+  ([agent_auth.py:434-446](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
+  A field the apply side cannot honor must not be collected, so the Azure
+  entry affordance asks for endpoint and key only.
 
 All kinds share the same lifecycle: Fernet-encrypted at rest
 (`cloud-secret-v1` key id), created and revoked through
@@ -539,6 +555,243 @@ every other harness uses, and read surfaces (settings' active-methods list,
 composer launch options) derive opencode's method state from the same
 selections.
 
+## The settings surface
+
+Everything above is the machinery. This section is the surface a user
+actually touches: **one pane per harness, reached from settings, whose job
+is to make "what credentials will my next session run on" legible in one
+screen** — and to make changing that answer a two-click operation rather
+than a configuration exercise.
+
+The implementation anchor is the Conductor reference capture at
+[reference/conductor/](../../../../reference/conductor/): its setting-row
+rhythm (label left, state and affordance right, hairline between rows) is
+what this pane is built out of. Two shape rules follow from it and hold
+everywhere below:
+
+- **Flat sections, no cards.** The pane is a vertical stack of titled
+  sections separated by rules. Nothing in it is a card, a tile, or a
+  bordered box — a card implies a self-contained object, and these sections
+  are facets of one harness.
+- **Existing components only.** Rows, inputs, modals, and status pills come
+  from the shared UI package; the pane introduces no new atom. Where this
+  document says "styled exactly like Conductor's", it means the existing
+  setting-row component, not a visual reimplementation.
+
+### Pane anatomy
+
+Seven sections, in this order. The order is the ruling: it walks from
+identity to auth to options to models, so the pane reads top to bottom as
+"which harness → how it authenticates → whether that worked → what else it
+can do → what it can run".
+
+**§1 — Title and docs.** Harness display name, one-line description, and a
+link to the harness's own documentation (`docsUrl`, already declared per
+harness in the registry). Rationale: the first thing a user needs from a
+vendor-tool pane is confirmation of which vendor tool it is, and an exit to
+that vendor's own docs.
+
+**§2 — Auth method.** The choice between `gateway`, `api_key`, and
+`native`, rendered Conductor-style but **not inside a card**. Radio
+semantics: picking one deselects the others, because for the four
+single-source harnesses the selection model is literally a radio
+([selection_rules.py](../../../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)'s
+`SINGLE_SOURCE_HARNESSES`). Rationale: the stored model is one enabled
+source, so the control that writes it must be one-of-N and not a set of
+independent switches.
+
+For **opencode this section is not a gate.** Opencode is
+`MULTI_SOURCE_HARNESSES`
+([selection_rules.py](../../../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)):
+gateway, any number of API keys, and its own native login all compose
+additively, so there is no "method" to pick before anything else becomes
+usable. Nothing below §2 is disabled or hidden pending a choice there.
+Rationale: a blocker UI would be a lie about a harness whose whole model is
+coexistence.
+
+**§3 — Authenticated status.** *Every* method — gateway, API key, native —
+shows an authenticated-status row with a refresh affordance, styled exactly
+like Conductor's status row. Rationale: "am I authenticated" is one
+question with one answer shape; a per-method status treatment makes the
+user learn three.
+
+The native status row is additionally **clickable**, and opens the choice
+between refreshing the status and running a login terminal session. The
+login-terminal flow already exists and is surface-agnostic
+([HarnessAuthCliDetails.tsx:110-136](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthCliDetails.tsx),
+over [login_terminal.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs));
+this ruling only moves its entry point onto the status row it explains.
+Rationale: the row that reports "not logged in" is the row a user clicks to
+fix it.
+
+Saved state and live state **coexist** in this section rather than
+overwriting each other: "API key set" is a fact about the vault and the
+selection; "authenticated" is a fact about the last observation. A saved
+key whose provider rejects it must read as *saved but failing*, never as
+either alone.
+
+**§4 — API keys.** **One spot per key.** Instead of a generic "add
+credential" affordance followed by a type picker, the section lists named
+entry affordances — "Set OpenAI API key", "Configure Bedrock", "Configure
+Azure" — each of which opens a **pre-typed, paste-first input**: the kind is
+already decided by which affordance was clicked, so the modal asks only for
+the value(s). Rationale: asking a user to classify a secret they just
+pasted is asking them to do the registry's job; the affordance they clicked
+already said which kind it is.
+
+The section **always displays which kind is set**, not just that something
+is. Field sets per kind, straight from the vault contract above:
+
+| Affordance | Vault `kind` | Fields collected |
+| --- | --- | --- |
+| "Set &lt;provider&gt; API key" | `api_key` | the secret only (env var name comes from the registry slot) |
+| "Configure Bedrock" | `aws_bedrock` | `region`, `bearerToken` |
+| "Configure Azure" | `azure_openai` | `endpoint`, `apiKey` |
+
+The Azure modal has **no `deployment` field** — see [The
+vault](#the-vault)'s Azure note: the renderer deliberately does not
+translate one, so collecting it would store a value nothing applies.
+
+Keys are **disabled, not deleted, while in use.** Revocation of a key wired
+into an enabled selection is refused server-side with the referencing
+harnesses named
+([service.py:232-240](../../../../server/proliferate/server/cloud/agent_gateway/service.py)'s
+`agent_api_key_referenced`), so the UI renders that state up front as an
+"in use by N harnesses" chip and offers disable rather than a delete button
+that 409s. Rationale: surface the refusal as a state, not as an error the
+user discovers by hitting it.
+
+**§5 — OpenCode "Add provider".** Opencode's pane gets one additional
+affordance: a modal that is a **near-literal copy of Conductor's** provider
+picker.
+
+- **The full list is searchable.** All ~149 vendored providers
+  ([provider-registry.generated.json](../../../../apps/packages/product-client/src/config/provider-registry.generated.json),
+  vendored from `https://models.dev/api.json` by
+  [scripts/vendor-provider-registry.mjs](../../../../scripts/vendor-provider-registry.mjs)).
+  Rationale: opencode can talk to any of them, so the picker must not
+  curate the user's provider choice down to a shortlist.
+- **Rows without valid env vars are filtered out**, as the vendoring script
+  and today's modal already do — there is nothing to prefill for a provider
+  that declares no env var.
+- **A featured subset is expanded; the rest collapses.** The popular
+  providers (openai, anthropic, gemini, and peers) plus every provider the
+  user has already configured show by default; the remainder sits behind
+  "Show more providers" / "Show fewer providers". Rationale: 149 rows is a
+  search box's job, not a scroll's, and already-configured providers are
+  the ones a returning user came for.
+- **Provider logos** render per row, from the models.dev logo set
+  (`https://models.dev/logos/<id>.svg`), vendored alongside the registry.
+  See [open verification items](#open-verification-items) — the logo set's
+  license is unresolved and gates the vendoring, not the design.
+
+Selecting a provider and pasting a key does exactly two writes: a vault
+`api_key` entry, and one opencode selection row whose `env_var_name` is the
+provider's first registry-declared env var and whose `provider_hint` is the
+provider id. The hint stays display-only, per [Not
+auth](#not-auth-harness-settings) — it is how the row later renders with
+that provider's name and logo, and nothing at launch reads it.
+
+The **expanded-row interaction is an assumption, not an observation**: this
+document specifies an inline paste field appearing in the selected row. The
+Conductor capture did not include that state, so it is marked as an
+assumption to be resolved against the reference before implementation.
+
+**§6 — Harness-specific options.** After auth, the harness's declared
+settings toggles (claude's "Use Claude Code with Chrome" being the current
+one) — the `agent_auth_harness_settings` content described in [Not
+auth](#not-auth-harness-settings). Rationale: these are options *on top of*
+a working harness, so they belong below the thing that makes it work, and
+labeling them as a separate section keeps "not auth" visible in the layout.
+
+**§7 — Model list.** The probed model list
+([model-catalog.md](model-catalog.md)), auto-collapsed by default, with a
+probe status indicator on the left built from the **same status-row
+component as §3's auth status** and a refresh affordance on the right.
+Rationale: "when was this last checked, and can I check again" is the same
+question for credentials and for models, so it gets the same control; and
+the list itself is reference material, not the reason a user opened the
+pane, so it starts closed.
+
+For opencode specifically, **the pane's job is auth-status clarity plus the
+provider listing** — ideally distinguishing opencode's own Zen service from
+a subscription plan in the wording (see the Zen note below) — and *not*
+displaying gateway models as its primary content. Rationale: an opencode
+user's question is "which of my providers are live", and a flat gateway
+model list answers a different question at the expense of that one.
+
+Wording: opencode's own hosted service is **Zen**, and the pane says Zen
+where it means Zen (the registry's `opencode-zen` slot, discovery kind
+`opencode-auth-json/opencode`). It is not "OpenCode auth" and not a
+subscription plan.
+
+### Model attribution
+
+Model rows in listings and popovers carry an origin icon. The rule is
+**selection-derived, not name-derived**, and it differs by cardinality:
+
+| Harness kind | Attribution source | Rendered as |
+| --- | --- | --- |
+| single-source (claude, codex, grok, cursor) | the enabled selection itself | bedrock-typed entry → AWS logo on every row; azure-typed → Microsoft logo; `gateway` → Proliferate logo; native (no rows) → no icon |
+| opencode | the observation's verbatim `provider` field | that provider's logo, per row |
+
+Rationale: for a single-source harness every model in the list is served by
+the one selected source, so the selection *is* the attribution and no
+per-row inference is needed or correct. Opencode's list is genuinely mixed,
+and its observation already carries `provider` verbatim
+([model-catalog.md](model-catalog.md)'s field contract) — so the honest
+attribution is the one the harness itself reported.
+
+The icon table is explicit, with a neutral fallback for any provider
+without a mapped logo. And the hard rule: **attribution never gates
+anything.** An unknown provider, a missing logo, or an unmapped icon
+renders neutrally and changes nothing about whether the model is
+selectable, launchable, or visible.
+
+### Probing during a degraded apply
+
+An apply can land while gateway enrollment sync is still incomplete: the
+renderer drops the unsatisfiable gateway source
+([agent_auth.py:261-271](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)),
+possibly leaving `sources: []` for that harness, which the launch path
+treats fail-closed. The ruling for the probe in that window:
+
+- **The probe still runs.** It observes whatever world actually exists and
+  records it honestly.
+- **Its results are shown, with a co-located pending badge** reading
+  *gateway setup in progress* next to the model list and the §3 status row.
+- **The existing freshness trigger repairs it.** Enrollment reaching
+  `synced` re-materializes and re-pulls (see [Applied means
+  acknowledged](#applied-means-acknowledged)), and the resulting apply ack
+  fires a fresh probe.
+
+Rationale: never lie about what was observed, and do not invent a special
+no-probe state for a window that lasts seconds. A pending badge next to
+real data beats an empty pane next to no explanation.
+
+### Open verification items
+
+Cells this document specifies but does not yet claim as verified. Each is a
+card the UI marks *pending* until its run passes — a pending declaration is
+never offered as a working option.
+
+- **claude × `azure_openai` (Foundry) is offerable in the registry but its
+  render arm is self-admittedly unverified**
+  ([agent_auth.py:418-433](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)
+  carries the unverified-judgment-call comment: the resource-name
+  derivation and the API-key-vs-auth-token choice are both analogies to
+  opencode's proven arm, not tested facts). **Ruling: verify before
+  offering.** The live run is pending quota approval, so the cell stays an
+  open verification item and the Azure card for claude renders pending.
+- **The models.dev logo set's license is unchecked.** §5's per-row logos
+  depend on vendoring `models.dev/logos/<id>.svg`; the license review is an
+  open item that gates the vendoring step, not the picker's design.
+- **§5's expanded-row inline paste field is an assumption**, not a captured
+  Conductor state.
+- **Desktop pull invalidation** is a dependency, not a new mechanism: §3's
+  status and §7's list are only as fresh as the auth-state query's
+  invalidation, which the [desktop delivery](#desktop-delivery) loop owns.
+
 ## API surface
 
 `/v1/cloud/agent-auth/` owns the user-facing auth relationship
@@ -786,14 +1039,63 @@ Deltas between this document and the integration stack
       `agent_gateway` package) is still pending — S1 was URL-string-only by
       design, so the account/auth/policy code still lives in the single
       `agent_gateway` package regardless of which prefix its routes answer.
-- [ ] **Cursor's api_key route reports a false Ready.** The api_key source
-      is persisted and rendered for cursor, and readiness reports `Ready`
-      for it — the check is kind-agnostic
-      ([readiness/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs))
-      and the catalog's `cursor-login` auth context's `anyOf` signal
-      includes the `CURSOR_API_KEY` env var. But cursor-agent's ACP
-      process ignores `CURSOR_API_KEY` and requires macOS Keychain auth
-      ([catalog_probe.rs](../../../../anyharness/crates/anyharness/src/commands/catalog_probe.rs)),
-      so a user who selects "API key" sees Ready, and the session fails at
-      runtime. Resolution needs either an upstream cursor-agent change or
-      dropping the api_key card for cursor (founder ruling).
+- [x] ~~**Cursor's api_key route reports a false Ready.**~~ **Struck as
+      stale.** This gap asserted that "cursor-agent's ACP process ignores
+      `CURSOR_API_KEY` and requires macOS Keychain auth", making cursor's
+      `Ready` a lie. That is **refuted**: a live test on 2026-07-26 drove
+      `initialize` → `session/new` → prompt → `end_turn` with a valid
+      `CURSOR_API_KEY`, an isolated `HOME`, and
+      `AGENT_CLI_CREDENTIAL_STORE=file`. The false comment and its dead
+      `cursor-api` bail arm were deleted and the arm now injects a supplied
+      key in commit `4ccbfc41a`
+      ([catalog_probe.rs](../../../../anyharness/crates/anyharness/src/commands/catalog_probe.rs)).
+      Cursor's `api_key` route is real, its `Ready` is honest, and no
+      founder ruling about dropping the card is owed. What remains correct
+      and unchanged: cursor is **manual-refresh-only** for probing, because
+      its native credential lives in the macOS keychain and an unattended
+      spawn can raise an OS keychain prompt with no user-visible cause
+      ([model-catalog.md](model-catalog.md)'s probe engine; enforced in
+      `targets.rs`'s `AUTO_PROBE_EXCLUDED_HARNESSES`).
+- [ ] **The same stale claim is restated in two other places.** The docs
+      copy in [agent-distribution.md](agent-distribution.md)'s cursor
+      carve-out is corrected in this pass. The code comment in
+      `anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/targets.rs`
+      (the `AUTO_PROBE_EXCLUDED_HARNESSES` doc comment) still says
+      cursor-agent "ignores `CURSOR_API_KEY`" as its *reason* for the
+      exclusion; the exclusion is right and stays, but its justification
+      should be rewritten to the keychain-prompt reason alone. Code
+      follow-up, not part of this docs pass.
+- [ ] **Opencode's native detector throws away the provider key.**
+      `detect_opencode_local_auth`
+      ([auth/credentials.rs:288-341](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs))
+      iterates `~/.local/share/opencode/auth.json` as
+      `for (_provider, value)` — it discards the provider name and returns
+      one whole-file `Present`/`Expired`/`Absent` verdict, so the pane
+      cannot say *which* provider a user is natively logged into. The fix
+      is to preserve the key and match it against each slot's declared
+      `discoveryKinds` (`opencode-auth-json/anthropic`,
+      `.../openai`, `.../google`, `.../gemini`, `.../opencode`), producing
+      a per-slot verdict. **This introduces no new wire concept**: per-slot
+      results already flow to clients through the existing `auth_slots`
+      field on the readiness projection
+      ([readiness/service.rs:118-147](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs)),
+      so this is a detector change plus the pane reading a field that is
+      already there. It is the precondition for §3's per-provider status
+      rows and for the Zen-vs-provider distinction.
+- [ ] **The typed-vault path is unreachable behind two gates, not one.**
+      The server gate is documented in the typed-selections gap above
+      (`_assert_keys_usable`'s `kind == 'api_key'` filter,
+      [selections.py:63-92](../../../../server/proliferate/db/store/agent_gateway/selections.py),
+      plus the `ck_agent_auth_selection_api_key_shape` CHECK constraint
+      that a migration must loosen). The **client** gate is separate and
+      equally blocking: `getSupportedProviderConfigKinds()` is hardcoded to
+      return `[]` for every harness
+      ([provider-config-fields.ts:121-125](../../../../apps/packages/product-client/src/lib/domain/settings/provider-config-fields.ts)),
+      so §4's "Configure Bedrock"/"Configure Azure" affordances render for
+      nobody. The stub's own comment is now stale — it defers to a registry
+      `providerConfig` declaration that has since landed
+      ([registry.json](../../../../catalogs/agents/registry.json) declares
+      `aws_bedrock` and `azure_openai` for claude, codex, and opencode,
+      with codex×azure marked `pending`), so the replacement is a read of
+      the harness's registry entry minus pending kinds. Both gates must
+      open together: either alone leaves the path dead.
