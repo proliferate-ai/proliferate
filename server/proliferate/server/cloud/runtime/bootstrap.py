@@ -145,36 +145,6 @@ def build_runtime_env(
     return env
 
 
-def build_runtime_launch_script(
-    provider: SandboxProvider,
-    runtime_context: SandboxRuntimeContext,
-    runtime_env: Mapping[str, str],
-) -> str:
-    merged_env = {**runtime_context.base_env, **runtime_env}
-    export_lines = "\n".join(
-        f"export {key}={shlex.quote(value)}" for key, value in sorted(merged_env.items())
-    )
-    serve_args = []
-    serve_args.append("--require-bearer-auth")
-    if provider.runtime_endpoint_handles_cors:
-        serve_args.append("--disable-cors")
-    serve_args.append("--host 0.0.0.0")
-    serve_args.append(f"--port {provider.runtime_port}")
-    return "\n".join(
-        [
-            "#!/bin/sh",
-            "set -eu",
-            f"cd {shlex.quote(runtime_context.runtime_workdir)}",
-            export_lines,
-            (
-                f"exec {shlex.quote(runtime_context.runtime_binary_path)} serve "
-                f"{' '.join(serve_args)}"
-            ),
-            "",
-        ]
-    )
-
-
 def local_anyharness_base_url(provider: SandboxProvider) -> str:
     return f"http://127.0.0.1:{provider.runtime_port}"
 
@@ -210,6 +180,33 @@ def supervisor_bridge_marker_dir(runtime_context: SandboxRuntimeContext) -> str:
 
 
 def supervisor_log_path(runtime_context: SandboxRuntimeContext) -> str:
+    """Where a freshly launched Supervisor's stdout/stderr redirect lands.
+
+    Standardized (2026-07-26, S5-B) onto the same directory as
+    ``supervisor_config_path`` -- ``.proliferate/supervisor/`` -- matching
+    where the Rust D5 bridge itself writes this log
+    (``detached_supervisor_launch_script`` in
+    anyharness/crates/proliferate-worker/src/supervisor_bridge/bridge/mod.rs,
+    which joins ``proliferate-supervisor.log`` onto the config path's parent
+    dir). Before this, fresh Python-launched provisions wrote to the bare
+    home-dir path (``{home_dir}/proliferate-supervisor.log``) while a bridged
+    sandbox's Supervisor (spawned by the Rust bridge, not by this launch
+    command) always wrote here -- so a debug report pulled from a bridged
+    sandbox using the old path came back empty. Existing sandboxes already
+    running with a Supervisor launched before this change keep logging to the
+    old path; ``collect_runtime_debug_report`` in ``sandbox_exec.py`` reads
+    both locations for that reason.
+    """
+    return f"{runtime_context.home_dir}/.proliferate/supervisor/proliferate-supervisor.log"
+
+
+def legacy_supervisor_log_path(runtime_context: SandboxRuntimeContext) -> str:
+    """The pre-2026-07-26 fresh-launch supervisor log location.
+
+    Still read (never written) by ``collect_runtime_debug_report`` so debug
+    reports for sandboxes whose Supervisor was launched before the
+    standardization above still find their log.
+    """
     return f"{runtime_context.home_dir}/proliferate-supervisor.log"
 
 
@@ -218,19 +215,31 @@ def anyharness_runtime_home(runtime_context: SandboxRuntimeContext) -> str:
     return f"{runtime_context.home_dir}/.proliferate/anyharness"
 
 
-def worker_log_path(runtime_context: SandboxRuntimeContext) -> str:
-    return f"{runtime_context.home_dir}/proliferate-worker.log"
-
-
 def build_worker_config(
     *,
     cloud_base_url: str,
     enrollment_token: str,
     runtime_context: SandboxRuntimeContext,
     runtime_bearer_token: str | None = None,
-    supervisor_owned: bool = False,
+    supervisor_owned: bool = True,
     supervisor_config_toml: str | None = None,
 ) -> str:
+    """Build the Worker's config.toml for a supervisor-owned cloud-sandbox target.
+
+    Every production caller passes (or defaults to) ``supervisor_owned=True``:
+    Cloud only ever spawns a Worker as a Supervisor child now. The legacy
+    branch that emitted ``self_update_enabled``/``anyharness_update_enabled``
+    (an independently-launched Worker converging its own and AnyHarness's
+    binaries in place, with no Supervisor) was deleted once the legacy launch
+    path that was its only caller (``launch_worker_sidecar``) was deleted;
+    ``supervisor_owned`` stays a parameter (rather than being inlined away)
+    only so a caller cannot accidentally omit the fence fields.
+    """
+    if not supervisor_owned:
+        raise ValueError(
+            "build_worker_config no longer supports a non-supervisor-owned "
+            "Worker; the legacy independent-launch config shape was deleted."
+        )
     worker_dir = f"{runtime_context.home_dir}/.proliferate/worker"
     values: dict[str, str | int | bool] = {
         "cloud_base_url": cloud_base_url,
@@ -239,53 +248,28 @@ def build_worker_config(
         "integration_gateway_home": anyharness_runtime_home(runtime_context),
         "heartbeat_interval_seconds": 30,
     }
-    if supervisor_owned:
-        # Make Managed Runtime Updates Supervisor-Owned, decision 7 (the
-        # fence): a supervisor-owned target's Worker never downloads,
-        # replaces, kills, or rolls back AnyHarness OR itself in place — the
-        # Supervisor verifies/stages/activates/health-gates/rolls back both.
-        # So neither self-update gate is emitted true here; instead the
-        # Worker gets the mailbox dir it writes durable update requests into
-        # (decision 2) and the D5 bridge coordinates (decision 6), which a
-        # supervisor-spawned Worker's bridge check treats as a no-op because
-        # a Supervisor is already alive and owns it.
-        values["self_update_enabled"] = False
-        values["anyharness_update_enabled"] = False
-        values["supervisor_update_request_dir"] = supervisor_update_request_dir(runtime_context)
-        values["supervisor_binary_path"] = supervisor_binary_path(runtime_context)
-        values["supervisor_config_path"] = supervisor_config_path(runtime_context)
-        values["supervisor_bridge_marker_dir"] = supervisor_bridge_marker_dir(runtime_context)
-        # Carry the Supervisor config TOML so the D5 bridge on an
-        # already-provisioned box (which has no Supervisor config on disk yet)
-        # can materialize one before spawning the Supervisor (R9-007). A
-        # Supervisor-first provision has the config on disk already; the value is
-        # just carried and only used if that Worker ever bridges.
-        if supervisor_config_toml is not None:
-            values["supervisor_config_toml"] = supervisor_config_toml
-    else:
-        # Local import to avoid a module-load cycle (sandbox_exec imports
-        # nothing from bootstrap, but keeping the launcher-path helper's home
-        # here is cleaner than a top-level cross-import for a single call).
-        from proliferate.server.cloud.runtime.sandbox_exec import runtime_launcher_path
-
-        # The sandbox sidecar has no launcher that updates it (plain nohup),
-        # so it converges its own binary onto the heartbeat's desiredVersions.
-        # Desktop workers must never set this: the app bundle owns updates.
-        values["self_update_enabled"] = True
-        # The sandbox worker also owns the in-place swap of the AnyHarness
-        # runtime binary onto the heartbeat's desiredVersions.anyharness. This
-        # gate is independent of self_update_enabled so the two tracks are
-        # separately controllable; desktop leaves it off (app bundle owns it).
-        # Fenced off entirely above once a target is supervisor-owned
-        # (decision 7); this legacy branch is unchanged, deletion deferred
-        # to the named follow-up after the bridge window.
-        values["anyharness_update_enabled"] = True
-        # Paths the worker acts on for the swap (all already known here):
-        # the fixed runtime binary path, the on-disk launcher to relaunch, and
-        # the workdir to relaunch in.
-        values["anyharness_binary_path"] = runtime_context.runtime_binary_path
-        values["anyharness_launcher_path"] = runtime_launcher_path(runtime_context)
-        values["anyharness_workdir"] = runtime_context.runtime_workdir
+    # Make Managed Runtime Updates Supervisor-Owned, decision 7 (the fence): a
+    # supervisor-owned target's Worker never downloads, replaces, kills, or
+    # rolls back AnyHarness OR itself in place — the Supervisor
+    # verifies/stages/activates/health-gates/rolls back both. So neither
+    # self-update gate is emitted true here; instead the Worker gets the
+    # mailbox dir it writes durable update requests into (decision 2) and the
+    # D5 bridge coordinates (decision 6), which a supervisor-spawned Worker's
+    # bridge check treats as a no-op because a Supervisor is already alive
+    # and owns it.
+    values["self_update_enabled"] = False
+    values["anyharness_update_enabled"] = False
+    values["supervisor_update_request_dir"] = supervisor_update_request_dir(runtime_context)
+    values["supervisor_binary_path"] = supervisor_binary_path(runtime_context)
+    values["supervisor_config_path"] = supervisor_config_path(runtime_context)
+    values["supervisor_bridge_marker_dir"] = supervisor_bridge_marker_dir(runtime_context)
+    # Carry the Supervisor config TOML so the D5 bridge on an
+    # already-provisioned box (which has no Supervisor config on disk yet)
+    # can materialize one before spawning the Supervisor (R9-007). A
+    # Supervisor-first provision has the config on disk already; the value is
+    # just carried and only used if that Worker ever bridges.
+    if supervisor_config_toml is not None:
+        values["supervisor_config_toml"] = supervisor_config_toml
     if runtime_bearer_token:
         values["runtime_bearer_token"] = runtime_bearer_token
     lines = []
@@ -423,13 +407,21 @@ def build_detached_supervisor_launch_command(
     target_env_lines = [
         f"export {key}={shlex.quote(value)}" for key, value in sorted(combined_env.items())
     ]
+    quoted_supervisor_binary = shlex.quote(supervisor_binary)
+    # A paused VM instantiated from a template that predates the baked
+    # supervisor binary would otherwise fail this launch with only a generic
+    # health-timeout downstream. The guard keeps the command exiting 0
+    # (matching the legacy worker sidecar's `test -x` guard) without
+    # half-starting anything; the health probe then fails with a clean
+    # missing-binary signal instead of a silent timeout.
     script = "\n".join(
         [
             "set -eu",
             *kill_lines,
             *target_env_lines,
             (
-                f"nohup {shlex.quote(supervisor_binary)} --config {shlex.quote(config_path)} run "
+                f"test -x {quoted_supervisor_binary} && "
+                f"nohup {quoted_supervisor_binary} --config {shlex.quote(config_path)} run "
                 f"> {shlex.quote(log_path)} 2>&1 < /dev/null &"
             ),
         ]

@@ -421,8 +421,9 @@ server/proliferate/
     │   └── sandbox_io/
     │       ├── connect.py                   the provisioning engine
     │       ├── resume_acceptance.py         post-resume pause reconciliation
-    │       ├── runtime_launch.py            Supervisor-owned runtime launch
-    │       └── worker_sidecar.py            Worker enrollment token mint + config
+    │       └── runtime_launch.py            Supervisor-owned runtime launch (only
+    │                                        topology; also mints the Worker
+    │                                        enrollment token)
     ├── runtime/bootstrap.py                 env, launcher, and Supervisor config builders
     ├── runtime/liveness_health.py           health + auth-enforcement probes
     ├── webhooks/                            E2B lifecycle event ingestion (HMAC, dedupe, correlate)
@@ -470,29 +471,34 @@ server/proliferate/
   exit); run by the release and promote lanes and by the rollback runbook.
 - Managed runtime update proof: T4-RUNTIME-1 (heartbeat-driven update on a
   live sandbox) in the release suite.
-- Pending: the live E2B N-1 to N update proof that gates the
-  Supervisor-owned topology default (below).
+- Live E2B N-1 to N update proof (2026-07-26): real sandbox, supervisor-owned
+  topology, pins 0.3.47->0.3.48, zero rollbacks, sha256 of active binaries
+  matched published CDN artifacts, ~75s convergence. This gated the
+  Supervisor-owned topology default, which is now on.
+- D5 BRIDGE proof (2026-07-26, sandbox `iwwvadhffzxoora56f437`): a running
+  legacy (pre-Supervisor) sandbox migrated onto the Supervisor-owned topology
+  in place, in ~2.5s, via the `desiredTopology` heartbeat signal — no
+  destroy/recreate. This, together with the update proof above, gated
+  deleting the legacy launch path entirely: every (re)launch is now
+  unconditionally Supervisor-owned. `supervisor_owned_runtime`
+  ([config.py](../../../../server/proliferate/config.py)) survives only to
+  gate that same `desiredTopology` heartbeat signal for any already-running
+  legacy worker still bridging — see its docstring for the asymmetry.
 
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `supervisor_owned_runtime` defaults off
-      ([config.py](../../../../server/proliferate/config.py)); today's
-      default launch is the legacy path (direct detached AnyHarness plus a
-      best-effort Worker sidecar,
-      [runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py)).
-      The flag flips after the live E2B N-1 to N proof passes; the legacy
-      launch path is then deleted.
-- [ ] Worker death still has no alert path: a `running` sandbox's stale or
-      missing Worker now surfaces as `workerDegraded: true` on the
-      workspace runtime-status payload
-      (`_worker_degraded` in
-      [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py))
-      and logs a structured warning on each read, but nothing routes that
-      condition into the production alert path (issue tracker), sidecar
-      launch failures are still swallowed at boot, and the warm-reuse path
-      still never relaunches a dead Worker.
+- [ ] Worker death still has no alert path: the Worker is now a
+      Supervisor-owned child with automatic restart-with-backoff
+      (`restart_delay_seconds`), so the old "sidecar launch failures are
+      swallowed" framing is gone along with the deleted sidecar launcher.
+      What remains open is alerting — a `running` sandbox's stale or
+      missing Worker surfaces as `workerDegraded: true` on the workspace
+      runtime-status payload and logs a structured warning on each read
+      (PR #1526), but nothing routes that condition into the production
+      alert path (issue tracker), and the warm-reuse path still never
+      relaunches a dead Worker.
 - [ ] The account model is one sandbox per user globally (partial unique
       index on `owner_user_id`; org variants are stubs that raise,
       [cloud_sandboxes.py](../../../../server/proliferate/db/store/cloud_sandboxes.py)).

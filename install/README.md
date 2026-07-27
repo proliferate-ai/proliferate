@@ -37,18 +37,21 @@ The installer writes:
 
 SSH onboarding uses this command surfaced in the Desktop Compute settings page.
 Managed cloud does not run this shell installer; managed cloud bootstrap
-writes worker (and, on a supervisor-owned target, supervisor) config directly
-inside the sandbox. Whether managed cloud actually **starts** Supervisor
-depends on the server's `supervisor_owned_runtime` flag: off (the default at
-merge), it launches AnyHarness and the Worker sidecar directly and never
-starts Supervisor; on, it launches Supervisor detached and Supervisor starts
-AnyHarness and Worker itself. See
+writes worker and supervisor config directly inside the sandbox. Every
+managed-cloud launch is unconditionally Supervisor-owned: it launches
+Supervisor detached, and Supervisor starts AnyHarness and Worker itself. The
+legacy direct-nohup'd AnyHarness plus a separately launched Worker sidecar was
+deleted 2026-07-26 once the live E2B N-1→N update proof and the D5 BRIDGE
+proof both passed. `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=false` does **not**
+restore that legacy launch path — there is no launch-topology rollback lever
+anymore. The flag now only suppresses the D5 `desiredTopology` heartbeat
+signal that tells an already-running legacy worker (from before the cutover)
+to bridge onto a Supervisor; rolling back the launch topology itself means
+rolling back the server deploy. See
 [`server/architecture.md`](../specs/codebase/structures/server/architecture.md#5-managed-runtime-and-worker-detailed)
-for the current default and
+for the current launch flow and
 [`proliferate-supervisor/README.md`](../specs/codebase/structures/proliferate-supervisor/README.md#implementation-status-this-pr)
-for what Supervisor owns once it is the parent. The mailbox consumer is
-implemented; the remaining gate is operational — do not flip
-`supervisor_owned_runtime` on before the live E2B proof passes.
+for what Supervisor owns as the parent process.
 
 ## Environment Variables
 

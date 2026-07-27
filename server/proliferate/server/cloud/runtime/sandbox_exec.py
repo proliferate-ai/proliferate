@@ -10,6 +10,7 @@ from uuid import UUID
 
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.runtime import bootstrap as bootstrap_module
 from proliferate.utils.time import duration_ms
 
 
@@ -79,14 +80,6 @@ def runtime_launcher_path(runtime_context: SandboxRuntimeContext) -> str:
     return f"{runtime_context.home_dir}/start-anyharness.sh"
 
 
-def build_detached_runtime_launch_command(runtime_context: SandboxRuntimeContext) -> str:
-    """Legacy launcher used by pre-supervisor sandboxes during reconnect fallback."""
-    return "bash -lc " + shlex.quote(
-        f"nohup {shlex.quote(runtime_launcher_path(runtime_context))} "
-        f"> {shlex.quote(runtime_log_path(runtime_context))} 2>&1 < /dev/null &"
-    )
-
-
 def _redacted_launcher_command(path: str) -> str:
     return (
         "awk 'BEGIN { IGNORECASE = 1 } "
@@ -123,12 +116,26 @@ async def collect_runtime_debug_report(
     supervisor_config_path = shlex.quote(
         f"{runtime_context.home_dir}/.proliferate/supervisor/config.toml"
     )
-    supervisor_log_path = shlex.quote(f"{runtime_context.home_dir}/proliferate-supervisor.log")
+    # Two candidate supervisor-log locations (S5-B, 2026-07-26): the current
+    # location a freshly launched Supervisor writes to
+    # (``.proliferate/supervisor/proliferate-supervisor.log``, matching the
+    # Rust D5 bridge's own write path) and the pre-standardization bare
+    # home-dir location that a Supervisor launched before this change (or
+    # bridged before it) may still be writing to. Concatenate labeled
+    # sections from whichever exist rather than picking one, since which one
+    # is live depends on when this sandbox's Supervisor was (re)launched.
+    current_log_path = shlex.quote(bootstrap_module.supervisor_log_path(runtime_context))
+    legacy_log_path = shlex.quote(bootstrap_module.legacy_supervisor_log_path(runtime_context))
+    supervisor_log_command = (
+        f"for f in {current_log_path} {legacy_log_path}; do "
+        'if [ -f "$f" ]; then echo "=== $f ==="; tail -n 200 "$f"; fi; '
+        "done || true"
+    )
     commands = {
         "launcher": _redacted_launcher_command(launcher_path),
         "log": f"tail -n 200 {log_path} || true",
         "supervisor_config": _redacted_supervisor_config_command(supervisor_config_path),
-        "supervisor_log": f"tail -n 200 {supervisor_log_path} || true",
+        "supervisor_log": supervisor_log_command,
         "processes": (
             "ps -ef | grep -E 'anyharness|proliferate-worker|proliferate-supervisor' "
             "| grep -v grep || true"

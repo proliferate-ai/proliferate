@@ -149,16 +149,17 @@ repository attempt owns its GitHub authority check and credential
 materialization, and remains best-effort so one repository failure cannot
 prevent the non-repository state from converging.
 
-The E2B launch path launches Proliferate Supervisor as the process parent of
-AnyHarness and the Worker when `supervisor_owned_runtime` is on
-(`_launch_supervisor_owned_runtime` in
-[runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py));
-the direct non-supervisor launch is the legacy branch, deletion-pending with
-the rest of the legacy topology
-([agent-distribution.md](agent-distribution.md) Current gaps). A missing or
-unhealthy Worker does not make direct AnyHarness access unavailable. Reusing an
-already-healthy AnyHarness does not currently restart or self-heal a missing
-Worker sidecar.
+The E2B launch path unconditionally launches Proliferate Supervisor as the
+process parent of AnyHarness and the Worker
+(`launch_anyharness_runtime` in
+[runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py)).
+The legacy direct-nohup'd AnyHarness plus a separately launched Worker
+sidecar was deleted once the live E2B N-1→N update proof and the D5 BRIDGE
+proof both passed (2026-07-26); `supervisor_owned_runtime` no longer gates
+which topology a launch takes, only the D5 `desiredTopology` heartbeat signal
+for already-running legacy workers. A missing or unhealthy Worker does not
+make direct AnyHarness access unavailable. Reusing an already-healthy
+AnyHarness does not currently restart or self-heal a missing Worker.
 
 ### Delete
 
