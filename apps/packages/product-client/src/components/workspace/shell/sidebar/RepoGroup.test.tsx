@@ -147,7 +147,6 @@ describe("RepoGroup new workspace command scope", () => {
     const { unmount } = render(
       <RepoGroup
         name="Repo A"
-        count={1}
         collapsed={false}
         onToggleCollapsed={vi.fn()}
         newWorkspaceCommandScope={scope}
@@ -168,7 +167,6 @@ describe("RepoGroup new workspace command scope", () => {
     render(
       <RepoGroup
         name="Repo A"
-        count={1}
         collapsed={false}
         environmentKind="local_cloud"
         onToggleCollapsed={vi.fn()}
@@ -184,7 +182,6 @@ describe("RepoGroup new workspace command scope", () => {
     render(
       <RepoGroup
         name="Repo A"
-        count={1}
         collapsed={false}
         environmentKind="local"
         isGitHubRepo
@@ -212,7 +209,6 @@ describe("RepoGroup new workspace command scope", () => {
     render(
       <RepoGroup
         name="Repo A"
-        count={0}
         collapsed={false}
         environmentKind="cloud"
         onToggleCollapsed={vi.fn()}
@@ -236,7 +232,6 @@ describe("RepoGroup new workspace command scope", () => {
     render(
       <RepoGroup
         name="Repo A"
-        count={0}
         collapsed={false}
         environmentKind="cloud"
         onToggleCollapsed={vi.fn()}

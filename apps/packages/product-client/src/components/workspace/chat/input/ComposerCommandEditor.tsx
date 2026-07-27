@@ -187,7 +187,10 @@ export function ComposerCommandEditor({
           className="relative overflow-y-auto"
           style={{
             minHeight: `${WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
-            maxHeight: `calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows})`,
+            // Capped at 25dvh so the draft area never crowds out the
+            // transcript above it on short viewports, even when maxRows
+            // would otherwise let it grow taller.
+            maxHeight: `min(calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows}), 25dvh)`,
           }}
         >
           <ComposerRichTextEditor

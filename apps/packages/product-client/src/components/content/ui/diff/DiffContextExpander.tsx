@@ -31,7 +31,7 @@ export function formatUnmodifiedLinesLabel(lineCount: number): string {
  *
  * Small gaps (<=7 lines): single expand-both (ChevronsUpDown) icon.
  * Large gaps: expand-down chevron on top (extends hunk above), expand-up
- * below (extends hunk below) — matching Codex ordering where each control
+ * below (extends hunk below) — matching reference ordering where each control
  * is adjacent to the hunk it extends.
  */
 export function DiffGapGutterControls({
@@ -178,7 +178,7 @@ export function DiffCollapsedContentLabel({
 // ---------------------------------------------------------------------------
 
 /**
- * Codex-style per-gap separator row: a compact, left-anchored inline
+ * reference-style per-gap separator row: a compact, left-anchored inline
  * cluster of expand affordances followed by the "N unmodified lines"
  * label. The cluster is `position: sticky` against the nearest
  * horizontally scrolling ancestor so it never drifts out of the visible

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
+import { ChevronDown } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CarryOutPlanRow } from "#product/components/workspace/chat/transcript/CarryOutPlanRow";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
@@ -86,7 +87,7 @@ export function UserMessage({
             <div
               ref={textRef}
               className={`[--prose-text-size:var(--text-message)] [--prose-text-line-height:var(--text-message--line-height)] break-words select-text${
-                !expanded ? " line-clamp-5" : ""
+                !expanded ? " line-clamp-[20]" : ""
               }`}
             >
               <PromptContentRenderer
@@ -97,18 +98,35 @@ export function UserMessage({
               />
             </div>
             {needsToggle && (
-              <div className="mt-1 flex justify-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  data-chat-transcript-ignore
-                  onClick={() => setExpanded((v) => !v)}
-                  className="h-auto px-1 py-0 text-chat text-muted-foreground hover:bg-transparent hover:text-foreground"
-                >
-                  {expanded ? "Show less" : "Show more"}
-                </Button>
-              </div>
+              /*
+               * Unstyled Button, not the ghost variant: the toggle must never
+               * grow its own background (the ghost hover wash reads as a pill
+               * inside the bubble) and must sit flush with the message text's
+               * left edge, so it carries no horizontal padding of its own —
+               * the bubble's px-3 is the shared left margin.
+               */
+              <Button
+                type="button"
+                variant="unstyled"
+                size="unstyled"
+                data-chat-transcript-ignore
+                onClick={() => setExpanded((v) => !v)}
+                className="mt-1.5 flex items-center gap-1 text-chat text-muted-foreground hover:text-foreground"
+              >
+                {expanded ? "Show less" : "Show more"}
+                {/*
+                 * Always rendered (not opacity/hover-gated) so the chevron
+                 * occupies stable space at all times — an opacity-only fade
+                 * still reserves the slot, but a hover-mounted element does
+                 * not, which is what made the label visibly shift right on
+                 * hover before. Only the rotate on expand/collapse and the
+                 * inherited hover color change; position never moves.
+                 */}
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`icon-paired shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+                />
+              </Button>
             )}
           </div>
         )}
