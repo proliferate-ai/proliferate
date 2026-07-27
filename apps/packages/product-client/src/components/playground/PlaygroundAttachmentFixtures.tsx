@@ -192,10 +192,10 @@ export function PlaygroundAttachmentPreviewAside() {
   }, []);
 
   return (
-    <aside className="playground-attachment-preview-aside flex shrink-0 flex-col border-l border-sidebar-border bg-sidebar-background">
+    <aside className="playground-attachment-preview-aside flex shrink-0 flex-col border-l border-border bg-sidebar-background">
       {target?.kind === "promptAttachment" ? (
         <>
-          <div className="right-panel-tab-system flex h-10 shrink-0 items-stretch border-b border-sidebar-border">
+          <div className="right-panel-tab-system flex h-10 shrink-0 items-stretch border-b border-border">
             <ViewerHeaderButton
               target={target}
               isActive

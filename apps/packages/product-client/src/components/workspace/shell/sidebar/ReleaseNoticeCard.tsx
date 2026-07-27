@@ -20,7 +20,7 @@ export function ReleaseNoticeCard({
   return (
     <aside
       aria-label={`What's new in ${notice.version}: ${notice.title}`}
-      className="mx-2 shrink-0 overflow-hidden rounded-lg border border-sidebar-border bg-surface-control px-3 py-3 text-sidebar-foreground"
+      className="mx-2 shrink-0 overflow-hidden rounded-lg border border-border bg-surface-control px-3 py-3 text-sidebar-foreground"
     >
       <div className="flex min-w-0 items-start gap-2">
         <Badge

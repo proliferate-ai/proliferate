@@ -307,9 +307,9 @@ function ModelPickerGroup({
             labelClassName="text-composer"
             className={`px-2.5 py-2 ${
               model.isSelected
-                ? "bg-popover-accent"
+                ? "bg-hover"
                 : isHighlighted
-                  ? "bg-list-hover"
+                  ? "bg-hover"
                   : ""
             }`}
             onClick={() => onSelect({ kind: group.kind, modelId: model.modelId })}

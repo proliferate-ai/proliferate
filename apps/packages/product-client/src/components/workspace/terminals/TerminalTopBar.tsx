@@ -63,7 +63,7 @@ export function TerminalTopBar({
   };
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-2 text-sidebar-foreground">
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-2 text-sidebar-foreground">
       <PopoverButton
         align="start"
         trigger={
@@ -78,7 +78,7 @@ export function TerminalTopBar({
             <ChevronDown className="icon-paired shrink-0 text-sidebar-muted-foreground" />
           </Button>
         }
-        className="w-72 rounded-md border border-sidebar-border bg-sidebar-background p-1 shadow-popover"
+        className="w-72 rounded-md border border-border bg-sidebar-background p-1 shadow-popover"
       >
         {(close) => (
           <div className="max-h-80 overflow-y-auto py-0.5">
@@ -110,7 +110,7 @@ export function TerminalTopBar({
                           maxLength={160}
                           autoFocus
                           onChange={(event) => setRenameDraft(event.target.value)}
-                          className="h-7 min-w-0 flex-1 border-sidebar-border bg-sidebar-background text-ui text-sidebar-foreground"
+                          className="h-7 min-w-0 flex-1 border-border bg-sidebar-background text-ui text-sidebar-foreground"
                         />
                         <IconButton
                           size="xs"

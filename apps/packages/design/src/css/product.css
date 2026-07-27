@@ -131,19 +131,16 @@ body {
   }
 }
 
-.proliferate-scrollbar,
 .web-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-heavy) transparent;
 }
 
-.proliferate-scrollbar::-webkit-scrollbar,
 .web-scrollbar::-webkit-scrollbar {
   width: 9px;
   height: 9px;
 }
 
-.proliferate-scrollbar::-webkit-scrollbar-thumb,
 .web-scrollbar::-webkit-scrollbar-thumb {
   background: var(--color-border-heavy);
   border-radius: 999px;
@@ -175,7 +172,7 @@ body {
 .chat-composer-surface {
   background-color: var(--color-composer-background);
   box-shadow:
-    0 0 0 0.5px var(--color-composer-border),
+    0 0 0 0.5px var(--color-border),
     var(--color-composer-shadow);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);
@@ -814,22 +811,6 @@ body {
   height: 0;
 }
 
-/* ---- Pulsing dot for running sessions ---- */
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    transform: translateX(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.animate-panel-in {
-  animation: panel-in var(--duration-panel) var(--ease-out-quint);
-}
-
 /* Shared menu-surface enter: applied at Radix positioned
    wrappers (PopoverButton/DropdownMenu/ContextMenu content, Tooltip), never
    inside POPOVER_SURFACE_CLASS, so hand-positioned surfaces don't
@@ -1166,15 +1147,6 @@ body {
   }
 }
 
-@keyframes ripple-spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
 /* activity-motion */
 .animate-ripple-center {
   animation: ripple-center 1.2s ease-in-out infinite;
@@ -1183,11 +1155,6 @@ body {
 /* activity-motion */
 .animate-ripple-sat {
   animation: ripple-sat 1.2s ease-in-out infinite;
-}
-
-/* activity-motion */
-.animate-ripple-spin {
-  animation: ripple-spin 6s linear infinite;
 }
 
 /* Turn-tail status crossfade — the shimmer / transient-thought / needs-input
@@ -1301,41 +1268,6 @@ body {
   .animate-update-pill-in {
     animation: none;
   }
-}
-
-/* ---- Loading illustration animations ---- */
-@keyframes loading-line {
-  0%, 100% { opacity: 0.15; transform: scaleX(0.7); }
-  50% { opacity: 0.45; transform: scaleX(1); }
-}
-
-@keyframes loading-orbit {
-  0%, 100% { opacity: 0.4; transform: translateY(0); }
-  50% { opacity: 0.85; transform: translateY(-2px); }
-}
-
-/* activity-motion */
-.animate-loading-line-1 {
-  animation: loading-line 2.4s ease-in-out infinite;
-  transform-origin: left center;
-}
-/* activity-motion */
-.animate-loading-line-2 {
-  animation: loading-line 2.4s ease-in-out infinite 0.4s;
-  transform-origin: left center;
-}
-/* activity-motion */
-.animate-loading-line-3 {
-  animation: loading-line 2.4s ease-in-out infinite 0.8s;
-  transform-origin: left center;
-}
-/* activity-motion */
-.animate-loading-orbit-1 {
-  animation: loading-orbit 3s ease-in-out infinite;
-}
-/* activity-motion */
-.animate-loading-orbit-2 {
-  animation: loading-orbit 3s ease-in-out infinite 1.5s;
 }
 
 /*
@@ -1458,22 +1390,6 @@ body {
   }
 }
 
-/* ---- Toast slide-in ---- */
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-toast-in {
-  animation: toast-in var(--duration-enter) var(--ease-out-quint);
-}
-
 /* ---- Dialog pop-in (update restart confirm) ----
    Compositor-only entrance for centered Radix dialog panels. The keyframes
    restate the -translate-x/y-1/2 centering because `animation` overrides the
@@ -1523,17 +1439,17 @@ body {
 }
 
 .workspace-shell-tab:hover .workspace-shell-tab__surface {
-  background-color: var(--workspace-shell-tab-hover-background);
+  background-color: var(--color-hover);
   border-color: var(--workspace-shell-tab-hover-border);
 }
 
 .workspace-shell-tab[data-multi-selected="true"] .workspace-shell-tab__surface {
-  background-color: var(--workspace-shell-tab-selected-background);
+  background-color: var(--color-selected);
   border-color: var(--workspace-shell-tab-selected-border);
 }
 
 .workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface {
-  background-color: var(--workspace-shell-tab-active-background);
+  background-color: var(--color-selected);
   border-color: var(--workspace-shell-tab-active-border);
 }
 
@@ -1591,17 +1507,8 @@ body {
 .workspace-shell-icon-button:hover:not(:disabled),
 .workspace-shell-action-button[data-state="open"],
 .workspace-shell-icon-button[data-state="open"] {
-  background-color: var(--workspace-shell-action-hover-background);
+  background-color: var(--color-hover);
   color: var(--workspace-shell-action-hover-foreground);
-}
-
-/* Modifier: flat at rest, rim appears on hover/open. */
-.workspace-shell-icon-button--hover-rim {
-  border-color: transparent;
-}
-.workspace-shell-icon-button--hover-rim:hover:not(:disabled),
-.workspace-shell-icon-button--hover-rim[data-state="open"] {
-  border-color: var(--workspace-shell-action-border);
 }
 
 /* Modifier: flat always (rest, hover, open) — only tint fill on hover. */
@@ -2157,10 +2064,6 @@ body {
 
 .right-panel-tab-system .right-panel-tab-drop-target[data-drop-before="true"]::before {
   left: 2px;
-}
-
-.right-panel-tab-system .right-panel-tool-drop-target {
-  width: var(--tab-gap);
 }
 
 .right-panel-tab-system .ui-tab-system-live-region {

@@ -165,7 +165,7 @@ function FileViewerContentContextMenu({
 
 const FILE_VIEWER_TOOLBAR_BUTTON_CLASS =
   // Icons match the right-panel tab's text-relative paired-glyph tier.
-  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground [&_svg]:icon-paired";
+  "size-7 rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground data-[state=open]:bg-hover data-[state=open]:text-foreground [&_svg]:icon-paired";
 
 function FileBreadcrumbs({
   filePath,
@@ -248,7 +248,7 @@ function FileViewerToolbarButton({
       aria-label={label}
       disabled={disabled}
       className={`${FILE_VIEWER_TOOLBAR_BUTTON_CLASS} ${
-        active ? "bg-list-hover text-foreground" : ""
+        active ? "bg-hover text-foreground" : ""
       }`}
       onClick={onClick}
     >

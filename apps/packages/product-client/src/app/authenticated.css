@@ -206,7 +206,7 @@
 }
 
 [data-chat-diff-wrap-context-trigger="turn-header"]:hover .turn-diff-review-target {
-  background: color-mix(in oklab, var(--color-list-hover) 30%, transparent);
+  background: color-mix(in oklab, var(--color-hover) 30%, transparent);
 }
 
 .turn-document-reference-trigger:hover {

@@ -16,7 +16,6 @@ from scripts.check_appearance_scaling import (
     census_slack,
     check_census_additions,
     check_design_css_source,
-    check_design_token_source,
     check_source,
     collect_raw_violations,
     imported_icon_names,
@@ -26,28 +25,6 @@ from scripts.check_appearance_scaling import (
     staged_census,
     unsanctioned_growth,
 )
-
-LEGACY_ALIAS_SOURCE = "\n".join(
-    f'''"{name}": {{\n  dark: "var(--color-hover) /* legacy-alias */",\n  light: "var(--color-hover) /* legacy-alias */",\n}},'''
-    for name in (
-        "--color-accent",
-        "--color-composer-border",
-        "--color-composer-control-hover",
-        "--color-list-hover",
-        "--color-popover-accent",
-        "--color-popover-ring",
-        "--color-sidebar-accent",
-        "--color-sidebar-border",
-        "--shadow-composer",
-        "--shadow-floating",
-        "--shadow-floating-dark",
-        "--workspace-shell-action-hover-background",
-        "--workspace-shell-tab-active-background",
-        "--workspace-shell-tab-hover-background",
-        "--workspace-shell-tab-selected-background",
-    )
-)
-
 
 class AppearanceScalingGuardTest(unittest.TestCase):
     def test_rejects_fixed_text_and_imported_icon_sizes(self) -> None:
@@ -433,25 +410,6 @@ const ORBIT_DELAYS = [
             ["authored-root-token"],
         )
 
-    def test_legacy_alias_contract_requires_identical_tagged_values(self) -> None:
-        self.assertEqual(check_design_token_source(Path("tokens.ts"), LEGACY_ALIAS_SOURCE), [])
-        broken = LEGACY_ALIAS_SOURCE.replace(
-            'light: "var(--color-hover) /* legacy-alias */"',
-            'light: "var(--color-active) /* legacy-alias */"',
-            1,
-        )
-        self.assertIn(
-            "invalid-legacy-alias",
-            {violation.rule_id for violation in check_design_token_source(Path("tokens.ts"), broken)},
-        )
-
-    def test_legacy_alias_census_rejects_extra_markers(self) -> None:
-        extra = LEGACY_ALIAS_SOURCE + '\n"--color-extra": {\n  dark: "var(--color-hover) /* legacy-alias */",\n  light: "var(--color-hover) /* legacy-alias */",\n},'
-        self.assertIn(
-            "legacy-alias-census",
-            {violation.rule_id for violation in check_design_token_source(Path("tokens.ts"), extra)},
-        )
-
     def test_rejects_numeric_z_and_unvirtualized_long_list_additions(self) -> None:
         sources = [
             (
@@ -611,14 +569,14 @@ const ORBIT_DELAYS = [
 
     def test_unstaged_rules_are_never_absorbed_by_the_census(self) -> None:
         """Rules outside STAGED_RULE_IDS fail on their first hit, census or not."""
-        path = Path("/repo/apps/packages/design/src/tokens.ts")
-        unstaged = Violation("legacy-alias-census", path, 1, "m")
-        self.assertNotIn("legacy-alias-census", STAGED_RULE_IDS)
+        path = Path("/repo/apps/packages/design/src/css/product.css")
+        unstaged = Violation("authored-root-token", path, 1, "m")
+        self.assertNotIn("authored-root-token", STAGED_RULE_IDS)
         self.assertEqual(staged_census([unstaged], Path("/repo")), {})
         self.assertEqual(
             apply_staged_baseline(
                 [unstaged],
-                {"apps/packages/design/src/tokens.ts|legacy-alias-census": 5},
+                {"apps/packages/design/src/css/product.css|authored-root-token": 5},
                 Path("/repo"),
             ),
             [unstaged],

@@ -240,23 +240,6 @@ RAW_HEX_FILE_ALLOWLIST = {
     "apps/packages/product-client/src/components/workspace/open-target/app-icons.tsx",
     "apps/desktop/src/lib/infra/measurement/boot-stall-diagnostics-overlay.ts",
 }
-LEGACY_ALIAS_NAMES = {
-    "--color-accent",
-    "--color-composer-border",
-    "--color-composer-control-hover",
-    "--color-list-hover",
-    "--color-popover-accent",
-    "--color-popover-ring",
-    "--color-sidebar-accent",
-    "--color-sidebar-border",
-    "--shadow-composer",
-    "--shadow-floating",
-    "--shadow-floating-dark",
-    "--workspace-shell-action-hover-background",
-    "--workspace-shell-tab-active-background",
-    "--workspace-shell-tab-hover-background",
-    "--workspace-shell-tab-selected-background",
-}
 
 # Rule families whose pre-existing sites are censused per file and may only
 # shrink. A rule stays here after reaching zero entries: an empty census is an
@@ -703,45 +686,6 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
     return violations
 
 
-def check_design_token_source(path: Path, source: str) -> list[Violation]:
-    violations: list[Violation] = []
-    for alias in sorted(LEGACY_ALIAS_NAMES):
-        escaped = re.escape(f'"{alias}"')
-        entry = re.search(rf"{escaped}\s*:\s*\{{(?P<body>[\s\S]*?)\n\s*\}},", source)
-        if entry is None:
-            violations.append(
-                Violation("missing-legacy-alias", path, 1, f"{alias} compatibility alias is missing")
-            )
-            continue
-        values = re.findall(
-            r'(?:dark|light)\s*:\s*"(var\(--[a-z0-9-]+\) /\* legacy-alias \*/)"',
-            entry.group("body"),
-        )
-        if len(values) != 2 or values[0] != values[1]:
-            violations.append(
-                Violation(
-                    "invalid-legacy-alias",
-                    path,
-                    line_number(source, entry.start()),
-                    f"{alias} must have identical tagged var() values in both modes",
-                )
-            )
-
-    marker_count = len(
-        re.findall(r'(?:dark|light)\s*:\s*"var\(--[a-z0-9-]+\) /\* legacy-alias \*/"', source)
-    )
-    if marker_count != len(LEGACY_ALIAS_NAMES) * 2:
-        violations.append(
-            Violation(
-                "legacy-alias-census",
-                path,
-                1,
-                f"expected {len(LEGACY_ALIAS_NAMES) * 2} legacy-alias markers, found {marker_count}",
-            )
-        )
-    return violations
-
-
 def load_baselines(path: Path = BASELINE_FILE) -> dict[str, dict[str, int]]:
     return json.loads(path.read_text())
 
@@ -936,10 +880,6 @@ def collect_raw_violations(paths: Sequence[Path] | None = None) -> list[Violatio
     design_css = [path for path in DESIGN_CSS_FILES if requested is None or path in requested]
     for path in design_css:
         violations.extend(check_design_css_source(path, path.read_text()))
-    if requested is None or DESIGN_TOKEN_FILE in requested:
-        violations.extend(
-            check_design_token_source(DESIGN_TOKEN_FILE, DESIGN_TOKEN_FILE.read_text())
-        )
     return violations
 
 

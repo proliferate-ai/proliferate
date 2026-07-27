@@ -92,7 +92,7 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
-      <div aria-hidden className="mx-3 h-[0.5px] bg-sidebar-border" />
+      <div aria-hidden className="mx-3 h-[0.5px] bg-border" />
       <div className="flex items-center gap-1 px-2 py-2">
         <PopoverButton
           align="start"

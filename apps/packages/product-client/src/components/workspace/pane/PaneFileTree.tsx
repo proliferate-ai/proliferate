@@ -55,7 +55,7 @@ export function PaneFileTree<TData = unknown>({
   return (
     <div className={twMerge("flex h-full min-h-0 flex-col bg-sidebar-background", className)}>
       {hasSearch && (
-        <div className="border-b border-sidebar-border/70 p-2">
+        <div className="border-b border-border/70 p-2">
           <div className="flex h-7 items-center gap-1.5 rounded-lg bg-surface-control px-2 text-sidebar-muted-foreground">
             <Search className="icon-compact shrink-0" />
             <Input
