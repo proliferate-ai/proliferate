@@ -610,10 +610,15 @@ async def materialize_agent_auth(
             operation_id=ctx.sandbox.id,
             paths={state_path, manifest_path},
         )
+        await _record_cloud_delivery_ack(db, user_id=user_id, state=state, fingerprint=fingerprint)
         return
 
     previous = await _read_previous_manifest(ctx)
     if previous.get("fingerprint") == fingerprint:
+        # Content already at rest in the sandbox — the delivery is confirmed at
+        # this fingerprint, so stamp the ack even without a rewrite (a re-run
+        # after a crashed ack write must still converge to applied).
+        await _record_cloud_delivery_ack(db, user_id=user_id, state=state, fingerprint=fingerprint)
         return
 
     await sandbox_io.write_private_file_atomic(
@@ -635,20 +640,65 @@ async def materialize_agent_auth(
         content=json.dumps(manifest, sort_keys=True, indent=2) + "\n",
         mode="600",
     )
+    await _record_cloud_delivery_ack(db, user_id=user_id, state=state, fingerprint=fingerprint)
 
 
-async def materialize_agent_auth_for_user(db: AsyncSession, *, user_id: UUID) -> None:
+async def _record_cloud_delivery_ack(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    state: Mapping[str, object],
+    fingerprint: str,
+) -> None:
+    """Stamp the cloud ack: the materialization op completing IS the cloud
+    runtime's acknowledgement (agent-auth.md "Applied means acknowledged" —
+    sessions read the file fresh at launch, so file-at-rest == rendered).
+
+    Runs after ``commit_cloud_sandbox_session`` released the state-read
+    transaction; the write opens a fresh one that the task runner (or the
+    bootstrap caller) commits.
+    """
+    await agent_gateway_store.record_delivery_ack(
+        db,
+        user_id=user_id,
+        surface=AGENT_AUTH_SURFACE_CLOUD,
+        revision=int(state["revision"]),  # type: ignore[call-overload]
+        fingerprint=fingerprint,
+    )
+
+
+async def materialize_agent_auth_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    ensure_sandbox: bool = False,
+) -> None:
     """Refresh agent-auth state in the user's active personal sandbox.
 
-    Only sandboxes that already have a provider sandbox are refreshed; a
-    sandbox that has never booted picks the state up during its full
-    bootstrap (``materialize_sandbox``).
+    By default only a sandbox that already has a provider sandbox is refreshed
+    (an asleep provider is resumed by ``connect_ready_sandbox``'s canonical
+    provision-or-wake); one that has never booted picks the state up during
+    its full bootstrap (``materialize_sandbox``).
+
+    ``ensure_sandbox=True`` is the ensure-on-switch path (agent-auth.md "A
+    cloud switch ensures the sandbox"): a provisioned-but-never-booted sandbox
+    is booted through the same operation/connect path every materializer uses,
+    so the switched document lands now instead of at the next unrelated wake —
+    but only when the rendered document has something to deliver (booting a
+    provider to deliver "no file" would be waste: a provider that never
+    existed holds no stale file, and absent already means native). The
+    never-provisioned case (no sandbox row at all) still falls to bootstrap
+    on every path.
     """
     sandbox = await cloud_sandboxes_store.load_personal_cloud_sandbox(db, user_id)
     if sandbox is None or sandbox.destroyed_at is not None or sandbox.status == "destroyed":
         return
     if sandbox.e2b_sandbox_id is None:
-        return
+        if not ensure_sandbox:
+            return
+        state, _ = await build_agent_auth_state(db, user_id)
+        if not state["harnesses"]:
+            return
     await operation.run_cloud_sandbox_operation(
         db,
         sandbox=sandbox,

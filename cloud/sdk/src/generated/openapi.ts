@@ -1467,6 +1467,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-auth/state/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ack Agent Auth State Endpoint
+         * @description Record a surface runtime's delivery acknowledgement (the desktop seam).
+         *
+         *     The desktop calls this after its local runtime's state PUT/DELETE
+         *     succeeded, echoing the pushed document's ``revision`` and the served
+         *     ``fingerprint`` from ``GET /state``. This stamp is what flips the
+         *     selections read from pending to applied (agent-auth.md "Applied means
+         *     acknowledged"). The cloud surface's twin is stamped server-side by the
+         *     materialization worker, not through this route.
+         */
+        post: operations["ack_agent_auth_state_endpoint_v1_cloud_agent_auth_state_ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/organizations/{organization_id}/agent-auth/policy": {
         parameters: {
             query?: never;
@@ -3210,6 +3237,18 @@ export interface components {
             /** Createdat */
             createdAt: string;
         };
+        /** AgentAuthDeliveryAckResponse */
+        AgentAuthDeliveryAckResponse: {
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /** Ackedrevision */
+            ackedRevision: number;
+            /** Ackedat */
+            ackedAt: string;
+        };
         /** AgentAuthSelectionResponse */
         AgentAuthSelectionResponse: {
             /** Id */
@@ -3236,6 +3275,8 @@ export interface components {
             providerHint: string | null;
             /** Enabled */
             enabled: boolean;
+            /** Applied */
+            applied?: boolean | null;
             /** Createdat */
             createdAt: string;
             /** Updatedat */
@@ -3272,6 +3313,20 @@ export interface components {
              */
             enabled: boolean;
         };
+        /**
+         * AgentAuthStateAckRequest
+         * @description Desktop delivery ack: the pushed document's identity, echoed back.
+         *
+         *     ``revision`` is the revision the local runtime's state PUT/DELETE
+         *     confirmed; ``fingerprint`` is the served document's fingerprint from
+         *     ``GET /state`` (never client-computed).
+         */
+        AgentAuthStateAckRequest: {
+            /** Revision */
+            revision: number;
+            /** Fingerprint */
+            fingerprint: string;
+        };
         /** AgentAuthStateHarness */
         AgentAuthStateHarness: {
             /** Harness Kind */
@@ -3286,6 +3341,11 @@ export interface components {
         /**
          * AgentAuthStateResponse
          * @description The whole ``state.json`` v2 document (``route_auth/state.rs``).
+         *
+         *     ``fingerprint`` is a response-only rider (the renderer's sha256 of the
+         *     canonical document), NOT part of the state.json wire contract: the desktop
+         *     echoes it through ``POST /state/ack`` after a successful runtime push and
+         *     must strip it before pushing the document to the local runtime.
          */
         AgentAuthStateResponse: {
             /** Version */
@@ -3296,6 +3356,8 @@ export interface components {
             user_id?: string | null;
             /** Harnesses */
             harnesses: components["schemas"]["AgentAuthStateHarness"][];
+            /** Fingerprint */
+            fingerprint?: string | null;
         };
         /**
          * AgentAuthStateSource
@@ -10514,6 +10576,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentAuthStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ack_agent_auth_state_endpoint_v1_cloud_agent_auth_state_ack_post: {
+        parameters: {
+            query: {
+                surface: "local" | "cloud";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentAuthStateAckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthDeliveryAckResponse"];
                 };
             };
             /** @description Validation Error */

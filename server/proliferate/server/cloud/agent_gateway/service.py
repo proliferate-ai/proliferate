@@ -340,7 +340,15 @@ async def put_auth_selections(
         enabled_count=sum(1 for row in rows if row.enabled),
     )
     if surface == AGENT_AUTH_SURFACE_CLOUD:
-        await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
+        # Ensure-on-switch (agent-auth.md "A cloud switch ensures the
+        # sandbox"): the scheduled task provisions-or-wakes the user's
+        # existing sandbox through the canonical connect path so the new
+        # document lands now, not at the next unrelated wake. Schedule only —
+        # the write never blocks on sandbox boot (the ack pipeline observes
+        # arrival), and the never-provisioned case still falls to bootstrap.
+        await materialization_service.schedule_materialize_agent_auth(
+            db, user_id=user_id, ensure_sandbox=True
+        )
     return rows
 
 
@@ -375,14 +383,122 @@ async def get_auth_state(
     *,
     user_id: UUID,
     surface: str,
-) -> dict[str, object]:
-    """Render the user's state.json v2 document for one surface.
+) -> tuple[dict[str, object], str]:
+    """Render the user's state.json v2 (document, fingerprint) for one surface.
 
     Same render path as the cloud materializer. A surface with no resolvable
-    enabled sources renders as a v2 doc with an empty ``harnesses`` list.
+    enabled sources renders as a v2 doc with an empty ``harnesses`` list. The
+    fingerprint (the renderer's sha256 of the canonical document) rides the
+    response so the desktop can echo it back through the delivery ack — the
+    server never has to trust a client-computed hash.
     """
-    state, _ = await build_agent_auth_state(db, user_id, surface=surface)
-    return state
+    return await build_agent_auth_state(db, user_id, surface=surface)
+
+
+async def ack_auth_state_delivery(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str,
+    revision: int,
+    fingerprint: str,
+) -> agent_gateway_store.AgentAuthDeliveryAckRecord:
+    """Record a surface runtime's delivery acknowledgement (desktop ack seam).
+
+    The desktop calls this after its local runtime's state PUT/DELETE
+    succeeded, echoing the pushed document's (revision, fingerprint) as served
+    by ``GET /state``. Out-of-order (lower-revision) acks are inert in the
+    store — a delayed confirmation of a superseded document never moves the
+    stamp backwards.
+
+    Trust boundary: the FINGERPRINT is taken from the authenticated client by
+    design — it can only misreport its own delivery state, and it already
+    holds the keys the document carries, so a lie gains it nothing beyond a
+    wrong badge on its own settings. The REVISION, however, is server-bounded:
+    an ack claiming a revision higher than the surface's current rendered
+    revision (max ``updated_at`` over the surface's selection rows — the same
+    value ``GET /state`` serves) could never have been served, and accepting
+    it would wedge the store's only-move-forward backstop against every later
+    legitimate ack. Such an ack from the future is rejected with 400.
+    """
+    if revision < 0:
+        raise CloudApiError(
+            "invalid_agent_auth_delivery_ack",
+            "revision must be a non-negative integer.",
+            status_code=400,
+        )
+    fingerprint = fingerprint.strip()
+    if not fingerprint or len(fingerprint) > 128:
+        raise CloudApiError(
+            "invalid_agent_auth_delivery_ack",
+            "fingerprint must be a 1-128 character string.",
+            status_code=400,
+        )
+    current_revision = _selection_scope_revision(
+        await agent_gateway_store.list_auth_selections(db, user_id=user_id, surface=surface)
+    )
+    if revision > current_revision:
+        raise CloudApiError(
+            "invalid_agent_auth_delivery_ack",
+            "ack from the future: revision exceeds the surface's current rendered revision.",
+            status_code=400,
+        )
+    record = await agent_gateway_store.record_delivery_ack(
+        db,
+        user_id=user_id,
+        surface=surface,
+        revision=revision,
+        fingerprint=fingerprint,
+    )
+    log_cloud_event(
+        "agent_auth_delivery_acked",
+        user_id=str(user_id),
+        surface=surface,
+        revision=revision,
+    )
+    return record
+
+
+def _selection_scope_revision(records: Sequence[AgentAuthSelectionRecord]) -> int:
+    """The renderer's revision contribution of one harness scope (ms epoch)."""
+    return max((int(record.updated_at.timestamp() * 1000) for record in records), default=0)
+
+
+async def annotate_selection_delivery(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    records: Sequence[AgentAuthSelectionRecord],
+) -> dict[UUID, bool]:
+    """Per-record applied-vs-pending truth for the selections read.
+
+    Applied means acknowledged (agent-auth.md): a record reads applied only
+    when its surface's runtime has confirmed a delivery that covers it —
+    either the surface's CURRENT rendered fingerprint equals the acked one
+    (nothing outstanding at all), or this harness scope's revision is no newer
+    than the acked revision (the outstanding change belongs to a different
+    harness on the surface). No ack at all means everything with rows is
+    pending — a failed or missing delivery is visible, never silently stale.
+    """
+    applied: dict[UUID, bool] = {}
+    for surface in {record.surface for record in records}:
+        surface_records = [record for record in records if record.surface == surface]
+        ack = await agent_gateway_store.get_delivery_ack(db, user_id=user_id, surface=surface)
+        if ack is None:
+            for record in surface_records:
+                applied[record.id] = False
+            continue
+        _, fingerprint = await build_agent_auth_state(db, user_id, surface=surface)
+        surface_applied = ack.acked_fingerprint == fingerprint
+        by_harness: dict[str, list[AgentAuthSelectionRecord]] = {}
+        for record in surface_records:
+            by_harness.setdefault(record.harness_kind, []).append(record)
+        for harness_records in by_harness.values():
+            scope_revision = _selection_scope_revision(harness_records)
+            harness_applied = surface_applied or scope_revision <= ack.acked_revision
+            for record in harness_records:
+                applied[record.id] = harness_applied
+    return applied
 
 
 # --------------------------------------------------------------------------- #

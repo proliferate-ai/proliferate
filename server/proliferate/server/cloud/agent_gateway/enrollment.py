@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
+    AGENT_AUTH_SURFACE_LOCAL,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
@@ -563,8 +564,21 @@ async def _sync_enrollment(
             ),
         )
         if synced.user_id is not None:
-            # A gateway selection may have been waiting on this enrollment;
-            # push fresh agent-auth state into the user's live sandbox.
+            # A gateway selection may have been waiting on this enrollment's
+            # keys — sync completion pokes BOTH delivery surfaces (agent-auth.md
+            # "Applied means acknowledged"), so no surface keeps serving a
+            # keyless document until an unrelated mutation.
+            #
+            # Local: bump the local-surface revision seam (the rendered
+            # revision is max(updated_at) over the surface's selection rows),
+            # so the desktop's next pull renders WITH keys at a strictly newer
+            # revision than any document pulled before sync completed.
+            await agent_gateway_store.touch_auth_selection_revisions(
+                db,
+                user_id=synced.user_id,
+                surface=AGENT_AUTH_SURFACE_LOCAL,
+            )
+            # Cloud: push fresh agent-auth state into the user's live sandbox.
             await materialization_service.schedule_materialize_agent_auth(
                 db,
                 user_id=synced.user_id,

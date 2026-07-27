@@ -44,7 +44,11 @@ export function stampIssuingServerOrigin(
   state: AgentAuthState,
   issuingServerOrigin: string,
 ): AgentAuthStateDocument {
-  return { ...state, issuing_server_origin: issuingServerOrigin };
+  // `fingerprint` is a server-response rider for the delivery ack (echoed back
+  // via POST /state/ack after the runtime confirms the push), never part of
+  // the state.json contract the runtime persists — strip it before pushing.
+  const { fingerprint: _fingerprint, ...document } = state;
+  return { ...document, issuing_server_origin: issuingServerOrigin };
 }
 
 export function planLocalAuthStatePush(input: {

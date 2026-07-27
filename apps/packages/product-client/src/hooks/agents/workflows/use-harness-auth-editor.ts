@@ -26,6 +26,9 @@ import {
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 
+// Poll cadence while a delivery ack is outstanding (pending → applied).
+const DELIVERY_PENDING_POLL_MS = 3000;
+
 export interface HarnessAuthEditorApi {
   // Queries
   // The auth plane is ready: the user is signed into the control plane and it
@@ -38,6 +41,13 @@ export interface HarnessAuthEditorApi {
   enrollmentQuery: ReturnType<typeof useAgentGatewayEnrollment>;
   selectionsQuery: ReturnType<typeof useAuthSelections>;
   apiKeysQuery: ReturnType<typeof useAgentApiKeys>;
+
+  // Applied means acknowledged (agent-auth.md): true while this (harness,
+  // surface) scope has a selection delivery the surface's runtime has not yet
+  // acknowledged. Drives the pane's "Applying…" indicator; while pending the
+  // selections query polls so a server-side ack (the cloud materializer's)
+  // flips the pane without any client mutation.
+  deliveryPending: boolean;
 
   // Derived
   gatewayLocked: boolean;
@@ -112,7 +122,14 @@ export function useHarnessAuthEditor(
 
   const capabilitiesQuery = useAgentGatewayCapabilities(authReady);
   const enrollmentQuery = useAgentGatewayEnrollment(authReady);
-  const selectionsQuery = useAuthSelections(null, authReady);
+  // While a delivery is pending the acks land out-of-band (the desktop sync
+  // hook's ack POST, or the cloud materializer server-side), so the query
+  // polls until the scope reads applied again (state-driven: one render
+  // behind `deliveryPending`, which is fine for a poll gate).
+  const [deliveryPolling, setDeliveryPolling] = useState(false);
+  const selectionsQuery = useAuthSelections(null, authReady, {
+    refetchInterval: deliveryPolling ? DELIVERY_PENDING_POLL_MS : false,
+  });
   const apiKeysQuery = useAgentApiKeys(authReady);
   const putSelections = usePutAuthSelections();
   const { agentsByKind } = useAgentCatalog();
@@ -145,6 +162,20 @@ export function useHarnessAuthEditor(
     setPendingMethod(null);
     lastPutSigRef.current = JSON.stringify(buildDesiredSources(harnessKind, derived));
   }, [selections, scopeKey, harnessKind, surface]);
+
+  // Pending delivery for THIS scope only: a sibling harness's (or the other
+  // surface's) unacked change must not flip this pane to "Applying…". Only an
+  // EXPLICIT `applied: false` is pending — the field is schema-optional so
+  // pre-ack fixtures/clients read as applied, never as falsely pending.
+  const deliveryPending = (selections ?? []).some(
+    (record) =>
+      record.harnessKind === harnessKind
+      && record.surface === surface
+      && record.applied === false,
+  );
+  useEffect(() => {
+    setDeliveryPolling(deliveryPending);
+  }, [deliveryPending]);
 
   const localAgent = agentsByKind.get(harnessKind);
   const loginSession = loginWorkflow.sessionsByKind[harnessKind];
@@ -301,6 +332,7 @@ export function useHarnessAuthEditor(
     enrollmentQuery,
     selectionsQuery,
     apiKeysQuery,
+    deliveryPending,
     gatewayLocked,
     harnessDisallowed,
     gatewayDisallowed,

@@ -1,6 +1,8 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
+  AckAgentAuthStateRequest,
   AgentApiKey,
+  AgentAuthDeliveryAck,
   AgentAuthSelection,
   AgentAuthState,
   AgentAuthSurface,
@@ -99,6 +101,28 @@ export async function getAgentAuthState(
     method: "GET",
     path: "/v1/cloud/agent-auth/state",
     query: { surface },
+  });
+}
+
+/**
+ * Report a surface runtime's delivery acknowledgement (agent-auth.md "Applied
+ * means acknowledged"). The desktop calls this after its local runtime's
+ * state PUT/DELETE succeeded, echoing the pushed document's `revision` and
+ * the served `fingerprint` from `getAgentAuthState` — never a
+ * client-computed hash. This stamp flips the selections read from pending to
+ * applied; the cloud surface's twin is stamped server-side by the
+ * materialization worker.
+ */
+export async function ackAgentAuthState(
+  surface: AgentAuthSurface,
+  input: AckAgentAuthStateRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AgentAuthDeliveryAck> {
+  return client.requestJson<AgentAuthDeliveryAck>({
+    method: "POST",
+    path: "/v1/cloud/agent-auth/state/ack",
+    query: { surface },
+    body: input,
   });
 }
 

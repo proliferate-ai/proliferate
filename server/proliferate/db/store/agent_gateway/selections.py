@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
@@ -325,6 +325,38 @@ async def list_enabled_selections_referencing_key(
         .all()
     )
     return [selection_record(row) for row in rows]
+
+
+async def touch_auth_selection_revisions(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str,
+) -> int:
+    """Bump ``updated_at`` on every selection row for one (user, surface).
+
+    The rendered document's ``revision`` is ``max(updated_at)`` across the
+    surface's rows (see ``materialize/agent_auth.py``), so touching the rows IS
+    the surface's revision-bump seam — the same one ``put_auth_selections``
+    exercises through its disabled-gateway marker row. It exists for
+    out-of-band key events that change the rendered *content* without any
+    selection edit (an enrollment reaching ``synced``): the next render then
+    carries a strictly newer revision than any document pulled before the
+    event, so a runtime holding the stale (keyless) document can never reject
+    the re-render as out-of-order. Returns the number of rows touched; a
+    surface with no rows renders no document, so zero is a correct no-op.
+    """
+    if surface not in AGENT_AUTH_SURFACES:
+        raise ValueError(f"Unknown agent auth surface: {surface}")
+    result = await db.execute(
+        update(AgentAuthSelection)
+        .where(
+            AgentAuthSelection.user_id == user_id,
+            AgentAuthSelection.surface == surface,
+        )
+        .values(updated_at=utcnow())
+    )
+    return result.rowcount or 0
 
 
 async def clear_auth_selections(

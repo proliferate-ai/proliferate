@@ -13,6 +13,13 @@ export type AgentAuthState = Schema<"AgentAuthStateResponse">;
 export type AgentAuthStateHarness = Schema<"AgentAuthStateHarness">;
 export type AgentAuthStateSource = Schema<"AgentAuthStateSource">;
 
+// Delivery acknowledgement (agent-auth.md "Applied means acknowledged"): the
+// desktop echoes the pushed document's (revision, fingerprint) after its
+// local runtime confirmed the state push; the selections read derives
+// applied-vs-pending from the stored stamp.
+export type AckAgentAuthStateRequest = Schema<"AgentAuthStateAckRequest">;
+export type AgentAuthDeliveryAck = Schema<"AgentAuthDeliveryAckResponse">;
+
 export type AgentGatewayCapabilities = Schema<"AgentGatewayCapabilitiesResponse">;
 export type AgentGatewayEnrollment = Schema<"AgentGatewayEnrollmentResponse">;
 

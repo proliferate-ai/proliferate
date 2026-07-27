@@ -642,6 +642,9 @@ class _SandboxIOSpy:
         self.writes: list[dict[str, Any]] = []
         self.removed: set[str] = set()
         self.read_count = 0
+        # Cloud delivery acks stamped by the materializer (Proof C1/C2's cloud
+        # ack mechanism): (surface, revision, fingerprint) per recorded ack.
+        self.acks: list[tuple[str, int, str]] = []
 
     async def write_private_file_atomic(
         self,
@@ -705,6 +708,18 @@ def _install_spy(
         "run_materialization_script",
         spy.run_materialization_script,
     )
+
+    async def _record_ack(
+        _db: object,
+        *,
+        user_id: uuid.UUID,
+        surface: str,
+        revision: int,
+        fingerprint: str,
+    ) -> None:
+        spy.acks.append((surface, revision, fingerprint))
+
+    monkeypatch.setattr(agent_auth.agent_gateway_store, "record_delivery_ack", _record_ack)
     return spy
 
 
@@ -739,6 +754,9 @@ class TestMaterializeAgentAuth:
         manifest = json.loads(str(spy.writes[1]["content"]))
         assert manifest["fingerprint"] == agent_auth.agent_auth_state_fingerprint(state)
         assert spy.removed == set()
+        # Proof C1 (cloud half): completing the delivery IS the cloud ack —
+        # stamped with exactly the delivered document's identity.
+        assert spy.acks == [("cloud", REVISION, manifest["fingerprint"])]
 
     @pytest.mark.asyncio
     async def test_unchanged_fingerprint_skips_writes(
@@ -758,6 +776,9 @@ class TestMaterializeAgentAuth:
         assert spy.writes == []
         assert spy.removed == set()
         assert spy.read_count == 1
+        # Content already at rest still confirms delivery: a re-run after a
+        # crashed ack write must converge to applied rather than stick pending.
+        assert spy.acks == [("cloud", REVISION, fingerprint)]
 
     @pytest.mark.asyncio
     async def test_unsatisfiable_selection_writes_an_empty_entry_instead_of_deleting(
@@ -807,6 +828,11 @@ class TestMaterializeAgentAuth:
             paths.agent_auth_state_path(),
             paths.agent_auth_manifest_path(),
         }
+        # The clear-to-native delivery is acknowledged too, stamped with the
+        # empty document's identity — its fingerprint is still the change
+        # detector even though nothing was written.
+        state, fingerprint = agent_auth.render_agent_auth_state(inputs)
+        assert spy.acks == [("cloud", state["revision"], fingerprint)]
 
     @pytest.mark.asyncio
     async def test_bad_gateway_still_purges_revoked_key_and_writes_rest(
@@ -859,6 +885,31 @@ class TestMaterializeAgentAuth:
         serialized = json.dumps(state)
         assert "sk-live" in serialized
         assert str(revoked_id) not in serialized
+
+    @pytest.mark.asyncio
+    async def test_failed_delivery_never_stamps_the_cloud_ack(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Proof C1 (cloud half): no path shows applied without an ack — a
+        # sandbox write failing means no ack is recorded, so the selection
+        # stays visibly pending until a later pass succeeds.
+        inputs = _inputs((_selection(harness="claude", source_kind="gateway"),))
+
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+            return inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
+        spy = _install_spy(monkeypatch, previous_manifest=None)
+
+        async def failing_write(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("sandbox write failed")
+
+        monkeypatch.setattr(agent_auth.sandbox_io, "write_private_file_atomic", failing_write)
+
+        with pytest.raises(RuntimeError, match="sandbox write failed"):
+            await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+
+        assert spy.acks == []
 
     @pytest.mark.asyncio
     async def test_unsatisfiable_selection_survives_renderer_merge_tripwire(
