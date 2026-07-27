@@ -814,3 +814,45 @@ class TestOldAgentGatewayRoutesAreGone:
         ):
             response = await getattr(client, method)(path, headers=headers)
             assert response.status_code == 404, f"{method} {path}"
+
+    def test_agent_auth_and_agent_gateway_prefixes_carry_the_right_routes(self) -> None:
+        """Pin the S1 split by structure, not by probing random 404s.
+
+        The org-policy 404s above only prove the org guard rejects a random
+        org id -- they'd pass even if S1 never moved a route. This asserts the
+        actual shape: every vault/selections/state/org-policy route now lives
+        under ``/agent-auth``, and only enrollment + capabilities (the
+        gateway-account concerns model-gateway.md scopes to that prefix)
+        remain under ``/agent-gateway``.
+        """
+        from proliferate.main import app
+
+        spec = app.openapi()
+        registered = [
+            (method.upper(), path)
+            for path, operations in spec["paths"].items()
+            for method in operations
+        ]
+
+        agent_auth = sorted(pair for pair in registered if "/agent-auth" in pair[1])
+        assert agent_auth == [
+            ("DELETE", "/v1/cloud/agent-auth/keys/{key_id}"),
+            ("GET", "/v1/cloud/agent-auth/keys"),
+            ("GET", "/v1/cloud/agent-auth/selections"),
+            ("GET", "/v1/cloud/agent-auth/state"),
+            ("GET", "/v1/cloud/organizations/{organization_id}/agent-auth/policy"),
+            (
+                "GET",
+                "/v1/cloud/organizations/{organization_id}/agent-auth/policy/violations",
+            ),
+            ("POST", "/v1/cloud/agent-auth/keys"),
+            ("POST", "/v1/cloud/agent-auth/keys/provider-config"),
+            ("PUT", "/v1/cloud/agent-auth/selections/{harness_kind}"),
+            ("PUT", "/v1/cloud/organizations/{organization_id}/agent-auth/policy"),
+        ]
+
+        agent_gateway = sorted(pair for pair in registered if "/agent-gateway" in pair[1])
+        assert agent_gateway == [
+            ("GET", "/v1/cloud/agent-gateway/capabilities"),
+            ("GET", "/v1/cloud/agent-gateway/enrollment"),
+        ]

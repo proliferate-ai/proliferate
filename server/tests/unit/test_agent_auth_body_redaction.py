@@ -101,10 +101,16 @@ async def test_validation_error_handler_redacts_raw_api_key_for_provider_config(
     """End-to-end through the real handler: a malformed provider-config body
     that fails pydantic validation must never echo the raw ``value.apiKey``
     credential in the 422 response.
+
+    The body omits ``kind`` (a required field) rather than mis-typing
+    ``title``: pydantic's "missing" error echoes the WHOLE input document
+    (there is no narrower sub-value to point at), so ``value.apiKey`` is
+    genuinely present in the raw ``input`` this handler redacts. A type
+    error on a sibling field would only echo that field's own value, never
+    exercising the whole-body redaction path this test exists to pin.
     """
     body = {
-        "title": ["not-a-string-title"],
-        "kind": "azure_openai",
+        "title": "t",
         "value": {"apiKey": RAW_KEY_MUST_NOT_LEAK, "endpoint": "https://example.invalid"},
     }
     with pytest.raises(ValidationError) as captured:
