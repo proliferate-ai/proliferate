@@ -152,21 +152,6 @@ export function Blocks({ className, ...props }: IconProps) {
   );
 }
 
-// lucide-react "plug" glyph (ISC licensed, redrawn from its path data — not a
-// copied asset): a literal plug reads more directly as "integrations" than
-// the puzzle-grid `Blocks` glyph it replaces in the composer's integrations
-// control.
-export function Plug({ className, ...props }: IconProps) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <path d="M12 22v-5" />
-      <path d="M15 8V2" />
-      <path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" />
-      <path d="M9 8V2" />
-    </svg>
-  );
-}
-
 export function CircleUser({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" {...props}>
