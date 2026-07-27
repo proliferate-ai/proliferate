@@ -7,7 +7,7 @@
 //! without widening their visibility.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use agent_client_protocol::{self as acp};
@@ -33,13 +33,44 @@ pub struct ProbeOptions {
     /// ANTHROPIC_API_KEY). Treated as protected: merged last, never recorded
     /// in the snapshot.
     pub auth_env: BTreeMap<String, String>,
+    /// Env keys required ABSENT in the spawned process, mapped to
+    /// `LaunchEnv.route_auth_remove` (which `merge_spawn_env` and spawn already
+    /// honor).
+    ///
+    /// Without it the claude recipes' sanitization half is silently dropped: the
+    /// renderer removes `CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`,
+    /// `AWS_BEARER_TOKEN_BEDROCK` and any Anthropic selector the route did not
+    /// itself set, on EVERY non-native claude route. A probe that only sets vars
+    /// would observe Bedrock's model menu on a Bedrock-exporting machine and
+    /// record it as the gateway's (or the BYOK key's) truth.
+    pub auth_env_remove: Vec<String>,
     pub runtime_home: PathBuf,
+    /// Parent for the throwaway spawn workspace. `None` keeps the historical
+    /// `temp_dir()` behavior for the CLI; the runtime engine passes its own
+    /// scratch so ONE guard cleans everything — including on a cancelled probe,
+    /// whose own teardown never runs.
+    pub workspace_root: Option<PathBuf>,
     /// How long to wait for a ConfigOptionUpdate notification after a model
     /// switch before recording the switch as unobserved.
     pub model_switch_timeout: Duration,
     /// Optional cap on how many models to switch through (safety valve for
     /// harnesses with very large dynamic model lists).
     pub max_models: Option<usize>,
+    /// Capture the per-model `config_options` matrix by switching through every
+    /// model. `true` for the central CLI, `false` for runtime probes.
+    ///
+    /// **It does not skip the enumeration loop.** The loop does two jobs at once:
+    /// the per-model switch round-trip AND building the `models` vector the whole
+    /// snapshot exists to capture. `false` keeps every `models.push`, and
+    /// suppresses only the `config_options` capture (set to `None`) plus the
+    /// un-switchable warning — not switching was the instruction, not a defect.
+    /// Ids, names, descriptions, modes, observed defaults and the attestation are
+    /// all still recorded.
+    ///
+    /// Runtime probes set `false` because the matrix costs one round-trip per
+    /// model against the user's own provider, and control wiring is
+    /// catalog-authoritative anyway (model-catalog.md, "Truth tiers").
+    pub switch_models: bool,
     /// Send one minimal prompt on the session's current model and record the
     /// outcome. This is the ONLY honest availability test for seeded model
     /// ids: harness menus list whatever the config names without validating
@@ -149,7 +180,7 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
         );
     }
 
-    let workspace = probe_workspace_dir(&options.agent_kind)?;
+    let workspace = probe_workspace_dir(&options.agent_kind, options.workspace_root.as_deref())?;
     let mut warnings = Vec::new();
 
     // Mirror production launch env: point the adapter at the managed native
@@ -187,6 +218,9 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
     );
     let launch_env = crate::live::sessions::model::LaunchEnv {
         session: session_launch_env,
+        // Removals are applied last at spawn (`Command::env_remove`), so they win
+        // even against ambient values the runtime process inherited.
+        route_auth_remove: options.auth_env_remove.clone(),
         ..Default::default()
     };
     let spawned = spawn_agent_process(
@@ -367,7 +401,11 @@ async fn run_enumeration(
     let mut models = Vec::with_capacity(available.len());
     for (model_id, name, description) in available {
         drain_pending(notification_rx);
-        let config_options = if let Some(config_id) = &model_config_id {
+        let config_options = if !options.switch_models {
+            // The instruction was "do not switch", so there is no matrix and no
+            // defect to warn about. The entry is still recorded in full.
+            None
+        } else if let Some(config_id) = &model_config_id {
             // Model exposed as a config option: switch through it; the
             // response carries the updated option set directly.
             match conn
@@ -595,19 +633,50 @@ fn native_cli_path(
     claude_override.or(managed_native)
 }
 
-fn probe_workspace_dir(kind: &AgentKind) -> anyhow::Result<PathBuf> {
+/// Where the throwaway spawn workspace lives. `workspace_root` lets the runtime
+/// engine put it inside its own scratch guard, so a cancelled probe (whose
+/// teardown `remove_dir_all` never runs) still leaves nothing behind.
+fn probe_workspace_dir(kind: &AgentKind, workspace_root: Option<&Path>) -> anyhow::Result<PathBuf> {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
-    let dir = std::env::temp_dir().join(format!(
+    let name = format!(
         "anyharness-catalog-probe-{}-{}-{}",
         kind.as_str(),
         std::process::id(),
         nanos
-    ));
+    );
+    let dir = match workspace_root {
+        Some(root) => root.join(name),
+        None => std::env::temp_dir().join(name),
+    };
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
+}
+
+/// The env a probe's child would actually receive, for tests OUTSIDE this module
+/// (the probe seam's) to assert the removal chain end to end.
+///
+/// It exists because `merge_spawn_env` and the driver layer are private to
+/// `live::sessions` by design, and the property worth pinning — that
+/// `auth_env_remove` beats a set value at spawn — lives in that private layer.
+/// Building the `LaunchEnv` here rather than in the test is the point: a test that
+/// assembled its own could pass while `probe_agent` forgot to pass the removals
+/// through, which is exactly the regression C5 named.
+#[cfg(test)]
+pub(crate) fn spawn_env_for_options(
+    options: &ProbeOptions,
+    ambient: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let mut session = ambient.clone();
+    session.extend(options.auth_env.clone());
+    let launch_env = crate::live::sessions::model::LaunchEnv {
+        session,
+        route_auth_remove: options.auth_env_remove.clone(),
+        ..Default::default()
+    };
+    super::driver::process::merge_spawn_env(&launch_env, None)
 }
 
 #[cfg(test)]

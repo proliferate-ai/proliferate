@@ -16,6 +16,8 @@ use crate::domains::activity::store::ActivityStore;
 use crate::domains::agents::catalog::gateway_probe::GatewayProbeStore;
 use crate::domains::agents::catalog::gateway_resolver::GatewayModelResolver;
 use crate::domains::agents::catalog::service::AgentCatalogService;
+use crate::domains::agents::model_snapshot::targets::RuntimeProbeTargets;
+use crate::domains::agents::model_snapshot::ModelSnapshotService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
@@ -117,6 +119,7 @@ pub struct AppState {
     pub agent_runtime: Arc<AgentRuntime>,
     pub catalog_sync_service: Arc<CatalogSyncService>,
     pub gateway_model_resolver: Arc<GatewayModelResolver>,
+    pub model_snapshot_service: Arc<ModelSnapshotService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -217,6 +220,22 @@ impl AppState {
         let gateway_model_resolver = Arc::new(GatewayModelResolver::new(
             catalog_sync_service.clone(),
             GatewayProbeStore::new(db.clone()),
+        ));
+        // The machine model-snapshot engine. Constructed here so the status route
+        // can serve it and so exactly ONE engine exists per process; the pokes that
+        // drive it are wired separately (they are a distinct change with its own
+        // trigger-ordering argument), so on this revision the engine probes only
+        // when a client asks it to.
+        //
+        // Its lock decides ownership at construction: a second runtime over the
+        // same home comes up read-only and reports so on the status surface.
+        let model_snapshot_service = Arc::new(ModelSnapshotService::new(
+            runtime_home.clone(),
+            gateway_model_resolver.clone(),
+            Arc::new(RuntimeProbeTargets::new(
+                runtime_home.clone(),
+                AgentCatalogService::new(catalog_sync_service.clone()),
+            )),
         ));
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
@@ -529,6 +548,7 @@ impl AppState {
             agent_runtime,
             catalog_sync_service,
             gateway_model_resolver,
+            model_snapshot_service,
             agent_reconcile_service,
             repo_root_service,
             workspace_runtime,

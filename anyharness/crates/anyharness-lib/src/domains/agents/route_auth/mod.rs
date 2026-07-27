@@ -22,6 +22,7 @@
 
 mod materialize;
 pub mod plan;
+pub mod probe_materialization;
 pub mod profile;
 pub mod render;
 pub mod state;
@@ -36,6 +37,10 @@ pub(crate) mod test_support;
 use std::path::{Path, PathBuf};
 
 pub use plan::{GatewayModelPlan, GatewayModelResolve};
+pub use probe_materialization::{
+    materialize_for_probe, probe_auth_material, sweep_probe_scratch, ProbeAuthMaterial,
+    ProbeAuthMaterialization, ProbeScratch,
+};
 pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
 pub use render::{render_profile, RenderedRouteAuth};
 pub use state::{
@@ -100,7 +105,7 @@ impl RouteAuthError {
 /// context outside the desktop-embedded runtime.
 const CURRENT_SERVER_ORIGIN_ENV: &str = "PROLIFERATE_API_BASE_URL_ORIGIN";
 
-fn current_server_origin() -> Option<String> {
+pub(crate) fn current_server_origin() -> Option<String> {
     std::env::var(CURRENT_SERVER_ORIGIN_ENV)
         .ok()
         .map(|value| value.trim().to_string())
@@ -118,7 +123,7 @@ pub(crate) fn resolve_launch_auth_profile(
     resolve_profile(state.as_ref(), harness_kind)
 }
 
-fn load_effective_state(
+pub(crate) fn load_effective_state(
     runtime_home: &Path,
     current_server_origin: Option<&str>,
 ) -> Result<Option<AgentAuthState>, RouteAuthError> {
