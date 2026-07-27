@@ -16,7 +16,6 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
@@ -263,10 +262,17 @@ async def test_reactivation_raises_hard_cap_budgets_for_user_subject(
     topup_settings: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
     user_id = await _create_user(db_session)
     enrollment = await ensure_user_enrollment(db_session, user_id)
     assert enrollment.virtual_key_id is None
+    # Fund the legacy personal subject explicitly: enrollment itself no longer
+    # grants free credit anywhere (the signup grant is org-only, D-2).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
     enrollment_keys = await store.list_active_enrollment_keys(
         db_session, enrollment_id=enrollment.id
     )
@@ -310,9 +316,16 @@ async def test_reactivation_falls_back_to_remint_when_unblock_fails(
     topup_settings: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
     user_id = await _create_user(db_session)
     enrollment = await ensure_user_enrollment(db_session, user_id)
+    # Explicit funding for the legacy personal subject (see above: enrollment
+    # no longer grants free credit).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
     old_key_ids = {
         key.virtual_key_id
         for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
@@ -402,9 +415,16 @@ async def test_remint_schedules_materialization(
 ) -> None:
     """After a virtual key rotation during top-up reactivation, agent-auth
     materialization is scheduled for the affected user."""
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
     user_id = await _create_user(db_session)
     enrollment = await ensure_user_enrollment(db_session, user_id)
+    # Explicit funding for the legacy personal subject (see above: enrollment
+    # no longer grants free credit).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
     old_key_ids = {
         key.virtual_key_id
         for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)

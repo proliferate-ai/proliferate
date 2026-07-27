@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -95,10 +95,15 @@ async def ensure_organization_billing_subject(
         )
         .on_conflict_do_nothing(
             index_elements=[BillingSubject.organization_id],
-            index_where=(
-                (BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION)
-                & BillingSubject.organization_id.is_not(None)
-            ),
+            # Literal predicate text, matching uq_billing_subject_organization_id
+            # exactly. A parameterized predicate (`kind == :param`) breaks
+            # partial-index inference once Postgres switches this prepared
+            # statement to a generic plan (after ~5 executions per connection,
+            # asyncpg always prepares): the unbound parameter can no longer be
+            # proven to imply the index predicate and the INSERT starts failing
+            # with "no unique or exclusion constraint matching the ON CONFLICT
+            # specification".
+            index_where=text("kind = 'organization' AND organization_id IS NOT NULL"),
         )
         .returning(BillingSubject.id)
     )
@@ -203,28 +208,33 @@ async def ensure_agent_gateway_free_credit_allocation(
     db: AsyncSession,
     *,
     user_id: UUID,
+    billing_subject: BillingSubject,
     period_key: str,
 ) -> bool:
-    """Reserve the one-time agent-gateway free-credit allocation for a user.
+    """Reserve the one-time agent-gateway free-credit allocation for a subject.
 
-    Deduped through ``free_cloud_allocation`` on (allocation_kind, github
-    identity, period_key) — the same anti-abuse guard the compute free trial
-    uses. Returns True only when this call owns the allocation (either it
-    created the row, or an existing row already belongs to this subject), so
-    the caller can grant credits exactly once per GitHub identity. Returns
+    ``billing_subject`` is the subject the grant will land on — the user's
+    default org under the org-only account model (model-gateway.md §Account
+    model); ``user_id`` is the human whose linked GitHub identity keys the
+    dedupe. Deduped through ``free_cloud_allocation`` on (allocation_kind,
+    github identity, period_key) — the same anti-abuse guard the compute free
+    trial uses. Returns True only when this call owns the allocation (either
+    it created the row, or an existing row already belongs to this subject),
+    so the caller can grant credits exactly once per GitHub identity. Returns
     False when the user has no linked GitHub identity or the allocation
-    belongs to a different subject.
+    belongs to a different subject (another account on the same identity, or
+    a pre-migration personal subject).
     """
     github_provider_user_id = await _linked_github_provider_user_id(db, user_id)
     if github_provider_user_id is None:
         return False
-    subject = await ensure_personal_billing_subject(db, user_id)
     return await _ensure_free_cloud_allocation(
         db,
         allocation_kind=FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
-        subject=subject,
+        subject=billing_subject,
         github_provider_user_id=github_provider_user_id,
         period_key=period_key,
+        claimant_user_id=user_id,
     )
 
 
@@ -279,8 +289,13 @@ async def _ensure_free_cloud_allocation(
     subject: BillingSubject,
     github_provider_user_id: str,
     period_key: str,
+    claimant_user_id: UUID | None = None,
 ) -> bool:
-    if subject.user_id is None:
+    # An org subject carries no user_id of its own; the claiming human is
+    # recorded on the allocation row instead (agent-gateway free credits land
+    # on the default org's subject under the org-only account model).
+    allocation_user_id = subject.user_id if subject.user_id is not None else claimant_user_id
+    if allocation_user_id is None:
         return False
     now = utcnow()
     result = await db.execute(
@@ -289,7 +304,7 @@ async def _ensure_free_cloud_allocation(
             allocation_kind=allocation_kind,
             github_provider_user_id=github_provider_user_id,
             billing_subject_id=subject.id,
-            user_id=subject.user_id,
+            user_id=allocation_user_id,
             issued_billing_grant_id=None,
             period_key=period_key,
             status="active",

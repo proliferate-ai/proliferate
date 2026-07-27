@@ -1,12 +1,20 @@
-"""Eager LiteLLM enrollment for users and organizations.
+"""Eager LiteLLM enrollment under the org-only account model.
 
-Every enrollment ensures the durable row first (idempotent), then — when the
-gateway is enabled — provisions the LiteLLM team, user, and one
-access-group-scoped virtual key per gateway-capable harness_kind (child
-``agent_gateway_enrollment_key`` rows; model-gateway.md §Account model), and
-marks the enrollment row synced. Failures mark the row failed; the backfill
-worker retries pending/failed rows and discovers users created before the
-hooks existed.
+Orgs are the only billing subject (model-gateway.md §Account model): a new
+signup enrolls the member INTO their default org — one LiteLLM team per org
+(``org-<uuid>``), one LiteLLM user per (org, member)
+(``org-<org>-user-<uuid>``, never one global user spanning orgs), and one
+access-group-scoped virtual key per (member, gateway-capable harness) (child
+``agent_gateway_enrollment_key`` rows). Every enrollment ensures the durable
+row first (idempotent), then — when the gateway is enabled — provisions the
+LiteLLM shape and marks the row synced. Failures mark the row failed; the
+backfill worker retries pending/failed rows and discovers active org
+memberships whose enroll hook was lost.
+
+Personal (``subject_kind='user'``) enrollments are pre-migration residue: no
+path creates new ones, but existing rows keep re-syncing through
+:func:`ensure_user_enrollment` until the D-3 migration re-parents them onto
+each user's default org.
 """
 
 from __future__ import annotations
@@ -27,6 +35,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
 from proliferate.db.store.billing_subjects import (
     ensure_organization_billing_subject,
@@ -34,7 +43,7 @@ from proliferate.db.store.billing_subjects import (
 )
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
-from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free_credit_grant
+from proliferate.server.cloud.agent_gateway.free_credits import ensure_signup_free_credit_grant
 from proliferate.server.cloud.materialization import service as materialization_service
 
 logger = logging.getLogger(__name__)
@@ -249,10 +258,44 @@ async def _reopen_if_key_set_drifted(
     )
 
 
+async def ensure_signup_enrollment(
+    db: AsyncSession,
+    user_id: UUID,
+) -> AgentGatewayEnrollmentRecord | None:
+    """Enroll a (possibly brand-new) user under the org-only account model.
+
+    The signup/onboarding entrypoint: resolves the user's default org (the
+    org their identity was placed into at signup — always created before the
+    enrollment task runs) and enrolls the member into it. No personal-subject
+    enrollment is ever created (model-gateway.md §Account model — orgs are
+    the only billing subject). A user with no active membership yet gets
+    nothing here; the backfill worker's membership discovery enrolls them
+    once a membership exists.
+    """
+    default_org = await organization_store.get_default_organization_for_user(db, user_id)
+    if default_org is None:
+        logger.info(
+            "Agent gateway signup enrollment deferred: user has no default org yet",
+            extra={"user_id": str(user_id)},
+        )
+        return None
+    return await ensure_org_enrollment(db, default_org.organization.id, user_id)
+
+
 async def ensure_user_enrollment(
     db: AsyncSession,
     user_id: UUID,
 ) -> AgentGatewayEnrollmentRecord:
+    """Re-sync a PRE-MIGRATION personal enrollment (legacy shape).
+
+    No signup or onboarding path calls this anymore — new users are enrolled
+    org-only via :func:`ensure_signup_enrollment`. It remains only so
+    existing ``subject_kind='user'`` rows (pre-D-2 residue) keep re-syncing
+    (backfill of pending/failed rows, key-set drift) until the D-3 migration
+    re-parents them onto each user's default org. It never grants free
+    credits: the signup grant lands on the default org's billing subject via
+    the org path.
+    """
     subject = await ensure_personal_billing_subject(db, user_id)
     enrollment = await agent_gateway_store.ensure_enrollment_row(
         db,
@@ -262,9 +305,6 @@ async def ensure_user_enrollment(
     )
     if not settings.agent_gateway_enabled:
         return enrollment
-    # Grant free credits (deduped) before syncing so the LiteLLM budget can
-    # mirror the resulting remaining balance. Runs every pass; idempotent.
-    await ensure_user_free_credit_grant(db, user_id)
     enrollment = await _reopen_if_key_set_drifted(
         db,
         enrollment,
@@ -324,9 +364,13 @@ async def ensure_org_enrollment(
 ) -> AgentGatewayEnrollmentRecord:
     """Enroll one member under the org team.
 
-    Per spec §2.3 the virtual key is per (user, team): every org member gets
-    their own key under the shared org team/budget so gateway spend is
-    attributable to the member who spent it.
+    The one enrollment shape (model-gateway.md §Account model): the org team
+    (``org-<uuid>``) holds the budget, the member gets a per-(org, member)
+    LiteLLM user (``org-<org>-user-<uuid>`` — never one global user spanning
+    orgs, so any user-scoped LiteLLM control is org-scoped by construction),
+    and every gateway-capable harness gets its own access-group-scoped key
+    under that user, so gateway spend is attributable to the member who
+    spent it.
     """
     subject = await ensure_organization_billing_subject(db, organization_id)
     enrollment = await agent_gateway_store.ensure_enrollment_row(
@@ -338,6 +382,13 @@ async def ensure_org_enrollment(
     )
     if not settings.agent_gateway_enabled:
         return enrollment
+    # Grant the signup free credit (deduped per GitHub identity) before
+    # syncing so the LiteLLM budget can mirror the resulting balance. The
+    # grant always lands on the member's DEFAULT org's billing subject —
+    # which may not be this org when the member was invited here — so a
+    # joining member never brings their free grant into an org. Runs every
+    # pass; idempotent.
+    await ensure_signup_free_credit_grant(db, user_id)
     enrollment = await _reopen_if_key_set_drifted(
         db,
         enrollment,
@@ -364,10 +415,11 @@ async def ensure_org_enrollment(
         db,
         enrollment=enrollment,
         team_alias=f"org-{organization_id}",
-        # Per-member attribution (spec §2.3): the member's key is minted under
-        # their own LiteLLM user, matching their personal enrollment, so org
-        # spend rows stay attributable to the member who spent them.
-        litellm_user_id=f"user-{user_id}",
+        # One LiteLLM user per (org, member) — `org-<org>-user-<uuid>`
+        # (model-gateway.md §Account model). Never the old shared global
+        # `user-<uuid>`: a user spanning orgs would make any user-scoped
+        # LiteLLM control (per-member caps) leak across org boundaries.
+        litellm_user_id=f"org-{organization_id}-user-{user_id}",
         subject_label=f"org-{organization_id}-user-{user_id}",
         budget_raw=budget_raw,
     )
@@ -541,7 +593,15 @@ async def _sync_enrollment(
 
 
 async def backfill_enrollments(db: AsyncSession, *, limit: int = 50) -> int:
-    """Sync pending/failed enrollments and enroll users missing rows.
+    """Sync pending/failed enrollments and enroll memberships missing rows.
+
+    Discovery is org-only: a lost signup/org-join hook leaves an active
+    membership with no enrollment row, which would otherwise never self-heal.
+    There is deliberately no bare-user discovery — new enrollment rows are
+    only ever org-shaped, and a user with no membership yet has no org to
+    bill (their default org is created at signup, so this is a transient
+    state). Existing personal rows still re-sync (first pass) until the D-3
+    migration removes them.
 
     Work is bounded to ``limit`` subjects per invocation. Returns the number
     of subjects processed.
@@ -559,19 +619,6 @@ async def backfill_enrollments(db: AsyncSession, *, limit: int = 50) -> int:
     remaining = limit - processed
     if remaining <= 0:
         return processed
-    missing_user_ids = await agent_gateway_store.list_user_ids_missing_enrollment(
-        db,
-        limit=remaining,
-    )
-    for user_id in missing_user_ids:
-        await ensure_user_enrollment(db, user_id)
-        processed += 1
-
-    remaining = limit - processed
-    if remaining <= 0:
-        return processed
-    # Symmetric org recovery: a lost org-join hook leaves an active membership
-    # with no enrollment row, which would otherwise never self-heal.
     missing_memberships = await agent_gateway_store.list_org_memberships_missing_enrollment(
         db,
         limit=remaining,

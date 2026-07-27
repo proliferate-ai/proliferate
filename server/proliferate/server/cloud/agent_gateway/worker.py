@@ -2,7 +2,7 @@
 
 All are started from the app lifespan (mirroring the anonymous-telemetry
 sender). The backfill worker retries pending/failed enrollments and enrolls
-users that predate the signup hooks every
+active org memberships whose enroll hook was lost (org-only discovery) every
 ``agent_gateway_backfill_interval_seconds``. The usage-import worker pages
 LiteLLM spend logs and enforces LLM-credit exhaustion every
 ``agent_gateway_usage_import_interval_seconds``. The top-up worker charges

@@ -18,7 +18,6 @@ from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_SYNC_STATUS_PENDING,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
 from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.agent_gateway.enrollment_keys import revoke_enrollment_keys
@@ -258,29 +257,6 @@ async def list_enrollments_needing_sync(
     return [enrollment_record(row) for row in rows]
 
 
-async def list_user_ids_missing_enrollment(
-    db: AsyncSession,
-    *,
-    limit: int = 50,
-) -> list[UUID]:
-    """Users with no active personal enrollment row (backfill discovery)."""
-    active_user_enrollment = (
-        select(AgentGatewayEnrollment.id)
-        .where(
-            AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_USER,
-            AgentGatewayEnrollment.user_id == User.id,
-            AgentGatewayEnrollment.revoked_at.is_(None),
-        )
-        .exists()
-    )
-    rows = (
-        await db.execute(
-            select(User.id).where(~active_user_enrollment).order_by(User.created_at).limit(limit)
-        )
-    ).scalars()
-    return list(rows.all())
-
-
 async def list_org_memberships_missing_enrollment(
     db: AsyncSession,
     *,
@@ -288,8 +264,9 @@ async def list_org_memberships_missing_enrollment(
 ) -> list[tuple[UUID, UUID]]:
     """(organization_id, user_id) pairs for active memberships lacking a row.
 
-    Symmetric to :func:`list_user_ids_missing_enrollment`: recovers org members
-    whose join hook was lost so a per-member virtual key is still minted.
+    The backfill worker's only discovery source (org-only account model):
+    recovers members whose signup/org-join hook was lost so per-member
+    virtual keys are still minted.
     """
     active_org_enrollment = (
         select(AgentGatewayEnrollment.id)

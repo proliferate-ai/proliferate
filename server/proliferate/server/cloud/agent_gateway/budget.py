@@ -85,11 +85,13 @@ async def get_gateway_enrollment_for_user(
     LiteLLM team-budget mirror flooring unfunded subjects at the exhausted
     floor), never by re-routing payment to a different subject.
 
-    A user whose default org has no org enrollment row yet still resolves
-    their personal enrollment, as does an org-less user. That personal shape
-    is pre-migration residue: deleting it and re-parenting personal
-    enrollments onto the default org is the org-only unification (D-2), not
-    this resolver's concern.
+    The trailing personal-enrollment fallback exists ONLY for pre-migration
+    residue: rows minted before the org-only signup shape (D-2) landed. A
+    user signed up since then can never take it — signup enrolls them into
+    their default org and creates no personal row, so the org branch always
+    resolves first. Deleting the residue (re-parenting existing personal
+    enrollments onto each default org) is the D-3 migration, after which the
+    fallback goes too.
     """
     default_org = await organization_store.get_default_organization_for_user(db, user_id)
     if default_org is not None:

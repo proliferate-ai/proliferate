@@ -39,6 +39,7 @@ from proliferate.server.cloud.agent_gateway.budget import (
 )
 from proliferate.server.cloud.agent_gateway.enrollment import (
     ensure_org_enrollment,
+    ensure_signup_enrollment,
     ensure_user_enrollment,
 )
 from proliferate.server.cloud.materialization.materialize.agent_auth import (
@@ -225,6 +226,12 @@ async def test_org_less_user_still_resolves_personal_enrollment(
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
+    """Pre-migration residue only: an EXISTING personal row still resolves.
+
+    ``ensure_user_enrollment`` here fabricates the pre-D-2 shape directly —
+    no signup path creates it anymore. The fallback (and this test) is
+    deleted with the D-3 migration.
+    """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     user_id = await _create_user(db_session)
 
@@ -234,6 +241,45 @@ async def test_org_less_user_still_resolves_personal_enrollment(
     assert resolved is not None
     assert resolved.id == personal.id
     assert resolved.subject_kind == "user"
+
+
+@pytest.mark.asyncio
+async def test_new_signup_never_creates_or_takes_the_personal_fallback(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """D-2 fallback tightening: a new signup can never reach the personal path.
+
+    The org-only signup shape creates no ``subject_kind='user'`` row at all,
+    so the resolver's pre-migration fallback has nothing to return — the
+    default org's enrollment governs whether funded or not (an unfunded org
+    fails closed at the budget gate; it never re-routes to a personal
+    subject).
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
+    user_id = await _create_user(db_session)
+    org_id = await _create_org_with_active_member(db_session, user_id=user_id)
+
+    enrollment = await ensure_signup_enrollment(db_session, user_id)
+
+    assert enrollment is not None
+    assert enrollment.subject_kind == "organization"
+    assert enrollment.organization_id == org_id
+    # No personal row exists for the fallback to find.
+    assert await store.get_enrollment_for_user(db_session, user_id=user_id) is None
+    resolved = await get_gateway_enrollment_for_user(db_session, user_id)
+    assert resolved is not None
+    assert resolved.id == enrollment.id
+
+    # Even with the org unfunded (gate refuses), resolution stays on the org:
+    # fail-closed never re-routes payment to another subject.
+    assert await is_gateway_budget_available(db_session, user_id) is False
+    still_resolved = await get_gateway_enrollment_for_user(db_session, user_id)
+    assert still_resolved is not None
+    assert still_resolved.id == enrollment.id
+    assert still_resolved.subject_kind == "organization"
 
 
 @pytest.mark.asyncio

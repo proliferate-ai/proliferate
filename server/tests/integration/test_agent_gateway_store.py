@@ -517,23 +517,6 @@ async def test_enrollment_sync_lifecycle(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_user_ids_missing_enrollment(db_session: AsyncSession) -> None:
-    enrolled_id = await _create_user(db_session)
-    missing_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, enrolled_id)
-    await store.ensure_enrollment_row(
-        db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
-        user_id=enrolled_id,
-    )
-
-    missing = await store.list_user_ids_missing_enrollment(db_session, limit=100)
-    assert missing_id in missing
-    assert enrolled_id not in missing
-
-
-@pytest.mark.asyncio
 async def test_list_billing_subject_ids_paginates_past_a_page(
     db_session: AsyncSession,
 ) -> None:

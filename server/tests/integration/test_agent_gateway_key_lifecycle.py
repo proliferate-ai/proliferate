@@ -86,7 +86,7 @@ class _StubLiteLLM:
         models: list[str] | None = None,
     ) -> LiteLLMVirtualKey:
         self.token_counter += 1
-        self.minted.append({"alias": alias, "models": models})
+        self.minted.append({"alias": alias, "models": models, "user_id": user_id})
         return LiteLLMVirtualKey(
             key=f"sk-litellm-{self.token_counter}",
             token_id=f"token-{self.token_counter}",
@@ -395,6 +395,68 @@ async def test_added_harness_kind_reopens_enrollment_and_mints_missing_key(
     # Exactly one new mint: the already-present keys are never re-minted.
     assert len(gateway_litellm.minted) == minted_before + 1
     assert gateway_litellm.minted[-1]["models"] == ["grok"]
+
+
+@pytest.mark.asyncio
+async def test_added_harness_kind_reopens_org_enrollment_too(
+    db_session: AsyncSession,
+    gateway_litellm: _StubLiteLLM,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D7 on the org-only signup shape: drift reopens and mints the missing key.
+
+    New enrollments are org-shaped (D-2), so the fingerprint-bump mechanism
+    must hold on ``ensure_org_enrollment``'s rows — the shape every user
+    signed up since the cut actually has.
+    """
+    from proliferate.db.models.organizations import Organization, OrganizationMembership
+    from proliferate.server.cloud.agent_gateway.enrollment import ensure_signup_enrollment
+
+    user_id = await _create_user(db_session)
+    organization = Organization(name=f"Drift Org {uuid.uuid4().hex[:6]}")
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=user_id,
+            role="member",
+            status="active",
+        )
+    )
+    await db_session.flush()
+    monkeypatch.setattr(
+        enrollment_service,
+        "_GATEWAY_CAPABLE_HARNESS_KINDS",
+        ("claude", "codex"),
+    )
+
+    first = await ensure_signup_enrollment(db_session, user_id)
+    assert first is not None
+    assert first.sync_status == "synced"
+    assert first.subject_kind == "organization"
+    minted_before = len(gateway_litellm.minted)
+
+    # A new gateway-capable harness appears in the config.
+    monkeypatch.setattr(
+        enrollment_service,
+        "_GATEWAY_CAPABLE_HARNESS_KINDS",
+        ("claude", "codex", "grok"),
+    )
+
+    resynced = await ensure_signup_enrollment(db_session, user_id)
+
+    assert resynced is not None
+    assert resynced.sync_status == "synced"
+    assert resynced.sync_fingerprint != first.sync_fingerprint
+    assert {
+        key.harness_kind
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=first.id)
+    } == {"claude", "codex", "grok"}
+    # Exactly one new mint, under the per-(org, member) LiteLLM user.
+    assert len(gateway_litellm.minted) == minted_before + 1
+    assert gateway_litellm.minted[-1]["models"] == ["grok"]
+    assert gateway_litellm.minted[-1]["user_id"] == f"org-{organization.id}-user-{user_id}"
 
 
 @pytest.mark.asyncio
