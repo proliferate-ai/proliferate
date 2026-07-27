@@ -756,7 +756,8 @@ export async function enrollActorAndRunGatewayTurn(
 }> {
   // 1. Enroll a fresh actor through the product (invitation + register). The
   //    register/login fires the server's eager gateway enrollment
-  //    (`ensure_user_enrollment` via `signup_hook`), which mints the actor's
+  //    (`ensure_signup_enrollment` via `signup_hook` — the org-only path that
+  //    replaced the pre-D `ensure_user_enrollment`), which mints the actor's
   //    scoped LiteLLM virtual key server-side before the turn.
   const actor = await inviteAndRegisterMemberViaApi(world, owner);
 

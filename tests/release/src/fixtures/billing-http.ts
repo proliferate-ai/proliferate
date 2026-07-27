@@ -77,7 +77,8 @@ export interface LlmBalance {
 export interface OrganizationSummary {
   id: string;
   name: string;
-  membership?: { role: string; status: string };
+  /** `joinedAt` is what orders the DEFAULT org (see `resolveDefaultOrgId`). */
+  membership?: { role: string; status: string; joinedAt?: string };
 }
 
 export interface OverageSettingsResponse {
@@ -163,6 +164,46 @@ export function isStripeTestModeUrl(url: string): boolean {
 /** True when a Stripe URL was minted by a LIVE-mode account (the pre-swap state finding #4 recorded). */
 export function isStripeLiveModeUrl(url: string): boolean {
   return url.includes("cs_live_") || url.includes("/live/") || url.includes("/session/live_");
+}
+
+/**
+ * Resolves the org that PAYS for the authenticated user: their DEFAULT org.
+ *
+ * Under the org-only account model (model-gateway.md §Account model) orgs are
+ * the only billing subject, the signup free credit lands on the user's default
+ * org's billing subject, and sessions resolve that org's enrollment
+ * unconditionally ("which org pays (v1): the user's default org, always" —
+ * `get_default_organization_for_user`, the earliest active membership).
+ *
+ * `RELEASE_E2E_DURABLE_ORG_ID` stays authoritative when set (the durable
+ * staging bot's own org — the same override every other billing scenario
+ * honours). Without it, `GET /v1/organizations` is ordered by org NAME, not
+ * membership age, so the default org is recovered by picking the earliest
+ * `membership.joinedAt`. That is the wire's closest observable proxy for the
+ * server's `membership.created_at` ordering; a single-org user (the durable
+ * fixture) is unambiguous either way, and a genuinely ambiguous list (no
+ * `joinedAt` on the wire) returns undefined so the caller reports blocked
+ * rather than asserting against the wrong org.
+ */
+export function resolveDefaultOrgId(
+  organizations: OrganizationSummary[],
+  envOverride: string | undefined,
+): string | undefined {
+  const override = envOverride?.trim();
+  if (override) {
+    return override;
+  }
+  const active = organizations.filter((org) => (org.membership?.status ?? "active") === "active");
+  if (active.length === 1) {
+    return active[0].id;
+  }
+  const dated = active.filter((org) => Boolean(org.membership?.joinedAt));
+  if (dated.length !== active.length || dated.length === 0) {
+    return undefined;
+  }
+  return [...dated].sort((a, b) =>
+    (a.membership?.joinedAt ?? "").localeCompare(b.membership?.joinedAt ?? ""),
+  )[0].id;
 }
 
 /** Resolves the durable org for the authenticated user: the env override, else the one owned org. */

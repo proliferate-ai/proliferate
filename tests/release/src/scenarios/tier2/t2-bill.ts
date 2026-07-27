@@ -70,10 +70,17 @@ const GATEWAY_GAP_REASON =
  * function directly against the booted profile DB — the same "run the
  * product's own pass function out of process" convention `billing.ts` uses
  * for the accounting/reconciler/topup passes, scoped to
- * `ensure_user_free_credit_grant`.
+ * `ensure_signup_free_credit_grant`.
+ *
+ * Under org-only billing (model-gateway.md §Account model) that function
+ * grants onto the user's DEFAULT ORG's billing subject, not a personal
+ * subject: it resolves `get_default_organization_for_user`, calls
+ * `ensure_organization_billing_subject`, and returns False for a user with no
+ * default org yet. (It replaced the pre-D `ensure_user_free_credit_grant`,
+ * which granted on the personal subject and no longer exists.)
  *
  * Returns whether the user OWNS the free-signup grant after the call — NOT
- * whether this call newly created it. `ensure_user_free_credit_grant` is
+ * whether this call newly created it. `ensure_signup_free_credit_grant` is
  * idempotent-by-ownership (the `free_cloud_allocation` guard returns True when
  * the allocation already belongs to this subject, and the grant insert is
  * `source_ref`-deduped), so a replay returns True too. The dedup guarantee is
@@ -90,10 +97,10 @@ function runFreeCreditGrantPass(userId: string): Promise<boolean> {
       // line (SyntaxError), so the pyExpr must be genuinely multi-line.
       "import asyncio\n" +
         "from proliferate.db.engine import async_session_factory\n" +
-        "from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free_credit_grant\n" +
+        "from proliferate.server.cloud.agent_gateway.free_credits import ensure_signup_free_credit_grant\n" +
         "async def _m():\n" +
         "    async with async_session_factory() as db:\n" +
-        `        granted = await ensure_user_free_credit_grant(db, "${userId}")\n` +
+        `        granted = await ensure_signup_free_credit_grant(db, "${userId}")\n` +
         "        await db.commit()\n" +
         // Unambiguous tokens: 'NOT_GRANTED' contains 'GRANTED' as a substring,
         // so the reader below matches a distinct marker instead.
@@ -992,8 +999,9 @@ const t2Bill14: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
 
   if (!gatewayEnabled()) {
     // The subject-scoped LiteLLM virtual key / provider budget guarantees need
-    // `ensure_user_enrollment` against the LiteLLM(-fake) admin plane — see the
-    // module doc.
+    // `ensure_org_enrollment` (the org-only enrollment path that replaced the
+    // pre-D `ensure_user_enrollment`) against the LiteLLM(-fake) admin plane —
+    // see the module doc.
     return blockedResult(`LiteLLM virtual-key enrollment idempotency: ${GATEWAY_GAP_REASON}`);
   }
 
