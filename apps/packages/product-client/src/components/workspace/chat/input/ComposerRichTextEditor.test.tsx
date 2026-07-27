@@ -15,9 +15,9 @@ import {
 } from "lexical";
 import {
   ComposerRichTextEditor,
-  replaceComposerTextRange,
   type ComposerRichTextEditorProps,
 } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
+import { replaceComposerTextRange } from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
 let originalRangeRectDescriptor: PropertyDescriptor | undefined;
