@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { ArrowUpRight, Plug, Settings } from "@proliferate/ui/icons";
+import { ArrowUpRight, Globe, Settings } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
 import { useComposerIntegrationsState } from "#product/hooks/cloud/derived/use-composer-integrations-state";
@@ -60,7 +60,12 @@ export function ComposerIntegrationsControl() {
                 className="block icon-status rounded-full bg-warning/70"
               />
             ) : (
-              <Plug aria-hidden="true" className="icon-control" />
+              // Reference: the sidebar's own "Connections" entry (the
+              // settings section this control deep-links to) uses a
+              // network/globe glyph, not a literal plug or puzzle-piece —
+              // matched here via the in-repo Globe icon rather than the
+              // reference's own path data.
+              <Globe aria-hidden="true" className="icon-control" />
             )
           }
         />
@@ -80,7 +85,7 @@ export function ComposerIntegrationsControl() {
             >
               {providers.length === 0 && (
                 <StatusRow
-                  icon={<Plug className="icon-paired" />}
+                  icon={<Globe className="icon-paired" />}
                   label="No integrations connected"
                   disabled
                 />

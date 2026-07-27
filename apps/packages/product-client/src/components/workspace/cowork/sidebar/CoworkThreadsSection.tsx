@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { SkeletonBlock } from "#product/components/feedback/Skeleton";
-import { ChevronDownUp, ChevronUpDown, Plus } from "@proliferate/ui/icons";
+import { Plus } from "@proliferate/ui/icons";
 import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { useCoworkStatus } from "#product/hooks/access/anyharness/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
@@ -64,8 +64,6 @@ export function CoworkThreadsSection() {
       )
     ),
   );
-  const renderedThreadCount = listedThreads.length + (showPendingCoworkThread ? 1 : 0);
-
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const toggleThreadExpanded = useCallback((threadId: string) => {
     setExpandedThreadIds((prev) => {
@@ -102,21 +100,9 @@ export function CoworkThreadsSection() {
     <div className="pb-2">
       <ProductSidebarSectionHeader
         label="Threads"
+        collapsed={threadsCollapsed}
+        onToggleCollapsed={handleToggleCollapsed}
         actions={(
-          <>
-          {renderedThreadCount > 0 && (
-            <SidebarActionButton
-              onClick={handleToggleCollapsed}
-              title={threadsCollapsed ? "Expand threads" : "Collapse threads"}
-              variant="section"
-            >
-              {threadsCollapsed ? (
-                <ChevronUpDown className="icon-compact" />
-              ) : (
-                <ChevronDownUp className="icon-compact" />
-              )}
-            </SidebarActionButton>
-          )}
           <SidebarActionButton
             onClick={() => { void createThread().catch(() => undefined); }}
             disabled={isCreatingThread}
@@ -125,7 +111,6 @@ export function CoworkThreadsSection() {
           >
             <Plus className="icon-compact" />
           </SidebarActionButton>
-          </>
         )}
       />
 

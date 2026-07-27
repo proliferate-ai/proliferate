@@ -285,10 +285,10 @@ function FullSidebarPane() {
   const [width, setWidth] = useState<number>(280);
   const [shortcutReveal, setShortcutReveal] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [repositoriesCollapsed, setRepositoriesCollapsed] = useState(false);
 
   const toggleGroup = (name: string) =>
     setCollapsedGroups((state) => ({ ...state, [name]: !state[name] }));
-  const allCollapsed = SIDEBAR_FIXTURE_GROUPS.every((group) => collapsedGroups[group.name]);
 
   let shortcutIndex = 0;
 
@@ -337,24 +337,17 @@ function FullSidebarPane() {
         />
         <div className="flex min-h-0 flex-col px-2">
           <SidebarRepositoriesHeader
-            hasRepoGroups
-            allRepoGroupsCollapsed={allCollapsed}
+            repositoriesCollapsed={repositoriesCollapsed}
             filtersActive={false}
             workspaceTypes={["local", "worktree", "cloud", "ssh"]}
-            onToggleAllRepoGroups={() => {
-              const next = !allCollapsed;
-              setCollapsedGroups(Object.fromEntries(
-                SIDEBAR_FIXTURE_GROUPS.map((group) => [group.name, next]),
-              ));
-            }}
+            onToggleRepositoriesCollapsed={() => setRepositoriesCollapsed((value) => !value)}
             onToggleWorkspaceType={() => {}}
             onAddRepo={() => {}}
           />
-          {SIDEBAR_FIXTURE_GROUPS.map((group) => (
+          {!repositoriesCollapsed && SIDEBAR_FIXTURE_GROUPS.map((group) => (
             <RepoGroup
               key={group.name}
               name={group.name}
-              count={group.rows.length}
               collapsed={!!collapsedGroups[group.name]}
               environmentKind={group.kind}
               onToggleCollapsed={() => toggleGroup(group.name)}

@@ -90,10 +90,14 @@ export const MainSidebar = memo(function MainSidebar() {
     sidebarOpen,
     workspaceTypes,
     toggleSidebarWorkspaceType,
+    repositoriesCollapsed,
+    setRepositoriesCollapsed,
   } = useWorkspaceUiStore(useShallow((state) => ({
     sidebarOpen: state.sidebarOpen,
     workspaceTypes: state.workspaceTypes,
     toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
+    repositoriesCollapsed: state.repositoriesCollapsed,
+    setRepositoriesCollapsed: state.setRepositoriesCollapsed,
   })));
   const {
     groups,
@@ -145,13 +149,10 @@ export const MainSidebar = memo(function MainSidebar() {
     && !repoConfigs;
 
   const {
-    allRepoKeys,
-    allRepoGroupsCollapsed,
     collapsedRepoGroupKeys,
     repoGroupsShownMoreKeys,
     handleToggleRepoShowMore,
     handleToggleRepoCollapsed,
-    handleToggleAllRepoGroups,
     clearRepoGroupShowMore,
   } = useSidebarRepoGroupState({
     groups,
@@ -310,6 +311,9 @@ export const MainSidebar = memo(function MainSidebar() {
       : cloudComputeUnconfiguredForSignedInUser
         ? CAPABILITY_COPY.cloudNotConfiguredTooltip
         : CAPABILITY_COPY.cloudSignInTooltip;
+  const handleToggleRepositoriesCollapsed = useCallback(() => {
+    setRepositoriesCollapsed(!repositoriesCollapsed);
+  }, [repositoriesCollapsed, setRepositoriesCollapsed]);
   const filtersActive = !isDefaultSidebarWorkspaceTypes(workspaceTypes);
   const sidebarShortcutLabelById = useMemo(
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
@@ -358,52 +362,53 @@ export const MainSidebar = memo(function MainSidebar() {
           />
 
           <SidebarRepositoriesHeader
-            hasRepoGroups={allRepoKeys.length > 0}
-            allRepoGroupsCollapsed={allRepoGroupsCollapsed}
+            repositoriesCollapsed={repositoriesCollapsed}
             filtersActive={filtersActive}
             workspaceTypes={workspaceTypes}
-            onToggleAllRepoGroups={handleToggleAllRepoGroups}
+            onToggleRepositoriesCollapsed={handleToggleRepositoriesCollapsed}
             onToggleWorkspaceType={toggleSidebarWorkspaceType}
             onAddRepo={actions.handleAddRepo}
           />
 
-          <DebugProfiler id="workspace-sidebar-content">
-            <SidebarWorkspaceContent
-              emptyState={emptyState}
-              isLoading={isLoading}
-              groups={groups}
-              collapsedRepoGroupKeys={collapsedRepoGroupKeys}
-              repoGroupsShownMore={repoGroupsShownMoreKeys}
-              onToggleRepoCollapsed={handleToggleRepoCollapsed}
-              onToggleRepoShowMore={handleToggleRepoShowMore}
-              configuredCloudRepoKeys={configuredCloudRepoKeys}
-              cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
-              cloudConnected={cloudActive}
-              cloudWorkspaceEnabled={!cloudWorkspaceBlocked}
-              cloudWorkspaceTooltip={cloudWorkspaceTooltip}
-              onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
-              onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
-              onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
-              onSelectWorkspace={actions.handleSelectWorkspace}
-              onIndicatorAction={actions.handleSidebarIndicatorAction}
-              onOpenPullRequest={actions.handleOpenPullRequest}
-              onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
-              onWorkspaceAvailabilityCommand={handleWorkspaceAvailabilityCommand}
-              onWorkspaceHover={handleWorkspaceHover}
-              shortcutRevealVisible={shortcutRevealVisible}
-              shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
-              onArchiveWorkspace={handleArchiveWorkspace}
-              onUnarchiveWorkspace={handleUnarchiveWorkspace}
-              onRenameWorkspace={handleRenameWorkspace}
-              onRemoveRepo={handleRemoveRepo}
-              onOpenRepoSettings={handleOpenRepoSettings}
-              isDesktopHost={isDesktopHost}
-              managedCloudAvailable={managedCloudAvailable}
-              onOpenCloudRepoSettingsForGroup={handleOpenCloudRepoSettings}
-              onSetUpCloudForGroup={handleSetUpCloud}
-              onAddToThisMac={handleAddToThisMac}
-            />
-          </DebugProfiler>
+          {!repositoriesCollapsed && (
+            <DebugProfiler id="workspace-sidebar-content">
+              <SidebarWorkspaceContent
+                emptyState={emptyState}
+                isLoading={isLoading}
+                groups={groups}
+                collapsedRepoGroupKeys={collapsedRepoGroupKeys}
+                repoGroupsShownMore={repoGroupsShownMoreKeys}
+                onToggleRepoCollapsed={handleToggleRepoCollapsed}
+                onToggleRepoShowMore={handleToggleRepoShowMore}
+                configuredCloudRepoKeys={configuredCloudRepoKeys}
+                cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
+                cloudConnected={cloudActive}
+                cloudWorkspaceEnabled={!cloudWorkspaceBlocked}
+                cloudWorkspaceTooltip={cloudWorkspaceTooltip}
+                onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
+                onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
+                onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
+                onSelectWorkspace={actions.handleSelectWorkspace}
+                onIndicatorAction={actions.handleSidebarIndicatorAction}
+                onOpenPullRequest={actions.handleOpenPullRequest}
+                onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
+                onWorkspaceAvailabilityCommand={handleWorkspaceAvailabilityCommand}
+                onWorkspaceHover={handleWorkspaceHover}
+                shortcutRevealVisible={shortcutRevealVisible}
+                shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
+                onArchiveWorkspace={handleArchiveWorkspace}
+                onUnarchiveWorkspace={handleUnarchiveWorkspace}
+                onRenameWorkspace={handleRenameWorkspace}
+                onRemoveRepo={handleRemoveRepo}
+                onOpenRepoSettings={handleOpenRepoSettings}
+                isDesktopHost={isDesktopHost}
+                managedCloudAvailable={managedCloudAvailable}
+                onOpenCloudRepoSettingsForGroup={handleOpenCloudRepoSettings}
+                onSetUpCloudForGroup={handleSetUpCloud}
+                onAddToThisMac={handleAddToThisMac}
+              />
+            </DebugProfiler>
+          )}
           {isDesktopHost ? <CoworkThreadsSection /> : null}
         </ProductSidebarScrollableContent>
       </ProductSidebarBody>
