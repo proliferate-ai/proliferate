@@ -22,13 +22,13 @@ function fakeWorld(): ReadyLocalWorld {
     runtime: { baseUrl: "http://127.0.0.1:9002", client: undefined as never },
     renderer: { baseUrl: "http://127.0.0.1:9003", browser: undefined as never },
     gateway: {
-      resolveActorKey: async ({ userId, enrollmentId }: { userId: string; enrollmentId: string }) =>
+      resolveActorKey: async ({ userId, enrollmentId, harnessKind }: { userId: string; enrollmentId: string; harnessKind: string }) =>
         ({
           userId,
           enrollmentId,
           teamId: "team-b",
           litellmUserId: "litellm-user-b",
-          keyAlias: `vk-user-${userId}`,
+          keyAlias: `vk-user-${userId}-${harnessKind}`,
           tokenId: "token-b",
           tokenIdHash: "hash-b",
         }) satisfies ActorKeyIdentity,
@@ -126,7 +126,7 @@ test("invitedActor drives invite -> register -> login -> enrollment poll -> clou
   assert.equal(actor.organizationId, "org-1");
   assert.equal(actor.enrollmentId, "enrollment-b");
   assert.equal(actor.session.access_token, "actor-b-token");
-  assert.equal(actor.gatewayKey.keyAlias, "vk-user-user-b");
+  assert.equal(actor.gatewayKey.keyAlias, "vk-user-user-b-claude");
 
   // The register token IS the invitation id; the surface defaults to cloud.
   assert.deepEqual(calls, [
@@ -153,7 +153,7 @@ test("invitedActor hands actor-B enrollment custody off before selection or scen
   const { transport, calls } = fakeTransport({
     getEnrollment: async () => ({ id: "enrollment-b", syncStatus: "synced", lastErrorCode: null }),
   });
-  const custody: Array<{ userId: string; enrollmentId: string }> = [];
+  const custody: Array<{ userId: string; enrollmentId: string; harnessKind: string }> = [];
 
   await assert.rejects(
     () => invitedActor(fakeWorld(), {
@@ -167,7 +167,7 @@ test("invitedActor hands actor-B enrollment custody off before selection or scen
     /simulated actor-B custody interruption/,
   );
 
-  assert.deepEqual(custody, [{ userId: "user-b", enrollmentId: "enrollment-b" }]);
+  assert.deepEqual(custody, [{ userId: "user-b", enrollmentId: "enrollment-b", harnessKind: "claude" }]);
   assert.ok(!calls.some((call) => call.startsWith("putGatewaySelection")));
 });
 

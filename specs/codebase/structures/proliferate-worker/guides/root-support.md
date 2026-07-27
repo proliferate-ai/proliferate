@@ -1,9 +1,9 @@
 # Worker Root Support Files
 
 Root support modules are small process-wide dependencies. The focused root
-workflow modules—`catalog_sync.rs`, `integration_gateway.rs`,
-`self_update.rs`, and `anyharness_update.rs`—are covered by the identity,
-lifecycle, and client guides rather than treated as generic utilities.
+workflow modules—`integration_gateway.rs`, `self_update.rs`, and
+`anyharness_update.rs`—are covered by the identity, lifecycle, and client
+guides rather than treated as generic utilities.
 
 ## Ownership
 

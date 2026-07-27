@@ -241,25 +241,19 @@ pub struct AgentCatalogSession {
     #[serde(default)]
     pub observed_defaults: BTreeMap<String, String>,
     /// Per-harness gateway curation (present on gateway-capable agents). Carries
-    /// the compat-group `providers` filter, model-role pins (`roles`, e.g.
-    /// `small_fast`) that used to live in Rust consts, and `seedModels` — the
-    /// pre-probe fallback model list. The gateway model default itself lives in
-    /// `defaults["gateway"]`. Consumed by the runtime gateway resolver.
+    /// model-role pins (`roles`, e.g. `small_fast`) that used to live in Rust
+    /// consts, and `seedModels` — the pre-probe fallback model list. The
+    /// gateway model default itself lives in `defaults["gateway"]`. Consumed by
+    /// the runtime gateway resolver.
     #[serde(default)]
     pub gateway_policy: Option<AgentCatalogGatewayPolicy>,
 }
 
 /// Gateway-route curation for one harness (spec §1). All fields optional:
-/// `providers` empty/absent means "all providers"; `roles` and `seed_models`
-/// default empty.
+/// `roles` and `seed_models` default empty.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentCatalogGatewayPolicy {
-    /// The compat group the gateway serves for this harness (e.g.
-    /// `["anthropic"]` for claude, `["anthropic","openai"]` for codex). Empty
-    /// means no filter — every probed/seed model is offered.
-    #[serde(default)]
-    pub providers: Vec<String>,
     /// Model-role pins formerly hard-coded in Rust (currently only claude's
     /// `small_fast`). Keyed by role name.
     #[serde(default)]

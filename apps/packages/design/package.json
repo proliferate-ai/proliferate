@@ -20,12 +20,11 @@
       "import": "./dist/react-native.js"
     },
     "./theme.css": "./dist/theme.css",
-    "./dom.css": "./dist/css/dom.css",
     "./product.css": "./dist/css/product.css",
     "./desktop.css": "./dist/css/desktop.css"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs && node scripts/copy-dom-css.mjs && node scripts/check-theme.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs && node scripts/copy-css.mjs && node scripts/check-theme.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

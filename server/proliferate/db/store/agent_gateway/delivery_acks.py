@@ -1,0 +1,116 @@
+"""Agent-auth delivery acknowledgement persistence (per user/surface stamp).
+
+The "Applied means acknowledged" seam (agent-auth.md): one row per
+(user, surface) recording the last rendered ``state.json`` a surface's
+runtime confirmed. Writers are the two delivery pipelines — the cloud
+materializer stamps after its sandbox operation completes, and the desktop
+ack route stamps what the local runtime's state push accepted. Readers derive
+pending-vs-applied by comparing the CURRENT rendered (revision, fingerprint)
+against the stamp; the fingerprint is the change detector, the revision only
+rejects an out-of-order (delayed) ack for an older document.
+"""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.constants.agent_gateway import AGENT_AUTH_SURFACES
+from proliferate.db.models.cloud.agent_gateway import AgentAuthDeliveryAck
+from proliferate.db.store.agent_gateway.mappers import delivery_ack_record
+from proliferate.db.store.agent_gateway.records import AgentAuthDeliveryAckRecord
+from proliferate.utils.time import utcnow
+
+
+async def get_delivery_ack(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str,
+) -> AgentAuthDeliveryAckRecord | None:
+    row = await _load_row(db, user_id=user_id, surface=surface)
+    return delivery_ack_record(row) if row is not None else None
+
+
+async def record_delivery_ack(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str,
+    revision: int,
+    fingerprint: str,
+) -> AgentAuthDeliveryAckRecord:
+    """Stamp an acknowledged delivery; latest wins, out-of-order acks are inert.
+
+    An ack whose ``revision`` is LOWER than the stored one is a delayed
+    confirmation of a superseded document (the runtime itself rejects such a
+    push as stale) — it must not move the stamp backwards, so the stored row
+    is returned unchanged. An EQUAL revision is content-authoritative (key
+    rotation without a selection edit) and updates the fingerprint.
+
+    Written as a single ``INSERT ... ON CONFLICT (user_id, surface) DO
+    UPDATE`` so two concurrent FIRST acks for the same scope cannot race a
+    check-then-insert into a unique-constraint failure: the loser of the
+    insert race lands in the conflict arm, where the same only-move-forward
+    revision predicate applies. A predicate-suppressed update (stale ack)
+    returns no row, and the stored stamp is re-read unchanged.
+    """
+    if surface not in AGENT_AUTH_SURFACES:
+        raise ValueError(f"Unknown agent auth surface: {surface}")
+    now = utcnow()
+    row = (
+        await db.execute(
+            pg_insert(AgentAuthDeliveryAck)
+            .values(
+                user_id=user_id,
+                surface=surface,
+                acked_revision=revision,
+                acked_fingerprint=fingerprint,
+                acked_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                constraint="uq_agent_auth_delivery_ack_scope",
+                set_={
+                    "acked_revision": revision,
+                    "acked_fingerprint": fingerprint,
+                    "acked_at": now,
+                    "updated_at": now,
+                },
+                # Only move forward: strictly newer revisions advance the
+                # stamp; an equal revision refreshes the fingerprint (key
+                # rotation without a selection edit); an older one is inert.
+                where=AgentAuthDeliveryAck.acked_revision <= revision,
+            )
+            .returning(AgentAuthDeliveryAck)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        # The conflict predicate suppressed the update — a delayed ack for a
+        # superseded document. The scope row necessarily exists.
+        row = await _load_row(db, user_id=user_id, surface=surface)
+        assert row is not None
+        # The suppressed UPDATE never reached the ORM, so the identity-mapped
+        # instance (if any) is already current; no refresh needed.
+        return delivery_ack_record(row)
+    return delivery_ack_record(row)
+
+
+async def _load_row(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str,
+) -> AgentAuthDeliveryAck | None:
+    return (
+        await db.execute(
+            select(AgentAuthDeliveryAck).where(
+                AgentAuthDeliveryAck.user_id == user_id,
+                AgentAuthDeliveryAck.surface == surface,
+            )
+        )
+    ).scalar_one_or_none()

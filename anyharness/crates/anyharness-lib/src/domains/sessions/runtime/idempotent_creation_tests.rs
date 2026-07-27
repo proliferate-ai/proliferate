@@ -9,6 +9,38 @@ use crate::live::sessions::ScriptedSessionSpec;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 
+// A9 Scope C: `start_live_session` now checks readiness (mirroring
+// create_session's gate), so this suite's bare "claude" sessions need a
+// credentialed, installed claude to reach the scripted/pending startup it
+// actually exercises — otherwise every case here fails closed on
+// AgentNotReady before ever reaching the replay-join behavior under test.
+// The `ANYHARNESS_CLAUDE_AGENT_PROGRAM` override (like the scripted-agent
+// suite in `api/workflow_runs_scripted_tests.rs`) makes the agent-process
+// artifact resolve as installed without faking the managed npm install
+// layout; `test_state`'s `secrets/global.env` gives claude's required
+// anthropic slot a credential, so `credential_state` is `Ready` and the
+// native-artifact check in `compute_readiness` is never reached.
+struct AgentProgramGuard {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl AgentProgramGuard {
+    fn set(path: &std::path::Path) -> Self {
+        let previous = std::env::var_os("ANYHARNESS_CLAUDE_AGENT_PROGRAM");
+        std::env::set_var("ANYHARNESS_CLAUDE_AGENT_PROGRAM", path);
+        Self { previous }
+    }
+}
+
+impl Drop for AgentProgramGuard {
+    fn drop(&mut self) {
+        match self.previous.as_ref() {
+            Some(value) => std::env::set_var("ANYHARNESS_CLAUDE_AGENT_PROGRAM", value),
+            None => std::env::remove_var("ANYHARNESS_CLAUDE_AGENT_PROGRAM"),
+        }
+    }
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn create_replay_joins_pending_startup_and_persists_readiness() {
     let _lock = test_support::ENV_MUTEX
@@ -18,6 +50,7 @@ async fn create_replay_joins_pending_startup_and_persists_readiness() {
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let state = test_state("pending");
+    let _agent_program_guard = AgentProgramGuard::set(&state.runtime_home.join("claude-agent-stub"));
     let session_id = "01234567-89ab-4def-8123-456789abcdef";
     state
         .session_service
@@ -87,6 +120,8 @@ async fn create_replay_persists_ready_handle_when_the_first_request_was_cancelle
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let state = test_state("ready");
+    let _agent_program_guard =
+        AgentProgramGuard::set(&state.runtime_home.join("claude-agent-stub"));
     let session_id = "11234567-89ab-4def-8123-456789abcdef";
     state
         .session_service
@@ -144,6 +179,20 @@ fn test_state(label: &str) -> AppState {
     ));
     let workspace_path = runtime_home.join("workspace");
     std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
+    // Give claude's required `anthropic` auth slot a credential, and a real
+    // (stub) executable for the `ANYHARNESS_CLAUDE_AGENT_PROGRAM` override,
+    // so `credential_state`/`agent_process.installed` both resolve `Ready`
+    // (Scope C's readiness check).
+    std::fs::create_dir_all(runtime_home.join("secrets")).expect("create secrets directory");
+    std::fs::write(
+        runtime_home.join("secrets/global.env"),
+        "ANTHROPIC_API_KEY=test-not-a-real-key\n",
+    )
+    .expect("write test credential");
+    let agent_program = runtime_home.join("claude-agent-stub");
+    std::fs::write(&agent_program, "#!/bin/sh\nexit 0\n").expect("write agent stub");
+    crate::integrations::agent_cli::executable::make_executable(&agent_program)
+        .expect("make agent stub executable");
     let state = AppState::new(
         runtime_home,
         "http://127.0.0.1:8457".to_string(),

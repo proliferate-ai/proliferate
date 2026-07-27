@@ -1,8 +1,8 @@
 # Worker Lifecycle And Convergence
 
 The Worker heartbeat is both its liveness signal and the carrier for desired
-binary versions (the catalog version it still carries is deletion-pending —
-see below).
+binary versions. Binary versions are all it carries: the agent catalog rides
+inside the runtime binary, so there is no catalog version on the wire.
 
 ```text
 POST /v1/cloud/worker/heartbeat
@@ -26,22 +26,16 @@ reasserting a revoked gateway token. A success returned immediately before
 revocation can race one final stale write, which the active successor repairs
 on its next successful heartbeat.
 
-## Catalog Convergence (deletion pending)
+## Catalog Convergence (none)
 
-The settled target has no catalog convergence in this crate: the agent
-catalog ships only inside the runtime binary, so a runtime binary swap is
-the catalog update
+There is no catalog convergence in this crate: the agent catalog ships only
+inside the runtime binary, so the AnyHarness binary swap below IS the catalog
+update
 ([agent-distribution.md](../../../platforms/product/agent-distribution.md)
-Current gaps owns the deletion of this path, the heartbeat
-`catalogVersion`, and the runtime's `PUT /v1/catalogs/agents` route).
-
-Until that lands, the legacy mechanism still runs: when
-`desiredVersions.catalogVersion` differs from AnyHarness's active catalog
-version, the Worker does
-`GET AnyHarness /v1/catalogs/agents/version` →
-`GET Cloud /v1/catalogs/agents` (ETag-aware) →
-`PUT` the catalog bytes to AnyHarness. Catalog state (the last ETag) is in
-memory. Do not extend this path.
+"Convergence"). The Worker has no served catalog version to compare, no
+document to fetch, and no push route to call. Do not reintroduce one — a
+faster catalog lane would break the invariant that the active catalog is
+immutable for the lifetime of the runtime process.
 
 ## Supervisor-Owned Convergence (mailbox)
 

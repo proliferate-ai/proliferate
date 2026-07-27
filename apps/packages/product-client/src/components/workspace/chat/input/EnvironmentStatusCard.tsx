@@ -252,7 +252,7 @@ function WorktreeStatusRow({
   ].filter(Boolean).join(" · ");
 
   return (
-    <div className="group/worktree-row relative isolate flex min-w-0 items-start gap-2 rounded-md py-1.5 before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-list-hover">
+    <div className="group/worktree-row relative isolate flex min-w-0 items-start gap-2 rounded-md py-1.5 before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-hover">
       <span className="flex h-4 w-[18px] shrink-0 items-center justify-start">
         <DetailStateGlyph state={statusToDetailState(status.tone)} emphasizeFailing />
       </span>

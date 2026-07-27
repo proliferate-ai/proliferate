@@ -336,7 +336,7 @@ function ActivityActionRow({
       disabled={disabled}
       title={title}
       onClick={onSelect}
-      className="group/activity-row relative isolate flex min-h-7 w-full min-w-0 items-center justify-start gap-2 py-1 text-left text-ui-sm text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-[''] hover:before:bg-list-hover"
+      className="group/activity-row relative isolate flex min-h-7 w-full min-w-0 items-center justify-start gap-2 py-1 text-left text-ui-sm text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-[''] hover:before:bg-hover"
     >
       <span className="flex w-[18px] shrink-0 items-center justify-start text-muted-foreground">
         {icon}

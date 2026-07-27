@@ -1,13 +1,13 @@
 pub mod access;
 pub mod agent_auth;
 pub mod agent_gateway_catalog;
+pub mod agent_model_snapshot;
 pub mod agents;
 mod agents_contract;
 mod agents_errors;
 pub mod auth;
 pub mod blocking;
 pub mod catalogs;
-mod catalogs_errors;
 pub mod cowork;
 pub mod error;
 pub mod files;

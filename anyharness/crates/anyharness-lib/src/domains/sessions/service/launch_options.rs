@@ -11,7 +11,7 @@ use std::path::Path;
 use super::SessionService;
 use crate::domains::agents::auth::context::{classify, ActiveAuthContexts};
 use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
-use crate::domains::agents::catalog::gateway_resolver;
+use crate::domains::agents::catalog::projection;
 use crate::domains::agents::catalog::schema::{
     AgentCatalogModelControl, AgentCatalogSessionControl,
 };
@@ -78,7 +78,15 @@ impl SessionService {
         let contexts = ActiveAuthContexts::from_ids(context_ids);
         self.catalog_service
             .active_catalog()
-            .validate_launch(&record.agent_kind, &contexts, Some(value), None)
+            .validate_launch_in_universe(
+                &record.agent_kind,
+                &contexts,
+                Some(value),
+                None,
+                // The same universe create validated against, so a model the machine
+                // observed is switchable mid-session rather than only launchable.
+                &self.observed_universe.observed_universe(&record.agent_kind),
+            )
             .is_ok()
     }
 
@@ -125,11 +133,17 @@ impl SessionService {
             if resolved.status != ResolvedAgentStatus::Ready {
                 continue;
             }
+            // BELOW the two `continue` guards deliberately: reading the universe stats
+            // the document, the manifest and every context's discovery files, and doing
+            // it above would pay that for the harnesses this loop is about to skip.
+            let universe = self.observed_universe.observed_universe(&agent.kind);
 
             let facts = collect_launch_env_facts(&agent.kind, &readiness_env, &self.runtime_home);
             let active = classify(&descriptor, &agent.auth_contexts, &facts);
+            // The advertised default must be one create would accept, so the menu
+            // and validation read the same universe.
             let default_model_id = catalog
-                .validate_launch(&agent.kind, &active, None, None)
+                .validate_launch_in_universe(&agent.kind, &active, None, None, &universe)
                 .ok()
                 .and_then(|selection| selection.model_id);
 
@@ -148,7 +162,7 @@ impl SessionService {
                         is_default: default_model_id.as_deref() == Some(model.id.as_str()),
                         default_opt_in: None,
                         description: model.description.clone(),
-                        provider: gateway_resolver::provider_for_model(&model.id)
+                        provider: projection::provider_for_model(&model.id)
                             .map(str::to_string),
                         status: Some(model.status),
                         effort: projected_model_effort(&model.controls),

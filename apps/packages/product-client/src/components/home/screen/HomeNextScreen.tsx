@@ -43,6 +43,7 @@ export function HomeNextScreen() {
     onboardingCards,
     isAddingRepo,
     handleHomeAction,
+    authSetupStep,
     modelProbeInputs,
     dismissModelProbeCard,
   } = useHomeScreen();
@@ -118,6 +119,7 @@ export function HomeNextScreen() {
     })
     : undefined;
   const homeOnboardingVisible = onboardingCards.length > 0
+    || authSetupStep === "settingUp"
     || (modelProbeState !== undefined && modelProbeState.kind !== "hidden");
   const modelAvailabilityNotice =
     homeNext.modelAvailabilityState === "no_launchable_model"
@@ -290,6 +292,7 @@ export function HomeNextScreen() {
                 cards={onboardingCards}
                 isAddingRepo={isAddingRepo}
                 onSelect={(card) => handleHomeAction(card.id)}
+                authSetup={authSetupStep}
                 modelProbe={modelProbeState}
                 onOpenAgents={() => handleHomeAction("agent-settings")}
                 onDismissModelProbe={dismissModelProbeCard}
