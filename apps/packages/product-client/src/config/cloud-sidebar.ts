@@ -45,9 +45,10 @@ export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
     dotClassName: "bg-sidebar-muted-foreground/60",
   },
   lost: {
-    label: "lost",
+    label: "Lost",
     tone: "error",
-    className: "border-destructive/20 bg-destructive/10 text-destructive",
+    textClassName: "text-destructive",
+    dotClassName: "bg-destructive",
   },
   archived: {
     label: "Archived",
