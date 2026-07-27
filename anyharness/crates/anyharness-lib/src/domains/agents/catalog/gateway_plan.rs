@@ -38,7 +38,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::gateway_probe::probe_gateway_models;
-use super::gateway_resolver::{filter_by_providers, native_default_model};
+use super::gateway_resolver::native_default_model;
 use super::schema::{AgentCatalogGatewayPolicy, AgentCatalogModel};
 use super::sync::CatalogSyncService;
 use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;
@@ -186,13 +186,12 @@ impl GatewayModelPlanner {
             None => (policy.seed_models.clone(), false),
         };
 
-        let models = filter_by_providers(raw_models, &policy.providers);
         (
             GatewayModelPlan {
                 default_model,
                 native_default_model,
                 small_fast_model,
-                models,
+                models: raw_models,
             },
             used_seed_floor,
         )

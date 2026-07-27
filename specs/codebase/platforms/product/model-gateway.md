@@ -269,9 +269,12 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] Enrollment mints one unscoped key per subject (it sees all models)
       instead of per-harness group-scoped keys; existing enrollments need
       rotation at migration.
-- [ ] Harness-to-model filtering is client-side (the Rust
-      `provider_for_model` prefix-matcher and catalog
-      `gatewayPolicy.providers`); both delete once proxy-side grants land.
+- [ ] The Rust `provider_for_model` prefix-matcher is a provisional stand-in
+      for provider-tagged catalog model entries; it now only labels enriched
+      gateway-model / launch-option rows for the UI (the client-side
+      `gatewayPolicy.providers` filter it used to back is gone — B5 — now
+      that LiteLLM access-group tags enforce harness-to-model scoping
+      server-side).
 - [ ] `state.json`'s gateway payload carries one key, not a per-harness key
       map (contract change owned by agent-auth).
 - [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,

@@ -134,8 +134,8 @@ fn a_probe_plan_carries_the_live_gateway_list_not_the_seed_floor() {
             "gpt-5.2",
             "a-model-the-catalog-has-never-heard-of"
         ],
-        "opencode declares no gatewayPolicy.providers, so nothing is filtered — \
-         including an id the catalog does not know, which is the whole point"
+        "the full live list passes through untouched, including an id the \
+         catalog does not know, which is the whole point"
     );
     // The fetch really was handed this harness's own gateway credentials.
     assert_eq!(
@@ -337,31 +337,6 @@ fn an_expired_memo_still_beats_the_floor_for_a_launch() {
         "a stale real observation beats a curated guess when we may not block"
     );
     assert_eq!(fetcher.calls(), 1);
-}
-
-/// `gatewayPolicy.providers` filtering is preserved: claude's gateway plan keeps only
-/// anthropic-family ids even when the proxy serves more.
-#[test]
-fn provider_filtering_is_preserved_for_a_scoped_harness() {
-    let home = TempHome::new("providers");
-    home.write_gateway_state("claude", "https://gw.example", "sk-virtual");
-    let fetcher = Arc::new(CountingFetch::new(&[
-        "claude-sonnet-4-5",
-        "gpt-5.2",
-        "grok-4",
-    ]));
-    let planner = build_planner(&home, fetcher, DEFAULT_PLAN_FETCH_TTL);
-
-    let (plan, used_floor) = planner.resolve_gateway_models_blocking("claude", 3);
-    assert!(!used_floor);
-    assert_eq!(
-        plan.models,
-        vec!["claude-sonnet-4-5"],
-        "claude declares providers: [anthropic], so the proxy's other families drop"
-    );
-    // And the curated pins still ride along from the catalog.
-    assert!(plan.small_fast_model.is_some(), "claude's small_fast role pin");
-    assert!(plan.default_model.is_some(), "the gateway default model");
 }
 
 /// The seed-floor warning string is the one the entry records, asserted here so the

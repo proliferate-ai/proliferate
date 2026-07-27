@@ -417,12 +417,13 @@ options in the composer.
 Deltas between this document and `main`, each struck by its follow-up PR:
 
 - [ ] `catalog.json` still carries gateway model names:
-      `session.gatewayPolicy` (`providers` client-side filter, `seedModels`
-      pre-probe fallback, `roles`) and gateway entries in
-      `session.defaults`. All of it leaves the catalog once proxy-side
-      access groups land (gateway spec gaps) and gateway model discovery
-      is a live `GET /v1/models` with the harness key; role choices move
-      gateway-side. The JS validator's seedModels checks go with it.
+      `session.gatewayPolicy` (`seedModels` pre-probe fallback, `roles`) and
+      gateway entries in `session.defaults`. (The `providers` client-side
+      filter that used to sit alongside them is gone — B5, superseded by
+      LiteLLM access-group tags.) The rest leaves the catalog once
+      gateway model discovery is a live `GET /v1/models` with the harness
+      key; role choices move gateway-side. The JS validator's seedModels
+      checks go with it.
 - [ ] The Rust `gateway_resolver`/`gateway_probe` consume `gatewayPolicy`
       and delete with it.
 - [ ] `specs/developing/operating/agent-catalog-update.md` documents
