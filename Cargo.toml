@@ -69,6 +69,7 @@ fs2 = "0.4"
 # dead owner from a live foreign one before removing a scratch root.
 libc = "0.2"
 toml = "0.9"
+libc = "0.2"
 
 # ACP SDK
 agent-client-protocol = { version = "0.14.0", features = ["unstable"] }

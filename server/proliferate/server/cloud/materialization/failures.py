@@ -40,6 +40,9 @@ PROVIDER_SANDBOX_MISSING_RECEIPT = (
 )
 _PROVIDER_UNAVAILABLE_ERROR = "The sandbox provider is temporarily unavailable. Retry later."
 _RUNTIME_ERROR = "The sandbox runtime did not become ready. Retry later."
+_DISK_EXHAUSTED_ERROR = (
+    "The sandbox disk is full. Delete workspaces or content to free disk, then retry."
+)
 _INTERRUPTED_ERROR = "Sandbox materialization was interrupted. Retry later."
 _USAGE_BINDING_ERROR = (
     "Sandbox usage attribution conflicts with its provider binding. Contact support."
@@ -63,6 +66,9 @@ def materialization_error_receipt(exc: BaseException) -> str:
     if isinstance(exc, SandboxProviderUnavailableError):
         return _PROVIDER_UNAVAILABLE_ERROR
     if isinstance(exc, CloudMaterializationCommandError):
+        command_failure = str(exc).casefold()
+        if "no space left on device" in command_failure or "enospc" in command_failure:
+            return _DISK_EXHAUSTED_ERROR
         return _RUNTIME_ERROR
     if isinstance(exc, asyncio.CancelledError):
         return _INTERRUPTED_ERROR

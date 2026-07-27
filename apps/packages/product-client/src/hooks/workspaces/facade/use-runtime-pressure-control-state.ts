@@ -21,8 +21,12 @@ import {
 import type { WorktreeSettingsTarget } from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
-
-export type RuntimePressureTone = "success" | "warning" | "destructive" | "quiet";
+import {
+  cloudPressureLimitPercent,
+  pressureProgressPercent,
+  pressureTone,
+  type RuntimePressureTone,
+} from "./runtime-pressure-threshold";
 
 export interface RuntimePressureTargetState {
   target: WorktreeSettingsTarget;
@@ -311,49 +315,6 @@ function worktreeRepoLabel(row: WorktreeInventoryRow): string {
   return parts[parts.length - 1] ?? "Unknown repo";
 }
 
-function pressureTone(percent: number | null, limitPercent: number): RuntimePressureTone {
-  if (percent === null || !Number.isFinite(percent)) {
-    return "quiet";
-  }
-  if (percent >= limitPercent) {
-    return "destructive";
-  }
-  if (percent >= limitPercent * 0.8) {
-    return "warning";
-  }
-  return "success";
-}
-
-function pressureProgressPercent(
-  percent: number | null,
-  limitPercent: number,
-): number | null {
-  if (percent === null || !Number.isFinite(percent) || limitPercent <= 0) {
-    return null;
-  }
-  return Math.max(0, Math.min(100, (percent / limitPercent) * 100));
-}
-
-function cloudPressureLimitPercent(pressure: RuntimeResourcePressure | null): number {
-  if (!pressure) {
-    return 100;
-  }
-  const cpuPercent = pressure.cpu?.normalizedPercent ?? null;
-  const memoryPercent = pressure.memory?.percent ?? null;
-  if (cpuPercent !== null && memoryPercent !== null) {
-    return cpuPercent >= memoryPercent
-      ? pressure.cpu?.idealMaxPercent ?? 100
-      : pressure.memory?.idealMaxPercent ?? 100;
-  }
-  if (cpuPercent !== null) {
-    return pressure.cpu?.idealMaxPercent ?? 100;
-  }
-  if (memoryPercent !== null) {
-    return pressure.memory?.idealMaxPercent ?? 100;
-  }
-  return 100;
-}
-
 function localDetailLines(
   worktreeCount: number,
   totalWorktreeCount: number,
@@ -381,15 +342,21 @@ function cloudDetailLines(
       `${totalWorktreeCount} materialized worktrees`,
     ];
   }
-  return [
+  const lines = [
     pressure.cpu
       ? `CPU ${formatPercent(pressure.cpu.normalizedPercent)} of ${formatPercent(pressure.cpu.idealMaxPercent)} ideal`
       : "CPU unavailable",
     pressure.memory
       ? `RAM ${formatPercent(pressure.memory.percent)} of ${formatPercent(pressure.memory.idealMaxPercent)} ideal`
       : "RAM unavailable",
-    `${totalWorktreeCount} materialized worktrees`,
   ];
+  if (pressure.disk) {
+    lines.push(
+      `Disk ${formatPercent(pressure.disk.percent)} of ${formatPercent(pressure.disk.idealMaxPercent)} ideal`,
+    );
+  }
+  lines.push(`${totalWorktreeCount} materialized worktrees`);
+  return lines;
 }
 
 function formatPercent(value: number): string {

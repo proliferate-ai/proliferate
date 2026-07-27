@@ -463,23 +463,6 @@ apps/packages/product-client/src/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Worktree creation does not fetch: the plain create path
-      ([runtime/worktrees.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/worktrees.rs))
-      never fetches and bases on the clone's local state; cloud freshness
-      holds only because the server's clone-refresh script runs in the same
-      request, and local/Desktop creates get whatever the clone has. The
-      exact-ref path's fetch is unbounded and silently swallowed
-      (`fetch_branch_if_possible`, no timeout, no `GIT_TERMINAL_PROMPT=0`,
-      result discarded). Implement the bounded, classified, surfaced fetch
-      in both paths.
-- [ ] Callers supply `target_path`: it is a required contract field (an
-      omitted path is a 400), the cloud server invents
-      `/home/user/workspace/worktrees/<owner>/<repo>/<branch>-<id8>`
-      ([provisioning.py](../../../../server/proliferate/server/cloud/workspaces/provisioning.py)),
-      and one unit test pins the literal string. Make the field optional
-      with a runtime default-placement branch (the workflow-placement
-      pattern); nothing downstream depends on the path — the server keeps
-      only workspace and repo-root ids after creation.
 - [ ] The managed-root fence excludes every cloud worktree:
       `ANYHARNESS_WORKTREES_ROOT` is never set in the cloud launch env
       ([bootstrap.py](../../../../server/proliferate/server/cloud/runtime/bootstrap.py)),
@@ -498,20 +481,9 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       no clone-delete primitive exists anywhere in AnyHarness (no route, no
       store method). Add the paired after-commit reclaims and build the
       clone-delete primitive under the same fence discipline as retire.
-- [ ] No disk axis: the resource-pressure collector measures CPU and memory
-      only (no statvfs anywhere in the runtime), the composer card shows
-      CPU/memory rows without disk, no threshold notification exists
-      (surfaces are pull-only), and the inventory row carries no
-      last-activity timestamp for suggesting stale worktrees. Add the disk
-      axis to
-      [resource_pressure.rs](../../../../anyharness/crates/anyharness-lib/src/observability/resource_pressure.rs)
-      and the health contract, last activity to the inventory row, and the
-      client-side threshold surface.
-- [ ] Disk exhaustion is untyped: only checkout exit codes 42/43/44 are
-      classified; ENOSPC from any in-sandbox command flattens into the
-      generic runtime-not-ready receipt
-      ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
-      Detect and type it.
+- [ ] The inventory row carries no last-activity timestamp for suggesting
+      stale worktrees. Add last activity after wiring the session store
+      into worktree inventory.
 - [ ] After provider loss, workspaces dangle instead of being marked lost:
       `cloud_workspace` rows still reference dead AnyHarness workspace ids
       on the replacement VM, surfacing as opaque runtime errors, and
