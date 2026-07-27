@@ -34,20 +34,31 @@ export function splitProviderDisplayName(displayName: string): DisplayNameParts 
 }
 
 /**
- * Drops the redundant "GPT-" family prefix from OpenAI model names and
- * title-cases the variant suffix: "GPT-5.6 Sol" / "gpt-5.6-sol" → "5.6 Sol".
- * The provider icon on the pill already carries the family identity, so the
- * prefix is noise. Non-GPT names pass through unchanged. Display-only — never
- * touches catalog identity or modelId.
+ * Drops the redundant vendor-family prefix from a model name and title-cases
+ * the variant suffix: "GPT-5.6 Sol" / "gpt-5.6-sol" → "5.6 Sol", and
+ * "Claude-Sonnet-5" / "Claude Sonnet 5" → "Sonnet 5". The provider icon on the
+ * pill already carries the family identity, so the prefix is noise. Names in
+ * other families pass through unchanged. Display-only — never touches catalog
+ * identity or modelId.
  */
+const REDUNDANT_FAMILY_PREFIX = /^(?:gpt|claude)[-\s]+(.+)$/i;
+
 export function formatModelLeafName(name: string): string {
-  const match = /^gpt[-\s]+(.+)$/i.exec(name.trim());
+  const match = REDUNDANT_FAMILY_PREFIX.exec(name.trim());
   if (!match) {
     return name;
   }
 
-  return match[1]
-    .split(/[-\s]+/)
+  const remainder = match[1]!.trim();
+  // Already-spaced remainders are real labels: their remaining punctuation is
+  // meaningful (date suffixes like "Sonnet 4.5 (2025-09-29)") and must survive
+  // verbatim. Only an all-hyphen remainder has hyphens as word separators.
+  if (/\s/.test(remainder)) {
+    return remainder;
+  }
+
+  return remainder
+    .split("-")
     .filter(Boolean)
     .map((part) =>
       /^[a-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part

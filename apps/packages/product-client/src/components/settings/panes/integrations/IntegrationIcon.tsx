@@ -1,4 +1,4 @@
-import type { ComponentType, SVGProps } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Plug } from "lucide-react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import axiomIcon from "../../../../assets/connector-icons/axiom.svg";
@@ -126,6 +126,35 @@ function selectIconTileClass(
   return config.tileClassName ?? "bg-brand-logo-tile";
 }
 
+/**
+ * Shared tile shell for both artwork branches. The tile box stays a callsite
+ * concern (default size-8, overridden via `className`); this owns only the
+ * tone-neutral chrome plus the `text-ui` font size that both artwork tiers
+ * below resolve their em-relative size against.
+ */
+const TILE_BASE_CLASS =
+  "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/70 text-ui text-muted-foreground";
+
+/**
+ * Artwork tier for the image branch, shared by every logo asset so they all
+ * land at the same optical size. A semantic tier rather than the old
+ * `size-full`, which let full-bleed artwork touch the tile border while
+ * whitespace-padded artwork looked tiny by comparison.
+ */
+const ARTWORK_CLASS = "icon-display object-contain";
+
+/**
+ * [RETUNE:integration-icons/glyph-optical-weight] — the inline brand glyphs
+ * are flat, full-bleed marks with no internal whitespace baked into their
+ * paths, unlike the image logos (most of which already carry some breathing
+ * room). At the image branch's tier they therefore read heavier than their
+ * neighbours in an identical tile — most visibly the four-lobe
+ * messaging-provider mark, which was the "gigantic" complaint. One tier down
+ * for the whole glyph branch corrects that, rather than special-casing a
+ * single namespace.
+ */
+const GLYPH_ARTWORK_CLASS = "icon-large shrink-0";
+
 interface IntegrationIconProps {
   /** The integration definition's namespace (e.g. "linear", "sentry"). */
   namespace: string;
@@ -136,40 +165,37 @@ interface IntegrationIconProps {
 /**
  * Brand icon tile for an integration provider, keyed by definition namespace.
  * Unknown namespaces (e.g. org-custom MCP definitions) fall back to a generic
- * plug glyph.
+ * plug glyph. Both artwork branches share one tile shell and resolve their
+ * artwork size from one semantic icon tier per branch (see `ARTWORK_CLASS` /
+ * `GLYPH_ARTWORK_CLASS`) so a new provider can't land at a divergent optical
+ * size, no matter which branch it falls into.
  */
 export function IntegrationIcon({ namespace, className }: IntegrationIconProps) {
   const resolvedMode = useResolvedMode();
   const imageConfig = INTEGRATION_ICON_IMAGES[namespace] ?? null;
 
+  let toneClassName: string;
+  let artwork: ReactNode;
+
   if (imageConfig) {
-    return (
-      <div
-        className={twMerge(
-          "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/70",
-          selectIconTileClass(imageConfig, resolvedMode),
-          className,
-        )}
-      >
-        <img
-          src={selectIconImage(imageConfig, resolvedMode)}
-          alt=""
-          aria-hidden="true"
-          className="size-full object-contain"
-        />
-      </div>
+    toneClassName = selectIconTileClass(imageConfig, resolvedMode);
+    artwork = (
+      <img
+        src={selectIconImage(imageConfig, resolvedMode)}
+        alt=""
+        aria-hidden="true"
+        className={ARTWORK_CLASS}
+      />
+    );
+  } else {
+    const Glyph = INTEGRATION_GLYPHS[namespace] ?? Plug;
+    toneClassName = "bg-transparent";
+    artwork = (
+      <Glyph aria-hidden="true" className={GLYPH_ARTWORK_CLASS} />
     );
   }
 
-  const Glyph = INTEGRATION_GLYPHS[namespace] ?? Plug;
   return (
-    <div
-      className={twMerge(
-        "flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-transparent text-ui text-muted-foreground [&_svg]:icon-large",
-        className,
-      )}
-    >
-      <Glyph aria-hidden="true" className="shrink-0" />
-    </div>
+    <div className={twMerge(TILE_BASE_CLASS, toneClassName, className)}>{artwork}</div>
   );
 }

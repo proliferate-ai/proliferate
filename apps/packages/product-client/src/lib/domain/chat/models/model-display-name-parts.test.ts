@@ -7,7 +7,7 @@ import {
 describe("splitProviderDisplayName", () => {
   it("splits on the first slash", () => {
     expect(splitProviderDisplayName("OpenCode Zen/Claude Sonnet 4")).toEqual({
-      leaf: "Claude Sonnet 4",
+      leaf: "Sonnet 4",
       badge: "OpenCode Zen",
     });
   });
@@ -34,8 +34,8 @@ describe("splitProviderDisplayName", () => {
   });
 
   it("returns null badge when prefix is empty", () => {
-    expect(splitProviderDisplayName("/Claude Sonnet 4")).toEqual({
-      leaf: "/Claude Sonnet 4",
+    expect(splitProviderDisplayName("/Acme Sonnet 4")).toEqual({
+      leaf: "/Acme Sonnet 4",
       badge: null,
     });
   });
@@ -84,9 +84,19 @@ describe("formatModelLeafName", () => {
     expect(formatModelLeafName("GPT-5.5")).toBe("5.5");
   });
 
-  it("leaves non-GPT names untouched", () => {
+  it("strips the redundant vendor family word and normalizes all-hyphen ids", () => {
+    expect(formatModelLeafName("Claude-Sonnet-5")).toBe("Sonnet 5");
+    expect(formatModelLeafName("Claude Sonnet 5")).toBe("Sonnet 5");
+    expect(formatModelLeafName("Claude Opus 4.8")).toBe("Opus 4.8");
+  });
+
+  it("keeps punctuation inside already-spaced labels", () => {
+    expect(formatModelLeafName("Claude Sonnet 4.5 (2025-09-29)"))
+      .toBe("Sonnet 4.5 (2025-09-29)");
+  });
+
+  it("leaves names in other families untouched", () => {
     expect(formatModelLeafName("Sonnet 4.5")).toBe("Sonnet 4.5");
-    expect(formatModelLeafName("Claude Opus 4.8")).toBe("Claude Opus 4.8");
     expect(formatModelLeafName("grok-4.3")).toBe("grok-4.3");
     expect(formatModelLeafName("chatgpt-image-latest")).toBe("chatgpt-image-latest");
   });

@@ -86,6 +86,50 @@ describe("resolveModelDisplayName", () => {
     ).toBe("Sonnet 4.6");
   });
 
+  it("names a generation that ships without a minor version", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "claude",
+        modelId: "claude-sonnet-5",
+        preferKnownAlias: true,
+      }),
+    ).toBe("Sonnet 5");
+    expect(
+      resolveModelDisplayName({
+        agentKind: "claude",
+        modelId: "us.anthropic.claude-opus-5",
+        preferKnownAlias: true,
+      }),
+    ).toBe("Opus 5");
+  });
+
+  it("drops the redundant vendor family word from catalog labels", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "claude",
+        modelId: "claude-sonnet-5",
+        sourceLabels: ["Claude-Sonnet-5"],
+      }),
+    ).toBe("Sonnet 5");
+    expect(
+      resolveModelDisplayName({
+        agentKind: "opencode",
+        modelId: "opencode/claude-sonnet-5",
+        sourceLabels: ["OpenCode Zen/Claude Sonnet 5"],
+      }),
+    ).toBe("OpenCode Zen/Sonnet 5");
+  });
+
+  it("keeps date suffixes intact while stripping the family word", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "opencode",
+        modelId: "claude-sonnet-4-5-20250929",
+        sourceLabels: ["Claude Sonnet 4.5 (2025-09-29)"],
+      }),
+    ).toBe("Sonnet 4.5 (2025-09-29)");
+  });
+
   it("has a fallback label for the next Codex candidate", () => {
     expect(
       resolveModelDisplayName({

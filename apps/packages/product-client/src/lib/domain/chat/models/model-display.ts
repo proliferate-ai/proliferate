@@ -55,9 +55,44 @@ function titleCaseToken(token: string): string {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
+// Vendor family word the product never prints: the harness already names the
+// vendor (the provider badge / harness group), so repeating it in the model
+// name is noise — "Claude Sonnet 5" and "Claude-Sonnet-5" both read as
+// "Sonnet 5". Stripped per "/"-separated segment so provider-scoped catalog
+// labels ("Anthropic/Claude Sonnet 5") keep their provider prefix and only
+// lose the redundant family word.
+const REDUNDANT_MODEL_FAMILY_PREFIX = /^claude[-\s]+(.+)$/i;
+
+function stripRedundantFamilyPrefix(segment: string): string {
+  const match = REDUNDANT_MODEL_FAMILY_PREFIX.exec(segment.trim());
+  if (!match) {
+    return segment;
+  }
+
+  const remainder = match[1]!.trim();
+  // A remainder that still has no spaces was an all-hyphen label
+  // ("Claude-Sonnet-5"), so its hyphens are word separators and get
+  // normalized. Anything already spaced is a real label and keeps its
+  // punctuation verbatim — dashes there belong to date suffixes like
+  // "Sonnet 4.5 (2025-09-29)".
+  if (/\s/.test(remainder)) {
+    return remainder;
+  }
+
+  return remainder
+    .split("-")
+    .filter(Boolean)
+    .map(titleCaseToken)
+    .join(" ");
+}
+
 function normalizeDisplayLabel(label: string): string {
   return normalizeWhitespace(
-    label.replace(/GPT-(\d)/g, "GPT $1"),
+    label
+      .replace(/GPT-(\d)/g, "GPT $1")
+      .split("/")
+      .map(stripRedundantFamilyPrefix)
+      .join("/"),
   );
 }
 
@@ -119,15 +154,20 @@ function formatGeminiModelId(modelId: string): string | null {
   );
 }
 
+// The minor component is optional: a generation that ships without one
+// ("claude-sonnet-5") is named "Sonnet 5", not left to fall through to the raw
+// catalog id. The optional trailing `-<digits>` still absorbs date/revision
+// suffixes.
 function formatClaudeModelId(modelId: string): string | null {
-  const match = /claude-([a-z]+)-(\d)-(\d)(?:-[\d-]+)?/.exec(modelId);
+  const match = /claude-([a-z]+)-(\d)(?:-(\d))?(?:-[\d-]+)?/.exec(modelId);
   if (!match) {
     return null;
   }
 
   const [, family, major, minor] = match;
+  const version = minor === undefined ? major : `${major}.${minor}`;
   const contextHint = /\[1m\]|-1m\b|\b1m\b/i.test(modelId) ? " (1M context)" : "";
-  return normalizeWhitespace(`${titleCaseToken(family)} ${major}.${minor}${contextHint}`);
+  return normalizeWhitespace(`${titleCaseToken(family)} ${version}${contextHint}`);
 }
 
 export function shouldHideModel(agentKind: string, modelId: string): boolean {

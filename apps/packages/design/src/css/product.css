@@ -941,9 +941,14 @@ body {
    transform/opacity here run on the compositor instead of forcing a repaint
    of SVG child elements every frame in WKWebView. */
 /* activity-motion */
+/* Ambient, not urgent: the wave says "this model is thinking hard", so it
+   breathes on a slow ~2.4s cycle with a shallower trough than the old 1.1s
+   pulse (which read as a loading spinner). The per-bar stagger in
+   LevelBarsButton.tsx paces the crest so the sweep stays legible at this
+   duration. */
 .composer-level-bar-wave {
   transform-origin: bottom;
-  animation: composer-level-bar-wave 1.1s ease-in-out infinite;
+  animation: composer-level-bar-wave 2.4s var(--ease-standard) infinite;
 }
 
 @keyframes composer-level-bar-wave {
@@ -953,8 +958,8 @@ body {
     opacity: 1;
   }
   50% {
-    transform: scaleY(0.55);
-    opacity: 0.65;
+    transform: scaleY(0.72);
+    opacity: 0.78;
   }
 }
 
