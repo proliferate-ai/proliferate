@@ -358,7 +358,7 @@ const ORBIT_DELAYS = [
 }
 '''
         self.assertEqual(
-            {violation.rule_id for violation in check_design_css_source(Path("dom.css"), source)},
+            {violation.rule_id for violation in check_design_css_source(Path("product.css"), source)},
             {
                 "authored-theme-block",
                 "authored-root-token",
@@ -378,7 +378,7 @@ const ORBIT_DELAYS = [
   backdrop-filter: var(--composer-backdrop-filter);
 }
 '''
-        self.assertEqual(check_design_css_source(Path("dom.css"), source), [])
+        self.assertEqual(check_design_css_source(Path("product.css"), source), [])
 
     def test_backdrop_filter_ownership_covers_the_vendor_prefixed_spelling(self) -> None:
         """The house style authors the pair, and WebKit is the desktop shell's
@@ -390,7 +390,7 @@ const ORBIT_DELAYS = [
                 self.assertEqual(
                     [
                         violation.rule_id
-                        for violation in check_design_css_source(Path("dom.css"), source)
+                        for violation in check_design_css_source(Path("product.css"), source)
                     ],
                     ["unowned-backdrop-filter"],
                 )
@@ -728,7 +728,7 @@ const ORBIT_DELAYS = [
     def test_scanned_roots_cover_every_root_tailwind_compiles(self) -> None:
         """The product-surfaces hole, made unrepeatable.
 
-        ``@source`` in dom.css is the definition of "this tree ships utilities":
+        ``@source`` in product.css is the definition of "this tree ships utilities":
         a root listed there is compiled into the stylesheet users load, so a root
         listed there but absent from PRODUCTION_ROOTS holds every foundation ban
         at zero strength — which is exactly how product-surfaces shipped a
@@ -737,12 +737,14 @@ const ORBIT_DELAYS = [
         next package added to the build cannot arrive ungated: whoever adds the
         ``@source`` line has to census the root in the same commit.
         """
-        dom_css = next(path for path in check_module.DESIGN_CSS_FILES if path.name == "dom.css")
+        product_css = next(
+            path for path in check_module.DESIGN_CSS_FILES if path.name == "product.css"
+        )
         sourced = {
-            (dom_css.parent / match).resolve()
-            for match in re.findall(r'@source\s+"([^"]+)"', dom_css.read_text())
+            (product_css.parent / match).resolve()
+            for match in re.findall(r'@source\s+"([^"]+)"', product_css.read_text())
         }
-        self.assertTrue(sourced, "dom.css must declare the roots Tailwind scans")
+        self.assertTrue(sourced, "product.css must declare the roots Tailwind scans")
         scanned = set(check_module.PRODUCTION_ROOTS)
         self.assertEqual(
             sorted(relative_path(path) for path in sourced - scanned),

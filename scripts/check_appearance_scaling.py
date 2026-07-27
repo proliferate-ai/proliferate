@@ -50,7 +50,7 @@ from typing import Iterable, Mapping, Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 # Every shipped frontend source root, which is exactly the set Tailwind scans
-# from `dom.css` (`@source`). A root that ships utilities but is not listed here
+# from `product.css` (`@source`). A root that ships utilities but is not listed here
 # is a hole in the ban, not an omission of taste: the vocabulary would be closed
 # everywhere except the one package nobody was looking at.
 PRODUCTION_ROOTS = (
@@ -61,7 +61,6 @@ PRODUCTION_ROOTS = (
     REPO_ROOT / "apps" / "desktop" / "src",
 )
 DESIGN_CSS_FILES = (
-    REPO_ROOT / "apps" / "packages" / "design" / "src" / "css" / "dom.css",
     REPO_ROOT / "apps" / "packages" / "design" / "src" / "css" / "product.css",
 )
 DESIGN_TOKEN_FILE = REPO_ROOT / "apps" / "packages" / "design" / "src" / "tokens.ts"
@@ -641,7 +640,7 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
                     "authored-root-token",
                     path,
                     line_number(source, root_match.start("body") + custom_property.start()),
-                    "global tokens are generated from tokens.ts, not declared in dom.css/product.css",
+                    "global tokens are generated from tokens.ts, not declared in product.css",
                 )
             )
 

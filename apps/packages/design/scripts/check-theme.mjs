@@ -10,8 +10,7 @@
  * It additionally pins the frozen census numbers (dispositions / removals /
  * aliases / provenance tags), the motion values shared with `motion.ts`, the
  * React Native bridge shape, and the ownership rule that global token VALUES
- * only ever live in generated CSS — never in `src/css/dom.css` or
- * `src/css/product.css`.
+ * only ever live in generated CSS — never in `src/css/product.css`.
  */
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -486,38 +485,39 @@ assert(
   "the generated theme must contain exactly one flattened light root",
 );
 
-const sources = {};
-for (const name of ["dom.css", "product.css"]) {
-  const source = await readFile(resolve(root, "src/css", name), "utf8");
-  sources[name] = source;
-  for (const { selector, body } of topLevelBlocks(source)) {
-    const ownsGlobalScope =
-      selector.startsWith("@theme") ||
-      /(^|\s):root(\[data-mode="(light|dark)"\])?$/.test(selector.trim());
-    if (!ownsGlobalScope) continue;
-    assert(
-      !/^\s*--[a-z0-9-]+\s*:/m.test(body),
-      `${name} re-introduces hand-authored global token values in ${selector.trim()}`,
-    );
-  }
+const productCss = await readFile(resolve(root, "src/css/product.css"), "utf8");
+for (const { selector, body } of topLevelBlocks(productCss)) {
+  const ownsGlobalScope =
+    selector.startsWith("@theme") ||
+    /(^|\s):root(\[data-mode="(light|dark)"\])?$/.test(selector.trim());
+  if (!ownsGlobalScope) continue;
+  assert(
+    !/^\s*--[a-z0-9-]+\s*:/m.test(body),
+    `product.css re-introduces hand-authored global token values in ${selector.trim()}`,
+  );
 }
 
-const domCss = sources["dom.css"];
-const productCss = sources["product.css"];
-const tailwindImport = domCss.indexOf('@import "tailwindcss";');
-const themeImport = domCss.indexOf('@import "../theme.css";');
+const tailwindImport = productCss.indexOf('@import "tailwindcss";');
+const themeImport = productCss.indexOf('@import "../theme.css";');
 // Line-anchored so prose in a comment can mention the at-rule without becoming
 // the "first @source" position.
-const firstSource = domCss.search(/^@source\s/m);
-assert(tailwindImport >= 0, "dom.css must import tailwindcss");
-assert(themeImport > tailwindImport, "dom.css must import the generated theme after tailwindcss");
+const firstSource = productCss.search(/^@source\s/m);
+assert(tailwindImport >= 0, "product.css must import tailwindcss");
+assert(
+  themeImport > tailwindImport,
+  "product.css must import the generated theme after tailwindcss",
+);
 assert(
   firstSource < 0 || themeImport < firstSource,
-  "dom.css must import the generated theme before the first @source (CSS import-order law)",
+  "product.css must import the generated theme before the first @source (CSS import-order law)",
 );
-const domRoot = topLevelBlocks(domCss).find(({ selector }) => selector === ":root")?.body ?? "";
-assert(/font-family:\s*var\(--font-sans\);/.test(domRoot), "dom.css :root must use var(--font-sans)");
-assert(!/\bInter\b/.test(domRoot), "dom.css :root must not hand-author a font stack");
+const productRoot =
+  topLevelBlocks(productCss).find(({ selector }) => selector === ":root")?.body ?? "";
+assert(
+  /font-family:\s*var\(--font-sans\);/.test(productRoot),
+  "product.css :root must use var(--font-sans)",
+);
+assert(!/\bInter\b/.test(productRoot), "product.css :root must not hand-author a font stack");
 
 /* ------------------------------------------------------------------ *
  * 6. Motion ownership inside the design package's own CSS
@@ -528,11 +528,6 @@ for (const declaration of [
   "animation: stream-word-in var(--activity-stream-reveal-fade) linear both;",
   "animation: brand-mark-settle var(--duration-emphasized) var(--ease-standard);",
   "animation: web-sidebar-panel-slide-in var(--duration-panel) var(--ease-spring);",
-]) {
-  assert(domCss.includes(declaration), `dom.css lost the exact motion declaration: ${declaration}`);
-}
-
-for (const declaration of [
   "animation: panel-in var(--duration-panel) var(--ease-out-quint);",
   "animation: modal-overlay-in var(--duration-enter) var(--ease-out-quint);",
   "animation: modal-overlay-out var(--duration-exit) var(--ease-standard) forwards;",
@@ -591,7 +586,6 @@ function checkRawMotionAuthority(css, sourceName) {
   }
 }
 
-checkRawMotionAuthority(domCss, "dom.css");
 checkRawMotionAuthority(productCss, "product.css");
 checkRawMotionAuthority(generated, "dist/theme.css");
 
