@@ -129,8 +129,8 @@ const LI_CLASSNAME = "pl-0.5";
 // reads at the same measure the user is typing into. The narrower
 // --container-transcript-readable (40rem) token still exists for any
 // consumer that wants a tighter reading measure, but conversation prose no
-// longer applies it: see the two-tier measure note on `markdownClassName`
-// above.
+// longer applies it: see the single-measure note on `markdownClassName`
+// below.
 const PROSE_MEASURE_CLASSNAME = "max-w-full";
 
 // Markdown component overrides are the React element *types* for every
@@ -168,9 +168,8 @@ const STATIC_MARKDOWN_COMPONENTS = {
   table: (props: MdElementProps) => (
     // ui-foundation-escalation: [CHAT-04]'s RULED block adopts
     // --container-transcript-wide (56rem) for wide blocks like this table.
-    // The two-tier measure (see markdownClassName above) now lets this
-    // table use the full 48rem --container-transcript-thread column instead
-    // of the 40rem readable cap, but 56rem still exceeds that thread column
+    // This table uses the full 48rem --container-transcript-thread column
+    // (like all prose — see markdownClassName), but 56rem exceeds that column
     // — reaching it would need a breakout (negative-margin / container-
     // query) restructure applied at every MarkdownBody consumer (transcript
     // rows, plan cards, tool-detail panels). That restructure is out of
@@ -354,14 +353,14 @@ export const MarkdownBody = memo(function MarkdownBody({
     [content, isStreaming],
   );
   const markdownClassName = [
-    // Two-tier measure: the thread column (ChatColumn.ts) widens to the
-    // 48rem --container-transcript-thread token so avatars/action rows and
-    // wide blocks (tables, code — see the `table` override below) get more
-    // room. This wrapper stays max-w-full so those wide blocks can use that
-    // width; the narrower 40rem --container-transcript-readable cap is
-    // applied per prose element instead (see PROSE_MEASURE_CLASSNAME) so
-    // paragraphs/headings/lists keep a readable line length without
-    // constraining their wide-block siblings.
+    // Single measure: the thread column (ChatColumn.ts) widens to the 48rem
+    // --container-transcript-thread token, and BOTH wide blocks (tables,
+    // code — see the `table` override below) and prose elements fill it
+    // (PROSE_MEASURE_CLASSNAME is max-w-full too), so an assistant message
+    // reads at the same width the user is typing into. The 40rem
+    // --container-transcript-readable token still exists for consumers that
+    // want a tighter reading measure, but conversation prose no longer
+    // applies it.
     "chat-markdown min-w-0 max-w-full text-foreground break-words",
     "[&_li>p]:my-0",
     "[&_li>ol]:mt-2 [&_li>ol]:mb-0",

@@ -10,40 +10,50 @@ export type CloudSidebarStatus = CloudWorkspaceStatus;
 export interface CloudSidebarStatusDefinition {
   label: string;
   tone: CloudSidebarStatusTone;
-  className: string;
+  /**
+   * Ink for the label text, in the row's quiet meta tier — no border, no
+   * fill, no uppercase tracking. The tone still reads through the dot.
+   */
+  textClassName: string;
+  /** Fill for the small status dot rendered ahead of the label. */
+  dotClassName: string;
 }
 
 export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
   pending: {
-    label: "pending",
+    label: "Pending",
     tone: "pending",
-    className: "border-warning-border bg-warning text-warning-foreground",
+    textClassName: "text-sidebar-muted-foreground",
+    dotClassName: "bg-warning-border",
   },
   materializing: {
-    label: "preparing",
+    label: "Preparing",
     tone: "pending",
-    className: "border-warning-border bg-warning text-warning-foreground",
+    textClassName: "text-sidebar-muted-foreground",
+    dotClassName: "bg-warning-border",
   },
   needs_rematerialization: {
-    label: "updating",
+    label: "Updating",
     tone: "pending",
-    className: "border-warning-border bg-warning text-warning-foreground",
+    textClassName: "text-sidebar-muted-foreground",
+    dotClassName: "bg-warning-border",
   },
   ready: {
-    label: "cloud",
+    label: "Cloud",
     tone: "ready",
-    className:
-      "border-sidebar-border bg-surface-control text-sidebar-muted-foreground",
+    textClassName: "text-sidebar-muted-foreground",
+    dotClassName: "bg-sidebar-muted-foreground/60",
   },
   archived: {
-    label: "archived",
+    label: "Archived",
     tone: "pending",
-    className:
-      "border-sidebar-border bg-transparent text-sidebar-muted-foreground",
+    textClassName: "text-sidebar-muted-foreground",
+    dotClassName: "bg-sidebar-muted-foreground/60",
   },
   error: {
-    label: "error",
+    label: "Error",
     tone: "error",
-    className: "border-destructive/20 bg-destructive/10 text-destructive",
+    textClassName: "text-destructive",
+    dotClassName: "bg-destructive",
   },
 } as const satisfies Record<CloudWorkspaceStatus, CloudSidebarStatusDefinition>;

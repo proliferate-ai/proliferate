@@ -55,19 +55,12 @@ export function TurnAssistantActionRow({
   showCopyButton = false,
   reserveSlot = false,
   timestampLabel = null,
-  alwaysVisible = false,
   metMarker = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
   timestampLabel?: string | null;
-  /**
-   * When true the copy/action row is persistently visible (opacity-100)
-   * instead of hover-gated. Set only for the transcript's final completed AI
-   * message; every earlier message keeps hover-to-reveal.
-   */
-  alwaysVisible?: boolean;
   /**
    * Inline "✓ Goal achieved in Xs" marker rendered between the copy button
    * and the timestamp — only on the final completed message when the active
@@ -80,9 +73,12 @@ export function TurnAssistantActionRow({
     return null;
   }
 
-  const visibilityClassName = alwaysVisible
-    ? "opacity-100"
-    : "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
+  // Hover-to-reveal on EVERY message, including the final one — the copy
+  // button is never permanent chrome. (The goal-met marker below stays
+  // persistently visible; it reports state rather than offering an action.)
+  const visibilityClassName =
+    "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
+  const timestampVisibilityClassName = visibilityClassName;
 
   return (
     // The footer sits in the same TURN_ITEM_GAP_CLASS flex column as the
@@ -101,6 +97,7 @@ export function TurnAssistantActionRow({
             timestampLabel={metMarker ? null : timestampLabel}
             timestampPosition="after"
             visibilityClassName={visibilityClassName}
+            timestampVisibilityClassName={timestampVisibilityClassName}
           />
         )}
         {copyContent && metMarker && (
@@ -108,16 +105,10 @@ export function TurnAssistantActionRow({
             <span aria-hidden className="h-3 w-px bg-border/60" />
             {metMarker}
             {timestampLabel && (
-              // Hover-gated like every earlier message's timestamp — the
-              // final completed message's copy/check-mark row is
-              // persistently visible (alwaysVisible), but the date itself
-              // stays reveal-on-hover so it doesn't sit as permanent chrome.
+              // Hover-gated like every message's timestamp, so the date
+              // never sits as permanent chrome next to the goal-met marker.
               <span
-                className={`text-chat-meta text-foreground-tertiary tabular-nums transition-opacity duration-hover ${
-                  alwaysVisible
-                    ? "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100"
-                    : ""
-                }`}
+                className={`text-chat-meta text-foreground-tertiary tabular-nums transition-opacity duration-hover ${timestampVisibilityClassName}`}
               >
                 {timestampLabel}
               </span>

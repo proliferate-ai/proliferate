@@ -16,9 +16,19 @@
   height: var(--icon-status);
 }
 
+@utility icon-tight {
+  width: var(--icon-tight);
+  height: var(--icon-tight);
+}
+
 @utility icon-compact {
   width: var(--icon-compact);
   height: var(--icon-compact);
+}
+
+@utility icon-indicator {
+  width: var(--icon-indicator);
+  height: var(--icon-indicator);
 }
 
 @utility icon-paired {

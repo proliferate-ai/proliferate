@@ -55,12 +55,26 @@ describe("TurnAssistantActionRow", () => {
     expect(container.innerHTML).toContain("opacity-0 group-hover/turn:opacity-100");
   });
 
-  it("keeps the copy button persistently visible when alwaysVisible (final message)", () => {
+  it("hover-gates the copy button on the final message too (never permanent chrome)", () => {
     const { container } = render(
-      <TurnAssistantActionRow content="reply" showCopyButton alwaysVisible timestampLabel="5:02pm" />,
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
     );
-    expect(container.innerHTML).toContain("opacity-100");
-    expect(container.innerHTML).not.toContain("opacity-0 group-hover/turn");
+    const copyWrapper = container.querySelector("[data-turn-assistant-footer-slot] > span");
+    expect(copyWrapper?.className).toContain("opacity-0 group-hover/turn:opacity-100");
+    expect(copyWrapper?.className).not.toMatch(/(?<!:)opacity-100/);
+  });
+
+  it("hover-gates the date like the copy button", () => {
+    const { container } = render(
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
+    );
+    // (The outer copy-button wrapper span also has "5:02pm" as its
+    // textContent since it contains the date span, so pick the innermost
+    // match — the one with no further descendant spans.)
+    const timestamp = Array.from(container.querySelectorAll("span")).find(
+      (span) => span.textContent === "5:02pm" && span.querySelector("span") === null,
+    );
+    expect(timestamp?.className).toContain("opacity-0 group-hover/turn:opacity-100");
   });
 
   it("renders the goal-met marker between the copy button and the timestamp", () => {
@@ -68,7 +82,6 @@ describe("TurnAssistantActionRow", () => {
       <TurnAssistantActionRow
         content="reply"
         showCopyButton
-        alwaysVisible
         timestampLabel="5:02pm"
         metMarker={<TurnGoalMetMarker label="Goal achieved in 40s" />}
       />,

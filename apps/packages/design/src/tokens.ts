@@ -853,9 +853,13 @@ export const themeTokens = {
     provenance: "[RETUNE:state/overlay]",
   },
   "--color-sidebar": {
-    dark: "#1d1d1d",
+    // Round-2 measurement against the reference app's dark capture: the
+    // sidebar rail reads rgb(34, 34, 34) — one step LIGHTER than the root
+    // surface, not recessed to --color-surface-under. Supersedes the
+    // surface-recess ruling from the prior retune.
+    dark: "#222222",
     light: "var(--color-surface-under)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:sidebar/reference-surface]",
   },
   "--color-sidebar-accent": {
     dark: "var(--color-hover) /* legacy-alias */",
@@ -1275,6 +1279,19 @@ export const themeTokens = {
     light: "2em",
     provenance: "[SHIPPED]",
   },
+  /**
+   * [RETUNE:icons/sidebar-indicator] — the sidebar row's trailing activity
+   * glyphs (waiting clock, running spinner, error/warning badge) render at
+   * 14px inside a 20px centered cell in the reference, against the same 12px
+   * row text. 1.166667em is exactly 14px at that base — between
+   * `--icon-compact` (12px, too small) and `--icon-control` (16px, visibly
+   * too big), neither of which matches on screen.
+   */
+  "--icon-indicator": {
+    dark: "1.166667em",
+    light: "1.166667em",
+    provenance: "[RETUNE:icons/sidebar-indicator]",
+  },
   "--icon-large": {
     dark: "1.666667em",
     light: "1.666667em",
@@ -1289,6 +1306,21 @@ export const themeTokens = {
     dark: "0.55em",
     light: "0.55em",
     provenance: "[SHIPPED]",
+  },
+  /**
+   * [RETUNE:icons/sidebar-trailing-tight] — round-4 sidebar feedback: the
+   * trailing plus/three-dots row controls (`SidebarActionButton`, the
+   * sidebar's `RowActionIconButton` kebab) rendered their glyph at
+   * `--icon-control` (16px), which read 50-60% too big against the
+   * reference sidebar on screen even though the ratio math looked correct.
+   * `0.875em` lands at 10.5px against the sidebar row's 12px text — the
+   * smallest inline-glyph tier, reserved for these row-trailing controls
+   * whose 24px hit box is unusually large relative to their glyph.
+   */
+  "--icon-tight": {
+    dark: "0.875em",
+    light: "0.875em",
+    provenance: "[RETUNE:icons/sidebar-trailing-tight]",
   },
   "--radius": {
     dark: "0.5rem",

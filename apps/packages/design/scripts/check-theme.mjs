@@ -183,19 +183,22 @@ for (const [currentName, finalName] of Object.entries(currentTokenDispositions))
   if (provenance.startsWith("[RETUNE:")) retuned += 1;
 }
 // `--color-composer-background` moved from [SHIPPED] to
-// [RETUNE:surface/composer-opaque], and `--color-composer-backdrop-filter`
-// (the composer-goes-opaque follow-on: light's blur has nothing left to
-// blur once the surface is opaque) makes the same crossing, so two
-// dispositions move from the shipped tally into the retuned one. The
-// 285-name disposition census itself is unchanged: the three
+// [RETUNE:surface/composer-opaque], `--color-composer-backdrop-filter`
+// followed it (the composer-goes-opaque follow-on: light's blur has nothing
+// left to blur once the surface is opaque), and `--color-sidebar` moved from
+// [SHIPPED] to [RETUNE:sidebar/reference-surface] (round-2 sidebar retune,
+// previously [RETUNE:sidebar/surface-recess]). The session-header retune
+// ([RETUNE:header/quiet-active-tab]) aliases
+// `--workspace-shell-tab-active-background` onto `--color-selected` (it
+// was already in the retuned tally as [RETUNE:state/overlay], so the tag
+// changes but no disposition crosses) and `--workspace-shell-tab-active-border`
+// onto `--color-border`, moving one more disposition from shipped into
+// retuned — four crossings in total.
+// The 285-name disposition census itself is unchanged: the three
 // transcript-measure/turn-rhythm additions are net-new tokens, and this map
 // is frozen to the names that existed BEFORE the retune.
-// `--workspace-shell-tab-active-border` additionally moved from [SHIPPED] to
-// [RETUNE:header/quiet-active-tab] (session-header-alignment pass: the
-// active tab's border softens from --color-border-heavy to --color-border
-// so the active state reads as a quiet wash, not a heavy chip outline).
-assert(shipped === 173, `expected 173 shipped dispositions, got ${shipped}`);
-assert(retuned === 42, `expected 42 retuned dispositions, got ${retuned}`);
+assert(shipped === 172, `expected 172 shipped dispositions, got ${shipped}`);
+assert(retuned === 43, `expected 43 retuned dispositions, got ${retuned}`);
 
 for (const [name, value] of tokenEntries) {
   assert(value.provenance.length > 0, `${name} is missing provenance`);

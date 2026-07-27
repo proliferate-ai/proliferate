@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
+import { ChevronRight } from "@proliferate/ui/icons";
 import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
@@ -8,7 +9,6 @@ import { PrStatusIconOverlay, type PrStatusView } from "../patterns/PrStatusBadg
 
 export interface ProductSidebarRepoGroupHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick"> {
   label: string;
-  count: number;
   collapsed: boolean;
   icon?: ReactNode;
   expandedIcon?: ReactNode;
@@ -19,7 +19,6 @@ export interface ProductSidebarRepoGroupHeaderProps extends Omit<HTMLAttributes<
 
 export function ProductSidebarRepoGroupHeader({
   label,
-  count,
   collapsed,
   icon,
   expandedIcon,
@@ -37,11 +36,16 @@ export function ProductSidebarRepoGroupHeader({
     <SidebarRowSurface
       onPress={onToggleCollapsed}
       aria-expanded={!collapsed}
-      className={`group/folder-row h-[28px] justify-between overflow-x-hidden py-1 text-sidebar-nav focus-visible:outline-offset-[-2px] ${className}`}
+      className={`group/folder-row h-[30px] justify-between overflow-x-hidden py-1 text-sidebar-nav focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
-        <span className="relative flex h-6 w-6 items-center justify-center text-current">
+      {/* gap-0.5 + no leading pl: the icon well (h-7.5/w-7.5, kept large for
+          the hover-chevron swap) already accounts for 30px, so trimming the
+          wrapper's own inset is what lands the label at the same left edge
+          as workspace/thread row labels below it (both rows start at the
+          same left-anchored surface). */}
+      <div className="flex min-w-0 flex-1 items-center gap-0.5">
+        <span className="relative flex h-7.5 w-7.5 items-center justify-center text-current">
           {visibleIcon ? (
             <span className="flex items-center justify-center group-hover/folder-row:opacity-0">
               {visibleIcon}
@@ -55,17 +59,13 @@ export function ProductSidebarRepoGroupHeader({
           {label}
         </span>
 
-        <div className="relative ml-auto flex h-6 min-w-6 shrink-0 items-center justify-end">
-          <span className={`flex size-6 items-center justify-center font-mono text-ui-sm text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0 group-focus-within/folder-row:opacity-0" : ""
-            }`}>
-            {count}
-          </span>
-          {hasAction ? (
-            <div className="absolute inset-y-0 right-0 flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover/folder-row:opacity-100 group-focus-within/folder-row:opacity-100">
-              {action}
-            </div>
-          ) : null}
-        </div>
+        {hasAction ? (
+          // No workspace count at rest — the trailing area is hover-revealed
+          // actions only, so the header stays quiet until pointed at.
+          <div className="ml-auto flex h-6 min-w-6 shrink-0 items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover/folder-row:opacity-100 group-focus-within/folder-row:opacity-100">
+            {action}
+          </div>
+        ) : null}
       </div>
     </SidebarRowSurface>
   );
@@ -101,13 +101,13 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   shortcutRevealVisible?: boolean;
   hoverAction?: ReactNode;
   /**
-   * PR status rendered codex-style as a dot anchored on the idle git glyph
-   * (§3.3). Rendered only when present — omit when PR data is not available
+   * PR status rendered as a dot anchored on the idle git glyph
+   * Rendered only when present — omit when PR data is not available
    * for the row.
    */
   prStatus?: PrStatusView | null;
   /**
-   * Unseen-activity dot in the trailing cell (codex pattern, §3.4). Yields
+   * Unseen-activity dot in the trailing cell. Yields
    * to `trailingStatus` (live activity wins) and to hover actions.
    */
   unreadDot?: boolean;
@@ -140,7 +140,7 @@ export function ProductSidebarWorkspaceRow({
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
-      className={`${hasSubtitle ? "h-[40px]" : "h-[28px]"} px-2 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
+      className={`${hasSubtitle ? "h-[40px]" : "h-[30px]"} pl-2 pr-1 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {hoverAction ? (
@@ -199,9 +199,13 @@ export function ProductSidebarWorkspaceRow({
                 {trailingStatus}
               </div>
             ) : unreadDot ? (
+              // Same fixed 20px cell as the activity indicators (which sit
+              // justify-end + centered in their own min-w-5 box): the dot's
+              // center lands 10px from the right edge, exactly where the
+              // spinner/error badge centers land, instead of hugging the edge.
               <Tooltip
                 content="Unseen activity"
-                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
+                className={`col-start-1 row-start-1 flex h-5 w-5 items-center justify-center justify-self-end transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                     ? "opacity-0"
                     : "group-hover:opacity-0 group-focus-within:opacity-0"
                   }`}
@@ -213,7 +217,10 @@ export function ProductSidebarWorkspaceRow({
                 />
               </Tooltip>
             ) : trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui tabular-nums text-faint transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
+              // Centered in the same end-anchored 20px cell as the activity
+              // glyphs and unread dot, so the time column shares their axis
+              // instead of hugging the right edge.
+              <div className={`col-start-1 row-start-1 flex h-5 min-w-5 items-center justify-center justify-self-end overflow-visible truncate whitespace-nowrap text-ui tabular-nums text-faint transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>
@@ -237,10 +244,8 @@ export function ProductSidebarWorkspaceRow({
 
 function ChevronGlyph({ collapsed }: { collapsed: boolean }) {
   return (
-    <span
-      className={`block size-1.5 border-b border-r border-current transition-transform ${collapsed ? "-rotate-45" : "rotate-45"
-        }`}
-      aria-hidden="true"
+    <ChevronRight
+      className={`icon-compact transition-transform ${collapsed ? "" : "rotate-90"}`}
     />
   );
 }
