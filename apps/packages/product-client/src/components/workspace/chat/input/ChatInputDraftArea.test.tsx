@@ -12,7 +12,7 @@ vi.mock("#product/hooks/chat/ui/use-chat-draft-state", () => ({
 vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () => ({
   ComposerRichTextEditor: () => <div data-testid="queue-rich-editor" />,
 }));
-vi.mock("@proliferate/ui/primitives/ComposerTextareaFrame", () => ({
+vi.mock("@proliferate/ui/patterns/ComposerTextareaFrame", () => ({
   ComposerTextareaFrame: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("#product/components/workspace/chat/input/QueuedPromptEditBanner", () => ({
@@ -50,7 +50,7 @@ describe("ChatInputDraftArea", () => {
     expect(viewport.classList.contains("overflow-y-auto")).toBe(true);
     expect(viewport.style.minHeight).toBe(`${WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem}rem`);
     expect(viewport.style.maxHeight).toBe(
-      `calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows})`,
+      `min(calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows}), 25dvh)`,
     );
   });
 });

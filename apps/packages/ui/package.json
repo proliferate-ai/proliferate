@@ -7,65 +7,65 @@
     "dist"
   ],
   "exports": {
-    "./command-palette-icons": {
-      "types": "./dist/command-palette-icons.d.ts",
-      "import": "./dist/command-palette-icons.js"
+    "./icons/command-palette-icons": {
+      "types": "./dist/icons/command-palette-icons.d.ts",
+      "import": "./dist/icons/command-palette-icons.js"
     },
     "./icons": {
-      "types": "./dist/icons.d.ts",
-      "import": "./dist/icons.js"
+      "types": "./dist/icons/index.d.ts",
+      "import": "./dist/icons/index.js"
     },
-    "./layout/AutoHideScrollArea": {
-      "types": "./dist/layout/AutoHideScrollArea.d.ts",
-      "import": "./dist/layout/AutoHideScrollArea.js"
+    "./patterns/AutoHideScrollArea": {
+      "types": "./dist/patterns/AutoHideScrollArea.d.ts",
+      "import": "./dist/patterns/AutoHideScrollArea.js"
     },
-    "./layout/EmptyState": {
-      "types": "./dist/layout/EmptyState.d.ts",
-      "import": "./dist/layout/EmptyState.js"
+    "./patterns/EmptyState": {
+      "types": "./dist/patterns/EmptyState.d.ts",
+      "import": "./dist/patterns/EmptyState.js"
     },
-    "./layout/FixedPositionLayer": {
-      "types": "./dist/layout/FixedPositionLayer.d.ts",
-      "import": "./dist/layout/FixedPositionLayer.js"
+    "./primitives/FixedPositionLayer": {
+      "types": "./dist/primitives/FixedPositionLayer.d.ts",
+      "import": "./dist/primitives/FixedPositionLayer.js"
     },
-    "./layout/ListRow": {
-      "types": "./dist/layout/ListRow.d.ts",
-      "import": "./dist/layout/ListRow.js"
+    "./patterns/ListRow": {
+      "types": "./dist/patterns/ListRow.d.ts",
+      "import": "./dist/patterns/ListRow.js"
     },
-    "./layout/PageContentFrame": {
-      "types": "./dist/layout/PageContentFrame.d.ts",
-      "import": "./dist/layout/PageContentFrame.js"
+    "./patterns/PageContentFrame": {
+      "types": "./dist/patterns/PageContentFrame.d.ts",
+      "import": "./dist/patterns/PageContentFrame.js"
     },
-    "./layout/PageHeader": {
-      "types": "./dist/layout/PageHeader.d.ts",
-      "import": "./dist/layout/PageHeader.js"
+    "./patterns/PageHeader": {
+      "types": "./dist/patterns/PageHeader.d.ts",
+      "import": "./dist/patterns/PageHeader.js"
     },
-    "./layout/PaneIconButton": {
-      "types": "./dist/layout/PaneIconButton.d.ts",
-      "import": "./dist/layout/PaneIconButton.js"
+    "./primitives/PaneIconButton": {
+      "types": "./dist/primitives/PaneIconButton.d.ts",
+      "import": "./dist/primitives/PaneIconButton.js"
     },
-    "./layout/PaneOptionsMenuItem": {
-      "types": "./dist/layout/PaneOptionsMenuItem.d.ts",
-      "import": "./dist/layout/PaneOptionsMenuItem.js"
+    "./patterns/PaneOptionsMenuItem": {
+      "types": "./dist/patterns/PaneOptionsMenuItem.d.ts",
+      "import": "./dist/patterns/PaneOptionsMenuItem.js"
     },
-    "./layout/RowActionIconButton": {
-      "types": "./dist/layout/RowActionIconButton.d.ts",
-      "import": "./dist/layout/RowActionIconButton.js"
+    "./primitives/RowActionIconButton": {
+      "types": "./dist/primitives/RowActionIconButton.d.ts",
+      "import": "./dist/primitives/RowActionIconButton.js"
     },
-    "./layout/ShortcutBadge": {
-      "types": "./dist/layout/ShortcutBadge.d.ts",
-      "import": "./dist/layout/ShortcutBadge.js"
+    "./primitives/ShortcutBadge": {
+      "types": "./dist/primitives/ShortcutBadge.d.ts",
+      "import": "./dist/primitives/ShortcutBadge.js"
     },
-    "./layout/SidebarNavRow": {
-      "types": "./dist/layout/SidebarNavRow.d.ts",
-      "import": "./dist/layout/SidebarNavRow.js"
+    "./patterns/SidebarNavRow": {
+      "types": "./dist/patterns/SidebarNavRow.d.ts",
+      "import": "./dist/patterns/SidebarNavRow.js"
     },
-    "./layout/SidebarRowSurface": {
-      "types": "./dist/layout/SidebarRowSurface.d.ts",
-      "import": "./dist/layout/SidebarRowSurface.js"
+    "./patterns/SidebarRowSurface": {
+      "types": "./dist/patterns/SidebarRowSurface.d.ts",
+      "import": "./dist/patterns/SidebarRowSurface.js"
     },
-    "./layout/SidebarActionButton": {
-      "types": "./dist/layout/SidebarActionButton.d.ts",
-      "import": "./dist/layout/SidebarActionButton.js"
+    "./patterns/SidebarActionButton": {
+      "types": "./dist/patterns/SidebarActionButton.d.ts",
+      "import": "./dist/patterns/SidebarActionButton.js"
     },
     "./overlays/overlay-presence": {
       "types": "./dist/overlays/overlay-presence.d.ts",
@@ -83,9 +83,9 @@
       "types": "./dist/primitives/Badge.d.ts",
       "import": "./dist/primitives/Badge.js"
     },
-    "./primitives/AuthProviderButton": {
-      "types": "./dist/primitives/AuthProviderButton.d.ts",
-      "import": "./dist/primitives/AuthProviderButton.js"
+    "./patterns/AuthProviderButton": {
+      "types": "./dist/patterns/AuthProviderButton.d.ts",
+      "import": "./dist/patterns/AuthProviderButton.js"
     },
     "./primitives/Button": {
       "types": "./dist/primitives/Button.d.ts",
@@ -95,37 +95,37 @@
       "types": "./dist/primitives/Checkbox.d.ts",
       "import": "./dist/primitives/Checkbox.js"
     },
-    "./primitives/CommandPalette": {
-      "types": "./dist/primitives/CommandPalette.d.ts",
-      "import": "./dist/primitives/CommandPalette.js"
+    "./patterns/CommandPalette": {
+      "types": "./dist/patterns/CommandPalette.d.ts",
+      "import": "./dist/patterns/CommandPalette.js"
     },
-    "./primitives/ConfirmationDialog": {
-      "types": "./dist/primitives/ConfirmationDialog.d.ts",
-      "import": "./dist/primitives/ConfirmationDialog.js"
+    "./patterns/ConfirmationDialog": {
+      "types": "./dist/patterns/ConfirmationDialog.d.ts",
+      "import": "./dist/patterns/ConfirmationDialog.js"
     },
-    "./primitives/ComposerActionButton": {
-      "types": "./dist/primitives/ComposerActionButton.d.ts",
-      "import": "./dist/primitives/ComposerActionButton.js"
+    "./patterns/ComposerActionButton": {
+      "types": "./dist/patterns/ComposerActionButton.d.ts",
+      "import": "./dist/patterns/ComposerActionButton.js"
     },
-    "./primitives/ComposerControlButton": {
-      "types": "./dist/primitives/ComposerControlButton.d.ts",
-      "import": "./dist/primitives/ComposerControlButton.js"
+    "./patterns/ComposerControlButton": {
+      "types": "./dist/patterns/ComposerControlButton.d.ts",
+      "import": "./dist/patterns/ComposerControlButton.js"
     },
-    "./primitives/LevelBarsButton": {
-      "types": "./dist/primitives/LevelBarsButton.d.ts",
-      "import": "./dist/primitives/LevelBarsButton.js"
+    "./patterns/LevelBarsButton": {
+      "types": "./dist/patterns/LevelBarsButton.d.ts",
+      "import": "./dist/patterns/LevelBarsButton.js"
     },
-    "./primitives/ComposerTextarea": {
-      "types": "./dist/primitives/ComposerTextarea.d.ts",
-      "import": "./dist/primitives/ComposerTextarea.js"
+    "./patterns/ComposerTextarea": {
+      "types": "./dist/patterns/ComposerTextarea.d.ts",
+      "import": "./dist/patterns/ComposerTextarea.js"
     },
-    "./primitives/ComposerTextareaFrame": {
-      "types": "./dist/primitives/ComposerTextareaFrame.d.ts",
-      "import": "./dist/primitives/ComposerTextareaFrame.js"
+    "./patterns/ComposerTextareaFrame": {
+      "types": "./dist/patterns/ComposerTextareaFrame.d.ts",
+      "import": "./dist/patterns/ComposerTextareaFrame.js"
     },
-    "./primitives/EnvironmentSearchSelect": {
-      "types": "./dist/primitives/EnvironmentSearchSelect.d.ts",
-      "import": "./dist/primitives/EnvironmentSearchSelect.js"
+    "./patterns/EnvironmentSearchSelect": {
+      "types": "./dist/patterns/EnvironmentSearchSelect.d.ts",
+      "import": "./dist/patterns/EnvironmentSearchSelect.js"
     },
     "./primitives/IconButton": {
       "types": "./dist/primitives/IconButton.d.ts",
@@ -139,13 +139,13 @@
       "types": "./dist/primitives/Label.d.ts",
       "import": "./dist/primitives/Label.js"
     },
-    "./primitives/ModalShell": {
-      "types": "./dist/primitives/ModalShell.d.ts",
-      "import": "./dist/primitives/ModalShell.js"
+    "./patterns/ModalShell": {
+      "types": "./dist/patterns/ModalShell.d.ts",
+      "import": "./dist/patterns/ModalShell.js"
     },
-    "./primitives/PickerPopoverContent": {
-      "types": "./dist/primitives/PickerPopoverContent.d.ts",
-      "import": "./dist/primitives/PickerPopoverContent.js"
+    "./patterns/PickerPopoverContent": {
+      "types": "./dist/patterns/PickerPopoverContent.d.ts",
+      "import": "./dist/patterns/PickerPopoverContent.js"
     },
     "./primitives/PopoverSearchField": {
       "types": "./dist/primitives/PopoverSearchField.d.ts",
@@ -179,9 +179,9 @@
       "types": "./dist/primitives/Select.d.ts",
       "import": "./dist/primitives/Select.js"
     },
-    "./primitives/SettingsMenu": {
-      "types": "./dist/primitives/SettingsMenu.d.ts",
-      "import": "./dist/primitives/SettingsMenu.js"
+    "./patterns/SettingsMenu": {
+      "types": "./dist/patterns/SettingsMenu.d.ts",
+      "import": "./dist/patterns/SettingsMenu.js"
     },
     "./primitives/Skeleton": {
       "types": "./dist/primitives/Skeleton.d.ts",
@@ -195,9 +195,9 @@
       "types": "./dist/primitives/Switch.d.ts",
       "import": "./dist/primitives/Switch.js"
     },
-    "./primitives/ThinkingText": {
-      "types": "./dist/primitives/ThinkingText.d.ts",
-      "import": "./dist/primitives/ThinkingText.js"
+    "./patterns/ThinkingText": {
+      "types": "./dist/patterns/ThinkingText.d.ts",
+      "import": "./dist/patterns/ThinkingText.js"
     },
     "./primitives/Textarea": {
       "types": "./dist/primitives/Textarea.d.ts",
@@ -211,13 +211,13 @@
       "types": "./dist/primitives/UserAvatar.d.ts",
       "import": "./dist/primitives/UserAvatar.js"
     },
-    "./proliferate-icons": {
-      "types": "./dist/proliferate-icons.d.ts",
-      "import": "./dist/proliferate-icons.js"
+    "./icons/proliferate-icons": {
+      "types": "./dist/icons/proliferate-icons.d.ts",
+      "import": "./dist/icons/proliferate-icons.js"
     },
-    "./provider-icons": {
-      "types": "./dist/provider-icons.d.ts",
-      "import": "./dist/provider-icons.js"
+    "./icons/provider-icons": {
+      "types": "./dist/icons/provider-icons.d.ts",
+      "import": "./dist/icons/provider-icons.js"
     },
     "./utils/scroll-chain": {
       "types": "./dist/utils/scroll-chain.d.ts",
@@ -231,37 +231,37 @@
       "types": "./dist/utils/tw-merge.d.ts",
       "import": "./dist/utils/tw-merge.js"
     },
-    "./kit/AlertDialog": {
-      "types": "./dist/kit/AlertDialog.d.ts",
-      "import": "./dist/kit/AlertDialog.js"
+    "./primitives/AlertDialog": {
+      "types": "./dist/primitives/AlertDialog.d.ts",
+      "import": "./dist/primitives/AlertDialog.js"
     },
-    "./kit/Checkbox": {
-      "types": "./dist/kit/Checkbox.d.ts",
-      "import": "./dist/kit/Checkbox.js"
+    "./primitives/checkbox-primitive": {
+      "types": "./dist/primitives/checkbox-primitive.d.ts",
+      "import": "./dist/primitives/checkbox-primitive.js"
     },
-    "./kit/Command": {
-      "types": "./dist/kit/Command.d.ts",
-      "import": "./dist/kit/Command.js"
+    "./primitives/Command": {
+      "types": "./dist/primitives/Command.d.ts",
+      "import": "./dist/primitives/Command.js"
     },
-    "./kit/Dialog": {
-      "types": "./dist/kit/Dialog.d.ts",
-      "import": "./dist/kit/Dialog.js"
+    "./primitives/Dialog": {
+      "types": "./dist/primitives/Dialog.d.ts",
+      "import": "./dist/primitives/Dialog.js"
     },
-    "./kit/DropdownMenu": {
-      "types": "./dist/kit/DropdownMenu.d.ts",
-      "import": "./dist/kit/DropdownMenu.js"
+    "./primitives/DropdownMenu": {
+      "types": "./dist/primitives/DropdownMenu.d.ts",
+      "import": "./dist/primitives/DropdownMenu.js"
     },
-    "./kit/Popover": {
-      "types": "./dist/kit/Popover.d.ts",
-      "import": "./dist/kit/Popover.js"
+    "./primitives/Popover": {
+      "types": "./dist/primitives/Popover.d.ts",
+      "import": "./dist/primitives/Popover.js"
     },
-    "./kit/Sonner": {
-      "types": "./dist/kit/Sonner.d.ts",
-      "import": "./dist/kit/Sonner.js"
+    "./primitives/Sonner": {
+      "types": "./dist/primitives/Sonner.d.ts",
+      "import": "./dist/primitives/Sonner.js"
     },
-    "./kit/Tooltip": {
-      "types": "./dist/kit/Tooltip.d.ts",
-      "import": "./dist/kit/Tooltip.js"
+    "./primitives/tooltip-primitive": {
+      "types": "./dist/primitives/tooltip-primitive.d.ts",
+      "import": "./dist/primitives/tooltip-primitive.js"
     },
     "./lib/utils": {
       "types": "./dist/lib/utils.d.ts",

@@ -8,7 +8,7 @@ import {
   ExpandAll,
   Search,
 } from "@proliferate/ui/icons";
-import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
+import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
 import { PopoverButton, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";

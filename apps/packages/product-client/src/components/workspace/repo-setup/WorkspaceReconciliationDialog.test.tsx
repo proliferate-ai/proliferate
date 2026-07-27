@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceGitReconciliationPlan } from "#product/lib/domain/workspaces/cloud/workspace-git-reconciliation";
 
 // Inline the AlertDialog kit so the body renders in jsdom without a portal.
-vi.mock("@proliferate/ui/kit/AlertDialog", () => ({
+vi.mock("@proliferate/ui/primitives/AlertDialog", () => ({
   AlertDialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AlertDialogAction: ({ children, onClick, disabled }: any) => (
     <button type="button" onClick={onClick} disabled={disabled} data-testid="action">{children}</button>

@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
-import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsEyebrow } from "@proliferate/product-ui/patterns/SettingsEyebrow";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 
 /**
  * How a harness auth/config block renders its title + content.

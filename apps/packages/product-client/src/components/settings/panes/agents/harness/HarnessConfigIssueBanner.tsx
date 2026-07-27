@@ -1,5 +1,5 @@
 import type { AgentSummary } from "@anyharness/sdk";
-import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import {
   configurationDetailForAgent,

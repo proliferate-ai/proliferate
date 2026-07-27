@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Check } from "@proliferate/ui/icons";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import type { OrganizationInvitationRecord } from "#product/lib/domain/organizations/organization-records";
 
 export function CurrentUserInvitationsSection({

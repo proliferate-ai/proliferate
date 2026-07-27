@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { X } from "@proliferate/ui/icons";
 
 interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {

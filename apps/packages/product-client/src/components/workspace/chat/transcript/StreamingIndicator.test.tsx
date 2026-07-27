@@ -15,12 +15,13 @@ afterEach(() => {
 });
 
 describe("StreamingIndicator", () => {
-  it("shows and advances elapsed seconds after the first full second", () => {
+  it("renders the Thinking gleam without an elapsed-seconds suffix", () => {
     render(<StreamingIndicator startedAt="2026-07-20T05:59:59.000Z" />);
 
-    expect(screen.getByText(/1s/)).toBeTruthy();
+    // "Thinking" renders twice (base text + aria-hidden band glyph copy).
+    expect(screen.getAllByText("Thinking").length).toBeGreaterThan(0);
 
     act(() => vi.advanceTimersByTime(2_000));
-    expect(screen.getByText(/3s/)).toBeTruthy();
+    expect(screen.queryByText(/\d+s/)).toBeNull();
   });
 });

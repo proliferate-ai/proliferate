@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
 import type { ReconcileAgentsResponse } from "@anyharness/sdk";
-import { toast } from "@proliferate/ui/kit/Sonner";
+import { toast } from "@proliferate/ui/primitives/Sonner";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";

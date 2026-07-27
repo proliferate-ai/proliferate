@@ -10,7 +10,7 @@ import {
 } from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Slot } from "@radix-ui/react-slot";
-import { Popover, PopoverTrigger } from "../kit/Popover";
+import { Popover, PopoverTrigger } from "./Popover";
 import { useNativeOverlayRegistration } from "../overlays/overlay-presence";
 import { POPOVER_SURFACE_CLASS } from "./popover-surface";
 

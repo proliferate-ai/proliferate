@@ -14,7 +14,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@proliferate/ui/kit/Dialog";
+} from "@proliferate/ui/primitives/Dialog";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";

@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
