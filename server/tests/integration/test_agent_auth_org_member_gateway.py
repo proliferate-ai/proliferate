@@ -1,25 +1,25 @@
-"""Org-member gateway resolution (model-gateway.md org-member gap, closed by B3).
+"""Gateway payer resolution + fail-closed funding law (model-gateway.md).
 
-Before this fix, an org member's gateway sessions always resolved their
-PERSONAL enrollment (state renderer and budget gate both called
-``get_enrollment_for_user`` unconditionally), so org members' gateway spend
-landed on their personal subject rather than the org's.
+v1 payer law: the subject that pays for a user's gateway sessions is their
+DEFAULT org — the org their identity was placed into at signup, i.e. the
+earliest active membership — always. The interim funding-follows-attribution
+guard (org governs only when funded, else fall back to the personal
+enrollment) and the name-ordered org choice are deleted; funding never
+re-routes payment to a different subject.
 
-The fix routes an org member to their ORG enrollment, but only when the org
-billing subject is actually FUNDED — the funding-follows-attribution guard
-(interim; founder end-state ruling pending). On hosted every user gets a
-default personal org, so unconditional org routing would send every user to a
-subject with no credit grant: ``is_gateway_budget_available`` returns ``True``
-unconditionally for a grant-less subject and the org team's default budget of
-"0" means *uncapped* in LiteLLM, so both walls open and the personal free
-credit is never consulted. An unfunded org therefore falls back to the personal
-enrollment (pre-B3 behavior); a funded org governs.
+Unfunded fails closed instead: a subject with no active credit grant and no
+explicitly configured positive default budget gets no gateway — the budget
+gate refuses, the state renderer withholds key material, and the mirrored
+LiteLLM team budget sits at the exhausted floor (see the enrollment tests).
+
+Proof ledger: D8 (default-org resolution, guard + name-ordered choice gone)
+and the gate/renderer halves of D3 (unfunded fails closed) live here.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -61,19 +61,25 @@ async def _create_user(db_session: AsyncSession) -> uuid.UUID:
 
 
 async def _create_org_with_active_member(
-    db_session: AsyncSession, *, user_id: uuid.UUID, name: str | None = None
+    db_session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    name: str | None = None,
+    membership_created_at: datetime | None = None,
 ) -> uuid.UUID:
     organization = Organization(name=name or f"Gateway Org {uuid.uuid4().hex[:6]}")
     db_session.add(organization)
     await db_session.flush()
-    db_session.add(
-        OrganizationMembership(
-            organization_id=organization.id,
-            user_id=user_id,
-            role="member",
-            status="active",
-        )
+    membership = OrganizationMembership(
+        organization_id=organization.id,
+        user_id=user_id,
+        role="member",
+        status="active",
     )
+    if membership_created_at is not None:
+        membership.created_at = membership_created_at
+        membership.joined_at = membership_created_at
+    db_session.add(membership)
     await db_session.flush()
     return organization.id
 
@@ -98,20 +104,27 @@ async def _drain(db_session: AsyncSession, *, billing_subject_id: uuid.UUID) -> 
 
 
 @pytest.mark.asyncio
-async def test_funded_org_governs_the_members_gateway(
+async def test_default_org_governs_unconditionally_even_when_unfunded(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """An org with a real credit grant is the subject that governs its members."""
+    """D8: no funding guard — the org enrollment governs with zero grants.
+
+    The deleted guard resolved the PERSONAL enrollment here (org subject
+    unfunded). Funding never re-routes payment; it is enforced by the budget
+    gate instead.
+    """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
     user_id = await _create_user(db_session)
     org_id = await _create_org_with_active_member(db_session, user_id=user_id)
 
     personal = await ensure_user_enrollment(db_session, user_id)
     org_enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
     assert personal.id != org_enrollment.id
-    await _grant(db_session, billing_subject_id=org_enrollment.billing_subject_id, amount="50")
+    # A personal grant must not pull resolution back to the personal subject.
+    await _grant(db_session, billing_subject_id=personal.billing_subject_id, amount="5")
 
     resolved = await get_gateway_enrollment_for_user(db_session, user_id)
     assert resolved is not None
@@ -120,17 +133,17 @@ async def test_funded_org_governs_the_members_gateway(
 
 
 @pytest.mark.asyncio
-async def test_unfunded_org_falls_back_to_the_personal_enrollment(
+async def test_unfunded_org_fails_closed_at_the_gate(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """The guard: no org grant and no explicit org budget → personal governs.
+    """D3 (gate): no org grant + no explicit org budget → launches refused.
 
-    Routing to the unfunded org subject would make the gate's ``granted <= 0``
-    branch return True unconditionally while LiteLLM reads the org team's "0"
-    budget as uncapped — unlimited spend with the personal grant never
-    consulted.
+    Replaces the deleted "no grant means unlimited" behavior: the gate no
+    longer answers True for a grant-less subject, and a funded PERSONAL
+    subject cannot stand in for the unfunded default org (the guard that did
+    that fallback is gone).
     """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
@@ -139,31 +152,71 @@ async def test_unfunded_org_falls_back_to_the_personal_enrollment(
 
     personal = await ensure_user_enrollment(db_session, user_id)
     await ensure_org_enrollment(db_session, org_id, user_id)
+    await _grant(db_session, billing_subject_id=personal.billing_subject_id, amount="5")
 
-    resolved = await get_gateway_enrollment_for_user(db_session, user_id)
-    assert resolved is not None
-    assert resolved.id == personal.id
-    assert resolved.subject_kind == "user"
+    assert await is_gateway_budget_available(db_session, user_id) is False
 
 
 @pytest.mark.asyncio
-async def test_explicit_org_budget_also_counts_as_funded(
+async def test_unfunded_org_state_render_withholds_gateway_key(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """A deployment that configures a real org team cap has a funding source."""
+    """D3 (renderer): an unfunded org member's render drops the gateway source.
+
+    The runtime then fails closed at launch (empty ``sources``); granting the
+    org credit is what turns the key back on, proving funding was the only
+    thing withheld.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
+    monkeypatch.setattr(
+        settings,
+        "agent_gateway_litellm_public_base_url",
+        "https://llm.proliferate.ai",
+    )
+    user_id = await _create_user(db_session)
+    org_id = await _create_org_with_active_member(db_session, user_id=user_id)
+    org_enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
+
+    await put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="cloud",
+        sources=[DesiredAuthSource(source_kind="gateway")],
+    )
+
+    state, _ = await build_agent_auth_state(db_session, user_id, surface="cloud")
+    sources = [s for h in state["harnesses"] for s in h["sources"]]
+    assert not any(s["kind"] == "gateway" for s in sources)
+
+    await _grant(db_session, billing_subject_id=org_enrollment.billing_subject_id, amount="50")
+    state, _ = await build_agent_auth_state(db_session, user_id, surface="cloud")
+    sources = [s for h in state["harnesses"] for s in h["sources"]]
+    assert any(s["kind"] == "gateway" and s.get("key") for s in sources)
+
+
+@pytest.mark.asyncio
+async def test_explicit_org_budget_keeps_a_grantless_org_open(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """A deployment-configured positive org budget is a real funding source:
+    the LiteLLM team budget is the guardrail, so the ledger gate stays open."""
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "250")
     user_id = await _create_user(db_session)
     org_id = await _create_org_with_active_member(db_session, user_id=user_id)
 
-    await ensure_user_enrollment(db_session, user_id)
     org_enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
 
     resolved = await get_gateway_enrollment_for_user(db_session, user_id)
     assert resolved is not None
     assert resolved.id == org_enrollment.id
+    assert await is_gateway_budget_available(db_session, user_id) is True
 
 
 @pytest.mark.asyncio
@@ -184,41 +237,13 @@ async def test_org_less_user_still_resolves_personal_enrollment(
 
 
 @pytest.mark.asyncio
-async def test_unfunded_org_member_is_blocked_by_a_drained_personal_grant(
+async def test_org_gate_follows_only_the_org_ledger(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """The money assertion: personal credit still caps an unfunded-org member.
-
-    This is what the pre-fix version of this suite asserted backwards — it
-    treated "drained personal grant does not block the member" as the desired
-    behavior, which is exactly the unlimited-spend hole (the member's only
-    funding source was drained, yet nothing stopped them).
-    """
-    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
-    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
-    user_id = await _create_user(db_session)
-    org_id = await _create_org_with_active_member(db_session, user_id=user_id)
-
-    personal = await ensure_user_enrollment(db_session, user_id)
-    await ensure_org_enrollment(db_session, org_id, user_id)
-    await _grant(db_session, billing_subject_id=personal.billing_subject_id, amount="1")
-
-    assert await is_gateway_budget_available(db_session, user_id) is True
-
-    await _drain(db_session, billing_subject_id=personal.billing_subject_id)
-
-    assert await is_gateway_budget_available(db_session, user_id) is False
-
-
-@pytest.mark.asyncio
-async def test_funded_org_budgets_are_independent_of_personal_credit(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-    stub_litellm: StubLiteLLM,
-) -> None:
-    """Once the org funds the member, the two ledgers move independently."""
+    """The default org's ledger is the only one the gate reads: draining the
+    personal subject changes nothing, draining the org subject blocks."""
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
     user_id = await _create_user(db_session)
@@ -229,11 +254,9 @@ async def test_funded_org_budgets_are_independent_of_personal_credit(
     await _grant(db_session, billing_subject_id=org_enrollment.billing_subject_id, amount="50")
     await _grant(db_session, billing_subject_id=personal.billing_subject_id, amount="1")
 
-    # Draining the PERSONAL subject does not block a member the org funds.
     await _drain(db_session, billing_subject_id=personal.billing_subject_id)
     assert await is_gateway_budget_available(db_session, user_id) is True
 
-    # Draining the ORG subject does block them — that is the governing ledger.
     await _drain(db_session, billing_subject_id=org_enrollment.billing_subject_id)
     assert await is_gateway_budget_available(db_session, user_id) is False
 
@@ -244,8 +267,8 @@ async def test_org_member_state_render_uses_org_enrollment_key(
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """The rendered gateway source's key comes from the funded org enrollment's
-    per-harness child key, not the member's personal one."""
+    """The rendered gateway source's key comes from the default org
+    enrollment's per-harness child key, not the member's personal one."""
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(
         settings,
@@ -288,12 +311,12 @@ async def test_every_gateway_key_reader_resolves_the_same_enrollment(
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """Divergence guard: gate, renderer, probe, and capabilities must agree.
+    """Divergence guard: gate, renderer, and capabilities must agree.
 
-    Four call sites read gateway key material or report its readiness. If any
-    one of them resolves a different enrollment than the others, the gate can
-    authorize one paying subject while a key from another is handed out (or the
-    UI reports a readiness that does not describe the key in use).
+    The call sites that read gateway key material or report its readiness must
+    all resolve the same enrollment; otherwise the gate can authorize one
+    paying subject while a key from another is handed out (or the UI reports a
+    readiness that does not describe the key in use).
     """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(
@@ -353,37 +376,42 @@ async def test_every_gateway_key_reader_resolves_the_same_enrollment(
 
 
 @pytest.mark.asyncio
-async def test_multi_org_membership_picks_the_first_org_by_name(
+async def test_multi_org_membership_resolves_the_default_org_not_the_name_order(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """Deterministic payer across several funded memberships.
+    """D8: the payer is the EARLIEST membership (the signup default org).
 
-    ``get_current_membership_for_user`` orders active memberships by
-    organization NAME and takes the first, so the chosen payer is stable for a
-    fixed set of names — but renaming an org can move it. This pins the current
-    behavior (inherited from the compute attribution path) so a change is a
-    deliberate one.
+    The deleted name-ordered choice (`get_current_membership_for_user`) would
+    pick "Alpha ..." here; the default-org resolution picks "Zulu ..." because
+    it was joined first. Funding the later org must not move the payer either
+    (that would be the deleted guard's funded-org preference).
     """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     user_id = await _create_user(db_session)
     suffix = uuid.uuid4().hex[:6]
-    alpha_id = await _create_org_with_active_member(
-        db_session, user_id=user_id, name=f"Alpha Org {suffix}"
-    )
+    base = datetime(2026, 7, 1, 9, 0, tzinfo=UTC)
     zulu_id = await _create_org_with_active_member(
-        db_session, user_id=user_id, name=f"Zulu Org {suffix}"
+        db_session,
+        user_id=user_id,
+        name=f"Zulu Org {suffix}",
+        membership_created_at=base,
+    )
+    alpha_id = await _create_org_with_active_member(
+        db_session,
+        user_id=user_id,
+        name=f"Alpha Org {suffix}",
+        membership_created_at=base + timedelta(days=1),
     )
 
     await ensure_user_enrollment(db_session, user_id)
-    alpha_enrollment = await ensure_org_enrollment(db_session, alpha_id, user_id)
     zulu_enrollment = await ensure_org_enrollment(db_session, zulu_id, user_id)
-    # Both orgs funded, so the guard does not decide between them.
+    alpha_enrollment = await ensure_org_enrollment(db_session, alpha_id, user_id)
+    # Only the later, name-first org is funded — and it still must not govern.
     await _grant(db_session, billing_subject_id=alpha_enrollment.billing_subject_id, amount="50")
-    await _grant(db_session, billing_subject_id=zulu_enrollment.billing_subject_id, amount="50")
 
     resolved = await get_gateway_enrollment_for_user(db_session, user_id)
     assert resolved is not None
-    assert resolved.id == alpha_enrollment.id
-    assert resolved.id != zulu_enrollment.id
+    assert resolved.id == zulu_enrollment.id
+    assert resolved.id != alpha_enrollment.id

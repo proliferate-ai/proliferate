@@ -293,18 +293,24 @@ async def _remaining_credit_budget_raw(
     billing_subject_id: UUID,
     fallback: str,
 ) -> str:
-    """Budget string mirroring remaining LLM credit.
+    """Budget string mirroring remaining LLM credit; unfunded fails closed.
 
     When the subject has any active credit grant, the LiteLLM budget mirrors
     the remaining balance, floored at a tiny positive value so an exhausted
     subject gets a near-zero (blocked) cap rather than "0" — which
-    ``_parse_budget`` would read as uncapped. With no grant at all — e.g. free
-    credits disabled or no linked GitHub identity — fall back to the default
-    user budget so gateway access is not silently uncapped-to-zero.
+    ``_parse_budget`` would read as uncapped. With no grant at all, the only
+    thing that can keep the team open is an explicitly configured positive
+    default budget (``fallback``); absent that, the subject is unfunded and
+    its team budget mirrors the same exhausted floor, so its keys stop
+    working instead of becoming unlimited (model-gateway.md §Account model —
+    the "no grant means unlimited" branch is deleted, and LiteLLM never
+    receives a literal "0", which it reads as uncapped).
     """
     balance = await agent_gateway_store.get_remaining_credit_usd(db, billing_subject_id)
     if balance.granted_usd <= 0:
-        return fallback
+        if _parse_budget(fallback) is not None:
+            return fallback
+        return str(_EXHAUSTED_BUDGET_FLOOR_USD)
     remaining = balance.remaining_usd
     if remaining <= _EXHAUSTED_BUDGET_FLOOR_USD:
         remaining = _EXHAUSTED_BUDGET_FLOOR_USD
@@ -342,8 +348,10 @@ async def ensure_org_enrollment(
     # Org caps (spec section 7): overage-enabled orgs are effectively
     # uncapped ("0" sends no LiteLLM budget) — the top-up worker keeps the
     # ledger funded and the importer remains the reconciler. Otherwise the
-    # team budget is the remaining credit (hard cap), falling back to the
-    # default org budget when the org holds no grants.
+    # team budget is the remaining credit (hard cap); an org with no grants
+    # uses the explicitly configured default org budget when one is set, and
+    # otherwise mirrors the exhausted floor — an unfunded org fails closed
+    # rather than getting an uncapped team (model-gateway.md §Account model).
     if subject.overage_enabled:
         budget_raw = "0"
     else:

@@ -53,6 +53,10 @@ class StubLiteLLM:
         self.users: set[str] = set()
         self.team_metadata: list[dict[str, Any] | None] = []
         self.user_metadata: list[dict[str, Any] | None] = []
+        # ensure_team's max_budget per call, in call order — the team is the
+        # only budget layer (keys never carry one), so mirrored-budget
+        # assertions read this.
+        self.ensure_team_budgets: list[float | None] = []
         self.minted: list[dict[str, Any]] = []
         # Live keys keyed by alias -> token_id, mirroring LiteLLM's globally
         # unique key_alias enforcement so idempotency can be exercised.
@@ -82,6 +86,7 @@ class StubLiteLLM:
         metadata: dict[str, Any] | None = None,
     ) -> str:
         self.team_metadata.append(metadata)
+        self.ensure_team_budgets.append(max_budget)
         team_id = self.teams.setdefault(alias, f"team-{alias}")
         return team_id
 
@@ -262,12 +267,21 @@ async def test_user_enrollment_marks_failed_on_litellm_error(
 
 
 @pytest.mark.asyncio
-async def test_org_enrollment_syncs_without_budget_cap(
+async def test_unfunded_org_enrollment_mirrors_the_exhausted_floor(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
+    """D3 (mirror): an unfunded org's team budget is the floor, never 0/uncapped.
+
+    Replaces the deleted "no grant means unlimited" mirroring: with no grant
+    and no explicitly configured org budget, the team used to be created
+    uncapped (budget ``None``). It now mirrors the tiny exhausted floor, so
+    the org's keys stop working instead of becoming unlimited — and LiteLLM
+    never receives a literal 0, which it reads as uncapped.
+    """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
     organization = Organization(name="Enroll Org")
     db_session.add(organization)
     await db_session.flush()
@@ -282,11 +296,42 @@ async def test_org_enrollment_syncs_without_budget_cap(
     assert enrollment.litellm_team_id == f"team-org-{organization.id}"
     # Per member (spec §2.3): the key is attributed to the member's litellm user.
     assert enrollment.litellm_user_id == f"user-{member_id}"
+    # Unfunded fails closed at the team-budget layer: a real, tiny positive cap.
+    assert stub_litellm.ensure_team_budgets == [0.01]
     minted = stub_litellm.minted[0]
-    # Default org budget "0" means uncapped: no budget forwarded.
+    # Keys never carry a budget of their own — the team is the budget layer.
     assert minted["max_budget"] is None
     assert minted["metadata"]["proliferate_organization_id"] == str(organization.id)
     assert minted["metadata"]["proliferate_user_id"] == str(member_id)
+
+
+@pytest.mark.asyncio
+async def test_funded_org_enrollment_mirrors_remaining_credit(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """A funded org's team budget mirrors the ledger's remaining credit."""
+    from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
+
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
+    organization = Organization(name="Funded Enroll Org")
+    db_session.add(organization)
+    await db_session.flush()
+    member_id = await _create_user(db_session)
+    subject = await ensure_organization_billing_subject(db_session, organization.id)
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=subject.id,
+        source=LLM_CREDIT_SOURCE_ADMIN,
+        amount_usd=Decimal("50"),
+    )
+
+    enrollment = await ensure_org_enrollment(db_session, organization.id, member_id)
+
+    assert enrollment.sync_status == "synced"
+    assert stub_litellm.ensure_team_budgets == [50.0]
 
 
 @pytest.mark.asyncio
@@ -434,6 +479,40 @@ async def test_exhausted_grant_yields_blocked_budget_not_uncapped(
     # Not uncapped (None), not the default fallback — a real, tiny positive cap.
     assert parsed is not None
     assert 0 < parsed <= 0.01
+
+
+@pytest.mark.asyncio
+async def test_no_grant_and_no_configured_budget_mirrors_the_floor(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """D3 (mirror): a subject with no grant and a "0" fallback is unfunded.
+
+    The old branch returned the fallback verbatim, which ``_parse_budget``
+    reads as *uncapped* — the "no grant means unlimited" hole. Unfunded now
+    mirrors the exhausted floor; an explicitly configured positive fallback is
+    still honored as the deployment's funding source.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    user_id = await _create_user(db_session)
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+
+    unfunded = await _remaining_credit_budget_raw(
+        db_session,
+        billing_subject_id=subject.id,
+        fallback="0",
+    )
+    parsed = _parse_budget(unfunded)
+    assert parsed is not None
+    assert 0 < parsed <= 0.01
+
+    configured = await _remaining_credit_budget_raw(
+        db_session,
+        billing_subject_id=subject.id,
+        fallback="250",
+    )
+    assert _parse_budget(configured) == 250.0
 
 
 @pytest.mark.asyncio

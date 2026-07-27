@@ -496,12 +496,16 @@ async def test_exhausted_budget_withholds_gateway_key_from_state_render(
 
 
 @pytest.mark.asyncio
-async def test_available_budget_leaves_state_render_and_no_grant_unblocked(
+async def test_configured_default_budget_keeps_a_grantless_subject_open(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """A no-grant subject (default-budget) is never blocked by the ledger gate."""
+    """An explicitly configured positive default budget is a funding source.
+
+    With no grant but a real configured budget, the LiteLLM team budget is the
+    guardrail — the ledger gate stays open and the render hands out the key.
+    """
     from proliferate.db.store.agent_gateway import DesiredAuthSource
     from proliferate.db.store.agent_gateway.selections import put_auth_selections
     from proliferate.server.cloud.materialization.materialize.agent_auth import (
@@ -509,9 +513,9 @@ async def test_available_budget_leaves_state_render_and_no_grant_unblocked(
     )
 
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
-    # Free credits disabled: enrollment has no grant, LiteLLM default budget
-    # is the only guardrail; the ledger gate must not block.
+    # Free credits disabled: no grant. The explicit default budget funds it.
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "0")
+    monkeypatch.setattr(settings, "agent_gateway_default_user_budget_usd", "5")
     monkeypatch.setattr(
         settings,
         "agent_gateway_litellm_public_base_url",
@@ -533,3 +537,48 @@ async def test_available_budget_leaves_state_render_and_no_grant_unblocked(
     state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
     sources = [s for h in state["harnesses"] for s in h["sources"]]
     assert any(s["kind"] == "gateway" and s.get("key") for s in sources)
+
+
+@pytest.mark.asyncio
+async def test_unfunded_subject_fails_closed_at_gate_and_render(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """D3: no grant and no configured budget → gate refuses, render withholds.
+
+    Replaces the deleted "no grant means unlimited" assertion: an unfunded
+    subject used to sail through the ledger gate (and, org-side, get an
+    uncapped LiteLLM team). Now it fails closed — no key material is rendered,
+    so the runtime refuses the launch.
+    """
+    from proliferate.db.store.agent_gateway import DesiredAuthSource
+    from proliferate.db.store.agent_gateway.selections import put_auth_selections
+    from proliferate.server.cloud.materialization.materialize.agent_auth import (
+        build_agent_auth_state,
+    )
+
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "0")
+    monkeypatch.setattr(settings, "agent_gateway_default_user_budget_usd", "0")
+    monkeypatch.setattr(
+        settings,
+        "agent_gateway_litellm_public_base_url",
+        "https://llm.proliferate.ai",
+    )
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+    enrollment = await ensure_user_enrollment(db_session, user_id)
+    assert enrollment.virtual_key_id is None
+
+    await put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        sources=[DesiredAuthSource(source_kind="gateway")],
+    )
+    assert await is_gateway_budget_available(db_session, user_id) is False
+    state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
+    sources = [s for h in state["harnesses"] for s in h["sources"]]
+    assert not any(s["kind"] == "gateway" for s in sources)

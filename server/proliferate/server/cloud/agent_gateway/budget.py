@@ -22,9 +22,10 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.agent_gateway import AGENT_GATEWAY_SUBJECT_KIND_USER
 from proliferate.db.store import agent_gateway as agent_gateway_store
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
-from proliferate.db.store.billing_runtime_usage import resolve_organization_id_for_user
 
 _ZERO = Decimal("0")
 
@@ -49,14 +50,19 @@ _ZERO = Decimal("0")
 AGENT_GATEWAY_CREDITS_EXHAUSTED_CODE = "agent_gateway_credits_exhausted"
 
 
-def _explicit_org_budget_configured() -> bool:
-    """Whether the deployment configured a real (non-default) org team budget.
+def _explicit_default_budget_configured(subject_kind: str) -> bool:
+    """Whether the deployment configured a real (positive) default team budget.
 
-    ``agent_gateway_default_org_budget_usd`` defaults to "0", which LiteLLM
-    reads as *uncapped* rather than as zero — so the default is the absence of
-    a cap, not a cap of nothing.
+    Both budget settings default to a value LiteLLM would read as *uncapped*
+    ("0"/empty), so only a strictly positive configured value counts as a
+    funding source. This is the one non-ledger way a subject can be funded:
+    a deployment that runs no credit ledger at all caps spend with the
+    configured LiteLLM team budget instead.
     """
-    raw = settings.agent_gateway_default_org_budget_usd.strip()
+    if subject_kind == AGENT_GATEWAY_SUBJECT_KIND_USER:
+        raw = settings.agent_gateway_default_user_budget_usd.strip()
+    else:
+        raw = settings.agent_gateway_default_org_budget_usd.strip()
     if not raw:
         return False
     try:
@@ -65,61 +71,34 @@ def _explicit_org_budget_configured() -> bool:
         return False
 
 
-async def _subject_is_funded(db: AsyncSession, billing_subject_id: UUID) -> bool:
-    """Whether a billing subject actually funds gateway spend.
-
-    Funded means a positive LLM credit grant (the ledger the importer debits
-    and the gate reads) or an explicitly configured org team budget. A subject
-    with neither has no funding source at all, and every LLM guardrail reads as
-    "unlimited" for it (see :func:`get_gateway_enrollment_for_user`).
-    """
-    balance = await agent_gateway_store.get_remaining_credit_usd(db, billing_subject_id)
-    if balance.granted_usd > _ZERO:
-        return True
-    return _explicit_org_budget_configured()
-
-
 async def get_gateway_enrollment_for_user(
     db: AsyncSession,
     user_id: UUID,
 ) -> AgentGatewayEnrollmentRecord | None:
     """The enrollment that governs a user's gateway sessions.
 
-    An org member (current membership, same resolution
-    ``resolve_billing_subject_id_for_user`` and ``ensure_org_enrollment`` use)
-    is governed by their **org** enrollment rather than their personal one —
-    closing the model-gateway.md org-member gap where sessions previously
-    always resolved the personal enrollment regardless of org membership.
+    v1 payer law (model-gateway.md §Account model): the payer is the user's
+    DEFAULT org — the org their identity was placed into at signup, i.e. the
+    earliest active membership — always. There is no funding guard and no
+    funded-org fallback: whether the resolved subject is funded is enforced
+    at the budget layer (:func:`is_gateway_budget_available`, plus the
+    LiteLLM team-budget mirror flooring unfunded subjects at the exhausted
+    floor), never by re-routing payment to a different subject.
 
-    Funding-follows-attribution guard (interim; founder end-state ruling
-    pending). Routing to the org subject unconditionally is not safe on hosted,
-    where EVERY user gets a default personal org: an org billing subject with
-    no credit grant makes ``is_gateway_budget_available`` return ``True``
-    unconditionally (the ``granted_usd <= 0`` "no ledger, LiteLLM budget is the
-    guardrail" branch), while the org team's default budget of "0" means
-    *uncapped* in LiteLLM. Both walls open at once, the personal free-credit
-    grant is never consulted, and spend is unbounded. So the org enrollment
-    governs only when the org subject is actually funded
-    (:func:`_org_subject_is_funded`); otherwise this resolves the personal
-    enrollment — the pre-B3 behavior, where the personal grant is the cap.
-
-    Org choice is deterministic when a user holds several memberships: it is
-    the first active membership ordered by organization NAME
-    (``get_current_membership_for_user``), the same choice compute attribution
-    makes. Renaming an org can therefore move the payer; that instability is
-    inherited from the compute path and pinned by test, not introduced here.
+    A user whose default org has no org enrollment row yet still resolves
+    their personal enrollment, as does an org-less user. That personal shape
+    is pre-migration residue: deleting it and re-parenting personal
+    enrollments onto the default org is the org-only unification (D-2), not
+    this resolver's concern.
     """
-    organization_id = await resolve_organization_id_for_user(db, user_id)
-    if organization_id is not None:
+    default_org = await organization_store.get_default_organization_for_user(db, user_id)
+    if default_org is not None:
         org_enrollment = await agent_gateway_store.get_enrollment_for_organization(
             db,
-            organization_id=organization_id,
+            organization_id=default_org.organization.id,
             user_id=user_id,
         )
-        if org_enrollment is not None and await _subject_is_funded(
-            db,
-            org_enrollment.billing_subject_id,
-        ):
+        if org_enrollment is not None:
             return org_enrollment
     return await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
 
@@ -127,13 +106,20 @@ async def get_gateway_enrollment_for_user(
 async def is_gateway_budget_available(db: AsyncSession, user_id: UUID) -> bool:
     """Whether a user may launch a gateway-route session.
 
-    True when the gateway is disabled (LiteLLM budgets are the only guardrail),
-    or the user has no credit grant (default-budget subjects are never blocked
-    on the ledger), or their remaining LLM credit is above zero. False only when
-    a granted subject has spent its credit. Checks the same enrollment the state
-    renderer hands out key material for (the org enrollment for an org member,
-    else the personal one), so the gate and the keys it guards always agree on
-    the paying subject.
+    An unfunded subject fails closed (model-gateway.md §Account model): a
+    subject with no active credit grant and no explicitly configured positive
+    default budget gets no gateway — the state renderer withholds key
+    material off this predicate, and the mirrored LiteLLM team budget sits at
+    the exhausted floor. There is no "no grant means unlimited" branch.
+
+    True when the gateway is disabled (nothing to gate), when no enrollment
+    exists at all (there is no key material either — the renderer withholds
+    on the missing keys, not on this predicate), when the subject holds
+    remaining credit, or when a grant-less subject is covered by an
+    explicitly configured positive default budget (the LiteLLM team budget
+    is then the guardrail). Checks the same enrollment the state renderer
+    hands out key material for, so the gate and the keys it guards always
+    agree on the paying subject.
     """
     if not settings.agent_gateway_enabled:
         return True
@@ -145,5 +131,5 @@ async def is_gateway_budget_available(db: AsyncSession, user_id: UUID) -> bool:
         enrollment.billing_subject_id,
     )
     if balance.granted_usd <= _ZERO:
-        return True
+        return _explicit_default_budget_configured(enrollment.subject_kind)
     return balance.remaining_usd > _ZERO
