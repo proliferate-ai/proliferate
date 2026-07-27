@@ -445,6 +445,27 @@ async def get_worker(
     return _worker_value(row) if row is not None else None
 
 
+async def get_worker_for_cloud_sandbox(
+    db: AsyncSession,
+    *,
+    cloud_sandbox_id: UUID,
+) -> RuntimeWorkerValue | None:
+    """Load the non-revoked worker for a cloud sandbox, if any.
+
+    At most one non-revoked worker exists per sandbox (partial unique index).
+    Used by runtime-status to surface Worker liveness alongside sandbox status.
+    """
+    row = (
+        await db.execute(
+            select(CloudRuntimeWorker).where(
+                CloudRuntimeWorker.cloud_sandbox_id == cloud_sandbox_id,
+                CloudRuntimeWorker.status != "revoked",
+            )
+        )
+    ).scalar_one_or_none()
+    return _worker_value(row) if row is not None else None
+
+
 async def get_active_desktop_worker_for_user(
     db: AsyncSession,
     *,
