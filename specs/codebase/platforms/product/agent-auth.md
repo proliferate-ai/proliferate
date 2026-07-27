@@ -559,7 +559,10 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       lists cursor as native-only and the store's harness allow-list
       excludes it, even though the registry declares `CURSOR_API_KEY` as
       its credential slot; the `api_key` source needs enabling for
-      cursor end to end (rules, allow-list, recipe already generic).
+      cursor end to end. The runtime side needs nothing: the `api_key`
+      recipe is generic, and that is now asserted for cursor
+      specifically (`route_auth/cursor_render_tests.rs`), so only the
+      server rules, the store allow-list, and the settings UI remain.
 - [ ] **Cloud native login is not offered.** The cloud settings surface
       shows static "no auth configured" text instead of the Authenticate
       action, though the login-terminal mechanism is surface-agnostic;
