@@ -336,3 +336,6 @@ fn cli_auth_state_unsupported_when_no_discovery() {
 
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[path = "credential_ladder_tests.rs"]
+mod credential_ladder;

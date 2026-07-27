@@ -28,9 +28,34 @@ export interface FirstRunAuthAdoptionInput {
   gatewayEnabled: boolean;
 }
 
-/** Native credentials detected by the local AnyHarness credential scan. */
+/**
+ * Native credentials detected by the local AnyHarness credential scan.
+ *
+ * `credentialState === "ready"` is NOT sufficient on its own: readiness is
+ * route-aware on every surface (agent-distribution.md's route-aware law —
+ * settings and launch must agree), so a harness whose readiness comes from an
+ * enrolled gateway/api_key route also reads `ready`. Adoption below must not
+ * mistake that for a vendor-CLI login, or one already-routed harness would
+ * suppress gateway preselection for every harness.
+ *
+ * `credentialsFromRoute` is the runtime's provenance flag. It is absent on
+ * runtimes that predate it — and those runtimes are also the ones whose
+ * `GET /v1/agents` was native-only, so absent correctly means "not from a
+ * route".
+ *
+ * Belt and braces: `planFirstRunAuthAdoption` only runs at zero selections, and
+ * a route in effect normally implies a selection row exists, so the two guards
+ * overlap. They are not the same guard though — a `state.json` left by another
+ * install or a selection set that has not loaded into this scope would slip
+ * through the count check — and this predicate is exported and named as a claim
+ * about NATIVE auth, so it must be true on its own terms.
+ */
 export function hasDetectedNativeAuth(agent: AgentSummary): boolean {
-  return agent.credentialState === "ready" && agent.installState === "installed";
+  return (
+    agent.credentialState === "ready"
+    && agent.installState === "installed"
+    && !agent.credentialsFromRoute
+  );
 }
 
 /** Which authentication surface the settings pane shows for a harness. */

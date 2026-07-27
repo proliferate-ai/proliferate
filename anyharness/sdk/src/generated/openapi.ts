@@ -2188,6 +2188,18 @@ export interface components {
             agentProcess: components["schemas"]["ArtifactStatus"];
             cliAuthState?: null | components["schemas"]["AgentCliAuthState"];
             credentialState: components["schemas"]["AgentCredentialState"];
+            /**
+             * @description True when the enrolled agent-auth route — not a credential detected on
+             *     this machine — is what makes `credentialState` read `ready`.
+             *
+             *     Readiness is route-aware on every surface (agent-distribution.md's
+             *     route-aware law: settings and launch must agree), so `ready` alone no
+             *     longer means "the vendor CLI is logged in here". A client that means the
+             *     latter — first-run native-auth adoption, CLI login chrome — must exclude
+             *     the route-upgraded case. Absent on older runtimes; treat absent as
+             *     `false` (the pre-route-aware meaning, which is what those runtimes had).
+             */
+            credentialsFromRoute?: boolean;
             displayName: string;
             docsUrl?: string | null;
             expectedEnvVars: string[];

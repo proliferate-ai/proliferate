@@ -11,7 +11,7 @@ use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole};
 use crate::domains::agents::readiness::paths::{
     artifact_root, managed_registry_binary_for_names, managed_registry_npm_binary_for_names,
 };
-use crate::domains::agents::readiness::service::resolve_agent;
+use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executable};
 
 #[derive(Debug, thiserror::Error)]
@@ -76,7 +76,11 @@ fn managed_login_command(
     runtime_home: &Path,
 ) -> Option<(AgentLoginCommand, Vec<PathBuf>)> {
     let login = descriptor.auth.primary_login()?;
-    let resolved = resolve_agent(descriptor, runtime_home);
+    // Unrouted on purpose: this only needs the native artifact's path, and an
+    // enrolled gateway/api_key route is irrelevant to "where is the vendor CLI
+    // I am about to run `login` with". Reading the routed projection here would
+    // load agent-auth state on every login-command build for no gain.
+    let resolved = resolve_agent_unrouted(descriptor, runtime_home);
     if let Some(native) = resolved.native.as_ref() {
         if native.source.as_deref() != Some("path") {
             if let Some(path) = native.path.as_ref() {

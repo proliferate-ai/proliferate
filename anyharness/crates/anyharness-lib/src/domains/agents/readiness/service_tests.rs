@@ -13,67 +13,10 @@ fn make_temp_dir(prefix: &str) -> PathBuf {
     path
 }
 
-struct PathEnvGuard {
-    original: Option<std::ffi::OsString>,
-}
-
-impl PathEnvGuard {
-    fn set(path: &Path) -> Self {
-        let original = std::env::var_os("PATH");
-        let paths = vec![path.to_path_buf()];
-        let joined = std::env::join_paths(paths).expect("join PATH");
-        std::env::set_var("PATH", joined);
-        Self { original }
-    }
-}
-
-impl Drop for PathEnvGuard {
-    fn drop(&mut self) {
-        if let Some(original) = &self.original {
-            std::env::set_var("PATH", original);
-        } else {
-            std::env::remove_var("PATH");
-        }
-    }
-}
-
-struct EnvVarGuard {
-    name: &'static str,
-    original: Option<std::ffi::OsString>,
-}
-
-impl EnvVarGuard {
-    fn set(name: &'static str, value: &Path) -> Self {
-        let original = std::env::var_os(name);
-        std::env::set_var(name, value);
-        Self { name, original }
-    }
-
-    fn set_str(name: &'static str, value: &str) -> Self {
-        let original = std::env::var_os(name);
-        std::env::set_var(name, value);
-        Self { name, original }
-    }
-
-    /// Remove a var for the guard's lifetime (restored on drop). Used to
-    /// neutralize an ambient provider key so credential detection is
-    /// deterministic regardless of the host's environment.
-    fn remove(name: &'static str) -> Self {
-        let original = std::env::var_os(name);
-        std::env::remove_var(name);
-        Self { name, original }
-    }
-}
-
-impl Drop for EnvVarGuard {
-    fn drop(&mut self) {
-        if let Some(original) = &self.original {
-            std::env::set_var(self.name, original);
-        } else {
-            std::env::remove_var(self.name);
-        }
-    }
-}
+// The process-env guards + the lock that serializes their users.
+#[path = "test_env_guards.rs"]
+mod test_env_guards;
+use test_env_guards::{lock_env, EnvVarGuard, PathEnvGuard};
 
 #[test]
 fn parses_node_versions() {
@@ -255,6 +198,7 @@ fn registry_backed_binary_hint_launcher_requires_backing_binary() {
 
 #[test]
 fn registry_backed_binary_hint_does_not_resolve_superset_wrapper_as_agent_process() {
+    let _env = lock_env();
     let registry = built_in_registry();
     let cursor = registry
         .into_iter()
@@ -296,6 +240,9 @@ fn claude_compatibility_check_applies_to_direct_managed_npm_installs() {
 
 #[test]
 fn override_program_validation_requires_existing_executable() {
+    // Reads PATH (bare `sh` resolves through it), so it must not run while a
+    // PathEnvGuard has narrowed PATH to a temp dir.
+    let _env = lock_env();
     assert!(!is_override_program_valid(Path::new(
         "/definitely/missing/agent-binary"
     )));
@@ -304,6 +251,7 @@ fn override_program_validation_requires_existing_executable() {
 
 #[test]
 fn override_launch_prepends_catalog_default_args() {
+    let _env = lock_env();
     let registry = built_in_registry();
     let codex = registry
         .into_iter()
@@ -472,6 +420,7 @@ fn route_upgrade_clears_only_credential_gaps_never_install() {
 fn resolve_launch_agent_matches_native_readiness_when_no_route_enrolled() {
     // With no agent-auth state file, launch readiness must be byte-for-byte
     // native readiness — the route path never changes a routeless agent.
+    let _env = lock_env();
     let registry = built_in_registry();
     let claude = registry
         .into_iter()
@@ -498,6 +447,7 @@ fn resolve_launch_agent_clears_a_gateway_routed_credential_gap() {
     // installed ACP process + absent XAI creds resolves to a CREDENTIAL gap
     // (LoginRequired), never InstallRequired — this exercises the credential
     // arm, not the install path.
+    let _env = lock_env();
     let registry = built_in_registry();
     let grok = registry
         .into_iter()
@@ -558,6 +508,7 @@ fn resolve_launch_agent_never_masks_a_missing_binary() {
     // enrolled gateway route must NOT flip that to Ready — the launcher still
     // has to exec a binary (Claude's ACP adapter shells out to the native
     // CLI via CLAUDE_CODE_EXECUTABLE).
+    let _env = lock_env();
     let registry = built_in_registry();
     let claude = registry
         .into_iter()
@@ -581,3 +532,6 @@ fn resolve_launch_agent_never_masks_a_missing_binary() {
 
     let _ = std::fs::remove_dir_all(runtime_home);
 }
+
+#[path = "route_aware_read_tests.rs"]
+mod route_aware_read;
