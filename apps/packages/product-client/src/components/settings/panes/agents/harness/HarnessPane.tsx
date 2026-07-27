@@ -7,6 +7,7 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowUpRight } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CloudGuard } from "#product/components/cloud/CloudGuard";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
@@ -51,6 +52,7 @@ const SETTINGS_HARNESS_DISPLAY_NAMES: Record<string, string> = {
  * the affordance is never faked with a guessed URL.
  */
 function HarnessDocsLink({ docsUrl }: { docsUrl: string | null | undefined }) {
+  const { links } = useProductHost();
   if (!docsUrl) return null;
   return (
     <Button
@@ -58,7 +60,7 @@ function HarnessDocsLink({ docsUrl }: { docsUrl: string | null | undefined }) {
       size="sm"
       className="gap-1.5"
       onClick={() => {
-        window.open(docsUrl, "_blank", "noopener,noreferrer");
+        void links.openExternal(docsUrl);
       }}
     >
       {HARNESS_PANE_COPY.docsLink}
@@ -268,8 +270,12 @@ function HarnessAuthSurface({
         editor={editor}
       />
 
-      {/* §3 — Authenticated status, one row shape for every method. */}
-      {editor.authReady || surface === "cloud" ? (
+      {/* §3 — Authenticated status, one row shape for every method. On the
+          cloud surface this stays gated on authReady (cloud has no native CLI
+          row to fall back to when auth isn't ready). On local it always
+          renders: the native CLI status row + Authenticate affordance must be
+          reachable for signed-out/local-only users too. */}
+      {(surface === "cloud" ? editor.authReady : true) ? (
         <HarnessAuthDetailsSection
           harnessKind={harnessKind}
           selectedMethod={selectedMethod}

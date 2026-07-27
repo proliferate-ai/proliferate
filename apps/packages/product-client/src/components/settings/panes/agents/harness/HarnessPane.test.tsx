@@ -34,11 +34,15 @@ const state = vi.hoisted(() => ({
       publicBaseUrl: "https://gateway.example",
       enrollmentStatus: "synced",
     } as CapabilitiesData | undefined,
+    isPending: false,
+    isFetching: false,
   },
   enrollment: {
     data: undefined as
       | { syncStatus: string; lastErrorCode: string | null }
       | undefined,
+    isPending: false,
+    isFetching: false,
   },
   selections: {
     data: [] as Array<Record<string, unknown>> | undefined,
@@ -293,7 +297,11 @@ afterEach(() => {
     publicBaseUrl: "https://gateway.example",
     enrollmentStatus: "synced",
   };
+  state.capabilities.isPending = false;
+  state.capabilities.isFetching = false;
   state.enrollment.data = undefined;
+  state.enrollment.isPending = false;
+  state.enrollment.isFetching = false;
   state.selections.data = [];
   state.selections.isLoading = false;
   state.apiKeys.data = [];
@@ -808,6 +816,33 @@ describe("HarnessPane authentication", () => {
     expect(putMutate).not.toHaveBeenCalled();
   });
 
+  // P1-b regression: while the capabilities query is still in flight (first
+  // load, no data yet), the gateway status row must show a neutral/loading
+  // tone instead of falsely reporting "Not ready" before the observation
+  // exists.
+  it("shows a loading status, not a false Not ready warning, while gateway capabilities are pending", () => {
+    state.capabilities.data = undefined;
+    state.capabilities.isPending = true;
+    state.capabilities.isFetching = true;
+    state.selections.data = [{
+      id: "sel-gw",
+      harnessKind: "claude",
+      surface: "local",
+      sourceKind: "gateway",
+      apiKeyId: null,
+      keyTitle: null,
+      envVarName: null,
+      providerHint: null,
+      enabled: true,
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:00:00Z",
+    }];
+    renderPane("claude");
+
+    expect(screen.queryByText("Not ready")).toBeNull();
+    expect(screen.getAllByText("Checking").length).toBeGreaterThan(0);
+  });
+
   it("disables the gateway toggle while enrollment is unsynced", () => {
     state.enrollment.data = { syncStatus: "pending", lastErrorCode: null };
     renderPane("claude");
@@ -834,6 +869,52 @@ describe("HarnessPane authentication", () => {
       expect.objectContaining({ kind: "claude" }),
       { restart: false },
     );
+  });
+
+  // P0 regression: §3's auth-details section must render on the local surface
+  // even when authReady is false, because the native CLI status row + its
+  // "Authenticate" affordance are local's own credentials, unrelated to cloud
+  // sign-in. Gating §3 on authReady||cloud hid that row for anonymous/local-
+  // only users; the fix always renders §3 on local.
+  it("shows exactly one Authenticate button for an anonymous local user with a login_required claude agent", () => {
+    state.authStatus = "anonymous";
+    state.cloudActive = false;
+    state.agentSurface = "local";
+    state.agentsByKind = new Map([[
+      "claude",
+      {
+        kind: "claude",
+        displayName: "Claude Code",
+        readiness: "login_required",
+        supportsLogin: true,
+      },
+    ]]);
+    renderPane("claude");
+
+    expect(screen.getAllByRole("button", { name: "Authenticate" }).length).toBe(1);
+  });
+
+  // P1-a regression: `localAgent?.supportsLogin ?? canRunLogin` let `??`
+  // (which binds tighter than the intended `&&`) short-circuit on
+  // `supportsLogin: true` alone, offering Authenticate even when the CLI
+  // itself says login can't run right now (canRunLogin false, e.g. already
+  // authenticated). The fix requires BOTH supportsLogin and canRunLogin.
+  it("does not offer Authenticate for a healthy authenticated agent even when supportsLogin is true", () => {
+    state.agentsByKind = new Map([[
+      "claude",
+      {
+        kind: "claude",
+        displayName: "Claude Code",
+        readiness: "ready",
+        supportsLogin: true,
+      },
+    ]]);
+    renderPane("claude");
+
+    // Open the native row's choice group.
+    fireEvent.click(screen.getByRole("button", { name: /Authenticated/ }));
+
+    expect(screen.queryByRole("button", { name: "Authenticate" })).toBeNull();
   });
 
   it("asks the user to sign in when signed out", () => {

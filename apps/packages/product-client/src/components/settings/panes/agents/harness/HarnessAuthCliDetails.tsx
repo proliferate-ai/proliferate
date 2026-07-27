@@ -73,6 +73,33 @@ export function CliDetails({ editor }: { editor: HarnessAuthEditorApi }) {
         ? HARNESS_PANE_COPY.cliAuthenticated
         : HARNESS_PANE_COPY.cliUnknown;
 
+  // Login is offerable only when the agent both supports it AND the CLI's own
+  // state says it can be run right now — `??` binds tighter than `&&`, so the
+  // naive `localAgent?.supportsLogin ?? canRunLogin` silently ignored
+  // canRunLogin whenever supportsLogin was defined (even `false`).
+  const canOfferLogin = (localAgent?.supportsLogin ?? false) && canRunLogin;
+
+  const loginButton = (
+    <Button
+      type="button"
+      variant="primary"
+      size="sm"
+      disabled={loginSession?.isStarting ?? false}
+      onClick={() => {
+        if (localAgent) {
+          void loginWorkflow.openAuthTerminal(localAgent, {
+            restart: Boolean(loginSession),
+          });
+        }
+        setChoiceOpen(false);
+      }}
+    >
+      {loginSession?.isStarting
+        ? HARNESS_PANE_COPY.runLoginOpening
+        : HARNESS_PANE_COPY.runLogin}
+    </Button>
+  );
+
   return (
     <HarnessStatusRow
       data-harness-status="native"
@@ -84,6 +111,7 @@ export function CliDetails({ editor }: { editor: HarnessAuthEditorApi }) {
       // of being replaced by it.
       savedState={editor.native ? HARNESS_PANE_COPY.nativeStateLocal : null}
       description={HARNESS_PANE_COPY.nativeRowHint}
+      refreshLabel="Refresh credential status"
       refreshing={refreshing}
       onRefresh={handleRefreshCredential}
       onClick={() => setChoiceOpen((open) => !open)}
@@ -103,26 +131,7 @@ export function CliDetails({ editor }: { editor: HarnessAuthEditorApi }) {
           >
             {HARNESS_PANE_COPY.nativeRefreshChoice}
           </Button>
-          {localAgent?.supportsLogin ?? canRunLogin ? (
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              disabled={loginSession?.isStarting ?? false}
-              onClick={() => {
-                if (localAgent) {
-                  void loginWorkflow.openAuthTerminal(localAgent, {
-                    restart: Boolean(loginSession),
-                  });
-                }
-                setChoiceOpen(false);
-              }}
-            >
-              {loginSession?.isStarting
-                ? HARNESS_PANE_COPY.runLoginOpening
-                : HARNESS_PANE_COPY.runLogin}
-            </Button>
-          ) : null}
+          {canOfferLogin ? loginButton : null}
         </div>
       ) : null}
 
@@ -130,25 +139,9 @@ export function CliDetails({ editor }: { editor: HarnessAuthEditorApi }) {
           CLI actually needs a login, so the fix is one click from a failing row
           (and so the qualification flow's "Authenticate" button is always
           reachable). */}
-      {canRunLogin && !choiceOpen ? (
+      {canOfferLogin && !choiceOpen ? (
         <div className="pb-3">
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            disabled={loginSession?.isStarting ?? false}
-            onClick={() => {
-              if (localAgent) {
-                void loginWorkflow.openAuthTerminal(localAgent, {
-                  restart: Boolean(loginSession),
-                });
-              }
-            }}
-          >
-            {loginSession?.isStarting
-              ? HARNESS_PANE_COPY.runLoginOpening
-              : HARNESS_PANE_COPY.runLogin}
-          </Button>
+          {loginButton}
         </div>
       ) : null}
 
