@@ -472,11 +472,18 @@ native-auth adoption, CLI login chrome — must exclude that case; the flag is
 absent on runtimes predating it, and those are the runtimes whose read
 surface was native-only, so absent correctly means "not from a route".
 
-Opencode's readiness is the special case: its registry policy is
-`provider_managed`, so the native projection is structurally `Ready`.
-Its *real* auth state is the selection set itself — read surfaces derive
-opencode's method state from selections plus native detection, not from
-the projection.
+Opencode's registry policy is `provider_managed`: the harness resolves
+PROVIDER auth itself at prompt time, so readiness does not gate on any ONE
+required slot the way `any_required_slot`/`all_required_slots` harnesses do.
+It is not credential-less, though — `aggregate_credential_state` (A9) reads
+every slot's actual ladder state and is `Ready` the moment any one resolves,
+same shape as `any_required_slot` but without requiring
+`required_for_readiness` on the slot. That is what makes the selection set
+opencode's real auth truth everywhere: a selection enrolls a route, the route
+clears the credential gap through the same `apply_launch_route_upgrade` seam
+every other harness uses, and read surfaces (settings' active-methods list,
+composer launch options) derive opencode's method state from the same
+selections.
 
 ## API surface
 
@@ -607,11 +614,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `/v1/cloud/agent-auth/` (with catalog routes to the model-catalog
       platform) is pending, including the matching
       `api.py`/`service.py`/`models.py` three-domain split.
-- [ ] **Opencode's method state is projection-derived on some read
-      surfaces.** Settings derives opencode's active methods from
-      selections, but readiness still reports the structural
-      `provider_managed` `Ready`; the selection set should be opencode's
-      truth everywhere (composer launch options included).
 - [ ] **Stale IA references.** The settings information-architecture doc
       still describes the removed Bifrost-era `agent-authentication`
       pane (the shipped UI redirects it to `agent-api-keys`); its Agents

@@ -354,16 +354,19 @@ wire_api = "responses"
             env.insert("AWS_BEARER_TOKEN_BEDROCK".to_string(), token);
             Ok(env)
         }
-        // cursor-agent's ACP session services ignore CURSOR_API_KEY and
-        // require a machine login (auth in macOS Keychain "Cursor Safe
-        // Storage" — not isolatable by HOME). Probe runs under the real
-        // machine login; acceptable because cursor is single-provider so
-        // there is no cross-provider auth attribution to pollute.
-        (AgentKind::Cursor, "cursor-login") => Ok(BTreeMap::new()),
-        (AgentKind::Cursor, "cursor-api") => bail!(
-            "cursor-agent ignores CURSOR_API_KEY for ACP sessions; run `cursor-agent login` \
-             on this machine and use --auth-context cursor-login instead"
-        ),
+        // cursor-agent DOES honor CURSOR_API_KEY for ACP sessions (disproven
+        // live 2026-07-26). Inject it when supplied; else fall through to the
+        // machine's real login (macOS Keychain "Cursor Safe Storage" — not
+        // isolatable by HOME), same as before. No separate "cursor-api"
+        // context exists in the catalog (grep-confirmed) — cursor-login
+        // covers both paths.
+        (AgentKind::Cursor, "cursor-login") => {
+            let mut env = BTreeMap::new();
+            if let Some(key) = secrets.get("CURSOR_API_KEY") {
+                env.insert("CURSOR_API_KEY".to_string(), key);
+            }
+            Ok(env)
+        }
         // Grok (xAI Grok Build) speaks ACP natively. Isolate HOME so
         // machine-local config cannot pollute observed values, then inject one
         // explicit API key or copy the selected logged-in auth file.
@@ -553,6 +556,28 @@ mod tests {
 
         drop(isolation_dirs);
         assert!(!base.exists(), "probe isolation must be removed on drop");
+    }
+
+    #[test]
+    fn cursor_login_arm_injects_a_supplied_cursor_api_key() {
+        let secrets = ProbeSecrets {
+            values: BTreeMap::from([("CURSOR_API_KEY".to_string(), "sk-cursor-test".to_string())]),
+        };
+        let mut isolation_dirs = IsolationDirs::default();
+        let env =
+            auth_env_for_context(&secrets, &AgentKind::Cursor, "cursor-login", &mut isolation_dirs)
+                .unwrap();
+        assert_eq!(env.get("CURSOR_API_KEY").map(String::as_str), Some("sk-cursor-test"));
+    }
+
+    #[test]
+    fn cursor_login_arm_falls_through_to_machine_login_without_a_supplied_key() {
+        let secrets = ProbeSecrets { values: BTreeMap::new() };
+        let mut isolation_dirs = IsolationDirs::default();
+        let env =
+            auth_env_for_context(&secrets, &AgentKind::Cursor, "cursor-login", &mut isolation_dirs)
+                .unwrap();
+        assert!(env.is_empty(), "no key supplied: machine login stands, nothing to inject");
     }
 
     #[test]

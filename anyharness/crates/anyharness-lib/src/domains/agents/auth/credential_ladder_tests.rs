@@ -353,39 +353,72 @@ fn all_required_slots_rejects_an_empty_value_in_any_slot() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// The two structurally-always-Ready policies stay structurally always-Ready:
-/// the ladder tightening must not turn opencode's `provider_managed` (which
-/// resolves provider auth itself at prompt time — a stated boundary in
-/// agent-distribution.md) into a credential gap.
+/// `None`'s structural Ready stays structurally always-Ready: the ladder
+/// tightening must not turn a harness with no local auth requirement at all
+/// into a credential gap.
 #[test]
-fn provider_managed_and_none_policies_stay_ready_under_the_tightened_ladder() {
+fn none_policy_stays_ready_under_the_tightened_ladder() {
     let _env = lock_env();
     let home = make_temp_home();
     let _ambient = AmbientVarGuard::remove(LADDER_VAR);
 
-    for policy in [
-        AuthReadinessPolicy::ProviderManaged,
-        AuthReadinessPolicy::None,
-    ] {
-        let auth = AuthSpec {
-            readiness_policy: policy,
-            slots: vec![AuthSlotSpec {
-                id: "slot".into(),
-                label: "Slot".into(),
-                credential_provider_ids: vec!["test".into()],
-                required_for_readiness: false,
-                env_vars: vec![LADDER_VAR.into()],
-                login: None,
-                discovery: CredentialDiscoveryKind::OpenCode,
-                materialization: Default::default(),
-            }],
-        };
-        assert_eq!(
-            detect_credentials_with_env(&auth, &home, &workspace_env("")),
-            CredentialState::Ready,
-            "{policy:?} is structurally Ready"
-        );
-    }
+    let auth = AuthSpec {
+        readiness_policy: AuthReadinessPolicy::None,
+        slots: vec![AuthSlotSpec {
+            id: "slot".into(),
+            label: "Slot".into(),
+            credential_provider_ids: vec!["test".into()],
+            required_for_readiness: false,
+            env_vars: vec![LADDER_VAR.into()],
+            login: None,
+            discovery: CredentialDiscoveryKind::OpenCode,
+            materialization: Default::default(),
+        }],
+    };
+    assert_eq!(
+        detect_credentials_with_env(&auth, &home, &workspace_env("")),
+        CredentialState::Ready,
+        "None is structurally Ready"
+    );
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// A9 fix: `ProviderManaged` is NO LONGER structurally always-Ready like
+/// `None` — it reads its slots' actual ladder state (opencode's selection
+/// set is its real auth truth, agent-auth.md "Readiness interplay"). With no
+/// credential anywhere in scope, it reads the same missing-credential state
+/// any other policy would.
+#[test]
+fn provider_managed_follows_its_slot_ladder_under_the_tightened_ladder() {
+    let _env = lock_env();
+    let home = make_temp_home();
+    let _ambient = AmbientVarGuard::remove(LADDER_VAR);
+
+    let auth = AuthSpec {
+        readiness_policy: AuthReadinessPolicy::ProviderManaged,
+        slots: vec![AuthSlotSpec {
+            id: "slot".into(),
+            label: "Slot".into(),
+            credential_provider_ids: vec!["test".into()],
+            required_for_readiness: false,
+            env_vars: vec![LADDER_VAR.into()],
+            login: None,
+            discovery: CredentialDiscoveryKind::OpenCode,
+            materialization: Default::default(),
+        }],
+    };
+
+    assert_eq!(
+        detect_credentials_with_env(&auth, &home, &workspace_env("")),
+        CredentialState::MissingEnv,
+        "no credential anywhere in scope: ProviderManaged reads the slot's real state"
+    );
+    assert_eq!(
+        detect_credentials_with_env(&auth, &home, &workspace_env("sk-real")),
+        CredentialState::Ready,
+        "a selected credential in scope: ProviderManaged reads Ready"
+    );
 
     let _ = std::fs::remove_dir_all(&home);
 }

@@ -1,18 +1,29 @@
-//! Runtime gateway-catalog transport handlers (spec §2/§5).
+//! Runtime gateway-catalog transport handlers (spec §2/§5), backed by the
+//! machine model-snapshot (A9 §3 route backend swap).
 //!
 //! - `GET  /v1/agents/{kind}/catalog/gateway-models` returns the RUNTIME's
-//!   resolved gateway model plan for the local surface (probe-or-seed), so the
-//!   desktop All-Models tab can read what this runtime can actually reach for
-//!   the gateway route instead of the cloud catalog.
+//!   resolved gateway model list for the local surface, so the desktop
+//!   All-Models tab can read what this runtime can actually reach for the
+//!   gateway route instead of the cloud catalog. It is a thin read over the
+//!   `gateway` auth context's `model_snapshot` entry (`document::read_document`)
+//!   plus the projection enrichment join — no probing happens here.
 //! - `POST /v1/agents/{kind}/catalog/refresh-gateway` re-probes the gateway
-//!   now (the desktop Refresh button) and records the result.
+//!   context now (the desktop Refresh button). It is a poke of the same
+//!   forced re-probe `POST /v1/agents/{kind}/model-snapshot/refresh` runs,
+//!   scoped to `authContextId=gateway`, kept as its own URL because the
+//!   desktop All-Models tab and C3's refresh path still consume the legacy
+//!   route shape (ruling: keep the URLs, replace the backend).
 //!
-//! Both derive the credential revision from the local `state.json` and probe
-//! the gateway directly (no harness process spawned).
+//! Both URLs are legacy-shaped on purpose (ruling §3): the resolver chain
+//! that used to back them (`gateway_resolver.rs`/`gateway_probe.rs`'s sqlite
+//! store) is deleted, but deleting the ROUTE would break the desktop UI that
+//! still calls it. `GET /v1/agents/{kind}/model-snapshot` is the general
+//! per-context status surface every harness's every context uses; this module
+//! is the gateway-context-only, catalog-enriched projection of that same
+//! document, shaped for the All-Models table this route has always fed.
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde::Serialize;
@@ -22,12 +33,8 @@ use anyharness_contract::v1::{ModelCatalogStatus, ModelEffort};
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::catalog::gateway_resolver::{
-    normalize_model_family, provider_for_model, GatewayModelSource,
-};
-use crate::domains::agents::catalog::schema::AgentCatalogModel;
+use crate::domains::agents::catalog::projection::{self, EnrichedModel};
 use crate::domains::agents::model::ModelCatalogStatus as DomainModelCatalogStatus;
-use crate::domains::agents::route_auth::load_state_file;
 use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;
 
 /// One enriched gateway model row (spec §1). Catalog-known ids carry the joined
@@ -65,7 +72,7 @@ pub struct GatewayModelEntry {
 }
 
 /// Map the runtime-owned lifecycle status to the wire enum (identical variants).
-pub(crate) fn map_model_status(status: DomainModelCatalogStatus) -> ModelCatalogStatus {
+fn map_model_status(status: DomainModelCatalogStatus) -> ModelCatalogStatus {
     match status {
         DomainModelCatalogStatus::Candidate => ModelCatalogStatus::Candidate,
         DomainModelCatalogStatus::Active => ModelCatalogStatus::Active,
@@ -74,105 +81,20 @@ pub(crate) fn map_model_status(status: DomainModelCatalogStatus) -> ModelCatalog
     }
 }
 
-/// The effort control joined from a catalog model, if it declares one.
-/// Falls back to `reasoning_effort` for codex models.
-pub(crate) fn model_effort(model: &AgentCatalogModel) -> Option<ModelEffort> {
-    model
-        .controls
-        .get("effort")
-        .or_else(|| model.controls.get("reasoning_effort"))
-        .map(|control| ModelEffort {
-            values: control.values.clone(),
-            default: control.observed_value.clone(),
-        })
-}
-
-/// The permission/agent modes joined from a catalog model (`controls.mode`), if
-/// it declares that control (contract §5).
-pub(crate) fn model_modes(model: &AgentCatalogModel) -> Option<Vec<String>> {
-    model
-        .controls
-        .get("mode")
-        .map(|control| control.values.clone())
-}
-
-/// Resolve the bundled catalog row for a resolved gateway id (contract §5).
-/// Tries an exact id match first, then falls back to a FAMILY-key match (see
-/// [`normalize_model_family`]). When several catalog entries share the family
-/// key, prefer the non-`[1m]` entry, then the longest (most-specific) id, then
-/// a lexical tiebreak — deterministic regardless of catalog ordering.
-fn resolve_catalog_match<'a>(
-    id: &str,
-    catalog_models: &'a [AgentCatalogModel],
-) -> Option<&'a AgentCatalogModel> {
-    if let Some(model) = catalog_models.iter().find(|model| model.id == id) {
-        return Some(model);
-    }
-    let key = normalize_model_family(id);
-    catalog_models
-        .iter()
-        .filter(|model| normalize_model_family(&model.id) == key)
-        .max_by(|a, b| {
-            let a_non_1m = !a.id.ends_with("[1m]");
-            let b_non_1m = !b.id.ends_with("[1m]");
-            a_non_1m
-                .cmp(&b_non_1m)
-                .then_with(|| a.id.len().cmp(&b.id.len()))
-                .then_with(|| a.id.cmp(&b.id))
-        })
-}
-
-/// Enrich a resolved gateway model id by joining the bundled catalog row(s).
-///
-/// - `own_match`: from the requesting harness's own catalog — contributes FULL
-///   enrichment (identity + behavioral controls: effort, modes, fast_mode, status).
-/// - `foreign_match`: from any other harness's catalog (cross-harness fallback) —
-///   contributes IDENTITY ONLY (displayName + description). Behavioral controls
-///   are harness-specific (e.g. codex users should not see claude-CLI thinking
-///   controls) so they are never bridged from a foreign harness.
-/// - Neither: probe-only sparse row `{ id, provider? }`.
-fn enrich_model(
-    id: String,
-    own_match: Option<&AgentCatalogModel>,
-    foreign_match: Option<&AgentCatalogModel>,
-) -> GatewayModelEntry {
-    let provider = provider_for_model(&id).map(str::to_string);
-    if let Some(model) = own_match {
-        // Full enrichment from own-harness catalog.
-        GatewayModelEntry {
-            id,
-            display_name: Some(model.display_name.clone()),
-            description: model.description.clone(),
-            provider,
-            status: Some(map_model_status(model.status)),
-            effort: model_effort(model),
-            fast_mode: Some(model.controls.contains_key("fast_mode")),
-            modes: model_modes(model),
-        }
-    } else if let Some(model) = foreign_match {
-        // Identity-only enrichment from foreign-harness catalog.
-        GatewayModelEntry {
-            id,
-            display_name: Some(model.display_name.clone()),
-            description: model.description.clone(),
-            provider,
-            status: None,
-            effort: None,
-            fast_mode: None,
-            modes: None,
-        }
-    } else {
-        // Probe-only: no catalog entry anywhere.
-        GatewayModelEntry {
-            id,
-            display_name: None,
-            description: None,
-            provider,
-            status: None,
-            effort: None,
-            fast_mode: None,
-            modes: None,
-        }
+/// Wire-shape a [`projection::EnrichedModel`] into this route's response row.
+fn to_wire(model: EnrichedModel) -> GatewayModelEntry {
+    GatewayModelEntry {
+        id: model.id,
+        display_name: model.display_name,
+        description: model.description,
+        provider: model.provider,
+        status: model.status.map(map_model_status),
+        effort: model.effort.map(|effort| ModelEffort {
+            values: effort.values,
+            default: effort.default,
+        }),
+        fast_mode: model.fast_mode,
+        modes: model.modes,
     }
 }
 
@@ -185,7 +107,8 @@ pub struct GatewayModelsResponse {
     /// client-side provider filtering is applied; server-side access groups
     /// (once B1 lands) own scoping.
     pub models: Vec<GatewayModelEntry>,
-    /// `"seed"` (no probe yet) or `"probe"` (a live probe supplied the list).
+    /// `"seed"` (no snapshot entry yet) or `"probe"` (a snapshot observation
+    /// supplied the list).
     pub source: String,
     /// When a probe supplied the list (RFC3339); absent for seed.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -196,19 +119,12 @@ pub struct GatewayModelsResponse {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RefreshGatewayResponse {
-    /// The freshly probed model ids — exactly what the gateway returned, with
-    /// no client-side provider filtering applied anywhere downstream.
+    /// The freshly probed model ids — exactly what the snapshot entry now
+    /// carries for the gateway context, with no client-side provider
+    /// filtering applied anywhere downstream.
     pub models: Vec<String>,
     /// The probe timestamp (RFC3339).
     pub probed_at: String,
-}
-
-fn current_revision(state: &AppState) -> i64 {
-    load_state_file(&state.runtime_home)
-        .ok()
-        .flatten()
-        .map(|document| document.revision)
-        .unwrap_or(0)
 }
 
 #[utoipa::path(
@@ -224,29 +140,69 @@ pub async fn get_gateway_models(
     State(state): State<AppState>,
     Path(kind): Path<String>,
 ) -> Result<Json<GatewayModelsResponse>, ApiError> {
-    let revision = current_revision(&state);
-    let (plan, source) = state
-        .gateway_model_resolver
-        .resolve_with_source(&kind, revision);
-    let (source, probed_at) = match source {
-        GatewayModelSource::Seed => ("seed".to_string(), None),
-        GatewayModelSource::Probe { probed_at } => ("probe".to_string(), Some(probed_at)),
+    // The gateway-route auth context id is a fixed, catalog-wide constant
+    // (matches `defaults["gateway"]` and the render plane's context id) — every
+    // gateway-capable harness in the bundled catalog declares exactly this id,
+    // so no catalog lookup is needed to find it.
+    let entry = state
+        .model_snapshot_service
+        .entry(&kind, SOURCE_KIND_GATEWAY);
+
+    let (raw_models, source, probed_at) = match entry {
+        Some(entry) => (
+            entry.models.into_iter().map(|model| model.id).collect(),
+            "probe".to_string(),
+            Some(entry.probed_at),
+        ),
+        None => {
+            // No snapshot entry yet: the catalog's seedModels floor is the
+            // honest pre-probe answer (same floor `GatewayModelPlanner` renders
+            // into a launch), not an empty table.
+            let seed_models = state
+                .catalog_sync_service
+                .active()
+                .document
+                .agents
+                .iter()
+                .find(|agent| agent.kind == kind)
+                .and_then(|agent| agent.session.gateway_policy.clone())
+                .map(|policy| policy.seed_models)
+                .unwrap_or_default();
+            (seed_models, "seed".to_string(), None)
+        }
     };
-    let catalog_models = state.gateway_model_resolver.catalog_models(&kind);
-    let all_catalog_models = state.gateway_model_resolver.catalog_models_all();
-    let models = plan
-        .models
+
+    let catalog_models = state
+        .catalog_sync_service
+        .active()
+        .document
+        .agents
+        .iter()
+        .find(|agent| agent.kind == kind)
+        .map(|agent| agent.session.models.clone())
+        .unwrap_or_default();
+    let all_catalog_models: Vec<_> = state
+        .catalog_sync_service
+        .active()
+        .document
+        .agents
+        .iter()
+        .flat_map(|agent| agent.session.models.clone())
+        .collect();
+
+    let models = raw_models
         .into_iter()
         .map(|id| {
-            let own_match = resolve_catalog_match(&id, &catalog_models);
+            let own_match = projection::resolve_catalog_match(&id, &catalog_models);
             let foreign_match = if own_match.is_none() {
-                resolve_catalog_match(&id, &all_catalog_models)
+                projection::resolve_catalog_match(&id, &all_catalog_models)
             } else {
                 None
             };
-            enrich_model(id, own_match, foreign_match)
+            to_wire(projection::enrich_model(id, own_match, foreign_match))
         })
         .collect();
+
     Ok(Json(GatewayModelsResponse {
         models,
         source,
@@ -260,7 +216,8 @@ pub async fn get_gateway_models(
     params(("kind" = String, Path, description = "Agent kind identifier")),
     responses(
         (status = 200, description = "Gateway re-probed and recorded", body = RefreshGatewayResponse),
-        (status = 400, description = "No gateway selection for this harness", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Unknown agent kind or no gateway route active", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "This runtime does not own the probe engine, or its local auth config is unusable", body = anyharness_contract::v1::ProblemDetails),
         (status = 502, description = "Gateway probe failed", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "catalogs"
@@ -269,65 +226,18 @@ pub async fn refresh_gateway_models(
     State(state): State<AppState>,
     Path(kind): Path<String>,
 ) -> Result<Json<RefreshGatewayResponse>, ApiError> {
-    let Some(document) = load_state_file(&state.runtime_home)
-        .map_err(|error| ApiError::internal(error.to_string()))?
-    else {
-        return Err(ApiError::bad_request(
-            "no agent-auth state on this runtime; nothing to probe",
-            "GATEWAY_REFRESH_NO_STATE",
-        ));
-    };
-    let revision = document.revision;
-    // Absent harness and present-but-empty are the same answer here — either way
-    // there is no gateway source to refresh against, and the caller gets the
-    // typed NO_SELECTION rejection below.
-    let sources = document.sources_for(&kind).unwrap_or_default();
-    let source = sources
-        .iter()
-        .find(|source| source.kind == SOURCE_KIND_GATEWAY)
-        .ok_or_else(|| {
-            ApiError::bad_request(
-                format!("no gateway route source for harness '{kind}'"),
-                "GATEWAY_REFRESH_NO_SELECTION",
-            )
-        })?;
-    let base_url = source
-        .base_url
-        .clone()
-        .filter(|url| !url.trim().is_empty())
-        .ok_or_else(|| {
-            ApiError::bad_request(
-                format!("gateway source for '{kind}' is missing baseUrl"),
-                "GATEWAY_REFRESH_INCOMPLETE",
-            )
-        })?;
-    let key = source
-        .key
-        .clone()
-        .filter(|key| !key.trim().is_empty())
-        .ok_or_else(|| {
-            ApiError::bad_request(
-                format!("gateway source for '{kind}' is missing a key"),
-                "GATEWAY_REFRESH_INCOMPLETE",
-            )
-        })?;
-
-    let models = state
-        .gateway_model_resolver
-        .refresh_now(&kind, revision, &base_url, &key)
+    // A poke of the same forced re-probe the model-snapshot refresh route runs,
+    // scoped to the gateway context — the simplest honest shape per ruling §3
+    // (mirror, not fork, the manual-refresh seam).
+    let entry = state
+        .model_snapshot_service
+        .refresh_now(&kind, SOURCE_KIND_GATEWAY)
         .await
-        .map_err(|error| {
-            ApiError::new(
-                StatusCode::BAD_GATEWAY,
-                "gateway model probe failed",
-                Some(error.to_string()),
-                Some("GATEWAY_REFRESH_PROBE_FAILED"),
-            )
-        })?;
+        .map_err(super::agent_model_snapshot::refresh_error)?;
 
     Ok(Json(RefreshGatewayResponse {
-        models,
-        probed_at: chrono::Utc::now().to_rfc3339(),
+        models: entry.models.into_iter().map(|model| model.id).collect(),
+        probed_at: entry.probed_at,
     }))
 }
 
@@ -335,12 +245,10 @@ pub async fn refresh_gateway_models(
 mod tests {
     use super::*;
     use crate::domains::agents::catalog::schema::{
-        AgentCatalogAvailability, AgentCatalogModelControl,
+        AgentCatalogAvailability, AgentCatalogModel, AgentCatalogModelControl,
     };
     use std::collections::BTreeMap;
 
-    /// A catalog model with an effort control (values + observed default) and a
-    /// fast_mode control — the shape the table's enriched row needs.
     fn catalog_model(id: &str) -> AgentCatalogModel {
         let mut controls = BTreeMap::new();
         controls.insert(
@@ -353,26 +261,6 @@ mod tests {
                 ],
                 default: None,
                 observed_value: Some("medium".to_string()),
-            },
-        );
-        controls.insert(
-            "fast_mode".to_string(),
-            AgentCatalogModelControl {
-                values: vec!["on".to_string(), "off".to_string()],
-                default: None,
-                observed_value: None,
-            },
-        );
-        controls.insert(
-            "mode".to_string(),
-            AgentCatalogModelControl {
-                values: vec![
-                    "default".to_string(),
-                    "acceptEdits".to_string(),
-                    "plan".to_string(),
-                ],
-                default: None,
-                observed_value: None,
             },
         );
         AgentCatalogModel {
@@ -391,247 +279,36 @@ mod tests {
         }
     }
 
+    /// The wire mapping preserves identity + status + effort exactly as the
+    /// projection module computed them — this route adds no logic of its own
+    /// beyond the snapshot-vs-seed source selection.
     #[test]
-    fn catalog_known_model_is_fully_enriched() {
+    fn to_wire_preserves_enrichment() {
         let model = catalog_model("claude-sonnet-4-5");
-        let entry = enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
+        let enriched = projection::enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
+        let wire = to_wire(enriched);
 
-        assert_eq!(entry.id, "claude-sonnet-4-5");
-        assert_eq!(entry.display_name.as_deref(), Some("Claude Sonnet 4.5"));
-        assert_eq!(entry.description.as_deref(), Some("Balanced coding model"));
-        assert_eq!(entry.provider.as_deref(), Some("anthropic"));
-        assert!(matches!(entry.status, Some(ModelCatalogStatus::Active)));
-        let effort = entry.effort.expect("effort");
-        assert_eq!(effort.values, vec!["low", "medium", "high"]);
-        assert_eq!(effort.default.as_deref(), Some("medium"));
-        assert_eq!(entry.fast_mode, Some(true));
-        assert_eq!(
-            entry.modes,
-            Some(vec![
-                "default".to_string(),
-                "acceptEdits".to_string(),
-                "plan".to_string()
-            ])
-        );
-    }
-
-    #[test]
-    fn model_without_effort_or_fast_mode_omits_them() {
-        let mut model = catalog_model("claude-sonnet-4-5");
-        model.controls.clear();
-        let entry = enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
-
-        assert!(entry.effort.is_none());
-        assert_eq!(entry.fast_mode, Some(false));
-        assert!(entry.modes.is_none());
-        // Catalog-known rows still carry display metadata + status.
-        assert_eq!(entry.display_name.as_deref(), Some("Claude Sonnet 4.5"));
-        assert!(entry.status.is_some());
-    }
-
-    #[test]
-    fn probe_only_matched_id_is_sparse_with_provider() {
-        // Not in the catalog (proxy serves it, catalog doesn't know it).
-        let entry = enrich_model("claude-future-9".to_string(), None, None);
-
-        assert_eq!(entry.id, "claude-future-9");
-        assert_eq!(entry.provider.as_deref(), Some("anthropic"));
-        assert!(entry.display_name.is_none());
-        assert!(entry.description.is_none());
-        assert!(entry.status.is_none());
-        assert!(entry.effort.is_none());
-        assert!(entry.fast_mode.is_none());
-    }
-
-    #[test]
-    fn probe_only_unmatched_id_omits_provider() {
-        let entry = enrich_model("mystery-model".to_string(), None, None);
-
-        assert_eq!(entry.id, "mystery-model");
-        assert!(entry.provider.is_none());
-        assert!(entry.display_name.is_none());
-    }
-
-    // --- The family-key join (contract §5, `resolve_catalog_match`), exercised
-    // with the REAL claude catalog + gateway id sets. ---
-
-    /// The catalog's real claude opus-4-8 entries (three ids sharing a family
-    /// key) plus the drifted sonnet/opus-4-6 entries that DON'T bridge today.
-    fn claude_catalog() -> Vec<AgentCatalogModel> {
-        [
-            "sonnet",
-            "opus[1m]",
-            "us.anthropic.claude-sonnet-4-6",
-            "us.anthropic.claude-sonnet-4-6[1m]",
-            "us.anthropic.claude-opus-4-6-v1[1m]",
-            "claude-opus-4-8",
-            "us.anthropic.claude-opus-4-8",
-            "us.anthropic.claude-opus-4-8[1m]",
-        ]
-        .into_iter()
-        .map(catalog_model)
-        .collect()
-    }
-
-    #[test]
-    fn exact_id_wins_over_family() {
-        let models = claude_catalog();
-        let hit = resolve_catalog_match("claude-opus-4-8", &models).expect("match");
-        // Exact id match, even though bedrock opus-4-8 variants share its family.
-        assert_eq!(hit.id, "claude-opus-4-8");
-    }
-
-    #[test]
-    fn dated_gateway_id_family_joins_preferring_non_1m_most_specific() {
-        let models = claude_catalog();
-        // No exact id: the dated gateway id family-matches the three opus-4-8
-        // catalog entries; prefer non-[1m], then the longest/most-specific id.
-        let hit = resolve_catalog_match("claude-opus-4-8-20260101", &models).expect("match");
-        assert_eq!(hit.id, "us.anthropic.claude-opus-4-8");
-    }
-
-    #[test]
-    fn drifted_gateway_ids_stay_sparse_today() {
-        let models = claude_catalog();
-        // Real config.yaml gateway ids: catalog moved to 4-6/4-8, gateway serves
-        // 4-5 and a bedrock-`-v1` 4-6 — none bridge, so enrichment is sparse.
-        assert!(resolve_catalog_match("claude-sonnet-4-5", &models).is_none());
-        assert!(resolve_catalog_match("claude-sonnet-4-5-20250929", &models).is_none());
-        assert!(resolve_catalog_match("claude-haiku-4-5", &models).is_none());
-        assert!(resolve_catalog_match("claude-opus-4-6-20260205", &models).is_none());
-    }
-
-    #[test]
-    fn codex_model_with_reasoning_effort_enriches_effort() {
-        // Codex models use "reasoning_effort" key — verify the fallback works.
-        let mut controls = BTreeMap::new();
-        controls.insert(
-            "reasoning_effort".to_string(),
-            AgentCatalogModelControl {
-                values: vec![
-                    "low".to_string(),
-                    "medium".to_string(),
-                    "high".to_string(),
-                    "xhigh".to_string(),
-                ],
-                default: None,
-                observed_value: Some("medium".to_string()),
-            },
-        );
-        let model = AgentCatalogModel {
-            id: "codex-model".to_string(),
-            display_name: "Codex Model".to_string(),
-            description: None,
-            aliases: vec![],
-            family: None,
-            availability: AgentCatalogAvailability {
-                any_of: vec!["codex-api".to_string()],
-            },
-            default_visible: true,
-            controls,
-            status: DomainModelCatalogStatus::Active,
-            provenance: None,
-        };
-
-        let effort = model_effort(&model).expect("effort should be present");
-        assert_eq!(effort.values, vec!["low", "medium", "high", "xhigh"]);
-        assert_eq!(effort.default.as_deref(), Some("medium"));
-
-        // Also test enrichment via enrich_model
-        let entry = enrich_model("codex-model".to_string(), Some(&model), None);
-        assert!(entry.effort.is_some());
-        assert_eq!(entry.effort.unwrap().values, vec!["low", "medium", "high", "xhigh"]);
-    }
-
-    #[test]
-    fn claude_model_with_effort_still_works() {
-        // Claude models use "effort" key — verify it still works.
-        let model = catalog_model("claude-sonnet-4-5");
-        let effort = model_effort(&model).expect("effort should be present");
+        assert_eq!(wire.id, "claude-sonnet-4-5");
+        assert_eq!(wire.display_name.as_deref(), Some("Claude Sonnet 4.5"));
+        assert_eq!(wire.provider.as_deref(), Some("anthropic"));
+        assert!(matches!(wire.status, Some(ModelCatalogStatus::Active)));
+        let effort = wire.effort.expect("effort");
         assert_eq!(effort.values, vec!["low", "medium", "high"]);
         assert_eq!(effort.default.as_deref(), Some("medium"));
     }
 
-    // --- Cross-harness fallback enrichment (identity-only from foreign harness) ---
-
+    /// A probe-only id (proxy serves it, catalog doesn't know it) stays sparse
+    /// on the wire — no display name, no status, provider only when the
+    /// prefix matcher recognizes it.
     #[test]
-    fn foreign_match_yields_identity_only() {
-        // Simulates: codex requesting `claude-sonnet-4-5`; own catalog has no
-        // match, but the opencode catalog has `anthropic/claude-sonnet-4-5`.
-        let foreign_model = catalog_model("anthropic/claude-sonnet-4-5");
-        let entry = enrich_model(
-            "claude-sonnet-4-5".to_string(),
-            None,
-            Some(&foreign_model),
-        );
+    fn to_wire_probe_only_id_is_sparse() {
+        let enriched = projection::enrich_model("claude-future-9".to_string(), None, None);
+        let wire = to_wire(enriched);
 
-        // Identity fields bridged.
-        assert_eq!(entry.display_name.as_deref(), Some("Claude Sonnet 4.5"));
-        assert_eq!(entry.description.as_deref(), Some("Balanced coding model"));
-        assert_eq!(entry.provider.as_deref(), Some("anthropic"));
-        // Behavioral controls NOT bridged (harness-specific).
-        assert!(entry.status.is_none());
-        assert!(entry.effort.is_none());
-        assert!(entry.fast_mode.is_none());
-        assert!(entry.modes.is_none());
-    }
-
-    #[test]
-    fn own_match_takes_priority_over_foreign() {
-        // When both own and foreign match, own wins with full enrichment.
-        let own_model = catalog_model("claude-sonnet-4-5");
-        let foreign_model = catalog_model("anthropic/claude-sonnet-4-5");
-        let entry = enrich_model(
-            "claude-sonnet-4-5".to_string(),
-            Some(&own_model),
-            Some(&foreign_model),
-        );
-
-        // Full enrichment from own (status, effort, modes present).
-        assert!(entry.status.is_some());
-        assert!(entry.effort.is_some());
-        assert_eq!(entry.fast_mode, Some(true));
-        assert!(entry.modes.is_some());
-    }
-
-    #[test]
-    fn no_match_anywhere_stays_sparse() {
-        let entry = enrich_model("totally-unknown-model".to_string(), None, None);
-
-        assert_eq!(entry.id, "totally-unknown-model");
-        assert!(entry.display_name.is_none());
-        assert!(entry.description.is_none());
-        assert!(entry.provider.is_none());
-        assert!(entry.status.is_none());
-        assert!(entry.effort.is_none());
-        assert!(entry.fast_mode.is_none());
-        assert!(entry.modes.is_none());
-    }
-
-    #[test]
-    fn codex_requesting_claude_bridges_via_opencode_catalog_entry() {
-        // The real scenario: codex harness requests `claude-sonnet-4-5` via
-        // gateway; codex's own catalog doesn't know it, but opencode's catalog
-        // has `anthropic/claude-sonnet-4-5`. The normalizer strips the provider
-        // prefix, enabling the family-key bridge.
-        let opencode_catalog = vec![catalog_model("anthropic/claude-sonnet-4-5")];
-        let codex_catalog: Vec<AgentCatalogModel> = vec![];
-
-        // Own-harness miss.
-        let own = resolve_catalog_match("claude-sonnet-4-5", &codex_catalog);
-        assert!(own.is_none());
-
-        // Foreign-harness hit (family key: both normalize to `claude-sonnet-4-5`).
-        let foreign = resolve_catalog_match("claude-sonnet-4-5", &opencode_catalog);
-        assert!(foreign.is_some());
-        assert_eq!(foreign.unwrap().id, "anthropic/claude-sonnet-4-5");
-
-        // Enrichment is identity-only.
-        let entry = enrich_model("claude-sonnet-4-5".to_string(), own, foreign);
-        assert_eq!(entry.display_name.as_deref(), Some("Claude Sonnet 4.5"));
-        assert!(entry.status.is_none());
-        assert!(entry.effort.is_none());
-        assert!(entry.fast_mode.is_none());
-        assert!(entry.modes.is_none());
+        assert_eq!(wire.id, "claude-future-9");
+        assert_eq!(wire.provider.as_deref(), Some("anthropic"));
+        assert!(wire.display_name.is_none());
+        assert!(wire.status.is_none());
+        assert!(wire.effort.is_none());
     }
 }

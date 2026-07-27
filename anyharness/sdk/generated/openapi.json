@@ -397,8 +397,18 @@
               }
             }
           },
-          "400": {
-            "description": "No gateway selection for this harness",
+          "404": {
+            "description": "Unknown agent kind or no gateway route active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This runtime does not own the probe engine, or its local auth config is unusable",
             "content": {
               "application/json": {
                 "schema": {
@@ -10606,7 +10616,7 @@
           },
           "source": {
             "type": "string",
-            "description": "`\"seed\"` (no probe yet) or `\"probe\"` (a live probe supplied the list)."
+            "description": "`\"seed\"` (no snapshot entry yet) or `\"probe\"` (a snapshot observation\nsupplied the list)."
           }
         }
       },
@@ -15075,7 +15085,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The freshly probed model ids — exactly what the gateway returned, with\nno client-side provider filtering applied anywhere downstream."
+            "description": "The freshly probed model ids — exactly what the snapshot entry now\ncarries for the gateway context, with no client-side provider\nfiltering applied anywhere downstream."
           },
           "probedAt": {
             "type": "string",

@@ -188,6 +188,24 @@ pub(super) fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> Ap
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
         EnsureLiveSessionError::RouteAuth(error) => map_route_auth_error(&error),
+        // A9 Scope C: the live-start readiness gate now runs on resume too
+        // (previously only create_session checked it). 409, same family as
+        // the AGENT_ROUTE_* codes (RouteAuthError::code, route_auth/mod.rs)
+        // — the request is fine, the launch precondition is not satisfied
+        // until the agent's readiness changes.
+        EnsureLiveSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        } => ApiError::conflict(
+            match detail {
+                Some(detail) => {
+                    format!("agent '{agent_kind}' is not ready (status: {status:?}): {detail}")
+                }
+                None => format!("agent '{agent_kind}' is not ready (status: {status:?})"),
+            },
+            "AGENT_NOT_READY",
+        ),
         EnsureLiveSessionError::Internal(error) => {
             let telemetry_safe_detail = format!("resume failed: {error}");
             map_internal_anyhow_error(error, telemetry_safe_detail, "resume failed: ")
@@ -258,6 +276,20 @@ pub(super) fn map_fork_session_error(error: ForkSessionError) -> ApiError {
         ForkSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
+        // A9 Scope C: same readiness gate now backs the fork child's start.
+        ForkSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        } => ApiError::conflict(
+            match detail {
+                Some(detail) => {
+                    format!("agent '{agent_kind}' is not ready (status: {status:?}): {detail}")
+                }
+                None => format!("agent '{agent_kind}' is not ready (status: {status:?})"),
+            },
+            "AGENT_NOT_READY",
+        ),
         ForkSessionError::StartFailed { error, .. } => {
             let telemetry_safe_detail = format!("fork child start failed: {error}");
             map_internal_anyhow_error(error, telemetry_safe_detail, "fork child start failed: ")

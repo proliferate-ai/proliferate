@@ -127,7 +127,7 @@ fn ensure_known_kind(kind: &str) -> Result<(), ApiError> {
 /// `RouteAuthError::MalformedStateFile` embeds the absolute `state.json` path, and
 /// echoing a filesystem path from the user's home into an HTTP body is a gratuitous
 /// disclosure. The path is already in the runtime's own logs, where it belongs.
-fn refresh_error(error: RefreshError) -> ApiError {
+pub(super) fn refresh_error(error: RefreshError) -> ApiError {
     let code = error.code();
     match error {
         RefreshError::NotOwner => ApiError::new(
