@@ -15,11 +15,12 @@ const IMAGE_NAMESPACES = [
   "axiom",
   "posthog",
   "sentry",
+  "slack",
   "supabase",
 ] as const;
 
 /** Seed namespaces whose logos render as inline monochrome glyphs. */
-const GLYPH_NAMESPACES = ["linear", "slack", "tavily"] as const;
+const GLYPH_NAMESPACES = ["linear", "tavily"] as const;
 
 describe("IntegrationIcon", () => {
   afterEach(() => {
@@ -49,6 +50,19 @@ describe("IntegrationIcon", () => {
       ).toBe(false);
       unmount();
     }
+  });
+
+  /**
+   * Regression for "that isn't their icon": the messaging provider's mark used
+   * to be an inline `currentColor` glyph, which collapsed its four brand colors
+   * into one flat tone and left it unrecognizable beside the full-color image
+   * logos. It must resolve through the image branch, like every other
+   * palette-dependent logo, rather than the color-inheriting glyph branch.
+   */
+  it("renders the messaging provider as full-color artwork, not a color-inheriting glyph", () => {
+    const { container } = render(<IntegrationIcon namespace="slack" />);
+    expect(container.querySelector("img")).toBeTruthy();
+    expect(container.querySelector("svg")).toBeNull();
   });
 
   it("swaps to the dark asset variant when the resolved mode is dark", () => {
@@ -89,7 +103,7 @@ describe("IntegrationIcon", () => {
    * class strings (an inset-free `size-full` image vs. a font-size-driven
    * `[&_svg]:icon-large` glyph), so artwork landed at inconsistent optical
    * sizes across the same row. Both branches must now share the identical
-   * tile shell and resolve their artwork from a single semantic `icon-*`
+   * centering box and resolve their artwork from a single semantic `icon-*`
    * tier each, so a future provider can't silently regress to one branch's
    * old full-bleed sizing.
    */
@@ -102,17 +116,11 @@ describe("IntegrationIcon", () => {
       const tile = container.firstElementChild;
       expect(tile, `expected a tile wrapper for ${namespace}`).toBeTruthy();
 
-      // Every tile shares the same overflow/rounding/flex shell regardless of
-      // which artwork branch rendered inside it.
-      expect(tile?.className).toContain("overflow-hidden");
-      expect(tile?.className).toContain("rounded-lg");
-      tileClasses.add(
-        tile?.className
-          .split(" ")
-          .filter((cls) => !cls.startsWith("bg-"))
-          .sort()
-          .join(" ") ?? "",
-      );
+      // The marks sit directly on the surface: no border and no background
+      // plate, so a row reads as brand marks rather than framed swatches.
+      expect(tile?.className).not.toContain("border");
+      expect(tile?.className).not.toMatch(/\bbg-/);
+      tileClasses.add(tile?.className.split(" ").sort().join(" ") ?? "");
 
       const artwork = container.querySelector("img, svg");
       expect(artwork, `expected artwork for ${namespace}`).toBeTruthy();
@@ -125,8 +133,8 @@ describe("IntegrationIcon", () => {
       unmount();
     }
 
-    // The tile shell (minus tone background, which legitimately differs per
-    // provider/dark-mode) is identical across every namespace and branch.
+    // The centering box is byte-identical across every namespace and branch —
+    // there is no longer any per-provider tile treatment to diverge.
     expect(tileClasses.size).toBe(1);
 
     // Each branch resolves to exactly one artwork tier shared by every
