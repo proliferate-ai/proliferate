@@ -1,9 +1,9 @@
-//! Fakes for the engine's seams, so gate/coalescing/backoff logic is tested
-//! without a registry, a catalog document, a real install, or a network.
+//! Fakes for the engine's seams, so single-flight/backoff/poke logic is tested
+//! without a registry, a real install, or a network.
 //!
 //! Mirrors how `pr_status_cache` injects `BranchPrFetcher`: the fake counts
 //! invocations, can block on a barrier, can fail, and can hang past a timeout —
-//! the four behaviors the engine's brakes are defined against.
+//! the behaviors the engine's brakes are defined against.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -11,12 +11,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::domains::agents::catalog::schema::{AgentCatalogAuthContext, AgentCatalogAuthSignal};
 use crate::domains::agents::installer::manifest::{record_entries, ManifestArtifact};
 use crate::domains::agents::route_auth::{GatewayModelPlan, GatewayModelResolve};
 use crate::live::sessions::probe::{ProbeModelEntry, ProbeSnapshot};
 
-use super::probe::{ProbeError, ProbeRequest, ProbeRunner};
+use super::probe::{ProbeError, ProbeRequest, ProbeRunner, COMPOSED_AUTH_CONTEXT_LABEL};
 use super::targets::ProbeTargets;
 
 /// A self-cleaning temp runtime home.
@@ -45,7 +44,8 @@ impl TempRuntimeHome {
             .expect("write state");
     }
 
-    /// Record an `agent_process` manifest artifact, the staleness baseline.
+    /// Record an `agent_process` manifest artifact — the install identity the
+    /// observation records as provenance.
     pub(crate) fn write_manifest(
         &self,
         harness_kind: &str,
@@ -62,7 +62,13 @@ impl TempRuntimeHome {
                 sha256: sha256.map(str::to_string),
                 source: source.to_string(),
                 installed_at: "2026-07-26T00:00:00Z".to_string(),
-                path: self.path.join("agents").join(harness_kind).join("bin").display().to_string(),
+                path: self
+                    .path
+                    .join("agents")
+                    .join(harness_kind)
+                    .join("bin")
+                    .display()
+                    .to_string(),
             }],
         )
         .expect("write manifest");
@@ -94,51 +100,10 @@ pub(crate) fn gateway_state(revision: i64, harnesses: &[(&str, &str)]) -> serde_
     })
 }
 
-/// The catalog's `gateway` context shape.
-pub(crate) fn gateway_context() -> AgentCatalogAuthContext {
-    AgentCatalogAuthContext {
-        id: "gateway".to_string(),
-        auth_slot_id: Some("gateway".to_string()),
-        description: None,
-        signals: Some(AgentCatalogAuthSignal::Route("gateway".to_string())),
-    }
-}
-
-/// Cursor's real catalog shape: one login context whose signals are an env var OR a
-/// keychain discovery. Cursor has NO gateway route at all
-/// (`render.rs` returns `UnsupportedRoute`), so a gateway-context fixture would fail
-/// materialization rather than exercise the policy under test.
-pub(crate) fn cursor_login_context() -> AgentCatalogAuthContext {
-    AgentCatalogAuthContext {
-        id: "cursor-login".to_string(),
-        auth_slot_id: Some("cursor".to_string()),
-        description: None,
-        signals: Some(AgentCatalogAuthSignal::AnyOf(vec![
-            AgentCatalogAuthSignal::Env("CURSOR_API_KEY".to_string()),
-            AgentCatalogAuthSignal::Discovery("cursor-keychain".to_string()),
-        ])),
-    }
-}
-
-pub(crate) fn env_context(id: &str, slot: &str, vars: &[&str]) -> AgentCatalogAuthContext {
-    AgentCatalogAuthContext {
-        id: id.to_string(),
-        auth_slot_id: Some(slot.to_string()),
-        description: None,
-        signals: Some(AgentCatalogAuthSignal::AnyOf(
-            vars.iter()
-                .map(|var| AgentCatalogAuthSignal::Env(var.to_string()))
-                .collect(),
-        )),
-    }
-}
-
-/// Fixed targets: what the engine may probe, decided by the test rather than by
-/// the machine.
+/// Fixed targets: which harnesses the engine may probe, decided by the test
+/// rather than by the machine.
 pub(crate) struct FixedTargets {
     pub(crate) harnesses: Vec<String>,
-    pub(crate) contexts: BTreeMap<String, Vec<String>>,
-    pub(crate) catalog_contexts: BTreeMap<String, Vec<AgentCatalogAuthContext>>,
     pub(crate) installed: Vec<String>,
     /// Harnesses no AUTOMATIC poke may probe — the fake's stand-in for the
     /// production manual-refresh-only list.
@@ -146,12 +111,9 @@ pub(crate) struct FixedTargets {
 }
 
 impl FixedTargets {
-    pub(crate) fn single(harness: &str, contexts: Vec<AgentCatalogAuthContext>) -> Self {
-        let ids: Vec<String> = contexts.iter().map(|context| context.id.clone()).collect();
+    pub(crate) fn single(harness: &str) -> Self {
         Self {
             harnesses: vec![harness.to_string()],
-            contexts: BTreeMap::from([(harness.to_string(), ids)]),
-            catalog_contexts: BTreeMap::from([(harness.to_string(), contexts)]),
             installed: vec![harness.to_string()],
             manual_refresh_only: Vec::new(),
         }
@@ -168,22 +130,14 @@ impl ProbeTargets for FixedTargets {
     }
 
     fn allows_automatic_probe(&self, harness_kind: &str) -> bool {
-        !self.manual_refresh_only.iter().any(|kind| kind == harness_kind)
-    }
-
-    fn active_contexts(&self, harness_kind: &str) -> Vec<String> {
-        self.contexts.get(harness_kind).cloned().unwrap_or_default()
+        !self
+            .manual_refresh_only
+            .iter()
+            .any(|kind| kind == harness_kind)
     }
 
     fn is_installed(&self, harness_kind: &str) -> bool {
         self.installed.iter().any(|kind| kind == harness_kind)
-    }
-
-    fn catalog_contexts(&self, harness_kind: &str) -> Vec<AgentCatalogAuthContext> {
-        self.catalog_contexts
-            .get(harness_kind)
-            .cloned()
-            .unwrap_or_default()
     }
 }
 
@@ -362,7 +316,6 @@ impl ProbeRunner for FakeRunner {
         let outcome = match behavior {
             FakeBehavior::Ok => Ok(snapshot(
                 &request.harness_kind,
-                &request.auth_context_id,
                 &self.models.lock().expect("models poisoned"),
             )),
             FakeBehavior::Fail(detail) => Err(ProbeError::Failed { detail }),
@@ -372,7 +325,6 @@ impl ProbeRunner for FakeRunner {
                 {
                     Ok(()) => Ok(snapshot(
                         &request.harness_kind,
-                        &request.auth_context_id,
                         &self.models.lock().expect("models poisoned"),
                     )),
                     Err(_) => Err(ProbeError::Timeout),
@@ -387,11 +339,11 @@ impl ProbeRunner for FakeRunner {
     }
 }
 
-pub(crate) fn snapshot(harness_kind: &str, auth_context: &str, models: &[String]) -> ProbeSnapshot {
+pub(crate) fn snapshot(harness_kind: &str, models: &[String]) -> ProbeSnapshot {
     ProbeSnapshot {
         probed_at: "2026-07-26T00:00:00Z".to_string(),
         agent_kind: harness_kind.to_string(),
-        auth_context: auth_context.to_string(),
+        auth_context: COMPOSED_AUTH_CONTEXT_LABEL.to_string(),
         attestation: Some(crate::live::sessions::probe::ProbeAttestation {
             name: harness_kind.to_string(),
             version: "9.9.9".to_string(),
@@ -430,8 +382,7 @@ pub(crate) fn snapshot(harness_kind: &str, auth_context: &str, models: &[String]
 /// effect has to wait for another task. A fixed `yield_now` loop does NOT do that: on
 /// a multi-thread runtime the spawned task may be on another worker, so yielding N
 /// times guarantees nothing about its progress — the count only ever happens to be
-/// enough on a fast, idle machine. That is precisely how two of these tests passed
-/// locally and failed on CI once neighbouring tests added contention.
+/// enough on a fast, idle machine.
 ///
 /// The bound is deliberately far larger than the work (which is microseconds against a
 /// fake runner): a real failure fails the assertion inside `condition` at the call

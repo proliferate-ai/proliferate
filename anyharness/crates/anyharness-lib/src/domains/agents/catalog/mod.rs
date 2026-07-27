@@ -17,8 +17,6 @@ mod gateway_eligibility_tests;
 #[cfg(test)]
 mod gateway_plan_tests;
 #[cfg(test)]
-mod service_model_gate_tests;
-#[cfg(test)]
 mod service_tests;
 #[cfg(test)]
 mod service_universe_tests;

@@ -652,7 +652,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Per-auth-context model snapshot status",
+            "description": "The harness's composed model-snapshot status",
             "content": {
               "application/json": {
                 "schema": {
@@ -689,15 +689,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "authContextId",
-            "in": "query",
-            "description": "The auth context to re-probe (required)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -711,18 +702,8 @@
               }
             }
           },
-          "400": {
-            "description": "Missing authContextId",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
-            "description": "Unknown agent kind or inactive auth context",
+            "description": "Unknown agent kind, or the harness is not installed here",
             "content": {
               "application/json": {
                 "schema": {
@@ -9197,113 +9178,6 @@
           }
         ]
       },
-      "ContextStatus": {
-        "type": "object",
-        "required": [
-          "authContextId",
-          "active",
-          "state",
-          "stale",
-          "identityComparable",
-          "modelCount",
-          "modeCount"
-        ],
-        "properties": {
-          "active": {
-            "type": "boolean",
-            "description": "Whether the auth classifier currently counts this context as active. A\njust-deactivated context keeps its observation with `active: false`."
-          },
-          "attestation": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Diagnostics about the binary that answered — NOT the staleness input."
-          },
-          "authContextId": {
-            "type": "string"
-          },
-          "identityComparable": {
-            "type": "boolean",
-            "description": "`false` ⇒ the identity comparison was indeterminate; render no version\nclaim."
-          },
-          "lastAttempt": {
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "lastError": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "`lastAttempt.detail` when the last attempt failed. Lifted to its own field\nso a surface can render an error without knowing the attempt shape."
-          },
-          "modeCount": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "modelCount": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "models": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            },
-            "description": "The full model list off the same document read as `modelCount`. Added\nalongside the count (never replacing it — model-catalog.md:660 always\nsaid this route serves \"model and mode lists off the same document\nread\"; the count-only shape undershot that, and this is the fix) so a\nmachineless-surface uploader (the Worker's `model_snapshot_sync`) has\nsomething to read besides raw disk access to a document it should not\nknow the layout of."
-          },
-          "modes": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            },
-            "description": "The full mode list, same rationale as `models` above."
-          },
-          "nextAttemptAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Set iff `state == backoff`."
-          },
-          "probedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Last SUCCESSFUL observation. Never regresses on failure."
-          },
-          "snapshotAgeSeconds": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Server-computed so every surface renders the same age from one clock."
-          },
-          "stale": {
-            "type": "boolean"
-          },
-          "staleReason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "state": {
-            "$ref": "#/components/schemas/ModelSnapshotLiveState"
-          },
-          "warnings": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "CoworkArtifactDetailResponse": {
         "type": "object",
         "required": [
@@ -13190,7 +13064,7 @@
       },
       "ModelSnapshotLiveState": {
         "type": "string",
-        "description": "The engine's live view of one context. In-memory only, so a restart reports\n`Idle` — which is true: nothing is running.\n\n`Queued` is distinct from `Running` on purpose: a probe admitted to its slot but\nstill waiting on the per-harness gate or the machine-wide semaphore is neither\n\"nothing is happening\" (which is what `Idle` would tell a polling UI, wrongly)\nnor \"a harness process exists\".",
+        "description": "The engine's live view of one harness. In-memory only, so a restart reports\n`Idle` — which is true: nothing is running.\n\n`Queued` is distinct from `Running` on purpose: a probe admitted to its slot but\nstill waiting on the machine-wide semaphore is neither \"nothing is happening\"\n(which is what `Idle` would tell a polling UI, wrongly) nor \"a harness process\nexists\".",
         "enum": [
           "idle",
           "queued",
@@ -13205,34 +13079,111 @@
           "agent",
           "schemaVersion",
           "probeEngine",
-          "contexts"
+          "state",
+          "modelCount",
+          "modeCount"
         ],
         "properties": {
           "agent": {
             "type": "string"
           },
-          "contexts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ContextStatus"
-            }
+          "attestation": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Provenance: the binary that answered. Diagnostics only."
           },
           "installIdentity": {
             "type": [
               "object",
               "null"
             ],
-            "description": "The staleness baseline, manifest-derived. `null` when unobservable."
+            "description": "Provenance: the install the observation was recorded on, as the document\ncarries it. `null` when the document is absent or recorded none."
+          },
+          "lastAttempt": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`lastAttempt.detail` when the last attempt failed. Lifted to its own field\nso a surface can render an error without knowing the attempt shape."
+          },
+          "modeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "modelCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The full model list off the same document read as `modelCount`, so a\nmachineless-surface uploader (the Worker's `model_snapshot_sync`) has\nsomething to read besides raw disk access to a document it should not\nknow the layout of."
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The full mode list, same rationale as `models` above."
+          },
+          "nextAttemptAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set iff `state == backoff`."
           },
           "probeEngine": {
             "type": "string",
             "description": "`owner` | `readonly` — visible rather than mysterious when a second\nruntime shares this home.",
             "example": "owner"
           },
+          "probedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last SUCCESSFUL observation. Never regresses on failure. Absent until the\nfirst observation lands."
+          },
           "schemaVersion": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
+          },
+          "snapshotAgeSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Server-computed so every surface renders the same age from one clock."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ModelSnapshotLiveState"
+          },
+          "stateRevision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Provenance: the `state.json` revision the observation was probed under."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -13970,16 +13921,6 @@
               "string",
               "null"
             ]
-          },
-          "requiredContexts": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "description": "RFC 7807 extension member: the auth-context ids that would unlock a\ngated selection (the model's `availability.anyOf`). Only set on\n`SESSION_MODEL_GATED`; absent on every other error, so unrelated responses\nstay byte-identical."
           },
           "status": {
             "type": "integer",

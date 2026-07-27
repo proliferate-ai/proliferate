@@ -15,7 +15,7 @@ interface RuntimeQueryOptions {
 }
 
 interface ModelSnapshotStatusQueryOptions extends RuntimeQueryOptions {
-  /** Poll fast while any context is queued/running/backoff-due. Defaults on. */
+  /** Poll fast while the probe engine is queued/running. Defaults on. */
   refetchWhileActive?: boolean;
 }
 
@@ -24,10 +24,10 @@ export const MODEL_SNAPSHOT_ACTIVE_INTERVAL_MS = 1500;
 /**
  * Polling cadence for `GET /v1/agents/{kind}/model-snapshot` (mirrors
  * `resolveAgentReconcileRefetchInterval`, model-catalog.md's polled-not-pushed
- * status surface). Any context `queued`/`running` polls fast (backoff resolves on its own
- * server-side timer and is picked up on the next natural refetch); a fully idle
- * status stops polling — this route has no discovery mode of its own (unlike
- * reconcile) because the caller decides when to probe via the refresh
+ * status surface). The engine `queued`/`running` polls fast (backoff resolves
+ * on its own server-side timer and is picked up on the next natural refetch);
+ * an idle status stops polling — this route has no discovery mode of its own
+ * (unlike reconcile) because the caller decides when to probe via the refresh
  * mutation, not by discovering new work. 404 (unknown agent kind) stops.
  */
 export function resolveModelSnapshotRefetchInterval(
@@ -40,16 +40,15 @@ export function resolveModelSnapshotRefetchInterval(
   if (!options.refetchWhileActive) {
     return false;
   }
-  const isActive = state.data?.contexts.some(
-    (context) => context.state === "queued" || context.state === "running",
-  );
+  const isActive = state.data?.state === "queued" || state.data?.state === "running";
   return isActive ? MODEL_SNAPSHOT_ACTIVE_INTERVAL_MS : false;
 }
 
 /**
- * Per-auth-context model-snapshot probe status for one agent kind (contract
- * §4 of probe-engine-design.md) — the staleness/freshness surface the "All
- * Models" tab renders alongside its model rows.
+ * The composed model-snapshot probe status for one agent kind
+ * (model-catalog.md "Runtime routes") — one observation per harness; the
+ * status/refresh surface the "All Models" tab renders alongside its model
+ * rows.
  */
 export function useModelSnapshotStatusQuery(
   kind: string,
@@ -77,7 +76,10 @@ export function useModelSnapshotStatusQuery(
   });
 }
 
-/** Force one context's re-probe now (the desktop Refresh button, owner runtimes only). */
+/**
+ * Force the harness's re-probe now (the manual-refresh poke, owner runtimes
+ * only). Param-less beyond the kind: one composed observation per harness.
+ */
 export function useRefreshModelSnapshotMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
@@ -85,11 +87,11 @@ export function useRefreshModelSnapshotMutation() {
   const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
-    mutationFn: async (input: { kind: string; authContextId: string }) => {
+    mutationFn: async (kind: string) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.modelSnapshot.refresh(input.kind.trim(), input.authContextId);
+      return client.modelSnapshot.refresh(kind.trim());
     },
-    onSuccess: (response, { kind }) => {
+    onSuccess: (response, kind) => {
       queryClient.setQueryData(
         anyHarnessAgentModelSnapshotStatusKey(runtimeUrl, kind.trim(), cacheScopeKey),
         response,

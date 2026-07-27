@@ -1,4 +1,4 @@
-//! Projecting a raw `ProbeSnapshot` into the document's entry shape (pure).
+//! Projecting a raw `ProbeSnapshot` into the wire document (pure).
 //!
 //! Split out of `mod.rs`: this is a translation, not reconciliation, and keeping it
 //! separate is what stops the reconciler from growing a second job.
@@ -6,42 +6,44 @@
 use chrono::{DateTime, Utc};
 
 use super::document::{
-    AttemptOutcome, InstallIdentity, SnapshotAttempt, SnapshotAttestation, SnapshotEntry,
-    SnapshotMode, SnapshotModel, SnapshotObservedDefaults,
+    AttemptOutcome, InstallIdentity, ModelSnapshotDocument, SnapshotAttempt, SnapshotAttestation,
+    SnapshotMode, SnapshotModel, SnapshotObservedDefaults, MODEL_SNAPSHOT_SCHEMA_VERSION,
 };
 use crate::domains::agents::catalog::gateway_plan::SEED_FALLBACK_WARNING;
 
-/// Project a raw `ProbeSnapshot` into the document's entry shape.
+/// Project a raw `ProbeSnapshot` into the schemaVersion-2 document.
 ///
 /// `probedAt` is the engine's own `now` rather than the snapshot's string: one
-/// clock for the entry, the gate and the status age, so an age can never come out
+/// clock for the document and the status age, so an age can never come out
 /// negative because two clocks disagreed.
-pub(super) fn entry_from_snapshot(
+pub(super) fn document_from_snapshot(
     snapshot: crate::live::sessions::probe::ProbeSnapshot,
-    fingerprint: String,
+    harness_kind: &str,
     install_identity: Option<InstallIdentity>,
+    state_revision: i64,
     used_seed_floor: bool,
     now: DateTime<Utc>,
-) -> SnapshotEntry {
+) -> ModelSnapshotDocument {
     let at = now.to_rfc3339();
     // The honest signal that this particular observation is not a discovery. A
     // gateway probe rendered over the seed floor watches the harness read back the
-    // very ids the floor just wrote into its config, so the entry must say so rather
-    // than present a tautology as the gateway's model set.
+    // very ids the floor just wrote into its config, so the document must say so
+    // rather than present a tautology as the gateway's model set.
     let mut warnings = snapshot.warnings;
     if used_seed_floor && !warnings.iter().any(|warning| warning == SEED_FALLBACK_WARNING) {
         warnings.push(SEED_FALLBACK_WARNING.to_string());
     }
-    SnapshotEntry {
+    ModelSnapshotDocument {
+        schema_version: MODEL_SNAPSHOT_SCHEMA_VERSION,
+        agent: harness_kind.to_string(),
         probed_at: at.clone(),
-        mechanism: "acp".to_string(),
         attestation: snapshot.attestation.map(|attestation| SnapshotAttestation {
             name: attestation.name,
             version: attestation.version,
             title: attestation.title,
         }),
         install_identity,
-        auth_fingerprint: fingerprint,
+        state_revision,
         models: snapshot
             .models
             .into_iter()

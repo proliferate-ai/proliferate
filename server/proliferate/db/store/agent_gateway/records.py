@@ -93,7 +93,6 @@ class AgentGatewayEnrollmentKeyRecord:
 class AgentModelSnapshotRecord:
     id: UUID
     harness_kind: str
-    auth_context_id: str
     owner_user_id: UUID
     snapshot_json: str
     probed_at: datetime

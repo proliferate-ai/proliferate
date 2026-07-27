@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::probe::{AcpProbeRunner, ProbeError, ProbeRequest, ProbeRunner};
-use super::test_support::{gateway_context, gateway_state, TempRuntimeHome};
+use super::test_support::{gateway_state, TempRuntimeHome};
 use crate::app::test_support::lock_env;
 use crate::domains::agents::route_auth::{
     probe_materialization::probe_auth_material_for_server, GatewayModelPlan,
@@ -81,17 +81,10 @@ done
 }
 
 fn request(home: &TempRuntimeHome, timeout: Duration) -> ProbeRequest {
-    let material = probe_auth_material_for_server(
-        home.path(),
-        "opencode",
-        "gateway",
-        &[gateway_context()],
-        None,
-    )
-    .expect("material");
+    let material =
+        probe_auth_material_for_server(home.path(), "opencode", None).expect("material");
     ProbeRequest {
         harness_kind: "opencode".to_string(),
-        auth_context_id: "gateway".to_string(),
         material,
         plan: GatewayModelPlan {
             models: vec!["m-1".to_string()],

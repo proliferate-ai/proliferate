@@ -127,13 +127,10 @@ AGENT_MODEL_SNAPSHOT_STATUS_INACTIVE = "inactive"
 # String(64) column (an over-long value would otherwise 500 on insert).
 AGENT_HARNESS_KIND_MAX_LENGTH = 64
 
-# auth_context_id is a catalog-declared slug ('anthropic-api', 'gateway',
-# 'baseline', …). Bounded for the same reason as harness_kind: the column is
-# String(64) and unbounded distinct values inflate snapshot cardinality. It is
-# deliberately NOT validated against the shipped catalog — a harness whose
-# catalog entry is newer than the server's document must still be able to upload
-# its observation (the read-side enrichment join tolerates unknown contexts).
-AGENT_AUTH_CONTEXT_ID_MAX_LENGTH = 64
+# The machine-document schema version the ingest route accepts
+# (model-catalog.md §Wire schema): schemaVersion 2 is the composed observation
+# — one entry per harness, no per-context map, no fingerprint.
+AGENT_MODEL_SNAPSHOT_SCHEMA_VERSION = 2
 
 AGENT_USAGE_IMPORT_CURSOR_ID = "default"
 

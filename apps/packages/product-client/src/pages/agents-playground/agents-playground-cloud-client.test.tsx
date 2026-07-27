@@ -171,14 +171,13 @@ describe("Agents playground Cloud transport", () => {
         enabled: true,
       }),
     ]);
-    expect(snapshot.agentModels).toEqual(expect.arrayContaining([
+    expect(snapshot.agentModels).toEqual([
       expect.objectContaining({
         harnessKind: "claude",
-        authContextId: "gateway",
         origin: "snapshot",
         overrideApplied: true,
       }),
-    ]));
+    ]);
     expect(snapshot.overrides).toEqual([
       expect.objectContaining({
         harnessKind: "claude",

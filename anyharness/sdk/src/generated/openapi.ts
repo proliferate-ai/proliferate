@@ -2487,54 +2487,6 @@ export interface components {
             /** @enum {string} */
             type: "tool_result_text";
         };
-        ContextStatus: {
-            /**
-             * @description Whether the auth classifier currently counts this context as active. A
-             *     just-deactivated context keeps its observation with `active: false`.
-             */
-            active: boolean;
-            /** @description Diagnostics about the binary that answered — NOT the staleness input. */
-            attestation?: Record<string, never> | null;
-            authContextId: string;
-            /**
-             * @description `false` ⇒ the identity comparison was indeterminate; render no version
-             *     claim.
-             */
-            identityComparable: boolean;
-            lastAttempt?: Record<string, never> | null;
-            /**
-             * @description `lastAttempt.detail` when the last attempt failed. Lifted to its own field
-             *     so a surface can render an error without knowing the attempt shape.
-             */
-            lastError?: string | null;
-            modeCount: number;
-            modelCount: number;
-            /**
-             * @description The full model list off the same document read as `modelCount`. Added
-             *     alongside the count (never replacing it — model-catalog.md:660 always
-             *     said this route serves "model and mode lists off the same document
-             *     read"; the count-only shape undershot that, and this is the fix) so a
-             *     machineless-surface uploader (the Worker's `model_snapshot_sync`) has
-             *     something to read besides raw disk access to a document it should not
-             *     know the layout of.
-             */
-            models?: Record<string, never>[];
-            /** @description The full mode list, same rationale as `models` above. */
-            modes?: Record<string, never>[];
-            /** @description Set iff `state == backoff`. */
-            nextAttemptAt?: string | null;
-            /** @description Last SUCCESSFUL observation. Never regresses on failure. */
-            probedAt?: string | null;
-            /**
-             * Format: int64
-             * @description Server-computed so every surface renders the same age from one clock.
-             */
-            snapshotAgeSeconds?: number | null;
-            stale: boolean;
-            staleReason?: string | null;
-            state: components["schemas"]["ModelSnapshotLiveState"];
-            warnings?: string[];
-        };
         CoworkArtifactDetailResponse: {
             artifact: components["schemas"]["CoworkArtifactSummary"];
             content: string;
@@ -3493,30 +3445,70 @@ export interface components {
             values: string[];
         };
         /**
-         * @description The engine's live view of one context. In-memory only, so a restart reports
+         * @description The engine's live view of one harness. In-memory only, so a restart reports
          *     `Idle` — which is true: nothing is running.
          *
          *     `Queued` is distinct from `Running` on purpose: a probe admitted to its slot but
-         *     still waiting on the per-harness gate or the machine-wide semaphore is neither
-         *     "nothing is happening" (which is what `Idle` would tell a polling UI, wrongly)
-         *     nor "a harness process exists".
+         *     still waiting on the machine-wide semaphore is neither "nothing is happening"
+         *     (which is what `Idle` would tell a polling UI, wrongly) nor "a harness process
+         *     exists".
          * @example idle
          * @enum {string}
          */
         ModelSnapshotLiveState: "idle" | "queued" | "running" | "backoff";
         ModelSnapshotStatus: {
             agent: string;
-            contexts: components["schemas"]["ContextStatus"][];
-            /** @description The staleness baseline, manifest-derived. `null` when unobservable. */
+            /** @description Provenance: the binary that answered. Diagnostics only. */
+            attestation?: Record<string, never> | null;
+            /**
+             * @description Provenance: the install the observation was recorded on, as the document
+             *     carries it. `null` when the document is absent or recorded none.
+             */
             installIdentity?: Record<string, never> | null;
+            lastAttempt?: Record<string, never> | null;
+            /**
+             * @description `lastAttempt.detail` when the last attempt failed. Lifted to its own field
+             *     so a surface can render an error without knowing the attempt shape.
+             */
+            lastError?: string | null;
+            modeCount: number;
+            modelCount: number;
+            /**
+             * @description The full model list off the same document read as `modelCount`, so a
+             *     machineless-surface uploader (the Worker's `model_snapshot_sync`) has
+             *     something to read besides raw disk access to a document it should not
+             *     know the layout of.
+             */
+            models?: Record<string, never>[];
+            /** @description The full mode list, same rationale as `models` above. */
+            modes?: Record<string, never>[];
+            /** @description Set iff `state == backoff`. */
+            nextAttemptAt?: string | null;
             /**
              * @description `owner` | `readonly` — visible rather than mysterious when a second
              *     runtime shares this home.
              * @example owner
              */
             probeEngine: string;
+            /**
+             * @description Last SUCCESSFUL observation. Never regresses on failure. Absent until the
+             *     first observation lands.
+             */
+            probedAt?: string | null;
             /** Format: int32 */
             schemaVersion: number;
+            /**
+             * Format: int64
+             * @description Server-computed so every surface renders the same age from one clock.
+             */
+            snapshotAgeSeconds?: number | null;
+            state: components["schemas"]["ModelSnapshotLiveState"];
+            /**
+             * Format: int64
+             * @description Provenance: the `state.json` revision the observation was probed under.
+             */
+            stateRevision?: number | null;
+            warnings?: string[];
         };
         /**
          * @description A product-normalized live session control derived from raw ACP config options.
@@ -3714,13 +3706,6 @@ export interface components {
             code?: string | null;
             detail?: string | null;
             instance?: string | null;
-            /**
-             * @description RFC 7807 extension member: the auth-context ids that would unlock a
-             *     gated selection (the model's `availability.anyOf`). Only set on
-             *     `SESSION_MODEL_GATED`; absent on every other error, so unrelated responses
-             *     stay byte-identical.
-             */
-            requiredContexts?: string[] | null;
             /** Format: int32 */
             status: number;
             title: string;
@@ -6036,7 +6021,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Per-auth-context model snapshot status */
+            /** @description The harness's composed model-snapshot status */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6058,10 +6043,7 @@ export interface operations {
     };
     refresh_model_snapshot: {
         parameters: {
-            query: {
-                /** @description The auth context to re-probe (required) */
-                authContextId: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 /** @description Agent kind identifier */
@@ -6080,16 +6062,7 @@ export interface operations {
                     "application/json": components["schemas"]["ModelSnapshotStatus"];
                 };
             };
-            /** @description Missing authContextId */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unknown agent kind or inactive auth context */
+            /** @description Unknown agent kind, or the harness is not installed here */
             404: {
                 headers: {
                     [name: string]: unknown;

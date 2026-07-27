@@ -1,8 +1,8 @@
 """Shared fixtures for the cloud model-snapshot tests.
 
 Extracted so the layered-read suite and the Worker-ingest suite can each stay
-under the repo line budget while sharing one definition of "a machine-document
-entry" and "a cloud-sandbox worker".
+under the repo line budget while sharing one definition of "a composed machine
+document" and "a cloud-sandbox worker".
 """
 
 from __future__ import annotations
@@ -21,19 +21,35 @@ from proliferate.db.store import runtime_workers as runtime_workers_store
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 HARNESS = "claude"
-CONTEXT = "gateway"
 MODELS_PATH = f"/v1/cloud/agent-models/{HARNESS}"
 PROBED_AT = "2026-07-24T09:12:03+00:00"
 
 
-def snapshot_entry(models: list[str], *, modes: list[str] | None = None) -> str:
-    """One machine-document entry in the wire shape the runtime writes."""
+def snapshot_document(
+    models: list[str],
+    *,
+    modes: list[str] | None = None,
+    agent: str = HARNESS,
+) -> str:
+    """One composed machine document (schemaVersion 2), as the Worker uploads it.
+
+    Mirrors what ``model_snapshot_sync.rs`` reassembles off the runtime's status
+    route: the composed observation plus its provenance fields — no ``entries``
+    map, no ``authFingerprint``, no per-context anything.
+    """
     return json.dumps(
         {
+            "schemaVersion": 2,
+            "agent": agent,
             "probedAt": PROBED_AT,
-            "mechanism": "acp",
-            "attestation": {"name": HARNESS, "version": "1.2.3"},
-            "authFingerprint": "sha256:9f2cdeadbeef",
+            "attestation": {"name": agent, "version": "1.2.3"},
+            "installIdentity": {
+                "role": "agent_process",
+                "version": "1.18.3",
+                "sha256": "9b4f9f1b1c00",
+                "source": "pinned_archive",
+            },
+            "stateRevision": 1721820000000,
             "models": [{"id": model} for model in models],
             "modes": [{"id": mode} for mode in (modes or ["build"])],
             "warnings": [],
@@ -163,15 +179,13 @@ async def store_snapshot(
     owner_user_id: uuid.UUID,
     models: list[str],
     harness_kind: str = HARNESS,
-    auth_context_id: str = CONTEXT,
     probed_at: datetime | None = None,
 ) -> None:
     await agent_gateway_store.create_model_snapshot(
         db_session,
         harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
         owner_user_id=owner_user_id,
-        snapshot_json=snapshot_entry(models),
+        snapshot_json=snapshot_document(models, agent=harness_kind),
         probed_at=probed_at,
     )
     await db_session.commit()

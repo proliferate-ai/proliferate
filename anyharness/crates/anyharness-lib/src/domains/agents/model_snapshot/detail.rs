@@ -4,7 +4,7 @@
 //! argument attached, and it deserves to be readable (and testable) without the
 //! surrounding concurrency machinery.
 
-use super::fingerprint;
+use crate::domains::agents::route_auth::probe_materialization::credential_value_digest;
 
 /// Cap on a persisted failure detail. Long enough for a real provider error,
 /// short enough that a chatty harness cannot grow the document without bound.
@@ -35,7 +35,7 @@ const REDACTED: &str = "[redacted]";
 /// into invalid UTF-8.
 pub(super) fn redact_and_truncate(detail: &str, credential_digests: &[String]) -> String {
     let matches_credential = |candidate: &str| {
-        !candidate.is_empty() && credential_digests.contains(&fingerprint::digest_of(candidate))
+        !candidate.is_empty() && credential_digests.contains(&credential_value_digest(candidate))
     };
 
     let mut redacted = String::with_capacity(detail.len());

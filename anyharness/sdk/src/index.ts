@@ -85,7 +85,6 @@ export type {
 } from "./types/agent-gateway-catalog.js";
 
 export type {
-  ContextStatus,
   ModelSnapshotLiveState,
   ModelSnapshotStatus,
 } from "./types/model-snapshot.js";

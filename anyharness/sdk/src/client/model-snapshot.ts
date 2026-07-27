@@ -4,7 +4,7 @@ import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 export class ModelSnapshotClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
-  /** Per-auth-context probe status for one agent kind (never polls-pushed — poll this). */
+  /** The composed probe status for one agent kind (never pushed — poll this). */
   async getStatus(
     kind: string,
     options?: AnyHarnessRequestOptions,
@@ -15,14 +15,16 @@ export class ModelSnapshotClient {
     );
   }
 
-  /** Force one context's re-probe now (the desktop Refresh button, owner runtimes only). */
+  /**
+   * Force a re-probe of the harness now (the manual-refresh poke, owner
+   * runtimes only). No `authContextId`: one composed observation per harness.
+   */
   async refresh(
     kind: string,
-    authContextId: string,
     options?: AnyHarnessRequestOptions,
   ): Promise<ModelSnapshotStatus> {
     return this.transport.post<ModelSnapshotStatus>(
-      `/v1/agents/${encodeURIComponent(kind)}/model-snapshot/refresh?authContextId=${encodeURIComponent(authContextId)}`,
+      `/v1/agents/${encodeURIComponent(kind)}/model-snapshot/refresh`,
       {},
       options,
     );

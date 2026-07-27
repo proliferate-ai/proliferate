@@ -113,17 +113,14 @@ pub struct HeartbeatResponse {
     pub supervisor_bridge: Option<SupervisorBridgeInputs>,
 }
 
-/// A Worker's upload of one changed model-snapshot entry (model-catalog.md
-/// "Write paths"/"Storage"): the ingest route absorbs today's separate
-/// `refresh`-with-payload and `mirror` routes. `snapshot_json` deliberately
-/// carries only the subset of the machine-document entry the cloud tier
-/// documents reading (`models`, `modes`, `attestation`, `warnings`) — see
-/// `model_snapshot_sync.rs` for why `authFingerprint`/`mechanism`/
-/// `installIdentity`/`lastAttempt` are never assembled here.
+/// A Worker's upload of one changed model-snapshot document (model-catalog.md
+/// "Write path"/"Storage"): `snapshot_json` carries the machine document's
+/// verbatim wire shape — the composed observation plus its provenance fields.
+/// There is no `authContextId`: one observation per harness, keyed server-side
+/// by (harness_kind, owner).
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct IngestModelSnapshotRequest {
-    pub auth_context_id: String,
     pub snapshot_json: String,
     pub probed_at: String,
 }

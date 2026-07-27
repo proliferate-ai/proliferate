@@ -32,7 +32,7 @@ describe("model snapshot status polling", () => {
     vi.useRealTimers();
   });
 
-  it("polls fast while any context is queued or running, and stops once idle", async () => {
+  it("polls fast while the engine is queued or running, and stops once idle", async () => {
     vi.useFakeTimers();
     mocks.getStatus
       .mockResolvedValueOnce(status("idle"))
@@ -45,7 +45,7 @@ describe("model snapshot status polling", () => {
 
     // idle: no automatic poke fires without one — a manual refresh mutation
     // is what moves this forward in the real app, so time alone should not
-    // trigger another request while every context stays idle.
+    // trigger another request while the engine stays idle.
     await flushTimers(MODEL_SNAPSHOT_ACTIVE_INTERVAL_MS * 10);
     expect(mocks.getStatus).toHaveBeenCalledTimes(1);
   });
@@ -67,7 +67,7 @@ describe("model snapshot status polling", () => {
     }, options)).toBe(false);
   });
 
-  it("polls fast when a context is queued or running", () => {
+  it("polls fast when the engine is queued or running", () => {
     const options = { refetchWhileActive: true };
     expect(resolveModelSnapshotRefetchInterval({ data: status("queued") }, options))
       .toBe(MODEL_SNAPSHOT_ACTIVE_INTERVAL_MS);
@@ -86,89 +86,17 @@ describe("model snapshot status polling", () => {
     )).toBe(false);
   });
 
-  it("keeps polling when ANY context is active, even if others are idle (multi-context harnesses like opencode)", () => {
-    const options = { refetchWhileActive: true };
-    const mixed: ModelSnapshotStatus = {
-      agent: "opencode",
-      probeEngine: "owner",
-      schemaVersion: 1,
-      installIdentity: null,
-      contexts: [
-        {
-          authContextId: "anthropic",
-          active: true,
-          state: "running",
-          identityComparable: true,
-          modelCount: 3,
-          modeCount: 1,
-          stale: false,
-        },
-        {
-          authContextId: "openai",
-          active: true,
-          state: "idle",
-          identityComparable: true,
-          modelCount: 2,
-          modeCount: 1,
-          stale: false,
-        },
-      ],
-    };
-
-    expect(resolveModelSnapshotRefetchInterval({ data: mixed }, options))
-      .toBe(MODEL_SNAPSHOT_ACTIVE_INTERVAL_MS);
-  });
-
-  it("stops polling only once EVERY context is idle", () => {
-    const options = { refetchWhileActive: true };
-    const allIdle: ModelSnapshotStatus = {
-      agent: "opencode",
-      probeEngine: "owner",
-      schemaVersion: 1,
-      installIdentity: null,
-      contexts: [
-        {
-          authContextId: "anthropic",
-          active: true,
-          state: "idle",
-          identityComparable: true,
-          modelCount: 3,
-          modeCount: 1,
-          stale: false,
-        },
-        {
-          authContextId: "openai",
-          active: true,
-          state: "idle",
-          identityComparable: true,
-          modelCount: 2,
-          modeCount: 1,
-          stale: false,
-        },
-      ],
-    };
-
-    expect(resolveModelSnapshotRefetchInterval({ data: allIdle }, options)).toBe(false);
-  });
 });
 
-function status(
-  state: ModelSnapshotStatus["contexts"][number]["state"],
-): ModelSnapshotStatus {
+function status(state: ModelSnapshotStatus["state"]): ModelSnapshotStatus {
   return {
     agent: "codex",
     probeEngine: "owner",
-    schemaVersion: 1,
+    schemaVersion: 2,
     installIdentity: null,
-    contexts: [{
-      authContextId: "gateway",
-      active: true,
-      state,
-      identityComparable: true,
-      modelCount: 3,
-      modeCount: 1,
-      stale: false,
-    }],
+    state,
+    modelCount: 3,
+    modeCount: 1,
   };
 }
 

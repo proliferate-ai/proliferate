@@ -16,7 +16,7 @@ use super::mcp_bindings::model::SessionMcpServer;
 use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
-use super::service::{ModelGatedContext, SessionService};
+use super::service::SessionService;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
@@ -60,15 +60,8 @@ pub struct SessionRuntime {
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
     /// Catalog-driven gateway model planner: supplies the render plane's
-    /// [`GatewayModelPlan`]. Materialization input only — launch-time
-    /// re-observation is the `model_snapshot` poke below.
+    /// [`GatewayModelPlan`]. Materialization input only.
     gateway_model_resolver: Arc<dyn GatewayModelResolve>,
-    /// The probe engine, poked as a backstop at each launch. `Option` because a
-    /// session runtime without one is a legitimate configuration (the session
-    /// suites build runtimes without a probe engine, and standing one up would
-    /// take a filesystem lock per test); `None` means "no backstop poke", never
-    /// "probe anyway".
-    model_snapshot: Option<Arc<crate::domains::agents::model_snapshot::ModelSnapshotService>>,
     active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     loops_resolver: Arc<dyn LoopsResolver>,
     activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
@@ -90,14 +83,14 @@ impl SessionRuntime {
 #[derive(Debug)]
 pub enum CreateAndStartSessionError {
     Invalid(String),
+    /// The requested model cannot launch under the active universe — the one
+    /// typed refusal for every unservable model intent
+    /// (`SESSION_MODEL_UNSUPPORTED`).
     ModelUnsupported {
         agent_kind: String,
         model_id: String,
+        active_universe: crate::domains::agents::catalog::service::ActiveUniverse,
     },
-    /// A known model is gated behind inactive auth contexts. Carries the
-    /// unlock condition (`required_contexts`) for the API layer; an
-    /// unresolvable model uses `ModelUnsupported` instead.
-    ModelGated(ModelGatedContext),
     ModeUnsupported {
         agent_kind: String,
         mode_id: String,
@@ -384,7 +377,6 @@ impl SessionRuntime {
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
         gateway_model_resolver: Arc<dyn GatewayModelResolve>,
-        model_snapshot: Option<Arc<crate::domains::agents::model_snapshot::ModelSnapshotService>>,
         active_goal_resolver: Arc<dyn ActiveGoalResolver>,
         loops_resolver: Arc<dyn LoopsResolver>,
         activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
@@ -402,7 +394,6 @@ impl SessionRuntime {
             plan_reference_resolver,
             plan_interaction_link_resolver,
             gateway_model_resolver,
-            model_snapshot,
             active_goal_resolver,
             loops_resolver,
             activity_roster_resolver,
