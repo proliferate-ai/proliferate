@@ -2,7 +2,19 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
+import { makeTestProductHost } from "#product/test/product-host-test-utils";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
+
+const hierarchyTestHost = makeTestProductHost();
+
+function renderHarnessPane(harnessKind = "claude") {
+  return render(
+    <ProductHostProvider host={hierarchyTestHost}>
+      <HarnessPane harnessKind={harnessKind} />
+    </ProductHostProvider>,
+  );
+}
 
 const readyAgent = {
   kind: "claude",
@@ -89,7 +101,7 @@ afterEach(() => {
 
 describe("HarnessPane visual hierarchy", () => {
   it("omits the redundant runtime status once the harness is configured", () => {
-    const { container } = render(<HarnessPane harnessKind="claude" />);
+    const { container } = renderHarnessPane("claude");
 
     expect(container.querySelector('[data-harness-runtime-state="ready"]')).toBeNull();
     expect(screen.queryByText("Runtime")).toBeNull();
@@ -107,7 +119,7 @@ describe("HarnessPane visual hierarchy", () => {
     readyCatalog.agentsByKind.set("claude", loginRequiredAgent);
     readyCatalog.agentsNeedingSetup = [loginRequiredAgent];
 
-    const { container } = render(<HarnessPane harnessKind="claude" />);
+    const { container } = renderHarnessPane("claude");
 
     expect(container.querySelector('[data-harness-runtime-state="login_required"]')).not.toBeNull();
     expect(screen.getByText("Login required")).toBeTruthy();
@@ -121,7 +133,7 @@ describe("HarnessPane visual hierarchy", () => {
       readiness: "unsupported",
     });
 
-    render(<HarnessPane harnessKind="claude" />);
+    renderHarnessPane("claude");
 
     expect(screen.getByText("Unsupported")).toBeTruthy();
     expect(
@@ -131,7 +143,7 @@ describe("HarnessPane visual hierarchy", () => {
   });
 
   it("has no second Local or Workspace runtime selector", () => {
-    render(<HarnessPane harnessKind="claude" />);
+    renderHarnessPane("claude");
 
     expect(screen.queryByLabelText("Harness update target")).toBeNull();
     expect(screen.queryByText("Workspace")).toBeNull();
@@ -150,7 +162,7 @@ describe("HarnessPane visual hierarchy", () => {
       onInstall,
     };
 
-    render(<HarnessPane harnessKind="claude" />);
+    renderHarnessPane("claude");
 
     expect(screen.getByRole("button", { name: "Install Claude Code" })).toBeTruthy();
     expect(
@@ -183,7 +195,7 @@ describe("HarnessPane visual hierarchy", () => {
       },
     };
 
-    render(<HarnessPane harnessKind="claude" />);
+    renderHarnessPane("claude");
 
     expect(screen.getByText("Installing Claude Code")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Installing Claude Code…" })).toBeTruthy();
