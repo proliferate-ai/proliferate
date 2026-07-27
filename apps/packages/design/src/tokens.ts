@@ -35,7 +35,7 @@ export const themeTokens = {
   "--activity-level-bar-step": {
     dark: motion.cssMs(motion.activity.levelBarStepMs),
     light: motion.cssMs(motion.activity.levelBarStepMs),
-    provenance: "[SHIPPED:motion/authority]",
+    provenance: "[RETUNE:motion/level-bar-cadence]",
   },
   "--activity-update-ready-sweep": {
     dark: motion.cssMs(motion.activity.updateReadySweepMs),
@@ -900,7 +900,7 @@ export const themeTokens = {
   "--ease-out-cubic": {
     dark: motion.ease.outCubic,
     light: motion.ease.outCubic,
-    provenance: "[SHIPPED:motion/authority]",
+    provenance: "[RETUNE:motion/level-bar-cadence]",
   },
   "--ease-out-quint": {
     dark: motion.ease.outQuint,

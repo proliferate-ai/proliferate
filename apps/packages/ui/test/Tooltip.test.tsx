@@ -75,6 +75,50 @@ describe("Tooltip", () => {
     });
   });
 
+  /**
+   * Escape and blur are the only dismissals a keyboard or switch-access user
+   * has for hover/focus content (WCAG 1.4.13), so `keepOpenOnPress` must
+   * suppress the press dismissal *only*. Suppressing every close request left
+   * the tooltip stuck open with no pointer-free way out.
+   */
+  it("still closes on Escape when keepOpenOnPress is set", async () => {
+    render(
+      <Tooltip content="Reasoning: High" keepOpenOnPress>
+        <button type="button">bars</button>
+      </Tooltip>,
+    );
+
+    const trigger = screen.getByRole("button");
+    hover(trigger.parentElement!);
+    await waitFor(() => {
+      expect(screen.getAllByText("Reasoning: High").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByText("Reasoning: High")).toBeNull();
+    });
+  });
+
+  it("still closes when focus leaves a keepOpenOnPress trigger", async () => {
+    render(
+      <Tooltip content="Reasoning: High" keepOpenOnPress>
+        <button type="button">bars</button>
+      </Tooltip>,
+    );
+
+    const trigger = screen.getByRole("button");
+    fireEvent.focus(trigger);
+    await waitFor(() => {
+      expect(screen.getAllByText("Reasoning: High").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.blur(trigger);
+    await waitFor(() => {
+      expect(screen.queryByText("Reasoning: High")).toBeNull();
+    });
+  });
+
   it("leaves the default press-to-dismiss behavior alone when not opted in", async () => {
     render(
       <Tooltip content="Opens a menu">
