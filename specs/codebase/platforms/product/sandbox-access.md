@@ -170,8 +170,9 @@ WebSocket upgrades carry the same token in the
 because WS clients cannot set headers. Server-side, gateway access
 resolution (row → upstream URL + bearer) is cached per user for 60 s with
 a per-user lock ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py))
-— the bound on how fast a destroy/recreate propagates to in-flight
-callers.
+and is invalidated immediately when runtime access is cleared or the row
+is destroyed. The billing permit is checked independently with a
+success-only 5 s cache; a 402 denial is never cached.
 
 ### Worked example: worktree inventory on a cloud sandbox
 
@@ -200,6 +201,10 @@ same one choreography.
   gating layers plus "not a gate". Feature code branches on the
   classification, never on raw `.code ===` string comparisons scattered at
   call sites.
+- **Gateway detail survives the transport.** `AnyHarnessError`
+  ([core.ts](../../../../anyharness/sdk/src/client/core.ts)) preserves a
+  FastAPI-style nested `detail` object as `details`, so the same subject-layer
+  402 representation reaches workspace presentation code unchanged.
 - **One capability parser.** The capability contract is parsed once, in
   product-client
   ([server-capability-contract.ts](../../../../apps/packages/product-client/src/lib/domain/capabilities/server-capability-contract.ts));
@@ -302,9 +307,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       provision-on-access) is [sandbox-lifecycle.md](sandbox-lifecycle.md)'s
       open question; this document's failure modes assume today's
       repair-by-materializing-action behavior.
-- [ ] `POST /cloud-sandbox/wake` is byte-identical to `ensure`; collapse
-      to `ensure` as a hard rename. Owned by
-      [sandbox-lifecycle.md](sandbox-lifecycle.md)'s gap list; listed here
-      because the SDK bindings
-      ([cloud-sandboxes.ts](../../../../cloud/sdk/src/client/cloud-sandboxes.ts))
-      change with it.

@@ -125,6 +125,9 @@ own sandboxes are representable (gap below).
    (402, `billing_credits_exhausted` | `billing_start_blocked`, with
    `decision_type`/`reason` detail —
    [billing/authorization.py](../../../../server/proliferate/server/billing/authorization.py)).
+   Successful decisions are cached for at most 5 seconds because the
+   authorizer builds the full billing snapshot and evaluates compute
+   budgets; denials are never cached.
 2. Ensure the personal sandbox row exists (rows are free; ensure never
    provisions — lifecycle's law).
 3. Load runtime access: `anyharness_base_url` plus the bearer and data-key
@@ -134,7 +137,9 @@ own sandboxes are representable (gap below).
    loss cleared it.
 4. Cache the resolved access per user for 60 seconds behind a per-user
    asyncio lock, so a burst of parallel requests (a workspace opening
-   chat, files, and terminals at once) resolves once.
+   chat, files, and terminals at once) resolves once. Every transition
+   that clears or retires runtime access invalidates this entry
+   immediately.
 
 The swap itself is mechanical: HTTP gets `Authorization: Bearer <runtime>`;
 WebSocket gets the runtime token as the upstream `access_token` query
@@ -307,13 +312,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       per-(user, org) model; the resolution seam grows the context input
       when that gap closes
       ([sandbox-lifecycle.md](sandbox-lifecycle.md)).
-- [ ] The access cache outlives a runtime reset: the 60 s per-user cache
-      ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py))
-      is not invalidated when reset-for-rematerialization or
-      provider-missing clears the row's access columns, so up to a minute
-      of requests forward to a dead address (502) instead of the typed
-      409. Invalidate on the clearing transitions, or validate
-      `runtime_generation` on use.
 - [ ] WebSocket auth still accepts `?access_token=` inbound
       ([gateway/access.py](../../../../server/proliferate/server/cloud/gateway/access.py),
       kept as legacy); product tokens do not belong in URLs. Clients all

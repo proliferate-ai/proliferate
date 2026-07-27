@@ -1,3 +1,4 @@
+import { AnyHarnessError } from "@anyharness/sdk";
 import type { CloudConnectionInfo, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
@@ -7,9 +8,23 @@ import {
   type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,
 } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import {
+  isCloudStartBlockReason,
+  type CloudStartBlockReason,
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 
 export const CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS = 750;
 export const CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES = 8;
+
+const BILLING_BLOCK_CODES = new Set([
+  "billing_credits_exhausted",
+  "billing_start_blocked",
+]);
+
+export interface CloudWorkspaceBillingBlock {
+  code: "billing_credits_exhausted" | "billing_start_blocked";
+  startBlockReason: CloudStartBlockReason | null;
+}
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -32,6 +47,40 @@ export function isRetryableCloudWorkspaceConnectionError(error: unknown): boolea
   }
 
   return isRetryableNetworkError(error);
+}
+
+export function getCloudWorkspaceBillingBlockFromError(
+  error: unknown,
+): CloudWorkspaceBillingBlock | null {
+  let status: number | null = null;
+  let code: unknown;
+  let reason: unknown;
+
+  if (error instanceof AnyHarnessError) {
+    status = error.problem.status;
+    code = error.details?.code;
+    reason = error.details?.reason;
+  } else if (error instanceof ProliferateClientError) {
+    status = error.status;
+    code = error.code;
+    reason = error.details.reason;
+  }
+
+  if (
+    status !== 402
+    || typeof code !== "string"
+    || !BILLING_BLOCK_CODES.has(code)
+  ) {
+    return null;
+  }
+
+  const startBlockReason = typeof reason === "string" ? reason : null;
+  return {
+    code: code as CloudWorkspaceBillingBlock["code"],
+    startBlockReason: isCloudStartBlockReason(startBlockReason)
+      ? startBlockReason
+      : null,
+  };
 }
 
 export async function retryCloudWorkspaceRequest<T>(

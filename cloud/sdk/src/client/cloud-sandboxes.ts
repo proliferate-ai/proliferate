@@ -21,15 +21,6 @@ export async function ensureCloudSandbox(
   });
 }
 
-export async function wakeCloudSandbox(
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudSandboxResponse> {
-  return client.requestJson<CloudSandboxResponse>({
-    method: "POST",
-    path: "/v1/cloud/cloud-sandbox/wake",
-  });
-}
-
 export async function destroyCloudSandbox(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudSandboxResponse | null> {

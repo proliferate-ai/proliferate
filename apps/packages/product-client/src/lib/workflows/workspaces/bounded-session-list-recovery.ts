@@ -1,6 +1,6 @@
 export type BoundedSessionListRecoveryResult<T> =
   | { kind: "loaded"; sessions: T[]; recovered: boolean }
-  | { kind: "failed" }
+  | { kind: "failed"; error: unknown }
   | { kind: "stale" };
 
 /**
@@ -11,6 +11,7 @@ export async function loadSessionsWithBoundedRecovery<T>(input: {
   forceInitialRefresh?: boolean;
   isCurrent: () => boolean;
   load: (forceRefresh: boolean) => Promise<T[]>;
+  shouldRetry?: (error: unknown) => boolean;
 }): Promise<BoundedSessionListRecoveryResult<T>> {
   try {
     const sessions = await input.load(input.forceInitialRefresh ?? false);
@@ -24,7 +25,10 @@ export async function loadSessionsWithBoundedRecovery<T>(input: {
         recovered: false,
       };
     }
-  } catch {
+  } catch (error) {
+    if (input.shouldRetry?.(error) === false) {
+      return input.isCurrent() ? { kind: "failed", error } : { kind: "stale" };
+    }
     // A failed first read and an empty cached read take the same single fresh
     // path. Only the forced result is authoritative enough to bootstrap an
     // actually empty workspace.
@@ -43,7 +47,7 @@ export async function loadSessionsWithBoundedRecovery<T>(input: {
       sessions,
       recovered: true,
     };
-  } catch {
-    return input.isCurrent() ? { kind: "failed" } : { kind: "stale" };
+  } catch (error) {
+    return input.isCurrent() ? { kind: "failed", error } : { kind: "stale" };
   }
 }

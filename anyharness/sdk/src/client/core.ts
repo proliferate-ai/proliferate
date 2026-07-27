@@ -160,10 +160,12 @@ export function withTimingCategory(
 
 export class AnyHarnessError extends Error {
   public readonly problem: ProblemDetails;
+  public readonly details?: Record<string, unknown>;
 
   constructor(
     problem: ProblemDetails,
     cause?: unknown,
+    details?: Record<string, unknown>,
   ) {
     const normalizedProblem = normalizeProblemDetails(problem, {
       title: "Request failed",
@@ -172,6 +174,9 @@ export class AnyHarnessError extends Error {
     super(normalizedProblem.detail ?? normalizedProblem.title);
     this.name = "AnyHarnessError";
     this.problem = normalizedProblem;
+    if (details !== undefined) {
+      this.details = details;
+    }
     if (cause !== undefined) {
       (this as Error & { cause?: unknown }).cause = cause;
     }
@@ -313,7 +318,7 @@ export class AnyHarnessTransport {
   async getBlob(path: string, options?: AnyHarnessRequestOptions): Promise<Blob> {
     const res = await this.fetchWithTiming("GET", path, undefined, options, {});
     if (!res.ok) {
-      throw new AnyHarnessError(await toProblemDetails(res));
+      throw await toAnyHarnessError(res);
     }
     return res.blob();
   }
@@ -344,7 +349,7 @@ export class AnyHarnessTransport {
       accept: "application/json",
     });
     if (!res.ok) {
-      throw new AnyHarnessError(await toProblemDetails(res));
+      throw await toAnyHarnessError(res);
     }
   }
 
@@ -455,7 +460,7 @@ export class AnyHarnessTransport {
 
   private async handleResponse<T>(res: Response): Promise<T> {
     if (!res.ok) {
-      throw new AnyHarnessError(await toProblemDetails(res));
+      throw await toAnyHarnessError(res);
     }
     return (await res.json()) as T;
   }
@@ -536,7 +541,7 @@ export class AnyHarnessClient {
   }
 }
 
-async function toProblemDetails(res: Response): Promise<ProblemDetails> {
+async function toAnyHarnessError(res: Response): Promise<AnyHarnessError> {
   let body: unknown;
   try {
     body = await res.json();
@@ -544,10 +549,17 @@ async function toProblemDetails(res: Response): Promise<ProblemDetails> {
     body = undefined;
   }
 
-  return normalizeProblemDetails(body, {
-    title: res.statusText || "Request failed",
-    status: res.status,
-  });
+  const details = isJsonObject(body) && isJsonObject(body.detail)
+    ? { ...body.detail }
+    : undefined;
+  return new AnyHarnessError(
+    normalizeProblemDetails(body, {
+      title: res.statusText || "Request failed",
+      status: res.status,
+    }),
+    undefined,
+    details,
+  );
 }
 
 interface ProblemDetailsFallback {

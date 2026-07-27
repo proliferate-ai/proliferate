@@ -482,14 +482,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       retire, then pair repository-environment deletion with an after-commit
       reclaim.
 - [ ] Git identity is not materialized at all: the only implementation was
-      deleted with its parked domain (#823), the calling stage survives as
-      unimportable dead code
-      ([git_identity.py](../../../../server/proliferate/server/automations/worker/cloud_execution/stages/git_identity.py)),
-      and every user commit today carries git's auto-derived fallback
-      (`user <user@<sandbox-hostname>>`). Reintroduce materialization with
-      the resolution rules above; delete the dead stage and the orphaned
-      `configure_git_identity`/`ensure_repo_checkout` command kinds
-      ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
 - [ ] The inventory row carries no last-activity timestamp for suggesting
       stale worktrees. Add last activity after wiring the session store
       into worktree inventory.
