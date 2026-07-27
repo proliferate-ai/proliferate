@@ -64,9 +64,19 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
         agent_kind: agent_kind.clone(),
         auth_context: args.auth_context.clone(),
         auth_env,
+        // The central pipeline scrubs its own process env and builds isolated
+        // credential dirs (`auth_env_for_context`), so it needs no per-child
+        // removals; the runtime engine, which must not mutate its own env, does.
+        auth_env_remove: Vec::new(),
         runtime_home: runtime_home.clone(),
+        // Keep the historical temp_dir() workspace: this process is short-lived
+        // and owns nothing a scratch guard would clean up.
+        workspace_root: None,
         model_switch_timeout: Duration::from_secs(args.model_switch_timeout_secs),
         max_models: args.max_models,
+        // The per-model option matrix is exactly what this command exists to
+        // capture (it feeds the shipped catalog's control wiring).
+        switch_models: true,
         send_test_prompt: false,
     };
 
@@ -91,9 +101,14 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
             agent_kind: agent_kind.clone(),
             auth_context: format!("{}+trial:{trial_id}", args.auth_context),
             auth_env: trial_env,
+            auth_env_remove: Vec::new(),
             runtime_home: runtime_home.clone(),
+            workspace_root: None,
             model_switch_timeout: Duration::from_secs(args.model_switch_timeout_secs),
             max_models: Some(0),
+            // Inert here: `max_models: Some(0)` leaves the loop nothing to
+            // iterate. Set anyway so this command has ONE policy, not two.
+            switch_models: true,
             // Menu listing is NOT acceptance — the harness lists whatever the
             // config names. Only a successful inference turn counts.
             send_test_prompt: true,
@@ -307,13 +322,18 @@ fn auth_env_for_context(
                 .with_context(|| format!("failed to copy {source}"))?;
             Ok(env)
         }
-        // Codex against AWS Bedrock: codex has no native Bedrock support and
-        // only speaks the Responses API (wire_api "chat" was removed), so we
-        // point a custom model_provider at Bedrock's OpenAI-compatible
-        // "mantle" surface, which serves /v1/responses for OpenAI models.
-        // Mantle model ids are their own namespace (openai.gpt-oss-120b — no
-        // Bedrock -1:0 suffix); its Anthropic models do not support
-        // /v1/responses and are unreachable from codex.
+        // Codex against AWS Bedrock. NOTE, corrected: codex DOES ship a built-in
+        // `amazon-bedrock` upstream provider, so a Bedrock launch normally needs
+        // only `model_provider = "amazon-bedrock"` and no
+        // `[model_providers.*]` table at all — that is the shape Track D's typed
+        // provider-config route renders.
+        //
+        // The custom provider below is a probe-specific choice, not a statement
+        // about codex's capabilities: this probe enumerates what is reachable
+        // over /v1/responses, and Bedrock's OpenAI-compatible "mantle" surface is
+        // where the OpenAI models live. Mantle model ids are their own namespace
+        // (openai.gpt-oss-120b — no Bedrock -1:0 suffix); its Anthropic models do
+        // not support /v1/responses and are unreachable from codex.
         (AgentKind::Codex, "bedrock") => {
             let token = secrets.require("AWS_BEARER_TOKEN_BEDROCK")?;
             let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")], isolation_dirs)?;
@@ -334,16 +354,19 @@ wire_api = "responses"
             env.insert("AWS_BEARER_TOKEN_BEDROCK".to_string(), token);
             Ok(env)
         }
-        // cursor-agent's ACP session services ignore CURSOR_API_KEY and
-        // require a machine login (auth in macOS Keychain "Cursor Safe
-        // Storage" — not isolatable by HOME). Probe runs under the real
-        // machine login; acceptable because cursor is single-provider so
-        // there is no cross-provider auth attribution to pollute.
-        (AgentKind::Cursor, "cursor-login") => Ok(BTreeMap::new()),
-        (AgentKind::Cursor, "cursor-api") => bail!(
-            "cursor-agent ignores CURSOR_API_KEY for ACP sessions; run `cursor-agent login` \
-             on this machine and use --auth-context cursor-login instead"
-        ),
+        // cursor-agent DOES honor CURSOR_API_KEY for ACP sessions (disproven
+        // live 2026-07-26). Inject it when supplied; else fall through to the
+        // machine's real login (macOS Keychain "Cursor Safe Storage" — not
+        // isolatable by HOME), same as before. No separate "cursor-api"
+        // context exists in the catalog (grep-confirmed) — cursor-login
+        // covers both paths.
+        (AgentKind::Cursor, "cursor-login") => {
+            let mut env = BTreeMap::new();
+            if let Some(key) = secrets.get("CURSOR_API_KEY") {
+                env.insert("CURSOR_API_KEY".to_string(), key);
+            }
+            Ok(env)
+        }
         // Grok (xAI Grok Build) speaks ACP natively. Isolate HOME so
         // machine-local config cannot pollute observed values, then inject one
         // explicit API key or copy the selected logged-in auth file.
@@ -533,6 +556,28 @@ mod tests {
 
         drop(isolation_dirs);
         assert!(!base.exists(), "probe isolation must be removed on drop");
+    }
+
+    #[test]
+    fn cursor_login_arm_injects_a_supplied_cursor_api_key() {
+        let secrets = ProbeSecrets {
+            values: BTreeMap::from([("CURSOR_API_KEY".to_string(), "sk-cursor-test".to_string())]),
+        };
+        let mut isolation_dirs = IsolationDirs::default();
+        let env =
+            auth_env_for_context(&secrets, &AgentKind::Cursor, "cursor-login", &mut isolation_dirs)
+                .unwrap();
+        assert_eq!(env.get("CURSOR_API_KEY").map(String::as_str), Some("sk-cursor-test"));
+    }
+
+    #[test]
+    fn cursor_login_arm_falls_through_to_machine_login_without_a_supplied_key() {
+        let secrets = ProbeSecrets { values: BTreeMap::new() };
+        let mut isolation_dirs = IsolationDirs::default();
+        let env =
+            auth_env_for_context(&secrets, &AgentKind::Cursor, "cursor-login", &mut isolation_dirs)
+                .unwrap();
+        assert!(env.is_empty(), "no key supplied: machine login stands, nothing to inject");
     }
 
     #[test]

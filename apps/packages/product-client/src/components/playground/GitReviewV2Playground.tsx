@@ -96,7 +96,7 @@ export function GitReviewV2Playground() {
             onClick={() => setPaneWidth(width)}
             className={`h-6 rounded-md px-2 text-ui ${
               paneWidth === width
-                ? "bg-list-hover text-foreground"
+                ? "bg-hover text-foreground"
                 : "text-muted-foreground"
             }`}
           >
@@ -210,7 +210,7 @@ function ReviewHeader({
   onJumpToFile: (key: string) => void;
 }) {
   return (
-    <div className="flex shrink-0 flex-col gap-0.5 border-b border-sidebar-border/70 px-2 py-1.5">
+    <div className="flex shrink-0 flex-col gap-0.5 border-b border-border/70 px-2 py-1.5">
       <div className="flex items-center gap-1">
         <PopoverButton
           align="start"

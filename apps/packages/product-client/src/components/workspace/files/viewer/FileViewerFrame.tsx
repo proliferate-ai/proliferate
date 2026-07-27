@@ -165,7 +165,7 @@ function FileViewerContentContextMenu({
 
 const FILE_VIEWER_TOOLBAR_BUTTON_CLASS =
   // Icons match the right-panel tab's text-relative paired-glyph tier.
-  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground [&_svg]:icon-paired";
+  "size-7 rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground data-[state=open]:bg-hover data-[state=open]:text-foreground [&_svg]:icon-paired";
 
 function FileBreadcrumbs({
   filePath,
@@ -185,7 +185,7 @@ function FileBreadcrumbs({
   return (
     <nav
       aria-label="File path"
-      className="hide-scrollbar flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
+      className="scrollbar-none flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
     >
       {/* The reference breadcrumbs sit one step below chat-body size;
           --text-ui is our body-minus-one that scales with appearance
@@ -248,7 +248,7 @@ function FileViewerToolbarButton({
       aria-label={label}
       disabled={disabled}
       className={`${FILE_VIEWER_TOOLBAR_BUTTON_CLASS} ${
-        active ? "bg-list-hover text-foreground" : ""
+        active ? "bg-hover text-foreground" : ""
       }`}
       onClick={onClick}
     >

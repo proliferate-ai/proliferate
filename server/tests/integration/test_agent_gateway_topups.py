@@ -16,14 +16,10 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
-from proliferate.server.cloud.agent_gateway.enrollment import (
-    ensure_org_enrollment,
-    ensure_user_enrollment,
-)
+from proliferate.server.cloud.agent_gateway.enrollment import ensure_org_enrollment
 from proliferate.server.cloud.agent_gateway.topups import (
     create_llm_topup_grant,
     run_llm_topups,
@@ -58,8 +54,11 @@ async def test_overage_org_enrollment_is_uncapped(
 
     assert enrollment.sync_status == "synced"
     assert enrollment.user_id == member_id
-    # Overage-enabled: no LiteLLM budget forwarded (uncapped).
-    assert stub_litellm.minted[-1]["max_budget"] is None
+    # Overage-enabled: no LiteLLM budget forwarded to the team (uncapped).
+    # Post-B2, minted per-harness keys never carry a budget at all — the
+    # team is the only budget layer (model-gateway.md §Account model).
+    assert stub_litellm.ensure_team_budgets[-1] is None
+    assert all(record["max_budget"] is None for record in stub_litellm.minted)
 
 
 @pytest.mark.asyncio
@@ -81,8 +80,10 @@ async def test_hard_cap_org_gets_remaining_credit_as_budget(
     enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
 
     assert enrollment.sync_status == "synced"
-    # Hard cap: the org team budget mirrors the remaining credit.
-    assert stub_litellm.minted[-1]["max_budget"] == 25.0
+    # Hard cap: the org TEAM budget mirrors the remaining credit; keys never
+    # carry a budget copy (post-B2, R2).
+    assert stub_litellm.ensure_team_budgets[-1] == 25.0
+    assert all(record["max_budget"] is None for record in stub_litellm.minted)
 
 
 @pytest.mark.asyncio
@@ -95,7 +96,13 @@ async def test_topup_charges_grants_and_reactivates(
     org_id, subject_id = await _overage_org_subject(db_session)
     member_id = await _create_user(db_session)
     enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
-    assert enrollment.virtual_key_id is not None
+    # Post-B2: the parent row carries no key; per-harness child keys do.
+    assert enrollment.virtual_key_id is None
+    enrollment_keys = await store.list_active_enrollment_keys(
+        db_session, enrollment_id=enrollment.id
+    )
+    key_ids = {key.virtual_key_id for key in enrollment_keys}
+    assert len(key_ids) == len(enrollment_keys)  # every harness got a distinct key
 
     # Drive the subject below the threshold and mark it exhausted (as the
     # importer would have before the overage exemption / with top-ups off).
@@ -128,9 +135,10 @@ async def test_topup_charges_grants_and_reactivates(
     assert balance.granted_usd == Decimal("11")
     assert balance.remaining_usd == Decimal("9.50")
 
-    # Reactivation: VK unblocked, budget_status ok. Overage orgs run uncapped,
-    # so the team + key budget are explicitly cleared (None) to drop any cap.
-    assert stub_litellm.enabled_keys == [enrollment.virtual_key_id]
+    # Reactivation: every per-harness key unblocked, budget_status ok. Overage
+    # orgs run uncapped, so the TEAM budget (the only layer keys ever
+    # touched, post-B2) is explicitly cleared (None) to drop any cap.
+    assert set(stub_litellm.enabled_keys) == key_ids
     refreshed = await store.get_enrollment_for_organization(
         db_session,
         organization_id=org_id,
@@ -139,7 +147,7 @@ async def test_topup_charges_grants_and_reactivates(
     assert refreshed is not None
     assert refreshed.budget_status == "ok"
     assert stub_litellm.team_budgets == [(enrollment.litellm_team_id, None)]
-    assert stub_litellm.key_budgets == [(enrollment.virtual_key_id, None)]
+    assert stub_litellm.key_budgets == []
 
     # Next tick: back above the threshold, nothing more is charged.
     again = await run_llm_topups(db_session)
@@ -244,17 +252,28 @@ async def test_topup_without_stripe_customer_is_skipped(
 
 
 @pytest.mark.asyncio
-async def test_reactivation_raises_hard_cap_budgets_for_user_subject(
+async def test_reactivation_raises_hard_cap_budgets_for_hard_capped_org(
     db_session: AsyncSession,
     stub_litellm: StubLiteLLM,
     stub_stripe: StubStripe,
     topup_settings: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    org_id = await _create_org(db_session)
     user_id = await _create_user(db_session)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is not None
+    enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
+    assert enrollment.virtual_key_id is None
+    # Fund the org subject explicitly (admin grant, not the signup grant).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
+    enrollment_keys = await store.list_active_enrollment_keys(
+        db_session, enrollment_id=enrollment.id
+    )
+    key_ids = {key.virtual_key_id for key in enrollment_keys}
     await _spend(
         db_session,
         billing_subject_id=enrollment.billing_subject_id,
@@ -274,15 +293,18 @@ async def test_reactivation_raises_hard_cap_budgets_for_user_subject(
     )
 
     assert grant.source == "topup"
-    # VK unblocked + budget_status ok.
-    assert stub_litellm.enabled_keys == [enrollment.virtual_key_id]
-    refreshed = await store.get_enrollment_for_user(db_session, user_id=user_id)
+    # Every per-harness key unblocked + budget_status ok.
+    assert set(stub_litellm.enabled_keys) == key_ids
+    refreshed = await store.get_enrollment_for_organization(
+        db_session, organization_id=org_id, user_id=user_id
+    )
     assert refreshed is not None
     assert refreshed.budget_status == "ok"
-    # Hard-cap subject: team + key budgets raised to the total granted
-    # allowance (LiteLLM budgets compare against lifetime team spend).
+    # Hard-cap subject: only the TEAM budget is raised to the total granted
+    # allowance (LiteLLM budgets compare against lifetime team spend); keys
+    # never carry a budget copy at all (post-B2, R2).
     assert stub_litellm.team_budgets == [(enrollment.litellm_team_id, 15.0)]
-    assert stub_litellm.key_budgets == [(enrollment.virtual_key_id, 15.0)]
+    assert stub_litellm.key_budgets == []
 
 
 @pytest.mark.asyncio
@@ -293,11 +315,21 @@ async def test_reactivation_falls_back_to_remint_when_unblock_fails(
     topup_settings: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    org_id = await _create_org(db_session)
     user_id = await _create_user(db_session)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
-    old_key_id = enrollment.virtual_key_id
-    assert old_key_id is not None
+    enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
+    # Explicit funding for the org subject (admin grant, not the signup grant).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
+    old_key_ids = {
+        key.virtual_key_id
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
+    }
+    assert all(key_id is not None for key_id in old_key_ids)
     await _spend(
         db_session,
         billing_subject_id=enrollment.billing_subject_id,
@@ -317,13 +349,20 @@ async def test_reactivation_falls_back_to_remint_when_unblock_fails(
         source_ref=f"llm_topup:in_remint_{uuid.uuid4().hex[:6]}",
     )
 
-    # Unblock failed: the key was hard-replaced (delete + mint) and persisted.
-    assert stub_litellm.rotated == [old_key_id]
-    refreshed = await store.get_enrollment_for_user(db_session, user_id=user_id)
+    # Unblock failed: every per-harness key was hard-replaced (delete + mint)
+    # and persisted.
+    assert set(stub_litellm.rotated) == old_key_ids
+    refreshed_keys = await store.list_active_enrollment_keys(
+        db_session, enrollment_id=enrollment.id
+    )
+    refreshed = await store.get_enrollment_for_organization(
+        db_session, organization_id=org_id, user_id=user_id
+    )
     assert refreshed is not None
     assert refreshed.budget_status == "ok"
-    assert refreshed.virtual_key_id is not None
-    assert refreshed.virtual_key_id != old_key_id
+    new_key_ids = {key.virtual_key_id for key in refreshed_keys}
+    assert all(key_id is not None for key_id in new_key_ids)
+    assert new_key_ids.isdisjoint(old_key_ids)
 
 
 @pytest.mark.asyncio
@@ -377,11 +416,21 @@ async def test_remint_schedules_materialization(
 ) -> None:
     """After a virtual key rotation during top-up reactivation, agent-auth
     materialization is scheduled for the affected user."""
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    org_id = await _create_org(db_session)
     user_id = await _create_user(db_session)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
-    old_key_id = enrollment.virtual_key_id
-    assert old_key_id is not None
+    enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
+    # Explicit funding for the org subject (admin grant, not the signup grant).
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
+    old_key_ids = {
+        key.virtual_key_id
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
+    }
+    assert all(key_id is not None for key_id in old_key_ids)
     await _spend(
         db_session,
         billing_subject_id=enrollment.billing_subject_id,
@@ -414,6 +463,10 @@ async def test_remint_schedules_materialization(
         source_ref=f"llm_topup:in_remint_{uuid.uuid4().hex[:6]}",
     )
 
-    # The key was rotated and materialization was scheduled.
-    assert stub_litellm.rotated == [old_key_id]
+    # Every per-harness key was rotated, and materialization was scheduled
+    # exactly ONCE for the enrollment — not once per re-minted key. The render
+    # reads the whole key map in one pass, so N schedules for N keys would be
+    # pure amplification (and only the last one would see a complete set).
+    assert set(stub_litellm.rotated) == old_key_ids
+    assert len(old_key_ids) > 1
     assert scheduled_users == [user_id]

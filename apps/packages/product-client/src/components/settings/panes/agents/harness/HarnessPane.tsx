@@ -28,6 +28,7 @@ interface HarnessPaneProps {
 const SETTINGS_HARNESS_DISPLAY_NAMES: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",
+  cursor: "Cursor",
   grok: "Grok",
   opencode: "OpenCode",
 };
@@ -214,7 +215,6 @@ function HarnessSurfaceCloud({
         <HarnessAuthDetailsSection
           harnessKind={harnessKind}
           displayName={displayName}
-          surface="cloud"
           selectedMethod={selectedMethod}
           editor={editor}
           variant="panel"
@@ -256,7 +256,6 @@ function HarnessSurfaceLocal({
         <HarnessAuthDetailsSection
           harnessKind={harnessKind}
           displayName={displayName}
-          surface="local"
           selectedMethod={selectedMethod}
           editor={editor}
           variant="panel"

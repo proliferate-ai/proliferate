@@ -488,8 +488,8 @@ button row.
 
 - Header: tiny icon + muted status text (`text-muted-foreground`), no bold.
 - Body: `vertical-scroll-fade-mask max-h-40` (160px cap) with `[--edge-fade-distance:2rem]`.
-  The fade-mask utility lives in `apps/packages/design/src/css/dom.css` so shared chat
-  components can use it on Desktop and Web.
+  The fade-mask utility lives in `apps/packages/design/src/css/product.css` so shared
+  chat components can use it on Desktop and Web.
 - Completed entries: `line-through` + `text-muted-foreground/60` on both the index and the content span.
 - Default: expanded. Collapse chevron in header.
 
@@ -533,13 +533,12 @@ Control-row tone rule — the pills are **monochrome**:
 
 As-built composer surface — `ChatComposerSurface` (product-ui) tags itself with
 the `chat-composer-surface` class, whose paint lives in
-`apps/packages/design/src/css/dom.css`:
+`apps/packages/design/src/css/product.css`:
 
 - Background: `--color-composer-background`.
-- Outline: a 0.5px stroke-in-shadow (`0 0 0 0.5px var(--color-composer-border)`)
-  stacked with `--color-composer-shadow` (the desktop theme sets it to
-  `--shadow-composer`; the `dom.css` baseline is `--shadow-subtle`) — there is
-  no CSS `border`.
+- Outline: a 0.5px stroke-in-shadow (`0 0 0 0.5px var(--color-border)`)
+  stacked with `--color-composer-shadow` (which resolves to
+  `--shadow-subtle`) — there is no CSS `border`.
 - Radius: `rounded-[var(--radius-composer,1rem)]`; `--radius-composer` is 1rem.
   `ChatComposerDock` locally overrides only the top corners to zero while the
   full-width workspace-activity cap is present.

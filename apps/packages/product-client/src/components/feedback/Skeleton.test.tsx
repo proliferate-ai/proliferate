@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
-const domCss = readFileSync(
-  resolve(testDir, "../../../../../packages/design/src/css/dom.css"),
+const productCss = readFileSync(
+  resolve(testDir, "../../../../../packages/design/src/css/product.css"),
   "utf8",
 );
 
@@ -33,11 +33,11 @@ describe("SkeletonBlock", () => {
 
 describe("skeleton shimmer css contract", () => {
   it("sweeps via transform with a per-row delay knob (compositor-only)", () => {
-    const start = domCss.indexOf("@keyframes skeleton-shimmer-sweep");
+    const start = productCss.indexOf("@keyframes skeleton-shimmer-sweep");
     expect(start).toBeGreaterThan(-1);
-    const section = domCss.slice(start, domCss.indexOf("}", domCss.indexOf(".skeleton-shimmer::before")));
+    const section = productCss.slice(start, productCss.indexOf("}", productCss.indexOf(".skeleton-shimmer::before")));
 
-    expect(domCss).toContain(".skeleton-shimmer::before");
+    expect(productCss).toContain(".skeleton-shimmer::before");
     expect(section).toContain("transform: translateX(-100%)");
     expect(section).toContain("transform: translateX(100%)");
     /* activity-motion */

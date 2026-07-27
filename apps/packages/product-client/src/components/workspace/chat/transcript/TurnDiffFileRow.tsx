@@ -29,7 +29,7 @@ export function TurnDiffFileRow({
   const header = (
     <div
       data-chat-diff-wrap-context-trigger="file-header"
-      className="relative flex h-9 w-full min-w-0 items-center bg-background/70 text-chat text-foreground hover:bg-list-hover/60"
+      className="relative flex h-9 w-full min-w-0 items-center bg-background/70 text-chat text-foreground hover:bg-hover/60"
     >
       <Button
         type="button"

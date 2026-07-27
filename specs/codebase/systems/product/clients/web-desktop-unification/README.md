@@ -403,15 +403,19 @@ Web renders the Desktop product visual system. The shared CSS boundary is:
 
 ```text
 apps/packages/design/src/css/
-  dom.css       Tailwind setup, reset, tokens, and package source scanning
-  product.css   shared product theme and global product styling
+  product.css   Tailwind setup, reset, package source scanning, shared product
+                theme and global product styling
   desktop.css   genuine Desktop/native presentation overrides only
 
-apps/desktop/src/index.css
-  imports product.css, desktop.css, and required third-party CSS
+apps/packages/product-client/src/index.css
+  imports product.css (rides with the eager ProductClient entry; xterm CSS
+  loads lazily with the terminal chunk)
+
+apps/desktop/src/main.tsx
+  imports desktop.css
 
 apps/web/src/index.css
-  imports product.css and required third-party CSS
+  imports product.css (import-only; the Web host carries no bespoke CSS)
 ```
 
 The Tailwind entry explicitly scans every DOM package that emits classes:

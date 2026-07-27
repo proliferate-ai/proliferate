@@ -158,7 +158,7 @@ describe("CoworkThreadsSection", () => {
       type: "about:blank",
       title: "Model is not available",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
     }));
     const catchSpy = vi.spyOn(rejection, "catch");

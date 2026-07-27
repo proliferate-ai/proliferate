@@ -101,7 +101,7 @@ apps/packages/
   design/
     src/
       tokens.ts
-      dom.css
+      css/product.css
       react-native.ts
 
   ui/

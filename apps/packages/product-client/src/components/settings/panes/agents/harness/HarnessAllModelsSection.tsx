@@ -1,18 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import {
-  useAgentCatalog,
-  useRefreshAgentCatalog,
-  useAuthSelections,
-  useUpsertCatalogOverride,
+  useAgentModels,
+  useUpsertAgentModelOverride,
 } from "@proliferate/cloud-sdk-react";
 import {
-  useAgentGatewayModelsQuery,
   useAgentLaunchOptionsQuery,
-  useRefreshAgentGatewayModelsMutation,
+  useModelSnapshotStatusQuery,
+  useRefreshModelSnapshotMutation,
 } from "@anyharness/sdk-react";
 import { RefreshCw, Search, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/patterns/ModelTable";
 import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
@@ -21,12 +20,13 @@ import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-clou
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   buildEnabledOverridePatchJson,
-  buildRuntimeCatalogModelsJson,
-  catalogRouteForSurface,
   normalizeCatalogModels,
-  normalizeGatewayModels,
   normalizeRuntimeLaunchModels,
 } from "#product/lib/domain/settings/harness-catalog";
+import {
+  formatSnapshotAge,
+  resolveComposedObservation,
+} from "#product/lib/domain/settings/model-snapshot-observation";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;
@@ -34,6 +34,26 @@ interface HarnessAllModelsSectionProps {
   surface: AgentAuthSurface;
 }
 
+/**
+ * The All Models surface, re-cut to the composed observation
+ * (model-catalog.md "The picker is the observation"): ONE observation per
+ * harness — no per-context tabs or rows.
+ *
+ * - Local surface: the runtime's machine observation is the truth. The
+ *   polled status route carries the model/mode lists off the same document
+ *   read, the `probedAt` age, the `lastAttempt` failed-refresh indicator,
+ *   and the provenance fields (attestation, install identity) rendered as
+ *   diagnostics only. Manual Refresh calls the param-less refresh route —
+ *   the one manual poke in the closed event set; there is no auto-probe
+ *   here, because the five events are the only probe spawn sites.
+ * - Cloud surface: the layered read (the cloud sandbox's observation at
+ *   rest, else the shipped catalog's models as the read-time seed) with the
+ *   user's override patch applied.
+ *
+ * Where the shipped catalog serves in place of an observation (local before
+ * the first probe; cloud `origin === "catalog"`), the list is marked as
+ * unverified seed data.
+ */
 export function HarnessAllModelsSection({
   harnessKind,
   displayName,
@@ -41,60 +61,62 @@ export function HarnessAllModelsSection({
 }: HarnessAllModelsSectionProps) {
   const { cloudActive } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
+  const isLocal = surface === "local";
 
-  const selectionsQuery = useAuthSelections(null, cloudActive);
-  const route = catalogRouteForSurface(
-    harnessKind,
-    surface,
-    cloudActive ? selectionsQuery.data ?? [] : [],
-  );
-  // Local surface + gateway route: the RUNTIME has already resolved what its
-  // harness + auth can actually reach (contract §5) — read that directly
-  // instead of the cloud catalog snapshot, which never sees the runtime's own
-  // gateway probes.
-  const isRuntimeGateway = surface === "local" && route === "gateway";
-  const isSignedOutLocal = surface === "local" && !cloudActive;
-  // native/api_key routes probe on the client (catalog.py's refresh_catalog
-  // contract) — the server rejects a refresh with no uploaded payload for
-  // these routes, so Refresh sources one from the local AnyHarness runtime's
-  // already-resolved launch catalog instead (see buildRuntimeCatalogModelsJson).
-  const isRuntimeProbedRoute = route !== "gateway";
+  // Cloud (machineless) branch: the layered read off the context-free route —
+  // one composed observation per (owner, harness), the cloud sandbox's
+  // document at rest else the shipped catalog's read-time seed, with the
+  // user's override patch applied. The former per-auth-context routing
+  // (authContextId resolution off the enabled selections) is deleted with the
+  // (owner, harness) re-key (model-catalog.md §Cloud routes).
+  const agentModelsQuery = useAgentModels(harnessKind, cloudActive && !isLocal);
+  const upsertOverride = useUpsertAgentModelOverride();
 
-  const catalogQuery = useAgentCatalog(
-    { harnessKind, surface, route },
-    cloudActive && !isRuntimeGateway,
-  );
-  const refreshCatalog = useRefreshAgentCatalog();
-  const upsertOverride = useUpsertCatalogOverride();
-
-  const gatewayModelsQuery = useAgentGatewayModelsQuery(harnessKind, {
-    enabled: cloudActive && isRuntimeGateway,
+  // Local branch: the composed observation off the runtime's polled status
+  // route, plus the manual-refresh poke. Works signed in or out — the
+  // runtime, not the cloud session, owns this document.
+  const modelSnapshotStatusQuery = useModelSnapshotStatusQuery(harnessKind, {
+    enabled: isLocal,
   });
-  const refreshGatewayModels = useRefreshAgentGatewayModelsMutation();
+  const refreshModelSnapshot = useRefreshModelSnapshotMutation();
+  const observation = useMemo(
+    () => resolveComposedObservation(modelSnapshotStatusQuery.data),
+    [modelSnapshotStatusQuery.data],
+  );
+  const hasObservation = Boolean(observation?.probedAt);
+  // Pre-first-observation window: the runtime-resolved launch options are the
+  // shipped catalog's seed on this machine, rendered marked as unverified.
   const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
-    enabled: isRuntimeProbedRoute || isSignedOutLocal,
+    enabled: isLocal && !hasObservation,
   });
 
   const models = useMemo(() => {
-    if (isSignedOutLocal) {
+    if (isLocal) {
+      if (observation && hasObservation) {
+        return observation.models;
+      }
       return normalizeRuntimeLaunchModels(harnessKind, runtimeLaunchOptionsQuery.data);
     }
-    if (isRuntimeGateway) {
-      return normalizeGatewayModels(gatewayModelsQuery.data?.models ?? []);
-    }
-    return normalizeCatalogModels(catalogQuery.data?.models ?? []);
+    return normalizeCatalogModels(agentModelsQuery.data?.models ?? []);
   }, [
-    isSignedOutLocal,
+    isLocal,
+    observation,
+    hasObservation,
     harnessKind,
     runtimeLaunchOptionsQuery.data,
-    isRuntimeGateway,
-    gatewayModelsQuery.data?.models,
-    catalogQuery.data?.models,
+    agentModelsQuery.data?.models,
   ]);
-  // Each row carries its own enriched metadata (contract §1); probe-only models
-  // stay sparse (Provider "—" when unmatched — no harness-name fallback).
-  // Runtime-resolved gateway models have no override endpoint yet, so their
-  // toggle is read-only.
+
+  // Seed marking: the shipped catalog serving in true absence of an
+  // observation, never overriding one.
+  const isSeed = isLocal
+    ? !hasObservation
+    : agentModelsQuery.data?.origin === "catalog";
+
+  // Each row carries its own enriched metadata; probe-only models stay sparse
+  // (Provider "—" when unmatched — no harness-name fallback). Observation
+  // rows have no override endpoint on this surface, so their toggle is
+  // read-only; the cloud layered read keeps its override toggles.
   const rows: ModelTableRow[] = models.map((model) => ({
     id: model.id,
     displayName: model.displayName,
@@ -105,10 +127,10 @@ export function HarnessAllModelsSection({
     modes: model.modes,
     fastMode: model.fastMode,
     enabled: model.enabled,
-    toggleDisabled: isSignedOutLocal || isRuntimeGateway || upsertOverride.isPending,
+    toggleDisabled: isLocal || upsertOverride.isPending,
   }));
 
-  if (surface === "cloud" && !cloudActive) {
+  if (!isLocal && !cloudActive) {
     return (
       <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
         <p className="py-3 text-ui-sm text-muted-foreground">
@@ -118,50 +140,25 @@ export function HarnessAllModelsSection({
     );
   }
 
+  // Manual refresh exists only where a caller can actually trigger a probe:
+  // the runtime's param-less refresh route. The cloud-snapshot ingest route
+  // is Worker-authenticated only, so the cloud branch has no refresh
+  // affordance.
+  const canManuallyRefresh = isLocal;
+
   function handleRefresh() {
-    if (isSignedOutLocal) {
-      void runtimeLaunchOptionsQuery.refetch();
+    if (!isLocal) {
       return;
     }
-    if (isRuntimeGateway) {
-      refreshGatewayModels.mutate(harnessKind, {
-        onError: (error) => {
-          showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
-        },
-      });
-      return;
-    }
-    if (isRuntimeProbedRoute) {
-      const modelsJson = buildRuntimeCatalogModelsJson(
-        harnessKind,
-        runtimeLaunchOptionsQuery.data,
-      );
-      if (modelsJson === null) {
-        showToast(HARNESS_PANE_COPY.catalogRefreshRuntimeUnavailable(displayName));
-        return;
-      }
-      refreshCatalog.mutate(
-        { harnessKind, body: { surface, route, modelsJson } },
-        {
-          onError: (error) => {
-            showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
-          },
-        },
-      );
-      return;
-    }
-    refreshCatalog.mutate(
-      { harnessKind, body: { surface, route } },
-      {
-        onError: (error) => {
-          showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
-        },
+    refreshModelSnapshot.mutate(harnessKind, {
+      onError: (error) => {
+        showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
       },
-    );
+    });
   }
 
   function handleToggle(modelId: string, enabled: boolean) {
-    if (isSignedOutLocal || isRuntimeGateway) {
+    if (isLocal) {
       return;
     }
     upsertOverride.mutate(
@@ -177,67 +174,60 @@ export function HarnessAllModelsSection({
     );
   }
 
-  const isLoading = isSignedOutLocal
-    ? runtimeLaunchOptionsQuery.isLoading
-    : isRuntimeGateway
-      ? gatewayModelsQuery.isLoading
-      : catalogQuery.isLoading;
-  const isRefreshing = isSignedOutLocal
-    ? runtimeLaunchOptionsQuery.isFetching
-    : isRuntimeGateway
-      ? refreshGatewayModels.isPending
-      : refreshCatalog.isPending;
-
-  // Auto-probe an empty catalog: landing on a resolved-but-empty catalog kicks
-  // off the same refresh the button uses, exactly once per (harnessKind, surface,
-  // route) scope. Guards against loops — we only fire when nothing is
-  // loading/refreshing and we haven't already probed this scope. For
-  // runtime-probed routes we skip when the runtime launch options aren't
-  // available yet (buildRuntimeCatalogModelsJson would be null); the empty
-  // message stays until the runtime is reachable.
-  const autoProbedScopeRef = useRef<string | null>(null);
-  const autoProbeScope = `${harnessKind}:${surface}:${route}`;
-  const runtimeModelsUnavailable =
-    isRuntimeProbedRoute
-    && buildRuntimeCatalogModelsJson(harnessKind, runtimeLaunchOptionsQuery.data) === null;
-  useEffect(() => {
-    if (!cloudActive || isLoading || isRefreshing || models.length > 0) {
-      return;
-    }
-    if (autoProbedScopeRef.current === autoProbeScope) {
-      return;
-    }
-    if (runtimeModelsUnavailable) {
-      return;
-    }
-    autoProbedScopeRef.current = autoProbeScope;
-    handleRefresh();
-  }, [
-    cloudActive,
-    isLoading,
-    isRefreshing,
-    models.length,
-    autoProbeScope,
-    runtimeModelsUnavailable,
-  ]);
-  // Empty catalog with a probe in flight (auto or manual) shows the probing state
-  // instead of the static empty copy.
+  const isLoading = isLocal
+    ? modelSnapshotStatusQuery.isLoading
+      || (!hasObservation && runtimeLaunchOptionsQuery.isLoading)
+    : agentModelsQuery.isLoading;
+  const isRefreshing = isLocal
+    && (
+      refreshModelSnapshot.isPending
+      || observation?.engineState === "queued"
+      || observation?.engineState === "running"
+    );
+  // Empty list with a probe in flight shows the probing state instead of the
+  // static empty copy.
   const isProbingEmpty = models.length === 0 && isRefreshing;
-  const freshnessLine = isSignedOutLocal
-    ? ""
-    : isRuntimeGateway
-    ? gatewayModelsQuery.data
-      ? gatewayModelsQuery.data.source === "probe" && gatewayModelsQuery.data.probedAt
-        ? HARNESS_PANE_COPY.allModelsFreshnessProbed(
-          new Date(gatewayModelsQuery.data.probedAt).toLocaleString(),
-        )
-        : HARNESS_PANE_COPY.allModelsFreshnessSeed
-      : ""
-    : catalogQuery.data?.probedAt
-      ? `Last refreshed ${new Date(catalogQuery.data.probedAt).toLocaleString()}`
-      : catalogQuery.data?.source
-        ? `Source: ${catalogQuery.data.source}`
+
+  // The only freshness display: the observation's age (event-driven; age
+  // never disqualifies) — or the unverified-seed line while the shipped
+  // catalog fills absence.
+  const freshnessLine = isLocal
+    ? observation && hasObservation
+      ? observation.ageSeconds != null
+        ? HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(formatSnapshotAge(observation.ageSeconds))
+        : `Last refreshed ${new Date(observation.probedAt ?? "").toLocaleString()}`
+      : HARNESS_PANE_COPY.allModelsSeedDescription
+    : agentModelsQuery.data?.probedAt
+      ? `Last refreshed ${new Date(agentModelsQuery.data.probedAt).toLocaleString()}`
+      : isSeed
+        ? HARNESS_PANE_COPY.allModelsSeedDescription
         : "";
+
+  const seedBadge = isSeed && !isLoading
+    ? <Badge tone="neutral">{HARNESS_PANE_COPY.allModelsUnverifiedBadge}</Badge>
+    : null;
+  const refreshingBadge = isRefreshing
+    ? <Badge tone="neutral">{HARNESS_PANE_COPY.allModelsRefreshingBadge}</Badge>
+    : null;
+  // A failed refresh never destroys truth: the last-good lists keep serving,
+  // with this indicator next to the probedAt age.
+  const failedRefreshBadge = isLocal && observation?.lastAttemptFailed
+    ? (
+      <Badge tone="warning" title={observation.lastError ?? undefined}>
+        {HARNESS_PANE_COPY.allModelsRefreshFailedBadge}
+      </Badge>
+    )
+    : null;
+
+  // Diagnostics only (model-catalog.md: "the provenance fields are not
+  // gates") — what binary and install answered, and which modes it advertised.
+  const diagnosticsLines: string[] = [];
+  if (isLocal && observation?.provenance) {
+    diagnosticsLines.push(HARNESS_PANE_COPY.allModelsProvenance(observation.provenance));
+  }
+  if (isLocal && hasObservation && observation && observation.modes.length > 0) {
+    diagnosticsLines.push(HARNESS_PANE_COPY.allModelsModes(observation.modes));
+  }
 
   const [filterText, setFilterText] = useState("");
   const filteredRows = useMemo(() => {
@@ -256,23 +246,40 @@ export function HarnessAllModelsSection({
     <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
       <div className="space-y-3 py-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-ui-sm text-muted-foreground">{freshnessLine}</p>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-2"
-            disabled={isRefreshing}
-            onClick={handleRefresh}
-          >
-            <RefreshCw
-              className={`icon-paired ${isRefreshing ? "animate-spin" : ""}`}
-            />
-            {isRefreshing
-              ? HARNESS_PANE_COPY.allModelsRefreshing
-              : HARNESS_PANE_COPY.allModelsRefresh}
-          </Button>
+          <span className="flex items-center gap-2">
+            <p className="text-ui-sm text-muted-foreground">{freshnessLine}</p>
+            {seedBadge}
+            {refreshingBadge}
+            {failedRefreshBadge}
+          </span>
+          {canManuallyRefresh ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              disabled={isRefreshing}
+              onClick={handleRefresh}
+            >
+              <RefreshCw
+                className={`icon-paired ${isRefreshing ? "animate-spin" : ""}`}
+              />
+              {isRefreshing
+                ? HARNESS_PANE_COPY.allModelsRefreshing
+                : HARNESS_PANE_COPY.allModelsRefresh}
+            </Button>
+          ) : null}
         </div>
+
+        {diagnosticsLines.length > 0 ? (
+          <div className="space-y-0.5">
+            {diagnosticsLines.map((line) => (
+              <p key={line} className="text-ui-sm text-muted-foreground">
+                {line}
+              </p>
+            ))}
+          </div>
+        ) : null}
 
         {rows.length > 0 ? (
           // Canonical picker-search treatment (PopoverSearchField recipe): muted

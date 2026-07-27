@@ -161,7 +161,7 @@ export function SessionContentSearchOverlay({
             variant="unstyled"
             size="unstyled"
             aria-label="Close find"
-            className="-m-0.5 flex size-6 items-center justify-center rounded-full text-foreground hover:bg-list-hover"
+            className="-m-0.5 flex size-6 items-center justify-center rounded-full text-foreground hover:bg-hover"
             onClick={closeSearch}
           >
             <X className="icon-paired" />
@@ -190,7 +190,7 @@ function SearchNavigationButton({
       size="unstyled"
       aria-label={label}
       disabled={disabled}
-      className="flex size-4 items-center justify-center rounded-full p-0 text-muted-foreground hover:bg-list-hover hover:text-foreground disabled:opacity-40"
+      className="flex size-4 items-center justify-center rounded-full p-0 text-muted-foreground hover:bg-hover hover:text-foreground disabled:opacity-40"
       onClick={onClick}
     >
       <ArrowUp className={`icon-paired ${next ? "rotate-180" : ""}`} />

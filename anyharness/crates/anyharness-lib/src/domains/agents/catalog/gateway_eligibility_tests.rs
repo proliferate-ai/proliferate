@@ -28,7 +28,7 @@ fn gateway_context_gates_native_ids_and_offers_only_gateway_models() {
     let sync = Arc::new(CatalogSyncService::from_bundled());
     let catalog = AgentCatalogService::new(sync).active_catalog();
 
-    // Every native selector + a Bedrock id is gated under a pure gateway route.
+    // Every native selector + a Bedrock id is refused under a pure gateway route.
     for ineligible in [
         "default",
         "sonnet",
@@ -36,12 +36,12 @@ fn gateway_context_gates_native_ids_and_offers_only_gateway_models() {
         "haiku",
         "us.anthropic.claude-sonnet-4-6",
     ] {
-        let gated = catalog
+        let refused = catalog
             .validate_launch("claude", &contexts(&["gateway"]), Some(ineligible), None)
             .unwrap_err();
         assert!(
-            matches!(gated, SelectionUnsupported::ModelGated { .. }),
-            "{ineligible:?} must be gated under a gateway route, got {gated:?}"
+            matches!(refused, SelectionUnsupported::UnsupportedModel { .. }),
+            "{ineligible:?} must be refused under a gateway route, got {refused:?}"
         );
     }
 

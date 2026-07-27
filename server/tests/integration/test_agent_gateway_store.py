@@ -11,9 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey
+from proliferate.db.models.organizations import Organization
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.agent_gateway import DesiredAuthSource
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
+
+
+async def _create_org_subject(db_session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID]:
+    """(organization_id, billing_subject_id) — enrollment rows are org-only."""
+    organization = Organization(name=f"Store Org {uuid.uuid4().hex[:6]}")
+    db_session.add(organization)
+    await db_session.flush()
+    subject = await ensure_organization_billing_subject(db_session, organization.id)
+    return organization.id, subject.id
 
 
 async def _create_user(db_session: AsyncSession, *, email: str | None = None) -> uuid.UUID:
@@ -62,6 +72,7 @@ async def test_api_key_create_list_revoke(db_session: AsyncSession) -> None:
     assert created.title == "Work key"
     assert created.redacted_hint == "sk-...abc4"
     assert created.status == "active"
+    assert created.kind == "api_key"
 
     listed = await store.list_agent_api_keys(db_session, user_id=user_id)
     assert [record.id for record in listed] == [created.id]
@@ -91,6 +102,124 @@ async def test_api_key_create_list_revoke(db_session: AsyncSession) -> None:
     assert len(with_revoked) == 1
     assert (
         await store.get_agent_api_key_decrypted(
+            db_session,
+            user_id=user_id,
+            api_key_id=created.id,
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_provider_config_stores_typed_kind_and_decrypts(
+    db_session: AsyncSession,
+) -> None:
+    user_id = await _create_user(db_session)
+
+    created = await store.create_agent_provider_config(
+        db_session,
+        user_id=user_id,
+        title="Personal Bedrock",
+        kind="aws_bedrock",
+        value={"region": "us-east-1", "bearerToken": "bedrock-token-abcd"},
+    )
+    assert created.kind == "aws_bedrock"
+    assert created.title == "Personal Bedrock"
+    # No single-secret tail to show for a multi-field payload.
+    assert created.redacted_hint == "aws_bedrock:2 field(s)"
+
+    listed = await store.list_agent_api_keys(db_session, user_id=user_id)
+    assert [record.id for record in listed] == [created.id]
+    assert listed[0].kind == "aws_bedrock"
+
+    decrypted = await store.get_agent_provider_config_decrypted(
+        db_session,
+        user_id=user_id,
+        api_key_id=created.id,
+    )
+    assert decrypted is not None
+    assert decrypted[1] == {"region": "us-east-1", "bearerToken": "bedrock-token-abcd"}
+
+
+@pytest.mark.asyncio
+async def test_create_provider_config_rejects_unknown_kind(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    with pytest.raises(ValueError, match="Unsupported provider-config kind"):
+        await store.create_agent_provider_config(
+            db_session,
+            user_id=user_id,
+            title="Bad kind",
+            kind="api_key",
+            value={"anything": "value"},
+        )
+    with pytest.raises(ValueError, match="Unsupported provider-config kind"):
+        await store.create_agent_provider_config(
+            db_session,
+            user_id=user_id,
+            title="Bad kind",
+            kind="not_a_real_kind",
+            value={"anything": "value"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_provider_config_rejects_empty_values(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    with pytest.raises(ValueError, match="non-empty"):
+        await store.create_agent_provider_config(
+            db_session,
+            user_id=user_id,
+            title="Empty field",
+            kind="azure_openai",
+            value={"endpoint": "https://foo.openai.azure.com", "apiKey": "  "},
+        )
+    with pytest.raises(ValueError, match="non-empty"):
+        await store.create_agent_provider_config(
+            db_session,
+            user_id=user_id,
+            title="No fields",
+            kind="azure_openai",
+            value={},
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_agent_api_key_decrypted_does_not_resolve_typed_row(
+    db_session: AsyncSession,
+) -> None:
+    """A typed row is invisible to the bare-secret fetch (kind-scoped query)."""
+    user_id = await _create_user(db_session)
+    created = await store.create_agent_provider_config(
+        db_session,
+        user_id=user_id,
+        title="Personal Bedrock",
+        kind="aws_bedrock",
+        value={"region": "us-east-1", "bearerToken": "bedrock-token-abcd"},
+    )
+    assert (
+        await store.get_agent_api_key_decrypted(
+            db_session,
+            user_id=user_id,
+            api_key_id=created.id,
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_agent_provider_config_decrypted_does_not_resolve_bare_key(
+    db_session: AsyncSession,
+) -> None:
+    """A bare-secret row is invisible to the typed-config fetch (kind-scoped query)."""
+    user_id = await _create_user(db_session)
+    created = await store.create_agent_api_key(
+        db_session,
+        user_id=user_id,
+        title="Bare key",
+        value="sk-ant-api03-secretsecretabc4",
+    )
+    assert (
+        await store.get_agent_provider_config_decrypted(
             db_session,
             user_id=user_id,
             api_key_id=created.id,
@@ -158,13 +287,16 @@ async def test_put_rejects_bad_source_shape(db_session: AsyncSession) -> None:
                 DesiredAuthSource(source_kind="gateway", env_var_name="X_API_KEY"),
             ],
         )
+    # env_var_name is no longer a structural requirement (a typed vault entry
+    # legally carries none) — but an api_key source with NO vault reference at
+    # all is still an illegal shape.
     with pytest.raises(ValueError, match="api_key source requires"):
         await store.put_auth_selections(
             db_session,
             user_id=user_id,
             harness_kind="claude",
             surface="local",
-            sources=[DesiredAuthSource(source_kind="api_key", api_key_id=uuid.uuid4())],
+            sources=[DesiredAuthSource(source_kind="api_key", env_var_name="X_API_KEY")],
         )
 
 
@@ -323,24 +455,27 @@ async def test_user_hard_delete_with_selection_succeeds(db_session: AsyncSession
 @pytest.mark.asyncio
 async def test_ensure_enrollment_row_is_idempotent(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    org_id, subject_id = await _create_org_subject(db_session)
 
     first = await store.ensure_enrollment_row(
         db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
+        billing_subject_id=subject_id,
+        organization_id=org_id,
         user_id=user_id,
     )
     second = await store.ensure_enrollment_row(
         db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
+        billing_subject_id=subject_id,
+        organization_id=org_id,
         user_id=user_id,
     )
     assert first.id == second.id
     assert first.sync_status == "pending"
+    assert first.subject_kind == "organization"
 
-    fetched = await store.get_enrollment_for_user(db_session, user_id=user_id)
+    fetched = await store.get_enrollment_for_organization(
+        db_session, organization_id=org_id, user_id=user_id
+    )
     assert fetched is not None
     assert fetched.id == first.id
 
@@ -348,11 +483,11 @@ async def test_ensure_enrollment_row_is_idempotent(db_session: AsyncSession) -> 
 @pytest.mark.asyncio
 async def test_enrollment_sync_lifecycle(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    org_id, subject_id = await _create_org_subject(db_session)
     enrollment = await store.ensure_enrollment_row(
         db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
+        billing_subject_id=subject_id,
+        organization_id=org_id,
         user_id=user_id,
     )
 
@@ -373,7 +508,7 @@ async def test_enrollment_sync_lifecycle(db_session: AsyncSession) -> None:
         db_session,
         enrollment_id=enrollment.id,
         litellm_team_id="team-1",
-        litellm_user_id=f"user-{user_id}",
+        litellm_user_id=f"org-{org_id}-user-{user_id}",
         virtual_key_id="token-1",
         virtual_key="sk-litellm-secret",
         sync_fingerprint="fp",
@@ -394,24 +529,12 @@ async def test_enrollment_sync_lifecycle(db_session: AsyncSession) -> None:
     revoked = await store.revoke_enrollment(db_session, enrollment_id=enrollment.id)
     assert revoked is not None
     assert revoked.revoked_at is not None
-    assert await store.get_enrollment_for_user(db_session, user_id=user_id) is None
-
-
-@pytest.mark.asyncio
-async def test_list_user_ids_missing_enrollment(db_session: AsyncSession) -> None:
-    enrolled_id = await _create_user(db_session)
-    missing_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, enrolled_id)
-    await store.ensure_enrollment_row(
-        db_session,
-        subject_kind="user",
-        billing_subject_id=subject.id,
-        user_id=enrolled_id,
+    assert (
+        await store.get_enrollment_for_organization(
+            db_session, organization_id=org_id, user_id=user_id
+        )
+        is None
     )
-
-    missing = await store.list_user_ids_missing_enrollment(db_session, limit=100)
-    assert missing_id in missing
-    assert enrolled_id not in missing
 
 
 @pytest.mark.asyncio
@@ -422,14 +545,14 @@ async def test_list_billing_subject_ids_paginates_past_a_page(
     subject_ids: set[uuid.UUID] = set()
     for _ in range(5):
         user_id = await _create_user(db_session)
-        subject = await ensure_personal_billing_subject(db_session, user_id)
+        org_id, subject_id = await _create_org_subject(db_session)
         await store.ensure_enrollment_row(
             db_session,
-            subject_kind="user",
-            billing_subject_id=subject.id,
+            billing_subject_id=subject_id,
+            organization_id=org_id,
             user_id=user_id,
         )
-        subject_ids.add(subject.id)
+        subject_ids.add(subject_id)
 
     seen: list[uuid.UUID] = []
     after: uuid.UUID | None = None
@@ -502,34 +625,44 @@ async def test_usage_import_cursor_roundtrip(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_catalog_snapshot_and_override(db_session: AsyncSession) -> None:
+async def test_model_snapshot_and_override(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
-    await store.create_catalog_snapshot(
+    first = await store.create_model_snapshot(
         db_session,
         harness_kind="claude",
-        surface="cloud",
-        route="gateway",
-        owner_user_id=None,
-        models_json='["claude-sonnet-4-5"]',
-        source="seed",
+        owner_user_id=user_id,
+        snapshot_json='{"schemaVersion": 2, "models": ["claude-sonnet-4-5"]}',
     )
-    newer = await store.create_catalog_snapshot(
+    newer = await store.create_model_snapshot(
         db_session,
         harness_kind="claude",
-        surface="cloud",
-        route="gateway",
-        owner_user_id=None,
-        models_json='["claude-sonnet-4-5", "claude-haiku-4-5"]',
+        owner_user_id=user_id,
+        snapshot_json='{"schemaVersion": 2, "models": ["claude-sonnet-4-5", "claude-haiku-4-5"]}',
     )
-    latest = await store.get_latest_catalog_snapshot(
+    latest = await store.get_active_model_snapshot(
         db_session,
         harness_kind="claude",
-        surface="cloud",
-        route="gateway",
-        owner_user_id=None,
+        owner_user_id=user_id,
     )
     assert latest is not None
     assert latest.id == newer.id
+    assert latest.id != first.id
+
+    # Another harness for the same owner is a separate scope, not a rewrite.
+    other_harness = await store.create_model_snapshot(
+        db_session,
+        harness_kind="codex",
+        owner_user_id=user_id,
+        snapshot_json='{"schemaVersion": 2, "models": ["gpt-5.2-codex"]}',
+    )
+    still_claude = await store.get_active_model_snapshot(
+        db_session,
+        harness_kind="claude",
+        owner_user_id=user_id,
+    )
+    assert still_claude is not None
+    assert still_claude.id == newer.id
+    assert other_harness.id != newer.id
 
     override = await store.upsert_catalog_override(
         db_session,

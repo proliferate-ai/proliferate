@@ -69,8 +69,9 @@ artifact is
 
 Legacy Web still performs **no route-level code splitting** (`apps/web/src/App.tsx`
 statically imports every page, so `/login` eagerly loads the whole authenticated
-product) and emits **no separate font/image assets** (`index.css` imports only
-`@proliferate/design/dom.css`). These are the numbers phase 6 compares the
+product) and emitted **no separate font/image assets** at measurement time
+(`index.css` imported only `@proliferate/design/dom.css`, since collapsed into
+`product.css`). These are the numbers phase 6 compares the
 replacement browser-host build against.
 
 ## Phase-6 first-load budget measurement (optimized candidate)
