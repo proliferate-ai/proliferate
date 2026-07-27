@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
+import { useCreateAgentApiKey, useRevokeAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
@@ -7,7 +7,10 @@ import {
   ProviderConfigCreatorModal,
   type ProviderConfigCreatorSubmit,
 } from "#product/components/settings/panes/agent-auth/ProviderConfigCreatorModal";
-import { getHarnessEnvVarSuggestions } from "#product/config/harness-env-vars";
+import {
+  getHarnessEnvVarSuggestions,
+  getProviderSecretEnvVar,
+} from "#product/config/harness-env-vars";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import {
@@ -42,7 +45,11 @@ export function ApiKeyDetails({
   const apiKeys = editor.apiKeysQuery.data ?? [];
   const { providerModalOpen, setProviderModalOpen } = useProviderModal();
   const createKey = useCreateAgentApiKey();
+  const revokeKey = useRevokeAgentApiKey();
   const showToast = useToastStore((state) => state.show);
+  // Inline error for the provider picker's two-write flow — the modal stays open
+  // on failure so the user can retry.
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   // Compute the env-var suggestion for the modal prefill.
   const usedEnvVars = new Set(editor.editorState.rows.map((row) => row.envVarName));
@@ -56,6 +63,11 @@ export function ApiKeyDetails({
   const configuredProviderIds = editor.editorState.rows
     .map((row) => row.providerHint)
     .filter((hint): hint is string => typeof hint === "string" && hint.length > 0);
+
+  // env_var_name values already taken on this harness. The server keys a
+  // selection scope by (source_kind, env_var_name), so the picker must not offer
+  // a second add of one of these (it would create a vault key and then 400).
+  const boundEnvVarNames = [...usedEnvVars].filter((name) => name.length > 0);
 
   // Typed provider-config kinds (Bedrock/Azure) this harness may offer. Empty
   // for EVERY harness until D1 lands registry.json's `providerConfig`
@@ -87,21 +99,43 @@ export function ApiKeyDetails({
   }
 
   // §5's two writes: a vault api_key entry, then one selection row whose
-  // env_var_name is the provider's first registry env var and whose
+  // env_var_name is the provider's key-shaped registry env var (never blindly
+  // envVarNames[0] — that is a resource name on multi-field providers) and whose
   // provider_hint is the provider id (display-only).
+  //
+  // The two writes are not atomic, so the modal only closes once write 2 lands.
+  // If the selection PUT is rejected, the just-created vault key is revoked
+  // (nothing references it, so the revoke succeeds) and the error renders inline
+  // — a failed save never leaves an orphaned key or a row that looks wired.
   function handleProviderSubmit(
     provider: { id: string; displayName: string; envVarNames: readonly string[] },
     value: string,
   ) {
+    const envVarName = getProviderSecretEnvVar(provider);
+    if (envVarName === null) {
+      // The picker filters these out; belt-and-braces so no secret is ever
+      // written under a non-key env var.
+      setProviderError(HARNESS_PANE_COPY.addApiKeyError);
+      return;
+    }
+    setProviderError(null);
     createKey.mutate(
       { title: `${provider.displayName} API key`, value },
       {
         onSuccess: (created) => {
-          setProviderModalOpen(false);
-          editor.addBoundApiKey(provider.envVarNames[0] ?? "", provider.id, created.id);
+          editor.addBoundApiKey(envVarName, provider.id, created.id, {
+            onSuccess: () => {
+              setProviderError(null);
+              setProviderModalOpen(false);
+            },
+            onError: (message) => {
+              setProviderError(message);
+              revokeKey.mutate(created.id);
+            },
+          });
         },
         onError: (error) => {
-          showToast(error.message || HARNESS_PANE_COPY.addApiKeyError);
+          setProviderError(error.message || HARNESS_PANE_COPY.addApiKeyError);
         },
       },
     );
@@ -251,9 +285,14 @@ export function ApiKeyDetails({
         <Suspense fallback={null}>
           <ProviderPickerModal
             open
-            onClose={() => setProviderModalOpen(false)}
+            onClose={() => {
+              setProviderError(null);
+              setProviderModalOpen(false);
+            }}
             configuredProviderIds={configuredProviderIds}
-            submitting={createKey.isPending}
+            boundEnvVarNames={boundEnvVarNames}
+            submitting={createKey.isPending || editor.busy}
+            error={providerError}
             onSubmit={handleProviderSubmit}
           />
         </Suspense>

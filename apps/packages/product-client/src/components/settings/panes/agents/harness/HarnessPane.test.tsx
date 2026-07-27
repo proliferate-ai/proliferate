@@ -93,6 +93,7 @@ const state = vi.hoisted(() => ({
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
+const revokeKeyMutate = vi.hoisted(() => vi.fn());
 const overrideMutate = vi.hoisted(() => vi.fn());
 const refreshModelSnapshotMutate = vi.hoisted(() => vi.fn());
 const openAuthTerminal = vi.hoisted(() => vi.fn());
@@ -110,6 +111,7 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useOrgAgentPolicy: () => ({ data: undefined, isLoading: false }),
   usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
+  useRevokeAgentApiKey: () => ({ mutate: revokeKeyMutate, isPending: false }),
   useUpsertAgentModelOverride: () => ({ mutate: overrideMutate, isPending: false }),
 }));
 
@@ -138,33 +140,60 @@ vi.mock("#product/stores/toast/toast-store", () => ({
 
 // ModalShell (Radix Dialog) has no jsdom polyfills here — stub the picker to a
 // deterministic button that fires onSubmit (provider + pasted key) when open.
+// The stub also surfaces `error` and the bound env-var list so the pane's
+// failure/dup handling is assertable without Radix.
 vi.mock("./ProviderPickerModal", () => ({
   ProviderPickerModal: ({
     open,
     onSubmit,
+    error,
+    boundEnvVarNames,
   }: {
     open: boolean;
     onSubmit: (
-      provider: { id: string; displayName: string; envVarNames: string[] },
+      provider: { id: string; displayName: string; envVarNames: readonly string[] },
       value: string,
     ) => void;
+    error?: string | null;
+    boundEnvVarNames?: readonly string[];
   }) =>
     open ? (
-      <button
-        type="button"
-        onClick={() => {
-          onSubmit(
-            {
-              id: "openrouter",
-              displayName: "OpenRouter",
-              envVarNames: ["OPENROUTER_API_KEY"],
-            },
-            "sk-openrouter",
-          );
-        }}
-      >
-        pick-openrouter
-      </button>
+      <div>
+        <button
+          type="button"
+          onClick={() => {
+            onSubmit(
+              {
+                id: "openrouter",
+                displayName: "OpenRouter",
+                envVarNames: ["OPENROUTER_API_KEY"],
+              },
+              "sk-openrouter",
+            );
+          }}
+        >
+          pick-openrouter
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSubmit(
+              {
+                id: "azure",
+                displayName: "Azure",
+                envVarNames: ["AZURE_RESOURCE_NAME", "AZURE_API_KEY"],
+              },
+              "sk-azure",
+            );
+          }}
+        >
+          pick-azure
+        </button>
+        <div data-testid="picker-bound">{(boundEnvVarNames ?? []).join(",")}</div>
+        {error === null || error === undefined ? null : (
+          <div data-testid="picker-error">{error}</div>
+        )}
+      </div>
     ) : null,
 }));
 
@@ -271,6 +300,24 @@ function renderPane(harnessKind = "claude") {
       </ProductHostProvider>
     </QueryClientProvider>,
   );
+}
+
+// One persisted opencode api_key selection — enough for the API-key detail
+// section (and its "Add provider" button) to render.
+function seededOpencodeApiKeySelection() {
+  return {
+    id: "sel-key",
+    harnessKind: "opencode",
+    surface: "local" as const,
+    sourceKind: "api_key" as const,
+    apiKeyId: "key-1",
+    keyTitle: null,
+    envVarName: "OPENAI_API_KEY",
+    providerHint: "openai",
+    enabled: true,
+    createdAt: "2026-07-01T00:00:00Z",
+    updatedAt: "2026-07-01T00:00:00Z",
+  };
 }
 
 function gatewayCard() {
@@ -792,8 +839,8 @@ describe("HarnessPane authentication", () => {
       expect.anything(),
     );
 
-    // Write 2: one selection row (env var = provider's first registry env var,
-    // provider_hint = provider id), once the vault create resolves.
+    // Write 2: one selection row (env var = provider's key-shaped registry env
+    // var, provider_hint = provider id), once the vault create resolves.
     const lastCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
     const onSuccess = lastCall?.[1]?.onSuccess;
     await act(async () => {
@@ -809,6 +856,101 @@ describe("HarnessPane authentication", () => {
               apiKeyId: "key-openrouter",
               envVarName: "OPENROUTER_API_KEY",
               providerHint: "openrouter",
+              enabled: true,
+            },
+          ]),
+        },
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("revokes the just-created key and keeps the picker open when the selection PUT fails", async () => {
+    state.selections.data = [seededOpencodeApiKeySelection()];
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: /Add provider/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "pick-openrouter" }));
+
+    const createCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
+    await act(async () => {
+      createCall?.[1]?.onSuccess?.({ id: "key-openrouter" });
+    });
+
+    // The selection PUT is rejected: the vault key now has no referent.
+    const putCall = putMutate.mock.calls[putMutate.mock.calls.length - 1];
+    await act(async () => {
+      putCall?.[1]?.onError?.({ message: "Duplicate selection source" });
+    });
+
+    // No orphan: the unreferenced key is revoked.
+    expect(revokeKeyMutate).toHaveBeenCalledWith("key-openrouter");
+    // The modal stays open and reports the failure inline so the user can retry.
+    expect(screen.queryByRole("button", { name: "pick-openrouter" })).not.toBeNull();
+    expect(screen.getByTestId("picker-error").textContent).toBe(
+      "Duplicate selection source",
+    );
+    // The optimistic row is rolled back, so nothing renders as wired.
+    expect(screen.queryByText("OPENROUTER_API_KEY")).toBeNull();
+    // A pane-level error is the modal's job here, not a toast.
+    expect(showToast).not.toHaveBeenCalledWith("Duplicate selection source");
+  });
+
+  it("closes the picker only after the selection PUT succeeds", async () => {
+    state.selections.data = [seededOpencodeApiKeySelection()];
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: /Add provider/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "pick-openrouter" }));
+
+    const createCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
+    await act(async () => {
+      createCall?.[1]?.onSuccess?.({ id: "key-openrouter" });
+    });
+    // Still open: write 2 has not landed yet.
+    expect(screen.queryByRole("button", { name: "pick-openrouter" })).not.toBeNull();
+
+    const putCall = putMutate.mock.calls[putMutate.mock.calls.length - 1];
+    await act(async () => {
+      putCall?.[1]?.onSuccess?.([]);
+    });
+
+    expect(screen.queryByRole("button", { name: "pick-openrouter" })).toBeNull();
+    expect(revokeKeyMutate).not.toHaveBeenCalled();
+  });
+
+  it("passes the harness's bound env vars to the picker so duplicates aren't offered", async () => {
+    state.selections.data = [seededOpencodeApiKeySelection()];
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: /Add provider/ }));
+    await screen.findByRole("button", { name: "pick-openrouter" });
+
+    expect(screen.getByTestId("picker-bound").textContent).toBe("OPENAI_API_KEY");
+  });
+
+  it("writes a multi-field provider's secret under its key-shaped env var", async () => {
+    state.selections.data = [seededOpencodeApiKeySelection()];
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: /Add provider/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "pick-azure" }));
+
+    const createCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
+    await act(async () => {
+      createCall?.[1]?.onSuccess?.({ id: "key-azure" });
+    });
+
+    // AZURE_RESOURCE_NAME is envVarNames[0] but holds no secret.
+    expect(putMutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: {
+          sources: expect.arrayContaining([
+            {
+              sourceKind: "api_key",
+              apiKeyId: "key-azure",
+              envVarName: "AZURE_API_KEY",
+              providerHint: "azure",
               enabled: true,
             },
           ]),
