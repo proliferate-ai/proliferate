@@ -404,11 +404,11 @@ mod tests {
     #[test]
     fn bundled_codex_azure_openai_provider_config_is_pending() {
         // The registry declares codex azure_openai's env-var vocabulary (Track
-        // D's full-scope intent), but the pinned codex binary has zero Azure
-        // env support -- codex only reaches Azure via config.toml
-        // model_providers, which needs A5's config.toml injection mechanism
-        // (not built). This pins that the declaration is marked `pending`
-        // with a reason naming that dependency, so it reads as honest scope
+        // D's full-scope intent), and D3-rust built the config.toml
+        // model_providers injection it needs -- but the cell is
+        // live-unverified (nobody has exercised codex against real Azure
+        // OpenAI). This pins that the declaration stays marked `pending`
+        // with a reason naming that debt, so it reads as honest scope
         // rather than a working integration.
         let registry = bundled_agent_registry_document();
         let codex = registry
@@ -428,8 +428,8 @@ mod tests {
             .as_deref()
             .expect("pending entry must carry a pendingReason");
         assert!(
-            reason.contains("A5"),
-            "pendingReason must name the A5 config.toml injection dependency: {reason}"
+            reason.contains("live-unverified"),
+            "pendingReason must name the live-verification debt: {reason}"
         );
 
         let bedrock = codex

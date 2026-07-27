@@ -563,6 +563,9 @@ class TestRenderProviderConfigSource:
         # that no longer resolves (revoked/vanished) is simply absent from
         # provider_config_values, and its source is dropped rather than
         # raising -- one unsatisfiable source never aborts the reconcile.
+        # Under A4's fail-closed rendering the selected harness keeps its
+        # entry with an empty sources list (same law as the fixture's grok),
+        # rather than vanishing from the document.
         key_id = uuid.uuid4()
         state, _ = agent_auth.render_agent_auth_state(
             _inputs(
@@ -576,7 +579,7 @@ class TestRenderProviderConfigSource:
                 provider_config_values={},
             )
         )
-        assert state["harnesses"] == []
+        assert state["harnesses"] == [{"harness_kind": "codex", "sources": []}]
 
     def test_unsupported_combination_drops_the_source(self) -> None:
         key_id = uuid.uuid4()
@@ -597,7 +600,8 @@ class TestRenderProviderConfigSource:
                 },
             )
         )
-        assert state["harnesses"] == []
+        # A4 fail-closed: entry retained, sources empty.
+        assert state["harnesses"] == [{"harness_kind": "codex", "sources": []}]
 
     def test_composes_with_gateway_and_bare_api_key_sources(self) -> None:
         # The opencode three-way composition the contract fixture (§4.3)

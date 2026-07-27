@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,44 +50,6 @@ def read_agent_catalog() -> AgentCatalogDocument:
 
 
 @dataclass(frozen=True)
-class _CachedCatalogVersion:
-    mtime_ns: int
-    version: str | None
-
-
-_catalog_version_cache: dict[Path, _CachedCatalogVersion] = {}
-
-
-def served_agent_catalog_version(path: Path = CATALOG_PATH) -> str | None:
-    """`catalogVersion` of the catalog document this server serves.
-
-    Generation-agnostic: whatever document sits at the catalog path, its
-    top-level ``catalogVersion`` field is advertised for heartbeat
-    convergence. Cached in-process against the file's mtime so the
-    worker-heartbeat hot path does not reparse the document.
-    """
-    try:
-        mtime_ns = path.stat().st_mtime_ns
-    except OSError:
-        return None
-    cached = _catalog_version_cache.get(path)
-    if cached is not None and cached.mtime_ns == mtime_ns:
-        return cached.version
-    version = _read_catalog_version(path)
-    _catalog_version_cache[path] = _CachedCatalogVersion(mtime_ns=mtime_ns, version=version)
-    return version
-
-
-def _read_catalog_version(path: Path) -> str | None:
-    try:
-        document = json.loads(path.read_bytes())
-    except (OSError, ValueError):
-        return None
-    version = document.get("catalogVersion") if isinstance(document, dict) else None
-    return version if isinstance(version, str) else None
-
-
-@dataclass(frozen=True)
 class _CachedRegistryDocument:
     mtime_ns: int
     document: dict[str, object]
@@ -132,8 +95,8 @@ def supported_provider_config_kinds(
     the API output is deterministic regardless of registry declaration order.
 
     Empty for a harness with no ``providerConfig`` block or an unknown
-    harness — never raises, mirroring ``served_agent_catalog_version``'s
-    read-only tolerance. Nothing in the product wires this into a response
+    harness — never raises; read-only tolerance, same as the registry read
+    itself. Nothing in the product wires this into a response
     yet (the client's ``getSupportedProviderConfigKinds`` still hardcodes
     ``[]`` until D3's cutover); this is the server-side half of that seam.
     """

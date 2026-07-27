@@ -10,7 +10,6 @@ from proliferate.server.catalogs.domain.schema import agent_catalog_schema_versi
 from proliferate.server.catalogs.service import (
     CATALOG_PATH,
     read_agent_catalog,
-    served_agent_catalog_version,
     supported_provider_config_kinds,
 )
 

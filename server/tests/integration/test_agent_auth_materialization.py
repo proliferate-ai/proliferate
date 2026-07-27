@@ -386,8 +386,8 @@ class TestBuildAgentAuthStateTypedProviderConfig:
 
         state, _ = await agent_auth.build_agent_auth_state(db_session, user_id)
 
-        assert state["harnesses"] == [], (
-            "a revoked typed vault entry must drop the source (and thus the "
-            "whole harness, on this branch's omit-not-empty semantics), not "
-            "raise or leak the last-known env values"
+        assert state["harnesses"] == [{"harness_kind": "opencode", "sources": []}], (
+            "a revoked typed vault entry must drop the source (the selected "
+            "harness keeps an empty entry under A4's fail-closed rendering), "
+            "not raise or leak the last-known env values"
         )
