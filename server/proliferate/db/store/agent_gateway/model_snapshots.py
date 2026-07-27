@@ -1,11 +1,13 @@
 """Cloud model-snapshot persistence: soft-versioned machine observations.
 
-One row per (harness_kind, auth_context_id, owner_user_id) is ``active``; every
-prior write is retained as ``inactive``, which is the audit trail that makes
-"what changed between refreshes" answerable without storing diffs
-(model-catalog.md §Storage). There are no ownerless rows: the server never
-generates a snapshot, so ``owner_user_id`` is NOT NULL and the seed tier is a
-read-time fallback to the shipped catalog rather than stored state.
+One row per (harness_kind, owner_user_id) is ``active``; every prior write is
+retained as ``inactive``, which is the audit trail that makes "what changed
+between refreshes" answerable without storing diffs (model-catalog.md
+§Storage). There is no ``auth_context_id``: the per-context re-key is
+superseded by the composed observation — one document per harness. There are
+no ownerless rows: the server never generates a snapshot, so ``owner_user_id``
+is NOT NULL and the seed tier is a read-time fallback to the shipped catalog
+rather than stored state.
 """
 
 from __future__ import annotations
@@ -29,7 +31,6 @@ async def create_model_snapshot(
     db: AsyncSession,
     *,
     harness_kind: str,
-    auth_context_id: str,
     owner_user_id: UUID,
     snapshot_json: str,
     probed_at: datetime | None = None,
@@ -46,7 +47,6 @@ async def create_model_snapshot(
         update(AgentModelSnapshot)
         .where(
             AgentModelSnapshot.harness_kind == harness_kind,
-            AgentModelSnapshot.auth_context_id == auth_context_id,
             AgentModelSnapshot.owner_user_id == owner_user_id,
             AgentModelSnapshot.status == AGENT_MODEL_SNAPSHOT_STATUS_ACTIVE,
         )
@@ -55,14 +55,14 @@ async def create_model_snapshot(
 
     row = AgentModelSnapshot(
         harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
         owner_user_id=owner_user_id,
         snapshot_json=snapshot_json,
         status=AGENT_MODEL_SNAPSHOT_STATUS_ACTIVE,
     )
     if probed_at is not None:
-        # The uploaded entry carries the timestamp of the probe itself, which ran
-        # on the sandbox's runtime possibly many ticks before this upload landed.
+        # The uploaded document carries the timestamp of the probe itself, which
+        # ran on the sandbox's runtime possibly many ticks before this upload
+        # landed.
         row.probed_at = probed_at
     db.add(row)
     await db.flush()
@@ -73,29 +73,27 @@ async def get_active_model_snapshot(
     db: AsyncSession,
     *,
     harness_kind: str,
-    auth_context_id: str,
     owner_user_id: UUID,
 ) -> AgentModelSnapshotRecord | None:
-    """The owner's current observation for the scope, or None when unobserved.
+    """The owner's current observation for the harness, or None when unobserved.
 
     None is the read-time seed condition: the caller falls back to the shipped
     catalog's models rather than to a stored seed row.
 
     ``id`` is a tie-break on ``probed_at``, and it is load-bearing rather than
     decorative: because the scope carries no unique key, two racing upload ticks
-    can leave two active rows — and a Worker re-sending its last entry sends the
-    SAME ``probedAt``, so the tie is the common case, not the exotic one. Ordering
-    on the timestamp alone leaves the winner to physical row order, which
-    Postgres is free to change under a HOT update or a VACUUM, so the served
-    model list could flip without any write. The rows are equivalent when the
-    entry really is identical, but "equivalent" is not "deterministic", and a
-    picker that changes answers on its own is not debuggable.
+    can leave two active rows — and a Worker re-sending its last document sends
+    the SAME ``probedAt``, so the tie is the common case, not the exotic one.
+    Ordering on the timestamp alone leaves the winner to physical row order,
+    which Postgres is free to change under a HOT update or a VACUUM, so the
+    served model list could flip without any write. The rows are equivalent when
+    the document really is identical, but "equivalent" is not "deterministic",
+    and a picker that changes answers on its own is not debuggable.
     """
     query = (
         select(AgentModelSnapshot)
         .where(
             AgentModelSnapshot.harness_kind == harness_kind,
-            AgentModelSnapshot.auth_context_id == auth_context_id,
             AgentModelSnapshot.owner_user_id == owner_user_id,
             AgentModelSnapshot.status == AGENT_MODEL_SNAPSHOT_STATUS_ACTIVE,
         )

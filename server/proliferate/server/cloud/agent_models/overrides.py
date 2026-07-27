@@ -15,10 +15,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.agent_gateway import (
-    AGENT_AUTH_CONTEXT_ID_MAX_LENGTH,
-    AGENT_HARNESS_KIND_MAX_LENGTH,
-)
+from proliferate.constants.agent_gateway import AGENT_HARNESS_KIND_MAX_LENGTH
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import AgentCatalogOverrideRecord
 from proliferate.server.cloud.errors import CloudApiError
@@ -48,28 +45,6 @@ def validate_harness_kind(harness_kind: str) -> str:
             status_code=400,
         )
     return harness_kind
-
-
-def validate_auth_context_id(auth_context_id: str) -> str:
-    """Bound the auth-context id for the same column/cardinality reasons.
-
-    Deliberately not checked against the shipped catalog: a machine whose
-    harness catalog is newer than this server's document must still be able to
-    upload its observation, and the read-side join tolerates unknown contexts.
-    """
-    if not auth_context_id or len(auth_context_id) > AGENT_AUTH_CONTEXT_ID_MAX_LENGTH:
-        raise CloudApiError(
-            "invalid_agent_auth_context_id",
-            f"authContextId must be 1-{AGENT_AUTH_CONTEXT_ID_MAX_LENGTH} characters.",
-            status_code=400,
-        )
-    if _SLUG_PATTERN.match(auth_context_id) is None:
-        raise CloudApiError(
-            "invalid_agent_auth_context_id",
-            "authContextId may only contain letters, digits, '.', '_' or '-'.",
-            status_code=400,
-        )
-    return auth_context_id
 
 
 def normalize_entry(entry: object) -> dict[str, Any] | None:
