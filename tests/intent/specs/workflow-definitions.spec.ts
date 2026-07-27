@@ -18,6 +18,8 @@ import {
   passwordLogin,
   webBaseUrl,
 } from "../stack/seed.ts";
+// TEMPORARY (workflows beta gate): see tests/intent/stack/workflows-beta-gate.ts.
+import { dismissWorkflowsBetaGate } from "../stack/workflows-beta-gate.ts";
 
 test.describe.configure({ mode: "serial" });
 
@@ -84,6 +86,10 @@ test.beforeAll(async () => {
 test("creates, reloads, reopens, edits, and deletes a durable definition", async ({ page }) => {
   await signInThroughUi(page);
   await page.goto(`${webBaseUrl()}/workflows`);
+  // TEMPORARY (workflows beta gate): the surface raises a dismissible "in beta"
+  // notice over itself; a user clicks through it before touching the page, and
+  // so does this spec. Everything below exercises the real surface unchanged.
+  await dismissWorkflowsBetaGate(page);
 
   await expect(page.getByRole("heading", { name: "Workflows", exact: true, level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "New workflow", exact: true }).first().click();

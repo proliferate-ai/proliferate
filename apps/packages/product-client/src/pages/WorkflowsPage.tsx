@@ -24,6 +24,31 @@ import { useWorkflowRunOpenActions } from "#product/hooks/workflows/workflows/us
  */
 const WORKFLOWS_BETA_GATE_ENABLED = true;
 
+// TEMPORARY (workflows beta gate). The acknowledgement is scoped to the browser
+// session so the notice is shown once per app session rather than on every
+// mount: the surface remounts on reload and on each workflows route change, and
+// re-raising the same notice there would be nagging rather than informative.
+const WORKFLOWS_BETA_GATE_STORAGE_KEY = "proliferate.workflows-beta-gate.acknowledged";
+
+function readBetaGateAcknowledged(): boolean {
+  try {
+    return window.sessionStorage.getItem(WORKFLOWS_BETA_GATE_STORAGE_KEY) === "1";
+  } catch {
+    // Storage can be unavailable (privacy modes, embedded webviews). Falling
+    // back to "not acknowledged" keeps the notice visible, which is the safe
+    // direction for a beta warning.
+    return false;
+  }
+}
+
+function persistBetaGateAcknowledged(): void {
+  try {
+    window.sessionStorage.setItem(WORKFLOWS_BETA_GATE_STORAGE_KEY, "1");
+  } catch {
+    // Best-effort only; the in-memory state below still dismisses the notice.
+  }
+}
+
 export function WorkflowsPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -76,17 +101,18 @@ function AuthenticatedWorkflowsPage({
   const navigate = useNavigate();
   const capabilities = useAppCapabilities();
   const { openWorkflowRunSession } = useWorkflowRunOpenActions();
-  // TEMPORARY (workflows beta gate): per-visit acknowledgement, deliberately
-  // not persisted — the notice should reappear next time the surface is
-  // entered while the feature is still unfinished.
-  const [betaGateAcknowledged, setBetaGateAcknowledged] = useState(false);
+  // TEMPORARY (workflows beta gate): once-per-browser-session acknowledgement.
+  const [betaGateAcknowledged, setBetaGateAcknowledged] = useState(readBetaGateAcknowledged);
 
   return (
     <MainSidebarPageShell>
       {WORKFLOWS_BETA_GATE_ENABLED ? (
         <WorkflowsBetaGateModal
           open={!betaGateAcknowledged}
-          onContinue={() => setBetaGateAcknowledged(true)}
+          onContinue={() => {
+            persistBetaGateAcknowledged();
+            setBetaGateAcknowledged(true);
+          }}
           onLeave={() => navigate(APP_ROUTES.home)}
         />
       ) : null}

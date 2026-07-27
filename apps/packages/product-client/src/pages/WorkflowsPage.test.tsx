@@ -100,6 +100,9 @@ function renderWorkflows(path = "/workflows") {
 describe("WorkflowsPage authentication boundary", () => {
   beforeEach(() => {
     authMode.devBypassed = false;
+    // TEMPORARY (workflows beta gate): the notice acknowledgement lives in
+    // sessionStorage, so each test starts from a fresh browser session.
+    window.sessionStorage.clear();
     useAuthStore.setState({
       status: "anonymous",
       session: null,
@@ -199,6 +202,13 @@ describe("WorkflowsPage authentication boundary", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue anyway" }));
 
+    expect(screen.queryByText("This feature is in beta")).toBeNull();
+    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
+
+    // The acknowledgement is session-scoped, so a remount (route change, or a
+    // reload inside the same browser session) does not re-raise the notice.
+    cleanup();
+    renderWorkflows();
     expect(screen.queryByText("This feature is in beta")).toBeNull();
     expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
   });
