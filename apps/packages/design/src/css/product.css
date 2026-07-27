@@ -942,20 +942,18 @@ body {
    of SVG child elements every frame in WKWebView. */
 /* activity-motion */
 /* Ambient, not urgent: the wave says "this model is thinking hard", so it
-   breathes on a slow ~2.4s cycle with a shallower trough than the old 1.1s
-   pulse (which read as a loading spinner). The per-bar stagger in
-   LevelBarsButton.tsx paces the crest so the sweep stays legible at this
-   duration. */
-/* The crest rises slowly and at a decelerating rate, then settles back over a
-   comparable span — no symmetric ease in both directions. Two things produce
-   the shape: the peak sits at 52% of the cycle, giving the upward travel ~4.5s
-   (the drain gets the remaining ~4.1s), and --ease-out-quint front-loads the
-   motion within each leg, so most of the distance is covered early and then
-   decelerates hard into a long tail. Reads as a breath drawn and released, not
-   a pulse. */
+   breathes rather than pulsing the way the original 1.1s cycle did (which read
+   as a loading spinner).
+   The rise is the slow, deliberate half and gets most of the cycle: the peak
+   sits at 62% of 8.6s, so the bar climbs for ~5.3s and drains in ~3.3s.
+   Deliberately NOT --ease-out-quint: that curve covers ~93% of the distance in
+   its first tenth and then parks at the extreme, which turns a long duration
+   into a fast snap plus dead air rather than a long climb. --ease-standard is
+   the in-out on the token scale, so the bar is still visibly travelling for
+   most of each leg instead of idling at the top and bottom. */
 .composer-level-bar-wave {
   transform-origin: bottom;
-  animation: composer-level-bar-wave 8.6s var(--ease-out-quint) infinite;
+  animation: composer-level-bar-wave 8.6s var(--ease-standard) infinite;
 }
 
 @keyframes composer-level-bar-wave {
@@ -964,7 +962,7 @@ body {
     transform: scaleY(0.72);
     opacity: 0.78;
   }
-  52% {
+  62% {
     transform: scaleY(1);
     opacity: 1;
   }
