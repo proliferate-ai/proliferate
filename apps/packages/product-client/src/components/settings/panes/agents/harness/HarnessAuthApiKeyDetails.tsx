@@ -42,12 +42,11 @@ export function ApiKeyDetails({
     (candidate) => !usedEnvVars.has(candidate.envVarName),
   );
 
-  // Typed provider-config kinds (Bedrock/Azure) this harness may offer. Empty
-  // for EVERY harness until D1 lands registry.json's `providerConfig`
-  // declarations (agents-impl-plan.md §4) — see
-  // provider-config-fields.ts's module comment. The buttons below simply
-  // don't render while this stays empty, so the UI never promises a create
-  // flow the server can't yet store or launch on.
+  // Typed provider-config kinds (Bedrock/Azure) this harness may offer:
+  // the registry's non-pending `providerConfig` declarations — the same set
+  // the server's selection write gate admits (see provider-config-fields.ts's
+  // module comment). Empty for a harness with no declarations (cursor, grok),
+  // so those panes render no typed-config buttons.
   const providerConfigKinds = getSupportedProviderConfigKinds(harnessKind);
   const [openProviderConfigKind, setOpenProviderConfigKind] =
     useState<ProviderConfigKind | null>(null);
@@ -80,12 +79,13 @@ export function ApiKeyDetails({
     }
   }
 
-  // Placeholder submit: there is no server endpoint yet for a typed vault
-  // entry (D1's `kind` column + create-request shape land later), so this
-  // wires the collected payload nowhere — the button that opens this modal
-  // never renders today (providerConfigKinds is always []), so this path is
-  // unreachable in the shipped product. D3 replaces this with the real
-  // mutation once D1's request shape exists.
+  // FOLLOW-UP (typed-config UI wiring): the server side is fully open —
+  // POST /v1/cloud/agent-auth/keys/provider-config stores the entry and a
+  // selection referencing it (api_key source, NO envVarName) persists and
+  // renders — but this submit is still a placeholder: the editor's row model
+  // (EditableApiKeyRow / buildDesiredSources) is env-var-keyed and cannot yet
+  // represent a typed row, so the collected payload is not wired anywhere.
+  // The real mutation + typed-row editor support is the remaining UI half.
   function handleProviderConfigSubmit(_input: ProviderConfigCreatorSubmit) {
     setOpenProviderConfigKind(null);
   }

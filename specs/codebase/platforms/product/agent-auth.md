@@ -659,10 +659,12 @@ Auth (the full system):
   provider-config mode flags) always survive. (`render_tests.rs`)
 - **A4** Opencode composes gateway + N api_keys + ambient native into one
   delta; `XDG_DATA_HOME` stays ambient. (`opencode_render_tests.rs`)
-- **A5** Typed-config end to end (once the write gate opens): typed vault
-  row → selection with no env var → `provider_config` wire source → spawn
-  env contains the harness's real env set; revoking the entry drops the
-  source at the next pass. (server pytest + render tests + one intent test)
+- **A5** Typed-config end to end (write gate open, registry-driven): typed
+  vault row → selection with no env var → `provider_config` wire source →
+  spawn env contains the harness's real env set; revoking the entry drops
+  the source at the next pass; an undeclared or registry-`pending`
+  (harness, kind) combo refuses the write. (server pytest + render tests +
+  one intent test)
 - **A6** The store rejects both illegal shapes: a bare-key selection
   without an env var, and a typed-entry selection with one. (server pytest)
 - **A7** A gateway launch cannot read native credentials (isolated homes),
@@ -723,61 +725,25 @@ Deltas between this document and the integration stack
 - [ ] **Onboarding has no ack-gated "setting up" step.** First-run adoption
       fires and the state lands whenever it lands; nothing in onboarding
       awaits the ack or renders the pending/degraded path.
-- [ ] **Selections cannot yet reference a typed vault entry.** D3's python
-      arm built the render half of this gap: `state.json` now has a
-      `provider_config` wire source
-      ([agent_auth.py](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)'s
-      `_render_provider_config_source`/`_translate_provider_config_env`),
-      and a resolved typed entry renders into the harness's own real env set
-      (claude/codex/opencode × aws_bedrock/azure_openai, per the harness's
-      registry declaration) rather than the vault's generic field names.
-      D3's rust arm built the runtime half: `route_auth/`'s `AuthSource`
-      carries the `config_kind`/`env` pair, a `provider_config` source
-      resolves into a typed `ProviderConfigProfile`, and the render plane
-      composes it per harness (claude/opencode set the resolved env map
-      generically, mode-switch flags included; codex×`aws_bedrock` renders
-      a real `config.toml` via codex's built-in `amazon-bedrock` provider,
-      model id from the catalog's `session.defaults["bedrock"]`).
-      The selection WRITE path today has exactly ONE gate that actually
-      inspects the referenced vault row's `kind`: `_assert_keys_usable`
-      (`selections.py:63-92`) queries for `kind ==
-      'api_key'` and rejects the whole write if any referenced id misses —
-      this is what makes
-      `test_put_rejects_typed_provider_config_as_api_key_source` (D1) pass
-      today. The other checks a typed-entry write must also clear are
-      NOT kind-aware and do not by themselves block one: `_validate_source`
-      only requires that `env_var_name` be present (any non-null string
-      satisfies it), the DB `ck_agent_auth_selection_api_key_shape` CHECK
-      constraint on `agent_auth_selection` likewise only requires
-      `env_var_name IS NOT NULL`, and `selection_rules.py`'s
-      `ENV_VAR_NAME_RE` only validates the shape of whatever name is
-      supplied — none of the three looks at the vault row at all, so a
-      typed-entry selection carrying a placeholder `env_var_name` passes
-      all three (this PR's own
-      `TestBuildAgentAuthStateTypedProviderConfig` integration test proves
-      it, by construction, to exercise the render path against a real typed
-      selection row inserted directly). The render path this PR added is
-      consequently unreachable by any real user selection only because of
-      `_assert_keys_usable`'s single kind check — until a follow-up relaxes
-      it to admit a typed-entry reference, which needs a migration
-      (dropping or loosening `ck_agent_auth_selection_api_key_shape`'s
-      `env_var_name IS NOT NULL` requirement, since a typed entry has no
-      `env_var_name` by the vault's own convention) alongside the
-      application-code relaxation, not an application-code change alone.
-      (The old Bifrost `provider_kind` tables were dropped outright and are
-      not a starting point.)
-- [ ] **Codex's `azure_openai` provider-config is declared but pending.**
-      D3-rust built the mechanism: codex×`azure_openai` renders a
-      `config.toml` `model_providers` injection (mirroring the gateway
-      recipe's `env_key` pattern), since the pinned codex binary has zero
-      Azure env support. The entry stays registry-`pending` because the
-      cell is live-unverified — nobody has exercised codex against real
-      Azure OpenAI, and the registry only declares `AZURE_OPENAI_API_KEY`
-      today, not the endpoint/deployment vars the render arm also
-      expects. The server excludes a pending kind from
-      `supported_provider_config_kinds`, so no real selection can reach
-      the arm until it is live-verified (or the entry is dropped, pending
-      a founder ruling).
+- [ ] **The `azure_openai` cells for codex AND claude are declared but
+      pending.** The typed-config write gate itself is open (see below), and
+      it is registry-driven: `_assert_keys_usable` admits a typed-entry
+      reference exactly when the harness's registry `providerConfig`
+      declaration for that kind is non-`pending`
+      (`supported_provider_config_kinds`, threaded from the service layer).
+      Two declared cells stay `pending` and therefore closed:
+      codex×`azure_openai` (D3-rust built the `config.toml`
+      `model_providers` injection, but the cell is live-unverified — nobody
+      has exercised codex against real Azure OpenAI, and the registry only
+      declares `AZURE_OPENAI_API_KEY` today) and claude×`azure_openai`
+      (Foundry — the renderer's endpoint→`ANTHROPIC_FOUNDRY_RESOURCE`
+      derivation and API_KEY/AUTH_TOKEN alternative are unverified judgment
+      calls, R5/R11). Each opens by clearing its registry `pending` flag
+      after its Gate 4 live run (or is dropped, pending a founder ruling).
+      Per R5, the azure vault entry collects `endpoint` + `apiKey` only —
+      `deployment` was dropped from the UI field spec and the server's
+      create validation because the renderer deliberately never translated
+      it.
 - [ ] **Module split.** The route prefix split landed (S1): vault,
       selections, state, and org policy now live under `/v1/cloud/agent-auth/`,
       and enrollment/capabilities stayed at `/v1/cloud/agent-gateway/`

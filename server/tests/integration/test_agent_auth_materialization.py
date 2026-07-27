@@ -16,7 +16,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.models.cloud.agent_gateway import AgentAuthSelection
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as agent_gateway_store
@@ -491,13 +490,13 @@ class TestBuildAgentAuthStateTypedProviderConfig:
     reading a nonexistent attribute instead of ``record.kind``, is invisible
     to every existing test.
 
-    The selection WRITE path (``put_auth_selections`` /
-    ``_assert_keys_usable``) structurally rejects a typed-entry reference
-    (``test_put_rejects_typed_provider_config_as_api_key_source``, D1) — so a
-    real row referencing one can only exist via a direct model insert, which
-    is exactly what a stale/pre-D1 row or a future relaxed write path would
-    also produce. This drives ``build_agent_auth_state`` against that row the
-    same way materialization would.
+    The selection WRITE path is the real one: the typed-config write gate is
+    open (``_assert_keys_usable`` admits a typed-entry reference for a
+    declared, non-pending providerConfig kind), so these tests persist the
+    selection through ``put_auth_selections`` — proof A5's write→render
+    corridor, with no direct model inserts. The row carries NO env_var_name
+    (the typed kind brings its own env mapping; the loosened
+    ``ck_agent_auth_selection_api_key_shape`` CHECK permits the NULL).
     """
 
     @pytest.mark.asyncio
@@ -514,26 +513,21 @@ class TestBuildAgentAuthStateTypedProviderConfig:
             kind="aws_bedrock",
             value={"region": "us-east-1", "bearerToken": "bedrock-tok-loader"},
         )
-        # Direct insert: the write path (put_auth_selections) rejects a typed
-        # api_key_id at _assert_keys_usable, so this is the only way a
-        # selection referencing a typed vault entry can exist today. The DB
-        # CHECK (ck_agent_auth_selection_api_key_shape) currently requires
-        # env_var_name IS NOT NULL for every api_key row regardless of vault
-        # kind — the schema does not yet encode "a typed entry names no
-        # env_var_name" (that gap is itself part of the spec's narrowed
-        # write-path bullet); a placeholder value satisfies the constraint
-        # without the renderer ever reading it (_render_provider_config_source
-        # only reads api_key_id, never env_var_name).
-        db_session.add(
-            AgentAuthSelection(
-                user_id=user_id,
-                harness_kind="opencode",
-                surface="cloud",
-                source_kind="api_key",
-                api_key_id=provider_config.id,
-                env_var_name="UNUSED_FOR_TYPED_ENTRY",
-                enabled=True,
-            )
+        # The REAL write path: the typed-config write gate admits the entry
+        # for a declared kind, persisting the row with env_var_name=None.
+        await agent_gateway_store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="opencode",
+            surface="cloud",
+            sources=[
+                DesiredAuthSource(
+                    source_kind="api_key",
+                    api_key_id=provider_config.id,
+                    env_var_name=None,
+                )
+            ],
+            supported_provider_config_kinds=("aws_bedrock",),
         )
         await db_session.flush()
 
@@ -575,16 +569,19 @@ class TestBuildAgentAuthStateTypedProviderConfig:
             kind="aws_bedrock",
             value={"region": "us-east-1", "bearerToken": "bedrock-tok-revoked"},
         )
-        db_session.add(
-            AgentAuthSelection(
-                user_id=user_id,
-                harness_kind="opencode",
-                surface="cloud",
-                source_kind="api_key",
-                api_key_id=provider_config.id,
-                env_var_name="UNUSED_FOR_TYPED_ENTRY",
-                enabled=True,
-            )
+        await agent_gateway_store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="opencode",
+            surface="cloud",
+            sources=[
+                DesiredAuthSource(
+                    source_kind="api_key",
+                    api_key_id=provider_config.id,
+                    env_var_name=None,
+                )
+            ],
+            supported_provider_config_kinds=("aws_bedrock",),
         )
         await db_session.flush()
         await agent_gateway_store.revoke_agent_api_key(

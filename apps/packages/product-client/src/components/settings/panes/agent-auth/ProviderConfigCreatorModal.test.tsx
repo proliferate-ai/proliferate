@@ -44,15 +44,16 @@ describe("ProviderConfigCreatorModal", () => {
     expect(bearerToken.type).toBe("password");
   });
 
-  it("renders the azure_openai spec's three fields with the api key masked", () => {
+  it("renders the azure_openai spec's two fields (R5: no deployment) with the api key masked", () => {
     renderModal({ kind: "azure_openai" });
 
     const endpoint = screen.getByLabelText("Resource endpoint") as HTMLInputElement;
-    const deployment = screen.getByLabelText("Deployment name") as HTMLInputElement;
     const apiKey = screen.getByLabelText("API key") as HTMLInputElement;
     expect(endpoint.type).toBe("text");
-    expect(deployment.type).toBe("text");
     expect(apiKey.type).toBe("password");
+    // Founder ruling R5: the deployment field is dropped — the renderer never
+    // translated it, and the server rejects it as an unknown field.
+    expect(screen.queryByLabelText("Deployment name")).toBeNull();
   });
 
   it("blocks submit until every required field (incl. title) is filled", () => {
@@ -85,7 +86,6 @@ describe("ProviderConfigCreatorModal", () => {
     fireEvent.change(screen.getByLabelText("Resource endpoint"), {
       target: { value: "https://my-resource.openai.azure.com" },
     });
-    fireEvent.change(screen.getByLabelText("Deployment name"), { target: { value: "gpt-4o" } });
     fireEvent.change(screen.getByLabelText("API key"), { target: { value: "azure-secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -94,7 +94,6 @@ describe("ProviderConfigCreatorModal", () => {
       kind: "azure_openai",
       value: {
         endpoint: "https://my-resource.openai.azure.com",
-        deployment: "gpt-4o",
         apiKey: "azure-secret",
       },
     });

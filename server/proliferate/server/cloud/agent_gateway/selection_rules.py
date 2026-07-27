@@ -56,8 +56,14 @@ def validate_auth_selection_set(
                     "a gateway source is not allowed."
                 )
         elif source.source_kind == AGENT_AUTH_SOURCE_API_KEY:
+            # env_var_name is optional at this layer: a source referencing a
+            # TYPED vault entry (aws_bedrock/azure_openai) carries none by law
+            # (the typed kind brings its own env mapping), and only the store
+            # can see which vault kind the id references — it enforces
+            # bare-requires-one / typed-forbids-one there. This validator only
+            # gates the SHAPE of a name when one is supplied.
             name = source.env_var_name
-            if name is None or ENV_VAR_NAME_RE.match(name) is None:
+            if name is not None and ENV_VAR_NAME_RE.match(name) is None:
                 raise SelectionRuleError(
                     f"Invalid env var name {name!r}: must match {ENV_VAR_NAME_RE.pattern}."
                 )

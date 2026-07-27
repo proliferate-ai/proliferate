@@ -20,7 +20,7 @@ def _gateway(*, enabled: bool = True) -> DesiredAuthSource:
 
 def _api_key(
     *,
-    env_var_name: str = "ANTHROPIC_API_KEY",
+    env_var_name: str | None = "ANTHROPIC_API_KEY",
     enabled: bool = True,
 ) -> DesiredAuthSource:
     return DesiredAuthSource(
@@ -97,6 +97,16 @@ class TestAuthSelectionRules:
                     harness_kind="claude",
                     sources=[_api_key(env_var_name=bad)],
                 )
+
+    def test_env_var_name_is_optional_for_typed_vault_references(self) -> None:
+        # A source referencing a TYPED vault entry names no env var by law
+        # (agent-auth.md: the typed kind carries its own env mapping); the
+        # rules layer cannot see vault kinds, so a missing name must pass
+        # here — the store's kind-aware gate enforces bare-vs-typed shape.
+        validate_auth_selection_set(
+            harness_kind="claude",
+            sources=[_api_key(env_var_name=None)],
+        )
 
     def test_env_var_name_max_length_boundary(self) -> None:
         # 1 leading letter + 127 tail chars = 128, the inclusive maximum.
