@@ -26,6 +26,8 @@ export type ScenarioKey =
   | "workspace-status-card"
   | "slash-command-search"
   | "slash-command-empty"
+  | "file-mention-search"
+  | "file-mention-empty"
   | "workspace-arrival-created"
   | "cloud-first-runtime"
   | "cloud-provisioning"
@@ -141,6 +143,8 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "workspace-status-card": { label: "Workspace status (new)" },
   "slash-command-search": { label: "Slash commands" },
   "slash-command-empty": { label: "Slash commands empty" },
+  "file-mention-search": { label: "File mentions" },
+  "file-mention-empty": { label: "File mentions empty" },
   "workspace-arrival-created": { label: "Workspace arrival" },
   "cloud-first-runtime": { label: "Cloud first runtime" },
   "cloud-provisioning": { label: "Cloud provisioning" },

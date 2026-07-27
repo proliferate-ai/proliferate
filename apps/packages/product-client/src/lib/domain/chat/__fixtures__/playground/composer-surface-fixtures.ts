@@ -1,4 +1,5 @@
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import type { FileMentionResult } from "#product/lib/domain/chat/composer/file-mention-search";
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { ComposerWorkspaceActivityModel } from "#product/lib/domain/workspaces/activity/composer-workspace-activity";
@@ -46,6 +47,13 @@ export const PLAYGROUND_SLASH_COMMANDS: SessionSlashCommandViewModel[] = [
     inputHint: "title",
     group: "MCP",
   },
+];
+
+export const PLAYGROUND_FILE_MENTIONS: FileMentionResult[] = [
+  { path: "apps/packages/ui/src/primitives/Button.tsx", name: "Button.tsx", parent: "apps/packages/ui/src/primitives" },
+  { path: "apps/packages/design/src/tokens.ts", name: "tokens.ts", parent: "apps/packages/design/src" },
+  { path: "specs/README.md", name: "README.md", parent: "specs" },
+  { path: "Cargo.toml", name: "Cargo.toml", parent: "" },
 ];
 
 export const PLAYGROUND_LONG_COMPOSER_DRAFT = [

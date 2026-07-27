@@ -6,8 +6,9 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import type { LexicalEditor } from "lexical";
+import { $createTextNode, type LexicalEditor } from "lexical";
 import { WORKSPACE_CHAT_COMPOSER_INPUT } from "#product/config/chat";
+import { useChatFileMentionMenu } from "#product/hooks/chat/ui/use-chat-file-mention-menu";
 import { useChatSlashCommandMenu } from "#product/hooks/chat/ui/use-chat-slash-command-menu";
 import {
   createTextDraft,
@@ -15,9 +16,10 @@ import {
   type ChatComposerDraft,
 } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
-  findSlashCommandTrigger,
-  type SlashCommandTrigger,
-} from "#product/lib/domain/chat/composer/slash-command-draft-edits";
+  findComposerMenuTrigger,
+  type ComposerMenuTrigger,
+} from "#product/lib/domain/chat/composer/composer-menu-trigger";
+import type { FileMentionResult } from "#product/lib/domain/chat/composer/file-mention-search";
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import {
   finishOrCancelMeasurementOperation,
@@ -27,10 +29,13 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import { markTypingActivity } from "#product/lib/infra/interaction/typing-activity-store";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { ComposerFileMentionSearch } from "#product/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
+import { $createComposerFileMentionNode } from "#product/components/workspace/chat/input/ComposerFileMentionNode";
 import {
   ComposerRichTextEditor,
   getComposerEditorContext,
+  replaceComposerRangeWithNodes,
   replaceComposerTextRange,
   type ComposerEditorContext,
 } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
@@ -69,7 +74,7 @@ export function ComposerCommandEditor({
 }: ComposerCommandEditorProps) {
   const editorRef = useRef<LexicalEditor | null>(null);
   const typingOperationRef = useRef<MeasurementOperationId | null>(null);
-  const commandTriggerRef = useRef<SlashCommandTrigger | null>(null);
+  const commandTriggerRef = useRef<ComposerMenuTrigger | null>(null);
   const markdown = serializeChatDraftToPrompt(draft);
   const [editorContext, setEditorContext] = useState<ComposerEditorContext>({
     plainText: markdown,
@@ -81,9 +86,11 @@ export function ComposerCommandEditor({
   const trigger = useMemo(() => (
     searchSuppressed || disabled
       ? null
-      : findSlashCommandTrigger(plainText, editorContext.focusOffset)
+      : findComposerMenuTrigger(plainText, editorContext.focusOffset)
   ), [disabled, editorContext.focusOffset, plainText, searchSuppressed]);
   commandTriggerRef.current = trigger;
+  const slashTrigger = trigger?.kind === "slash" ? trigger : null;
+  const mentionTrigger = trigger?.kind === "mention" ? trigger : null;
 
   const handleChange = useCallback((
     value: string,
@@ -117,30 +124,71 @@ export function ComposerCommandEditor({
     typingOperationRef.current = null;
   }, []);
 
+  // The token the trigger opened is replaced whole, and any single space that
+  // already followed it is absorbed so completing a trigger never leaves a
+  // double space behind.
+  const replaceEndFor = useCallback((activeTrigger: ComposerMenuTrigger) => (
+    /\s/u.test(plainText[activeTrigger.end] ?? "")
+      ? activeTrigger.end + 1
+      : activeTrigger.end
+  ), [plainText]);
+
   const handleSelectSearchResult = useCallback((command: SessionSlashCommandViewModel) => {
     const activeTrigger = commandTriggerRef.current;
-    if (!activeTrigger || !editorRef.current) return;
-    const replacement = `${command.displayName} `;
-    const replaceEnd = /\s/u.test(plainText[activeTrigger.end] ?? "")
-      ? activeTrigger.end + 1
-      : activeTrigger.end;
-    replaceComposerTextRange(editorRef.current, activeTrigger.start, replaceEnd, replacement);
+    if (activeTrigger?.kind !== "slash" || !editorRef.current) return;
+    replaceComposerTextRange(
+      editorRef.current,
+      activeTrigger.start,
+      replaceEndFor(activeTrigger),
+      `${command.displayName} `,
+    );
     setSearchSuppressed(true);
     editorRef.current.focus();
-  }, [plainText]);
+  }, [replaceEndFor]);
+
+  const handleSelectFileMention = useCallback((result: FileMentionResult) => {
+    const activeTrigger = commandTriggerRef.current;
+    if (activeTrigger?.kind !== "mention" || !editorRef.current) return;
+    // The mention is inserted as a chip node plus a trailing space, not as
+    // markdown text: markdown typed in one shot never reaches the shortcut
+    // plugin, so building the node here is what makes the draft show a chip
+    // immediately. Serialization back to `[name](path)` is the node's job.
+    replaceComposerRangeWithNodes(
+      editorRef.current,
+      activeTrigger.start,
+      replaceEndFor(activeTrigger),
+      () => [
+        $createComposerFileMentionNode(result.path, result.name),
+        $createTextNode(" "),
+      ],
+    );
+    setSearchSuppressed(true);
+    editorRef.current.focus();
+  }, [replaceEndFor]);
 
   const search = useChatSlashCommandMenu({
-    open: !!trigger,
-    query: trigger?.query ?? "",
+    open: !!slashTrigger,
+    query: slashTrigger?.query ?? "",
     onSelect: handleSelectSearchResult,
   });
+  const mentions = useChatFileMentionMenu({
+    open: !!mentionTrigger,
+    query: mentionTrigger?.query ?? "",
+    onSelect: handleSelectFileMention,
+  });
+  const openMenu = slashTrigger ? search : mentionTrigger ? mentions : null;
+  const openMenuItemCount = slashTrigger
+    ? search.commands.length
+    : mentionTrigger
+      ? mentions.results.length
+      : 0;
 
   const handleKeyDown = useCallback((event: ChatComposerKeyboardEvent) => {
     if (event.isComposing || event.nativeEvent?.isComposing || event.defaultPrevented) return;
-    if (trigger) {
+    if (openMenu) {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        search.moveHighlight(event.key === "ArrowDown" ? 1 : -1);
+        openMenu.moveHighlight(event.key === "ArrowDown" ? 1 : -1);
         return;
       }
       if (event.key === "Escape") {
@@ -150,25 +198,27 @@ export function ComposerCommandEditor({
       }
     }
     onKeyDown?.(event);
-  }, [onKeyDown, search, trigger]);
+  }, [onKeyDown, openMenu]);
 
   const handleCommandKey = useCallback((event: KeyboardEvent) => {
     if (!editorRef.current || event.defaultPrevented || event.isComposing) return false;
     const context = getComposerEditorContext(editorRef.current);
     const activeTrigger = searchSuppressed || disabled
       ? null
-      : findSlashCommandTrigger(context.plainText, context.focusOffset);
+      : findComposerMenuTrigger(context.plainText, context.focusOffset);
     commandTriggerRef.current = activeTrigger;
-    if (!activeTrigger) return false;
-    if ((event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) && search.commands.length > 0) {
+    if (!activeTrigger || !openMenu || activeTrigger.kind !== (slashTrigger ? "slash" : "mention")) {
+      return false;
+    }
+    if ((event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) && openMenuItemCount > 0) {
       event.preventDefault();
-      search.selectHighlighted();
+      openMenu.selectHighlighted();
       return true;
     }
     return false;
-  }, [disabled, search, searchSuppressed]);
+  }, [disabled, openMenu, openMenuItemCount, searchSuppressed, slashTrigger]);
 
-  const searchTray = trigger ? (
+  const searchTray = slashTrigger ? (
     <ComposerSlashCommandSearch
       commands={search.commands}
       highlightedIndex={search.highlightedIndex}
@@ -176,6 +226,20 @@ export function ComposerCommandEditor({
       onSelect={handleSelectSearchResult}
       onRowMouseEnter={search.handleRowMouseEnter}
       setRowRef={search.setRowRef}
+    />
+  ) : mentionTrigger ? (
+    <ComposerFileMentionSearch
+      results={mentions.results}
+      highlightedIndex={mentions.highlightedIndex}
+      listRef={mentions.listRef}
+      query={mentionTrigger.query}
+      isLoading={mentions.isLoading}
+      isError={mentions.isError}
+      isPending={mentions.isPending}
+      runtimeReady={mentions.runtimeReady}
+      onSelect={handleSelectFileMention}
+      onRowMouseEnter={mentions.handleRowMouseEnter}
+      setRowRef={mentions.setRowRef}
     />
   ) : null;
 

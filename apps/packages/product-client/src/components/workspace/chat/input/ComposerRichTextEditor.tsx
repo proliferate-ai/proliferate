@@ -12,6 +12,7 @@ import {
   OUTDENT_CONTENT_COMMAND,
   type LexicalEditor,
   type LexicalNode,
+  type RangeSelection,
   type TextNode,
 } from "lexical";
 import { LinkNode } from "@lexical/link";
@@ -39,6 +40,10 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ComposerCaretPlugin } from "#product/components/workspace/chat/input/ComposerCaretPlugin";
+import {
+  COMPOSER_FILE_MENTION_TRANSFORMER,
+  ComposerFileMentionNode,
+} from "#product/components/workspace/chat/input/ComposerFileMentionNode";
 import { ComposerLinkPastePlugin } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "@proliferate/product-ui/chat/transcript/TranscriptLinkStyles";
 import type { ComposerKeyboardEventLike } from "#product/lib/domain/chat/composer/composer-keyboard";
@@ -53,6 +58,10 @@ const INPUT_TRANSFORMERS: Transformer[] = [
   BOLD_UNDERSCORE,
   ITALIC_STAR,
   ITALIC_UNDERSCORE,
+  // A workspace file link becomes a mention chip on the way in. Web links stay
+  // literal text in the draft (LINK is output-only), so this is the one
+  // markdown destination the composer paints as an object.
+  COMPOSER_FILE_MENTION_TRANSFORMER,
 ];
 const OUTPUT_TRANSFORMERS: Transformer[] = [...INPUT_TRANSFORMERS, LINK];
 const EXTERNAL_VALUE_TAG = "external-composer-value";
@@ -104,7 +113,7 @@ export function ComposerRichTextEditor({
   const eventTimeStampRef = useRef<number | undefined>(undefined);
   const initialConfig = {
     namespace: "ProliferateChatComposer",
-    nodes: [ListNode, ListItemNode, LinkNode],
+    nodes: [ListNode, ListItemNode, LinkNode, ComposerFileMentionNode],
     editable: !disabled,
     theme: {
       paragraph: "m-0 min-h-[1lh]",
@@ -383,6 +392,37 @@ export function replaceComposerTextRange(
   end: number,
   replacement: string,
 ) {
+  replaceComposerRange(editor, start, end, (selection) => {
+    selection.insertText(replacement);
+  });
+}
+
+/**
+ * Replaces a plain-text range with real nodes.
+ *
+ * Node insertion cannot go through {@link replaceComposerTextRange}: markdown
+ * typed in one shot never reaches the markdown shortcut plugin (it only fires on
+ * single-character edits), so a surface that wants a chip has to build the node
+ * itself. `createNodes` runs inside the editor update, which is the only place
+ * `$create*` calls are legal.
+ */
+export function replaceComposerRangeWithNodes(
+  editor: LexicalEditor,
+  start: number,
+  end: number,
+  createNodes: () => LexicalNode[],
+) {
+  replaceComposerRange(editor, start, end, (selection) => {
+    selection.insertNodes(createNodes());
+  });
+}
+
+function replaceComposerRange(
+  editor: LexicalEditor,
+  start: number,
+  end: number,
+  apply: (selection: RangeSelection) => void,
+) {
   editor.update(() => {
     const anchor = pointAtOffset(start);
     const focus = pointAtOffset(end);
@@ -390,6 +430,6 @@ export function replaceComposerTextRange(
     const selection = $createRangeSelection();
     selection.setTextNodeRange(anchor.node, anchor.offset, focus.node, focus.offset);
     $setSelection(selection);
-    selection.insertText(replacement);
+    apply(selection);
   });
 }
