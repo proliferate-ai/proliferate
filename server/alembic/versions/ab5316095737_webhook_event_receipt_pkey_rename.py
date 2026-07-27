@@ -39,7 +39,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "ab5316095737"
-down_revision: str | Sequence[str] | None = "35fa0038d703"
+down_revision: str | Sequence[str] | None = "a1c2f4d6b8e0"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

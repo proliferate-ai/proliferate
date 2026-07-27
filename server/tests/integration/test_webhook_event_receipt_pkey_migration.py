@@ -29,7 +29,7 @@ from proliferate.db.models.base import Base
 from tests.postgres import temporary_database
 
 _REVISION = "ab5316095737"
-_DOWN_REVISION = "35fa0038d703"
+_DOWN_REVISION = "a1c2f4d6b8e0"
 _TABLE = "webhook_event_receipt"
 _OLD_PKEY = "sandbox_event_receipt_pkey"
 _NEW_PKEY = "webhook_event_receipt_pkey"
