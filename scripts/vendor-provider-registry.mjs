@@ -6,7 +6,7 @@
 // (re-run whenever OpenCode-supported providers change upstream; the output
 // below is checked in, there is no build-time fetch).
 
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,12 +32,21 @@ async function fetchProviders() {
   return response.json();
 }
 
+// Upstream ids become path components (assets/provider-logos/<id>.svg) and
+// identifiers in generated TS, so only plain slug ids are kept — anything else
+// could escape the logo dir or emit unparseable output.
+const SAFE_PROVIDER_ID_RE = /^[a-z0-9][a-z0-9._-]*$/i;
+
 function reduceProviders(raw) {
   const providers = [];
 
   for (const provider of Object.values(raw)) {
     const envVarNames = Array.isArray(provider.env) ? provider.env.filter(Boolean) : [];
     if (envVarNames.length === 0) continue;
+    if (typeof provider.id !== "string" || !SAFE_PROVIDER_ID_RE.test(provider.id)) {
+      console.warn(`Skipping provider with unsafe id: ${JSON.stringify(provider.id)}`);
+      continue;
+    }
 
     const entry = {
       id: provider.id,
@@ -57,26 +66,49 @@ function reduceProviders(raw) {
 // Download one mark per kept provider. A provider with no published logo is
 // skipped and logged — the picker renders a neutral fallback glyph for it, so a
 // missing mark is never a gate (agent-auth.md: attribution never gates).
+//
+// Downloads land in a sibling temp dir and are swapped in only after every
+// fetch settled. A mid-loop throw (network drop) therefore leaves the checked-in
+// logos and the generated map they back untouched, rather than an empty dir plus
+// a map importing 170+ missing files.
 async function vendorLogos(providers) {
-  rmSync(logosDir, { recursive: true, force: true });
-  mkdirSync(logosDir, { recursive: true });
+  const stagingDir = `${logosDir}.staging`;
+  rmSync(stagingDir, { recursive: true, force: true });
+  mkdirSync(stagingDir, { recursive: true });
 
   const kept = [];
   const missing = [];
-  for (const provider of providers) {
-    const response = await fetch(logoUrl(provider.id));
-    if (!response.ok) {
-      missing.push(`${provider.id} (${response.status})`);
-      continue;
+  try {
+    for (const provider of providers) {
+      const response = await fetch(logoUrl(provider.id));
+      if (!response.ok) {
+        missing.push(`${provider.id} (${response.status})`);
+        continue;
+      }
+      const svg = await response.text();
+      if (!svg.includes("<svg")) {
+        missing.push(`${provider.id} (not an svg)`);
+        continue;
+      }
+      writeFileSync(path.join(stagingDir, `${provider.id}.svg`), svg);
+      kept.push(provider.id);
     }
-    const svg = await response.text();
-    if (!svg.includes("<svg")) {
-      missing.push(`${provider.id} (not an svg)`);
-      continue;
-    }
-    writeFileSync(path.join(logosDir, `${provider.id}.svg`), svg);
-    kept.push(provider.id);
+  } catch (error) {
+    rmSync(stagingDir, { recursive: true, force: true });
+    throw error;
   }
+
+  // Atomic-enough swap: same filesystem, and the only window is between the two
+  // renames, which no build observes (this is a manual refresh script).
+  const retiredDir = `${logosDir}.retired`;
+  rmSync(retiredDir, { recursive: true, force: true });
+  try {
+    renameSync(logosDir, retiredDir);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  renameSync(stagingDir, logosDir);
+  rmSync(retiredDir, { recursive: true, force: true });
   return { kept, missing };
 }
 
