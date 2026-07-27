@@ -13,7 +13,7 @@ type ThinkingTextStyle = CSSProperties & { "--thinking-text-delay"?: string };
 /**
  * The product's one "agent is working" text treatment: a dim muted label with
  * a light left→right gleam. Motion comes from `.thinking-text*` (design
- * dom.css) — a masked band window and its counter-translated bright glyph copy
+ * product.css) — a masked band window and its counter-translated bright glyph copy
  * each animate transform in lockstep, so the gleam is compositor-only and
  * cannot jitter or bump layout while the main thread is busy. Reduced motion
  * renders a calm static label. Shared so desktop and the cloud/web chat

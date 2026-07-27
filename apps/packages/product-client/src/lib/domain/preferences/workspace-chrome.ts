@@ -61,7 +61,7 @@ export function resolveMainSidebarEdgeClassName({
   desktop: boolean;
   transparent: boolean;
 }): string {
-  return desktop && transparent ? "border-r border-sidebar-border" : "";
+  return desktop && transparent ? "border-r border-border" : "";
 }
 
 export function resolveStandardWorkspaceChromeClasses({
@@ -87,7 +87,7 @@ export function resolveStandardWorkspaceChromeClasses({
     // rendering them as off-shade stripes on every theme.
     contentShell: [
       "bg-background",
-      sidebarOpen && !transparent ? "rounded-tl-2xl border-l border-sidebar-border" : "",
+      sidebarOpen && !transparent ? "rounded-tl-2xl border-l border-border" : "",
       sidebarOpen && !transparent && showContentTopBorder ? "border-t" : "",
     ].filter(Boolean).join(" "),
     header,
@@ -105,7 +105,7 @@ export function resolveCoworkWorkspaceChromeClasses({
     root: transparent ? "bg-transparent" : "bg-sidebar",
     contentShell: [
       "bg-background",
-      sidebarOpen && !transparent ? "rounded-tl-2xl border-l border-t border-sidebar-border" : "",
+      sidebarOpen && !transparent ? "rounded-tl-2xl border-l border-t border-border" : "",
     ].filter(Boolean).join(" "),
     header: transparent ? WORKSPACE_GLASS_HEADER_CLASS : WORKSPACE_SOLID_HEADER_CLASS,
   };
