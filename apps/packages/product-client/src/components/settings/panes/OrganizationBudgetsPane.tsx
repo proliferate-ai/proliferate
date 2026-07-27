@@ -13,8 +13,8 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import {
   SegmentedControl,
 } from "@proliferate/ui/primitives/SegmentedControl";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
 import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";

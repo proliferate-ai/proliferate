@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   PROVIDER_REGISTRY,

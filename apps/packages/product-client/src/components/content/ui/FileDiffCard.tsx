@@ -70,20 +70,20 @@ export function FileDiffCard({
     ? "codex-review-diff-card rounded-md"
     : embedded ? "" : "rounded-lg";
   const cardStyle = {
-    "--codex-diffs-surface":
-      "var(--codex-diffs-surface-override, var(--color-diff-panel-surface))",
-    "--codex-diffs-header-surface": isSidebar
+    "--diff-view-surface":
+      "var(--diff-view-surface-override, var(--color-diff-panel-surface))",
+    "--diff-view-header-surface": isSidebar
       ? "var(--color-diff-sidebar-file-header-surface)"
       : headerTone === "inlineTool"
         ? "var(--color-diff-chat-inline-tool-header-surface)"
         : "var(--color-diff-chat-file-header-surface)",
     ...(isSidebar
       ? {
-          "--codex-diffs-separator-surface":
+          "--diff-view-separator-surface":
             "var(--color-diff-sidebar-file-header-hover-surface)",
         }
       : {}),
-    backgroundColor: "var(--codex-diffs-surface)",
+    backgroundColor: "var(--diff-view-surface)",
   } as CSSProperties;
   // Sidebar review cards use a near-opaque sticky header: the sticky wrapper
   // paints a 97% color-mix of the header surface (no backdrop-filter — blur
@@ -91,13 +91,13 @@ export function FileDiffCard({
   // so the inner shell must stay transparent for that paint to show.
   const headerShellClass = isSidebar
     ? "bg-transparent"
-    : "bg-[var(--codex-diffs-header-surface)]";
+    : "bg-[var(--diff-view-header-surface)]";
   const chatHeaderHoverClass = headerTone === "inlineTool"
     ? "hover:bg-[var(--color-diff-chat-inline-tool-header-hover-surface)]"
     : "hover:bg-[var(--color-diff-chat-file-header-hover-surface)]";
   const headerInnerClass = isSidebar
-    ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--codex-diffs-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat hover:bg-[var(--codex-diffs-separator-surface)]"
-    : `group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.25rem)] text-chat transition-colors ${chatHeaderHoverClass}`;
+    ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--diff-view-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat hover:bg-[var(--diff-view-separator-surface)]"
+    : `group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--diff-view-header-padding-x,1rem)] py-[var(--diff-view-header-padding-y,0.25rem)] text-chat transition-colors ${chatHeaderHoverClass}`;
   const actionRevealClass = "opacity-0 transition-opacity duration-hover group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100";
   const statsClass = isSidebar
     ? "leading-none"
@@ -133,7 +133,7 @@ export function FileDiffCard({
           : undefined
       }
       data-chat-diff-wrap-context-trigger={isSidebar ? undefined : "file-header"}
-      className={`z-10 select-none ${isSidebar ? "sticky top-0 bg-[color-mix(in_srgb,var(--codex-diffs-header-surface)_97%,transparent)]" : "bg-[var(--codex-diffs-header-surface)]"} ${canExpand ? "cursor-pointer" : ""}`}
+      className={`z-10 select-none ${isSidebar ? "sticky top-0 bg-[color-mix(in_srgb,var(--diff-view-header-surface)_97%,transparent)]" : "bg-[var(--diff-view-header-surface)]"} ${canExpand ? "cursor-pointer" : ""}`}
     >
       <div className={headerShellClass}>
         <div className={headerInnerClass}>
@@ -231,7 +231,7 @@ export function FileDiffCard({
     <div
       data-diff-surface={surface}
       style={cardStyle}
-      className={`group/file-diff flex flex-col overflow-clip bg-[var(--codex-diffs-surface)] ${cardClass}`}
+      className={`group/file-diff flex flex-col overflow-clip bg-[var(--diff-view-surface)] ${cardClass}`}
     >
       {headerWithContextMenu}
 

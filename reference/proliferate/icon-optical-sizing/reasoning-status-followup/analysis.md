@@ -1,6 +1,6 @@
 # Reasoning and status follow-up
 
-Primary reference owner: Codex Desktop. The exact inspected state is the founder-supplied 700×296 recording of the completed-work disclosure expanding and collapsing over a populated transcript; it is preserved at `reference/codex/reasoning-disclosure/codex-work-disclosure.mov`.
+Primary reference owner: Codex Desktop. The exact inspected state is the founder-supplied 700×296 recording of the completed-work disclosure expanding and collapsing over a populated transcript; the recording is retained locally in the untracked `reference/` tree.
 
 Matched properties:
 

@@ -3,8 +3,8 @@ import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, FolderRemote
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
@@ -21,12 +21,11 @@ import {
   type RepoGroupMenuHandlers,
 } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
-import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
+import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
 
 interface RepoGroupProps {
   name: string;
-  count: number;
   collapsed: boolean;
   environmentKind?: RepoGroupEnvironmentKind;
   children: ReactNode;
@@ -58,7 +57,6 @@ const CREATE_WORKSPACE_SHORTCUT_CLASS = "shrink-0 text-muted-foreground/70";
 
 export function RepoGroup({
   name,
-  count,
   collapsed,
   environmentKind = "local",
   children,
@@ -141,7 +139,6 @@ export function RepoGroup({
   const headerRow = (
     <ProductSidebarRepoGroupHeader
       label={name}
-      count={count}
       collapsed={collapsed}
       icon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded={false} />}
       expandedIcon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded />}
@@ -161,7 +158,7 @@ export function RepoGroup({
               alwaysVisible
               className="rounded-md opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
             >
-              <Plus className="icon-compact" />
+              <Plus className="icon-paired" />
             </SidebarActionButton>
           }
           side="right"
@@ -242,7 +239,7 @@ export function RepoGroup({
                 alwaysVisible
                 className="opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
               >
-                <MoreHorizontal className="icon-compact" />
+                <MoreHorizontal className="icon-paired" />
               </SidebarActionButton>
             }
             side="right"
@@ -310,7 +307,7 @@ function RepoGroupEnvironmentIcon({
   kind: RepoGroupEnvironmentKind;
   expanded: boolean;
 }) {
-  // Codex parity: remote-capable repos use the fused folder+globe glyph —
+  // Remote-capable repos use the fused folder+globe glyph —
   // one icon, never a badge overlay.
   if (kind === "cloud" || kind === "local_cloud") {
     return <FolderRemote className="icon-paired shrink-0" />;

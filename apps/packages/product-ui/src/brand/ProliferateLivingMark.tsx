@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
+import { ProliferateIcon } from "@proliferate/ui/icons/proliferate-icons";
 
 interface ProliferateLivingMarkProps {
   className?: string;

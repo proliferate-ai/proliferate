@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { UserAvatar } from "@proliferate/ui/primitives/UserAvatar";
 
-import { SettingsSection } from "../settings/SettingsSection";
+import { SettingsSection } from "../patterns/SettingsSection";
 import {
   AccountPasswordCredentialRow,
   type AccountPasswordCredentialView,

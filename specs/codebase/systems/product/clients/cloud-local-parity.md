@@ -122,10 +122,13 @@ Use these terms consistently in code, copy, and review notes.
 
 - `apps/web/src/components/settings/screen/SettingsScreen.tsx` is a Web route
   screen with a separate section model and Web-only data wiring.
-- `apps/packages/product-ui/src/settings/**` contains reusable settings UI pieces;
-  Web keeps its route-screen IA while sharing primitives with Desktop.
+- `apps/packages/product-ui/src/patterns/**` contains the reusable settings UI
+  pieces (`SettingsRow`, `SettingsSection`, `SettingsPageHeader`, etc.);
+  `apps/packages/product-ui/src/settings/**` holds the remaining scope-specific
+  pieces (`RepoPicker`, `OrganizationSsoSettingsSurface`). Web keeps its
+  route-screen IA while sharing primitives with Desktop.
 - `apps/desktop/src/components/settings/shared/**` already re-exports shared
-  settings primitives from `apps/packages/product-ui/src/settings/**`; extend
+  settings primitives from `apps/packages/product-ui/src/patterns/**`; extend
   those primitives instead of re-extracting them.
 
 ### Mobile
@@ -503,7 +506,7 @@ Settings sections to exclude from Web:
 Sharing model:
 
 - Extend the existing shared settings primitives in
-  `apps/packages/product-ui/src/settings/**`. Shared settings UI owns only
+  `apps/packages/product-ui/src/patterns/**`. Shared settings UI owns only
   presentational shells/nav/card/row/modal surfaces that accept section
   descriptors, statuses, disabled reasons, slots, and callbacks.
 - Move section definitions, ordering, search/filter labels, and capability

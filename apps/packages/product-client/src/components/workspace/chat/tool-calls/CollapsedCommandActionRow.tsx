@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ToolCallItem } from "@anyharness/sdk";
 import { CommandWindow } from "@proliferate/ui/icons";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import {
   deriveCommand,

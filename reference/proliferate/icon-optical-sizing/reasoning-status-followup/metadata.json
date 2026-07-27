@@ -25,7 +25,7 @@
     "beforeCopy": "before-copy-clipped.png",
     "beforeSpinner": "before-install-spinner.png",
     "beforeMarkdownOrdering": "before-markdown-resource-order.png",
-    "primaryReference": "../../../codex/reasoning-disclosure/codex-work-disclosure.mov"
+    "primaryReference": "retained locally under the untracked reference/ tree (removed from the repository)"
   },
   "limitations": [
     "The final recording is the frontend-only Desktop renderer, not packaged Desktop.",

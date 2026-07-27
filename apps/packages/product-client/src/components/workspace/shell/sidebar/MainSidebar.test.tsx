@@ -28,7 +28,7 @@ vi.mock("#product/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
-vi.mock("@proliferate/ui/layout/SidebarRowSurface", () => ({
+vi.mock("@proliferate/ui/patterns/SidebarRowSurface", () => ({
   SidebarRowSurface: ({
     active,
     children,
@@ -44,7 +44,7 @@ vi.mock("@proliferate/ui/layout/SidebarRowSurface", () => ({
   ),
 }));
 
-vi.mock("@proliferate/ui/layout/SidebarActionButton", () => ({
+vi.mock("@proliferate/ui/patterns/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     onClick,
@@ -90,7 +90,7 @@ vi.mock("@proliferate/ui/primitives/PopoverMenuItem", () => ({
   ),
 }));
 
-vi.mock("@proliferate/ui/layout/AutoHideScrollArea", () => ({
+vi.mock("@proliferate/ui/patterns/AutoHideScrollArea", () => ({
   AutoHideScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
@@ -200,6 +200,8 @@ const workspaceUiState = vi.hoisted(() => ({
   unarchiveWorkspaces: vi.fn(),
   workspaceTypes: ["local", "worktree", "cloud"],
   toggleSidebarWorkspaceType: vi.fn(),
+  repositoriesCollapsed: false,
+  setRepositoriesCollapsed: vi.fn(),
 }));
 
 vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
@@ -250,13 +252,10 @@ vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
 
 vi.mock("#product/hooks/workspaces/facade/use-sidebar-repo-group-state", () => ({
   useSidebarRepoGroupState: () => ({
-    allRepoKeys: [],
-    allRepoGroupsCollapsed: false,
     collapsedRepoGroupKeys: new Set<string>(),
     repoGroupsShownMoreKeys: new Set<string>(),
     handleToggleRepoShowMore: vi.fn(),
     handleToggleRepoCollapsed: vi.fn(),
-    handleToggleAllRepoGroups: vi.fn(),
     clearRepoGroupShowMore: vi.fn(),
   }),
 }));

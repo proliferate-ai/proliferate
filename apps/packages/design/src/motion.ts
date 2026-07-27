@@ -1,9 +1,6 @@
 /**
- * Shared authority for interaction motion and named activity cadence.
- *
- * Provenance: `ui-foundation-target.md` §motion (role durations + named eases)
- * and the frozen retune map §5.4.1 captured at
- * `origin/ui-foundation-pass:.foundation-scout/retune-spec.md`.
+ * Shared authority for interaction motion and named activity cadence, giving
+ * role durations and named eases a single owner.
  *
  * Duration/ease roles are projected into CSS custom properties by
  * `scripts/generate-theme.mjs`, so a component never hand-authors a millisecond

@@ -149,11 +149,10 @@ function renderInlineHint(hint?: ReactNode) {
   }
 
   if (typeof hint === "string" || typeof hint === "number") {
-    // Codex parity: commands/paths render as flat muted mono text in the row —
-    // no chip/pill chrome (codex mono = `--codex-chat-code-font-size`, one step
-    // under chat text; ours uses the 13px UI step instead of the old 11px
-    // transcript metadata size). Color inherits so hover brightens the command
-    // together with the label.
+    // Commands/paths render as flat muted mono text in the row — no chip/pill
+    // chrome; the mono text renders one step below chat size (the 13px UI
+    // step instead of the old 11px transcript metadata size). Color inherits
+    // so hover brightens the command together with the label.
     return (
       <span
         title={String(hint)}

@@ -2,8 +2,8 @@ import { Building2, Cloud, CreditCard, Gauge, Server } from "lucide-react";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 
-import { SettingsSection } from "../settings/SettingsSection";
-import { SettingsRow } from "../settings/SettingsRow";
+import { SettingsSection } from "../patterns/SettingsSection";
+import { SettingsRow } from "../patterns/SettingsRow";
 import type { BillingOwnerCardView } from "./billing-types";
 import { CreditGrantBreakdown } from "./BillingCreditGrantBreakdown";
 import {

@@ -18,6 +18,7 @@ type WorkspaceUiSidebarActions = Pick<
   | "ensureRepoGroupExpanded"
   | "setCollapsedRepoGroups"
   | "setShowArchived"
+  | "setRepositoriesCollapsed"
   | "setThreadsCollapsed"
   | "setSidebarOpen"
   | "setSidebarWidth"
@@ -107,6 +108,10 @@ export function createWorkspaceUiSidebarActions(
 
     setShowArchived: (value) => {
       set({ showArchived: value });
+    },
+
+    setRepositoriesCollapsed: (value) => {
+      set({ repositoriesCollapsed: value });
     },
 
     setThreadsCollapsed: (value) => {

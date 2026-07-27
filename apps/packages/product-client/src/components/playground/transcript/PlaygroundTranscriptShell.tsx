@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { Settings, Sparkles } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";

@@ -11,7 +11,7 @@ import {
   Plus,
   Trash,
 } from "@proliferate/ui/icons";
-import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
+import { PaneOptionsMenuItem } from "@proliferate/ui/patterns/PaneOptionsMenuItem";
 import {
   ScratchCodeMirrorEditor,
   type ScratchCodeMirrorEditorHandle,
