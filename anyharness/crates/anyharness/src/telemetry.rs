@@ -22,7 +22,7 @@ mod scrub;
 
 const ANYHARNESS_TELEMETRY_MODE: &str = "hosted_product";
 const RUNTIME_ENV_TAG: &str = "runtime_env";
-const RUNTIME_INCIDENT_FINGERPRINT: &str = "anyharness:session_model_gated";
+const RUNTIME_INCIDENT_FINGERPRINT: &str = "anyharness:runtime_incident";
 
 #[derive(Clone)]
 struct ScrubbedTransportFactory;

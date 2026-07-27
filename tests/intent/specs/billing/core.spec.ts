@@ -170,7 +170,7 @@ test.describe("T2-BILL-2: plan limits + policy gates", () => {
     // The claimed admin org is on the free plan; agent_gateway_policy_min_plan
     // defaults to "pro", so editing the gateway auth policy must 403.
     const res = await b.apiRequest(
-      `/v1/cloud/organizations/${organizationId}/agent-gateway/policy`,
+      `/v1/cloud/organizations/${organizationId}/agent-auth/policy`,
       {
         method: "PUT",
         token,

@@ -20,6 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_KIND_AWS_BEDROCK,
+    AGENT_API_KEY_KIND_AZURE_OPENAI,
+    AGENT_API_KEY_TYPED_KINDS,
     AGENT_AUTH_POLICY_ROUTES,
     AGENT_AUTH_ROUTE_NATIVE,
     AGENT_AUTH_SURFACE_CLOUD,
@@ -41,6 +44,8 @@ from proliferate.server.billing.domain.plans import (
 )
 from proliferate.server.billing.snapshots import billing_plan_rule_config
 from proliferate.server.billing.subjects import ensure_organization_billing_subject_state
+from proliferate.server.catalogs.service import supported_provider_config_kinds
+from proliferate.server.cloud.agent_gateway.budget import get_gateway_enrollment_for_user
 from proliferate.server.cloud.agent_gateway.selection_rules import (
     SelectionRuleError,
     validate_auth_selection_set,
@@ -125,6 +130,99 @@ async def create_api_key(
         "agent_api_key_created",
         user_id=str(user_id),
         api_key_id=str(record.id),
+    )
+    return record
+
+
+_MAX_PROVIDER_CONFIG_FIELD_LENGTH = 4096
+_MAX_PROVIDER_CONFIG_FIELDS = 16
+
+# Required field keys per typed kind, matching the UI field spec exactly
+# (apps/packages/product-client/src/lib/domain/settings/provider-config-fields.ts
+# PROVIDER_CONFIG_SPECS) so a value the UI can submit is never rejected here,
+# and a value shaped for the wrong kind (or carrying unknown keys) always is.
+# azure_openai is endpoint + apiKey ONLY (founder ruling R5): `deployment` is
+# dropped — the renderer deliberately never translated it
+# (materialize/agent_auth.py `_translate_provider_config_env`), so collecting
+# it stored a field nothing would ever read.
+_PROVIDER_CONFIG_REQUIRED_FIELDS: dict[str, frozenset[str]] = {
+    AGENT_API_KEY_KIND_AWS_BEDROCK: frozenset({"region", "bearerToken"}),
+    AGENT_API_KEY_KIND_AZURE_OPENAI: frozenset({"endpoint", "apiKey"}),
+}
+
+
+async def create_provider_config(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    title: str,
+    kind: str,
+    value: dict[str, str],
+) -> AgentApiKeyRecord:
+    """Create a typed vault entry (D2's ``ProviderConfigCreatorSubmit`` shape).
+
+    This is intentionally provider-agnostic, same as ``create_api_key``: a
+    vault entry is not bound to a harness at storage time (agent-auth.md's
+    "The vault"), so which harnesses may reference ``kind`` is enforced at
+    selection-write time, not here.
+    """
+    title = title.strip()
+    if not title or len(title) > _MAX_TITLE_LENGTH:
+        raise CloudApiError(
+            "invalid_agent_api_key_title",
+            f"Title must be 1-{_MAX_TITLE_LENGTH} characters.",
+            status_code=400,
+        )
+    if kind not in AGENT_API_KEY_TYPED_KINDS:
+        raise CloudApiError(
+            "invalid_agent_provider_config_kind",
+            f"Unsupported provider-config kind: {kind}.",
+            status_code=400,
+        )
+    if not value or len(value) > _MAX_PROVIDER_CONFIG_FIELDS:
+        raise CloudApiError(
+            "invalid_agent_provider_config_value",
+            f"Provider-config value must have 1-{_MAX_PROVIDER_CONFIG_FIELDS} field(s).",
+            status_code=400,
+        )
+    required_fields = _PROVIDER_CONFIG_REQUIRED_FIELDS[kind]
+    submitted_fields = frozenset(value.keys())
+    unknown_fields = submitted_fields - required_fields
+    if unknown_fields:
+        raise CloudApiError(
+            "invalid_agent_provider_config_fields",
+            f"Unknown field(s) for kind '{kind}': {', '.join(sorted(unknown_fields))}.",
+            status_code=422,
+        )
+    missing_fields = required_fields - submitted_fields
+    if missing_fields:
+        raise CloudApiError(
+            "invalid_agent_provider_config_fields",
+            f"Missing required field(s) for kind '{kind}': {', '.join(sorted(missing_fields))}.",
+            status_code=422,
+        )
+    trimmed_value: dict[str, str] = {}
+    for field_key, field_value in value.items():
+        trimmed = field_value.strip()
+        if not trimmed or len(trimmed) > _MAX_PROVIDER_CONFIG_FIELD_LENGTH:
+            raise CloudApiError(
+                "invalid_agent_provider_config_value",
+                f"Field '{field_key}' must be a non-empty string.",
+                status_code=400,
+            )
+        trimmed_value[field_key] = trimmed
+    record = await agent_gateway_store.create_agent_provider_config(
+        db,
+        user_id=user_id,
+        title=title,
+        kind=kind,
+        value=trimmed_value,
+    )
+    log_cloud_event(
+        "agent_provider_config_created",
+        user_id=str(user_id),
+        api_key_id=str(record.id),
+        kind=kind,
     )
     return record
 
@@ -223,6 +321,12 @@ async def put_auth_selections(
             harness_kind=harness_kind,
             surface=surface,
             sources=sources,
+            # The registry-driven typed-vault vocabulary (agent-auth.md "The
+            # vault"): the harness's declared, non-pending providerConfig
+            # kinds. The store cannot read the registry itself (store→server
+            # boundary), so the ONE source of truth — registry.json via the
+            # catalogs service — is threaded through here.
+            supported_provider_config_kinds=supported_provider_config_kinds(harness_kind),
         )
     except agent_gateway_store.AgentApiKeyNotUsableError as error:
         raise CloudApiError(
@@ -247,7 +351,15 @@ async def put_auth_selections(
         enabled_count=sum(1 for row in rows if row.enabled),
     )
     if surface == AGENT_AUTH_SURFACE_CLOUD:
-        await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
+        # Ensure-on-switch (agent-auth.md "A cloud switch ensures the
+        # sandbox"): the scheduled task provisions-or-wakes the user's
+        # existing sandbox through the canonical connect path so the new
+        # document lands now, not at the next unrelated wake. Schedule only —
+        # the write never blocks on sandbox boot (the ack pipeline observes
+        # arrival), and the never-provisioned case still falls to bootstrap.
+        await materialization_service.schedule_materialize_agent_auth(
+            db, user_id=user_id, ensure_sandbox=True
+        )
     return rows
 
 
@@ -282,14 +394,122 @@ async def get_auth_state(
     *,
     user_id: UUID,
     surface: str,
-) -> dict[str, object]:
-    """Render the user's state.json v2 document for one surface.
+) -> tuple[dict[str, object], str]:
+    """Render the user's state.json v2 (document, fingerprint) for one surface.
 
     Same render path as the cloud materializer. A surface with no resolvable
-    enabled sources renders as a v2 doc with an empty ``harnesses`` list.
+    enabled sources renders as a v2 doc with an empty ``harnesses`` list. The
+    fingerprint (the renderer's sha256 of the canonical document) rides the
+    response so the desktop can echo it back through the delivery ack — the
+    server never has to trust a client-computed hash.
     """
-    state, _ = await build_agent_auth_state(db, user_id, surface=surface)
-    return state
+    return await build_agent_auth_state(db, user_id, surface=surface)
+
+
+async def ack_auth_state_delivery(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str,
+    revision: int,
+    fingerprint: str,
+) -> agent_gateway_store.AgentAuthDeliveryAckRecord:
+    """Record a surface runtime's delivery acknowledgement (desktop ack seam).
+
+    The desktop calls this after its local runtime's state PUT/DELETE
+    succeeded, echoing the pushed document's (revision, fingerprint) as served
+    by ``GET /state``. Out-of-order (lower-revision) acks are inert in the
+    store — a delayed confirmation of a superseded document never moves the
+    stamp backwards.
+
+    Trust boundary: the FINGERPRINT is taken from the authenticated client by
+    design — it can only misreport its own delivery state, and it already
+    holds the keys the document carries, so a lie gains it nothing beyond a
+    wrong badge on its own settings. The REVISION, however, is server-bounded:
+    an ack claiming a revision higher than the surface's current rendered
+    revision (max ``updated_at`` over the surface's selection rows — the same
+    value ``GET /state`` serves) could never have been served, and accepting
+    it would wedge the store's only-move-forward backstop against every later
+    legitimate ack. Such an ack from the future is rejected with 400.
+    """
+    if revision < 0:
+        raise CloudApiError(
+            "invalid_agent_auth_delivery_ack",
+            "revision must be a non-negative integer.",
+            status_code=400,
+        )
+    fingerprint = fingerprint.strip()
+    if not fingerprint or len(fingerprint) > 128:
+        raise CloudApiError(
+            "invalid_agent_auth_delivery_ack",
+            "fingerprint must be a 1-128 character string.",
+            status_code=400,
+        )
+    current_revision = _selection_scope_revision(
+        await agent_gateway_store.list_auth_selections(db, user_id=user_id, surface=surface)
+    )
+    if revision > current_revision:
+        raise CloudApiError(
+            "invalid_agent_auth_delivery_ack",
+            "ack from the future: revision exceeds the surface's current rendered revision.",
+            status_code=400,
+        )
+    record = await agent_gateway_store.record_delivery_ack(
+        db,
+        user_id=user_id,
+        surface=surface,
+        revision=revision,
+        fingerprint=fingerprint,
+    )
+    log_cloud_event(
+        "agent_auth_delivery_acked",
+        user_id=str(user_id),
+        surface=surface,
+        revision=revision,
+    )
+    return record
+
+
+def _selection_scope_revision(records: Sequence[AgentAuthSelectionRecord]) -> int:
+    """The renderer's revision contribution of one harness scope (ms epoch)."""
+    return max((int(record.updated_at.timestamp() * 1000) for record in records), default=0)
+
+
+async def annotate_selection_delivery(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    records: Sequence[AgentAuthSelectionRecord],
+) -> dict[UUID, bool]:
+    """Per-record applied-vs-pending truth for the selections read.
+
+    Applied means acknowledged (agent-auth.md): a record reads applied only
+    when its surface's runtime has confirmed a delivery that covers it —
+    either the surface's CURRENT rendered fingerprint equals the acked one
+    (nothing outstanding at all), or this harness scope's revision is no newer
+    than the acked revision (the outstanding change belongs to a different
+    harness on the surface). No ack at all means everything with rows is
+    pending — a failed or missing delivery is visible, never silently stale.
+    """
+    applied: dict[UUID, bool] = {}
+    for surface in {record.surface for record in records}:
+        surface_records = [record for record in records if record.surface == surface]
+        ack = await agent_gateway_store.get_delivery_ack(db, user_id=user_id, surface=surface)
+        if ack is None:
+            for record in surface_records:
+                applied[record.id] = False
+            continue
+        _, fingerprint = await build_agent_auth_state(db, user_id, surface=surface)
+        surface_applied = ack.acked_fingerprint == fingerprint
+        by_harness: dict[str, list[AgentAuthSelectionRecord]] = {}
+        for record in surface_records:
+            by_harness.setdefault(record.harness_kind, []).append(record)
+        for harness_records in by_harness.values():
+            scope_revision = _selection_scope_revision(harness_records)
+            harness_applied = surface_applied or scope_revision <= ack.acked_revision
+            for record in harness_records:
+                applied[record.id] = harness_applied
+    return applied
 
 
 # --------------------------------------------------------------------------- #
@@ -302,8 +522,15 @@ async def get_capabilities(
     *,
     user_id: UUID,
 ) -> tuple[bool, str | None, str]:
-    """Return (gateway_enabled, public_base_url, enrollment_status)."""
-    enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    """Return (gateway_enabled, public_base_url, enrollment_status).
+
+    Reports the status of the enrollment that actually governs this user's
+    gateway sessions (``get_gateway_enrollment_for_user``). Reading the
+    personal enrollment unconditionally would show "synced" to a user whose
+    governing org enrollment is still pending (or the reverse), so the UI's
+    readiness signal and the key the renderer hands out would disagree.
+    """
+    enrollment = await get_gateway_enrollment_for_user(db, user_id)
     return (
         settings.agent_gateway_enabled,
         settings.agent_gateway_litellm_public_base_url or None,
@@ -316,7 +543,8 @@ async def get_enrollment(
     *,
     user_id: UUID,
 ) -> AgentGatewayEnrollmentRecord:
-    enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    """The governing enrollment for this user: the default org's, always."""
+    enrollment = await get_gateway_enrollment_for_user(db, user_id)
     if enrollment is None:
         raise CloudApiError(
             "agent_gateway_enrollment_not_found",

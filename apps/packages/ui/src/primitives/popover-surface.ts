@@ -4,5 +4,5 @@
 // an import cycle (Popover.tsx, PopoverButton.tsx, and DropdownMenu.tsx all
 // import from this module).
 export const POPOVER_FRAME_CLASS =
-  "m-px rounded-xl bg-popover/90 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm";
+  "m-px rounded-xl bg-popover/90 text-popover-foreground shadow-popover ring-[0.5px] ring-border backdrop-blur-sm";
 export const POPOVER_SURFACE_CLASS = `${POPOVER_FRAME_CLASS} flex max-h-[calc(100vh-1rem)] min-w-[240px] max-w-[320px] select-none flex-col overflow-y-auto p-1`;

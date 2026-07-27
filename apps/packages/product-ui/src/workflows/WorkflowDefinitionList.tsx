@@ -69,7 +69,7 @@ export function WorkflowDefinitionList({
               variant="unstyled"
               size="unstyled"
               onClick={() => onSelect(definition.id)}
-              className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-list-hover ${
+              className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-hover ${
                 index > 0 ? "border-t border-border" : ""
               }`}
             >

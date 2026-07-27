@@ -254,13 +254,15 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
             crate::domains::sessions::runtime::CreateAndStartSessionError::ModelUnsupported {
                 agent_kind,
                 model_id,
+                active_universe,
             } => ApiError::bad_request(
-                format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
+                format!(
+                    "model '{model_id}' is not supported for agent '{agent_kind}': \
+                     not served by {}",
+                    active_universe.describe()
+                ),
                 "SESSION_MODEL_UNSUPPORTED",
             ),
-            crate::domains::sessions::runtime::CreateAndStartSessionError::ModelGated(context) => {
-                ApiError::model_gated(context)
-            }
             crate::domains::sessions::runtime::CreateAndStartSessionError::ModeUnsupported {
                 agent_kind,
                 mode_id,
@@ -512,31 +514,31 @@ mod tests {
     use axum::response::IntoResponse;
 
     use super::CoworkCreateThreadError;
+    use crate::domains::agents::catalog::service::ActiveUniverse;
     use crate::domains::agents::route_auth::RouteAuthError;
     use crate::domains::sessions::runtime::CreateAndStartSessionError;
-    use crate::domains::sessions::service::ModelGatedContext;
 
+    /// Cowork thread creation shares the sessions API's single model refusal:
+    /// 400 `SESSION_MODEL_UNSUPPORTED` naming the active universe.
     #[test]
-    fn model_gate_uses_the_shared_runtime_incident_mapping() {
-        let error = CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::ModelGated(
-            ModelGatedContext {
-                workspace_id: "workspace-cowork".to_string(),
-                attempted_session_id: None,
+    fn unsupported_model_uses_the_single_refusal() {
+        let error =
+            CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::ModelUnsupported {
                 agent_kind: "claude".to_string(),
-                requested_model_id: "opus[1m]".to_string(),
-                canonical_model_id: "opus[1m]".to_string(),
-                active_contexts: vec!["anthropic-oauth".to_string()],
-                required_contexts: vec!["anthropic-api".to_string()],
-                catalog_version: "2026-07-18".to_string(),
-            },
-        ));
+                model_id: "opus[1m]".to_string(),
+                active_universe: ActiveUniverse::CatalogSeed,
+            });
 
         let mapped = super::map_create_cowork_thread_error(error);
         assert_eq!(mapped.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(mapped.code(), Some("SESSION_MODEL_GATED"));
-        assert!(mapped
-            .instance()
-            .is_some_and(|instance| instance.starts_with("urn:proliferate:anyharness:incident:")));
+        assert_eq!(mapped.code(), Some("SESSION_MODEL_UNSUPPORTED"));
+        assert_eq!(
+            mapped.detail(),
+            Some(
+                "model 'opus[1m]' is not supported for agent 'claude': \
+                 not served by the shipped catalog under the active auth contexts"
+            )
+        );
     }
 
     /// Materialization IO / malformed-state route-auth failures are server-side

@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
@@ -18,10 +19,10 @@ const outDir = fileURLToPath(
 
 export default defineConfig({
   root,
-  plugins: [react()],
-  // ProductClient imports shared product CSS as prebuilt plain CSS from
-  // `@proliferate/design/product.css` (no Tailwind directives), so the Tailwind
-  // plugin the real desktop app uses is not required to qualify the build.
+  // ProductClient's shared `@proliferate/design/product.css` is now the full
+  // Tailwind entrypoint (`@import "tailwindcss"`, `@source`, `@utility`), so
+  // the fixture needs the same Tailwind plugin as the real desktop app.
+  plugins: [tailwindcss(), react()],
   clearScreen: false,
   build: {
     outDir,

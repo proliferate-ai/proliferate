@@ -18,9 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
+    AgentAuthDeliveryAckRecord,
     AgentAuthSelectionRecord,
-    AgentCatalogOverrideRecord,
-    AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentRecord,
     DesiredAuthSource,
     OrgMemberRouteSelectionRecord,
@@ -31,9 +30,14 @@ if TYPE_CHECKING:
 
 AgentAuthSurface = Literal["local", "cloud"]
 AgentAuthSourceKind = Literal["gateway", "api_key"]
-# Catalog snapshots retain a route dimension (native/api_key/gateway); the auth
-# selection path itself no longer speaks "route".
-AgentAuthRoute = Literal["native", "api_key", "gateway"]
+# state.json WIRE source kinds: the DB source kinds plus `provider_config`,
+# the render-time wire shape of an api_key selection referencing a typed
+# vault entry (constants.agent_gateway.AGENT_AUTH_SOURCE_PROVIDER_CONFIG).
+AgentAuthStateSourceKind = Literal["gateway", "api_key", "provider_config"]
+# The vault's closed kind vocabulary (agent-auth.md's "The vault" table);
+# mirrors constants.agent_gateway.AGENT_API_KEY_KINDS.
+AgentApiKeyKind = Literal["api_key", "aws_bedrock", "azure_openai"]
+AgentProviderConfigKind = Literal["aws_bedrock", "azure_openai"]
 
 
 class AgentGatewayBaseModel(BaseModel):
@@ -48,6 +52,7 @@ class AgentGatewayBaseModel(BaseModel):
 class AgentApiKeyResponse(AgentGatewayBaseModel):
     id: str
     title: str
+    kind: AgentApiKeyKind
     redacted_hint: str = Field(alias="redactedHint")
     status: str
     created_at: str = Field(alias="createdAt")
@@ -56,6 +61,14 @@ class AgentApiKeyResponse(AgentGatewayBaseModel):
 class AgentApiKeyCreateRequest(AgentGatewayBaseModel):
     title: str
     value: str
+
+
+class AgentProviderConfigCreateRequest(AgentGatewayBaseModel):
+    """Create a typed vault entry (D2's ``ProviderConfigCreatorSubmit`` shape)."""
+
+    title: str
+    kind: AgentProviderConfigKind
+    value: dict[str, str]
 
 
 # --------------------------------------------------------------------------- #
@@ -75,6 +88,14 @@ class AgentAuthSelectionResponse(AgentGatewayBaseModel):
     env_var_name: str | None = Field(alias="envVarName")
     provider_hint: str | None = Field(alias="providerHint")
     enabled: bool
+    # Applied means acknowledged (agent-auth.md): True only once this scope's
+    # surface runtime has confirmed a delivery covering it. False is the
+    # visible pending state — including a delivery that never happened. The
+    # server always computes and sets a boolean; the schema-optional shape
+    # exists only so the generated client type stays optional (fixture
+    # builders predating the ack pipeline read as applied — clients treat
+    # exactly `false` as pending, never absence).
+    applied: bool | None = None
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
 
@@ -104,13 +125,21 @@ class AgentAuthSelectionsPutRequest(AgentGatewayBaseModel):
 
 
 class AgentAuthStateSource(BaseModel):
-    """A single credential source (contract §3). Key material for the caller."""
+    """A single credential source (contract §3). Key material for the caller.
 
-    kind: AgentAuthSourceKind
+    ``kind`` is the WIRE kind, which is wider than the DB source_kind: a
+    selection referencing a typed vault entry renders as
+    ``provider_config`` (``config_kind`` + the harness's resolved ``env``
+    map), decided at render time by the referenced vault row's kind.
+    """
+
+    kind: AgentAuthStateSourceKind
     base_url: str | None = None
     key: str | None = None
     env_var_name: str | None = None
     value: str | None = None
+    config_kind: AgentProviderConfigKind | None = None
+    env: dict[str, str] | None = None
 
 
 class AgentAuthStateHarness(BaseModel):
@@ -120,12 +149,37 @@ class AgentAuthStateHarness(BaseModel):
 
 
 class AgentAuthStateResponse(BaseModel):
-    """The whole ``state.json`` v2 document (``route_auth/state.rs``)."""
+    """The whole ``state.json`` v2 document (``route_auth/state.rs``).
+
+    ``fingerprint`` is a response-only rider (the renderer's sha256 of the
+    canonical document), NOT part of the state.json wire contract: the desktop
+    echoes it through ``POST /state/ack`` after a successful runtime push and
+    must strip it before pushing the document to the local runtime.
+    """
 
     version: int
     revision: int
     user_id: str | None = None
     harnesses: list[AgentAuthStateHarness]
+    fingerprint: str | None = None
+
+
+class AgentAuthStateAckRequest(BaseModel):
+    """Desktop delivery ack: the pushed document's identity, echoed back.
+
+    ``revision`` is the revision the local runtime's state PUT/DELETE
+    confirmed; ``fingerprint`` is the served document's fingerprint from
+    ``GET /state`` (never client-computed).
+    """
+
+    revision: int
+    fingerprint: str
+
+
+class AgentAuthDeliveryAckResponse(AgentGatewayBaseModel):
+    surface: AgentAuthSurface
+    acked_revision: int = Field(alias="ackedRevision")
+    acked_at: str = Field(alias="ackedAt")
 
 
 # --------------------------------------------------------------------------- #
@@ -145,56 +199,6 @@ class AgentGatewayEnrollmentResponse(AgentGatewayBaseModel):
     litellm_team_id: str | None = Field(alias="litellmTeamId")
     sync_status: str = Field(alias="syncStatus")
     last_error_code: str | None = Field(alias="lastErrorCode")
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
-
-
-# --------------------------------------------------------------------------- #
-# Catalog (P3 surface; auth-model-agnostic route dimension)
-# --------------------------------------------------------------------------- #
-
-
-class AgentGatewayCatalogResponse(AgentGatewayBaseModel):
-    """Layered catalog: latest snapshot (owner else seed) + caller override."""
-
-    harness_kind: str = Field(alias="harnessKind")
-    surface: AgentAuthSurface
-    route: AgentAuthRoute
-    models: list[dict[str, Any]]
-    snapshot_id: str | None = Field(alias="snapshotId")
-    probed_at: str | None = Field(alias="probedAt")
-    source: str | None
-    override_applied: bool = Field(alias="overrideApplied")
-
-
-class AgentGatewayCatalogRefreshRequest(AgentGatewayBaseModel):
-    surface: AgentAuthSurface
-    route: AgentAuthRoute
-    models_json: str | None = Field(default=None, alias="modelsJson")
-
-
-class AgentGatewayCatalogMirrorRequest(AgentGatewayBaseModel):
-    """A runtime's push of its own resolved probe result (contract §4).
-
-    Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
-    AnyHarness today), not the product UI, and ``probed_at`` reflects when the
-    runtime actually probed rather than when this request landed.
-    """
-
-    surface: AgentAuthSurface
-    route: AgentAuthRoute
-    models_json: str = Field(alias="modelsJson")
-    probed_at: str = Field(alias="probedAt")
-
-
-class AgentGatewayCatalogOverrideUpsertRequest(AgentGatewayBaseModel):
-    patch_json: str = Field(alias="patchJson")
-
-
-class AgentGatewayCatalogOverrideResponse(AgentGatewayBaseModel):
-    id: str
-    harness_kind: str = Field(alias="harnessKind")
-    patch_json: str = Field(alias="patchJson")
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
 
@@ -246,6 +250,7 @@ def api_key_payload(record: AgentApiKeyRecord) -> AgentApiKeyResponse:
     return AgentApiKeyResponse(
         id=str(record.id),
         title=record.title,
+        kind=record.kind,  # type: ignore[arg-type]
         redacted_hint=record.redacted_hint,
         status=record.status,
         created_at=record.created_at.isoformat(),
@@ -256,6 +261,7 @@ def auth_selection_payload(
     record: AgentAuthSelectionRecord,
     *,
     key_title: str | None,
+    applied: bool,
 ) -> AgentAuthSelectionResponse:
     return AgentAuthSelectionResponse(
         id=str(record.id),
@@ -267,6 +273,7 @@ def auth_selection_payload(
         env_var_name=record.env_var_name,
         provider_hint=record.provider_hint,
         enabled=record.enabled,
+        applied=applied,
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
     )
@@ -283,40 +290,23 @@ def desired_source(input_source: AgentAuthSourceInput) -> DesiredAuthSource:
     )
 
 
-def agent_auth_state_payload(state: dict[str, object]) -> AgentAuthStateResponse:
-    return AgentAuthStateResponse.model_validate(state)
-
-
-def catalog_payload(
+def agent_auth_state_payload(
+    state: dict[str, object],
     *,
-    harness_kind: str,
-    surface: AgentAuthSurface,
-    route: AgentAuthRoute,
-    models: list[dict[str, Any]],
-    snapshot: AgentCatalogSnapshotRecord | None,
-    override: AgentCatalogOverrideRecord | None,
-) -> AgentGatewayCatalogResponse:
-    return AgentGatewayCatalogResponse(
-        harness_kind=harness_kind,
-        surface=surface,
-        route=route,
-        models=models,
-        snapshot_id=str(snapshot.id) if snapshot is not None else None,
-        probed_at=snapshot.probed_at.isoformat() if snapshot is not None else None,
-        source=snapshot.source if snapshot is not None else None,
-        override_applied=override is not None,
-    )
+    fingerprint: str | None = None,
+) -> AgentAuthStateResponse:
+    response = AgentAuthStateResponse.model_validate(state)
+    response.fingerprint = fingerprint
+    return response
 
 
-def catalog_override_payload(
-    record: AgentCatalogOverrideRecord,
-) -> AgentGatewayCatalogOverrideResponse:
-    return AgentGatewayCatalogOverrideResponse(
-        id=str(record.id),
-        harness_kind=record.harness_kind,
-        patch_json=record.patch_json,
-        created_at=record.created_at.isoformat(),
-        updated_at=record.updated_at.isoformat(),
+def delivery_ack_payload(
+    record: AgentAuthDeliveryAckRecord,
+) -> AgentAuthDeliveryAckResponse:
+    return AgentAuthDeliveryAckResponse(
+        surface=record.surface,  # type: ignore[arg-type]
+        acked_revision=record.acked_revision,
+        acked_at=record.acked_at.isoformat(),
     )
 
 

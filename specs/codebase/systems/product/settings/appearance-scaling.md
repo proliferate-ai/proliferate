@@ -128,8 +128,8 @@ targets are not glyph icons and do not become font-relative.
 - `apps/packages/product-client/src/config/theme.ts` applies the resolved text
   and readable-code root variables through `applyAppearancePreference`; the
   stable `em` glyph ratios resolve from design CSS against those text owners.
-- `apps/packages/design/src/css/dom.css` and `product.css` own Default CSS
-  fallbacks and global semantic utilities.
+- `apps/packages/design/src/css/product.css` owns Default CSS fallbacks and
+  global semantic utilities.
 - `apps/packages/ui/src/utils/tw-merge.ts` preserves custom semantic utilities
   where Tailwind merge classification requires registration.
 - Production consumers live under

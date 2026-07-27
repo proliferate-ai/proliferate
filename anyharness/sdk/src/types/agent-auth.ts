@@ -10,11 +10,20 @@ export type ApplyAgentAuthStateResponse =
  * rather than in the generated OpenAPI surface.
  */
 export interface AgentAuthStateSource {
-  kind: "gateway" | "api_key";
+  kind: "gateway" | "api_key" | "provider_config";
   base_url?: string | null;
   key?: string | null;
   env_var_name?: string | null;
   value?: string | null;
+  /**
+   * `provider_config` sources only (Track D, `route_auth/state.rs`
+   * `AuthSource`): the typed vault kind plus the harness's already-resolved
+   * env map — the runtime `.set()`s the exact keys, never renaming. Narrowed
+   * to the known vault kinds here (the Rust side keeps a raw string, same as
+   * `kind`) to mirror the server's wire vocabulary.
+   */
+  config_kind?: "aws_bedrock" | "azure_openai" | null;
+  env?: Record<string, string> | null;
 }
 
 /** One harness's enabled sources in the state.json v2 document. */

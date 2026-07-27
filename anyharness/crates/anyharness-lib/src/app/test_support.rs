@@ -31,6 +31,24 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
 
 pub(crate) static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 
+/// Take the crate-wide process-environment lock for the length of a test body.
+///
+/// Every test that mutates or depends on a process-global variable —
+/// `ANYHARNESS_BEARER_TOKEN`, `ANYHARNESS_DATA_KEY`, `PATH`, `HOME`, the
+/// `ANYHARNESS_*_AGENT_PROGRAM` overrides — must hold this, and it has to be ONE
+/// lock crate-wide: narrowing `PATH` to a temp dir breaks any test in the crate
+/// that shells out, and an invalid `ANYHARNESS_DATA_KEY` breaks any test that
+/// builds an `AppState`. Module-local locks would not exclude those.
+///
+/// `.expect` on poisoning matches the crate's existing 88 call sites: a poisoned
+/// lock means another test already panicked, and the run is failing either way.
+pub(crate) fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+    ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex")
+}
+
 pub(crate) struct BearerTokenEnvGuard {
     previous: Option<OsString>,
 }

@@ -115,10 +115,10 @@ describe("useProductTelemetry", () => {
     const { result } = renderFacade(telemetry);
     const cause = new AnyHarnessError({
       type: "about:blank",
-      title: "Model gated",
+      title: "Model unsupported",
       status: 400,
-      detail: "caller-visible gating detail",
-      code: "SESSION_MODEL_GATED",
+      detail: "caller-visible refusal detail",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
     });
 
@@ -143,10 +143,10 @@ describe("useProductTelemetry", () => {
     const { result } = renderFacade(telemetry);
     const error = new AnyHarnessError({
       type: "about:blank",
-      title: "Model gated",
+      title: "Model unsupported",
       status: 400,
-      detail: "caller-visible gating detail",
-      code: "SESSION_MODEL_GATED",
+      detail: "caller-visible refusal detail",
+      code: "SESSION_MODEL_UNSUPPORTED",
       ...(instance === undefined ? {} : { instance }),
     });
 
@@ -156,9 +156,9 @@ describe("useProductTelemetry", () => {
     const [capturedError] = vi.mocked(telemetry.captureException).mock.calls[0];
     expect(capturedError).toMatchObject({
       name: "AnyHarnessError",
-      message: "AnyHarness request failed (SESSION_MODEL_GATED)",
+      message: "AnyHarness request failed (SESSION_MODEL_UNSUPPORTED)",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
     });
     expect("problem" in (capturedError as object)).toBe(false);
     expect("cause" in (capturedError as object)).toBe(false);

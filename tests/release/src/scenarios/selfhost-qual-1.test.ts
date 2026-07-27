@@ -972,25 +972,48 @@ test("stripGatewayKeysSedProgram + append overrides a shipped AGENT_GATEWAY_ENAB
   }
 });
 
-test("selectPersonalEnrollmentKeyToken: prefers the personal (vk-user-) alias over a co-located org key", () => {
+test("selectPersonalEnrollmentKeyToken: prefers the exact personal+harness (vk-user-...-claude-...) alias over a co-located org key", () => {
   const token = selectPersonalEnrollmentKeyToken([
-    { token: "org-token", key_alias: "vk-org-org1-user-u1-abcd1234" },
-    { token: "personal-token", key_alias: "vk-user-u1-abcd1234" },
-  ]);
+    { token: "org-token", key_alias: "vk-org-org1-user-u1-claude-abcd1234" },
+    { token: "personal-token", key_alias: "vk-user-u1-claude-abcd1234" },
+  ], "claude");
   assert.equal(token, "personal-token");
 });
 
-test("selectPersonalEnrollmentKeyToken: falls back to the first token when no alias is present", () => {
-  assert.equal(selectPersonalEnrollmentKeyToken([{ token: "only-token" }]), "only-token");
+test("selectPersonalEnrollmentKeyToken: prefers the exact harness segment over a sibling-harness personal key", () => {
+  const token = selectPersonalEnrollmentKeyToken([
+    { token: "codex-token", key_alias: "vk-user-u1-codex-abcd1234" },
+    { token: "claude-token", key_alias: "vk-user-u1-claude-abcd1234" },
+  ], "claude");
+  assert.equal(token, "claude-token");
+});
+
+test("selectPersonalEnrollmentKeyToken: falls back to any personal alias when the exact harness segment is missing", () => {
+  const token = selectPersonalEnrollmentKeyToken([
+    { token: "org-token", key_alias: "vk-org-org1-user-u1-claude-abcd1234" },
+    { token: "personal-token", key_alias: "vk-user-u1-abcd1234" },
+  ], "claude");
+  assert.equal(token, "personal-token");
+});
+
+test("selectPersonalEnrollmentKeyToken: falls back to the first non-org token when no alias is present", () => {
+  assert.equal(selectPersonalEnrollmentKeyToken([{ token: "only-token" }], "claude"), "only-token");
   assert.equal(
-    selectPersonalEnrollmentKeyToken([{ token: "first", key_alias: null }, { token: "second" }]),
+    selectPersonalEnrollmentKeyToken([{ token: "first", key_alias: null }, { token: "second" }], "claude"),
     "first",
+  );
+  assert.equal(
+    selectPersonalEnrollmentKeyToken(
+      [{ token: "org-token", key_alias: "vk-org-org1-user-u1-claude-abcd1234" }, { token: "bare-token" }],
+      "claude",
+    ),
+    "bare-token",
   );
 });
 
 test("selectPersonalEnrollmentKeyToken: undefined when there are no usable tokens", () => {
-  assert.equal(selectPersonalEnrollmentKeyToken([]), undefined);
-  assert.equal(selectPersonalEnrollmentKeyToken([{ token: "", key_alias: "vk-user-x" }]), undefined);
+  assert.equal(selectPersonalEnrollmentKeyToken([], "claude"), undefined);
+  assert.equal(selectPersonalEnrollmentKeyToken([{ token: "", key_alias: "vk-user-x-claude-y" }], "claude"), undefined);
 });
 
 test("classifyGithubInterstitial: the first-authorize grant page is drivable", () => {

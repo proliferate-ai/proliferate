@@ -212,6 +212,7 @@ mod tests {
                 message: None,
             },
             spawn: None,
+            credentials_from_route: false,
         }
     }
 
@@ -301,7 +302,7 @@ mod tests {
         let launch_env = LaunchEnv {
             session: BTreeMap::from([(
                 "CODEX_HOME".to_string(),
-                "/runtime/agent-auth/codex-local".to_string(),
+                "/runtime/agent-auth/codex-native".to_string(),
             )]),
             route_auth: BTreeMap::from([
                 (

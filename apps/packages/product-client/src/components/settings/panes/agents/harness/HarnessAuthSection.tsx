@@ -6,6 +6,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { gatewaySubtitle } from "#product/copy/settings/agent-auth-copy";
 import {
+  isGatewayCapableHarness,
   isMultiSourceHarness,
   type AuthMethod,
 } from "#product/lib/domain/settings/harness-auth-sources";
@@ -74,7 +75,6 @@ export function isMultiSourceApiKeyConfigVisible(editor: HarnessAuthEditorApi): 
   return editor.editorState.rows.length > 0 || editor.pendingMethod === "api_key";
 }
 
-const CURSOR_HARNESS = "cursor";
 const POLICY_TOOLTIP = "Disabled by your organization's policy";
 
 export function HarnessAuthSection({
@@ -84,16 +84,6 @@ export function HarnessAuthSection({
   editor,
   variant = "section",
 }: HarnessAuthSectionProps) {
-  if (harnessKind === CURSOR_HARNESS) {
-    return (
-      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.authenticationTitle}>
-        <p className="py-3 text-ui-sm text-muted-foreground">
-          {HARNESS_PANE_COPY.cursorNativeDescription(displayName)}
-        </p>
-      </HarnessPanelBlock>
-    );
-  }
-
   // Cloud surface gating is now handled at the pane level by wrapping the
   // entire cloud surface content in CloudGuard. The local surface keeps its
   // lighter inline sign-in prompt — but it gates on the auth plane (signed in),
@@ -141,6 +131,13 @@ function HarnessAuthMethods({
   }
 
   const multiSource = isMultiSourceHarness(harnessKind);
+  // Cursor has no gateway recipe (agent-auth.md: "typed refusal, no gateway
+  // route exists for cursor") — its only sourced method is api_key
+  // (CURSOR_API_KEY), radio-selected against CLI same as any other
+  // single-source harness. The gateway card is omitted entirely rather than
+  // shown-and-disabled, since there is no capability state that would ever
+  // unlock it.
+  const gatewayCapable = isGatewayCapableHarness(harnessKind);
   // Single-source harnesses are a radio (exactly one active method); only
   // opencode keeps the independent multi-select set.
   const selectedMethods = multiSource
@@ -176,29 +173,45 @@ function HarnessAuthMethods({
       {editor.harnessDisallowed ? (
         <p className="pb-2 text-ui-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
       ) : null}
+      {editor.deliveryPending ? (
+        // Applied means acknowledged (agent-auth.md): the selection is stored
+        // but the surface's runtime has not confirmed the delivered auth state
+        // yet. Flips off when the ack lands (the selections query polls while
+        // pending).
+        <p className="pb-2 text-ui-sm text-muted-foreground">
+          {HARNESS_PANE_COPY.deliveryPending}
+        </p>
+      ) : null}
       <div
-        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+        className={
+          gatewayCapable
+            ? "grid grid-cols-1 gap-2 sm:grid-cols-3"
+            : "grid grid-cols-1 gap-2 sm:grid-cols-2"
+        }
         data-harness-auth-section={harnessKind}
+        data-harness-auth-delivery={editor.deliveryPending ? "pending" : "applied"}
         data-harness-selected-route={[...selectedMethods]
           .map((method) => `${harnessKind}:${method}`)
           .join(" ")}
       >
-        <MethodCard
-          label={HARNESS_PANE_COPY.methodGateway}
-          description={HARNESS_PANE_COPY.methodGatewayDescription}
-          icon={<CloudIcon className="icon-large" />}
-          selected={selectedMethods.has("gateway")}
-          disabled={editor.gatewayLocked || editor.busy || gatewayCardDisallowed}
-          disabledReason={
-            editor.gatewayLocked
-              ? gatewaySubtitle(capabilities, enrollment)
-              : gatewayCardDisallowed
-                ? POLICY_TOOLTIP
-                : undefined
-          }
-          routeOptionId={`${harnessKind}:gateway`}
-          onClick={() => selectMethod("gateway")}
-        />
+        {gatewayCapable ? (
+          <MethodCard
+            label={HARNESS_PANE_COPY.methodGateway}
+            description={HARNESS_PANE_COPY.methodGatewayDescription}
+            icon={<CloudIcon className="icon-large" />}
+            selected={selectedMethods.has("gateway")}
+            disabled={editor.gatewayLocked || editor.busy || gatewayCardDisallowed}
+            disabledReason={
+              editor.gatewayLocked
+                ? gatewaySubtitle(capabilities, enrollment)
+                : gatewayCardDisallowed
+                  ? POLICY_TOOLTIP
+                  : undefined
+            }
+            routeOptionId={`${harnessKind}:gateway`}
+            onClick={() => selectMethod("gateway")}
+          />
+        ) : null}
         <MethodCard
           label={HARNESS_PANE_COPY.methodApiKey}
           description={HARNESS_PANE_COPY.methodApiKeyDescription}

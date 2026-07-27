@@ -288,7 +288,7 @@ describe("AssistantMessage streaming reveal", () => {
   it("keeps independent word fades alive long enough to overlap", () => {
     const cssPath = resolve(
       dirname(fileURLToPath(import.meta.url)),
-      "../../../../design/src/css/dom.css",
+      "../../../../design/src/css/product.css",
     );
     const css = readFileSync(cssPath, "utf8");
     const start = css.indexOf("/* ---- Streaming prose reveal ----");
@@ -320,7 +320,7 @@ describe("AssistantMessage streaming reveal", () => {
 
     const generatedCssPath = resolve(
       dirname(fileURLToPath(import.meta.url)),
-      "../../../../design/dist/css/dom.css",
+      "../../../../design/dist/css/product.css",
     );
     if (existsSync(generatedCssPath)) {
       expect(readFileSync(generatedCssPath, "utf8")).toContain(

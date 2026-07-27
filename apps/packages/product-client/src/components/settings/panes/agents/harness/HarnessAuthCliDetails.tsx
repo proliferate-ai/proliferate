@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
@@ -8,20 +7,24 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { isReadyAgent } from "#product/lib/domain/agents/status";
-import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
 
+// Both surfaces now share this component unmodified: the login-terminal
+// workflow (editor.loginWorkflow) already resolves a surface-aware runtime
+// connection (local desktop runtime vs. the one Cloud sandbox), so nothing
+// here branches on surface anymore.
 export function CliDetails({
-  surface,
   editor,
   variant,
 }: {
-  surface: AgentAuthSurface;
   editor: HarnessAuthEditorApi;
   variant: HarnessBlockVariant;
 }) {
   const { localAgent, loginSession, loginWorkflow } = editor;
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  // Surface-aware: on cloud this is the sandbox gateway's runtime URL
+  // (CloudAnyHarnessRuntimeProvider), on local it's the desktop's own runtime —
+  // both come from the same AnyHarness runtime context the login workflow reads.
+  const runtimeUrl = loginWorkflow.runtimeConnection.baseUrl;
   const { invalidateAgentListResources } = useAgentResourcesCache();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -31,16 +34,6 @@ export function CliDetails({
     void invalidateAgentListResources(runtimeUrl).finally(() => {
       setRefreshing(false);
     });
-  }
-
-  if (surface === "cloud") {
-    return (
-      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsCli}>
-        <p className="py-3 text-ui-sm text-muted-foreground">
-          {HARNESS_PANE_COPY.nativeStateCloud}
-        </p>
-      </HarnessPanelBlock>
-    );
   }
 
   // Prefer cliAuthState for CLI status (env-unmasked); fall back to readiness
@@ -131,6 +124,7 @@ export function CliDetails({
             session={loginSession}
             baseUrl={loginWorkflow.runtimeConnection.baseUrl}
             authToken={loginWorkflow.runtimeConnection.authToken}
+            webSocketAuthTransport={loginWorkflow.runtimeConnection.webSocketAuthTransport}
             onClose={(kind) => {
               void loginWorkflow.closeAuthTerminal(kind);
             }}

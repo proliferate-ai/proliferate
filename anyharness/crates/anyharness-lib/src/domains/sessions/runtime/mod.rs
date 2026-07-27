@@ -16,7 +16,8 @@ use super::mcp_bindings::model::SessionMcpServer;
 use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
-use super::service::{ModelGatedContext, SessionService};
+use super::service::SessionService;
+use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
@@ -58,8 +59,8 @@ pub struct SessionRuntime {
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
-    /// Catalog-driven gateway model resolver (spec §3): supplies the render
-    /// plane's [`GatewayModelPlan`] and schedules launch-time lazy probes.
+    /// Catalog-driven gateway model planner: supplies the render plane's
+    /// [`GatewayModelPlan`]. Materialization input only.
     gateway_model_resolver: Arc<dyn GatewayModelResolve>,
     active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     loops_resolver: Arc<dyn LoopsResolver>,
@@ -82,14 +83,14 @@ impl SessionRuntime {
 #[derive(Debug)]
 pub enum CreateAndStartSessionError {
     Invalid(String),
+    /// The requested model cannot launch under the active universe — the one
+    /// typed refusal for every unservable model intent
+    /// (`SESSION_MODEL_UNSUPPORTED`).
     ModelUnsupported {
         agent_kind: String,
         model_id: String,
+        active_universe: crate::domains::agents::catalog::service::ActiveUniverse,
     },
-    /// A known model is gated behind inactive auth contexts. Carries the
-    /// unlock condition (`required_contexts`) for the API layer; an
-    /// unresolvable model uses `ModelUnsupported` instead.
-    ModelGated(ModelGatedContext),
     ModeUnsupported {
         agent_kind: String,
         mode_id: String,
@@ -131,6 +132,18 @@ pub enum EnsureLiveSessionError {
     MissingDataKey,
     /// See [`CreateAndStartSessionError::RouteAuth`].
     RouteAuth(RouteAuthError),
+    /// A9 Scope C: the common live-start seam (`start_live_session`) now
+    /// checks `resolve_launch_agent`'s status like `create_session` always
+    /// has, so resume/fork/prompt/config-lazy-start converge on the same
+    /// gate. Previously this seam ignored the status entirely: a resumed
+    /// session whose credentials were revoked after creation spawned anyway
+    /// and failed as a generic ACP-start error instead of the typed
+    /// condition create-time would have reported for the same agent.
+    AgentNotReady {
+        agent_kind: String,
+        status: ResolvedAgentStatus,
+        detail: Option<String>,
+    },
     Internal(anyhow::Error),
 }
 
@@ -194,6 +207,13 @@ pub enum ForkSessionError {
     },
     MissingNativeSessionId,
     MissingDataKey,
+    /// See [`EnsureLiveSessionError::AgentNotReady`] (A9 Scope C) — the same
+    /// common live-start seam backs the fork child's start.
+    AgentNotReady {
+        agent_kind: String,
+        status: ResolvedAgentStatus,
+        detail: Option<String>,
+    },
     StartFailed {
         session: SessionRecord,
         link: SessionLinkRecord,
@@ -328,6 +348,17 @@ pub(super) enum StartSessionError {
     RestartRequired(String),
     /// Agent-auth route resolution refused the launch (fail-closed, spec §3).
     RouteAuth(RouteAuthError),
+    /// A9 Scope C: `resolve_launch_agent`'s status was resolved at this seam
+    /// but never checked, unlike `create_session`'s equivalent gate — so a
+    /// resume/fork/prompt/config-lazy-start against an agent whose readiness
+    /// regressed after creation (e.g. revoked credentials) fell through to a
+    /// spawn attempt and a generic `AcpStart` failure instead of this typed
+    /// condition.
+    AgentNotReady {
+        agent_kind: String,
+        status: ResolvedAgentStatus,
+        detail: Option<String>,
+    },
     Internal(anyhow::Error),
     AcpStart(anyhow::Error),
 }
