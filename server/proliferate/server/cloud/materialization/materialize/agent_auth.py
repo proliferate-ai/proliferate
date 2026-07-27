@@ -27,10 +27,11 @@ file lives at ``<anyharness home>/agent-auth/state.json`` (mode 0600):
       ]
     }
 
-``sources`` are the ENABLED rows only (disabled rows never leave the DB); a
-harness with no resolvable enabled source is omitted entirely. There is NO
-``model_catalog``, NO ``slot``, and NO ``provider`` on the wire — ``provider_hint``
-is a UI-only display field the renderer never emits.
+``sources`` are the ENABLED rows only (disabled rows never leave the DB). A
+harness whose every enabled row is unsatisfiable keeps its entry with
+``sources: []`` — absent means native, present-but-empty fails closed. There is
+NO ``model_catalog``, NO ``slot``, and NO ``provider`` on the wire —
+``provider_hint`` is a UI-only display field the renderer never emits.
 
 Two delivery surfaces share this one renderer: the cloud materialization worker
 writes the ``cloud`` surface into sandboxes, and ``GET /agent-gateway/state``
@@ -47,14 +48,15 @@ file without any row mutation, so change detection uses a sha256 fingerprint of
 the canonical JSON tracked in a server-owned manifest beside the home:
 unchanged fingerprint → no write.
 
-Empty state (contract §3): a harness absent from ``harnesses`` (or with empty
-``sources``) renders to the native delta at the read plane. When the whole
-surface resolves to zero harnesses, the state file and manifest are deleted so
-the reader finds no file (cloud launch fail-closes on its own — that is the Rust
-launcher's job, not this file's). A gateway source whose enrollment is not yet
-synced, or whose public base URL is unconfigured, is dropped (and logged) rather
-than raised, and a revoked ``api_key`` source's value simply vanishes at the next
-pass — one unsatisfiable source never aborts the whole reconcile.
+Empty state (contract §3): a harness ABSENT from ``harnesses`` renders to the
+native delta at the read plane; a harness PRESENT with ``sources: []`` fails the
+launch closed with a typed error. When the whole surface has no selection rows at
+all, the state file and manifest are deleted so the reader finds no file. A
+gateway source whose enrollment is not yet synced, or whose public base URL is
+unconfigured, is dropped (and logged) rather than raised, and a revoked
+``api_key`` source's value simply vanishes at the next pass — one unsatisfiable
+source never aborts the whole reconcile, but it does leave its harness entry
+empty rather than removing it.
 """
 
 from __future__ import annotations
@@ -80,7 +82,10 @@ from proliferate.constants.agent_gateway import (
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
-from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
+from proliferate.server.cloud.agent_gateway.budget import (
+    get_gateway_enrollment_for_user,
+    is_gateway_budget_available,
+)
 from proliferate.server.cloud.cloud_sandboxes import transactions as cloud_sandbox_transactions
 from proliferate.server.cloud.materialization import operation, paths, sandbox_io
 
@@ -96,6 +101,12 @@ class AgentAuthStateInputs:
     row still advances it. ``api_key_values`` maps an ``api_key_id`` to its
     decrypted secret; a revoked or vanished key is simply absent (its source is
     then dropped).
+
+    ``gateway_virtual_keys`` is a per-harness map (model-gateway.md §Account
+    model, R2): each gateway-capable harness gets its own access-group-scoped
+    key, so there is no longer one shared virtual key for a whole scope. A
+    harness absent from the map (or whose enrollment isn't synced) has an
+    unsatisfiable gateway source.
     """
 
     user_id: UUID
@@ -103,7 +114,7 @@ class AgentAuthStateInputs:
     selections: tuple[AgentAuthSelectionRecord, ...]
     api_key_values: Mapping[UUID, str]
     enrollment_sync_status: str | None
-    gateway_virtual_key: str | None
+    gateway_virtual_keys: Mapping[str, str]  # keyed by harness_kind
     gateway_base_url: str | None
     harness_settings: Mapping[str, dict[str, object]]  # keyed by harness_kind
 
@@ -111,23 +122,35 @@ class AgentAuthStateInputs:
 def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, object], str]:
     """Render (state, fingerprint) as a v2 document from pre-scoped inputs.
 
-    The returned document is always a valid v2 shape. ``harnesses`` lists only
-    the harnesses that have at least one resolvable enabled source; a harness
-    whose every source is unsatisfiable (revoked key, unsynced gateway) is
-    omitted, which the read plane treats as native. The caller (cloud
-    materializer) deletes the file when ``harnesses`` is empty.
+    The returned document is always a valid v2 shape. ``harnesses`` lists every
+    harness the user has an enabled selection row for, INCLUDING one whose every
+    source turned out unsatisfiable (revoked key, unsynced gateway) — that entry
+    is kept with ``sources: []``, which the runtime reads as "a selection this
+    machine cannot honor" and refuses the launch. Only a harness with no
+    selection row at all is absent, which the read plane treats as native. The
+    caller deletes the file when ``harnesses`` is empty, i.e. when nothing is
+    selected on this surface at all.
 
     Never raises for an unsatisfiable source: it is dropped (and logged) so a
     single bad source can never abort the reconcile and leave stale key material
-    behind.
+    behind. Dropping a source is not the same as dropping its harness.
     """
-    by_harness: dict[str, list[tuple[str, dict[str, object]]]] = {}
+    # Every harness the user has SELECTED something for gets a key here, even
+    # when its value ends up empty. That distinction is the fail-closed law:
+    # `sources: []` says "you selected a route and we could not satisfy it", and
+    # the runtime refuses the launch; an ABSENT harness says "you never
+    # configured this one" and the runtime uses the native login. Dropping the
+    # harness entirely collapsed those two into one, so an exhausted gateway
+    # budget silently billed the user's personal provider account.
+    by_harness: dict[str, list[tuple[str, dict[str, object]]]] = {
+        selection.harness_kind: [] for selection in inputs.selections
+    }
     for selection in inputs.selections:
         source = _render_source(inputs, selection)
         if source is None:
             continue
         sort_key = (str(source["kind"]), selection.env_var_name or "")
-        by_harness.setdefault(selection.harness_kind, []).append((sort_key, source))
+        by_harness[selection.harness_kind].append((sort_key, source))
 
     harnesses: list[dict[str, object]] = []
     for harness_kind in sorted(by_harness):
@@ -172,9 +195,12 @@ def _render_gateway_source(
 ) -> dict[str, object] | None:
     """Render a gateway source, or ``None`` if it cannot be satisfied.
 
-    An unsatisfiable gateway source is dropped rather than raised so the rest of
-    the state — including the removal of any now-revoked ``api_key`` material —
-    is still written; enrollment reaching ``synced`` re-triggers materialization.
+    Resolves the harness's own access-group-scoped key from the per-harness
+    map (model-gateway.md §Account model, R2) — never a single shared key.
+    An unsatisfiable gateway source is dropped rather than raised so the rest
+    of the state — including the removal of any now-revoked ``api_key``
+    material — is still written; enrollment reaching ``synced`` re-triggers
+    materialization.
     """
     if not inputs.gateway_base_url:
         # L7 (contract): a configured gateway selection that cannot be delivered
@@ -187,19 +213,20 @@ def _render_gateway_source(
         )
         return None
     synced = inputs.enrollment_sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED
-    if not synced or not inputs.gateway_virtual_key:
+    virtual_key = inputs.gateway_virtual_keys.get(selection.harness_kind)
+    if not synced or not virtual_key:
         logger.warning(
             "Skipping unsatisfiable gateway agent-auth source harness=%s "
             "(enrollment status=%s, virtual key present=%s)",
             selection.harness_kind,
             inputs.enrollment_sync_status or "none",
-            inputs.gateway_virtual_key is not None,
+            virtual_key is not None,
         )
         return None
     return {
         "kind": AGENT_AUTH_SOURCE_GATEWAY,
         "base_url": inputs.gateway_base_url,
-        "key": inputs.gateway_virtual_key,
+        "key": virtual_key,
     }
 
 
@@ -265,31 +292,47 @@ async def _load_state_inputs(
             api_key_values[selection.api_key_id] = value
 
     enrollment_sync_status: str | None = None
-    gateway_virtual_key: str | None = None
-    needs_gateway = any(
-        selection.source_kind == AGENT_AUTH_SOURCE_GATEWAY for selection in enabled
-    )
-    if needs_gateway:
-        enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    gateway_virtual_keys: dict[str, str] = {}
+    gateway_harness_kinds = {
+        selection.harness_kind
+        for selection in enabled
+        if selection.source_kind == AGENT_AUTH_SOURCE_GATEWAY
+    }
+    if gateway_harness_kinds:
+        # Org-member gap fix (model-gateway.md): an org member's gateway
+        # sessions are governed by their ORG enrollment, not their personal
+        # one — same resolution `is_gateway_budget_available` uses below, so
+        # the gate and the keys it guards always agree on the paying subject.
+        enrollment = await get_gateway_enrollment_for_user(db, user_id)
         if enrollment is not None:
             enrollment_sync_status = enrollment.sync_status
             if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
                 # Second enforcement wall for LLM-credit exhaustion (the first
-                # is the importer disabling the LiteLLM virtual key): an
-                # exhausted subject stops being handed the key at all, so a
+                # is the importer disabling the LiteLLM virtual keys): an
+                # exhausted subject stops being handed any key at all, so a
                 # lagging or failed key-disable cannot leak gateway access.
                 # The gateway source then renders unsatisfiable and is dropped;
                 # the runtime fails closed at launch.
                 if await is_gateway_budget_available(db, user_id):
-                    gateway_virtual_key = (
-                        await agent_gateway_store.get_enrollment_virtual_key_decrypted(
+                    for harness_kind in gateway_harness_kinds:
+                        enrollment_key = await agent_gateway_store.get_active_enrollment_key(
                             db,
                             enrollment_id=enrollment.id,
+                            harness_kind=harness_kind,
                         )
-                    )
+                        if enrollment_key is None:
+                            continue
+                        decrypted_key = (
+                            await agent_gateway_store.get_enrollment_key_virtual_key_decrypted(
+                                db,
+                                enrollment_key_id=enrollment_key.id,
+                            )
+                        )
+                        if decrypted_key is not None:
+                            gateway_virtual_keys[harness_kind] = decrypted_key
                 else:
                     logger.warning(
-                        "Withholding gateway virtual key: LLM credit exhausted "
+                        "Withholding gateway virtual keys: LLM credit exhausted "
                         "(user=%s, surface=%s)",
                         user_id,
                         surface,
@@ -307,7 +350,7 @@ async def _load_state_inputs(
         selections=enabled,
         api_key_values=api_key_values,
         enrollment_sync_status=enrollment_sync_status,
-        gateway_virtual_key=gateway_virtual_key,
+        gateway_virtual_keys=gateway_virtual_keys,
         gateway_base_url=settings.agent_gateway_litellm_public_base_url or None,
         harness_settings=harness_settings,
     )
@@ -328,9 +371,12 @@ async def materialize_agent_auth(
     manifest_path = paths.agent_auth_manifest_path()
 
     if not state["harnesses"]:
-        # No resolvable cloud sources: delete the file so the reader finds none
-        # (contract §3 — empty renders to native; cloud launch fail-closes in the
-        # runtime launcher, not here).
+        # NO SELECTIONS AT ALL for this surface — not "selections we could not
+        # satisfy". Since the renderer now keeps a `sources: []` entry for every
+        # selected harness, an empty `harnesses` list can only mean the user has
+        # selected nothing, and deleting the file is exactly right: absent means
+        # native. A surface with an unsatisfiable selection reaches the write
+        # below with `sources: []`, which the runtime fails closed on.
         await sandbox_io.remove_owned_files(
             ctx.target,
             operation_id=ctx.sandbox.id,

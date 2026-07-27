@@ -57,6 +57,7 @@ from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError
 from proliferate.server.cloud.agent_gateway.budget import (
     AGENT_GATEWAY_CREDITS_EXHAUSTED_CODE,
+    get_gateway_enrollment_for_user,
     is_gateway_budget_available,
 )
 from proliferate.server.cloud.errors import CloudApiError
@@ -412,7 +413,11 @@ async def _probe_gateway_models(db: AsyncSession, *, user_id: UUID, harness_kind
             "Your LLM credits are exhausted; top up to keep using the gateway.",
             status_code=402,
         )
-    enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    # Same resolution the gate above and the state renderer use
+    # (``get_gateway_enrollment_for_user``): probing the personal enrollment
+    # while the gate checked the org one would enumerate models against a key
+    # from a different paying subject than the one authorized.
+    enrollment = await get_gateway_enrollment_for_user(db, user_id)
     virtual_key: str | None = None
     if enrollment is not None:
         # Post-B2: the caller's harness has its own access-group-scoped key

@@ -152,6 +152,17 @@ class TestBuildAgentAuthStateSyncedGateway:
             enrollment_id=enrollment.id,
             litellm_team_id="team-1",
             litellm_user_id=f"user-{user_id}",
+            virtual_key_id=None,
+            virtual_key=None,
+            sync_fingerprint="fp-1",
+        )
+        # Post-B2/B3: the renderer resolves the harness's own per-harness
+        # child key (model-gateway.md §Account model), not a key on the
+        # parent enrollment row.
+        await agent_gateway_store.upsert_enrollment_key(
+            db_session,
+            enrollment_id=enrollment.id,
+            harness_kind="claude",
             virtual_key_id="tok-1",
             virtual_key="sk-litellm-vk",
             sync_fingerprint="fp-1",
@@ -174,3 +185,84 @@ class TestBuildAgentAuthStateSyncedGateway:
             }
         ]
         assert fingerprint == agent_auth.agent_auth_state_fingerprint(state)
+
+    @pytest.mark.asyncio
+    async def test_each_gateway_harness_renders_its_own_child_key(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Two gateway harnesses → two distinct keys through the real loader.
+
+        The unit suite covers the renderer's map lookup; this drives
+        ``_load_state_inputs`` against real child-key rows, so a loader that
+        fanned one key out to every harness (or looked up the wrong harness's
+        row) fails here.
+        """
+        monkeypatch.setattr(
+            settings,
+            "agent_gateway_litellm_public_base_url",
+            "https://llm.proliferate.ai",
+        )
+        user_id = await _register_user_id(client)
+        for harness_kind in ("claude", "codex"):
+            await agent_gateway_store.put_auth_selections(
+                db_session,
+                user_id=user_id,
+                harness_kind=harness_kind,
+                surface="cloud",
+                sources=[DesiredAuthSource(source_kind="gateway")],
+            )
+
+        subject = await ensure_personal_billing_subject(db_session, user_id)
+        enrollment = await agent_gateway_store.ensure_enrollment_row(
+            db_session,
+            subject_kind="user",
+            billing_subject_id=subject.id,
+            user_id=user_id,
+        )
+        await agent_gateway_store.mark_enrollment_synced(
+            db_session,
+            enrollment_id=enrollment.id,
+            litellm_team_id="team-1",
+            litellm_user_id=f"user-{user_id}",
+            virtual_key_id=None,
+            virtual_key=None,
+            sync_fingerprint="fp-set",
+        )
+        for harness_kind in ("claude", "codex"):
+            await agent_gateway_store.upsert_enrollment_key(
+                db_session,
+                enrollment_id=enrollment.id,
+                harness_kind=harness_kind,
+                virtual_key_id=f"tok-{harness_kind}",
+                virtual_key=f"sk-litellm-{harness_kind}",
+                sync_fingerprint=f"fp-{harness_kind}",
+            )
+        await db_session.flush()
+
+        state, _ = await agent_auth.build_agent_auth_state(db_session, user_id)
+
+        assert state["harnesses"] == [
+            {
+                "harness_kind": "claude",
+                "sources": [
+                    {
+                        "kind": "gateway",
+                        "base_url": "https://llm.proliferate.ai",
+                        "key": "sk-litellm-claude",
+                    }
+                ],
+            },
+            {
+                "harness_kind": "codex",
+                "sources": [
+                    {
+                        "kind": "gateway",
+                        "base_url": "https://llm.proliferate.ai",
+                        "key": "sk-litellm-codex",
+                    }
+                ],
+            },
+        ]

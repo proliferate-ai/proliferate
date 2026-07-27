@@ -50,15 +50,36 @@ def _inputs(
     api_key_values: dict[uuid.UUID, str] | None = None,
     enrollment_sync_status: str | None = "synced",
     gateway_virtual_key: str | None = "sk-litellm-vk",
+    gateway_virtual_keys: dict[str, str] | None = None,
     gateway_base_url: str | None = "https://llm.proliferate.ai",
 ) -> agent_auth.AgentAuthStateInputs:
+    """Build ``AgentAuthStateInputs``.
+
+    ``gateway_virtual_key`` (singular) is the convenience default: every
+    gateway-selection harness present in ``selections`` gets that same key
+    value (or none, when ``None``) — the per-harness key map
+    (model-gateway.md §Account model, R2) collapses to "one key" in tests
+    that don't care about per-harness distinctness. Pass
+    ``gateway_virtual_keys`` directly for tests that need distinct
+    per-harness values.
+    """
+    if gateway_virtual_keys is None:
+        gateway_virtual_keys = (
+            {
+                selection.harness_kind: gateway_virtual_key
+                for selection in selections
+                if selection.source_kind == "gateway"
+            }
+            if gateway_virtual_key is not None
+            else {}
+        )
     return agent_auth.AgentAuthStateInputs(
         user_id=USER_ID,
         revision=revision,
         selections=selections,
         api_key_values=api_key_values or {},
         enrollment_sync_status=enrollment_sync_status,
-        gateway_virtual_key=gateway_virtual_key,
+        gateway_virtual_keys=gateway_virtual_keys,
         gateway_base_url=gateway_base_url,
         harness_settings={},
     )
@@ -184,8 +205,13 @@ class TestRenderAgentAuthState:
                 api_key_values={live_id: "sk-live"},
             )
         )
-        # claude's only source was revoked -> the harness disappears entirely.
-        assert [entry["harness_kind"] for entry in state["harnesses"]] == ["codex"]
+        # claude's only source was revoked -> the ENTRY STAYS, empty. Dropping it
+        # would read as "never configured" at the runtime and silently launch on
+        # the user's own login (agent-auth.md: present-but-empty fails closed).
+        by_harness = {entry["harness_kind"]: entry["sources"] for entry in state["harnesses"]}
+        assert sorted(by_harness) == ["claude", "codex"]
+        assert by_harness["claude"] == []
+        assert len(by_harness["codex"]) == 1
 
     def test_unsatisfiable_gateway_still_renders_satisfiable_api_key(self) -> None:
         live_id = uuid.uuid4()
@@ -205,9 +231,18 @@ class TestRenderAgentAuthState:
                 gateway_virtual_key=None,
             )
         )
-        assert [entry["harness_kind"] for entry in state["harnesses"]] == ["codex"]
+        # codex keeps its live key; claude keeps its entry with no sources, so the
+        # runtime refuses a claude launch rather than degrading it to native.
+        by_harness = {entry["harness_kind"]: entry["sources"] for entry in state["harnesses"]}
+        assert sorted(by_harness) == ["claude", "codex"]
+        assert by_harness["claude"] == []
+        assert len(by_harness["codex"]) == 1
 
-    def test_all_unsatisfiable_renders_empty_harnesses(self) -> None:
+    def test_all_unsatisfiable_keeps_the_selected_harness_with_no_sources(self) -> None:
+        # The rewritten shape of the old `..._renders_empty_harnesses` test. An
+        # exhausted/unsynced gateway must NOT produce an empty document: an empty
+        # document is deleted by the materializer and reads as native, which is
+        # exactly the silent degradation the fail-closed law forbids.
         state, _ = agent_auth.render_agent_auth_state(
             _inputs(
                 (_selection(harness="claude", source_kind="gateway"),),
@@ -215,9 +250,16 @@ class TestRenderAgentAuthState:
                 gateway_virtual_key=None,
             )
         )
-        assert state["harnesses"] == []
+        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
         assert state["version"] == 2
         assert state["revision"] == REVISION
+
+    def test_no_selections_at_all_renders_an_empty_document(self) -> None:
+        # The one case that legitimately yields no harnesses — and therefore the
+        # only case in which the materializer deletes the state file. This is what
+        # keeps "absent means native" reachable at all.
+        state, _ = agent_auth.render_agent_auth_state(_inputs(()))
+        assert state["harnesses"] == []
 
     def test_gateway_without_public_base_url_logs_loud_warning(
         self, monkeypatch: pytest.MonkeyPatch
@@ -236,14 +278,14 @@ class TestRenderAgentAuthState:
                 gateway_base_url=None,
             )
         )
-        assert state["harnesses"] == []
+        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
         assert any(
             "gateway selection dropped" in message
             and "agent_gateway_litellm_public_base_url is not configured" in message
             for message in warnings
         )
 
-    def test_gateway_with_unsynced_enrollment_is_dropped(self) -> None:
+    def test_gateway_with_unsynced_enrollment_drops_the_source_not_the_harness(self) -> None:
         for status in ("pending", "failed", None):
             state, _ = agent_auth.render_agent_auth_state(
                 _inputs(
@@ -252,7 +294,58 @@ class TestRenderAgentAuthState:
                     gateway_virtual_key=None,
                 )
             )
-            assert state["harnesses"] == []
+            # The SOURCE is dropped; the harness entry survives empty so the
+            # runtime refuses the launch instead of falling back to native.
+            assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}], status
+
+    def test_each_gateway_harness_carries_its_own_key(self) -> None:
+        """Two gateway harnesses render two DISTINCT keys (R2's whole point).
+
+        The key map is per (subject, harness) so each harness is granted only
+        its own access group. If the renderer collapsed the map to one value,
+        every harness would ship a key scoped to some other harness's group —
+        the pre-B2 one-shared-key behavior with none of the scoping.
+        """
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(harness="claude", source_kind="gateway"),
+                    _selection(harness="codex", source_kind="gateway"),
+                ),
+                gateway_virtual_keys={
+                    "claude": "sk-litellm-claude",
+                    "codex": "sk-litellm-codex",
+                },
+            )
+        )
+        rendered = {
+            harness["harness_kind"]: [
+                source["key"] for source in harness["sources"] if source["kind"] == "gateway"
+            ]
+            for harness in state["harnesses"]
+        }
+        assert rendered == {
+            "claude": ["sk-litellm-claude"],
+            "codex": ["sk-litellm-codex"],
+        }
+
+    def test_harness_missing_from_the_key_map_never_borrows_a_sibling_key(self) -> None:
+        """Fails closed (``sources: []``, not dropped) and never borrows claude's key."""
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(harness="claude", source_kind="gateway"),
+                    _selection(harness="codex", source_kind="gateway"),
+                ),
+                gateway_virtual_keys={"claude": "sk-litellm-claude"},
+                gateway_base_url="https://llm",
+            )
+        )
+        by_harness = {h["harness_kind"]: h["sources"] for h in state["harnesses"]}
+        assert by_harness["claude"] == [
+            {"kind": "gateway", "base_url": "https://llm", "key": "sk-litellm-claude"}
+        ]
+        assert by_harness["codex"] == []
 
     def test_fingerprint_is_stable_across_renders(self) -> None:
         selections = (_selection(harness="claude", source_kind="gateway"),)
@@ -408,17 +501,37 @@ class TestMaterializeAgentAuth:
         assert spy.read_count == 1
 
     @pytest.mark.asyncio
-    async def test_no_resolvable_sources_deletes_state_file(
+    async def test_unsatisfiable_selection_writes_an_empty_entry_instead_of_deleting(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # A cloud selection whose only source is unsatisfiable resolves to zero
-        # harnesses -> the file is deleted (empty renders to native; the runtime
-        # launcher fail-closes cloud on its own).
+        # Rewrite of `..._deletes_state_file`: deleting the file here silently
+        # degrades to native; the selection must ship as `sources: []` instead so
+        # the runtime refuses the launch (agent-auth.md: present-but-empty fails closed).
         inputs = _inputs(
             (_selection(harness="claude", source_kind="gateway"),),
             enrollment_sync_status="pending",
             gateway_virtual_key=None,
         )
+
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+            return inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
+        spy = _install_spy(monkeypatch, previous_manifest=None)
+
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+
+        assert spy.removed == set(), "the document must NOT be deleted"
+        state = json.loads(str(spy.writes[0]["content"]))
+        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+
+    @pytest.mark.asyncio
+    async def test_no_selections_at_all_still_deletes_the_state_file(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The one remaining delete case, and the one that keeps "absent means
+        # native" reachable: the user has selected nothing on this surface.
+        inputs = _inputs(())
 
         async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
             return inputs
@@ -474,7 +587,14 @@ class TestMaterializeAgentAuth:
 
         assert spy.removed == set()
         state = json.loads(str(spy.writes[0]["content"]))
-        assert [entry["harness_kind"] for entry in state["harnesses"]] == ["grok"]
+        by_harness = {entry["harness_kind"]: entry["sources"] for entry in state["harnesses"]}
+        # grok's live key is delivered; claude (dead gateway) and codex (revoked
+        # key) keep EMPTY entries so their launches are refused rather than
+        # silently degraded. One bad source still does not abort the reconcile.
+        assert sorted(by_harness) == ["claude", "codex", "grok"]
+        assert by_harness["claude"] == []
+        assert by_harness["codex"] == []
+        assert len(by_harness["grok"]) == 1
         serialized = json.dumps(state)
         assert "sk-live" in serialized
         assert str(revoked_id) not in serialized

@@ -41,6 +41,7 @@ from proliferate.server.billing.domain.plans import (
 )
 from proliferate.server.billing.snapshots import billing_plan_rule_config
 from proliferate.server.billing.subjects import ensure_organization_billing_subject_state
+from proliferate.server.cloud.agent_gateway.budget import get_gateway_enrollment_for_user
 from proliferate.server.cloud.agent_gateway.selection_rules import (
     SelectionRuleError,
     validate_auth_selection_set,
@@ -302,8 +303,15 @@ async def get_capabilities(
     *,
     user_id: UUID,
 ) -> tuple[bool, str | None, str]:
-    """Return (gateway_enabled, public_base_url, enrollment_status)."""
-    enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    """Return (gateway_enabled, public_base_url, enrollment_status).
+
+    Reports the status of the enrollment that actually governs this user's
+    gateway sessions (``get_gateway_enrollment_for_user``). Reading the
+    personal enrollment unconditionally would show "synced" to a user whose
+    governing org enrollment is still pending (or the reverse), so the UI's
+    readiness signal and the key the renderer hands out would disagree.
+    """
+    enrollment = await get_gateway_enrollment_for_user(db, user_id)
     return (
         settings.agent_gateway_enabled,
         settings.agent_gateway_litellm_public_base_url or None,
@@ -316,7 +324,8 @@ async def get_enrollment(
     *,
     user_id: UUID,
 ) -> AgentGatewayEnrollmentRecord:
-    enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    """The governing enrollment for this user (org when funded, else personal)."""
+    enrollment = await get_gateway_enrollment_for_user(db, user_id)
     if enrollment is None:
         raise CloudApiError(
             "agent_gateway_enrollment_not_found",
