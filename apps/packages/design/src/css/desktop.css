@@ -5,7 +5,7 @@
  * regions, which rely on -webkit-app-region and only mean anything inside
  * a Tauri native webview. The shared Web/Desktop product theme (colors,
  * typography, shared component classes) lives in product.css, which
- * Desktop imports separately — see apps/desktop/src/index.css.
+ * rides with the ProductClient package entry — see apps/desktop/src/main.tsx.
  * ======================================================================== */
 
 /* ---- Drag region styles ---- */

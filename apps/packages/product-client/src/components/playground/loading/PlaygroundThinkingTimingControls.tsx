@@ -5,7 +5,7 @@ import { Label } from "@proliferate/ui/primitives/Label";
 import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
 
 // Timing lab for the PRODUCT ThinkingText animation. The two-layer compositor
-// sweep (.thinking-text-band / .thinking-text-band-glyphs, design dom.css —
+// sweep (.thinking-text-band / .thinking-text-band-glyphs, design product.css —
 // shared with the cloud/web chat surfaces) has exactly two knobs — the CSS
 // custom properties consumed by both keyframe pairs:
 //
@@ -14,7 +14,7 @@ import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
 //
 // The controls below write those vars onto the preview labels, so what
 // animates here is byte-for-byte the shipping mechanism; copy the summary
-// line into dom.css to change the product defaults. The steps() preset
+// line into product.css to change the product defaults. The steps() preset
 // exists to compare codex's cadenced feel (steps(48, end)) against the
 // smooth sweep we ship.
 
@@ -26,7 +26,7 @@ interface ThinkingTiming {
   stepCount: number;
 }
 
-/** Mirrors the shipped fallbacks in dom.css (2.4s linear); the step count
+/** Mirrors the shipped fallbacks in product.css (2.4s linear); the step count
     only participates when the steps preset is active. */
 const PRODUCT_DEFAULT_TIMING: ThinkingTiming = {
   durationMs: 2_400,

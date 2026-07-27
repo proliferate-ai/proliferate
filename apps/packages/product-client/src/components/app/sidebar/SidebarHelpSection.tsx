@@ -53,7 +53,6 @@ export function SidebarHelpSection({
       {supportAction.kind === "vendor" ? (
         <>
           <PopoverMenuItem
-            variant="sidebar"
             label="Send feedback"
             icon={<MessageSquare className="icon-paired [font-size:var(--text-sidebar-row)]" />}
             trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSupport)}</span>}
@@ -65,7 +64,6 @@ export function SidebarHelpSection({
             }}
           />
           <PopoverMenuItem
-            variant="sidebar"
             label="Submit a prompt"
             icon={<Lightbulb className="icon-paired" />}
             disabled={Boolean(supportDisabledReason)}
@@ -78,7 +76,6 @@ export function SidebarHelpSection({
         </>
       ) : supportAction.kind === "operator" ? (
         <PopoverMenuItem
-          variant="sidebar"
           label="Contact support"
           icon={<Mail className="icon-paired" />}
           onClick={() => {
@@ -88,7 +85,6 @@ export function SidebarHelpSection({
         />
       ) : null}
       <PopoverMenuItem
-        variant="sidebar"
         label="Documentation"
         icon={<BookOpen className="icon-paired" />}
         trailing={<ArrowUpRight className="icon-compact" />}
@@ -98,7 +94,6 @@ export function SidebarHelpSection({
         }}
       />
       <PopoverMenuItem
-        variant="sidebar"
         label="Discord"
         icon={<Discord className="icon-paired" />}
         trailing={<ArrowUpRight className="icon-compact" />}
@@ -108,7 +103,6 @@ export function SidebarHelpSection({
         }}
       />
       <PopoverMenuItem
-        variant="sidebar"
         label="Changelog"
         icon={<BookMarked className="icon-paired" />}
         trailing={<ArrowUpRight className="icon-compact" />}
@@ -119,7 +113,6 @@ export function SidebarHelpSection({
       />
       {webApp.available && webApp.baseUrl ? (
         <PopoverMenuItem
-          variant="sidebar"
           label="Go to web"
           icon={<Globe className="icon-paired [font-size:var(--text-sidebar-row)]" />}
           trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
