@@ -1,8 +1,13 @@
-"""HTTP routes for agent gateway auth: key vault, selections, state, policy.
+"""HTTP routes for the agent-auth platform plus the agent-gateway account.
 
-Model catalogs moved out: the cloud snapshot's routes live in their own
-``agent_models`` namespace (model-catalog.md §Cloud routes), named off both
-"gateway" (they serve every auth context) and "catalog".
+Two prefixes out of this one module (S1, agent-auth.md/model-gateway.md
+API surface): ``router``/``organization_router`` serve ``/agent-auth``
+(key vault, selections, state, org policy); ``gateway_account_router``
+serves ``/agent-gateway`` (enrollment, capabilities — the gateway-account
+concerns model-gateway.md scopes that prefix to). Model catalogs moved out
+earlier: the cloud snapshot's routes live in their own ``agent_models``
+namespace (model-catalog.md §Cloud routes), named off both "gateway" (they
+serve every auth context) and "catalog".
 """
 
 from __future__ import annotations
@@ -40,12 +45,18 @@ from proliferate.server.cloud.agent_gateway.models import (
 )
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
-router = APIRouter(prefix="/agent-gateway", tags=["cloud-agent-gateway"])
+router = APIRouter(prefix="/agent-auth", tags=["cloud-agent-auth"])
 
 organization_router = APIRouter(
-    prefix="/organizations/{organization_id}/agent-gateway",
-    tags=["cloud-agent-gateway"],
+    prefix="/organizations/{organization_id}/agent-auth",
+    tags=["cloud-agent-auth"],
 )
+
+# Enrollment + capabilities are gateway-account concerns (model-gateway.md
+# API surface) and stay under /agent-gateway; every other route on `router`
+# (vault, selections, state) and every `organization_router` route (org
+# policy) moved to /agent-auth (agent-auth.md API surface).
+gateway_account_router = APIRouter(prefix="/agent-gateway", tags=["cloud-agent-gateway"])
 
 
 # --------------------------------------------------------------------------- #
@@ -218,7 +229,7 @@ async def get_agent_auth_state_endpoint(
 # --------------------------------------------------------------------------- #
 
 
-@router.get("/capabilities", response_model=AgentGatewayCapabilitiesResponse)
+@gateway_account_router.get("/capabilities", response_model=AgentGatewayCapabilitiesResponse)
 async def get_agent_gateway_capabilities_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
@@ -234,7 +245,7 @@ async def get_agent_gateway_capabilities_endpoint(
     )
 
 
-@router.get("/enrollment", response_model=AgentGatewayEnrollmentResponse)
+@gateway_account_router.get("/enrollment", response_model=AgentGatewayEnrollmentResponse)
 async def get_agent_gateway_enrollment_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),

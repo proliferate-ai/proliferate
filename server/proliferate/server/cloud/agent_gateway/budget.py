@@ -4,7 +4,7 @@ Second enforcement wall for LLM credit exhaustion: the first wall is the
 LiteLLM virtual-key disable applied by the usage importer
 (``usage_import._enforce_subject_exhaustion``). This predicate is consumed at
 the point where a client acquires gateway access — the agent-auth state
-render (the cloud materializer and ``GET /agent-gateway/state``, which hand
+render (the cloud materializer and ``GET /agent-auth/state``, which hand
 out the decrypted virtual key) — so an exhausted subject stops receiving key
 material even if the LiteLLM-side disable lagged or failed.
 

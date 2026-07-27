@@ -17,7 +17,7 @@ import type {
 } from "../types/index.js";
 
 function selectionsPath(harnessKind: string): string {
-  return `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}`;
+  return `/v1/cloud/agent-auth/selections/${encodeURIComponent(harnessKind)}`;
 }
 
 // B4 re-key (model-catalog.md §Cloud routes): the cloud snapshot moved from
@@ -29,7 +29,7 @@ function agentModelsPath(harnessKind: string): string {
 }
 
 function orgAgentPolicyPath(organizationId: string): string {
-  return `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/agent-gateway/policy`;
+  return `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/agent-auth/policy`;
 }
 
 // --- Key vault -------------------------------------------------------------
@@ -39,7 +39,7 @@ export async function listAgentApiKeys(
 ): Promise<AgentApiKey[]> {
   return client.requestJson<AgentApiKey[]>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/keys",
+    path: "/v1/cloud/agent-auth/keys",
   });
 }
 
@@ -49,7 +49,7 @@ export async function createAgentApiKey(
 ): Promise<AgentApiKey> {
   return client.requestJson<AgentApiKey>({
     method: "POST",
-    path: "/v1/cloud/agent-gateway/keys",
+    path: "/v1/cloud/agent-auth/keys",
     body: input,
   });
 }
@@ -60,7 +60,7 @@ export async function revokeAgentApiKey(
 ): Promise<AgentApiKey> {
   return client.requestJson<AgentApiKey>({
     method: "DELETE",
-    path: `/v1/cloud/agent-gateway/keys/${encodeURIComponent(keyId)}`,
+    path: `/v1/cloud/agent-auth/keys/${encodeURIComponent(keyId)}`,
   });
 }
 
@@ -72,7 +72,7 @@ export async function listAuthSelections(
 ): Promise<AgentAuthSelection[]> {
   return client.requestJson<AgentAuthSelection[]>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/selections",
+    path: "/v1/cloud/agent-auth/selections",
     query: surface ? { surface } : undefined,
   });
 }
@@ -97,7 +97,7 @@ export async function getAgentAuthState(
 ): Promise<AgentAuthState> {
   return client.requestJson<AgentAuthState>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/state",
+    path: "/v1/cloud/agent-auth/state",
     query: { surface },
   });
 }

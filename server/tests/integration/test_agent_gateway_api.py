@@ -91,7 +91,7 @@ async def _create_key(
     value: str = SECRET,
 ) -> dict[str, object]:
     response = await client.post(
-        "/v1/cloud/agent-gateway/keys",
+        "/v1/cloud/agent-auth/keys",
         headers=headers,
         json={"title": title, "value": value},
     )
@@ -109,7 +109,7 @@ async def _put_selections(
     sources: list[dict[str, object]],
 ) -> Response:
     return await client.put(
-        f"/v1/cloud/agent-gateway/selections/{harness}",
+        f"/v1/cloud/agent-auth/selections/{harness}",
         headers=headers,
         params={"surface": surface},
         json={"sources": sources},
@@ -131,21 +131,21 @@ class TestAgentApiKeys:
         assert created["status"] == "active"
         assert created["kind"] == "api_key"
 
-        listed = await client.get("/v1/cloud/agent-gateway/keys", headers=headers)
+        listed = await client.get("/v1/cloud/agent-auth/keys", headers=headers)
         assert listed.status_code == 200
         _assert_no_secret(listed)
         keys = listed.json()
         assert [key["id"] for key in keys] == [created["id"]]
 
         revoked = await client.delete(
-            f"/v1/cloud/agent-gateway/keys/{created['id']}",
+            f"/v1/cloud/agent-auth/keys/{created['id']}",
             headers=headers,
         )
         assert revoked.status_code == 200
         _assert_no_secret(revoked)
         assert revoked.json()["status"] == "revoked"
 
-        listed_after = await client.get("/v1/cloud/agent-gateway/keys", headers=headers)
+        listed_after = await client.get("/v1/cloud/agent-auth/keys", headers=headers)
         assert listed_after.json() == []
 
         # Ciphertext lives in the DB; the raw value never does.
@@ -166,7 +166,7 @@ class TestAgentApiKeys:
         _, headers = await _authed_user(client)
 
         response = await client.post(
-            "/v1/cloud/agent-gateway/keys/provider-config",
+            "/v1/cloud/agent-auth/keys/provider-config",
             headers=headers,
             json={
                 "title": "Personal Bedrock",
@@ -181,7 +181,7 @@ class TestAgentApiKeys:
         assert created["kind"] == "aws_bedrock"
         assert "bedrock-token-abcd" not in response.text
 
-        listed = await client.get("/v1/cloud/agent-gateway/keys", headers=headers)
+        listed = await client.get("/v1/cloud/agent-auth/keys", headers=headers)
         assert listed.status_code == 200
         _assert_no_secret(listed)
         keys = listed.json()
@@ -205,7 +205,7 @@ class TestAgentApiKeys:
         _, headers = await _authed_user(client)
 
         response = await client.post(
-            "/v1/cloud/agent-gateway/keys/provider-config",
+            "/v1/cloud/agent-auth/keys/provider-config",
             headers=headers,
             json={
                 "title": "Bad kind",
@@ -224,7 +224,7 @@ class TestAgentApiKeys:
         _, headers = await _authed_user(client)
 
         response = await client.post(
-            "/v1/cloud/agent-gateway/keys/provider-config",
+            "/v1/cloud/agent-auth/keys/provider-config",
             headers=headers,
             json={"title": "Empty", "kind": "azure_openai", "value": {}},
         )
@@ -244,7 +244,7 @@ class TestAgentApiKeys:
         _, headers = await _authed_user(client)
 
         response = await client.post(
-            "/v1/cloud/agent-gateway/keys/provider-config",
+            "/v1/cloud/agent-auth/keys/provider-config",
             headers=headers,
             json={
                 "title": "Wrong kind fields",
@@ -264,7 +264,7 @@ class TestAgentApiKeys:
         _, headers = await _authed_user(client)
 
         response = await client.post(
-            "/v1/cloud/agent-gateway/keys/provider-config",
+            "/v1/cloud/agent-auth/keys/provider-config",
             headers=headers,
             json={
                 "title": "Arbitrary keys",
@@ -280,7 +280,7 @@ class TestAgentApiKeys:
         _, headers = await _authed_user(client)
 
         blank_title = await client.post(
-            "/v1/cloud/agent-gateway/keys",
+            "/v1/cloud/agent-auth/keys",
             headers=headers,
             json={"title": "   ", "value": SECRET},
         )
@@ -288,7 +288,7 @@ class TestAgentApiKeys:
         assert blank_title.json()["detail"]["code"] == "invalid_agent_api_key_title"
 
         empty_value = await client.post(
-            "/v1/cloud/agent-gateway/keys",
+            "/v1/cloud/agent-auth/keys",
             headers=headers,
             json={"title": "Key", "value": "   "},
         )
@@ -300,7 +300,7 @@ class TestAgentApiKeys:
         _, headers = await _authed_user(client)
 
         missing_field = await client.post(
-            "/v1/cloud/agent-gateway/keys",
+            "/v1/cloud/agent-auth/keys",
             headers=headers,
             json={"value": SECRET},
         )
@@ -308,7 +308,7 @@ class TestAgentApiKeys:
         assert SECRET not in missing_field.text
 
         wrong_type = await client.post(
-            "/v1/cloud/agent-gateway/keys",
+            "/v1/cloud/agent-auth/keys",
             headers=headers,
             json={"title": "Key", "value": [SECRET]},
         )
@@ -322,7 +322,7 @@ class TestAgentApiKeys:
         created = await _create_key(client, owner_headers)
 
         response = await client.delete(
-            f"/v1/cloud/agent-gateway/keys/{created['id']}",
+            f"/v1/cloud/agent-auth/keys/{created['id']}",
             headers=other_headers,
         )
         assert response.status_code == 404
@@ -350,7 +350,7 @@ class TestAgentApiKeys:
         assert put.status_code == 200, put.text
 
         blocked = await client.delete(
-            f"/v1/cloud/agent-gateway/keys/{created['id']}",
+            f"/v1/cloud/agent-auth/keys/{created['id']}",
             headers=headers,
         )
         assert blocked.status_code == 409, blocked.text
@@ -374,14 +374,14 @@ class TestAgentApiKeys:
             ],
         )
         freed = await client.delete(
-            f"/v1/cloud/agent-gateway/keys/{created['id']}",
+            f"/v1/cloud/agent-auth/keys/{created['id']}",
             headers=headers,
         )
         assert freed.status_code == 200, freed.text
 
     @pytest.mark.asyncio
     async def test_requires_authentication(self, client: AsyncClient) -> None:
-        response = await client.get("/v1/cloud/agent-gateway/keys")
+        response = await client.get("/v1/cloud/agent-auth/keys")
         assert response.status_code == 401
 
 
@@ -419,7 +419,7 @@ class TestAgentAuthSelections:
         assert api_row["keyTitle"] == "Work key"
 
         listed = await client.get(
-            "/v1/cloud/agent-gateway/selections",
+            "/v1/cloud/agent-auth/selections",
             headers=headers,
             params={"surface": "local"},
         )
@@ -720,7 +720,7 @@ class TestAgentGatewayEnrollment:
 
 async def _get_state(client: AsyncClient, headers: dict[str, str], surface: str) -> Response:
     return await client.get(
-        "/v1/cloud/agent-gateway/state",
+        "/v1/cloud/agent-auth/state",
         headers=headers,
         params={"surface": surface},
     )
@@ -847,7 +847,81 @@ class TestAgentAuthState:
     @pytest.mark.asyncio
     async def test_requires_authentication(self, client: AsyncClient) -> None:
         response = await client.get(
-            "/v1/cloud/agent-gateway/state",
+            "/v1/cloud/agent-auth/state",
             params={"surface": "local"},
         )
         assert response.status_code == 401
+
+
+class TestOldAgentGatewayRoutesAreGone:
+    @pytest.mark.asyncio
+    async def test_the_old_agent_gateway_routes_are_gone(self, client: AsyncClient) -> None:
+        """S1 moved the vault/selections/state/org-policy routes off
+        ``/agent-gateway`` onto ``/agent-auth`` (enrollment + capabilities
+        stayed put, model-gateway.md's gateway-account concerns). Any request
+        that still lands on the old prefix must 404, not silently resolve to
+        something else -- a shadowed route here would mean the old client
+        SDKs land on an endpoint with different auth/behavior instead of a
+        clean, loud failure.
+        """
+        _, headers = await _authed_user(client)
+        organization_id = uuid.uuid4()
+        for path, method in (
+            ("/v1/cloud/agent-gateway/keys", "get"),
+            ("/v1/cloud/agent-gateway/keys", "post"),
+            ("/v1/cloud/agent-gateway/keys/provider-config", "post"),
+            (f"/v1/cloud/agent-gateway/keys/{uuid.uuid4()}", "delete"),
+            ("/v1/cloud/agent-gateway/selections", "get"),
+            ("/v1/cloud/agent-gateway/selections/claude", "put"),
+            ("/v1/cloud/agent-gateway/state", "get"),
+            (f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy", "get"),
+            (f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy", "put"),
+            (
+                f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy/violations",
+                "get",
+            ),
+        ):
+            response = await getattr(client, method)(path, headers=headers)
+            assert response.status_code == 404, f"{method} {path}"
+
+    def test_agent_auth_and_agent_gateway_prefixes_carry_the_right_routes(self) -> None:
+        """Pin the S1 split by structure, not by probing random 404s.
+
+        The org-policy 404s above only prove the org guard rejects a random
+        org id -- they'd pass even if S1 never moved a route. This asserts the
+        actual shape: every vault/selections/state/org-policy route now lives
+        under ``/agent-auth``, and only enrollment + capabilities (the
+        gateway-account concerns model-gateway.md scopes to that prefix)
+        remain under ``/agent-gateway``.
+        """
+        from proliferate.main import app
+
+        spec = app.openapi()
+        registered = [
+            (method.upper(), path)
+            for path, operations in spec["paths"].items()
+            for method in operations
+        ]
+
+        agent_auth = sorted(pair for pair in registered if "/agent-auth" in pair[1])
+        assert agent_auth == [
+            ("DELETE", "/v1/cloud/agent-auth/keys/{key_id}"),
+            ("GET", "/v1/cloud/agent-auth/keys"),
+            ("GET", "/v1/cloud/agent-auth/selections"),
+            ("GET", "/v1/cloud/agent-auth/state"),
+            ("GET", "/v1/cloud/organizations/{organization_id}/agent-auth/policy"),
+            (
+                "GET",
+                "/v1/cloud/organizations/{organization_id}/agent-auth/policy/violations",
+            ),
+            ("POST", "/v1/cloud/agent-auth/keys"),
+            ("POST", "/v1/cloud/agent-auth/keys/provider-config"),
+            ("PUT", "/v1/cloud/agent-auth/selections/{harness_kind}"),
+            ("PUT", "/v1/cloud/organizations/{organization_id}/agent-auth/policy"),
+        ]
+
+        agent_gateway = sorted(pair for pair in registered if "/agent-gateway" in pair[1])
+        assert agent_gateway == [
+            ("GET", "/v1/cloud/agent-gateway/capabilities"),
+            ("GET", "/v1/cloud/agent-gateway/enrollment"),
+        ]

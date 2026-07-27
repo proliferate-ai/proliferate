@@ -95,9 +95,9 @@ describe("Agents playground Cloud transport", () => {
       expect(screen.getByText("New playground key")).toBeTruthy();
     });
     expect(transport.requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
-      "GET /v1/cloud/agent-gateway/keys",
-      "POST /v1/cloud/agent-gateway/keys",
-      "GET /v1/cloud/agent-gateway/keys",
+      "GET /v1/cloud/agent-auth/keys",
+      "POST /v1/cloud/agent-auth/keys",
+      "GET /v1/cloud/agent-auth/keys",
     ]);
     expect(realRequestJson).not.toHaveBeenCalled();
     expect(outerQueryClient.getQueryData(agentApiKeysKey())).toEqual([REAL_SIGNED_IN_KEY]);
@@ -153,9 +153,9 @@ describe("Agents playground Cloud transport", () => {
     });
 
     expect(transport.requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
-      "POST /v1/cloud/agent-gateway/keys",
-      "DELETE /v1/cloud/agent-gateway/keys/key-1",
-      "PUT /v1/cloud/agent-gateway/selections/claude",
+      "POST /v1/cloud/agent-auth/keys",
+      "DELETE /v1/cloud/agent-auth/keys/key-1",
+      "PUT /v1/cloud/agent-auth/selections/claude",
       "PUT /v1/cloud/agent-models/claude/override",
     ]);
     expect(realRequestJson).not.toHaveBeenCalled();
@@ -197,17 +197,17 @@ describe("Agents playground Cloud transport", () => {
 
     await expect(transport.client.requestJson({
       method: "DELETE",
-      path: "/v1/cloud/agent-gateway/keys/not-a-real-route/key-1",
+      path: "/v1/cloud/agent-auth/keys/not-a-real-route/key-1",
     })).rejects.toThrow("Unhandled Agents playground Cloud request");
     await expect(transport.client.requestJson({
       method: "PUT",
-      path: "/v1/cloud/agent-gateway/selections/not-a-real-route/claude",
+      path: "/v1/cloud/agent-auth/selections/not-a-real-route/claude",
       query: { surface: "local" },
       body: { sources: [{ sourceKind: "gateway", enabled: true }] },
     })).rejects.toThrow("Unhandled Agents playground Cloud request");
     await expect(transport.client.requestJson({
       method: "GET",
-      path: "/v1/cloud/agent-gateway/not-declared",
+      path: "/v1/cloud/agent-auth/not-declared",
     })).rejects.toThrow("Unhandled Agents playground Cloud request");
 
     const directClient = transport.client as unknown as Record<

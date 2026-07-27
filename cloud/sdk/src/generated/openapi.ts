@@ -1344,7 +1344,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/keys": {
+    "/v1/cloud/agent-auth/keys": {
         parameters: {
             query?: never;
             header?: never;
@@ -1352,17 +1352,17 @@ export interface paths {
             cookie?: never;
         };
         /** List Agent Api Keys Endpoint */
-        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_gateway_keys_get"];
+        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_auth_keys_get"];
         put?: never;
         /** Create Agent Api Key Endpoint */
-        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_gateway_keys_post"];
+        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_auth_keys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/keys/provider-config": {
+    "/v1/cloud/agent-auth/keys/provider-config": {
         parameters: {
             query?: never;
             header?: never;
@@ -1380,14 +1380,14 @@ export interface paths {
          *     entry is not bound to any harness until a selection references it, same
          *     as a bare key.
          */
-        post: operations["create_agent_provider_config_endpoint_v1_cloud_agent_gateway_keys_provider_config_post"];
+        post: operations["create_agent_provider_config_endpoint_v1_cloud_agent_auth_keys_provider_config_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/keys/{key_id}": {
+    "/v1/cloud/agent-auth/keys/{key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1398,13 +1398,13 @@ export interface paths {
         put?: never;
         post?: never;
         /** Revoke Agent Api Key Endpoint */
-        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_keys__key_id__delete"];
+        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_auth_keys__key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/selections": {
+    "/v1/cloud/agent-auth/selections": {
         parameters: {
             query?: never;
             header?: never;
@@ -1412,7 +1412,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Agent Auth Selections Endpoint */
-        get: operations["list_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections_get"];
+        get: operations["list_agent_auth_selections_endpoint_v1_cloud_agent_auth_selections_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1421,7 +1421,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/selections/{harness_kind}": {
+    "/v1/cloud/agent-auth/selections/{harness_kind}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1430,7 +1430,7 @@ export interface paths {
         };
         get?: never;
         /** Put Agent Auth Selections Endpoint */
-        put: operations["put_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections__harness_kind__put"];
+        put: operations["put_agent_auth_selections_endpoint_v1_cloud_agent_auth_selections__harness_kind__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1438,7 +1438,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/state": {
+    "/v1/cloud/agent-auth/state": {
         parameters: {
             query?: never;
             header?: never;
@@ -1458,7 +1458,42 @@ export interface paths {
          *     materializer writes into the user's own sandbox. Nothing crosses a user
          *     boundary.
          */
-        get: operations["get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get"];
+        get: operations["get_agent_auth_state_endpoint_v1_cloud_agent_auth_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/agent-auth/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Org Agent Policy Endpoint */
+        get: operations["get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_get"];
+        /** Put Org Agent Policy Endpoint */
+        put: operations["put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/agent-auth/policy/violations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Org Agent Policy Violations Endpoint */
+        get: operations["list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_violations_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1493,41 +1528,6 @@ export interface paths {
         };
         /** Get Agent Gateway Enrollment Endpoint */
         get: operations["get_agent_gateway_enrollment_endpoint_v1_cloud_agent_gateway_enrollment_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/organizations/{organization_id}/agent-gateway/policy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Org Agent Policy Endpoint */
-        get: operations["get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_get"];
-        /** Put Org Agent Policy Endpoint */
-        put: operations["put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/organizations/{organization_id}/agent-gateway/policy/violations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Org Agent Policy Violations Endpoint */
-        get: operations["list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_violations_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10310,7 +10310,7 @@ export interface operations {
             };
         };
     };
-    list_agent_api_keys_endpoint_v1_cloud_agent_gateway_keys_get: {
+    list_agent_api_keys_endpoint_v1_cloud_agent_auth_keys_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10330,7 +10330,7 @@ export interface operations {
             };
         };
     };
-    create_agent_api_key_endpoint_v1_cloud_agent_gateway_keys_post: {
+    create_agent_api_key_endpoint_v1_cloud_agent_auth_keys_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -10363,7 +10363,7 @@ export interface operations {
             };
         };
     };
-    create_agent_provider_config_endpoint_v1_cloud_agent_gateway_keys_provider_config_post: {
+    create_agent_provider_config_endpoint_v1_cloud_agent_auth_keys_provider_config_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -10396,7 +10396,7 @@ export interface operations {
             };
         };
     };
-    revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_keys__key_id__delete: {
+    revoke_agent_api_key_endpoint_v1_cloud_agent_auth_keys__key_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -10427,7 +10427,7 @@ export interface operations {
             };
         };
     };
-    list_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections_get: {
+    list_agent_auth_selections_endpoint_v1_cloud_agent_auth_selections_get: {
         parameters: {
             query?: {
                 surface?: ("local" | "cloud") | null;
@@ -10458,7 +10458,7 @@ export interface operations {
             };
         };
     };
-    put_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections__harness_kind__put: {
+    put_agent_auth_selections_endpoint_v1_cloud_agent_auth_selections__harness_kind__put: {
         parameters: {
             query: {
                 surface: "local" | "cloud";
@@ -10495,7 +10495,7 @@ export interface operations {
             };
         };
     };
-    get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get: {
+    get_agent_auth_state_endpoint_v1_cloud_agent_auth_state_get: {
         parameters: {
             query: {
                 surface: "local" | "cloud";
@@ -10513,6 +10513,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentAuthStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgAgentPolicyUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_violations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgAgentPolicyViolationListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10562,103 +10659,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentGatewayEnrollmentResponse"];
-                };
-            };
-        };
-    };
-    get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OrgAgentPolicyUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_violations_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrgAgentPolicyViolationListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

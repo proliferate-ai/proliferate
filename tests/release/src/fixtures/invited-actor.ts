@@ -111,7 +111,7 @@ export const defaultInvitedActorTransport: InvitedActorTransport = {
   },
   async putGatewaySelection(api, harnessKind, surface) {
     await api.put(
-      `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}?surface=${encodeURIComponent(surface)}`,
+      `/v1/cloud/agent-auth/selections/${encodeURIComponent(harnessKind)}?surface=${encodeURIComponent(surface)}`,
       { sources: [{ sourceKind: "gateway", enabled: true }] },
     );
   },

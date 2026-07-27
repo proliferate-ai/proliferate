@@ -279,9 +279,14 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `gatewayPolicy.providers` filter it used to back is gone — B5 — now
       that LiteLLM access-group tags enforce harness-to-model scoping
       server-side).
-- [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
-      state, org policy, and catalog routes; `api.py`/`service.py`/
-      `models.py` split along the same three-domain line.
+- [ ] `api.py`/`service.py`/`models.py` still share one `agent_gateway`
+      package across the gateway-account and agent-auth domains (S1 split
+      only the URL prefixes: BYOK vault, selections, state, and org policy
+      now answer under `/v1/cloud/agent-auth/`, while this document's
+      `/v1/cloud/agent-gateway/` narrowed to enrollment + capabilities as
+      specified); the matching Python module split is still pending. Catalog
+      routes already live in their own `agent_models` module
+      (model-catalog.md §Cloud routes).
 - [ ] No product-server route emits `agent_gateway_credits_exhausted`
       ([budget.py](../../../../server/proliferate/server/cloud/agent_gateway/budget.py)).
       Exhaustion is enforced — the usage importer disables the LiteLLM virtual

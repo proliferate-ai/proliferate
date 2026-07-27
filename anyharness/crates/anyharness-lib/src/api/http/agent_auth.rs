@@ -1,6 +1,6 @@
 //! Agent-auth state transport handler: the desktop (which owns the cloud
 //! session) fetches the local-surface state document from the control plane
-//! (`GET /agent-gateway/state?surface=local`) and pushes it here verbatim;
+//! (`GET /agent-auth/state?surface=local`) and pushes it here verbatim;
 //! the body is the state.json contract (`route_auth/state.rs`). The runtime
 //! persists it atomically (0600) at `<runtime_home>/agent-auth/state.json`,
 //! where every session launch reads it fresh.

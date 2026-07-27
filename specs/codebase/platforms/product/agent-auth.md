@@ -635,11 +635,14 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       marked `pending` with a `pendingReason` naming that dependency, and
       the server excludes it from `supported_provider_config_kinds` until
       A5 lands (or the entry is dropped, pending a founder ruling).
-- [ ] **Route prefix.** Vault, selections, state, and org policy still
-      live under `/v1/cloud/agent-gateway/`; the split to
-      `/v1/cloud/agent-auth/` (with catalog routes to the model-catalog
-      platform) is pending, including the matching
-      `api.py`/`service.py`/`models.py` three-domain split.
+- [ ] **Module split.** The route prefix split landed (S1): vault,
+      selections, state, and org policy now live under `/v1/cloud/agent-auth/`,
+      and enrollment/capabilities stayed at `/v1/cloud/agent-gateway/`
+      (model-gateway.md). The matching `api.py`/`service.py`/`models.py`
+      three-domain code split (one module set per platform, not one shared
+      `agent_gateway` package) is still pending — S1 was URL-string-only by
+      design, so the account/auth/policy code still lives in the single
+      `agent_gateway` package regardless of which prefix its routes answer.
 - [ ] **Stale IA references.** The settings information-architecture doc
       still describes the removed Bifrost-era `agent-authentication`
       pane (the shipped UI redirects it to `agent-api-keys`); its Agents
