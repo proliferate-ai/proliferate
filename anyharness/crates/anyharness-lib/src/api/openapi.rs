@@ -298,7 +298,6 @@ use utoipa::OpenApi;
         super::http::agent_gateway_catalog::GatewayModelEntry,
         super::http::agent_gateway_catalog::RefreshGatewayResponse,
         crate::domains::agents::model_snapshot::status::ModelSnapshotStatus,
-        crate::domains::agents::model_snapshot::status::ContextStatus,
         crate::domains::agents::model_snapshot::status::LiveState,
         ModelEffort,
         AgentReadinessState,

@@ -1,7 +1,7 @@
 import type { AgentSummary, ReconcileAgentsResponse } from "@anyharness/sdk";
 import {
-  anyHarnessAgentGatewayModelsKey,
   anyHarnessAgentLaunchOptionsKey,
+  anyHarnessAgentModelSnapshotStatusKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
 } from "@anyharness/sdk-react";
@@ -223,19 +223,34 @@ function seedHarnessQueries(
       }],
     },
   );
+  // The composed observation (model-catalog.md "Runtime routes"): one status
+  // document per harness, carrying the model/mode lists off the same document
+  // read that serves probedAt/lastAttempt and the provenance fields.
   client.setQueryData(
-    anyHarnessAgentGatewayModelsKey(
+    anyHarnessAgentModelSnapshotStatusKey(
       runtimeUrl,
       scenario.harnessKind,
       PLAYGROUND_CACHE_SCOPE,
     ),
     {
-      source: "probe",
+      agent: scenario.harnessKind,
+      schemaVersion: 2,
+      probeEngine: "owner",
+      state: "idle",
       probedAt: "2026-07-18T18:00:00Z",
+      snapshotAgeSeconds: 120,
+      modelCount: 2,
+      modeCount: 1,
       models: [
-        { id: "model-default", displayName: "Recommended", provider: "provider" },
-        { id: "model-fast", displayName: "Fast", provider: "provider" },
+        { id: "model-default", name: "Recommended", provider: "provider" },
+        { id: "model-fast", name: "Fast", provider: "provider" },
       ],
+      modes: [{ id: "build", name: "Build" }],
+      attestation: { name: scenario.harnessKind, version: "playground" },
+      installIdentity: { role: "agent_process", version: "playground", source: "pinned_archive" },
+      lastAttempt: { at: "2026-07-18T18:00:00Z", outcome: "ok", detail: null },
+      lastError: null,
+      warnings: [],
     },
   );
 }
@@ -305,32 +320,24 @@ function seedCloudQueries(
     user_id: "agents-playground",
     harnesses: [],
   });
-  // B4 re-key (model-catalog.md §Cloud routes): the layered read is keyed by
-  // (harnessKind, authContextId), not (surface, route) — seed every context id
-  // this harness's catalog entry declares (matches
-  // agents-playground-cloud-client.ts's AUTH_CONTEXT_IDS).
-  const authContextIds: Record<"claude" | "opencode", readonly string[]> = {
-    claude: ["bedrock", "anthropic-api", "anthropic-oauth", "gateway"],
-    opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline", "gateway"],
-  };
-  for (const authContextId of authContextIds[scenario.harnessKind]) {
-    client.setQueryData(
-      agentModelsKey(scenario.harnessKind, authContextId),
-      {
-        harnessKind: scenario.harnessKind,
-        authContextId,
-        models: [
-          { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
-          { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
-        ],
-        modes: [{ id: "build" }],
-        origin: "snapshot",
-        snapshotId: "playground-snapshot",
-        probedAt: "2026-07-18T18:00:00Z",
-        overrideApplied: false,
-      },
-    );
-  }
+  // The composed re-key (model-catalog.md §Cloud routes): the layered read is
+  // keyed by harness alone — one composed document; the former per-context
+  // seeding (one entry per catalog auth-context id) is deleted.
+  client.setQueryData(
+    agentModelsKey(scenario.harnessKind),
+    {
+      harnessKind: scenario.harnessKind,
+      models: [
+        { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
+        { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
+      ],
+      modes: [{ id: "build" }],
+      origin: "snapshot",
+      snapshotId: "playground-snapshot",
+      probedAt: "2026-07-18T18:00:00Z",
+      overrideApplied: false,
+    },
+  );
 
   if (scenario.id === "api-keys-loading") {
     void client.prefetchQuery({

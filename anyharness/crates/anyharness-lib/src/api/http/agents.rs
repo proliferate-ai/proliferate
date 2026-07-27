@@ -206,7 +206,21 @@ pub async fn close_agent_login_terminal(
     State(state): State<AppState>,
     Path(terminal_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    // Read the record before closing: the poke below needs the harness kind, and
+    // the close consumes the terminal.
+    let terminal =
+        get_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service).await?;
     close_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service).await?;
+    // Login-terminal-closed poke (model-catalog.md, "Freshness is event-driven"):
+    // a native login performed through the product's login terminal changes the
+    // harness's own credentials, so terminal exit pokes the probe. Fire-and-forget
+    // after the close is already decided. (A login performed entirely outside the
+    // product has no event; the unconditional startup pass is the safety net.)
+    ModelSnapshotService::poke_optional(
+        &state.automatic_poke_engine,
+        &terminal.kind,
+        PokeReason::LoginTerminal,
+    );
     Ok(StatusCode::NO_CONTENT)
 }
 

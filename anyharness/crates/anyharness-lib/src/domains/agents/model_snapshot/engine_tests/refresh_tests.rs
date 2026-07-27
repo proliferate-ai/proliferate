@@ -1,43 +1,32 @@
-//! T-25, T-26: forced refresh (the pre-queue fingerprint re-check) and the
-//! not-installed filter.
+//! Forced refresh: coalescing, and the typed refusals.
 
 use super::*;
 
-// ---------------------------------------------------------------------------
-// T-25: forced refresh
-// ---------------------------------------------------------------------------
-
-/// T-25(b)(c) — **the forced-refresh fingerprint re-check.**
-///
-/// (b) Two concurrent forced refreshes with the credential UNCHANGED produce one
-/// spawn: the second adopts the winner's result, which genuinely covers its
-/// request.
-///
-/// (c) Two forced refreshes straddling a key rotation produce TWO spawns. Without
-/// the pre-queue fingerprint capture, the second caller — who pressed Refresh
-/// BECAUSE their key changed — would be handed the pre-change observation labelled
-/// "refreshed just now", and no surface could detect the lie.
+/// Two CONCURRENT forced refreshes coalesce onto one spawn — the loser adopts the
+/// winner's observation, because it completed after the loser asked — while two
+/// SEQUENTIAL refreshes produce two spawns, because "refreshed just now" must
+/// never label a result that predates the press.
 #[tokio::test]
-async fn a_forced_refresh_adopts_a_coalesced_winner_only_when_the_credential_matches() {
-    // (b) unchanged credential: one spawn, both callers served.
-    let home = seeded_home("refresh-adopt", "opencode");
+async fn concurrent_refreshes_coalesce_and_sequential_refreshes_do_not() {
+    // (a) concurrent: one spawn, both callers served.
+    let home = seeded_home("refresh-coalesce", "opencode");
     let (runner, release) = FakeRunner::gated();
     let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
     let service = Arc::new(ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
         plan,
-        Arc::new(FixedTargets::single("opencode", vec![gateway_context()])),
+        Arc::new(FixedTargets::single("opencode")),
         runner.clone(),
         test_config(),
     ));
 
     let first = {
         let service = service.clone();
-        tokio::spawn(async move { service.refresh_now("opencode", "gateway").await })
+        tokio::spawn(async move { service.refresh_now("opencode").await })
     };
     let second = {
         let service = service.clone();
-        tokio::spawn(async move { service.refresh_now("opencode", "gateway").await })
+        tokio::spawn(async move { service.refresh_now("opencode").await })
     };
     tokio::task::yield_now().await;
     release.send(true).expect("release");
@@ -46,55 +35,34 @@ async fn a_forced_refresh_adopts_a_coalesced_winner_only_when_the_credential_mat
     assert_eq!(
         runner.count(),
         1,
-        "an unchanged credential must coalesce onto one spawn"
+        "concurrent forced refreshes must coalesce onto one spawn"
     );
     assert_eq!(
-        first.auth_fingerprint, second.auth_fingerprint,
+        first.probed_at, second.probed_at,
         "both callers were served the same observation"
     );
 
-    // (c) rotation between the two requests: two spawns, and the second carries the
-    // NEW fingerprint.
-    let home = seeded_home("refresh-rotate", "opencode");
-    let runner = Arc::new(FakeRunner::new());
-    let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
-    let service = Arc::new(ModelSnapshotService::with_parts(
-        home.path().to_path_buf(),
-        plan,
-        Arc::new(FixedTargets::single("opencode", vec![gateway_context()])),
-        runner.clone(),
-        test_config(),
-    ));
-
-    let before = service
-        .refresh_now("opencode", "gateway")
-        .await
-        .expect("first refresh");
-    home.write_state_json(&gateway_state(4, &[("opencode", "sk-ROTATED")]));
-    let after = service
-        .refresh_now("opencode", "gateway")
-        .await
-        .expect("second refresh");
-
-    assert_eq!(runner.count(), 2, "a rotation must force a second spawn");
-    assert_ne!(
-        before.auth_fingerprint, after.auth_fingerprint,
-        "the second entry must carry the ROTATED credential's fingerprint"
+    // (b) sequential: the second press postdates the first observation, so it
+    // genuinely re-probes — the auth world may have changed between them.
+    let before = service.refresh_now("opencode").await.expect("third refresh");
+    assert_eq!(runner.count(), 2, "a later refresh must spawn again");
+    let after = service.refresh_now("opencode").await.expect("fourth refresh");
+    assert_eq!(runner.count(), 3);
+    assert!(
+        after.probed_at >= before.probed_at,
+        "the newer observation postdates the older one"
     );
 }
 
-/// A forced refresh on an unknown or not-installed target is a typed refusal, not
-/// a spawn.
+/// A forced refresh on a not-installed target is a typed refusal, not a spawn.
 #[tokio::test]
-async fn a_forced_refresh_refuses_unknown_contexts_and_uninstalled_harnesses() {
+async fn a_forced_refresh_refuses_an_uninstalled_harness() {
     let home = seeded_home("refresh-refusals", "opencode");
     let runner = Arc::new(FakeRunner::new());
     let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
-    let mut targets = FixedTargets::single("opencode", vec![gateway_context()]);
+    let mut targets = FixedTargets::single("opencode");
+    // `grok` is a target but not installed.
     targets.harnesses.push("grok".to_string());
-    targets
-        .contexts
-        .insert("grok".to_string(), vec!["gateway".to_string()]);
     let service = ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
         plan,
@@ -103,36 +71,25 @@ async fn a_forced_refresh_refuses_unknown_contexts_and_uninstalled_harnesses() {
         test_config(),
     );
 
-    let unknown = service
-        .refresh_now("opencode", "not-a-context")
-        .await
-        .expect_err("unknown context");
-    assert!(matches!(unknown, RefreshError::UnknownContext { .. }));
-    assert_eq!(unknown.code(), "MODEL_SNAPSHOT_UNKNOWN_CONTEXT");
-
-    // `grok` is a target but not installed.
     let not_installed = service
-        .refresh_now("grok", "gateway")
+        .refresh_now("grok")
         .await
         .expect_err("not installed");
     assert!(matches!(not_installed, RefreshError::NotInstalled(_)));
-    assert_eq!(runner.count(), 0, "neither refusal may spawn");
+    assert_eq!(not_installed.code(), "MODEL_SNAPSHOT_NOT_INSTALLED");
+    assert_eq!(runner.count(), 0, "the refusal may not spawn");
 }
 
-// ---------------------------------------------------------------------------
-// T-26: the not-installed filter
-// ---------------------------------------------------------------------------
-
-/// T-26 — a not-installed harness is filtered BEFORE spawning, and no
-/// `lastAttempt` is written: `probe_agent`'s install precondition is never reached,
-/// and a missing install must not render as a probe error.
+/// A not-installed harness is filtered BEFORE spawning, and no `lastAttempt` is
+/// written: `probe_agent`'s install precondition is never reached, and a missing
+/// install must not render as a probe error.
 #[tokio::test]
 async fn a_not_installed_harness_is_filtered_before_spawning() {
     let home = TempRuntimeHome::new("not-installed");
     home.write_state_json(&gateway_state(1, &[("grok", "sk-vk")]));
     let runner = Arc::new(FakeRunner::new());
     let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
-    let mut targets = FixedTargets::single("grok", vec![gateway_context()]);
+    let mut targets = FixedTargets::single("grok");
     targets.installed.clear();
     let service = Arc::new(ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
@@ -143,12 +100,14 @@ async fn a_not_installed_harness_is_filtered_before_spawning() {
     ));
 
     service.clone().poke_all(PokeReason::Startup);
-    service.clone().poke_harness("grok", PokeReason::InstallCompleted);
+    service
+        .clone()
+        .poke_harness("grok", PokeReason::InstallCompleted);
     tokio::task::yield_now().await;
 
     assert_eq!(runner.count(), 0, "no spawn for an uninstalled harness");
     assert!(
         read_document(home.path(), "grok").is_none(),
-        "no lastAttempt entry may be written for an uninstalled harness"
+        "no lastAttempt document may be written for an uninstalled harness"
     );
 }

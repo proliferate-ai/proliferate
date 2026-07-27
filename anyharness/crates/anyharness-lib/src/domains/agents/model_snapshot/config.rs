@@ -7,19 +7,24 @@
 use std::time::Duration;
 
 use super::probe::ProbeError;
-use super::staleness;
 use crate::domains::agents::route_auth::RouteAuthError;
 
-/// Why a poke fired. Diagnostics only — the gate, never the reason, decides
-/// whether a probe happens. That is precisely what makes invalidation "exactly as
-/// wide as the change" instead of as wide as the trigger.
+/// Why a poke fired. **This is the closed trigger set** (model-catalog.md,
+/// "Freshness is event-driven"): the unconditional startup pass, the auth-apply
+/// ack, install completed, login-terminal exit, and manual refresh. There is no
+/// poll, no timer, and no gate-triggered spawn — a poke probes, subject only to
+/// the engine's concurrency guards and the failure backoff.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PokeReason {
+    /// The unconditional startup pass — the safety net that catches everything
+    /// that happened while the runtime was down or that had no event.
     Startup,
     InstallCompleted,
+    /// An applied `state.json` (including a clear, which is the widest possible
+    /// apply: it removes every harness's selection).
     AuthApplied,
-    AuthCleared,
-    SessionLaunch,
+    /// A native login performed through the product's login terminal ended.
+    LoginTerminal,
     Manual,
 }
 
@@ -30,8 +35,6 @@ impl PokeReason {
     /// manual-refresh-only law (model-catalog.md, "Cursor is manual-refresh only"):
     /// an unattended `cursor-agent` spawn can surface an OS keychain prompt with no
     /// user-visible cause, whereas a prompt the user just asked for explains itself.
-    /// Everything else about a poke is decided by the staleness gate, deliberately —
-    /// the reason is diagnostics.
     pub fn is_user_initiated(self) -> bool {
         matches!(self, Self::Manual)
     }
@@ -41,8 +44,7 @@ impl PokeReason {
             Self::Startup => "startup",
             Self::InstallCompleted => "install_completed",
             Self::AuthApplied => "auth_applied",
-            Self::AuthCleared => "auth_cleared",
-            Self::SessionLaunch => "session_launch",
+            Self::LoginTerminal => "login_terminal",
             Self::Manual => "manual",
         }
     }
@@ -55,12 +57,9 @@ pub struct ProbeEngineConfig {
     /// Documents intent only: the field it feeds is never read by
     /// `run_enumeration` today.
     pub model_switch_timeout: Duration,
-    /// The anti-storm floor: an attempt that COMPLETED (either outcome) inside
-    /// this window is never retried by an automatic poke.
-    pub min_reprobe_interval: Duration,
-    pub ttl_base: Duration,
-    pub ttl_jitter_span: Duration,
-    /// First failure waits this long; each subsequent failure doubles it.
+    /// First failure waits this long before another AUTOMATIC poke may retry;
+    /// each subsequent failure doubles it. Failure-only: a successful probe arms
+    /// nothing, and a manual refresh bypasses the window.
     pub backoff_base: Duration,
     pub backoff_max: Duration,
     /// Machine-wide concurrent probes. 1 by default: each probe spawns a real
@@ -77,9 +76,6 @@ impl Default for ProbeEngineConfig {
         Self {
             per_probe_timeout: Duration::from_secs(240),
             model_switch_timeout: Duration::from_secs(10),
-            min_reprobe_interval: Duration::from_secs(60),
-            ttl_base: staleness::DEFAULT_TTL_BASE,
-            ttl_jitter_span: staleness::DEFAULT_TTL_JITTER_SPAN,
             backoff_base: Duration::from_secs(60),
             backoff_max: Duration::from_secs(6 * 60 * 60),
             max_concurrent_probes: 1,
@@ -110,11 +106,6 @@ pub enum RefreshError {
     NotOwner,
     #[error("the probe could not be prepared: {0}")]
     Material(#[from] RouteAuthError),
-    #[error("no active auth context '{auth_context_id}' for harness '{harness_kind}'")]
-    UnknownContext {
-        harness_kind: String,
-        auth_context_id: String,
-    },
     #[error("harness '{0}' is not installed")]
     NotInstalled(String),
     #[error(transparent)]
@@ -127,7 +118,6 @@ impl RefreshError {
         match self {
             Self::NotOwner => "PROBE_ENGINE_NOT_OWNER",
             Self::Material(_) => "MODEL_SNAPSHOT_MATERIAL_FAILED",
-            Self::UnknownContext { .. } => "MODEL_SNAPSHOT_UNKNOWN_CONTEXT",
             Self::NotInstalled(_) => "MODEL_SNAPSHOT_NOT_INSTALLED",
             Self::Probe(_) => "MODEL_SNAPSHOT_PROBE_FAILED",
         }

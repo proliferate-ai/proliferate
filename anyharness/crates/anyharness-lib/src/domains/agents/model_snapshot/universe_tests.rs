@@ -1,15 +1,14 @@
-//! The document -> universe projection, and its one rule: FRESH entries only.
+//! The document -> universe projection, and its one rule: **any observation
+//! serves — age never disqualifies.**
 //!
-//! Real filesystem, because what makes an entry fresh is state on disk (the document,
-//! the install manifest, `state.json`). Fake runner, because none of this needs a
-//! harness.
+//! Real filesystem, because the observation is state on disk. Fake runner,
+//! because none of this needs a harness.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use super::test_support::{
-    gateway_context, gateway_state, wait_until, CountingPlanProducer, FakeRunner, FixedTargets,
-    TempRuntimeHome,
+    gateway_state, wait_until, CountingPlanProducer, FakeRunner, FixedTargets, TempRuntimeHome,
 };
 use super::{ModelSnapshotService, ProbeEngineConfig};
 
@@ -21,7 +20,7 @@ fn engine(
     let service = Arc::new(ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
         Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"])),
-        Arc::new(FixedTargets::single("opencode", vec![gateway_context()])),
+        Arc::new(FixedTargets::single("opencode")),
         runner.clone(),
         config,
     ));
@@ -48,101 +47,62 @@ async fn a_machine_with_no_document_has_an_empty_universe() {
     assert!(service.observed_universe("not-a-harness").is_empty());
 }
 
-/// A fresh entry contributes its observed ids under its own context id.
+/// The composed observation contributes its observed ids — one flat list, no
+/// context key.
 #[tokio::test]
-async fn a_fresh_entry_contributes_its_observed_models() {
+async fn an_observation_contributes_its_observed_models() {
     let home = seeded("universe-fresh");
-    let (service, runner) = engine(
-        &home,
-        ProbeEngineConfig {
-            min_reprobe_interval: Duration::ZERO,
-            ..ProbeEngineConfig::default()
-        },
-    );
-    *runner.models.lock().expect("models") =
-        vec!["live-a".to_string(), "live-b".to_string()];
+    let (service, runner) = engine(&home, ProbeEngineConfig::default());
+    *runner.models.lock().expect("models") = vec!["live-a".to_string(), "live-b".to_string()];
 
-    service
-        .refresh_now("opencode", "gateway")
-        .await
-        .expect("probe");
+    service.refresh_now("opencode").await.expect("probe");
 
     let universe = service.observed_universe("opencode");
-    assert!(universe.has_observation("gateway"));
-    assert!(universe.observes_id("gateway", "live-a"));
-    assert!(universe.observes_id("gateway", "live-b"));
-    assert!(!universe.observes_id("gateway", "never-observed"));
-    assert!(
-        !universe.has_observation("anthropic-api"),
-        "a context with no entry contributes nothing"
-    );
+    assert!(universe.has_observation());
+    assert!(universe.observes_id("live-a"));
+    assert!(universe.observes_id("live-b"));
+    assert!(!universe.observes_id("never-observed"));
 }
 
-/// **A STALE entry contributes nothing.**
+/// **Age and auth churn never disqualify an observation.** Freshness is
+/// event-driven: rotating the key or upgrading the harness makes the next EVENT
+/// re-probe, but until that probe lands the last good observation keeps serving —
+/// there is no fingerprint or identity comparison silently emptying the universe.
 ///
-/// model-catalog.md, "Failure modes" is explicit: a stale entry renders as "needs
-/// refresh" and *"launch validation falls back to the shipped catalog for that context
-/// until a fresh entry lands"*. Staled here by rotating the credential, which is the
-/// realistic trigger — the user switched auth, so what the old credential could serve
-/// says nothing about what the new one can.
+/// (This inverts the superseded design's staleness tests, deliberately: the old
+/// behavior — an auth-moved entry dropping out of validation — is exactly what
+/// the re-cut deletes.)
 #[tokio::test]
-async fn a_stale_entry_drops_out_of_the_universe() {
-    let home = seeded("universe-stale");
-    let (service, runner) = engine(
-        &home,
-        ProbeEngineConfig {
-            min_reprobe_interval: Duration::ZERO,
-            ..ProbeEngineConfig::default()
-        },
-    );
+async fn an_observation_keeps_serving_across_auth_and_install_churn() {
+    let home = seeded("universe-not-staleness");
+    let (service, runner) = engine(&home, ProbeEngineConfig::default());
     *runner.models.lock().expect("models") = vec!["live-a".to_string()];
 
-    service
-        .refresh_now("opencode", "gateway")
-        .await
-        .expect("probe");
-    assert!(service.observed_universe("opencode").has_observation("gateway"));
+    service.refresh_now("opencode").await.expect("probe");
+    assert!(service.observed_universe("opencode").observes_id("live-a"));
 
-    // Rotate the key: the entry's fingerprint no longer matches the machine.
+    // Rotate the key: the observation still serves until an event re-probes.
     home.write_state_json(&gateway_state(4, &[("opencode", "sk-rotated")]));
     assert!(
-        service.observed_universe("opencode").is_empty(),
-        "an auth-moved entry must stop being trusted for launch validation"
+        service.observed_universe("opencode").observes_id("live-a"),
+        "an auth change must not silently empty the universe; the auth-apply \
+         EVENT re-probes"
     );
 
-    // A re-probe restores it.
-    service
-        .refresh_now("opencode", "gateway")
-        .await
-        .expect("re-probe");
-    assert!(service.observed_universe("opencode").has_observation("gateway"));
-}
-
-/// A harness that MOVED stales its entries the same way, and for the same reason: the
-/// model list a snapshot records is bound to the binary that advertised it.
-#[tokio::test]
-async fn an_entry_recorded_on_another_install_drops_out() {
-    let home = seeded("universe-harness-moved");
-    let (service, _runner) = engine(
-        &home,
-        ProbeEngineConfig {
-            min_reprobe_interval: Duration::ZERO,
-            ..ProbeEngineConfig::default()
-        },
-    );
-
-    service
-        .refresh_now("opencode", "gateway")
-        .await
-        .expect("probe");
-    assert!(service.observed_universe("opencode").has_observation("gateway"));
-
-    // A harness upgrade: same role, different installed bytes.
+    // Upgrade the harness: same rule.
     home.write_manifest("opencode", Some("2.0.0"), Some("sha-2"), "pinned_archive");
     assert!(
-        service.observed_universe("opencode").is_empty(),
-        "a harness-moved entry must stop being trusted"
+        service.observed_universe("opencode").observes_id("live-a"),
+        "an install change must not silently empty the universe; the \
+         install-completed EVENT re-probes"
     );
+
+    // And when the event-driven re-probe lands, the universe follows it.
+    *runner.models.lock().expect("models") = vec!["live-b".to_string()];
+    service.refresh_now("opencode").await.expect("re-probe");
+    let universe = service.observed_universe("opencode");
+    assert!(universe.observes_id("live-b"));
+    assert!(!universe.observes_id("live-a"));
 }
 
 /// The universe read is available in READ-ONLY mode.
@@ -153,23 +113,14 @@ async fn an_entry_recorded_on_another_install_drops_out() {
 #[tokio::test]
 async fn a_read_only_engine_still_serves_the_universe() {
     let home = seeded("universe-readonly");
-    let (owner, runner) = engine(
-        &home,
-        ProbeEngineConfig {
-            min_reprobe_interval: Duration::ZERO,
-            ..ProbeEngineConfig::default()
-        },
-    );
+    let (owner, runner) = engine(&home, ProbeEngineConfig::default());
     *runner.models.lock().expect("models") = vec!["live-a".to_string()];
-    owner
-        .refresh_now("opencode", "gateway")
-        .await
-        .expect("probe");
+    owner.refresh_now("opencode").await.expect("probe");
 
     let (second, _second_runner) = engine(&home, ProbeEngineConfig::default());
     assert_eq!(second.mode(), super::ProbeEngineMode::ReadOnly);
     assert!(
-        second.observed_universe("opencode").observes_id("gateway", "live-a"),
+        second.observed_universe("opencode").observes_id("live-a"),
         "a read-only runtime validates against the owner's observations"
     );
 }
@@ -177,9 +128,10 @@ async fn a_read_only_engine_still_serves_the_universe() {
 /// An in-flight probe never gates anything: the universe read never blocks on one and
 /// never consults the engine's live state.
 ///
-/// model-catalog.md, "Staleness": *"An in-flight probe never gates anything: launching
-/// during the re-probe window validates against the fallback, so switching auth or
-/// updating a harness never locks the user out of starting a session"*.
+/// model-catalog.md: *"Nothing ever blocks on a probe: launching during a refresh
+/// window validates against the current observation (or the seed, before the first
+/// one), so switching auth or updating a harness never locks the user out of
+/// starting a session while the probe catches up."*
 #[tokio::test]
 async fn the_universe_read_never_waits_on_an_in_flight_probe() {
     let home = seeded("universe-inflight");
@@ -187,17 +139,14 @@ async fn the_universe_read_never_waits_on_an_in_flight_probe() {
     let service = Arc::new(ModelSnapshotService::with_parts(
         home.path().to_path_buf(),
         Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"])),
-        Arc::new(FixedTargets::single("opencode", vec![gateway_context()])),
+        Arc::new(FixedTargets::single("opencode")),
         runner.clone(),
-        ProbeEngineConfig {
-            min_reprobe_interval: Duration::ZERO,
-            ..ProbeEngineConfig::default()
-        },
+        ProbeEngineConfig::default(),
     ));
 
     let probing = tokio::spawn({
         let service = service.clone();
-        async move { service.refresh_now("opencode", "gateway").await }
+        async move { service.refresh_now("opencode").await }
     });
     // Wait for the attempt to actually reach the blocked runner. A fixed yield count
     // cannot establish that: the spawn above may be on another worker, so the window
@@ -215,9 +164,9 @@ async fn the_universe_read_never_waits_on_an_in_flight_probe() {
     .await
     .expect("the universe read must not block on an in-flight probe")
     .expect("join");
-    assert!(during, "no entry exists yet, so the shipped catalog fills in");
+    assert!(during, "no observation exists yet, so the shipped catalog fills in");
 
     release.send(true).expect("release the probe");
     probing.await.expect("join").expect("probe");
-    assert!(service.observed_universe("opencode").has_observation("gateway"));
+    assert!(service.observed_universe("opencode").has_observation());
 }

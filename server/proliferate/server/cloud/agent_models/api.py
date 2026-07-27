@@ -1,8 +1,9 @@
 """HTTP routes for cloud model snapshots: layered read, ingest, overrides.
 
-Named off both "gateway" (these serve every auth context, not one route) and
-"catalog" (that word belongs to the shipped-catalog document), per
-model-catalog.md §Cloud routes.
+Named off both "gateway" (these serve the composed observation, not one route)
+and "catalog" (that word belongs to the shipped-catalog document), per
+model-catalog.md §Cloud routes. One observation per harness: no
+``authContextId`` parameter anywhere on this surface.
 
 **One** router, with the auth identity chosen per route rather than per router:
 the reads and overrides depend on ``current_product_user``, the single ingest
@@ -20,7 +21,7 @@ added under either prefix would have inherited a silent-shadowing hazard.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
@@ -48,29 +49,25 @@ router = APIRouter(prefix="/agent-models", tags=["cloud-agent-models"])
 @router.get("/{harness_kind}", response_model=AgentModelsResponse)
 async def get_agent_models_endpoint(
     harness_kind: str,
-    auth_context_id: str = Query(..., alias="authContextId"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentModelsResponse:
     """The layered read: own snapshot, else the shipped catalog's models as the
     read-time seed, with the override patch applied.
 
-    No ``surface`` param: the cloud store holds cloud-sandbox observations only.
+    No ``authContextId`` and no ``surface`` params (model-catalog.md §Cloud
+    routes): one composed observation per harness, cloud-sandbox observations
+    only.
     """
     try:
         layered = await snapshots_service.get_models(
             db,
             user_id=user.id,
             harness_kind=harness_kind,
-            auth_context_id=auth_context_id,
         )
     except CloudApiError as error:
         raise_cloud_error(error)
-    return models_payload(
-        harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
-        layered=layered,
-    )
+    return models_payload(harness_kind=harness_kind, layered=layered)
 
 
 @router.post("/{harness_kind}/refresh", response_model=AgentModelsResponse)
@@ -80,14 +77,16 @@ async def ingest_agent_model_snapshot_endpoint(
     auth: WorkerAuthContext = Depends(authenticate_worker),
     db: AsyncSession = Depends(get_async_session),
 ) -> AgentModelsResponse:
-    """The single ingest route: a Worker-uploaded machine-snapshot entry.
+    """The single ingest route: a Worker-uploaded machine document.
 
     Absorbs the former ``refresh``-with-payload and ``mirror`` endpoints, which
     were two names for the same write, and the server-side gateway discovery
     that used to live inside ``refresh`` — the server never generates snapshots.
 
-    The owner is resolved from the Worker's sandbox row, so the body carries no
-    user identity to spoof.
+    The body is the worker's wire shape verbatim — ``snapshotJson`` (the whole
+    schemaVersion-2 document) plus ``probedAt``, nothing else. The owner is
+    resolved from the Worker's sandbox row, so the body carries no user
+    identity to spoof.
     """
     try:
         owner_user_id = await snapshots_service.resolve_upload_owner(
@@ -99,17 +98,12 @@ async def ingest_agent_model_snapshot_endpoint(
             db,
             owner_user_id=owner_user_id,
             harness_kind=harness_kind,
-            auth_context_id=body.auth_context_id,
             snapshot_json=body.snapshot_json,
             probed_at=body.probed_at,
         )
     except CloudApiError as error:
         raise_cloud_error(error)
-    return models_payload(
-        harness_kind=harness_kind,
-        auth_context_id=body.auth_context_id,
-        layered=layered,
-    )
+    return models_payload(harness_kind=harness_kind, layered=layered)
 
 
 @router.put("/{harness_kind}/override", response_model=AgentModelOverrideResponse)

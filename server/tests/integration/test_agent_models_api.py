@@ -1,8 +1,10 @@
-"""Integration tests for the layered model-snapshot read (B4 re-key).
+"""Integration tests for the layered model-snapshot read (composed re-key, B-3).
 
 Tier 2 (real postgres, real routing, no external services). Covers the read-time
-shipped fallback, the soft-versioning scope, and override layering. The Worker
-ingest path has its own suite in ``test_agent_models_ingest_api.py``.
+shipped fallback, the (harness, owner) soft-versioning scope, and override
+layering. One composed observation per harness: there is no ``authContextId``
+parameter anywhere on this surface. The Worker ingest path has its own suite in
+``test_agent_models_ingest_api.py``.
 """
 
 from __future__ import annotations
@@ -15,9 +17,8 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import agent_gateway as store
-from proliferate.server.cloud.agent_models.snapshots import shipped_models_for_context
+from proliferate.server.cloud.agent_models.snapshots import shipped_models
 from tests.helpers.agent_models import (
-    CONTEXT,
     HARNESS,
     MODELS_PATH,
     authed_user,
@@ -35,16 +36,12 @@ class TestShippedFallback:
         client: AsyncClient,
     ) -> None:
         _, headers = await authed_user(client)
-        response = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        response = await client.get(MODELS_PATH, headers=headers)
         assert response.status_code == 200, response.text
         payload = response.json()
 
-        expected = [model["id"] for model in shipped_models_for_context(HARNESS, CONTEXT)]
-        assert expected, "the shipped catalog must declare claude/gateway models"
+        expected = [model["id"] for model in shipped_models(HARNESS)]
+        assert expected, "the shipped catalog must declare claude models"
         assert model_ids(payload) == expected
         assert payload["origin"] == "catalog"
         assert payload["snapshotId"] is None
@@ -52,42 +49,19 @@ class TestShippedFallback:
         assert payload["modes"], "modes fall back to the catalog too"
 
     @pytest.mark.asyncio
-    async def test_shipped_fallback_is_scoped_to_the_auth_context(
+    async def test_the_seed_is_the_harness_whole_model_list(
         self,
         client: AsyncClient,
     ) -> None:
-        """The seed is per context, not the harness's whole model list.
+        """No per-context slice survives the re-key.
 
-        The catalog's ``availability.anyOf`` names which contexts observed a
-        model, so a gateway read must not leak the anthropic-api-only models.
+        The observation is one composed document per harness, so the seed that
+        fills its absence is the harness's full curated list — not a subset
+        scoped by which auth context once observed a model.
         """
         _, headers = await authed_user(client)
-        gateway = await client.get(
-            MODELS_PATH,
-            params={"authContextId": "gateway"},
-            headers=headers,
-        )
-        api_key = await client.get(
-            MODELS_PATH,
-            params={"authContextId": "anthropic-api"},
-            headers=headers,
-        )
-        assert set(model_ids(gateway.json())) != set(model_ids(api_key.json()))
-
-    @pytest.mark.asyncio
-    async def test_unknown_context_serves_nothing_rather_than_everything(
-        self,
-        client: AsyncClient,
-    ) -> None:
-        _, headers = await authed_user(client)
-        response = await client.get(
-            MODELS_PATH,
-            params={"authContextId": "not-a-context"},
-            headers=headers,
-        )
-        assert response.status_code == 200
-        assert response.json()["models"] == []
-        assert response.json()["origin"] == "catalog"
+        response = await client.get(MODELS_PATH, headers=headers)
+        assert model_ids(response.json()) == [model["id"] for model in shipped_models(HARNESS)]
 
     @pytest.mark.asyncio
     async def test_snapshot_wins_over_the_shipped_catalog(
@@ -101,11 +75,7 @@ class TestShippedFallback:
             owner_user_id=uuid.UUID(user_id),
             models=["observed-only-model"],
         )
-        response = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        response = await client.get(MODELS_PATH, headers=headers)
         payload = response.json()
         assert model_ids(payload) == ["observed-only-model"]
         assert payload["origin"] == "snapshot"
@@ -122,25 +92,18 @@ class TestShippedFallback:
         await store.create_model_snapshot(
             db_session,
             harness_kind=HARNESS,
-            auth_context_id=CONTEXT,
             owner_user_id=uuid.UUID(user_id),
-            snapshot_json="{ not-an-entry",
+            snapshot_json="{ not-a-document",
             probed_at=None,
         )
         await db_session.commit()
 
-        response = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        response = await client.get(MODELS_PATH, headers=headers)
         assert response.status_code == 200
         payload = response.json()
-        # Better than the pre-B4 empty list: the seed tier fills the absence.
+        # Better than an empty list: the seed tier fills the absence.
         assert payload["origin"] == "catalog"
-        assert model_ids(payload) == [
-            model["id"] for model in shipped_models_for_context(HARNESS, CONTEXT)
-        ]
+        assert model_ids(payload) == [model["id"] for model in shipped_models(HARNESS)]
 
     @pytest.mark.asyncio
     async def test_snapshots_are_owner_scoped(
@@ -155,81 +118,47 @@ class TestShippedFallback:
             owner_user_id=uuid.UUID(user_a),
             models=["a-only-model"],
         )
-        response_b = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers_b,
-        )
+        response_b = await client.get(MODELS_PATH, headers=headers_b)
         assert "a-only-model" not in model_ids(response_b.json())
         assert response_b.json()["origin"] == "catalog"
 
     @pytest.mark.asyncio
     async def test_requires_authentication(self, client: AsyncClient) -> None:
-        response = await client.get(MODELS_PATH, params={"authContextId": CONTEXT})
+        response = await client.get(MODELS_PATH)
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_auth_context_id_is_required(self, client: AsyncClient) -> None:
+    async def test_read_takes_no_auth_context_parameter(self, client: AsyncClient) -> None:
+        """A leftover per-context caller must not select anything.
+
+        One composed observation per harness: an ``authContextId`` query param
+        is an unknown parameter FastAPI ignores, and the response is identical
+        to the plain read — never a context-scoped slice.
+        """
         _, headers = await authed_user(client)
-        response = await client.get(MODELS_PATH, headers=headers)
-        assert response.status_code == 422
+        plain = await client.get(MODELS_PATH, headers=headers)
+        with_param = await client.get(
+            MODELS_PATH,
+            params={"authContextId": "gateway"},
+            headers=headers,
+        )
+        assert with_param.status_code == 200
+        assert with_param.json() == plain.json()
+        assert "authContextId" not in with_param.json()
 
     @pytest.mark.asyncio
-    async def test_overlong_ids_are_4xx_not_500(self, client: AsyncClient) -> None:
+    async def test_overlong_harness_kind_is_4xx_not_500(self, client: AsyncClient) -> None:
         _, headers = await authed_user(client)
         long_harness = await client.get(
             f"/v1/cloud/agent-models/{'x' * 65}",
-            params={"authContextId": CONTEXT},
             headers=headers,
         )
         assert long_harness.status_code == 400
         assert long_harness.json()["detail"]["code"] == "invalid_agent_harness_kind"
 
-        long_context = await client.get(
-            MODELS_PATH,
-            params={"authContextId": "x" * 65},
-            headers=headers,
-        )
-        assert long_context.status_code == 400
-        assert long_context.json()["detail"]["code"] == "invalid_agent_auth_context_id"
-
 
 class TestSoftVersioningScope:
-    """The new scope is (harness_kind, auth_context_id, owner_user_id)."""
-
-    @pytest.mark.asyncio
-    async def test_auth_context_is_part_of_the_scope(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        """Two contexts for one harness coexist; neither write retires the other."""
-        user_id, headers = await authed_user(client)
-        await store_snapshot(
-            db_session,
-            owner_user_id=uuid.UUID(user_id),
-            models=["gateway-model"],
-            auth_context_id="gateway",
-        )
-        await store_snapshot(
-            db_session,
-            owner_user_id=uuid.UUID(user_id),
-            models=["api-model"],
-            auth_context_id="anthropic-api",
-        )
-
-        gateway = await client.get(
-            MODELS_PATH,
-            params={"authContextId": "gateway"},
-            headers=headers,
-        )
-        api = await client.get(
-            MODELS_PATH,
-            params={"authContextId": "anthropic-api"},
-            headers=headers,
-        )
-        assert model_ids(gateway.json()) == ["gateway-model"]
-        assert model_ids(api.json()) == ["api-model"]
+    """The scope is (harness_kind, owner_user_id) — nothing else."""
 
     @pytest.mark.asyncio
     async def test_harness_is_part_of_the_scope(
@@ -250,16 +179,8 @@ class TestSoftVersioningScope:
             harness_kind="codex",
         )
 
-        claude = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
-        codex = await client.get(
-            "/v1/cloud/agent-models/codex",
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        claude = await client.get(MODELS_PATH, headers=headers)
+        codex = await client.get("/v1/cloud/agent-models/codex", headers=headers)
         assert model_ids(claude.json()) == ["claude-observed"]
         assert model_ids(codex.json()) == ["codex-observed"]
 
@@ -276,11 +197,7 @@ class TestSoftVersioningScope:
                 owner_user_id=uuid.UUID(user_id),
                 models=models,
             )
-        response = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        response = await client.get(MODELS_PATH, headers=headers)
         assert model_ids(response.json()) == ["c"]
 
 
@@ -306,11 +223,7 @@ class TestOverrideLayering:
         assert put.json()["harnessKind"] == HARNESS
 
         # Over the read-time seed: the patch's add still shows with no snapshot.
-        seeded = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        seeded = await client.get(MODELS_PATH, headers=headers)
         assert seeded.json()["origin"] == "catalog"
         assert seeded.json()["overrideApplied"] is True
         assert "extra" in model_ids(seeded.json())
@@ -321,11 +234,7 @@ class TestOverrideLayering:
             owner_user_id=uuid.UUID(user_id),
             models=["keep", "drop"],
         )
-        layered = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        layered = await client.get(MODELS_PATH, headers=headers)
         payload = layered.json()
         assert payload["origin"] == "snapshot"
         assert payload["overrideApplied"] is True
@@ -350,21 +259,13 @@ class TestOverrideLayering:
         )
         assert first.json()["id"] == second.json()["id"]
 
-        response = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        response = await client.get(MODELS_PATH, headers=headers)
         assert "two" in model_ids(response.json())
         assert "one" not in model_ids(response.json())
 
         delete = await client.delete(f"{MODELS_PATH}/override", headers=headers)
         assert delete.status_code == 204
-        after = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers,
-        )
+        after = await client.get(MODELS_PATH, headers=headers)
         assert after.json()["overrideApplied"] is False
 
         missing = await client.delete(f"{MODELS_PATH}/override", headers=headers)
@@ -385,11 +286,7 @@ class TestOverrideLayering:
         )
         assert put.status_code == 200
 
-        response_b = await client.get(
-            MODELS_PATH,
-            params={"authContextId": CONTEXT},
-            headers=headers_b,
-        )
+        response_b = await client.get(MODELS_PATH, headers=headers_b)
         assert response_b.json()["overrideApplied"] is False
         assert "a-added" not in model_ids(response_b.json())
 
@@ -435,6 +332,52 @@ class TestDeletedServerProber:
             if path != pathlib.Path(__file__).resolve()
             and "_probe_gateway_models" in path.read_text()
         ]
+        assert offenders == []
+
+    def test_the_cloud_snapshot_surface_is_context_free(self) -> None:
+        """Grep gate for the composed re-key (model-catalog.md §Storage).
+
+        ``auth_context_id`` must be gone from the cloud snapshot store, model
+        and routes — code, not prose: a docstring may still explain that the
+        column is deliberately absent. Legitimate uses elsewhere in the
+        codebase (auth-context concepts outside this surface) are not this
+        gate's business.
+        """
+        import ast
+        import pathlib
+
+        import proliferate
+
+        package_root = pathlib.Path(proliferate.__file__ or "").parent
+        surface = [
+            package_root / "db" / "models" / "cloud" / "agent_gateway.py",
+            package_root / "db" / "store" / "agent_gateway" / "model_snapshots.py",
+            package_root / "db" / "store" / "agent_gateway" / "records.py",
+            package_root / "db" / "store" / "agent_gateway" / "mappers.py",
+            package_root / "server" / "cloud" / "agent_models" / "api.py",
+            package_root / "server" / "cloud" / "agent_models" / "models.py",
+            package_root / "server" / "cloud" / "agent_models" / "snapshots.py",
+            package_root / "server" / "cloud" / "agent_models" / "overrides.py",
+        ]
+        offenders: list[str] = []
+        for path in surface:
+            tree = ast.parse(path.read_text())
+            for node in ast.walk(tree):
+                line = getattr(node, "lineno", "?")
+                name = (
+                    getattr(node, "id", None)
+                    or getattr(node, "attr", None)
+                    or getattr(node, "arg", None)
+                )
+                if isinstance(name, str) and "auth_context" in name:
+                    offenders.append(f"{path.name}:{line}:{name}")
+                is_short_string = (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and len(node.value) < 64
+                )
+                if is_short_string and "authContextId" in node.value:  # type: ignore[attr-defined]
+                    offenders.append(f"{path.name}:{line}:{node.value!r}")  # type: ignore[attr-defined]
         assert offenders == []
 
     def test_snapshot_ingest_never_reaches_litellm(self) -> None:

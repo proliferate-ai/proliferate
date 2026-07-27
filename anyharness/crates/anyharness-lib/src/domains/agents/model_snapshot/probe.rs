@@ -77,7 +77,6 @@ impl ProbeError {
 /// failure message, and the plan can be a long model list.
 pub struct ProbeRequest {
     pub harness_kind: String,
-    pub auth_context_id: String,
     pub material: ProbeAuthMaterial,
     pub plan: GatewayModelPlan,
     pub runtime_home: PathBuf,
@@ -90,13 +89,19 @@ impl std::fmt::Debug for ProbeRequest {
         formatter
             .debug_struct("ProbeRequest")
             .field("harness_kind", &self.harness_kind)
-            .field("auth_context_id", &self.auth_context_id)
             .field("state_revision", &self.material.state_revision)
             .field("plan_model_count", &self.plan.models.len())
             .field("per_probe_timeout", &self.per_probe_timeout)
             .finish()
     }
 }
+
+/// The `ProbeOptions.auth_context` label a composed runtime probe records.
+///
+/// `live/sessions/probe.rs` is shared with the central `catalog-probe` CLI, whose
+/// snapshots genuinely are per-context; a machine observation is of the whole
+/// composed auth world, so it carries this fixed label instead of a context id.
+pub const COMPOSED_AUTH_CONTEXT_LABEL: &str = "composed";
 
 /// The seam the engine probes through. Production uses [`AcpProbeRunner`]; tests
 /// inject a fake that counts invocations, blocks on a barrier, fails, or hangs —
@@ -153,7 +158,7 @@ impl ProbeRunner for AcpProbeRunner {
                     )?;
                     let options = ProbeOptions {
                         agent_kind,
-                        auth_context: request.auth_context_id.clone(),
+                        auth_context: COMPOSED_AUTH_CONTEXT_LABEL.to_string(),
                         auth_env: materialized.env_set.clone(),
                         auth_env_remove: materialized.env_remove.clone(),
                         // The live home, not the scratch: this is where

@@ -108,7 +108,6 @@ def model_snapshot_record(row: AgentModelSnapshot) -> AgentModelSnapshotRecord:
     return AgentModelSnapshotRecord(
         id=row.id,
         harness_kind=row.harness_kind,
-        auth_context_id=row.auth_context_id,
         owner_user_id=row.owner_user_id,
         snapshot_json=row.snapshot_json,
         probed_at=row.probed_at,

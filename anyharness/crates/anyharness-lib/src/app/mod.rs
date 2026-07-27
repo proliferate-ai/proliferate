@@ -245,10 +245,7 @@ impl AppState {
         let model_snapshot_service = Arc::new(ModelSnapshotService::new(
             runtime_home.clone(),
             gateway_model_planner.clone(),
-            Arc::new(RuntimeProbeTargets::new(
-                runtime_home.clone(),
-                AgentCatalogService::new(catalog_sync_service.clone()),
-            )),
+            Arc::new(RuntimeProbeTargets::new(runtime_home.clone())),
         ));
         // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
         // why it is separate; every one of the six sites reads THIS, so the
@@ -449,7 +446,6 @@ impl AppState {
             plan_service.clone(),
             plan_service.clone(),
             gateway_model_planner.clone(),
-            automatic_poke_engine.clone(),
             goal_service.clone(),
             loop_service.clone(),
             activity_service.clone(),

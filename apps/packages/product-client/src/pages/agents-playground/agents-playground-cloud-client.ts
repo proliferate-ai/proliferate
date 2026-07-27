@@ -65,14 +65,10 @@ export function buildPlaygroundHost(
 }
 
 const FIXTURE_TIME = "2026-07-18T18:00:00Z";
-// The playground seeds every auth-context id its two harnesses' catalog
-// entries declare (see apps/packages/product-client/src/generated/agent-catalog.json),
-// mirroring the B4 cloud snapshot's per-(harness, authContextId) keying
-// (model-catalog.md §Cloud routes) — not the old surface+route pair.
-const AUTH_CONTEXT_IDS: Readonly<Record<"claude" | "opencode", readonly string[]>> = {
-  claude: ["bedrock", "anthropic-api", "anthropic-oauth", "gateway"],
-  opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline", "gateway"],
-};
+// The composed re-key (model-catalog.md §Cloud routes): one layered document
+// per harness, keyed by (owner, harness). The former per-authContextId
+// seeding (one document per catalog auth-context id) is deleted with the
+// context-free route.
 
 export function createAgentsPlaygroundCloudTransport(
   seed: AgentsPlaygroundCloudSeed,
@@ -86,12 +82,7 @@ export function createAgentsPlaygroundCloudTransport(
   const overrides = new Map<string, AgentModelOverride>();
   const requests: AgentsPlaygroundCloudRequest[] = [];
 
-  for (const authContextId of AUTH_CONTEXT_IDS[seed.harnessKind]) {
-    agentModels.set(
-      agentModelsKey(seed.harnessKind, authContextId),
-      makeAgentModels(seed.harnessKind, authContextId),
-    );
-  }
+  agentModels.set(seed.harnessKind, makeAgentModels(seed.harnessKind));
 
   async function requestJson<TResponse>(input: ProliferateRequestJsonInput): Promise<TResponse> {
     requests.push({
@@ -198,11 +189,11 @@ export function createAgentsPlaygroundCloudTransport(
       } as TResponse;
     }
 
-    // The B4 cloud snapshot re-key (model-catalog.md §Cloud routes): layered
-    // read + override, keyed by (harnessKind, authContextId). There is no
-    // playground-callable refresh here — the real ingest route is
-    // Worker-authenticated only (F-040), so a product client (this fixture's
-    // subject) never calls it either.
+    // The composed cloud snapshot re-key (model-catalog.md §Cloud routes):
+    // layered read + override, keyed by harness alone — no authContextId
+    // query. There is no playground-callable refresh here — the real ingest
+    // route is Worker-authenticated only (F-040), so a product client (this
+    // fixture's subject) never calls it either.
     const agentModelsMatch = input.path.match(
       /^\/v1\/cloud\/agent-models\/([^/]+)(\/override)?$/,
     );
@@ -210,8 +201,7 @@ export function createAgentsPlaygroundCloudTransport(
       const harnessKind = decodeURIComponent(agentModelsMatch[1] ?? "");
       const action = agentModelsMatch[2] ?? "";
       if (input.method === "GET" && action === "") {
-        const authContextId = input.query?.authContextId as string;
-        return clone(requiredAgentModels(agentModels, harnessKind, authContextId)) as TResponse;
+        return clone(requiredAgentModels(agentModels, harnessKind)) as TResponse;
       }
       if (input.method === "PUT" && action === "/override") {
         const body = input.body as UpsertAgentModelOverrideRequest;
@@ -266,10 +256,9 @@ export function createAgentsPlaygroundCloudTransport(
   };
 }
 
-function makeAgentModels(harnessKind: string, authContextId: string): AgentModels {
+function makeAgentModels(harnessKind: string): AgentModels {
   return {
     harnessKind,
-    authContextId,
     models: [
       { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
       { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
@@ -282,17 +271,12 @@ function makeAgentModels(harnessKind: string, authContextId: string): AgentModel
   };
 }
 
-function agentModelsKey(harnessKind: string, authContextId: string) {
-  return `${harnessKind}:${authContextId}`;
-}
-
 function requiredAgentModels(
   agentModels: Map<string, AgentModels>,
   harnessKind: string,
-  authContextId: string,
 ) {
-  const entry = agentModels.get(agentModelsKey(harnessKind, authContextId));
-  if (!entry) throw new Error(`Unknown playground agent models: ${harnessKind}/${authContextId}`);
+  const entry = agentModels.get(harnessKind);
+  if (!entry) throw new Error(`Unknown playground agent models: ${harnessKind}`);
   return entry;
 }
 

@@ -5,22 +5,22 @@
 //!   resolved gateway model list for the local surface, so the desktop
 //!   All-Models tab can read what this runtime can actually reach for the
 //!   gateway route instead of the cloud catalog. It is a thin read over the
-//!   `gateway` auth context's `model_snapshot` entry (`document::read_document`)
+//!   harness's composed `model_snapshot` document (`document::read_document`)
 //!   plus the projection enrichment join — no probing happens here.
-//! - `POST /v1/agents/{kind}/catalog/refresh-gateway` re-probes the gateway
-//!   context now (the desktop Refresh button). It is a poke of the same
-//!   forced re-probe `POST /v1/agents/{kind}/model-snapshot/refresh` runs,
-//!   scoped to `authContextId=gateway`, kept as its own URL because the
-//!   desktop All-Models tab and C3's refresh path still consume the legacy
-//!   route shape (ruling: keep the URLs, replace the backend).
+//! - `POST /v1/agents/{kind}/catalog/refresh-gateway` re-probes the harness
+//!   now (the desktop Refresh button). It is a poke of the same forced
+//!   re-probe `POST /v1/agents/{kind}/model-snapshot/refresh` runs, kept as
+//!   its own URL because the desktop All-Models tab and C3's refresh path
+//!   still consume the legacy route shape (ruling: keep the URLs, replace the
+//!   backend).
 //!
 //! Both URLs are legacy-shaped on purpose (ruling §3): the resolver chain
 //! that used to back them (`gateway_resolver.rs`/`gateway_probe.rs`'s sqlite
 //! store) is deleted, but deleting the ROUTE would break the desktop UI that
 //! still calls it. `GET /v1/agents/{kind}/model-snapshot` is the general
-//! per-context status surface every harness's every context uses; this module
-//! is the gateway-context-only, catalog-enriched projection of that same
-//! document, shaped for the All-Models table this route has always fed.
+//! per-harness status surface; this module is the catalog-enriched projection
+//! of that same composed document, shaped for the All-Models table this route
+//! has always fed.
 
 use axum::{
     extract::{Path, State},
@@ -35,7 +35,6 @@ use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::catalog::projection::{self, EnrichedModel};
 use crate::domains::agents::model::ModelCatalogStatus as DomainModelCatalogStatus;
-use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;
 
 /// One enriched gateway model row (spec §1). Catalog-known ids carry the joined
 /// display metadata; probe-only ids (the proxy serves it but the bundled
@@ -140,19 +139,18 @@ pub async fn get_gateway_models(
     State(state): State<AppState>,
     Path(kind): Path<String>,
 ) -> Result<Json<GatewayModelsResponse>, ApiError> {
-    // The gateway-route auth context id is a fixed, catalog-wide constant
-    // (matches `defaults["gateway"]` and the render plane's context id) — every
-    // gateway-capable harness in the bundled catalog declares exactly this id,
-    // so no catalog lookup is needed to find it.
-    let entry = state
-        .model_snapshot_service
-        .entry(&kind, SOURCE_KIND_GATEWAY);
+    super::agent_model_snapshot::ensure_path_safe_identifier(&kind, "kind")?;
+    // One composed observation per harness: for a gateway-routed harness the
+    // observation IS the gateway-reachable menu (probe env == launch env), so
+    // this legacy gateway-scoped route serves the composed document until the
+    // C-track cutover deletes it.
+    let document = state.model_snapshot_service.document(&kind);
 
-    let (raw_models, source, probed_at) = match entry {
-        Some(entry) => (
-            entry.models.into_iter().map(|model| model.id).collect(),
+    let (raw_models, source, probed_at) = match document {
+        Some(document) => (
+            document.models.into_iter().map(|model| model.id).collect(),
             "probe".to_string(),
-            Some(entry.probed_at),
+            Some(document.probed_at),
         ),
         None => {
             // No snapshot entry yet: the catalog's seedModels floor is the
@@ -226,18 +224,19 @@ pub async fn refresh_gateway_models(
     State(state): State<AppState>,
     Path(kind): Path<String>,
 ) -> Result<Json<RefreshGatewayResponse>, ApiError> {
-    // A poke of the same forced re-probe the model-snapshot refresh route runs,
-    // scoped to the gateway context — the simplest honest shape per ruling §3
-    // (mirror, not fork, the manual-refresh seam).
-    let entry = state
+    super::agent_model_snapshot::ensure_path_safe_identifier(&kind, "kind")?;
+    // A poke of the same forced re-probe the model-snapshot refresh route runs —
+    // the simplest honest shape per ruling §3 (mirror, not fork, the
+    // manual-refresh seam). One composed observation; no context scoping.
+    let document = state
         .model_snapshot_service
-        .refresh_now(&kind, SOURCE_KIND_GATEWAY)
+        .refresh_now(&kind)
         .await
         .map_err(super::agent_model_snapshot::refresh_error)?;
 
     Ok(Json(RefreshGatewayResponse {
-        models: entry.models.into_iter().map(|model| model.id).collect(),
-        probed_at: entry.probed_at,
+        models: document.models.into_iter().map(|model| model.id).collect(),
+        probed_at: document.probed_at,
     }))
 }
 
@@ -254,11 +253,7 @@ mod tests {
         controls.insert(
             "effort".to_string(),
             AgentCatalogModelControl {
-                values: vec![
-                    "low".to_string(),
-                    "medium".to_string(),
-                    "high".to_string(),
-                ],
+                values: vec!["low".to_string(), "medium".to_string(), "high".to_string()],
                 default: None,
                 observed_value: Some("medium".to_string()),
             },
@@ -285,7 +280,8 @@ mod tests {
     #[test]
     fn to_wire_preserves_enrichment() {
         let model = catalog_model("claude-sonnet-4-5");
-        let enriched = projection::enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
+        let enriched =
+            projection::enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
         let wire = to_wire(enriched);
 
         assert_eq!(wire.id, "claude-sonnet-4-5");

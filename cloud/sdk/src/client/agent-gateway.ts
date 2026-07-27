@@ -22,10 +22,10 @@ function selectionsPath(harnessKind: string): string {
   return `/v1/cloud/agent-auth/selections/${encodeURIComponent(harnessKind)}`;
 }
 
-// B4 re-key (model-catalog.md §Cloud routes): the cloud snapshot moved from
-// /v1/cloud/agent-gateway/catalog/* to its own /v1/cloud/agent-models/*
-// namespace, keyed by the catalog's own auth-context ids instead of the old
-// coarse surface+route pair. Hard cutover, no alias window (F-040).
+// The composed re-key (model-catalog.md §Cloud routes): the cloud snapshot
+// lives under /v1/cloud/agent-models/*, keyed by (owner, harness) alone. The
+// former `authContextId` query parameter is deleted — one composed observation
+// per harness, no per-context anything. Hard cutover, no alias window (F-040).
 function agentModelsPath(harnessKind: string): string {
   return `/v1/cloud/agent-models/${encodeURIComponent(harnessKind)}`;
 }
@@ -138,13 +138,11 @@ export async function ackAgentAuthState(
 
 export async function getAgentModels(
   harnessKind: string,
-  authContextId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AgentModels> {
   return client.requestJson<AgentModels>({
     method: "GET",
     path: agentModelsPath(harnessKind),
-    query: { authContextId },
   });
 }
 

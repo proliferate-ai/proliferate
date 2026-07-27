@@ -1,19 +1,20 @@
 """Layered read + the single machine-snapshot ingest route.
 
-Layering (model-catalog.md §Serving per surface): the served model list for a
-(user, harness, auth context) is the owner's latest active snapshot, else the
-**shipped catalog's** models for that context as a read-time seed, with the
-caller's override patch applied on top.
+Layering (model-catalog.md §Serving): the served model list for a
+(user, harness) is the owner's latest active snapshot, else the **shipped
+catalog's** models for the harness as a read-time seed, with the caller's
+override patch applied on top. One composed observation per harness — there is
+no ``auth_context_id`` anywhere on this surface; the per-context re-key is
+superseded.
 
 The seed is a read-time join, not stored state: there are no ownerless seed rows
 to write or maintain, and the fallback goes straight to the catalog document the
 server already serves at ``GET /v1/catalogs/agents``.
 
-Ingest is one path — a Worker upload. The server never generates snapshots: it
-cannot spawn a harness, so it cannot produce an observation in the entry shape.
-Today's server-side gateway discovery (enrollment lookup, virtual-key decrypt,
-``GET /v1/models``) is deleted with the uniform probe mechanic; the runtime probe
-engine is the only prober.
+Ingest is one path — a Worker upload of the whole schemaVersion-2 machine
+document (``snapshotJson`` + ``probedAt``), stored verbatim. The server never
+generates snapshots: it cannot spawn a harness, so it cannot produce an
+observation in the document shape.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.agent_gateway import AGENT_MODEL_SNAPSHOT_SCHEMA_VERSION
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.agent_gateway import (
@@ -39,7 +41,6 @@ from proliferate.server.cloud.agent_models.overrides import (
     apply_override,
     normalize_entry,
     parse_patch_json,
-    validate_auth_context_id,
     validate_harness_kind,
 )
 from proliferate.server.cloud.errors import CloudApiError
@@ -51,7 +52,7 @@ MAX_SNAPSHOT_JSON_BYTES = 512 * 1024
 
 #: The read-time seed marker on the response. ``"snapshot"`` means a machine
 #: observed it; ``"catalog"`` means no observation exists yet for this
-#: (harness, auth context) and the shipped list is filling the absence.
+#: (owner, harness) and the shipped list is filling the absence.
 ModelOrigin = Literal["snapshot", "catalog"]
 
 MODEL_ORIGIN_SNAPSHOT: ModelOrigin = "snapshot"
@@ -69,20 +70,23 @@ class LayeredModels:
     modes: list[dict[str, Any]]
 
 
-def parse_snapshot_entry(snapshot_json: str) -> dict[str, Any]:
-    """Parse one machine-document entry; raises ValueError when invalid.
+def parse_snapshot_document(snapshot_json: str) -> dict[str, Any]:
+    """Parse one machine document; raises ValueError when invalid.
 
-    The entry is accepted as the runtime writes it (camelCase, per
+    The document is accepted as the runtime writes it (camelCase, per
     model-catalog.md §Wire schema) and stored verbatim. Only the fields the
     server actually serves are shape-checked — ``models`` and ``modes`` — so a
     runtime that adds a diagnostic field is never rejected by an older server.
+    ``schemaVersion`` is enforced at ingest (:func:`ingest_snapshot`), not
+    here: stored rows were validated on the way in, and re-checking on read
+    would turn one historic row into a permanent read failure.
     """
     try:
         payload = json.loads(snapshot_json)
     except json.JSONDecodeError as error:
         raise ValueError("snapshotJson must be valid JSON.") from error
     if not isinstance(payload, dict):
-        raise ValueError("snapshotJson must be a JSON object (one machine-document entry).")
+        raise ValueError("snapshotJson must be a JSON object (one machine document).")
 
     raw_models = payload.get("models", [])
     if not isinstance(raw_models, list):
@@ -107,41 +111,37 @@ def parse_snapshot_entry(snapshot_json: str) -> dict[str, Any]:
     return {**payload, "models": models, "modes": modes}
 
 
-def _entry_lists(snapshot_json: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    entry = parse_snapshot_entry(snapshot_json)
-    return entry["models"], entry["modes"]
+def _document_lists(snapshot_json: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    document = parse_snapshot_document(snapshot_json)
+    return document["models"], document["modes"]
 
 
-def shipped_models_for_context(harness_kind: str, auth_context_id: str) -> list[dict[str, Any]]:
-    """The shipped catalog's models for a context — the read-time seed tier.
+def shipped_models(harness_kind: str) -> list[dict[str, Any]]:
+    """The shipped catalog's models for a harness — the read-time seed tier.
 
-    Availability is the observed-set algebra the catalog already carries
-    (``availability.anyOf`` names the auth contexts whose central probe runs
-    contained the model), so the seed is scoped exactly like a snapshot entry
-    rather than being the harness's whole model list.
+    The whole curated list, not a context-scoped slice: the observation is one
+    composed document per harness (model-catalog.md §Serving), so the seed that
+    fills its absence is the harness's model list with no per-context filter —
+    there are no contexts to filter by.
     """
     agent = catalog_agent(read_agent_catalog().catalog, harness_kind)
     if agent is None:
         return []
-    seeded: list[dict[str, Any]] = []
-    for model in agent.session.models:
-        if auth_context_id not in model.availability.anyOf:
-            continue
-        seeded.append(
-            {
-                "id": model.id,
-                "displayName": model.displayName,
-                "description": model.description,
-                "aliases": list(model.aliases),
-                "defaultVisible": model.defaultVisible,
-                "status": model.status,
-            }
-        )
-    return seeded
+    return [
+        {
+            "id": model.id,
+            "displayName": model.displayName,
+            "description": model.description,
+            "aliases": list(model.aliases),
+            "defaultVisible": model.defaultVisible,
+            "status": model.status,
+        }
+        for model in agent.session.models
+    ]
 
 
 def shipped_modes(harness_kind: str) -> list[dict[str, Any]]:
-    """The shipped catalog's mode ids — modes are harness-wide, not per context."""
+    """The shipped catalog's mode ids — modes are harness-wide."""
     agent = catalog_agent(read_agent_catalog().catalog, harness_kind)
     if agent is None:
         return []
@@ -159,12 +159,10 @@ async def _load_layered(
     *,
     user_id: UUID,
     harness_kind: str,
-    auth_context_id: str,
 ) -> LayeredModels:
     snapshot = await agent_gateway_store.get_active_model_snapshot(
         db,
         harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
         owner_user_id=user_id,
     )
 
@@ -173,7 +171,7 @@ async def _load_layered(
     origin: ModelOrigin = MODEL_ORIGIN_CATALOG
     if snapshot is not None:
         try:
-            models, modes = _entry_lists(snapshot.snapshot_json)
+            models, modes = _document_lists(snapshot.snapshot_json)
             origin = MODEL_ORIGIN_SNAPSHOT
         except ValueError:
             # A single malformed stored row must not break the catalog for the
@@ -185,18 +183,16 @@ async def _load_layered(
                 extra={
                     "snapshot_id": str(snapshot.id),
                     "harness_kind": harness_kind,
-                    "auth_context_id": auth_context_id,
                 },
             )
             snapshot = None
 
     if origin == MODEL_ORIGIN_CATALOG:
-        models = shipped_models_for_context(harness_kind, auth_context_id)
+        models = shipped_models(harness_kind)
         modes = shipped_modes(harness_kind)
     elif not modes:
-        # Modes are baked into the binary and identical across contexts, so an
-        # entry that observed none still renders the catalog's set rather than
-        # an empty mode picker (model-catalog.md §Universe construction).
+        # Modes are baked into the binary, so a document that observed none
+        # still renders the catalog's set rather than an empty mode picker.
         modes = shipped_modes(harness_kind)
 
     override = await agent_gateway_store.get_catalog_override(
@@ -221,17 +217,10 @@ async def get_models(
     *,
     user_id: UUID,
     harness_kind: str,
-    auth_context_id: str,
 ) -> LayeredModels:
-    """The layered read for one (user, harness, auth context)."""
+    """The layered read for one (user, harness)."""
     validate_harness_kind(harness_kind)
-    validate_auth_context_id(auth_context_id)
-    return await _load_layered(
-        db,
-        user_id=user_id,
-        harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
-    )
+    return await _load_layered(db, user_id=user_id, harness_kind=harness_kind)
 
 
 async def resolve_upload_owner(
@@ -251,7 +240,7 @@ async def resolve_upload_owner(
     never syncs" is a law of the design, not a malformed request — every
     machineless consumer picks models for cloud execution, so a local
     observation would be machinery without a reader (model-catalog.md §The
-    cloud snapshot).
+    cloud copy).
     """
     if runtime_kind != "cloud_sandbox" or cloud_sandbox_id is None:
         raise CloudApiError(
@@ -274,18 +263,16 @@ async def ingest_snapshot(
     *,
     owner_user_id: UUID,
     harness_kind: str,
-    auth_context_id: str,
     snapshot_json: str,
     probed_at: str,
 ) -> LayeredModels:
-    """Store a Worker-uploaded machine observation and return the layered result.
+    """Store a Worker-uploaded machine document and return the layered result.
 
     ``owner_user_id`` comes from :func:`resolve_upload_owner`, never from the
     request body: the payload carries no user identity, so a compromised Worker
     token can only write its own sandbox owner's snapshots.
     """
     validate_harness_kind(harness_kind)
-    validate_auth_context_id(auth_context_id)
     if len(snapshot_json.encode()) > MAX_SNAPSHOT_JSON_BYTES:
         raise CloudApiError(
             "invalid_agent_model_snapshot",
@@ -293,13 +280,23 @@ async def ingest_snapshot(
             status_code=400,
         )
     try:
-        entry = parse_snapshot_entry(snapshot_json)
+        document = parse_snapshot_document(snapshot_json)
     except ValueError as error:
         raise CloudApiError(
             "invalid_agent_model_snapshot",
             str(error),
             status_code=400,
         ) from error
+    if document.get("schemaVersion") != AGENT_MODEL_SNAPSHOT_SCHEMA_VERSION:
+        # The composed-observation cutover is a hard cutover with no alias
+        # window (model-catalog.md §API surface): a v1 per-context entry (or a
+        # document that does not say what it is) is refused, never reinterpreted
+        # as a composed observation.
+        raise CloudApiError(
+            "invalid_agent_model_snapshot",
+            f"snapshotJson.schemaVersion must be {AGENT_MODEL_SNAPSHOT_SCHEMA_VERSION}.",
+            status_code=400,
+        )
     try:
         probed_at_value = datetime.fromisoformat(probed_at)
     except ValueError as error:
@@ -312,22 +309,15 @@ async def ingest_snapshot(
     snapshot = await agent_gateway_store.create_model_snapshot(
         db,
         harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
         owner_user_id=owner_user_id,
-        snapshot_json=json.dumps(entry),
+        snapshot_json=json.dumps(document),
         probed_at=probed_at_value,
     )
     log_cloud_event(
         "agent_model_snapshot_ingested",
         user_id=str(owner_user_id),
         harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
         snapshot_id=str(snapshot.id),
-        model_count=len(entry["models"]),
+        model_count=len(document["models"]),
     )
-    return await _load_layered(
-        db,
-        user_id=owner_user_id,
-        harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
-    )
+    return await _load_layered(db, user_id=owner_user_id, harness_kind=harness_kind)

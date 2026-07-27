@@ -627,44 +627,39 @@ async def test_model_snapshot_and_override(db_session: AsyncSession) -> None:
     first = await store.create_model_snapshot(
         db_session,
         harness_kind="claude",
-        auth_context_id="gateway",
         owner_user_id=user_id,
-        snapshot_json='{"models": ["claude-sonnet-4-5"]}',
+        snapshot_json='{"schemaVersion": 2, "models": ["claude-sonnet-4-5"]}',
     )
     newer = await store.create_model_snapshot(
         db_session,
         harness_kind="claude",
-        auth_context_id="gateway",
         owner_user_id=user_id,
-        snapshot_json='{"models": ["claude-sonnet-4-5", "claude-haiku-4-5"]}',
+        snapshot_json='{"schemaVersion": 2, "models": ["claude-sonnet-4-5", "claude-haiku-4-5"]}',
     )
     latest = await store.get_active_model_snapshot(
         db_session,
         harness_kind="claude",
-        auth_context_id="gateway",
         owner_user_id=user_id,
     )
     assert latest is not None
     assert latest.id == newer.id
     assert latest.id != first.id
 
-    # Another context for the same harness is a separate scope, not a rewrite.
-    other_context = await store.create_model_snapshot(
+    # Another harness for the same owner is a separate scope, not a rewrite.
+    other_harness = await store.create_model_snapshot(
+        db_session,
+        harness_kind="codex",
+        owner_user_id=user_id,
+        snapshot_json='{"schemaVersion": 2, "models": ["gpt-5.2-codex"]}',
+    )
+    still_claude = await store.get_active_model_snapshot(
         db_session,
         harness_kind="claude",
-        auth_context_id="anthropic-api",
-        owner_user_id=user_id,
-        snapshot_json='{"models": ["claude-opus-4-6"]}',
-    )
-    still_gateway = await store.get_active_model_snapshot(
-        db_session,
-        harness_kind="claude",
-        auth_context_id="gateway",
         owner_user_id=user_id,
     )
-    assert still_gateway is not None
-    assert still_gateway.id == newer.id
-    assert other_context.id != newer.id
+    assert still_claude is not None
+    assert still_claude.id == newer.id
+    assert other_harness.id != newer.id
 
     override = await store.upsert_catalog_override(
         db_session,

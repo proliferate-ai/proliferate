@@ -27,24 +27,20 @@ pub struct ProbeScratch {
 }
 
 impl ProbeScratch {
-    /// `<runtime_home>/agent-auth-probe/<harness>-<context>-<pid>-<nanos>`, 0700
+    /// `<runtime_home>/agent-auth-probe/<harness>-<pid>-<nanos>`, 0700
     /// before any content is written (so nested `create_dir_all` dirs cannot be
     /// world-traversable regardless of umask).
     ///
     /// pid + nanos make a name collision impossible between two probes of the
-    /// same (harness, context), and they are what lets the sweep tell an
-    /// abandoned root from a live one.
-    pub(super) fn create(
-        runtime_home: &Path,
-        harness_kind: &str,
-        auth_context_id: &str,
-    ) -> Result<Self, RouteAuthError> {
+    /// same harness, and they are what lets the sweep tell an abandoned root
+    /// from a live one.
+    pub(super) fn create(runtime_home: &Path, harness_kind: &str) -> Result<Self, RouteAuthError> {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let root = probe_root(runtime_home).join(format!(
-            "{harness_kind}-{auth_context_id}-{}-{nanos}",
+            "{harness_kind}-{}-{nanos}",
             std::process::id()
         ));
         create_private_dir(&root)?;
@@ -160,8 +156,9 @@ pub fn sweep_probe_scratch(runtime_home: &Path, max_probe_age: std::time::Durati
     removed
 }
 
-/// `<harness>-<context>-<pid>-<nanos>` -> (pid, nanos). Harness and context ids
-/// may themselves contain `-`, so the two numeric fields are taken from the END.
+/// `<harness>-<pid>-<nanos>` -> (pid, nanos). Harness kinds may themselves
+/// contain `-` (and pre-re-cut roots carried a context segment too), so the two
+/// numeric fields are taken from the END.
 fn parse_scratch_name(name: &str) -> Option<(u32, u128)> {
     let (head, nanos) = name.rsplit_once('-')?;
     let (_, pid) = head.rsplit_once('-')?;

@@ -50,14 +50,15 @@ export function agentGatewayEnrollmentKey() {
   return [...agentGatewayRootKey(), "enrollment"] as const;
 }
 
-// B4 re-key (model-catalog.md §Cloud routes): the cloud snapshot is keyed by
-// (harnessKind, authContextId) now, not the old (surface, route) pair.
+// The composed re-key (model-catalog.md §Cloud routes): the cloud snapshot is
+// keyed by harness alone — one composed observation per harness; the former
+// per-authContextId key segment is deleted.
 export function agentModelsRootKey() {
   return [...agentGatewayRootKey(), "agent-models"] as const;
 }
 
-export function agentModelsKey(harnessKind: string, authContextId: string) {
-  return [...agentModelsRootKey(), harnessKind, authContextId] as const;
+export function agentModelsKey(harnessKind: string) {
+  return [...agentModelsRootKey(), harnessKind] as const;
 }
 
 export function orgAgentPolicyKey(organizationId: string) {

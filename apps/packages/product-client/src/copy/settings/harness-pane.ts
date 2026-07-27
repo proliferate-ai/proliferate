@@ -78,16 +78,21 @@ export const HARNESS_PANE_COPY = {
   allModelsRefreshing: "Refreshing...",
   allModelsEmpty: "No models in the catalog for this surface yet.",
   allModelsLoading: "Loading model catalog...",
-  // Shown while an empty catalog auto-probes the runtime for models.
+  // Shown while an empty list has a probe in flight.
   allModelsProbing: "Probing…",
-  // Runtime-resolved gateway models (contract §5): freshness reads "seed" (the
-  // catalog's fallback list, no probe yet) or "probed <time>" (a live probe).
-  allModelsFreshnessSeed: "seed",
-  allModelsFreshnessProbed: (time: string) => `probed ${time}`,
-  // Model-snapshot staleness (model-catalog.md "Failure modes" — age alone
-  // never blocks a launch, but the picker/settings surface must render it).
-  allModelsStaleNeedsRefresh: "needs refresh",
-  allModelsStaleRefreshing: "refreshing…",
+  // The composed observation (model-catalog.md "The picker is the
+  // observation"): the only freshness display is the probedAt age plus the
+  // lastAttempt outcome — age alone never blocks anything, and there is no
+  // staleness state.
+  allModelsRefreshingBadge: "refreshing…",
+  allModelsRefreshFailedBadge: "last refresh failed",
+  // Pre-first-observation seed: shipped catalog models, marked as unverified.
+  allModelsUnverifiedBadge: "unverified",
+  allModelsSeedDescription:
+    "Showing shipped catalog models — not yet verified by a probe.",
+  // Diagnostics-only provenance (attestation + install identity) — never a gate.
+  allModelsProvenance: (line: string) => `Observed by ${line}`,
+  allModelsModes: (modes: readonly string[]) => `Modes: ${modes.join(", ")}`,
   // `ago` is the raw duration from formatSnapshotAge ("5m", "2h", "3d", or the
   // literal "just now" — which must NOT get its own "ago" appended, hence the
   // special case rather than a blind template).

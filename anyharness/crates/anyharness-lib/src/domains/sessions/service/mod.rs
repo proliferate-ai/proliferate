@@ -4,7 +4,7 @@ use super::attachment_storage::PromptAttachmentStorage;
 use super::deletion::SessionDeleteWorkflow;
 use super::model::SessionRecord;
 use super::store::SessionStore;
-use crate::domains::agents::catalog::service::AgentCatalogService;
+use crate::domains::agents::catalog::service::{ActiveUniverse, AgentCatalogService};
 use crate::domains::agents::model_snapshot::universe::ObservedUniverseSource;
 use crate::domains::workspaces::store::WorkspaceStore;
 
@@ -50,21 +50,6 @@ impl CreateSessionOutcome {
     }
 }
 
-/// Complete provenance for a catalog-known model rejected by the active auth
-/// context. The service constructs this before returning so the API boundary
-/// can emit one authoritative incident without reconstructing lost context.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModelGatedContext {
-    pub workspace_id: String,
-    pub attempted_session_id: Option<String>,
-    pub agent_kind: String,
-    pub requested_model_id: String,
-    pub canonical_model_id: String,
-    pub active_contexts: Vec<String>,
-    pub required_contexts: Vec<String>,
-    pub catalog_version: String,
-}
-
 #[derive(Debug)]
 pub enum CreateSessionError {
     WorkspaceNotFound(String),
@@ -75,15 +60,15 @@ pub enum CreateSessionError {
     SessionIdConflict {
         session_id: String,
     },
+    /// The requested model cannot launch under the active universe — the one
+    /// typed refusal for every unservable model intent
+    /// (`SESSION_MODEL_UNSUPPORTED`). `active_universe` names which truth
+    /// refused so the wire detail can say so.
     ModelUnsupported {
         agent_kind: String,
         model_id: String,
+        active_universe: ActiveUniverse,
     },
-    /// The model exists in the catalog but is gated behind auth contexts that
-    /// are not active. Distinct from `ModelUnsupported` (unresolvable model):
-    /// the client can unlock it by satisfying one of
-    /// `required_contexts` (the model's `availability.anyOf`).
-    ModelGated(ModelGatedContext),
     ModeUnsupported {
         agent_kind: String,
         mode_id: String,

@@ -14,7 +14,7 @@
 
 use super::schema::{AgentCatalogAgent, AgentCatalogModel};
 use super::service::SelectionUnsupported;
-use super::universe::{contexts_serving_model, ObservedUniverse};
+use super::universe::{is_trial_verified, ObservedUniverse};
 use crate::domains::agents::auth::context::ActiveAuthContexts;
 use crate::domains::agents::model::ModelCatalogStatus;
 
@@ -23,16 +23,34 @@ pub(super) struct ResolvedModel<'a> {
     pub(super) launch_id: String,
 }
 
-/// Available iff SOME active context serves this model — by this machine's own
-/// observation, or by the shipped catalog's declaration. The union direction is the
-/// whole point: an observation may add a context the catalog has not caught up to,
-/// and the catalog may carry a trial-verified row the harness never advertises.
+/// The observation is the truth wherever it exists (model-catalog.md, "Serving"):
+/// with an observation, a model is available iff the composed observation carries
+/// it — with the one trial-verified exemption, whose rows the harness never
+/// advertises and which therefore stay catalog-governed. Without an observation
+/// (pre-first-probe, machineless surfaces), the shipped catalog's per-context
+/// declarations serve as the seed, exactly as before probing existed.
 pub(super) fn model_is_available(
     model: &AgentCatalogModel,
     contexts: &ActiveAuthContexts,
     universe: &ObservedUniverse,
 ) -> bool {
-    contexts_serving_model(model, universe)
+    if universe.has_observation() {
+        return universe.observes_model(model)
+            || (is_trial_verified(model) && catalog_declares_available(model, contexts));
+    }
+    catalog_declares_available(model, contexts)
+}
+
+/// The seed rule: the shipped catalog declares the model under some ACTIVE auth
+/// context. Auth contexts remain a SELECTION-side concept (which sources are
+/// enabled); the observation side carries none.
+pub(super) fn catalog_declares_available(
+    model: &AgentCatalogModel,
+    contexts: &ActiveAuthContexts,
+) -> bool {
+    model
+        .availability
+        .any_of
         .iter()
         .any(|context_id| contexts.is_active(context_id))
 }
