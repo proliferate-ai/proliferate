@@ -328,15 +328,23 @@ def _hostname_first_label(endpoint: str) -> str:
     Live-test-proven vocabulary (ledger 2026-07-26 opencode×azure entry):
     ``https://proliferate-gw-aoai.openai.azure.com`` (or a bare
     ``proliferate-gw-aoai.openai.azure.com``, or even a bare
-    ``proliferate-gw-aoai``) -> ``proliferate-gw-aoai``. Tolerates a scheme,
-    a path/query suffix, and a bare hostname/resource-name value (no scheme
-    at all) uniformly by stripping a scheme if present, taking the host
-    portion before any path, and splitting on the first ``.``.
+    ``proliferate-gw-aoai``) -> ``proliferate-gw-aoai``. Tolerates a scheme, a
+    path/query suffix, userinfo (``user@host``), a port, and a bare
+    hostname/resource-name value (no scheme at all) uniformly by stripping a
+    scheme if present, taking the host:port portion before any path,
+    dropping any userinfo before ``@`` and any port after ``:``, then
+    splitting on the first ``.``. D2's stored-vault ``endpoint`` field is
+    never expected to carry userinfo or a port in practice, but this
+    function's contract is "first label of the hostname", so it strips both
+    rather than silently folding them into the returned label.
     """
     value = endpoint.strip()
     if "://" in value:
         value = value.split("://", 1)[1]
     value = value.split("/", 1)[0]
+    if "@" in value:
+        value = value.rsplit("@", 1)[1]
+    value = value.split(":", 1)[0]
     return value.split(".", 1)[0]
 
 

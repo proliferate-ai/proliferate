@@ -463,6 +463,22 @@ class TestTranslateProviderConfigEnv:
         assert with_path is not None
         assert with_path["AZURE_RESOURCE_NAME"] == "foo"
 
+        # Not evidenced by the live run and not an expected D2 vault shape,
+        # but the function's contract is "first label of the hostname" — it
+        # must strip userinfo and a port rather than fold them into the
+        # returned resource name (review finding 5).
+        with_userinfo_and_port = agent_auth._translate_provider_config_env(
+            "opencode",
+            "azure_openai",
+            {
+                "endpoint": "https://user@foo.openai.azure.com:8443/path",
+                "deployment": "d",
+                "apiKey": "k",
+            },
+        )
+        assert with_userinfo_and_port is not None
+        assert with_userinfo_and_port["AZURE_RESOURCE_NAME"] == "foo"
+
     def test_unsupported_harness_returns_none(self) -> None:
         assert (
             agent_auth._translate_provider_config_env(
