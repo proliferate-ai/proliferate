@@ -7,6 +7,7 @@ import {
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { planFirstRunAuthAdoption } from "#product/lib/domain/agents/auth-onboarding";
+import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
 
 /**
  * First-run adoption of the managed gateway into auth selections (spec §9).
@@ -28,6 +29,9 @@ export function useFirstRunAuthAdoption() {
     reconcileStatus,
   } = useAgentCatalog();
   const putSelections = usePutAuthSelections();
+  const recordAdoption = useAuthSetupOnboardingStore(
+    (store) => store.recordAdoption,
+  );
   const attemptedRef = useRef(false);
 
   const selections = selectionsQuery.data;
@@ -63,6 +67,13 @@ export function useFirstRunAuthAdoption() {
       selectionCount: selections.length,
       gatewayEnabled,
     });
+    // Ack-gated onboarding step (agent-auth.md, Proof C7): record what was
+    // adopted (possibly nothing) so the "setting up" step knows which
+    // selections' `applied` flags to await — and whether to show at all.
+    recordAdoption(
+      actions.map((action) => action.harnessKind),
+      Date.now(),
+    );
     for (const action of actions) {
       putMutate(
         {
@@ -86,6 +97,7 @@ export function useFirstRunAuthAdoption() {
     cloudActive,
     gatewayEnabled,
     readinessSettled,
+    recordAdoption,
     selections,
     putMutate,
   ]);

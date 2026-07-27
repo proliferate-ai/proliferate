@@ -4,6 +4,7 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSummary } from "@anyharness/sdk";
 import { useFirstRunAuthAdoption } from "#product/hooks/agents/lifecycle/use-first-run-auth-adoption";
+import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
 
 const state = vi.hoisted(() => ({
   cloudActive: true,
@@ -56,6 +57,7 @@ const GATEWAY_BODY = { sources: [{ sourceKind: "gateway", enabled: true }] };
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  useAuthSetupOnboardingStore.getState().resetForTests();
   state.cloudActive = true;
   state.capabilities.data = { gatewayEnabled: true };
   state.selections.data = [];
@@ -163,5 +165,38 @@ describe("useFirstRunAuthAdoption", () => {
     renderHook(() => useFirstRunAuthAdoption());
 
     expect(putMutate).not.toHaveBeenCalled();
+  });
+
+  // Ack-gated onboarding step (agent-auth.md, Proof C7): the "setting up"
+  // step reads the adoption decision from the auth-setup store.
+  it("records the adopted harness kinds for the onboarding step", () => {
+    state.agents = [
+      agent({ kind: "claude", credentialState: "login_required" }),
+      agent({ kind: "codex", credentialState: "login_required" }),
+    ];
+
+    renderHook(() => useFirstRunAuthAdoption());
+
+    const store = useAuthSetupOnboardingStore.getState();
+    expect(store.adoptedHarnessKinds).toEqual(["claude", "codex"]);
+    expect(store.adoptionStartedAt).not.toBeNull();
+  });
+
+  it("records an empty adoption (native creds detected) so the step stays hidden", () => {
+    state.agents = [agent({ kind: "claude" })];
+
+    renderHook(() => useFirstRunAuthAdoption());
+
+    expect(putMutate).not.toHaveBeenCalled();
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+  });
+
+  it("records nothing while the decision has not run (cloud inactive)", () => {
+    state.cloudActive = false;
+    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
+
+    renderHook(() => useFirstRunAuthAdoption());
+
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
   });
 });

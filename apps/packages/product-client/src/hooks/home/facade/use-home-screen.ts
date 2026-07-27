@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useAuthSetupOnboardingStep } from "#product/hooks/agents/lifecycle/use-auth-setup-onboarding-step";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
@@ -145,8 +146,12 @@ export function useHomeScreen() {
     [readyAgents],
   );
 
+  // Ack-gated onboarding "setting up" step (agent-auth.md, Proof C7).
+  const authSetupStep = useAuthSetupOnboardingStep();
+
   return {
     onboardingCards,
+    authSetupStep,
     isAddingRepo,
     handleHomeAction,
     // Model-probe card inputs (UX spec §10). The model count itself lives with
