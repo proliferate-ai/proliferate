@@ -17,6 +17,11 @@ class AgentApiKeyRecord:
     status: str
     created_at: datetime
     updated_at: datetime
+    # 'api_key' (default) or a typed provider-config kind ('aws_bedrock',
+    # 'azure_openai') — agent-auth.md's vault table. Never carries the
+    # decrypted payload; that stays server-internal (materialization + the
+    # authenticated GET /state read only).
+    kind: str = "api_key"
 
 
 @dataclass(frozen=True)
@@ -30,6 +35,25 @@ class AgentAuthSelectionRecord:
     env_var_name: str | None
     provider_hint: str | None
     enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class AgentAuthDeliveryAckRecord:
+    """The last acknowledged state delivery for one (user, surface).
+
+    ``acked_fingerprint`` is the renderer's sha256 of the delivered canonical
+    document (change detection); ``acked_revision`` is that document's
+    revision, kept as the out-of-order backstop only.
+    """
+
+    id: UUID
+    user_id: UUID
+    surface: str
+    acked_revision: int
+    acked_fingerprint: str
+    acked_at: datetime
     created_at: datetime
     updated_at: datetime
 
@@ -71,15 +95,26 @@ class AgentGatewayEnrollmentRecord:
 
 
 @dataclass(frozen=True)
-class AgentCatalogSnapshotRecord:
+class AgentGatewayEnrollmentKeyRecord:
+    """One per-(enrollment, harness) LiteLLM virtual key (model-gateway.md §Account model)."""
+
+    id: UUID
+    enrollment_id: UUID
+    harness_kind: str
+    virtual_key_id: str | None
+    sync_fingerprint: str | None
+    created_at: datetime
+    updated_at: datetime
+    revoked_at: datetime | None
+
+
+@dataclass(frozen=True)
+class AgentModelSnapshotRecord:
     id: UUID
     harness_kind: str
-    surface: str
-    route: str
-    owner_user_id: UUID | None
-    models_json: str
+    owner_user_id: UUID
+    snapshot_json: str
     probed_at: datetime
-    source: str
     status: str
 
 

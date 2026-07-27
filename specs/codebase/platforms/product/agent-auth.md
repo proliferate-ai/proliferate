@@ -211,10 +211,12 @@ Document laws:
   dead source omitted — and a launch that then resolves zero usable
   sources for a still-selected route is refused with a typed error. A
   selection never silently degrades to the user's personal credentials.
-- **`revision` is monotonic and the write guard.** The runtime rejects a
-  pushed document whose revision is lower than the persisted one and
-  accepts equal revisions as content-authoritative (key rotation without
-  a selection change)
+- **`revision` is a backstop, not the mechanism.** Correctness of delivery
+  lives in serialized, latest-wins pushes and the acknowledgement below;
+  change detection is the content fingerprint. The revision has exactly one
+  job: the runtime rejects a *delayed, out-of-order* push whose revision is
+  lower than the persisted one, and accepts equal revisions as
+  content-authoritative (key rotation without a selection change)
   ([state.rs `apply_state_file`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)).
 - **`issuing_server_origin` is the server-switch guard.** The desktop
   stamps the document with the origin it fetched from; the runtime
@@ -226,6 +228,43 @@ Document laws:
   A desktop repointed at a different control plane can never inject the
   abandoned server's gateway key.
 
+### Applied means acknowledged
+
+An auth change is not *real* until the target runtime has confirmed the
+applied document, and the UI says so:
+
+- **Pending → applied.** A selection write shows as *pending* on its surface
+  until the runtime acknowledges the applied `state.json`. A failed delivery
+  is a visible pending state — never a silently stale runtime. The
+  acknowledgement is also the trigger for the model-catalog probe
+  ([model-catalog.md](model-catalog.md)'s auth-applied event), so the picker
+  refreshes itself the moment the new world is real.
+- **A cloud switch ensures the sandbox.** A `cloud`-surface selection write
+  ensures the user's sandbox (provision-or-wake — always possible, since
+  cloud auth editing sits behind the provisioning onboarding), materializes
+  the document into it, and completes on the runtime's ack. The old
+  "no-op if the sandbox has not booted" branch remains only for the
+  never-provisioned case, which bootstrap covers.
+- **Latest wins.** Rapid switches coalesce: the delivery pushes the latest
+  rendered document, never replaying intermediates (the desktop hook's
+  serialized operation queue; the cloud scheduler's after-commit read of
+  committed truth).
+- **Enrollment sync pokes both surfaces.** An enrollment reaching `synced`
+  re-materializes cloud *and* invalidates the local-surface state so the
+  desktop re-pulls — a state pulled before sync completed (gateway source
+  dropped as unsatisfiable) must not persist until the next unrelated
+  mutation.
+- **Running sessions are offered a restart.** Auth applies at launch only,
+  so running sessions keep the old world — including billing the old route.
+  After the ack, the surface shows a modal — *"Restart running sessions on
+  old auth?"* with actions `"yes, restart now"` / `"no"` (founder-settled
+  copy, lowercase verbatim; the copy module marks it do-not-reword) —
+  scoped to running sessions of the switched harness on the switched
+  surface. Restart is an in-place relaunch
+  (transcript kept; the resume path re-runs route_auth and the readiness
+  gate). Declining leaves the sessions to run out their lives on the old
+  auth.
+
 ### Cloud delivery
 
 The materialization worker writes the file directly into the user's
@@ -236,7 +275,8 @@ sandbox
   the standard materialization steps
   ([materialize/sandbox.py](../../../../server/proliferate/server/cloud/materialization/materialize/sandbox.py))
   — so a fresh sandbox has the document before its first session. After
-  that, on every auth-relevant event: a selection write, an enrollment
+  that, on every auth-relevant event: a selection write (which ensures the
+  sandbox, per the acknowledgement contract above), an enrollment
   reaching `synced`, and a top-up reactivating an exhausted subject each
   call `schedule_materialize_agent_auth`.
 - **How it runs.** Through the same asynchronous after-commit application
@@ -245,8 +285,15 @@ sandbox
   the handler registers the task on the open transaction via
   `run_after_commit`, and a spawned task runs only once the transaction
   commits — the materializer always reads committed truth, never a state
-  mid-write. The task resolves the user's active personal sandbox and
-  no-ops if none has booted yet (bootstrap will cover it).
+  mid-write. The task resolves the user's active personal sandbox. For a
+  plain poke (enrollment sync, background refresh) it no-ops if none has
+  booted yet — bootstrap will cover it. The ensure-on-switch path is the
+  exception: a cloud selection change schedules with ensure semantics, so
+  a provisioned-but-unbooted or asleep sandbox is provisioned/woken to
+  receive the new state (never awaited by the request), and only a
+  never-provisioned user — who cannot have cloud selections yet — defers
+  to bootstrap. An ensure with an empty rendered document does not boot a
+  sandbox just to delete a file.
 - **What it writes.** The renderer builds the full document from enabled
   selections, decrypted vault values, and the enrollment's key material,
   then compares a sha256 fingerprint against a sidecar manifest: an
@@ -266,9 +313,18 @@ pushes into its embedded runtime
 
 - **When it runs.** On app start once signed in with a healthy runtime,
   and again whenever an auth mutation (selection PUT, vault
-  create/revoke) invalidates the auth-state query. Sync requires only
-  sign-in and a healthy local runtime — a self-hosted user with no cloud
-  compute still gets gateway and BYOK routes locally.
+  create/revoke) or an enrollment reaching `synced` invalidates the
+  auth-state query. Sync requires only sign-in and a healthy local
+  runtime — a self-hosted user with no cloud compute still gets gateway
+  and BYOK routes locally.
+- **Onboarding shows a card, never a block.** Account creation never
+  waits on LiteLLM (enrollment is fire-and-forget at signup). The desktop
+  first-run flow — auto-install, then first-run adoption defaulting the
+  gateway for harnesses without native logins, then this sync loop — is
+  what delivers the first `state.json`, and a home-screen onboarding card
+  ("Setting up your agents…") awaits the runtime's ack with a short grace
+  window (~20s) before auto-advancing — degrading to a visible pending
+  badge and letting the user proceed. It never blocks.
 - **The loop.** `GET /v1/cloud/agent-auth/state?surface=local` (the same
   renderer as the cloud materializer, scoped to the `local`-surface
   selections) → fingerprint-compare against the last pushed document →
@@ -307,12 +363,16 @@ answers four questions in order:
    ([profile.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/profile.rs)).
    A source missing a required field is `SelectionIncomplete`; an unknown
    kind is `UnsupportedRoute`. Pure mapping, no filesystem.
-2. **What models does the world mention?** Gateway recipes embed model
-   names (codex's `config.toml` pins a default model; opencode's provider
-   block lists models). Those names come from the catalog's gateway
-   policy through the `GatewayModelResolve` seam
+2. **What models does the world mention?** Recipes embed model names
+   (codex's `config.toml` pins a default model on the native route as well
+   as the gateway one; opencode's provider block lists models). Those names
+   come from the catalog's `session.defaults` and gateway policy through the
+   `GatewayModelResolve` seam
    ([plan.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/plan.rs))
-   — model names are catalog data, never Rust constants.
+   — model names are catalog data, never Rust constants. The plan carries a
+   separate native default (resolved from the non-gateway auth contexts in
+   precedence order) so a native launch pins the model the user's own
+   provider serves rather than the gateway's.
 3. **What must the world contain?** Render every source, in order, into
    one composed delta: env vars to set, env vars to remove, files to
    write
@@ -353,13 +413,43 @@ launch side-effect-free and a retry idempotent.
 The render dispatch is a per-harness table; this is where "every harness
 has its own way of accepting auth" is paid for, in one place:
 
-| Harness | Gateway route | `api_key` route |
-| --- | --- | --- |
-| claude | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (the scoped key); optional `ANTHROPIC_SMALL_FAST_MODEL` from the catalog plan; isolated `CLAUDE_CONFIG_DIR` (stable dir, no file); ambient sanitization | the named env var; same ambient sanitization |
-| codex | isolated `CODEX_HOME=codex-home-<rev>/` with generated `config.toml` (provider `proliferate`, `base_url`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, catalog default model); removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var only |
-| opencode | isolated `XDG_CONFIG_HOME` + generated `opencode.json` adding only the `proliferate` provider (`apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"`, catalog model list); **`XDG_DATA_HOME` deliberately left ambient** so natively-logged-in providers coexist | the named env var, additive beside gateway and native |
-| grok | isolated `HOME=grok-home-<rev>/`, `GROK_MODELS_BASE_URL`, `XAI_API_KEY` (the scoped key) | the named env var |
-| cursor | typed refusal (`UnsupportedRoute`) — no gateway route exists for cursor | the named env var (`CURSOR_API_KEY`, cursor's registry-declared slot) |
+| Harness | Native route | Gateway route | `api_key` route |
+| --- | --- | --- | --- |
+| claude | nothing — the CLI finds its own login and config | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (the scoped key); optional `ANTHROPIC_SMALL_FAST_MODEL` from the catalog plan; isolated `CLAUDE_CONFIG_DIR` (stable dir, no file) | the named env var |
+| codex | isolated `CODEX_HOME=codex-native/` (stable, not revision-keyed) holding TWO files: a `config.toml` pinning only the catalog's native default model (no provider table — the credential is the user's own), and a copy of the user's own `auth.json`, because codex resolves credentials at `$CODEX_HOME/auth.json` and relocating the home relocates that lookup | isolated `CODEX_HOME=codex-home-<rev>/` with generated `config.toml` (provider `proliferate`, `base_url`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, catalog gateway default model); removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var only |
+| opencode | nothing | isolated `XDG_CONFIG_HOME` + generated `opencode.json` adding only the `proliferate` provider (`apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"`, catalog model list); **`XDG_DATA_HOME` deliberately left ambient** so natively-logged-in providers coexist | the named env var, additive beside gateway and native |
+| grok | nothing | isolated `HOME=grok-home-<rev>/`, `GROK_MODELS_BASE_URL`, `XAI_API_KEY` (the scoped key) | the named env var |
+| cursor | nothing | typed refusal (`UnsupportedRoute`) — no gateway route exists for cursor | the named env var (`CURSOR_API_KEY`, cursor's registry-declared slot) |
+
+Three properties of the table itself, all load-bearing:
+
+- **Native is a route with a recipe, not the absence of one.** Four harnesses
+  render nothing natively, but codex needs an isolated `CODEX_HOME` even on the
+  user's own login, because it reads its model from `config.toml` rather than
+  from env and must not inherit whatever a developer left in `~/.codex`. Keeping
+  that in this table — rather than in a second launch-env path — is what makes
+  the native and routed homes distinct directories that cannot shadow or GC each
+  other, and what keeps every codex `config.toml` in the system emitted by one
+  function.
+- **An isolated home must carry the credential it isolates away from.** Codex
+  resolves credentials at `$CODEX_HOME/auth.json`, so setting `CODEX_HOME` moves
+  the credential lookup along with the config — a config-only isolated home
+  launches a natively-logged-in user *unauthenticated*, and nothing later repairs
+  it (the login terminal adjusts only `PATH`, so `codex login` writes `~/.codex`
+  and never the isolated home). The native recipe therefore delivers the user's
+  own `auth.json` as its second file, read at apply time from the user's real
+  codex home so the render stays pure. On macOS, codex's keychain entry is keyed
+  on `sha256(canonical CODEX_HOME)` and so is unreachable from a relocated home;
+  this is covered because the credential reader consults the keychain first and
+  materializes its payload as `auth.json` bytes — the keychain login arrives as a
+  file the relocated home can read. The one accepted residual: a token refresh
+  the child performs lands in the isolated home rather than the user's keychain,
+  which cannot diverge because every launch re-copies from the source.
+- **Claude's ambient sanitization applies to every non-native route**, once over
+  the fully composed delta rather than per recipe: the rerouting flags
+  (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`, `AWS_BEARER_TOKEN_BEDROCK`)
+  are always removed, and each Anthropic selector the route did *not* itself set
+  is removed so an ambient value cannot shadow the chosen credential.
 
 Typed provider configs are a third column in spirit but not in code: a
 `provider_config` source renders its env map through the same generic
@@ -406,11 +496,13 @@ harness home, exactly as they would on a laptop.
 
 ### Readiness interplay
 
-Readiness projection (agent-distribution.md) is computed from native
-credentials; a routed harness would read `CredentialsRequired` even
-though launch will inject valid keys. `resolve_launch_agent`
-([readiness/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs))
-therefore asks route-auth one yes/no question —
+Readiness projection (agent-distribution.md) is computed from installed
+artifacts plus locally-detected credentials, which alone would read
+`CredentialsRequired` for a routed harness even though launch will inject
+valid keys. Every projection therefore absorbs the enrolled route through
+**one** seam, `apply_launch_route_upgrade` in
+[readiness/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs):
+it asks route-auth one yes/no question —
 `launch_route_provides_credentials`, the same state load and origin
 guard as launch — and upgrades `CredentialsRequired`/`LoginRequired` to
 `Ready`. The predicate is deliberately tolerant (a malformed state reads
@@ -418,11 +510,36 @@ guard as launch — and upgrades `CredentialsRequired`/`LoginRequired` to
 path alone; and the upgrade can never clear `InstallRequired` or
 `Unsupported`, because a route cannot conjure a binary.
 
-Opencode's readiness is the special case: its registry policy is
-`provider_managed`, so the native projection is structurally `Ready`.
-Its *real* auth state is the selection set itself — read surfaces derive
-opencode's method state from selections plus native detection, not from
-the projection.
+Both the settings read (`resolve_agent`, behind `GET /v1/agents`) and the
+launch path (`resolve_launch_agent`) go through that one seam — that shared
+layer *is* the mechanism behind agent-distribution.md's law that the two
+surfaces resolve readiness the same way. They differ only in which
+environment counts: the launch path reads the workspace's composed env, the
+settings read the host's. `resolve_agent_unrouted` remains for the callers
+that genuinely mean "is the vendor CLI installed and logged in on this
+machine": the login flow (an enrolled route must never suppress a native
+login), the installed-only reconcile pass, and the catalog probe.
+
+Because route-upgraded readiness and native readiness collapse to the same
+`credentialState` on the wire, the projection also carries the provenance:
+`AgentSummary.credentialsFromRoute` is true exactly when the route is why
+the harness reads ready. Clients that mean native auth — first-run
+native-auth adoption, CLI login chrome — must exclude that case; the flag is
+absent on runtimes predating it, and those are the runtimes whose read
+surface was native-only, so absent correctly means "not from a route".
+
+Opencode's registry policy is `provider_managed`: the harness resolves
+PROVIDER auth itself at prompt time, so readiness does not gate on any ONE
+required slot the way `any_required_slot`/`all_required_slots` harnesses do.
+It is not credential-less, though — `aggregate_credential_state` (A9) reads
+every slot's actual ladder state and is `Ready` the moment any one resolves,
+same shape as `any_required_slot` but without requiring
+`required_for_readiness` on the slot. That is what makes the selection set
+opencode's real auth truth everywhere: a selection enrolls a route, the route
+clears the credential gap through the same `apply_launch_route_upgrade` seam
+every other harness uses, and read surfaces (settings' active-methods list,
+composer launch options) derive opencode's method state from the same
+selections.
 
 ## API surface
 
@@ -489,9 +606,16 @@ anyharness/
     │   ├── materialize.rs                     atomic writes, revision dirs, GC
     │   └── mod.rs                             pipeline, origin guard, typed errors
     ├── domains/agents/readiness/service.rs    route-aware readiness upgrade
+    ├── domains/sessions/service/create.rs     create-time fail-closed refusal (409)
     ├── domains/sessions/runtime/startup.rs    launch integration, fail-closed refusal
     └── live/sessions/driver/process.rs        env layering + ambient removal at spawn
 ```
+
+The wire shape crossing the Python↔Rust boundary is pinned by the
+`agent-auth-state` contract fixture
+([fixtures/contracts/agent-auth-state/](../../../../fixtures/contracts/agent-auth-state/)):
+the renderer asserts it produces it, `route_auth/` asserts it consumes it, and a
+shape change is made by changing the fixture — which breaks whichever side lags.
 
 | Layer | Owns |
 | --- | --- |
@@ -518,75 +642,112 @@ anyharness/
 - Gateway not deployed (`gateway_enabled` false): the gateway option is
   not offered and nothing fails at launch.
 
+## Proof
+
+Named, binary assertions; a corridor of work is done when its assertions are
+green. IDs are stable — tests reference them by name.
+
+Auth (the full system):
+
+- **A1** Zero enabled rows → no `state.json` entry → launch renders the
+  empty delta; the harness sees only its own login. (contract fixtures +
+  render tests)
+- **A2** Every unsatisfiable selected source — unsynced enrollment, revoked
+  key, exhausted credit, unfunded org — refuses launch with the typed 409;
+  no input silently degrades a selection to native. (runtime startup tests +
+  renderer pytest)
+- **A3** Every non-native route strips ambient rerouting flags and unset
+  Anthropic selectors; env vars the route itself set (including
+  provider-config mode flags) always survive. (`render_tests.rs`)
+- **A4** Opencode composes gateway + N api_keys + ambient native into one
+  delta; `XDG_DATA_HOME` stays ambient. (`opencode_render_tests.rs`)
+- **A5** Typed-config end to end (write gate open, registry-driven): typed
+  vault row → selection with no env var → `provider_config` wire source →
+  spawn env contains the harness's real env set; revoking the entry drops
+  the source at the next pass; an undeclared or registry-`pending`
+  (harness, kind) combo refuses the write. (server pytest + render tests +
+  one intent test)
+- **A6** The store rejects both illegal shapes: a bare-key selection
+  without an env var, and a typed-entry selection with one. (server pytest)
+- **A7** A gateway launch cannot read native credentials (isolated homes),
+  and codex's native recipe delivers the copied `auth.json` so a relocated
+  home stays authenticated. (render + native_render tests)
+
+Delivery, acknowledgement, restart:
+
+- **C1** A switch renders *pending* until the runtime ack and *applied*
+  after; a failed push stays visibly pending — no path shows applied
+  without an ack. (frontend hook tests + intent test)
+- **C2** A cloud switch against an asleep sandbox ensures → materializes →
+  acks; the never-provisioned case falls to bootstrap. (server integration
+  test)
+- **C3** Rapid switches deliver latest-wins; no intermediate document is
+  observable after a later one. (desktop hook tests + server pytest)
+- **C4** A delayed lower-revision push is rejected
+  `AGENT_ROUTE_STATE_STALE`; an equal-revision content change applies.
+  (`state.rs` tests)
+- **C5** A state pulled before enrollment sync lacks the key; sync
+  completion re-renders both surfaces with no unrelated mutation needed.
+  (server pytest + hook test)
+- **C6** After the ack, the restart modal lists exactly the running
+  sessions of the switched harness on the switched surface; restart
+  relaunches in place on the new auth with the transcript kept; declining
+  leaves the old auth running. (runtime resume test + frontend test)
+- **C7** A fresh signup on a healthy stack reaches an applied `state.json`
+  and a first observation within the onboarding grace window; with LiteLLM
+  down, signup still succeeds and onboarding proceeds with a pending
+  badge. (release scenario)
+- **C8** A server-switched desktop's stale document reads as absent.
+  (`origin_guard_tests.rs`)
+
 ## Current gaps
 
-Deltas between this document and `main`, each struck by its follow-up PR:
+Deltas between this document and the integration stack
+(`agents/integration-rc1`), each struck by its follow-up PR:
 
-- [ ] **One shared gateway key, not per-harness scoped keys.** The state
-      renderer resolves a single enrollment virtual key and fans it out
-      to every gateway-selected harness
-      ([materialize/agent_auth.py](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py));
-      per-(subject, harness) access-group-scoped keys are the
-      model-gateway migration (its gaps list carries the enrollment and
-      `config.yaml` sides; this document owns the renderer's key lookup
-      and the harness-side deletion of client model filtering).
-- [ ] **Unsatisfiable sources silently degrade to native.** The renderer
-      drops a dead source and omits an empty harness entry, and the
-      runtime reads absence as native — so a desktop user with a native
-      claude login whose gateway budget exhausts silently starts billing
-      their personal Anthropic account. The body's
-      "present-but-empty fails closed" law is not implemented; today
-      only render-stage errors refuse the launch.
-- [ ] **Typed provider configurations do not exist.** The vault has no
-      `kind` column and stores exactly one opaque string per entry; no
-      Bedrock/Azure payloads, no `provider_config` wire source, no
-      registry declaration of supported provider-config kinds. (The old
-      Bifrost `provider_kind` tables were dropped outright and are not a
-      starting point.)
-- [ ] **Cursor selections are rejected server-side.** `selection_rules.py`
-      lists cursor as native-only and the store's harness allow-list
-      excludes it, even though the registry declares `CURSOR_API_KEY` as
-      its credential slot; the `api_key` source needs enabling for
-      cursor end to end (rules, allow-list, recipe already generic).
-- [ ] **Cloud native login is not offered.** The cloud settings surface
-      shows static "no auth configured" text instead of the Authenticate
-      action, though the login-terminal mechanism is surface-agnostic;
-      wiring it up also revisits agent-distribution's cursor-in-cloud
-      carve-out, which assumed no headless credential path.
-- [ ] **Codex has a second, competing isolated home.** Every codex launch
-      — including gateway-routed ones — also writes
-      `agent-auth/codex-local/` with a hardcoded `config.toml` pinning
-      `model = "gpt-5.5"` (a Rust-constant model pin, violating the
-      catalog-owns-model-names law) and a copy of the user's native
-      `auth.json`
-      ([launch_env.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/launch_env.rs));
-      route_auth's `CODEX_HOME` then shadows it for routed launches,
-      leaving unnecessary credential material on disk. Fold the native
-      codex home preparation into the route-auth recipe table as the
-      native recipe, sourced from the catalog.
-- [ ] **Claude's ambient sanitization only runs on the gateway route.**
-      An `api_key` selection sets its env var but does not strip ambient
-      `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_VERTEX`, so a
-      Bedrock-configured host reroutes a BYOK launch. The body requires
-      sanitization on every non-native route.
-- [ ] **Route prefix.** Vault, selections, state, and org policy still
-      live under `/v1/cloud/agent-gateway/`; the split to
-      `/v1/cloud/agent-auth/` (with catalog routes to the model-catalog
-      platform) is pending, including the matching
-      `api.py`/`service.py`/`models.py` three-domain split.
-- [ ] **Dead error variants.** `RouteAuthError::SelectionMissing` and
-      `SelectionConflict` are never constructed (leftovers of the
-      pre-`sources[]` design); delete them or wire them to the
-      fail-closed law above.
-- [ ] **Opencode's method state is projection-derived on some read
-      surfaces.** Settings derives opencode's active methods from
-      selections, but readiness still reports the structural
-      `provider_managed` `Ready`; the selection set should be opencode's
-      truth everywhere (composer launch options included).
-- [ ] **Org members launch on their personal key.** Cross-referenced from
-      model-gateway.md's gaps: the renderer and budget gate resolve the
-      personal enrollment even for org members.
-- [ ] **Stale IA references.** The settings information-architecture doc
-      still describes the removed Bifrost-era `agent-authentication`
-      pane (the shipped UI redirects it to `agent-api-keys`); its Agents
-      scope needs a truth pass (PR E).
+- [ ] **The cloud surface has no auth-applied probe poke.** The desktop
+      runtime's state PUT/DELETE fires the `AuthApplied` probe event, but
+      the cloud materializer writes `state.json` directly into the sandbox
+      and stamps the ack server-side, without poking an awake sandbox
+      runtime's probe engine — so a cloud observation lags an applied auth
+      change until the next wake/startup pass. Either the materialization
+      op grows a poke of the runtime's refresh seam, or this bounded lag
+      gets ruled acceptable (founder decision pending).
+- [ ] **The `azure_openai` cells for codex AND claude are declared but
+      pending.** The typed-config write gate itself is open (see below), and
+      it is registry-driven: `_assert_keys_usable` admits a typed-entry
+      reference exactly when the harness's registry `providerConfig`
+      declaration for that kind is non-`pending`
+      (`supported_provider_config_kinds`, threaded from the service layer).
+      Two declared cells stay `pending` and therefore closed:
+      codex×`azure_openai` (D3-rust built the `config.toml`
+      `model_providers` injection, but the cell is live-unverified — nobody
+      has exercised codex against real Azure OpenAI, and the registry only
+      declares `AZURE_OPENAI_API_KEY` today) and claude×`azure_openai`
+      (Foundry — the renderer's endpoint→`ANTHROPIC_FOUNDRY_RESOURCE`
+      derivation and API_KEY/AUTH_TOKEN alternative are unverified judgment
+      calls, R5/R11). Each opens by clearing its registry `pending` flag
+      after its Gate 4 live run (or is dropped, pending a founder ruling).
+      Per R5, the azure vault entry collects `endpoint` + `apiKey` only —
+      `deployment` was dropped from the UI field spec and the server's
+      create validation because the renderer deliberately never translated
+      it.
+- [ ] **Module split.** The route prefix split landed (S1): vault,
+      selections, state, and org policy now live under `/v1/cloud/agent-auth/`,
+      and enrollment/capabilities stayed at `/v1/cloud/agent-gateway/`
+      (model-gateway.md). The matching `api.py`/`service.py`/`models.py`
+      three-domain code split (one module set per platform, not one shared
+      `agent_gateway` package) is still pending — S1 was URL-string-only by
+      design, so the account/auth/policy code still lives in the single
+      `agent_gateway` package regardless of which prefix its routes answer.
+- [ ] **Cursor's api_key route reports a false Ready.** The api_key source
+      is persisted and rendered for cursor, and readiness reports `Ready`
+      for it — the check is kind-agnostic
+      ([readiness/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs))
+      and the catalog's `cursor-login` auth context's `anyOf` signal
+      includes the `CURSOR_API_KEY` env var. But cursor-agent's ACP
+      process ignores `CURSOR_API_KEY` and requires macOS Keychain auth
+      ([catalog_probe.rs](../../../../anyharness/crates/anyharness/src/commands/catalog_probe.rs)),
+      so a user who selects "API key" sees Ready, and the session fails at
+      runtime. Resolution needs either an upstream cursor-agent change or
+      dropping the api_key card for cursor (founder ruling).

@@ -13,11 +13,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_KIND_API_KEY,
     AGENT_API_KEY_STATUS_ACTIVE,
+    AGENT_API_KEY_TYPED_KINDS,
     AGENT_AUTH_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
     AGENT_AUTH_SOURCE_GATEWAY,
@@ -32,18 +34,34 @@ from proliferate.db.store.agent_gateway.records import (
 )
 from proliferate.utils.time import utcnow
 
-# A source is identified within a scope by (source_kind, env_var_name); this is
-# the scope UNIQUE minus (user, harness, surface). Gateway rows share the
-# (gateway, None) identity, so at most one may exist per scope.
-_SourceKey = tuple[str, str | None]
+# A source is identified within a scope by (source_kind, env_var_name), the
+# scope UNIQUE minus (user, harness, surface) — plus the referenced vault
+# entry for a TYPED api_key source, whose env_var_name is None by law (the
+# typed kind carries its own env mapping), so only the entry itself can
+# distinguish two typed sources. Gateway rows share the (gateway, None, None)
+# identity, so at most one may exist per scope.
+_SourceKey = tuple[str, str | None, UUID | None]
 
 
-def _source_key(source_kind: str, env_var_name: str | None) -> _SourceKey:
-    return (source_kind, env_var_name)
+def _source_key(
+    source_kind: str,
+    env_var_name: str | None,
+    api_key_id: UUID | None,
+) -> _SourceKey:
+    if source_kind == AGENT_AUTH_SOURCE_API_KEY and env_var_name is None:
+        return (source_kind, None, api_key_id)
+    return (source_kind, env_var_name, None)
 
 
 class AgentApiKeyNotUsableError(ValueError):
     """A referenced api key is not an active key owned by the caller."""
+
+
+class AgentProviderConfigNotSupportedError(ValueError):
+    """A typed vault entry's kind is not a declared (non-pending) providerConfig
+    kind of the target harness — the registry-driven typed refusal
+    (agent-auth.md "The vault": the registry names which provider-config kinds
+    each harness supports; anything else is rejected at write time)."""
 
 
 def _validate_source(*, surface: str, source: DesiredAuthSource) -> None:
@@ -52,8 +70,11 @@ def _validate_source(*, surface: str, source: DesiredAuthSource) -> None:
     if source.source_kind not in AGENT_AUTH_SOURCE_KINDS:
         raise ValueError(f"Unknown agent auth source kind: {source.source_kind}")
     if source.source_kind == AGENT_AUTH_SOURCE_API_KEY:
-        if source.api_key_id is None or source.env_var_name is None:
-            raise ValueError("An api_key source requires both api_key_id and env_var_name.")
+        # env_var_name is NOT required here: whether it must be present (bare
+        # vault entry) or absent (typed entry) depends on the referenced
+        # row's kind, which only _assert_keys_usable's query can see.
+        if source.api_key_id is None:
+            raise ValueError("An api_key source requires an api_key_id.")
     else:  # gateway
         if source.api_key_id is not None or source.env_var_name is not None:
             raise ValueError("A gateway source must not carry an api_key_id or env_var_name.")
@@ -63,27 +84,72 @@ async def _assert_keys_usable(
     db: AsyncSession,
     *,
     user_id: UUID,
-    api_key_ids: set[UUID],
+    harness_kind: str,
+    sources: Sequence[DesiredAuthSource],
+    supported_provider_config_kinds: Sequence[str],
 ) -> None:
+    """The kind-aware write gate over every referenced vault entry.
+
+    Three laws, in order:
+
+    - every referenced id must be an active vault entry owned by the caller
+      (``AgentApiKeyNotUsableError`` otherwise — a revoked, foreign, or
+      vanished id is indistinguishable to the caller by design);
+    - the selection's shape must match the referenced entry's kind
+      (agent-auth.md "Shape checks are structural"): a bare ``api_key`` entry
+      requires an ``env_var_name``, a typed entry (``aws_bedrock``,
+      ``azure_openai``) must not carry one — the typed kind carries its own
+      env mapping. Enforced here, not in SQL, because it spans tables;
+    - a typed entry's kind must be one of ``supported_provider_config_kinds``
+      — the harness's registry-declared, non-pending providerConfig
+      vocabulary, supplied by the caller (the store cannot read the registry
+      itself: store→server import boundary). The default empty vocabulary
+      fails closed (``AgentProviderConfigNotSupportedError``).
+    """
+    api_key_sources = [
+        source
+        for source in sources
+        if source.source_kind == AGENT_AUTH_SOURCE_API_KEY and source.api_key_id is not None
+    ]
+    api_key_ids = {source.api_key_id for source in api_key_sources if source.api_key_id}
     if not api_key_ids:
         return
-    usable = set(
-        (
-            await db.execute(
-                select(AgentApiKey.id).where(
-                    AgentApiKey.id.in_(api_key_ids),
-                    AgentApiKey.user_id == user_id,
-                    AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
-                )
+    rows = (
+        await db.execute(
+            select(AgentApiKey.id, AgentApiKey.kind).where(
+                AgentApiKey.id.in_(api_key_ids),
+                AgentApiKey.user_id == user_id,
+                AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
             )
         )
-        .scalars()
-        .all()
-    )
-    if usable != api_key_ids:
+    ).all()
+    kind_by_id: dict[UUID, str] = {row.id: row.kind for row in rows}
+    if set(kind_by_id) != api_key_ids:
         raise AgentApiKeyNotUsableError(
             "api_key_id must reference an active key owned by the user."
         )
+    for source in api_key_sources:
+        assert source.api_key_id is not None  # narrowed by the filter above
+        kind = kind_by_id[source.api_key_id]
+        if kind == AGENT_API_KEY_KIND_API_KEY:
+            if source.env_var_name is None:
+                raise ValueError(
+                    "An api_key source referencing a bare key requires an env_var_name."
+                )
+            continue
+        if kind not in AGENT_API_KEY_TYPED_KINDS:  # pragma: no cover - DB CHECK bound
+            raise AgentApiKeyNotUsableError(f"Unknown vault entry kind: {kind}.")
+        if source.env_var_name is not None:
+            raise ValueError(
+                "A selection referencing a typed vault entry must not name an "
+                "env_var_name — the typed kind carries its own env mapping."
+            )
+        if kind not in supported_provider_config_kinds:
+            raise AgentProviderConfigNotSupportedError(
+                f"Harness '{harness_kind}' does not support provider-config "
+                f"kind '{kind}' (not a declared, non-pending registry "
+                "providerConfig kind)."
+            )
 
 
 async def put_auth_selections(
@@ -93,47 +159,57 @@ async def put_auth_selections(
     harness_kind: str,
     surface: str,
     sources: Sequence[DesiredAuthSource],
+    supported_provider_config_kinds: Sequence[str] = (),
 ) -> list[AgentAuthSelectionRecord]:
     """Replace a scope's selection rows with ``sources`` (full desired state).
 
-    Existing rows keyed by (source_kind, env_var_name) are updated in place,
-    absent ones deleted, and new ones inserted — so row ids and created_at
-    survive across edits. The disabled gateway revision marker is normalized
-    into every desired set. Structural coherence (source shape, key ownership,
-    no duplicate source) is enforced; per-harness legality is the caller's.
+    Existing rows keyed by (source_kind, env_var_name[, typed entry id]) are
+    updated in place, absent ones deleted, and new ones inserted — so row ids
+    and created_at survive across edits. The disabled gateway revision marker
+    is normalized into every desired set. Structural coherence (source shape,
+    key ownership, no duplicate source) is enforced; per-harness legality is
+    the caller's — as is ``supported_provider_config_kinds``, the harness's
+    registry-declared non-pending providerConfig vocabulary (the server layer
+    reads it from the registry; the store cannot). The empty default admits
+    no typed vault entry — closed unless the caller opens it.
     """
     if harness_kind not in AGENT_AUTH_HARNESS_KINDS:
         raise ValueError(f"Unknown agent harness kind: {harness_kind}")
 
     desired: dict[_SourceKey, DesiredAuthSource] = {}
-    referenced_key_ids: set[UUID] = set()
     for source in sources:
         _validate_source(surface=surface, source=source)
-        key = _source_key(source.source_kind, source.env_var_name)
+        key = _source_key(source.source_kind, source.env_var_name, source.api_key_id)
         if key in desired:
             raise ValueError(
                 "Duplicate selection source for "
                 f"(source_kind={source.source_kind!r}, env_var_name={source.env_var_name!r})."
             )
         desired[key] = source
-        if source.api_key_id is not None:
-            referenced_key_ids.add(source.api_key_id)
 
-    # Every harness kind accepted by this store is gateway-capable. Keep a
-    # disabled gateway row even when an older/direct client sends the native
-    # state as ``sources=[]``. Besides representing no effective source, this
-    # row is the scope's durable revision marker: deleting the final row would
+    # Keep a disabled gateway row even when an older/direct client sends the
+    # native state as ``sources=[]``, regardless of whether this harness kind
+    # is gateway-capable. Besides representing no effective source, this row
+    # is the scope's durable revision marker: deleting the final row would
     # reset the rendered revision to zero (or an older sibling scope), causing
     # an AnyHarness runtime to reject the clear as stale and retain its prior
-    # gateway route.
-    gateway_key = _source_key(AGENT_AUTH_SOURCE_GATEWAY, None)
+    # route. Surface-revision monotonicity is harness-agnostic — it must hold
+    # even for a harness (e.g. cursor) that can never select the gateway
+    # source itself.
+    gateway_key = _source_key(AGENT_AUTH_SOURCE_GATEWAY, None, None)
     if gateway_key not in desired:
         desired[gateway_key] = DesiredAuthSource(
             source_kind=AGENT_AUTH_SOURCE_GATEWAY,
             enabled=False,
         )
 
-    await _assert_keys_usable(db, user_id=user_id, api_key_ids=referenced_key_ids)
+    await _assert_keys_usable(
+        db,
+        user_id=user_id,
+        harness_kind=harness_kind,
+        sources=sources,
+        supported_provider_config_kinds=supported_provider_config_kinds,
+    )
 
     existing_rows = (
         (
@@ -148,7 +224,10 @@ async def put_auth_selections(
         .scalars()
         .all()
     )
-    existing = {_source_key(row.source_kind, row.env_var_name): row for row in existing_rows}
+    existing = {
+        _source_key(row.source_kind, row.env_var_name, row.api_key_id): row
+        for row in existing_rows
+    }
 
     now = utcnow()
     selection_changed = False
@@ -315,6 +394,38 @@ async def list_enabled_selections_referencing_key(
         .all()
     )
     return [selection_record(row) for row in rows]
+
+
+async def touch_auth_selection_revisions(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str,
+) -> int:
+    """Bump ``updated_at`` on every selection row for one (user, surface).
+
+    The rendered document's ``revision`` is ``max(updated_at)`` across the
+    surface's rows (see ``materialize/agent_auth.py``), so touching the rows IS
+    the surface's revision-bump seam — the same one ``put_auth_selections``
+    exercises through its disabled-gateway marker row. It exists for
+    out-of-band key events that change the rendered *content* without any
+    selection edit (an enrollment reaching ``synced``): the next render then
+    carries a strictly newer revision than any document pulled before the
+    event, so a runtime holding the stale (keyless) document can never reject
+    the re-render as out-of-order. Returns the number of rows touched; a
+    surface with no rows renders no document, so zero is a correct no-op.
+    """
+    if surface not in AGENT_AUTH_SURFACES:
+        raise ValueError(f"Unknown agent auth surface: {surface}")
+    result = await db.execute(
+        update(AgentAuthSelection)
+        .where(
+            AgentAuthSelection.user_id == user_id,
+            AgentAuthSelection.surface == surface,
+        )
+        .values(updated_at=utcnow())
+    )
+    return result.rowcount or 0
 
 
 async def clear_auth_selections(

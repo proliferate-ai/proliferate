@@ -76,7 +76,6 @@ class WorkerDesiredVersions(_CamelModel):
     # artifact and would drive an anyharness-updating sandbox worker into
     # perpetual swap attempts, so an unstamped server pins nothing.
     anyharness: str | None = None
-    catalog_version: str | None = None
 
 
 class WorkerSupervisorBridge(_CamelModel):

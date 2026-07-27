@@ -239,11 +239,12 @@ export interface ManagedCloudWorld {
   resolveAndTrackActorSubjects?(params: {
     userId: string;
     enrollmentId: string;
+    harnessKind: string;
   }): Promise<ActorKeyIdentity>;
 
   /** Persists one composite enrollment cleanup intent before actor creation. */
   beginActorEnrollmentCustody?(params: { email: string }): Promise<{
-    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+    resolveAndTrack(params: { userId: string; enrollmentId: string; harnessKind: string }): Promise<ActorKeyIdentity>;
   }>;
 
   close(): Promise<ManagedCloudCleanupEvidence>;
@@ -738,7 +739,7 @@ async function beginActorEnrollmentCustody(
   email: string,
   tracked: Map<string, { fingerprint: string; promise: Promise<void> }>,
 ): Promise<{
-  resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+  resolveAndTrack(params: { userId: string; enrollmentId: string; harnessKind: string }): Promise<ActorKeyIdentity>;
 }> {
   const replayInputs = {
     litellmBaseUrl: litellm.adminBaseUrl,
@@ -785,7 +786,7 @@ async function beginActorEnrollmentCustody(
   return {
     async resolveAndTrack(params) {
       const resolved = await gateway.resolveActorKey(params);
-      bindActorEnrollment(intent, resolved); // validates the public personal enrollment response
+      bindActorEnrollment(intent, resolved, params.harnessKind); // validates the public personal enrollment response
       const deadline = Date.now() + 60_000;
       let actorSet: ActorEnrollmentLookup;
       do {

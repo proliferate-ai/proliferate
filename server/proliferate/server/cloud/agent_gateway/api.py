@@ -1,4 +1,14 @@
-"""HTTP routes for agent gateway auth: key vault, selections, state, catalog."""
+"""HTTP routes for the agent-auth platform plus the agent-gateway account.
+
+Two prefixes out of this one module (S1, agent-auth.md/model-gateway.md
+API surface): ``router``/``organization_router`` serve ``/agent-auth``
+(key vault, selections, state, org policy); ``gateway_account_router``
+serves ``/agent-gateway`` (enrollment, capabilities — the gateway-account
+concerns model-gateway.md scopes that prefix to). Model catalogs moved out
+earlier: the cloud snapshot's routes live in their own ``agent_models``
+namespace (model-catalog.md §Cloud routes), named off both "gateway" (they
+serve every auth context) and "catalog".
+"""
 
 from __future__ import annotations
 
@@ -11,31 +21,26 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.permissions import CurrentOrgUser, current_path_org_admin
-from proliferate.server.cloud.agent_gateway import catalog as catalog_service
 from proliferate.server.cloud.agent_gateway import service
 from proliferate.server.cloud.agent_gateway.models import (
     AgentApiKeyCreateRequest,
     AgentApiKeyResponse,
-    AgentAuthRoute,
+    AgentAuthDeliveryAckResponse,
     AgentAuthSelectionResponse,
     AgentAuthSelectionsPutRequest,
+    AgentAuthStateAckRequest,
     AgentAuthStateResponse,
     AgentAuthSurface,
     AgentGatewayCapabilitiesResponse,
-    AgentGatewayCatalogMirrorRequest,
-    AgentGatewayCatalogOverrideResponse,
-    AgentGatewayCatalogOverrideUpsertRequest,
-    AgentGatewayCatalogRefreshRequest,
-    AgentGatewayCatalogResponse,
     AgentGatewayEnrollmentResponse,
+    AgentProviderConfigCreateRequest,
     OrgAgentPolicyResponse,
     OrgAgentPolicyUpdateRequest,
     OrgAgentPolicyViolationListResponse,
     agent_auth_state_payload,
     api_key_payload,
     auth_selection_payload,
-    catalog_override_payload,
-    catalog_payload,
+    delivery_ack_payload,
     desired_source,
     enrollment_payload,
     org_agent_policy_payload,
@@ -43,12 +48,18 @@ from proliferate.server.cloud.agent_gateway.models import (
 )
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
-router = APIRouter(prefix="/agent-gateway", tags=["cloud-agent-gateway"])
+router = APIRouter(prefix="/agent-auth", tags=["cloud-agent-auth"])
 
 organization_router = APIRouter(
-    prefix="/organizations/{organization_id}/agent-gateway",
-    tags=["cloud-agent-gateway"],
+    prefix="/organizations/{organization_id}/agent-auth",
+    tags=["cloud-agent-auth"],
 )
+
+# Enrollment + capabilities are gateway-account concerns (model-gateway.md
+# API surface) and stay under /agent-gateway; every other route on `router`
+# (vault, selections, state) and every `organization_router` route (org
+# policy) moved to /agent-auth (agent-auth.md API surface).
+gateway_account_router = APIRouter(prefix="/agent-gateway", tags=["cloud-agent-gateway"])
 
 
 # --------------------------------------------------------------------------- #
@@ -83,6 +94,32 @@ async def create_agent_api_key_endpoint(
     return api_key_payload(record)
 
 
+@router.post("/keys/provider-config", response_model=AgentApiKeyResponse)
+async def create_agent_provider_config_endpoint(
+    body: AgentProviderConfigCreateRequest,
+    db: AsyncSession = Depends(get_async_session, scope="function"),
+    user: User = Depends(current_product_user),
+) -> AgentApiKeyResponse:
+    """Create a typed vault entry (Bedrock/Azure) — D2's modal's request shape.
+
+    A distinct route rather than overloading ``POST /keys``: the request body
+    shape genuinely differs (a field map, not one secret string) and a typed
+    entry is not bound to any harness until a selection references it, same
+    as a bare key.
+    """
+    try:
+        record = await service.create_provider_config(
+            db,
+            user_id=user.id,
+            title=body.title,
+            kind=body.kind,
+            value=body.value,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return api_key_payload(record)
+
+
 @router.delete("/keys/{key_id}", response_model=AgentApiKeyResponse)
 async def revoke_agent_api_key_endpoint(
     key_id: UUID,
@@ -109,8 +146,13 @@ async def list_agent_auth_selections_endpoint(
 ) -> list[AgentAuthSelectionResponse]:
     records = await service.list_auth_selections(db, user_id=user.id, surface=surface)
     titles = await service.key_titles(db, user_id=user.id)
+    applied = await service.annotate_selection_delivery(db, user_id=user.id, records=records)
     return [
-        auth_selection_payload(record, key_title=titles.get(record.api_key_id))
+        auth_selection_payload(
+            record,
+            key_title=titles.get(record.api_key_id),
+            applied=applied.get(record.id, False),
+        )
         for record in records
     ]
 
@@ -159,8 +201,13 @@ async def put_agent_auth_selections_endpoint(
         except CloudApiError as error:
             raise_cloud_error(error)
     titles = await service.key_titles(db, user_id=user.id)
+    applied = await service.annotate_selection_delivery(db, user_id=user.id, records=records)
     return [
-        auth_selection_payload(record, key_title=titles.get(record.api_key_id))
+        auth_selection_payload(
+            record,
+            key_title=titles.get(record.api_key_id),
+            applied=applied.get(record.id, False),
+        )
         for record in records
     ]
 
@@ -186,137 +233,37 @@ async def get_agent_auth_state_endpoint(
     materializer writes into the user's own sandbox. Nothing crosses a user
     boundary.
     """
-    state = await service.get_auth_state(db, user_id=user.id, surface=surface)
-    return agent_auth_state_payload(state)
+    state, fingerprint = await service.get_auth_state(db, user_id=user.id, surface=surface)
+    return agent_auth_state_payload(state, fingerprint=fingerprint)
 
 
-# --------------------------------------------------------------------------- #
-# Catalog
-# --------------------------------------------------------------------------- #
-
-
-@router.get("/catalog/{harness_kind}", response_model=AgentGatewayCatalogResponse)
-async def get_agent_catalog_endpoint(
-    harness_kind: str,
+@router.post("/state/ack", response_model=AgentAuthDeliveryAckResponse)
+async def ack_agent_auth_state_endpoint(
+    body: AgentAuthStateAckRequest,
     surface: AgentAuthSurface = Query(...),
-    route: AgentAuthRoute = Query("gateway"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> AgentGatewayCatalogResponse:
-    snapshot, override, models = await catalog_service.get_catalog(
-        db,
-        user_id=user.id,
-        harness_kind=harness_kind,
-        surface=surface,
-        route=route,
-    )
-    return catalog_payload(
-        harness_kind=harness_kind,
-        surface=surface,
-        route=route,
-        models=models,
-        snapshot=snapshot,
-        override=override,
-    )
+) -> AgentAuthDeliveryAckResponse:
+    """Record a surface runtime's delivery acknowledgement (the desktop seam).
 
-
-@router.post("/catalog/{harness_kind}/refresh", response_model=AgentGatewayCatalogResponse)
-async def refresh_agent_catalog_endpoint(
-    harness_kind: str,
-    body: AgentGatewayCatalogRefreshRequest,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayCatalogResponse:
-    try:
-        snapshot, override, models = await catalog_service.refresh_catalog(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-            surface=body.surface,
-            route=body.route,
-            models_json=body.models_json,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return catalog_payload(
-        harness_kind=harness_kind,
-        surface=body.surface,
-        route=body.route,
-        models=models,
-        snapshot=snapshot,
-        override=override,
-    )
-
-
-@router.post("/catalog/{harness_kind}/mirror", response_model=AgentGatewayCatalogResponse)
-async def mirror_agent_catalog_endpoint(
-    harness_kind: str,
-    body: AgentGatewayCatalogMirrorRequest,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayCatalogResponse:
-    """Store the caller's own runtime-probed catalog as a read-model snapshot.
-
-    Distinct from ``.../refresh``: the runtime already did the probing (a
-    harness/gateway reachability check, possibly server-side via LiteLLM) and
-    is pushing the result here fire-and-forget, so this endpoint never talks
-    to an upstream itself.
+    The desktop calls this after its local runtime's state PUT/DELETE
+    succeeded, echoing the pushed document's ``revision`` and the served
+    ``fingerprint`` from ``GET /state``. This stamp is what flips the
+    selections read from pending to applied (agent-auth.md "Applied means
+    acknowledged"). The cloud surface's twin is stamped server-side by the
+    materialization worker, not through this route.
     """
     try:
-        snapshot, override, models = await catalog_service.mirror_catalog(
+        record = await service.ack_auth_state_delivery(
             db,
             user_id=user.id,
-            harness_kind=harness_kind,
-            surface=body.surface,
-            route=body.route,
-            models_json=body.models_json,
-            probed_at=body.probed_at,
+            surface=surface,
+            revision=body.revision,
+            fingerprint=body.fingerprint,
         )
     except CloudApiError as error:
         raise_cloud_error(error)
-    return catalog_payload(
-        harness_kind=harness_kind,
-        surface=body.surface,
-        route=body.route,
-        models=models,
-        snapshot=snapshot,
-        override=override,
-    )
-
-
-@router.put("/catalog/{harness_kind}/override", response_model=AgentGatewayCatalogOverrideResponse)
-async def upsert_agent_catalog_override_endpoint(
-    harness_kind: str,
-    body: AgentGatewayCatalogOverrideUpsertRequest,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayCatalogOverrideResponse:
-    try:
-        record = await catalog_service.upsert_override(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-            patch_json=body.patch_json,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return catalog_override_payload(record)
-
-
-@router.delete("/catalog/{harness_kind}/override", status_code=204)
-async def delete_agent_catalog_override_endpoint(
-    harness_kind: str,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> None:
-    try:
-        await catalog_service.delete_override(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return delivery_ack_payload(record)
 
 
 # --------------------------------------------------------------------------- #
@@ -324,7 +271,7 @@ async def delete_agent_catalog_override_endpoint(
 # --------------------------------------------------------------------------- #
 
 
-@router.get("/capabilities", response_model=AgentGatewayCapabilitiesResponse)
+@gateway_account_router.get("/capabilities", response_model=AgentGatewayCapabilitiesResponse)
 async def get_agent_gateway_capabilities_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
@@ -340,7 +287,7 @@ async def get_agent_gateway_capabilities_endpoint(
     )
 
 
-@router.get("/enrollment", response_model=AgentGatewayEnrollmentResponse)
+@gateway_account_router.get("/enrollment", response_model=AgentGatewayEnrollmentResponse)
 async def get_agent_gateway_enrollment_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),

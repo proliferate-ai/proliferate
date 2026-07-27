@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AnyHarnessClient } from "@anyharness/sdk";
 import {
   useAnyHarnessRuntimeContext,
@@ -16,7 +16,7 @@ interface RuntimeQueryOptions {
   refetchInterval?: number | false;
 }
 
-/** Shared query definition so the singular and plural (`useQueries`) hooks below stay in lockstep. */
+/** Shared query definition, factored out for the singular hook below. */
 function gatewayModelsQueryOptions(
   runtime: AnyHarnessRuntimeContextValue,
   kind: string,
@@ -51,23 +51,6 @@ export function useAgentGatewayModelsQuery(
 ) {
   const runtime = useAnyHarnessRuntimeContext();
   return useQuery(gatewayModelsQueryOptions(runtime, kind, options));
-}
-
-/**
- * The same resolved plan as [`useAgentGatewayModelsQuery`], but for a
- * variable-length set of harness kinds in one hook call (`useQueries`, so the
- * kind count can change across renders without breaking the rules of hooks).
- * Used by the desktop's runtime -> cloud mirror sync (contract §4), which
- * needs to watch every gateway-capable harness for a fresh probe result.
- */
-export function useAgentGatewayModelsQueries(
-  kinds: readonly string[],
-  options?: RuntimeQueryOptions,
-) {
-  const runtime = useAnyHarnessRuntimeContext();
-  return useQueries({
-    queries: kinds.map((kind) => gatewayModelsQueryOptions(runtime, kind, options)),
-  });
 }
 
 /** Re-probes the gateway now (the desktop Refresh button for local+gateway). */

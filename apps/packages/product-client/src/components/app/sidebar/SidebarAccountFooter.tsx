@@ -92,7 +92,7 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
-      <div aria-hidden className="mx-3 h-[0.5px] bg-sidebar-border" />
+      <div aria-hidden className="mx-3 h-[0.5px] bg-border" />
       <div className="flex items-center gap-1 px-2 py-2">
         <PopoverButton
           align="start"
@@ -144,7 +144,6 @@ export function SidebarAccountFooter() {
                   {pendingInvitations.map((invitation) => (
                     <PopoverMenuItem
                       key={invitation.id}
-                      variant="sidebar"
                       label={invitation.organizationName ?? invitation.email}
                       icon={<Mail className="icon-paired" />}
                       trailing={<span className="font-[520]">Accept</span>}
@@ -172,7 +171,6 @@ export function SidebarAccountFooter() {
                     organizations.map((organization) => (
                       <PopoverMenuItem
                         key={organization.id}
-                        variant="sidebar"
                         label={organization.name}
                         icon={(
                           <OrganizationAvatar
@@ -213,7 +211,6 @@ export function SidebarAccountFooter() {
               {authStatus === "authenticated" && planLabel ? (
                 <div className="border-t border-border-light py-1">
                   <PopoverMenuItem
-                    variant="sidebar"
                     label="Plan"
                     icon={<CreditCard className="icon-paired [font-size:var(--text-sidebar-row)]" />}
                     trailing={<span>{planLabel}</span>}
@@ -227,7 +224,6 @@ export function SidebarAccountFooter() {
 
               <div className="border-t border-border-light py-1">
                 <PopoverMenuItem
-                  variant="sidebar"
                   label="Keyboard shortcuts"
                   icon={<Keyboard className="icon-paired [font-size:var(--text-sidebar-row)]" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}</span>}
@@ -237,7 +233,6 @@ export function SidebarAccountFooter() {
                   }}
                 />
                 <PopoverMenuItem
-                  variant="sidebar"
                   label="Settings"
                   icon={<Settings className="icon-paired [font-size:var(--text-sidebar-row)]" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSettings)}</span>}
@@ -248,7 +243,6 @@ export function SidebarAccountFooter() {
                 />
                 {authStatus === "authenticated" ? (
                   <PopoverMenuItem
-                    variant="sidebar"
                     label="Log out"
                     icon={<LogOut className="icon-paired" />}
                     onClick={() => {

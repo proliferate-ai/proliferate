@@ -89,7 +89,7 @@ export function PopoverPanePrototype() {
           </div>
         </main>
         {paneOpen ? (
-          <aside className="w-72 shrink-0 border-l border-sidebar-border">
+          <aside className="w-72 shrink-0 border-l border-border">
             <GlobalAgentsPanePrototype
               parents={scenario.agents.length > 0
                 ? [{

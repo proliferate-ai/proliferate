@@ -39,12 +39,11 @@ apps/packages/design/
 ├── src/tokens.ts               the value authority: every color/type/radius/size/layering token
 ├── src/motion.ts               duration, easing, activity-cadence and delay primitives tokens.ts composes
 ├── src/react-native.ts         the native bridge: RN-safe projections + hand-authored shadow objects
-├── src/css/dom.css             shared Desktop/Web entrypoint: Tailwind setup, @source list, icon-tier utilities
-├── src/css/product.css         shared product rules: font loading, base type, component-scoped rules
+├── src/css/product.css         shared Desktop/Web entrypoint: Tailwind setup, @source list, font loading, base type, component-scoped rules
 ├── src/css/desktop.css         Tauri/native-only rules
 ├── scripts/generate-theme.mjs  projects dist/tokens.js → dist/theme.css (@theme + :root + light root + utilities)
-├── scripts/copy-dom-css.mjs    copies src/css/*.css into dist/css for package consumers
-└── scripts/check-theme.mjs     re-projects independently; asserts byte equality, real Tailwind compile, census
+├── scripts/copy-css.mjs        copies src/css/*.css into dist/css for package consumers
+└── scripts/check-theme.mjs     re-projects independently; asserts byte equality, real Tailwind compile, ownership laws
 
 apps/packages/ui/src/           the component library
 ├── primitives/                 raw Radix/vendor wrapper families + single-purpose visual atoms
@@ -195,8 +194,9 @@ micro-heading treatment rather than growing further.
 The sans slot currently ships a native system stack on trial. The previous Geist
 value is preserved in git history, so switching back is a one-value revert — the
 token's own provenance comment records that. Because the slot is single, no
-component can pin a font family: `check-theme.mjs` asserts `dom.css`'s `:root`
-sets `font-family: var(--font-sans)` and contains no hand-authored stack.
+component can pin a font family: `check-theme.mjs` asserts `product.css`'s
+`:root` sets `font-family: var(--font-sans)` and contains no hand-authored
+stack.
 
 ## Color
 
@@ -318,11 +318,9 @@ selection stands, so it is the quietest of the three — loud enough to find,
 quiet enough to live with. Press sits between them because it reads *against* an
 already-hovered surface.
 
-Nine tokens are pure aliases onto these three (`--color-accent`,
-`--color-list-hover`, `--color-popover-accent`, `--color-sidebar-accent`,
-`--color-composer-control-hover`, and the four `--workspace-shell-*-background`
-state tokens), so the shell, sidebar, lists and menus cannot drift apart. The
-gate reinforces this from the class side: `bg-accent`/`bg-sidebar-accent` are
+Consumers use these three roles directly — the shell, sidebar, lists and menus
+all paint from the same three tokens, so they cannot drift apart. The gate
+reinforces this from the class side: `bg-accent`/`bg-sidebar-accent` are
 banned as retired state spellings (`OLD_ACCENT_RE`), and any
 `bg-foreground/<alpha>` at or below 10% is banned outright
 (`FOREGROUND_ALPHA_RE`) — that is precisely the shape of an ad-hoc overlay
@@ -401,25 +399,6 @@ listed by count because the individual values carry no design rule beyond
 | `--scratch-*` | 6 | The scratch editor's type and marker geometry, derived from the message role and expressed in `em`. |
 | `--color-window-control-*` | 2 | Native window-control dots (close, minimize). |
 
-### Compatibility aliases
-
-Fifteen tokens are pure `var()` passthroughs carrying a `/* legacy-alias */`
-marker: `--color-accent`, `--color-composer-border`,
-`--color-composer-control-hover`, `--color-list-hover`, `--color-popover-accent`,
-`--color-popover-ring`, `--color-sidebar-accent`, `--color-sidebar-border`,
-`--shadow-composer`, `--shadow-floating`, `--shadow-floating-dark`,
-`--workspace-shell-action-hover-background`,
-`--workspace-shell-tab-active-background`,
-`--workspace-shell-tab-hover-background`,
-`--workspace-shell-tab-selected-background`.
-
-They exist so existing call sites keep working while the value lives in exactly
-one place. Two checks keep them honest: `check-theme.mjs` pins the 15-name set
-and asserts each alias is an exact tagged `var()` with `dark === light` (an alias
-that varied by mode would be a second value in disguise), and
-`check_design_token_source` in the appearance gate re-verifies the same shape and
-marker count directly in `tokens.ts`.
-
 ## Elevation
 
 The system is near-flat by design. There are exactly three shadows:
@@ -442,10 +421,8 @@ the same near-flat instinct applied at the edge.
 Both modes share all three values: a shadow is a light-direction cue, not a
 color, so it does not invert.
 
-Four names collapse onto these three roles: `--shadow-composer` and
-`--color-composer-shadow` both resolve to `--shadow-subtle`, and
-`--shadow-floating` / `--shadow-floating-dark` both resolve to `--shadow-modal`
-(the `-dark` suffix is vestigial — there was never a second value to switch to).
+One extra name rides on these roles: `--color-composer-shadow` resolves to
+`--shadow-subtle`, keeping the composer's outline shadow on the shared scale.
 From the class side, the appearance gate bans every other elevation spelling —
 `shadow-sm/md/lg/xl/2xl/inner` (stock Tailwind emits a non-token shadow),
 `shadow-floating`, `shadow-keystone`, and `shadow-[…]` — through
@@ -621,7 +598,7 @@ they are perceived as part of the same choreography, and JS consumers that must
 stay in lockstep with CSS import them and format through `motion.cssMs()`.
 
 > **Raw time literals are illegal in the design CSS.** `check-theme.mjs`'s
-> `checkRawMotionAuthority` walks `dom.css`, `product.css` and the generated
+> `checkRawMotionAuthority` walks `product.css` and the generated
 > theme and fails any `animation`/`transition` declaration carrying a numeric
 > `ms`/`s` value — with exactly one exemption: a rule that both declares an
 > `infinite` animation and carries the literal `/* activity-motion */` marker.
@@ -655,7 +632,7 @@ where a fixed `size-4` would not.
 
 The tiers are projected as `icon-status`/`icon-compact`/`icon-paired`/
 `icon-control`/`icon-large`/`icon-display` utilities in
-[dom.css](../../../../apps/packages/design/src/css/dom.css). The appearance gate
+[product.css](../../../../apps/packages/design/src/css/product.css). The appearance gate
 holds the line at every glyph call site: fixed `size`/`width`/`height` attributes
 and utilities on owned glyph tags, `[&_svg]:size-N` descendant sizing,
 `iconClassName`/`glyphClassName` with fixed sizes, glyph-named class constants,
@@ -958,7 +935,7 @@ grandfathered.
    ease, cadence or delay).
 2. Run the canonical build: `pnpm --filter @proliferate/design build`, which is
    `tsc -p tsconfig.json && node scripts/generate-theme.mjs && node
-   scripts/copy-dom-css.mjs && node scripts/check-theme.mjs`.
+   scripts/copy-css.mjs && node scripts/check-theme.mjs`.
 3. Commit both the source edit and any consumer changes together.
 
 > **The `tsc` step is load-bearing, not an optimization.**
@@ -974,7 +951,7 @@ Everything downstream is a projection of the same authority: `dist/theme.css`
 (the `@theme` block, the dark `:root`, the single flattened
 `:root[data-mode="light"]`, and the generated z/duration/ease/icon-button
 utilities), the React Native bridge, and the Shiki/Monaco/terminal palettes.
-`product.css` and `dom.css` hold rules only — never token values.
+`product.css` holds rules only — never token values.
 
 ### What check-theme proves
 
@@ -986,9 +963,9 @@ independent code path and then asserts, in order:
 - **A real Tailwind compile.** The generated CSS is run through Tailwind's
   `compile()`, so a malformed `@theme`/`@utility` block fails the design build
   instead of 500-ing a consumer app's JIT stylesheet at runtime.
-- **The frozen census:** 285 dispositions, 70 removals, 15 compatibility aliases
-  (by exact name), 289 live tokens; every token has a provenance tag; every
-  `color-mix()` token has a resolved `@theme` fallback.
+- **Provenance and fallback discipline:** every token has a provenance tag, and
+  every `color-mix()` token has a resolved `@theme` fallback (Tailwind's
+  `@theme` block cannot hold `color-mix()`).
 - **Motion authority:** each duration/ease/cadence/delay number and each
   `--duration-*`/`--ease-*`/`--activity-*` token matches `motion.ts` in both
   halves.
@@ -999,11 +976,11 @@ independent code path and then asserts, in order:
 - **The closed ramp:** the 13-role key order of
   `typography.size`/`lineHeight`/`letterSpacing`, and the chat/composer
   line-height invariant.
-- **Ownership:** neither `dom.css` nor `product.css` declares a global token
-  value in a `:root`/`@theme` block; `dom.css` imports Tailwind, then the
-  generated theme, then its `@source` list, in that order; named motion
-  declarations are still present verbatim; and no raw time literal appears in any
-  design CSS outside a marked infinite-loop rule.
+- **Ownership:** `product.css` never declares a global token value in a
+  `:root`/`@theme` block; it imports Tailwind, then the generated theme, then
+  its `@source` list, in that order; named motion declarations are still
+  present verbatim; and no raw time literal appears in any design CSS outside
+  a marked infinite-loop rule.
 - **One entry per name** in the `themeTokens` manifest (no duplicate keys
   silently shadowing each other).
 
@@ -1018,13 +995,6 @@ consolidation:
 | `[SHIPPED:raw-hex-move]` | A shipped literal that was living in a component and was relocated into the authority unchanged. |
 | `[SHIPPED:motion/authority]` | A shipped cadence whose value now lives in `motion.ts`. |
 | `[RETUNE:<area/change>]` | A deliberate change, named by what it changed — e.g. `[RETUNE:radii/soft-scale]`, `[RETUNE:type/closed-ramp]`, `[RETUNE:state/overlay]`, `[RETUNE:layering/scale]`. |
-
-`currentTokenDispositions` preserves the pre-consolidation name census: 285
-names, each mapped to its final name or to `null` if it was removed (59
-census-dead globals + 10 generic text properties + `--shadow-keystone` = 70).
-That map is what lets the checker prove a removed name is genuinely absent from
-the generated CSS rather than merely unused, and it is why the disposition count
-stays frozen while net-new tokens are added to `themeTokens`.
 
 Tags are historical, not permissions. `[SHIPPED]` does not mean a value is
 protected and `[RETUNE:…]` does not mean it is still in flight — the tag records
@@ -1078,7 +1048,7 @@ that gets deleted at the call site.
 | A token value is syntactically invalid CSS | The Tailwind `compile()` pass in `check-theme.mjs` fails; unguarded, the JIT stylesheet 500s at runtime and the app renders unstyled | Fix the value in `tokens.ts`; the compile pass keeps this pre-merge. |
 | A `color-mix()` token ships without a resolved `themeFallback` | `check-theme.mjs` fails; unguarded, the `@theme` half of that color is missing and Tailwind utilities built on it silently do nothing | Add the resolved literal alongside the mix expression. |
 | A banned class lands (arbitrary radius/z/gap/size, non-token shadow, `bg-foreground/<alpha>` ≤ 10%, `text-[…]`/`leading-[…]`, numeric duration, fixed glyph size) | `check_appearance_scaling.py` fails in pre-commit and CI, naming file and match | Replace with the semantic token utility, or obtain a written sanction — baseline growth is not a fix. |
-| A hard-coded value lands in `product.css`/`dom.css` instead of `tokens.ts` | The token-declaration case is gated: `check_design_css_source` emits `authored-root-token` for any `--x:` in a global `:root` block and `authored-theme-block` for any `@theme`. Only a non-token literal inside a component rule (e.g. `background: #212121` in `.foo`) escapes, since `RAW_HEX_RE` is not run over design CSS — that one silently becomes a second source of truth and diverges mode-to-mode | Move the value into `tokens.ts` and regenerate. |
+| A hard-coded value lands in `product.css` instead of `tokens.ts` | The token-declaration case is gated: `check_design_css_source` emits `authored-root-token` for any `--x:` in a global `:root` block and `authored-theme-block` for any `@theme`. Only a non-token literal inside a component rule (e.g. `background: #212121` in `.foo`) escapes, since `RAW_HEX_RE` is not run over design CSS — that one silently becomes a second source of truth and diverges mode-to-mode | Move the value into `tokens.ts` and regenerate. |
 | A raw `ms`/`s` literal or inline bezier lands in design CSS | `checkRawMotionAuthority` in `check-theme.mjs` fails, naming the owning rule and declaration | Use a `--duration-*`/`--ease-*`/`--activity-*` variable, or add the `/* activity-motion */` marker if it is genuinely an infinite loop. |
 | A `@radix-ui/*` import lands outside `ui/src/primitives/**` or `ui/src/patterns/**` | `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY` fails in `check_frontend_boundaries.py`, naming file and line | Move the wrapper into the library, or compose the existing library primitive. |
 | A new top-level entry is added under `ui/src` outside the six allowed dirs | `UI_SRC_TOP_LEVEL_ENTRY` fails, naming the offending entry | Move the content into `primitives/`, `patterns/`, or `icons/` per its role. |

@@ -53,6 +53,7 @@ fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
             message: None,
         },
         spawn: None,
+        credentials_from_route: false,
     }
 }
 

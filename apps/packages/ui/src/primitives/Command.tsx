@@ -115,7 +115,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group relative flex min-h-7 cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-[5px] text-ui outline-none data-[selected=true]:bg-list-hover data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
+        "group relative flex min-h-7 cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-[5px] text-ui outline-none data-[selected=true]:bg-hover data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
         className,
       )}
       {...props}

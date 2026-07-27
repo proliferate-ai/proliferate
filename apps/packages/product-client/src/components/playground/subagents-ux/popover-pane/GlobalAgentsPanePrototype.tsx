@@ -57,7 +57,7 @@ export function GlobalAgentsPanePrototype({
     const aggregate = buildSubagentAggregate(selectedParent.agents);
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar-background text-sidebar-foreground">
-        <div className="flex shrink-0 items-center gap-2 border-b border-sidebar-border px-3 py-2.5">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
           <Button
             type="button"
             variant="ghost"
@@ -96,7 +96,7 @@ export function GlobalAgentsPanePrototype({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar-background text-sidebar-foreground">
-      <div className="shrink-0 border-b border-sidebar-border px-4 py-3">
+      <div className="shrink-0 border-b border-border px-4 py-3">
         <p className="text-ui font-medium text-sidebar-foreground">Agents</p>
         <p className="mt-0.5 text-ui-sm text-sidebar-muted-foreground">
           {parents.length} {parents.length === 1 ? "parent session" : "parent sessions"}
@@ -113,7 +113,7 @@ export function GlobalAgentsPanePrototype({
                   variant="unstyled"
                   size="unstyled"
                   onClick={() => onSelectParent(parent.id)}
-                  className="flex min-h-12 w-full min-w-0 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground hover:bg-hover active:bg-active focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sidebar-border"
+                  className="flex min-h-12 w-full min-w-0 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground hover:bg-hover active:bg-active focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
                 >
                   <AgentGlyphStack ids={parent.agents.map((agent) => agent.id)} max={3} />
                   <span className="min-w-0 flex-1">
@@ -134,7 +134,7 @@ export function GlobalAgentsPanePrototype({
           </p>
         ) : null}
         {archived.length > 0 && onOpenArchived ? (
-          <section className="mt-4 border-t border-sidebar-border pt-3">
+          <section className="mt-4 border-t border-border pt-3">
             <Button
               type="button"
               variant="unstyled"
@@ -158,7 +158,7 @@ export function GlobalAgentsPanePrototype({
                       size="unstyled"
                       title={`${session.label} · ${session.parentTitle}`}
                       onClick={() => onOpenArchived(session.id)}
-                      className="flex min-h-11 w-full min-w-0 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground hover:bg-hover active:bg-active focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sidebar-border"
+                      className="flex min-h-11 w-full min-w-0 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground hover:bg-hover active:bg-active focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
                     >
                       <AgentGlyph id={session.id} dimmed />
                       <span className="min-w-0 flex-1">

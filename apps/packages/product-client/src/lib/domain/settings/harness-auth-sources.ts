@@ -23,6 +23,19 @@ export function isMultiSourceHarness(harnessKind: string): boolean {
   return harnessKind === "opencode";
 }
 
+// Mirror of the server's GATEWAY_CAPABLE_HARNESSES (selection_rules.py) —
+// a positive allow-list, not a cursor-shaped negative check, so a future
+// harness with no gateway recipe fails closed (omitted here) by default
+// instead of silently inheriting gateway capability. cursor has no gateway
+// recipe (agent-auth.md's per-harness recipe table — "typed refusal, no
+// gateway route exists for cursor"), so it never offers the gateway method
+// and never carries a gateway source (see buildDesiredSources).
+const GATEWAY_CAPABLE_HARNESSES = new Set(["claude", "codex", "opencode", "grok"]);
+
+export function isGatewayCapableHarness(harnessKind: string): boolean {
+  return GATEWAY_CAPABLE_HARNESSES.has(harnessKind);
+}
+
 export interface EditableApiKeyRow {
   // Stable client id: persisted rows reuse the server selection id, drafts get a
   // generated one. Never sent to the server — the store keys rows by env var name.
@@ -80,12 +93,12 @@ export function buildDesiredSources(
   harnessKind: string,
   state: HarnessAuthEditorState,
 ): AgentAuthSource[] {
-  const sources: AgentAuthSource[] = harnessKind === "cursor"
-    ? []
-    : [{
+  const sources: AgentAuthSource[] = isGatewayCapableHarness(harnessKind)
+    ? [{
       sourceKind: "gateway",
       enabled: state.gatewayEnabled,
-    }];
+    }]
+    : [];
   for (const row of state.rows) {
     if (!isRowComplete(row)) {
       continue;

@@ -103,7 +103,7 @@ export function ChatPlaygroundPage() {
           rightInsetPx={showAttachmentPreview ? 416 : 0}
         />
         {showSidebarGitDiff && (
-          <aside className="hidden w-[22rem] shrink-0 border-l border-sidebar-border bg-sidebar-background lg:block">
+          <aside className="hidden w-[22rem] shrink-0 border-l border-border bg-sidebar-background lg:block">
             <PlaygroundSidebarGitDiff />
           </aside>
         )}

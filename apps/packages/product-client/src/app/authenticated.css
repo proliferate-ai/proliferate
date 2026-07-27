@@ -103,7 +103,7 @@
 }
 
 /* At the top only the bottom edge fades; after scrolling both edges fade; at
- * the bottom only the top edge fades. dom.css retains the static fallback. */
+ * the bottom only the top edge fades. product.css retains the static fallback. */
 @supports (animation-timeline: scroll()) {
   .vertical-scroll-fade-mask {
     mask-image: linear-gradient(
@@ -206,7 +206,7 @@
 }
 
 [data-chat-diff-wrap-context-trigger="turn-header"]:hover .turn-diff-review-target {
-  background: color-mix(in oklab, var(--color-list-hover) 30%, transparent);
+  background: color-mix(in oklab, var(--color-hover) 30%, transparent);
 }
 
 .turn-document-reference-trigger:hover {

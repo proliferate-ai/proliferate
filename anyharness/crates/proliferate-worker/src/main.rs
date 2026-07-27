@@ -1,5 +1,4 @@
 mod anyharness_update;
-mod catalog_sync;
 mod cloud_client;
 mod config;
 mod error;
@@ -7,6 +6,7 @@ mod identity;
 mod integration_gateway;
 mod lifecycle;
 mod logging;
+mod model_snapshot_sync;
 mod observability;
 mod process_lock;
 mod runtime;

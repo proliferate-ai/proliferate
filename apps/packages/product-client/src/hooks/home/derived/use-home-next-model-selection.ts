@@ -62,16 +62,14 @@ export function useHomeNextModelSelection({
   );
   const readyAgentsForLaunch = useMemo<AgentCatalogSummary[]>(() => {
     if (!isCloudLaunchTarget) {
-      // `readyAgents` is NATIVE readiness (`GET /v1/agents`: "is the vendor CLI
-      // installed and logged in"). An agent whose enrolled gateway/api_key
-      // route supplies the launch credential is reported `login_required`
-      // there, yet the runtime's launch options (`GET /v1/agents/launch-options`,
-      // launch-time readiness via `resolve_launch_agent`) list it with models —
-      // that is the source the launcher actually uses. Without this union a
-      // gateway-only actor sees "No agents" even though every launch would
-      // succeed (an ambient vendor-CLI login on a developer machine masks the
-      // gap). Launch options never list an uninstalled agent, so this cannot
-      // resurrect an install-required agent.
+      // `GET /v1/agents` is now route-aware, so a harness whose gateway/api_key
+      // route supplies the launch credential already reports `ready` there and
+      // this union is usually redundant. It is kept because the two reads still
+      // differ in env scope — `/v1/agents` resolves against the HOST env while
+      // launch options resolve against the workspace's composed env — so a
+      // workspace-scoped credential can make launch options list an agent that
+      // the host-scoped read does not. Launch options never list an uninstalled
+      // agent, so this cannot resurrect an install-required agent.
       return mergeLaunchReadyAgents(readyAgents, runtimeLaunchOptions.data?.agents ?? null);
     }
     return buildCloudReadyAgentSummaries({ modelRegistries });
