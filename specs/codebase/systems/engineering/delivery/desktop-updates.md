@@ -77,7 +77,9 @@ or the rest of the sidebar.
 The packaged Desktop updater remains a user-gated flow:
 
 - Settings → Desktop updates starts an explicit update check.
-- The compact update pill remains an operational indicator.
+- The sidebar footer control remains the persistent operational indicator. It
+  sits immediately left of help, wears the same square accent footprint, and
+  carries no progress of its own.
 - The update toast owns the pre-install announcement: a valid authored title
   stays visible while its download action, progress, and restart action morph.
   It also owns recoverable update errors.

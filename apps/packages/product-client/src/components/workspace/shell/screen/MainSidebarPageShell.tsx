@@ -3,7 +3,6 @@ import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { useResize } from "#product/hooks/ui/layout/use-resize";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
-import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import {
   resolveMainSidebarEdgeClassName,
   resolveStandardWorkspaceChromeClasses,
@@ -14,7 +13,6 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "#product/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 
 interface MainSidebarPageShellProps {
@@ -34,14 +32,6 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
     showHeaderDivider: false,
     showContentTopBorder: false,
   });
-  const {
-    phase: updaterPhase,
-    downloadProgress,
-    restartWhenIdle,
-    downloadUpdate,
-    openRestartPrompt,
-  } = useUpdater();
-
   const onLeftSeparatorDown = useResize({
     direction: "horizontal",
     size: sidebarWidth,
@@ -76,15 +66,6 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
             >
               <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
             </IconButton>
-            {/* The update pill's single home is the top-left, next to the
-                sidebar toggle. */}
-            <SidebarUpdatePill
-              phase={updaterPhase}
-              downloadProgress={downloadProgress}
-              restartWhenIdle={restartWhenIdle}
-              onDownloadUpdate={downloadUpdate}
-              onOpenRestartPrompt={openRestartPrompt}
-            />
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -119,13 +100,6 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
               >
                 <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
               </IconButton>
-              <SidebarUpdatePill
-                phase={updaterPhase}
-                downloadProgress={downloadProgress}
-                restartWhenIdle={restartWhenIdle}
-                onDownloadUpdate={downloadUpdate}
-                onOpenRestartPrompt={openRestartPrompt}
-              />
             </div>
           )}
         </div>

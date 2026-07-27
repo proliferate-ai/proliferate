@@ -153,7 +153,6 @@ for (const [path, expected] of [
   ["activity.thinkingCycleMs", 1800],
   ["activity.streamRevealFadeMs", 320],
   ["activity.streamRevealHandoffDelayMs", 160],
-  ["activity.updateReadySweepMs", 700],
   ["delay.autoHideScrollbarMs", 700],
   ["delay.hoverCardHideMs", 120],
   ["delay.levelBarStaggerMs", 110],
@@ -175,7 +174,6 @@ for (const [tokenName, expected] of [
   ["--ease-standard", motion.ease.standard],
   ["--ease-linear", motion.ease.linear],
   ["--activity-stream-reveal-fade", motion.cssMs(motion.activity.streamRevealFadeMs)],
-  ["--activity-update-ready-sweep", motion.cssMs(motion.activity.updateReadySweepMs)],
 ]) {
   assert(themeTokens[tokenName]?.dark === expected, `${tokenName} drifted from motion.ts`);
   assert(themeTokens[tokenName]?.light === expected, `${tokenName} light half drifted from motion.ts`);
@@ -455,9 +453,6 @@ for (const declaration of [
   "animation: chip-enter var(--duration-emphasized) var(--ease-spring) both;",
   "animation: status-crossfade var(--duration-enter) var(--ease-out-quint);",
   "animation: transcript-activity-in var(--duration-enter) var(--ease-out-quint) both;",
-  "animation: thinking-band-sweep var(--activity-update-ready-sweep) ease-in-out 1 both;",
-  "animation: thinking-band-glyphs-sweep var(--activity-update-ready-sweep) ease-in-out 1 both;",
-  "animation: update-pill-in var(--duration-emphasized) var(--ease-spring);",
   "animation: dialog-pop-in var(--duration-enter) var(--ease-out-quint);",
   "transition: opacity var(--duration-hover) var(--ease-standard);",
   "transition-duration: var(--duration-hover);",

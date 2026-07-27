@@ -10,7 +10,7 @@ import {
   writeDevUpdaterMock,
   type DevUpdaterMockState,
 } from "#product/hooks/access/tauri/updater-dev-mock";
-import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
+import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
 
 type ProductionSurfacePreview =
   | "available"
@@ -162,8 +162,6 @@ export function UpdateUiPlaygroundControls() {
     manualCheckCompletedAt: liveManualCheckCompletedAt,
     checkNow,
     clearManualCheckCompleted,
-    downloadUpdate,
-    openRestartPrompt,
     scheduleRestartWhenIdle,
   } = useUpdater();
 
@@ -302,16 +300,10 @@ export function UpdateUiPlaygroundControls() {
 
       <div className="flex flex-wrap items-center gap-6 rounded-lg border border-border bg-card/60 p-3">
         <div className="flex min-h-6 items-center">
-          <SidebarUpdatePill
-            phase={livePhase}
-            downloadProgress={liveDownloadProgress}
-            restartWhenIdle={liveRestartWhenIdle}
-            onDownloadUpdate={downloadUpdate}
-            onOpenRestartPrompt={openRestartPrompt}
-          />
+          <SidebarUpdateFooterButton />
           {livePhase !== "available" && livePhase !== "downloading" && livePhase !== "ready" && (
             <span className="text-ui-sm text-muted-foreground">
-              No pill for this phase
+              No footer control for this phase
             </span>
           )}
         </div>

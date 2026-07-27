@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsageSummary } from "@proliferate/cloud-sdk";
 import {
   ConsumptionCard,
-  SidebarUsageTrigger,
   type SidebarConsumptionMeter,
   type SidebarConsumptionState,
 } from "#product/components/app/sidebar/SidebarConsumptionCard";
@@ -14,37 +12,19 @@ import {
 afterEach(cleanup);
 
 describe("sidebar consumption", () => {
-  it("renders one keyboard-focusable trigger that labels both concentric rings", async () => {
-    const user = userEvent.setup();
-    const onOpen = vi.fn();
-    const state = { kind: "ready", usageSummary: usage() } as const;
-    render(<SidebarUsageTrigger state={state} onClick={onOpen} />);
+  it("states usage as readable rows instead of concentric rings", () => {
+    const { container } = render(
+      <ConsumptionCard state={{ kind: "ready", usageSummary: usage() }} />,
+    );
 
-    const trigger = screen.getByRole("button", {
-      name: /Usage\. Compute, 50% used\. LLM, 90% used/,
-    });
-    expect(trigger.getAttribute("type")).toBe("button");
-    expect(trigger.className).toContain("size-10");
-    const meterGlyph = trigger.querySelector("svg");
-    expect(meterGlyph?.getAttribute("class")).toContain("icon-control");
-    expect(meterGlyph?.getAttribute("class")).not.toContain("icon-large");
-    // Usage: 20/28 of 1.333333em. Help: Lucide's 20/24 circle at 1.15em.
-    // Their visible outer circles stay optically equal while targets stay 40px.
-    expect(Math.abs((20 / 28) * 1.333333 - (20 / 24) * 1.15)).toBeLessThan(0.01);
-    expect(trigger.querySelectorAll("circle[data-meter]")).toHaveLength(4);
-    const computeRadius = Number(trigger
-      .querySelector('circle[data-meter="compute"][data-part="track"]')
-      ?.getAttribute("r"));
-    const llmRadius = Number(trigger
-      .querySelector('circle[data-meter="llm"][data-part="track"]')
-      ?.getAttribute("r"));
-    expect(computeRadius).toBeGreaterThan(llmRadius);
-    trigger.focus();
-    expect(document.activeElement).toBe(trigger);
-    await user.keyboard("{Enter}");
-    expect(onOpen).toHaveBeenCalledTimes(1);
-    await user.keyboard(" ");
-    expect(onOpen).toHaveBeenCalledTimes(2);
+    // Rings are rejected: no meter geometry may come back to this surface.
+    expect(container.querySelectorAll("svg")).toHaveLength(0);
+    expect(container.querySelectorAll("circle[data-meter]")).toHaveLength(0);
+    expect(screen.getByText("Usage")).not.toBeNull();
+    expect(screen.getByText("Compute").parentElement?.textContent).toContain("50% used");
+    expect(screen.getByText("Compute").parentElement?.textContent).toContain("1h left");
+    expect(screen.getByText("LLM").parentElement?.textContent).toContain("90% used");
+    expect(screen.getByText("LLM").parentElement?.textContent).toContain("$1.00 left");
   });
 
   it("keeps loading and unavailable states explicit", () => {
@@ -121,88 +101,24 @@ describe("sidebar consumption", () => {
     ["llm", "LLM"],
   ] as const)("%s meter truthfulness", (meter, label) => {
     it.each([
-      {
-        name: "zero allocation",
-        scenario: "zero-allocation",
-        ariaStatus: "No allocation",
-        detail: "No allocation",
-        fullRing: true,
-      },
-      {
-        name: "authoritative zero cap",
-        scenario: "zero-cap",
-        ariaStatus: "No allocation",
-        detail: "No allocation",
-        fullRing: true,
-      },
-      {
-        name: "positive exhausted usage",
-        scenario: "exhausted",
-        ariaStatus: "100% used, exhausted",
-        detail: "100% used · Exhausted",
-        fullRing: true,
-      },
-      {
-        name: "nonzero remaining usage",
-        scenario: "available",
-        ariaStatus: "10% used",
-        detail: "10% used",
-        fullRing: false,
-      },
-      {
-        name: "explicit blocked limit without usage",
-        scenario: "blocked",
-        ariaStatus: "blocked",
-        detail: "Blocked",
-        fullRing: true,
-      },
+      { name: "zero allocation", scenario: "zero-allocation", detail: "No allocation" },
+      { name: "authoritative zero cap", scenario: "zero-cap", detail: "No allocation" },
+      { name: "positive exhausted usage", scenario: "exhausted", detail: "100% used · Exhausted" },
+      { name: "nonzero remaining usage", scenario: "available", detail: "10% used" },
+      { name: "explicit blocked limit without usage", scenario: "blocked", detail: "Blocked" },
       {
         name: "positive explicit blocked limit",
         scenario: "positive-blocked",
-        ariaStatus: "100% used, exhausted, blocked",
         detail: "100% used · Exhausted · Blocked",
-        fullRing: true,
       },
-      {
-        name: "loading",
-        scenario: "loading",
-        ariaStatus: "loading",
-        detail: "Loading usage",
-        fullRing: false,
-      },
-      {
-        name: "unavailable",
-        scenario: "unavailable",
-        ariaStatus: "unavailable",
-        detail: "Usage unavailable",
-        fullRing: false,
-      },
-    ] as const)("keeps $name visual text and ARIA aligned", ({
-      scenario,
-      ariaStatus,
-      detail,
-      fullRing,
-    }) => {
+      { name: "loading", scenario: "loading", detail: "Loading usage" },
+      { name: "unavailable", scenario: "unavailable", detail: "Usage unavailable" },
+    ] as const)("keeps $name stated in words", ({ scenario, detail }) => {
       const state = stateForMeterScenario(meter, scenario);
-      render(
-        <>
-          <SidebarUsageTrigger state={state} />
-          <ConsumptionCard state={state} />
-        </>,
-      );
-
-      const trigger = screen.getByRole("button", { name: /Open usage details/ });
-      expect(trigger.getAttribute("aria-label")).toContain(`${label}, ${ariaStatus}`);
-      const dashOffset = trigger
-        .querySelector(`circle[data-meter="${meter}"][data-part="progress"]`)
-        ?.getAttribute("stroke-dashoffset");
-      expect(dashOffset === "0").toBe(fullRing);
+      render(<ConsumptionCard state={state} />);
 
       if (state.kind === "ready") {
         expect(screen.getByText(label).parentElement?.textContent).toContain(detail);
-        expect(screen.getByText(label).parentElement?.textContent).toContain(
-          meter === "compute" ? "Outer ring" : "Inner ring",
-        );
         if (scenario === "zero-allocation") {
           expect(screen.queryByText("0% used")).toBeNull();
         }
@@ -213,19 +129,14 @@ describe("sidebar consumption", () => {
   });
 
   it("preserves contractually supported unlimited Compute usage", () => {
-    const state = {
-      kind: "ready",
-      usageSummary: usage({ computeRemainingSeconds: null }),
-    } as const;
     render(
-      <>
-        <SidebarUsageTrigger state={state} />
-        <ConsumptionCard state={state} />
-      </>,
+      <ConsumptionCard
+        state={{ kind: "ready", usageSummary: usage({ computeRemainingSeconds: null }) }}
+      />,
     );
 
-    expect(screen.getByRole("button", { name: /Compute, unlimited/ })).not.toBeNull();
     expect(screen.getByText("Compute").parentElement?.textContent).toContain("No limit");
+    expect(screen.getByText("Compute").parentElement?.textContent).toContain("Unlimited");
   });
 });
 

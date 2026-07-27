@@ -37,11 +37,6 @@ export const themeTokens = {
     light: motion.cssMs(motion.activity.levelBarStepMs),
     provenance: "[RETUNE:motion/level-bar-cadence]",
   },
-  "--activity-update-ready-sweep": {
-    dark: motion.cssMs(motion.activity.updateReadySweepMs),
-    light: motion.cssMs(motion.activity.updateReadySweepMs),
-    provenance: "[SHIPPED:motion/authority]",
-  },
   "--animate-popover-in": {
     dark: "popover-in var(--duration-enter) var(--ease-out-quint)",
     light: "popover-in var(--duration-enter) var(--ease-out-quint)",
@@ -573,6 +568,19 @@ export const themeTokens = {
     dark: "#339cff",
     light: "#339cff",
     provenance: "[SHIPPED]",
+  },
+  /**
+   * [RETUNE:color/special-foreground] — the accent had no paired text color, so
+   * the first filled accent control (the sidebar's update affordance) had no
+   * legal way to name its glyph color: the palette resets stock Tailwind colors,
+   * so `text-white` compiles to nothing, and `--color-primary-foreground`
+   * inverts with the mode while the accent does not. The accent fill is
+   * mode-independent, so its paired foreground is too.
+   */
+  "--color-special-foreground": {
+    dark: "#ffffff",
+    light: "#ffffff",
+    provenance: "[RETUNE:color/special-foreground]",
   },
   "--color-status-in-progress": {
     dark: "#ffcc33",

@@ -3,7 +3,6 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { UPDATE_PREVIEW_STATES } from "#product/config/update-playground";
 import { UpdateDialogContent } from "#product/components/feedback/UpdateDialogContent";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
-import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { UpdateUiPlaygroundControls } from "#product/components/playground/UpdateUiPlaygroundControls";
 
 const PREVIEW_VERSION = "0.1.42";
@@ -64,25 +63,6 @@ export function UpdateUiPlayground() {
         </PreviewSection>
 
         <PreviewSection
-          title="Sidebar pill (top-left)"
-          description="The header pill across phases. Actionable states (available, ready) sit on the primary accent; downloading is muted (not clickable) with a spinner."
-        >
-          <div className="flex flex-wrap items-end gap-8 rounded-lg border border-border bg-card/60 p-5">
-            {(["available", "downloading", "ready"] as const).map((p) => (
-              <div key={p} className="flex flex-col items-center gap-2">
-                <SidebarUpdatePill
-                  phase={p}
-                  downloadProgress={p === "downloading" ? 68 : null}
-                  onDownloadUpdate={() => {}}
-                  onOpenRestartPrompt={() => {}}
-                />
-                <span className="text-ui-sm text-muted-foreground">{p}</span>
-              </div>
-            ))}
-          </div>
-        </PreviewSection>
-
-        <PreviewSection
           title="Release notice card (sidebar footer)"
           description="The installed-release changelog card shown after an update. This is the production component at its sidebar-width constraint."
         >
@@ -99,14 +79,14 @@ export function UpdateUiPlayground() {
 
         <PreviewSection
           title="Production Surfaces"
-          description="Live updater components driven by the dev updater mock. The toast keeps the authored release title while its Download, progress, and Restart states morph in place; the restart dialog renders as the real app modal; the pill below is fed by the same mock. Use “+ standard toast” to confirm the toast treatment matches the rest of the app."
+          description="Live updater components driven by the dev updater mock. The toast keeps the authored release title while its Download, progress, and Restart states morph in place; the restart dialog renders as the real app modal; the footer control below is fed by the same mock. Use “+ standard toast” to confirm the toast treatment matches the rest of the app."
         >
           <UpdateUiPlaygroundControls />
         </PreviewSection>
 
         <PreviewSection
           title="Copy deck"
-          description="Reference copy for each updater phase. The production surfaces (toast, pill, restart dialog, settings row) draw from these strings."
+          description="Reference copy for each updater phase. The production surfaces (toast, footer control, restart dialog, settings row) draw from these strings."
         >
           <div className="grid gap-3 md:grid-cols-2">
             {UPDATE_PREVIEW_STATES.map((state) => (

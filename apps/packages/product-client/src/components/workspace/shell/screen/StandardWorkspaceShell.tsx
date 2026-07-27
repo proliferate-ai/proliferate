@@ -27,7 +27,6 @@ import { useMainScreenShortcuts } from "#product/hooks/main/lifecycle/use-main-s
 import { useMainScreenActions } from "#product/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
-import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "#product/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceOpenInWebActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
 import { useWorkspaceRemoteAccessActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";
@@ -116,13 +115,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
       ? state.repoConfigs[publishSourceRootPath]?.defaultBranch ?? null
       : null
   ));
-  const {
-    phase: updaterPhase,
-    downloadProgress,
-    restartWhenIdle,
-    downloadUpdate,
-    openRestartPrompt,
-  } = useUpdater();
   const runCommand = useRunWorkspaceCommand({
     selectedWorkspaceId,
     selectedWorkspace,
@@ -233,16 +225,11 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellSidebar
                 open={sidebarOpen}
                 width={sidebarWidth}
-                updaterPhase={updaterPhase}
-                downloadProgress={downloadProgress}
-                restartWhenIdle={restartWhenIdle}
                 edgeClassName={resolveMainSidebarEdgeClassName({
                   desktop: desktopHost,
                   transparent: transparentChromeEnabled,
                 })}
                 onToggleSidebar={actions.onToggleSidebar}
-                onDownloadUpdate={downloadUpdate}
-                onOpenRestartPrompt={openRestartPrompt}
               />
               {sidebarOpen && (
                 <WorkspaceResizeSeparator
@@ -268,12 +255,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                           <WorkspaceSidebarHeaderControls
                             className="pl-[82px] pr-2"
                             toggleTitle="Show sidebar"
-                            phase={updaterPhase}
-                            downloadProgress={downloadProgress}
-                            restartWhenIdle={restartWhenIdle}
                             onToggleSidebar={actions.onToggleSidebar}
-                            onDownloadUpdate={downloadUpdate}
-                            onOpenRestartPrompt={openRestartPrompt}
                           />
                         )}
                         {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (

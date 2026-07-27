@@ -1,30 +1,19 @@
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 import { WorkspaceSidebarHeaderControls } from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
-import type { UpdaterPhase } from "#product/stores/updater/updater-store";
 
 interface WorkspaceShellSidebarProps {
   open: boolean;
   width: number;
-  updaterPhase: UpdaterPhase;
-  downloadProgress: number | null;
-  restartWhenIdle: boolean;
   edgeClassName?: string;
   onToggleSidebar: () => void;
-  onDownloadUpdate: () => void;
-  onOpenRestartPrompt: () => void;
 }
 
 export function WorkspaceShellSidebar({
   open,
   width,
-  updaterPhase,
-  downloadProgress,
-  restartWhenIdle,
   edgeClassName = "",
   onToggleSidebar,
-  onDownloadUpdate,
-  onOpenRestartPrompt,
 }: WorkspaceShellSidebarProps) {
   return (
     <div
@@ -42,12 +31,7 @@ export function WorkspaceShellSidebar({
               className="pl-[82px]"
               toggleTitle="Hide sidebar"
               iconTone="sidebar"
-              phase={updaterPhase}
-              downloadProgress={downloadProgress}
-              restartWhenIdle={restartWhenIdle}
               onToggleSidebar={onToggleSidebar}
-              onDownloadUpdate={onDownloadUpdate}
-              onOpenRestartPrompt={onOpenRestartPrompt}
             />
           </div>
           <div className="flex-1 min-h-0 overflow-hidden">

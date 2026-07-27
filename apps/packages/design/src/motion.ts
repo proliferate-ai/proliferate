@@ -51,7 +51,6 @@ export const motion = {
     thinkingCycleMs: 1800,
     streamRevealFadeMs: 320,
     streamRevealHandoffDelayMs: 160,
-    updateReadySweepMs: 700,
     /**
      * One bar's grow/shrink when the reasoning-effort control steps. Not the
      * `hover` role it used to borrow: at 120ms the climb was over before the

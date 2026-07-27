@@ -20,7 +20,6 @@
         "apps/packages/product-client/src/components/settings/panes/organization/OrganizationSettingsCard.tsx": 1,
         "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx": 2,
         "apps/packages/product-client/src/components/workspace/chat/transcript/UserMessage.tsx": 1,
-        "apps/packages/product-client/src/components/workspace/shell/sidebar/SidebarUpdatePill.tsx": 3,
         "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx": 1,
         "apps/packages/product-ui/src/chat/CloudChatHeader.tsx": 2,
         "apps/packages/product-ui/src/chat/transcript/CloudChatUserMessage.tsx": 1,
@@ -50,7 +49,6 @@
     "apps/packages/product-client/src/components/settings/panes/organization/OrganizationSettingsCard.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx|foreground-alpha-foundation": 2,
     "apps/packages/product-client/src/components/workspace/chat/transcript/UserMessage.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/workspace/shell/sidebar/SidebarUpdatePill.tsx|foreground-alpha-foundation": 3,
     "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-ui/src/settings/OrganizationSsoSettingsSurface.tsx|foreground-alpha-foundation": 3,
     "apps/packages/product-ui/src/workspaces/WorkspaceInventory.tsx|foreground-alpha-foundation": 5

@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UsageSummary } from "@proliferate/cloud-sdk";
-import { SidebarUsageFooter } from "#product/components/app/sidebar/SidebarUsageFooter";
+import { SidebarUsageSection } from "#product/components/app/sidebar/SidebarUsageSection";
 import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 
 const useUsageSummary = vi.hoisted(() => vi.fn());
@@ -41,23 +40,7 @@ vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
   }),
 }));
 
-vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
-  POPOVER_SURFACE_CLASS: "surface",
-  PopoverButton: ({
-    trigger,
-    children,
-  }: {
-    trigger: ReactElement;
-    children: (close: () => void) => ReactNode;
-  }) => (
-    <div>
-      {trigger}
-      <div>{children(vi.fn())}</div>
-    </div>
-  ),
-}));
-
-describe("SidebarUsageFooter", () => {
+describe("SidebarUsageSection", () => {
   beforeEach(() => {
     state.authStatus = "authenticated";
     state.usageMeteringEnabled = true;
@@ -76,30 +59,41 @@ describe("SidebarUsageFooter", () => {
 
   it("hides the concern when signed out or usage metering is unavailable", () => {
     state.authStatus = "anonymous";
-    const { container, rerender } = render(<SidebarUsageFooter />);
+    const { container, rerender } = render(<SidebarUsageSection />);
     expect(container.childElementCount).toBe(0);
 
     state.authStatus = "authenticated";
     state.usageMeteringEnabled = false;
-    rerender(<SidebarUsageFooter />);
+    rerender(<SidebarUsageSection />);
     expect(container.childElementCount).toBe(0);
   });
 
   it("renders truthful loading and unavailable states", () => {
-    const { rerender } = render(<SidebarUsageFooter />);
-    expect(screen.getByRole("button", { name: /Compute, loading\. LLM, loading/ })).not.toBeNull();
+    const { rerender } = render(<SidebarUsageSection />);
     expect(screen.getByText(/Loading usage/)).not.toBeNull();
 
     state.query = { data: undefined, isLoading: false, refetch: vi.fn() };
-    rerender(<SidebarUsageFooter />);
-    expect(screen.getByRole("button", { name: /Compute, unavailable\. LLM, unavailable/ })).not.toBeNull();
+    rerender(<SidebarUsageSection />);
+    expect(screen.getByText("Usage unavailable")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(state.query.refetch).toHaveBeenCalledTimes(1);
   });
 
+  it("reads usage as status rows, never as a meter ring", () => {
+    state.query = { data: usage(), isLoading: false, refetch: vi.fn() };
+    const { container } = render(<SidebarUsageSection />);
+
+    expect(container.querySelectorAll("circle[data-meter]")).toHaveLength(0);
+    expect(container.querySelector("svg")).toBeNull();
+    expect(screen.getByText("Compute")).not.toBeNull();
+    expect(screen.getByText("LLM")).not.toBeNull();
+    // Both meters sit at the same fraction in this fixture, so each row prints it.
+    expect(screen.getAllByText("10% used")).toHaveLength(2);
+  });
+
   it("reads personal usage explicitly and explains why its unsupported route has no action", () => {
     state.query = { data: usage(), isLoading: false, refetch: vi.fn() };
-    render(<SidebarUsageFooter />);
+    render(<SidebarUsageSection />);
 
     expect(useUsageSummary).toHaveBeenLastCalledWith(
       { ownerScope: "personal", organizationId: null },
@@ -108,7 +102,7 @@ describe("SidebarUsageFooter", () => {
     expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Billing" })).toBeNull();
     expect(screen.getByText(
-      "Billing for personal usage isn't available from this sidebar.",
+      "Billing for personal usage isn't available from this menu.",
     )).not.toBeNull();
   });
 
@@ -118,7 +112,7 @@ describe("SidebarUsageFooter", () => {
       activeOrganizationValidated: true,
     });
     state.query = { data: usage(), isLoading: false, refetch: vi.fn() };
-    render(<SidebarUsageFooter />);
+    render(<SidebarUsageSection />);
 
     expect(useUsageSummary).toHaveBeenLastCalledWith(
       { ownerScope: "organization", organizationId: "org-1" },
@@ -141,7 +135,7 @@ describe("SidebarUsageFooter", () => {
       isLoading: false,
       refetch: vi.fn(),
     };
-    render(<SidebarUsageFooter />);
+    render(<SidebarUsageSection />);
 
     expect(screen.getByText("Billing is managed by your organization admins.")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Billing" }));
@@ -156,11 +150,11 @@ describe("SidebarUsageFooter", () => {
       isLoading: false,
       refetch: vi.fn(),
     };
-    render(<SidebarUsageFooter />);
+    render(<SidebarUsageSection />);
 
     expect(screen.queryByText(/organization admins/)).toBeNull();
     expect(screen.getByText(
-      "Billing for personal usage isn't available from this sidebar.",
+      "Billing for personal usage isn't available from this menu.",
     )).not.toBeNull();
   });
 
@@ -171,7 +165,7 @@ describe("SidebarUsageFooter", () => {
     });
     state.query = { data: usage(), isLoading: false, refetch: vi.fn() };
     state.billingEnabled = false;
-    render(<SidebarUsageFooter />);
+    render(<SidebarUsageSection />);
 
     expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Billing" })).toBeNull();
@@ -190,11 +184,11 @@ describe("SidebarUsageFooter", () => {
       isLoading: false,
       refetch: vi.fn(),
     };
-    render(<SidebarUsageFooter />);
+    render(<SidebarUsageSection />);
 
     expect(screen.queryByText(/Ask your admin/)).toBeNull();
     expect(screen.getByText("Billing actions aren't available on this deployment.")).not.toBeNull();
-    expect(screen.getByRole("button", { name: /Compute, No allocation/ })).not.toBeNull();
+    expect(screen.getAllByText("No allocation")).toHaveLength(2);
   });
 });
 

@@ -344,10 +344,10 @@ member, timeseries, and limit hooks. Billing is also connected: Desktop and
 Web both reuse `BillingSettingsSurface`, while their navigation remains
 surface-specific.
 
-When the user is authenticated and usage metering is enabled, one usage trigger
-renders in the app sidebar footer outside the account popover. Its outer Compute
-ring and inner LLM ring share one focus target and open
-`SidebarConsumptionCard`, which preserves truthful loading, unavailable, and
+When the user is authenticated and usage metering is enabled, usage renders
+inside the account popover as `SidebarConsumptionCard`'s status rows — Compute
+and LLM each as label, percentage used, and remaining balance — rather than as
+a separate footer trigger. The card preserves truthful loading, unavailable, and
 ready states for the usage summary. Billing actions are a separate
 capability-gated concern rather than a prerequisite for showing usage. A
 supported self-service organization owner gets one Billing action with that
