@@ -23,6 +23,7 @@ import { createAgentsPlaygroundCloudTransport } from "#product/pages/agents-play
 const EXISTING_KEY: AgentApiKey = {
   id: "key-1",
   title: "Existing playground key",
+  kind: "api_key",
   redactedHint: "sk-...old",
   status: "active",
   createdAt: "2026-07-01T00:00:00Z",
@@ -31,6 +32,7 @@ const EXISTING_KEY: AgentApiKey = {
 const REAL_SIGNED_IN_KEY: AgentApiKey = {
   id: "real-key",
   title: "Real signed-in key",
+  kind: "api_key",
   redactedHint: "sk-...real",
   status: "active",
   createdAt: "2026-07-01T00:00:00Z",

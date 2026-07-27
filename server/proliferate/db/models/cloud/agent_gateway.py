@@ -33,8 +33,13 @@ from proliferate.db.models.base import Base, utcnow
 class AgentApiKey(Base):
     """A titled secret in a user's personal key vault.
 
-    Provider-agnostic: the key is bound to a provider only when a selection row
-    references it under a specific ``env_var_name`` (see AgentAuthSelection).
+    Provider-agnostic for the bare-secret ``kind='api_key'`` default: the key
+    is bound to a provider only when a selection row references it under a
+    specific ``env_var_name`` (see AgentAuthSelection). A typed ``kind``
+    (``aws_bedrock``, ``azure_openai``) instead carries the harness's own
+    provider-config JSON document (agent-auth.md's "The vault"); a selection
+    referencing a typed entry names no ``env_var_name`` — the typed kind
+    carries its own env mapping, applied by the harness's render recipe.
     """
 
     __tablename__ = "agent_api_key"
@@ -42,6 +47,10 @@ class AgentApiKey(Base):
         CheckConstraint(
             "status IN ('active', 'revoked')",
             name="ck_agent_api_key_status",
+        ),
+        CheckConstraint(
+            "kind IN ('api_key', 'aws_bedrock', 'azure_openai')",
+            name="ck_agent_api_key_kind",
         ),
         Index("ix_agent_api_key_user_status", "user_id", "status"),
     )
@@ -52,6 +61,15 @@ class AgentApiKey(Base):
         index=True,
     )
     title: Mapped[str] = mapped_column(Text)
+    # 'api_key' (default): value_ciphertext decrypts to one opaque secret
+    # string. 'aws_bedrock' | 'azure_openai': value_ciphertext decrypts to a
+    # JSON document (region+credentials / endpoint+deployment+key) — see
+    # proliferate.utils.crypto.{encrypt_json,decrypt_json}.
+    kind: Mapped[str] = mapped_column(
+        Text,
+        default="api_key",
+        server_default=text("'api_key'"),
+    )
     value_ciphertext: Mapped[str] = mapped_column(Text)
     encryption_key_id: Mapped[str] = mapped_column(Text)
     redacted_hint: Mapped[str] = mapped_column(Text)

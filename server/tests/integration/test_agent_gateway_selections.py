@@ -140,3 +140,35 @@ async def test_put_normalizes_empty_sources_to_monotonic_disabled_gateway_marker
     assert cleared[0].id == gateway_id
     assert cleared[0].enabled is False
     assert cleared[0].updated_at == clear_write
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_typed_provider_config_as_api_key_source(
+    db_session: AsyncSession,
+) -> None:
+    """A typed vault entry (aws_bedrock/azure_openai) carries its own env
+    mapping and is never a legal `api_key` source target (agent-auth.md: "a
+    selection referencing a typed entry names no env_var_name"); selecting
+    one must fail at write time with a clear, typed error, not silently
+    succeed or fail on an unrelated constraint.
+    """
+    user_id = await _create_user(db_session)
+    provider_config = await store.create_agent_provider_config(
+        db_session,
+        user_id=user_id,
+        title="Personal Bedrock",
+        kind="aws_bedrock",
+        value={"region": "us-east-1", "bearerToken": "bedrock-token-abcd"},
+    )
+
+    with pytest.raises(
+        store.AgentApiKeyNotUsableError,
+        match="api_key_id must reference an active key owned by the user",
+    ):
+        await store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+            sources=[_gateway(), _api_key(provider_config.id, provider_hint="anthropic")],
+        )

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-07-17.2",
+  "registryVersion": "2026-07-17.3",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -108,7 +108,35 @@
           }
         ]
       },
-      "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp"
+      "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp",
+      "providerConfig": [
+        {
+          "kind": "aws_bedrock",
+          "label": "AWS Bedrock",
+          "envVars": [
+            {
+              "name": "CLAUDE_CODE_USE_BEDROCK",
+              "kind": "flag"
+            },
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "AWS_REGION"
+          ]
+        },
+        {
+          "kind": "azure_openai",
+          "label": "Azure AI Foundry",
+          "envVars": [
+            {
+              "name": "CLAUDE_CODE_USE_FOUNDRY",
+              "kind": "flag"
+            },
+            "ANTHROPIC_FOUNDRY_RESOURCE",
+            "ANTHROPIC_FOUNDRY_BASE_URL",
+            "ANTHROPIC_FOUNDRY_API_KEY",
+            "ANTHROPIC_FOUNDRY_AUTH_TOKEN"
+          ]
+        }
+      ]
     },
     {
       "kind": "codex",
@@ -217,7 +245,26 @@
           }
         ]
       },
-      "docsUrl": "https://github.com/proliferate-ai/codex-acp"
+      "docsUrl": "https://github.com/proliferate-ai/codex-acp",
+      "providerConfig": [
+        {
+          "kind": "aws_bedrock",
+          "label": "AWS Bedrock",
+          "envVars": [
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "AWS_REGION"
+          ]
+        },
+        {
+          "kind": "azure_openai",
+          "label": "Azure OpenAI",
+          "envVars": [
+            "AZURE_OPENAI_API_KEY"
+          ],
+          "pending": true,
+          "pendingReason": "codex reaches Azure OpenAI only via config.toml model_providers, not plain env vars; awaiting A5's config.toml injection mechanism before this kind can be applied at launch."
+        }
+      ]
     },
     {
       "kind": "cursor",
@@ -422,7 +469,25 @@
           }
         ]
       },
-      "docsUrl": "https://opencode.ai"
+      "docsUrl": "https://opencode.ai",
+      "providerConfig": [
+        {
+          "kind": "aws_bedrock",
+          "label": "AWS Bedrock",
+          "envVars": [
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "AWS_REGION"
+          ]
+        },
+        {
+          "kind": "azure_openai",
+          "label": "Azure OpenAI",
+          "envVars": [
+            "AZURE_RESOURCE_NAME",
+            "AZURE_API_KEY"
+          ]
+        }
+      ]
     },
     {
       "kind": "grok",

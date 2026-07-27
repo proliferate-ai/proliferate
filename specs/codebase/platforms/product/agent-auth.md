@@ -590,12 +590,23 @@ shape change is made by changing the fixture — which breaks whichever side lag
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] **Typed provider configurations do not exist.** The vault has no
-      `kind` column and stores exactly one opaque string per entry; no
-      Bedrock/Azure payloads, no `provider_config` wire source, no
-      registry declaration of supported provider-config kinds. (The old
-      Bifrost `provider_kind` tables were dropped outright and are not a
-      starting point.)
+- [ ] **Typed provider configurations cannot be applied at launch.** The
+      vault stores typed Bedrock/Azure payloads (`kind` column,
+      JSON-encrypted) and the registry declares which kinds each harness
+      supports, but nothing downstream of storage consumes either yet:
+      selections cannot reference a typed entry, `state.json` has no
+      `provider_config` wire source, and no render recipe turns a typed
+      entry into the harness's own env set. (The old Bifrost `provider_kind`
+      tables were dropped outright and are not a starting point.)
+- [ ] **Codex's `azure_openai` provider-config is declared but pending.**
+      The registry names codex x `azure_openai`'s env-var vocabulary
+      (`AZURE_OPENAI_API_KEY`) for Track D's full-scope intent, but the
+      pinned codex binary has zero Azure env support — codex only reaches
+      Azure via `config.toml` `model_providers`, which needs A5's
+      config.toml injection mechanism (not built). The registry entry is
+      marked `pending` with a `pendingReason` naming that dependency, and
+      the server excludes it from `supported_provider_config_kinds` until
+      A5 lands (or the entry is dropped, pending a founder ruling).
 - [ ] **Route prefix.** Vault, selections, state, and org policy still
       live under `/v1/cloud/agent-gateway/`; the split to
       `/v1/cloud/agent-auth/` (with catalog routes to the model-catalog

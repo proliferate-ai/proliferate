@@ -20,6 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_KIND_AWS_BEDROCK,
+    AGENT_API_KEY_KIND_AZURE_OPENAI,
+    AGENT_API_KEY_TYPED_KINDS,
     AGENT_AUTH_POLICY_ROUTES,
     AGENT_AUTH_ROUTE_NATIVE,
     AGENT_AUTH_SURFACE_CLOUD,
@@ -126,6 +129,95 @@ async def create_api_key(
         "agent_api_key_created",
         user_id=str(user_id),
         api_key_id=str(record.id),
+    )
+    return record
+
+
+_MAX_PROVIDER_CONFIG_FIELD_LENGTH = 4096
+_MAX_PROVIDER_CONFIG_FIELDS = 16
+
+# Required field keys per typed kind, matching D2's UI field spec exactly
+# (apps/packages/product-client/src/lib/domain/settings/provider-config-fields.ts
+# PROVIDER_CONFIG_SPECS) so a value the UI can submit is never rejected here,
+# and a value shaped for the wrong kind (or carrying unknown keys) always is.
+_PROVIDER_CONFIG_REQUIRED_FIELDS: dict[str, frozenset[str]] = {
+    AGENT_API_KEY_KIND_AWS_BEDROCK: frozenset({"region", "bearerToken"}),
+    AGENT_API_KEY_KIND_AZURE_OPENAI: frozenset({"endpoint", "deployment", "apiKey"}),
+}
+
+
+async def create_provider_config(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    title: str,
+    kind: str,
+    value: dict[str, str],
+) -> AgentApiKeyRecord:
+    """Create a typed vault entry (D2's ``ProviderConfigCreatorSubmit`` shape).
+
+    This is intentionally provider-agnostic, same as ``create_api_key``: a
+    vault entry is not bound to a harness at storage time (agent-auth.md's
+    "The vault"), so which harnesses may reference ``kind`` is enforced at
+    selection-write time, not here.
+    """
+    title = title.strip()
+    if not title or len(title) > _MAX_TITLE_LENGTH:
+        raise CloudApiError(
+            "invalid_agent_api_key_title",
+            f"Title must be 1-{_MAX_TITLE_LENGTH} characters.",
+            status_code=400,
+        )
+    if kind not in AGENT_API_KEY_TYPED_KINDS:
+        raise CloudApiError(
+            "invalid_agent_provider_config_kind",
+            f"Unsupported provider-config kind: {kind}.",
+            status_code=400,
+        )
+    if not value or len(value) > _MAX_PROVIDER_CONFIG_FIELDS:
+        raise CloudApiError(
+            "invalid_agent_provider_config_value",
+            f"Provider-config value must have 1-{_MAX_PROVIDER_CONFIG_FIELDS} field(s).",
+            status_code=400,
+        )
+    required_fields = _PROVIDER_CONFIG_REQUIRED_FIELDS[kind]
+    submitted_fields = frozenset(value.keys())
+    unknown_fields = submitted_fields - required_fields
+    if unknown_fields:
+        raise CloudApiError(
+            "invalid_agent_provider_config_fields",
+            f"Unknown field(s) for kind '{kind}': {', '.join(sorted(unknown_fields))}.",
+            status_code=422,
+        )
+    missing_fields = required_fields - submitted_fields
+    if missing_fields:
+        raise CloudApiError(
+            "invalid_agent_provider_config_fields",
+            f"Missing required field(s) for kind '{kind}': {', '.join(sorted(missing_fields))}.",
+            status_code=422,
+        )
+    trimmed_value: dict[str, str] = {}
+    for field_key, field_value in value.items():
+        trimmed = field_value.strip()
+        if not trimmed or len(trimmed) > _MAX_PROVIDER_CONFIG_FIELD_LENGTH:
+            raise CloudApiError(
+                "invalid_agent_provider_config_value",
+                f"Field '{field_key}' must be a non-empty string.",
+                status_code=400,
+            )
+        trimmed_value[field_key] = trimmed
+    record = await agent_gateway_store.create_agent_provider_config(
+        db,
+        user_id=user_id,
+        title=title,
+        kind=kind,
+        value=trimmed_value,
+    )
+    log_cloud_event(
+        "agent_provider_config_created",
+        user_id=str(user_id),
+        api_key_id=str(record.id),
+        kind=kind,
     )
     return record
 

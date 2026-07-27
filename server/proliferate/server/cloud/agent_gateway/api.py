@@ -26,6 +26,7 @@ from proliferate.server.cloud.agent_gateway.models import (
     AgentAuthSurface,
     AgentGatewayCapabilitiesResponse,
     AgentGatewayEnrollmentResponse,
+    AgentProviderConfigCreateRequest,
     OrgAgentPolicyResponse,
     OrgAgentPolicyUpdateRequest,
     OrgAgentPolicyViolationListResponse,
@@ -72,6 +73,32 @@ async def create_agent_api_key_endpoint(
             db,
             user_id=user.id,
             title=body.title,
+            value=body.value,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return api_key_payload(record)
+
+
+@router.post("/keys/provider-config", response_model=AgentApiKeyResponse)
+async def create_agent_provider_config_endpoint(
+    body: AgentProviderConfigCreateRequest,
+    db: AsyncSession = Depends(get_async_session, scope="function"),
+    user: User = Depends(current_product_user),
+) -> AgentApiKeyResponse:
+    """Create a typed vault entry (Bedrock/Azure) — D2's modal's request shape.
+
+    A distinct route rather than overloading ``POST /keys``: the request body
+    shape genuinely differs (a field map, not one secret string) and a typed
+    entry is not bound to any harness until a selection references it, same
+    as a bare key.
+    """
+    try:
+        record = await service.create_provider_config(
+            db,
+            user_id=user.id,
+            title=body.title,
+            kind=body.kind,
             value=body.value,
         )
     except CloudApiError as error:

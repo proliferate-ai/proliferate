@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 
 AgentAuthSurface = Literal["local", "cloud"]
 AgentAuthSourceKind = Literal["gateway", "api_key"]
+# The vault's closed kind vocabulary (agent-auth.md's "The vault" table);
+# mirrors constants.agent_gateway.AGENT_API_KEY_KINDS.
+AgentApiKeyKind = Literal["api_key", "aws_bedrock", "azure_openai"]
+AgentProviderConfigKind = Literal["aws_bedrock", "azure_openai"]
 
 
 class AgentGatewayBaseModel(BaseModel):
@@ -43,6 +47,7 @@ class AgentGatewayBaseModel(BaseModel):
 class AgentApiKeyResponse(AgentGatewayBaseModel):
     id: str
     title: str
+    kind: AgentApiKeyKind
     redacted_hint: str = Field(alias="redactedHint")
     status: str
     created_at: str = Field(alias="createdAt")
@@ -51,6 +56,14 @@ class AgentApiKeyResponse(AgentGatewayBaseModel):
 class AgentApiKeyCreateRequest(AgentGatewayBaseModel):
     title: str
     value: str
+
+
+class AgentProviderConfigCreateRequest(AgentGatewayBaseModel):
+    """Create a typed vault entry (D2's ``ProviderConfigCreatorSubmit`` shape)."""
+
+    title: str
+    kind: AgentProviderConfigKind
+    value: dict[str, str]
 
 
 # --------------------------------------------------------------------------- #
@@ -191,6 +204,7 @@ def api_key_payload(record: AgentApiKeyRecord) -> AgentApiKeyResponse:
     return AgentApiKeyResponse(
         id=str(record.id),
         title=record.title,
+        kind=record.kind,  # type: ignore[arg-type]
         redacted_hint=record.redacted_hint,
         status=record.status,
         created_at=record.created_at.isoformat(),

@@ -3,6 +3,28 @@
 AGENT_API_KEY_STATUS_ACTIVE = "active"
 AGENT_API_KEY_STATUS_REVOKED = "revoked"
 
+# A vault entry's `kind` says how to interpret its ciphertext (agent-auth.md's
+# "The vault" table). `api_key` (the default) is one opaque secret string,
+# applied as the single env var named by the referencing selection; each typed
+# kind decrypts to a JSON document applied as the harness's own provider env
+# set. Which harness may pick which typed kind is a registry declaration
+# (registry.json's `providerConfig`), not this tuple — this is the closed
+# vocabulary of storable shapes only.
+AGENT_API_KEY_KIND_API_KEY = "api_key"
+AGENT_API_KEY_KIND_AWS_BEDROCK = "aws_bedrock"
+AGENT_API_KEY_KIND_AZURE_OPENAI = "azure_openai"
+AGENT_API_KEY_KINDS = (
+    AGENT_API_KEY_KIND_API_KEY,
+    AGENT_API_KEY_KIND_AWS_BEDROCK,
+    AGENT_API_KEY_KIND_AZURE_OPENAI,
+)
+# Typed kinds only — excludes the bare-secret default, which a selection wires
+# through `env_var_name` rather than by referencing the kind directly.
+AGENT_API_KEY_TYPED_KINDS = (
+    AGENT_API_KEY_KIND_AWS_BEDROCK,
+    AGENT_API_KEY_KIND_AZURE_OPENAI,
+)
+
 AGENT_AUTH_SURFACE_LOCAL = "local"
 AGENT_AUTH_SURFACE_CLOUD = "cloud"
 AGENT_AUTH_SURFACES = (AGENT_AUTH_SURFACE_LOCAL, AGENT_AUTH_SURFACE_CLOUD)

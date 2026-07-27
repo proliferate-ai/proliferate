@@ -130,6 +130,7 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
         {
           id: "key-1",
           title: "OpenRouter production",
+          kind: "api_key",
           redactedHint: "sk-or-...9f2",
           status: "active",
           createdAt: "2026-07-01T00:00:00Z",
@@ -137,6 +138,7 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
         {
           id: "key-2",
           title: "Anthropic personal",
+          kind: "api_key",
           redactedHint: "sk-ant-...3e1",
           status: "active",
           createdAt: "2026-06-15T00:00:00Z",

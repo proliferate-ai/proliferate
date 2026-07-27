@@ -35,6 +35,7 @@ def api_key_record(row: AgentApiKey) -> AgentApiKeyRecord:
         status=row.status,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        kind=row.kind,
     )
 
 
