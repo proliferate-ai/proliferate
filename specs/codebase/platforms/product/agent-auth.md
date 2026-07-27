@@ -257,8 +257,10 @@ applied document, and the UI says so:
 - **Running sessions are offered a restart.** Auth applies at launch only,
   so running sessions keep the old world — including billing the old route.
   After the ack, the surface shows a modal — *"Restart running sessions on
-  old auth?"* / **Restart now** / **No** — scoped to running sessions of the
-  switched harness on the switched surface. Restart is an in-place relaunch
+  old auth?"* with actions `"yes, restart now"` / `"no"` (founder-settled
+  copy, lowercase verbatim; the copy module marks it do-not-reword) —
+  scoped to running sessions of the switched harness on the switched
+  surface. Restart is an in-place relaunch
   (transcript kept; the resume path re-runs route_auth and the readiness
   gate). Declining leaves the sessions to run out their lives on the old
   auth.
@@ -315,14 +317,14 @@ pushes into its embedded runtime
   auth-state query. Sync requires only sign-in and a healthy local
   runtime — a self-hosted user with no cloud compute still gets gateway
   and BYOK routes locally.
-- **Onboarding blocks the step, never the signup.** Account creation never
+- **Onboarding shows a card, never a block.** Account creation never
   waits on LiteLLM (enrollment is fire-and-forget at signup). The desktop
   first-run flow — auto-install, then first-run adoption defaulting the
   gateway for harnesses without native logins, then this sync loop — is
-  what delivers the first `state.json`, and the onboarding "setting up"
-  step awaits the runtime's ack with a short grace window (~20s) before
-  degrading to a visible pending badge and letting the user proceed. It
-  never hard-blocks.
+  what delivers the first `state.json`, and a home-screen onboarding card
+  ("Setting up your agents…") awaits the runtime's ack with a short grace
+  window (~20s) before auto-advancing — degrading to a visible pending
+  badge and letting the user proceed. It never blocks.
 - **The loop.** `GET /v1/cloud/agent-auth/state?surface=local` (the same
   renderer as the cloud materializer, scoped to the `local`-surface
   selections) → fingerprint-compare against the last pushed document →
@@ -701,28 +703,14 @@ Delivery, acknowledgement, restart:
 Deltas between this document and the integration stack
 (`agents/integration-rc1`), each struck by its follow-up PR:
 
-- [ ] **Delivery is not acknowledged.** No pending→applied UI exists: a
-      selection write renders as done when the server commits, not when the
-      runtime confirms the applied document, and a failed desktop push is a
-      logged warning the user never sees. The whole
-      [Applied means acknowledged](#applied-means-acknowledged) contract —
-      the ack itself, the pending state, and the ack-fired probe — is
-      unimplemented.
-- [ ] **A cloud selection write does not ensure the sandbox.** The
-      materialization task still no-ops when the sandbox is asleep or
-      unprovisioned, so a cloud switch made from web/desktop settings lands
-      only at the next wake; the ensure-on-switch (provision-or-wake)
-      trigger is unimplemented.
-- [ ] **Enrollment sync does not poke the local surface.** Reaching
-      `synced` re-materializes cloud only; a desktop that pulled state
-      before sync completed keeps a keyless document until the next
-      unrelated mutation or app restart.
-- [ ] **No restart offer exists.** Nothing surfaces running sessions after
-      an auth switch; they silently continue (and bill) on the old world
-      with no modal and no way to see it.
-- [ ] **Onboarding has no ack-gated "setting up" step.** First-run adoption
-      fires and the state lands whenever it lands; nothing in onboarding
-      awaits the ack or renders the pending/degraded path.
+- [ ] **The cloud surface has no auth-applied probe poke.** The desktop
+      runtime's state PUT/DELETE fires the `AuthApplied` probe event, but
+      the cloud materializer writes `state.json` directly into the sandbox
+      and stamps the ack server-side, without poking an awake sandbox
+      runtime's probe engine — so a cloud observation lags an applied auth
+      change until the next wake/startup pass. Either the materialization
+      op grows a poke of the runtime's refresh seam, or this bounded lag
+      gets ruled acceptable (founder decision pending).
 - [ ] **Selections cannot yet reference a typed vault entry.** D3's python
       arm built the render half of this gap: `state.json` now has a
       `provider_config` wire source

@@ -262,6 +262,14 @@ protect live sessions and the machine, not staleness bookkeeping:
   install reconcile's job slot, each bounded by the engine's timeout on the
   probe's own thread so a cancelled attempt kills its child rather than
   leaking it.
+- **Failure backoff.** A failed attempt arms an exponential backoff — 60s
+  doubling to a 6h ceiling, spread by a deterministic ±20% jitter keyed on
+  (harness, attempt) so the schedule stays assertable — that gates
+  admission of *automatic* event pokes after failures only. It is never a
+  freshness gate, a manual/forced refresh always bypasses it, and it is
+  not persisted across restarts
+  ([model_snapshot/config.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/config.rs),
+  [backoff.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/backoff.rs)).
 - **Orphan sweep.** At engine construction the owner sweeps abandoned scratch
   roots (a SIGKILLed probe runs no guard), age-thresholded.
 - **One engine per runtime home.** The engine holds an advisory exclusive
@@ -372,6 +380,9 @@ then alias, then variant forms; seed pre-first-probe) launches. One that
 does not is refused with `SESSION_MODEL_UNSUPPORTED` — protection against a
 harness silently substituting its own default on an unattended run, which is
 the one outcome worse than either refusal or loud in-session failure.
+Catalog rows marked trial-verified stay launchable even when absent from the
+observation — the pre-existing asymmetry in the safe direction, since the
+shipped catalog carries trial-verified models a harness does not advertise.
 
 The gated taxonomy is deleted: no `SESSION_MODEL_GATED`, no
 `required_contexts`, no enumeration of which auth would serve a model. An
@@ -467,9 +478,10 @@ anyharness-lib/src/domains/agents/model_snapshot/
 ```
 
 Deleted from the per-context design: `fingerprint.rs`, `staleness.rs` and its
-test tree, `universe.rs`'s cross-context union, per-context slots and
-backoff, and `route_auth/probe_materialization/scoping.rs` with the
-attribution scrub — the probe materializes the full composed profile through
+test tree, per-context slots, and
+`route_auth/probe_materialization/scoping.rs` with the attribution scrub
+(`universe.rs` is not deleted but re-cut in place to the composed
+`ObservedUniverse`) — the probe materializes the full composed profile through
 the same
 [probe_materialization.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/probe_materialization.rs)
 seam (phase A shrinks to a state read; phase B and the scratch are
@@ -541,45 +553,13 @@ are stable — tests reference them by name.
 ## Current gaps
 
 Deltas between this document and the integration stack
-(`agents/integration-rc1`), each struck by its follow-up PR. The stack
-implements the superseded per-context design; these gaps are the re-cut.
+(`agents/integration-rc1`), each struck by its follow-up PR:
 
-- [ ] **The document and engine are per-context.** `model-snapshot.json`
-      carries an `entries` map keyed by auth-context id with per-entry
-      `authFingerprint`; the engine's slots, backoff, and status are keyed
-      per (harness, context); `targets.rs` enumerates active contexts. All
-      of it collapses to one composed observation per harness
-      (schemaVersion 2).
-- [ ] **Staleness machinery exists and deletes.** `fingerprint.rs`,
-      `staleness.rs` (identity comparison, TTL with jitter, the
-      completed-attempt floor as a staleness input), and the gate-evaluation
-      phase-A credential hashing all delete under the event model. The
-      startup pass becomes an unconditional background re-probe; the other
-      events fire on their own triggers. (The single-flight, scratch,
-      sweep, lock, and cursor rules all survive unchanged.)
-- [ ] **Per-context scoping and the attribution scrub exist and delete.**
-      `route_auth/probe_materialization/scoping.rs` and `attribution_scrub`
-      go; `materialize_for_probe` renders the full composed profile.
-- [ ] **The probe is not wired to the auth-apply ack or the login terminal.**
-      The apply handler pokes on state application (pre-ack) and no poke
-      exists on login-terminal exit; both move to the event set above once
-      agent-auth's ack-gated delivery lands.
-- [ ] **The cross-context universe union exists and deletes.**
-      `catalog/universe.rs`'s union and `validate_launch_in_universe`'s
-      context handling reduce to observation-first resolution with the
-      single `SESSION_MODEL_UNSUPPORTED` refusal; `SESSION_MODEL_GATED`,
-      `SelectionUnsupported::ModelGated`, and `required_contexts` delete.
-- [ ] **The cloud store carries `auth_context_id`.** `agent_model_snapshot`
-      re-keys to (harness_kind, owner_user_id) and `snapshot_json` holds the
-      whole machine document; the cloud routes and the Worker sync drop
-      their per-context parameters and diffs.
-- [ ] **The status UI is per-context.** The All Models surface (C3) polls
-      and renders per-context status; it becomes one per-harness
-      status/refresh row.
 - [ ] The picker does not project the machine observation yet: launch
-      validation reads it, but `models`/`visible_models` and the runtime's
-      launch options still read the shipped catalog alone. Closing this is
-      the [enrichment join](#enrichment-join); the pre-existing asymmetry is
+      validation and the runtime's launch options gate against the observed
+      universe, but the projected menu (`models`/`visible_models`) still
+      reads the shipped catalog alone. Closing this is the
+      [enrichment join](#enrichment-join); the pre-existing asymmetry is
       in the safe direction.
 - [ ] The composer's provider badge still calls
       `getProviderDisplayName(harnessKind)` instead of reading the model's
@@ -589,9 +569,9 @@ implements the superseded per-context design; these gaps are the re-cut.
       the sweep that enforces it.
 - [ ] The legacy gateway-models routes (`GET .../catalog/gateway-models`,
       `POST .../catalog/refresh-gateway`) still serve beside the snapshot
-      surface; they delete with the C-track cutover of the All Models tab.
-      The desktop mirror-sync hook (`useGatewayCatalogMirrorSync`) and its
+      surface. The All Models cutover has happened, so their only remaining
+      consumers are release fixtures plus an orphaned frontend access
+      client — deletion is now unblocked cleanup. The desktop mirror-sync
+      hook (`useGatewayCatalogMirrorSync`) and its
       `gateway-catalog-mirror.ts` push are already gone — the route cutover
       on the integration branch deleted them.
-- [ ] Onboarding contains no "checking for latest models" step (the surface
-      rendering the install-completed and auth-applied events).
