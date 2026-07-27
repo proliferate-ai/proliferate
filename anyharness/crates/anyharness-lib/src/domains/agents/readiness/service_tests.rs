@@ -440,6 +440,62 @@ fn resolve_launch_agent_matches_native_readiness_when_no_route_enrolled() {
 }
 
 #[test]
+fn opencode_provider_managed_readiness_follows_its_selection_set_not_already_ready() {
+    // A9 fix regression: before, ProviderManaged's Ready was unconditional,
+    // so `apply_launch_route_upgrade`'s `already_ready` guard never let an
+    // enrolled route (a selection) change opencode's readiness. Pins the fix:
+    // nothing selected -> a real gap; enrolling a route -> it clears.
+    let _env = lock_env();
+    let registry = built_in_registry();
+    let opencode = registry
+        .into_iter()
+        .find(|descriptor| descriptor.kind == AgentKind::OpenCode)
+        .expect("missing OpenCode descriptor");
+    let runtime_home = make_temp_dir("anyharness-opencode-provider-managed");
+    let bin = runtime_home.join("opencode-acp");
+    std::fs::write(&bin, "#!/bin/sh\nexit 0\n").expect("write override binary");
+    make_executable(&bin).expect("make override binary executable");
+    let _program_guard = EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", &bin);
+    // Neutralize the host's real credentials/local auth for determinism.
+    let empty_home = make_temp_dir("anyharness-opencode-empty-home");
+    let _home_guard = EnvVarGuard::set("HOME", &empty_home);
+    let _openai_guard = EnvVarGuard::remove("OPENAI_API_KEY");
+    let _anthropic_guard = EnvVarGuard::remove("ANTHROPIC_API_KEY");
+    let _anthropic_token_guard = EnvVarGuard::remove("ANTHROPIC_AUTH_TOKEN");
+    let _gemini_guard = EnvVarGuard::remove("GEMINI_API_KEY");
+    let _google_guard = EnvVarGuard::remove("GOOGLE_API_KEY");
+
+    // Precondition: nothing selected -> a real gap, not unconditional Ready.
+    let native = resolve_agent_with_env(&opencode, &runtime_home, &BTreeMap::new());
+    assert_eq!(
+        native.status,
+        ResolvedAgentStatus::CredentialsRequired,
+        "precondition: opencode with nothing selected must read a credential gap, got {:?}",
+        native.status
+    );
+
+    // Enroll a route (the runtime-side effect of a selection) -> clears.
+    let state_dir = runtime_home.join("agent-auth");
+    std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
+    std::fs::write(
+        state_dir.join("state.json"),
+        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"opencode","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+    )
+    .expect("write state");
+
+    let launch = resolve_launch_agent(&opencode, &runtime_home, &BTreeMap::new());
+    assert_eq!(
+        launch.status,
+        ResolvedAgentStatus::Ready,
+        "an enrolled route must clear opencode's now-reachable credential gap"
+    );
+    assert_eq!(launch.credential_state, CredentialState::ReadyViaLocalAuth);
+
+    let _ = std::fs::remove_dir_all(runtime_home);
+    let _ = std::fs::remove_dir_all(empty_home);
+}
+
+#[test]
 fn resolve_launch_agent_clears_a_gateway_routed_credential_gap() {
     // Issue #1106: a gateway route makes an agent whose ONLY gap is
     // credentials launch-ready with no credential in the workspace env (the

@@ -58,7 +58,12 @@ fn ignores_claude_json_without_credentials() {
 }
 
 #[test]
-fn treats_opencode_auth_as_provider_managed_when_no_env_or_auth_exists() {
+fn provider_managed_with_no_slot_credentials_is_missing_env_not_ready() {
+    // A9 fix (was: unconditionally Ready, same as `None`). ProviderManaged
+    // means the harness resolves provider auth itself, not "credential-less"
+    // — opencode's real auth state is its selection set (agent-auth.md,
+    // "Readiness interplay"), and a fresh opencode with no env vars and no
+    // local auth.json has genuinely NO usable credential.
     let home = make_temp_home();
     let auth = AuthSpec {
         readiness_policy: AuthReadinessPolicy::ProviderManaged,
@@ -74,7 +79,52 @@ fn treats_opencode_auth_as_provider_managed_when_no_env_or_auth_exists() {
         }],
     };
 
-    assert_eq!(detect_credentials(&auth, &home), CredentialState::Ready);
+    assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn provider_managed_is_ready_when_any_slot_has_a_selected_credential() {
+    // The other half of the A9 fix: ProviderManaged still resolves to Ready
+    // the moment ANY slot's ladder is satisfied (opencode is multi-provider —
+    // one selected provider is enough), same shape as AnyRequiredSlot but
+    // without requiring `required_for_readiness` on the slot.
+    let home = make_temp_home();
+    let auth = AuthSpec {
+        readiness_policy: AuthReadinessPolicy::ProviderManaged,
+        slots: vec![
+            AuthSlotSpec {
+                id: "openai".into(),
+                label: "OpenAI".into(),
+                credential_provider_ids: vec!["openai".into()],
+                required_for_readiness: false,
+                env_vars: vec!["OPENAI_API_KEY".into()],
+                login: None,
+                discovery: CredentialDiscoveryKind::OpenCode,
+                materialization: Default::default(),
+            },
+            AuthSlotSpec {
+                id: "anthropic".into(),
+                label: "Anthropic".into(),
+                credential_provider_ids: vec!["anthropic".into()],
+                required_for_readiness: false,
+                env_vars: vec![],
+                login: None,
+                discovery: CredentialDiscoveryKind::OpenCode,
+                materialization: Default::default(),
+            },
+        ],
+    };
+    let env: std::collections::BTreeMap<String, String> =
+        [("OPENAI_API_KEY".to_string(), "sk-test".to_string())]
+            .into_iter()
+            .collect();
+
+    assert_eq!(
+        detect_credentials_with_env(&auth, &home, &env),
+        CredentialState::Ready
+    );
 
     let _ = std::fs::remove_dir_all(&home);
 }

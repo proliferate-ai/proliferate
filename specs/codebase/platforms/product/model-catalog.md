@@ -320,12 +320,15 @@ blocks the operation that raised it:
   picker shows a re-probing state rather than stale data presented as
   current; you switch now, the probe catches up.
 - **Session launch** (backstop): starting a session pokes the reconciler
-  for that harness, adopted from today's launch-time gateway probe
-  (`schedule_launch_probe_if_stale` in
-  [catalog/gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs),
-  explicitly "never blocks this
-  launch"). Any probe a machine missed gets self-healed at the next
-  launch; the launch itself validates against whatever is fresh now.
+  for that harness
+  ([runtime/startup.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs),
+  placed exactly where the old gateway-only trigger sat, "never blocks this
+  launch"). Unlike that predecessor (revision-keyed, per gateway context
+  only) this poke is staleness-gated per (harness, auth context), so a
+  launch on a machine with fresh entries costs one in-memory gate
+  evaluation and no spawn. Any probe a machine missed gets self-healed at
+  the next launch; the launch itself validates against whatever is fresh
+  now.
 - **Manual refresh**: the settings surface forces a re-probe per harness,
   with "refreshed N minutes ago", "needs refresh", and "refreshing"
   states read straight off `probedAt`, the staleness rules, and
@@ -733,16 +736,19 @@ server/proliferate/server/cloud/agent_models/
 | Cloud sync | `proliferate-worker/src/model_snapshot_sync.rs` (new; on the tick in [proliferate-worker/src/runtime.rs](../../../../anyharness/crates/proliferate-worker/src/runtime.rs)) | Heartbeat-tick upload of changed entries |
 | Picker composition | [cloud-launch-catalog.ts](../../../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts) and the chat/model domain | Merge precedence, identity normalization, visibility filtering, badges |
 
-Deleted by this design:
+Deleted by this design (A9):
 [catalog/gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)'s
-persistence half
-and
-[catalog/gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs)
-(with the `gateway_model_probe` sqlite
-table), the `gatewayPolicy` seed fallback as a SERVING tier (agent-distribution
-gap), and the frontend
+persistence half (`GatewayProbeStore`/`GatewayProbeRow`)
+and `catalog/gateway_resolver.rs` entirely (with the `gateway_model_probe`
+sqlite table) — its surviving pure logic (`native_default_model`,
+`provider_for_model`, `normalize_model_family`, plus the enrichment join
+relocated from the legacy route) now lives in
+[catalog/projection.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/projection.rs).
+Still pending: the `gatewayPolicy` seed fallback as a SERVING tier
+(agent-distribution gap) and the frontend
 [useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
-polling hook.
+polling hook, whose justification erodes now that the route it polls reads
+the snapshot (C-track follow-up).
 
 Two pieces of that chain deliberately survive, and both are materialization
 rather than observation. `probe_gateway_models`' tolerant `GET /v1/models` fetch
@@ -790,26 +796,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       absent from the menu. Note the asymmetry is pre-existing and in the safe
       direction — the shipped catalog already carries trial-verified models a
       harness does not advertise.
-- [ ] **The legacy gateway-models route now serves seed data only**, and this is a
-      deliberate, bounded regression rather than a latent bug. The poke wiring
-      deleted the last two writers of the `gateway_model_probe` table (the
-      auth-apply scheduler and the launch-time trigger), while
-      `resolve_with_source` behind
-      `GET /v1/agents/{kind}/catalog/gateway-models` still reads only that table
-      — so it reports `source: "seed"` until a user presses the legacy Refresh.
-      Two consumers regress for the length of the window: the settings **All
-      Models** tab shows the seed list with no probe freshness, and the
-      desktop→cloud **mirror push**
-      ([gateway-catalog-mirror.ts](../../../../apps/packages/product-client/src/lib/domain/agents/gateway-catalog-mirror.ts)
-      pushes only `source === "probe"`) stops, so machineless surfaces keep
-      serving whatever they last received. The window closes when this route's
-      consumers move to the snapshot route: the mirror consumer is **deleted** by
-      the route cutover and the snapshot re-key, and the All Models tab is
-      rebuilt on the runtime status/snapshot surface. Restoring a writer here
-      would mean re-creating the revision-keyed table this design deletes, so
-      the fix is the cutover, not a patch. **Deploy implication: this must not
-      ship to users without the route cutover and the snapshot re-key in the
-      same release train.**
 - [ ] The cloud snapshot exists (`agent_catalog_snapshot` in
       [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py))
       but is keyed by
@@ -829,18 +815,22 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       server-side gateway discovery inside `refresh` (enrollment lookup,
       virtual-key decrypt, `GET /v1/models`) deletes — the server never
       generates snapshots.
-- [ ] The gateway model plan chain —
-      [gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs),
-      [gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)
-      with its `gateway_model_probe` sqlite table
-      (keyed on the global `state.json` revision, so any harness's auth
-      change invalidates every harness's probe), the `gatewayPolicy` seed
-      fallback, and the 60-second
+- [ ] `gateway_resolver.rs` (with its `gateway_model_probe` sqlite table,
+      keyed on the global `state.json` revision so any harness's auth
+      change invalidated every harness's probe) is deleted, and the two
+      legacy routes it backed (`GET .../catalog/gateway-models`,
+      `POST .../catalog/refresh-gateway`) now read/poke the model-snapshot
+      service instead of the old resolver — same URLs, new backend, kept
+      because the desktop All-Models tab still calls them (A9). Two pieces
+      remain, both TODO: the `gatewayPolicy` seed fallback (still consumed
+      by `gateway_plan.rs`'s pre-probe floor and the legacy route's own
+      pre-probe floor — leaves when the catalog-side bullet above does),
+      and the 60-second
       [useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
-      poll — is
-      the gateway-context special case of the machine snapshot and is
-      replaced by it (jointly ruled with the agent-distribution and
-      model-gateway gap lists).
+      poll, whose only real justification (keeping the cloud mirror fed
+      while the runtime-side probe was gateway-only) is gone now that the
+      route it polls is snapshot-backed — a C-track follow-up, not touched
+      by this Rust change.
 - [ ] No staleness UI exists: `probed_at` is stored on cloud snapshots but
       no surface renders "refreshed N minutes ago" or "needs refresh",
       and no auth fingerprint exists to compute staleness from.

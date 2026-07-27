@@ -424,8 +424,13 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       gateway model discovery is a live `GET /v1/models` with the harness
       key; role choices move gateway-side. The JS validator's seedModels
       checks go with it.
-- [ ] The Rust `gateway_resolver`/`gateway_probe` consume `gatewayPolicy`
-      and delete with it.
+- [ ] `gateway_resolver.rs` is deleted (A9; its surviving logic relocated
+      to `catalog/projection.rs`) and `gateway_probe.rs` is trimmed to the
+      stateless `GET /v1/models` call the model-snapshot poke engine and
+      `gateway_plan.rs` both use. What's left: `gatewayPolicy.seedModels`
+      is still consumed (by `gateway_plan.rs`'s pre-probe floor and the
+      legacy gateway-models route's own pre-probe floor) — it leaves the
+      catalog only when the first bullet above does.
 - [ ] `specs/developing/operating/agent-catalog-update.md` documents
       `make catalog-update` and the probe-PR review procedure; until it
       lands, the producer sections of the old readiness doc are the only

@@ -175,7 +175,27 @@ fn detect_slot_credentials(
 
 fn aggregate_credential_state(auth: &AuthSpec, slots: &[ResolvedAuthSlot]) -> CredentialState {
     match auth.readiness_policy {
-        AuthReadinessPolicy::None | AuthReadinessPolicy::ProviderManaged => CredentialState::Ready,
+        AuthReadinessPolicy::None => CredentialState::Ready,
+        // A9 fix (was: unconditional Ready alongside `None`, agent-auth.md
+        // gap "Opencode's method state is projection-derived"). ProviderManaged
+        // means the harness resolves PROVIDER auth itself at prompt time (no
+        // launcher-side gate needed for *which* provider it picks) — it does
+        // NOT mean "credential-less". Opencode's real auth state is its
+        // selection set (agent-auth.md, "Readiness interplay"): none of its
+        // slots are `required_for_readiness` (any one provider suffices), so
+        // this reads every slot rather than filtering to required ones, and
+        // is Ready only when at least one slot's ladder actually resolves.
+        // Falling back to `None`'s structural Ready here made
+        // `apply_launch_route_upgrade`'s `already_ready` unconditionally true
+        // for opencode, so an enrolled route (or lack of one) never affected
+        // its readiness — selections stopped mattering for the one signal
+        // that is supposed to reflect them everywhere.
+        AuthReadinessPolicy::ProviderManaged => {
+            if slots.is_empty() || slots.iter().any(|slot| slot_is_ready(&slot)) {
+                return CredentialState::Ready;
+            }
+            preferred_missing_state(slots.iter().collect())
+        }
         AuthReadinessPolicy::AnyRequiredSlot => {
             let required = required_slots(slots);
             if required.is_empty() {
