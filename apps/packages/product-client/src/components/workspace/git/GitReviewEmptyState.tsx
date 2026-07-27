@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 /**
- * Quiet empty/placeholder state for the review document. Codex-style: plain
+ * Quiet empty/placeholder state for the review document. reference-style: plain
  * muted text, no icon tile or bordered chrome. An optional small icon renders
  * inline beside the title (used by per-file states for the loading spinner).
  */
