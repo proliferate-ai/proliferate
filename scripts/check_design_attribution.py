@@ -71,12 +71,15 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     (
         "attributed-treatment",
         # A bare product name modifying one of our design nouns: "codex avatar
-        # -group clusters", "conductor row". Kept to design vocabulary so real
-        # product phrases ("the codex harness", "codex session") still pass.
+        # -group clusters", "conductor divider". Kept to design vocabulary so
+        # real product phrases ("the codex harness", "codex session") pass.
+        # `row` is deliberately absent: it is ordinary data vocabulary ("a
+        # cursor api_key row" is an auth row for a harness kind), and the
+        # hyphenated identifier form `cursor-row` is caught below anyway.
         re.compile(
             rf"\b{_PRODUCT}(?:'s)?\s+(?:\w+[-\s])?"
             r"(?:avatar|chip|pill|dot|glyph|sprite|icon|badge|tooltip|popover|"
-            r"dropdown|modal|card|row|panel|header|footer|divider|rail|gutter|"
+            r"dropdown|modal|card|panel|header|footer|divider|rail|gutter|"
             r"placeholder|shell|spacing|leading|tint|hue|palette|ink)s?\b",
             re.IGNORECASE,
         ),

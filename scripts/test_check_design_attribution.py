@@ -93,6 +93,14 @@ class ProductVocabularyAccepted(unittest.TestCase):
             findings_for('type EditorIconId = "cursor" | "vscode" | "zed";'),
         )
 
+    def test_data_row_for_a_harness(self) -> None:
+        """`row` is data vocabulary, not a design noun: this is an auth row for
+        a harness kind. The identifier form is still rejected above."""
+        self.assertEqual(
+            [],
+            findings_for('it("wires a cursor api_key row", () => {});'),
+        )
+
     def test_prose_about_the_harness(self) -> None:
         self.assertEqual(
             [],
