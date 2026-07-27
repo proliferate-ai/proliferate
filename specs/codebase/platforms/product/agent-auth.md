@@ -643,10 +643,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `agent_gateway` package) is still pending — S1 was URL-string-only by
       design, so the account/auth/policy code still lives in the single
       `agent_gateway` package regardless of which prefix its routes answer.
-- [ ] **Stale IA references.** The settings information-architecture doc
-      still describes the removed Bifrost-era `agent-authentication`
-      pane (the shipped UI redirects it to `agent-api-keys`); its Agents
-      scope needs a truth pass (PR E).
 - [ ] **Cursor's api_key route reports a false Ready.** The api_key source
       is persisted and rendered for cursor, and readiness reports `Ready`
       for it — the check is kind-agnostic
