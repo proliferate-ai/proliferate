@@ -499,15 +499,6 @@ body {
  * scripts/check-theme.mjs enforces that ownership.
  * ======================================================================== */
 
-.hide-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
 .file-reference-icon {
   color: color-mix(in srgb, #339cff 64%, #003f7a 36%);
 }
@@ -544,30 +535,6 @@ body {
 .file-source-view [data-file] {
   background: var(--diff-view-surface);
   color: var(--diffs-fg);
-}
-
-.file-source-line {
-  column-gap: var(--file-source-content-gap);
-  color: var(--diffs-fg);
-}
-
-.file-source-line:hover {
-  background: var(--file-source-row-hover);
-}
-
-.file-source-line-number {
-  box-sizing: border-box;
-  background: var(--diffs-bg);
-  color: var(--file-source-line-number);
-}
-
-.file-source-line:hover .file-source-line-number {
-  color: var(--file-source-line-number-hover);
-}
-
-.file-source-line-content {
-  padding-inline: var(--file-source-content-padding-inline);
-  tab-size: 2;
 }
 
 mark.codex-thread-find-match {
@@ -1535,12 +1502,6 @@ body {
 /* 4.5s total: trot in (0-30%), pause & celebrate (30-70%), trot out (70-100%) */
 /* Arms down during trot, raise when paused in center, stay up for exit */
 /* Trophy pops in after arms are up, stays for the hold, exits with the trot */
-/* ---- Focus ring utility ---- */
-.focus-ring:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-ring);
-}
-
 /* ---- Chat view text selection ---- */
 .chat-selection-root ::selection {
   background-color: var(--color-text-selection);

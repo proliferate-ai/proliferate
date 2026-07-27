@@ -185,7 +185,7 @@ function FileBreadcrumbs({
   return (
     <nav
       aria-label="File path"
-      className="hide-scrollbar flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
+      className="scrollbar-none flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
     >
       {/* The reference breadcrumbs sit one step below chat-body size;
           --text-ui is our body-minus-one that scales with appearance
