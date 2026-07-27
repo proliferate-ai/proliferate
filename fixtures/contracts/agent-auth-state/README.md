@@ -16,7 +16,7 @@ breaks the other side until it is updated.
 
 ## What `v2.json` pins
 
-Three things the two sides could otherwise drift on silently:
+Four things the two sides could otherwise drift on silently:
 
 **1. Per-harness gateway keys, not one shared key.** Every gateway source
 carries its OWN virtual key (`sk-vk-claude-0001`, `sk-vk-codex-0002`,
@@ -50,12 +50,26 @@ the order (`test_the_fixtures_source_order_is_the_order_this_renderer_emits` on
 the producer, `the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles`
 on the consumer).
 
+**4. `provider_config` sources carry an already-resolved, harness-real env
+map, not generic vault field names (Track D).** opencode's THIRD source
+(`config_kind: "aws_bedrock"`) is a typed vault entry rendered through the
+producer's provider-config translation: its `env` map's keys
+(`AWS_BEARER_TOKEN_BEDROCK`, `AWS_REGION`) are ALREADY opencode's real env-var
+names, never the vault's generic storage field names. Python resolves this
+translation before the document ever reaches Rust (agent-auth.md's wire
+contract: the runtime never learns provider-config internals); `config_kind`
+rides along only so Rust's render plane can pick which per-harness arm to
+run (a plain env-set loop for claude/opencode, codex's config.toml injection
+for `aws_bedrock`/`azure_openai`) — never to rename a field. This is the
+byte-identical third source D3's python and Rust arms coordinate on; see
+"Reconciliation status" below.
+
 Also pinned incidentally, because they are easy to get wrong: the document is
 **snake_case** on the wire (`harness_kind`, `env_var_name`, `base_url`,
-`user_id`, `issuing_server_origin`) while `settings` values are the catalog's own
-camelCase keys; a harness may carry several sources at once (opencode: a direct
-`api_key` + gateway); and cursor's only route is `api_key` (it has no gateway
-story).
+`user_id`, `issuing_server_origin`, `config_kind`) while `settings` values are
+the catalog's own camelCase keys; a harness may carry several sources at once
+(opencode: a direct `api_key` + gateway + provider_config); and cursor's only
+route is `api_key` (it has no gateway story).
 
 ## Reconciliation status
 
@@ -63,3 +77,16 @@ Written by the Rust side (Track A / A4). **Track B's B3 must produce byte-identi
 output for these inputs** — if B3 has already landed a fixture at this path with a
 different shape, that shape wins and this consumer test is updated to it rather
 than the other way round. Do not let the two forks coexist.
+
+**Track D update (D3-rust, this PR).** opencode's third source
+(`provider_config` × `aws_bedrock`) was added to match `agents/d3-provider-apply-python`'s
+(#1536) fixture content byte-for-byte — same `config_kind`, same `env` map,
+same values. That branch's own fixture lives on a DIFFERENT base
+(`agents/d1-provider-configs`, forked from `agents/b4-snapshot-rekey`) and so
+diverges from this one on several other axes unrelated to Track D (harness
+count/membership, `issuing_server_origin`, empty-sources semantics, and
+whether gateway keys are per-harness yet — see that branch's own README for
+the full list). This PR does NOT reconcile those; it only makes the ONE new
+fact both sides need to agree on — the shape of a `provider_config` source —
+identical between the two lineages, so whichever PR eventually merges them
+has one fewer divergence to resolve.

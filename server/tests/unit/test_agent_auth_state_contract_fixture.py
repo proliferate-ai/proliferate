@@ -36,11 +36,15 @@ class TestAgentAuthStateContractFixture:
         for entry in fixture["harnesses"]:
             assert set(entry) <= {"harness_kind", "sources", "settings"}
             for source in entry["sources"]:
-                assert source["kind"] in ("gateway", "api_key")
+                assert source["kind"] in ("gateway", "api_key", "provider_config")
                 if source["kind"] == "gateway":
                     assert set(source) == {"kind", "base_url", "key"}
-                else:
+                elif source["kind"] == "api_key":
                     assert set(source) == {"kind", "env_var_name", "value"}
+                else:
+                    assert set(source) == {"kind", "config_kind", "env"}
+                    assert isinstance(source["env"], dict)
+                    assert all(isinstance(v, str) for v in source["env"].values())
 
     def test_this_renderer_produces_the_fixtures_empty_sources_semantics(self) -> None:
         # The half of the contract this renderer owns TODAY: a selected harness
@@ -69,19 +73,26 @@ class TestAgentAuthStateContractFixture:
         # A fixture the producer could never emit is worse than no fixture: the
         # consumer would pin a document shape that never reaches a sandbox. This
         # renderer sorts a harness's sources by (kind, env_var_name), and
-        # "api_key" < "gateway" — so opencode's api_key row comes FIRST. Feed the
-        # renderer the fixture's own opencode inputs and compare kind-for-kind.
+        # "api_key" < "gateway" < "provider_config" -- so opencode's three
+        # sources appear in exactly that order. Feed the renderer the fixture's
+        # own opencode inputs and compare kind-for-kind.
         fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
         fixture_opencode = next(
             entry for entry in fixture["harnesses"] if entry["harness_kind"] == "opencode"
         )
         anthropic_id = uuid.uuid4()
+        bedrock_id = uuid.uuid4()
         state, _ = agent_auth.render_agent_auth_state(
             _inputs(
                 (
-                    # Deliberately fed gateway-first, so the assertion is about the
-                    # renderer's sort rather than about input order.
+                    # Deliberately fed out of order, so the assertion is about
+                    # the renderer's sort rather than about input order.
                     _selection(harness="opencode", source_kind="gateway"),
+                    _selection(
+                        harness="opencode",
+                        source_kind="api_key",
+                        api_key_id=bedrock_id,
+                    ),
                     _selection(
                         harness="opencode",
                         source_kind="api_key",
@@ -90,6 +101,12 @@ class TestAgentAuthStateContractFixture:
                     ),
                 ),
                 api_key_values={anthropic_id: "sk-ant-raw"},
+                provider_config_values={
+                    bedrock_id: (
+                        "aws_bedrock",
+                        {"region": "us-east-1", "bearerToken": "bedrock-tok"},
+                    )
+                },
             )
         )
         rendered_opencode = next(
@@ -99,40 +116,69 @@ class TestAgentAuthStateContractFixture:
             source["kind"] for source in fixture_opencode["sources"]
         ], (
             "the fixture's per-harness source order must be the order this renderer "
-            "emits — api_key before gateway, by the (kind, env_var_name) sort"
+            "emits -- api_key, then gateway, then provider_config, by the "
+            "(kind, env_var_name) sort"
         )
         assert [source["kind"] for source in fixture_opencode["sources"]] == [
             "api_key",
             "gateway",
+            "provider_config",
         ]
 
-    def test_per_harness_gateway_keys_are_not_produced_yet(self) -> None:
-        # KNOWN GAP, owned by Track B (B3, branch `agents/b3-renderer-key-map`).
-        # The fixture gives every gateway source its own virtual key because the
-        # gateway scopes keys per (subject, harness); this renderer still resolves
-        # ONE subject-wide `gateway_virtual_key` and fans it out. That is the "one
-        # shared gateway key" bullet in agent-auth.md's Current gaps, and it is NOT
-        # closed here.
-        #
-        # This test asserts the gap as it stands so B3 has to delete it when it
-        # lands the per-harness key map — a passing suite after B3 would otherwise
-        # hide that the fixture and the producer disagree.
+    def test_each_gateway_harness_renders_its_own_distinct_key(self) -> None:
+        # B3's per-harness key map is on this branch, so the pre-B3 lineage's
+        # shared-key tripwire test is deleted (its own comment demanded that
+        # once B3 landed). The fixture's claude/codex/opencode gateway keys
+        # are all distinct; assert this renderer reproduces that when fed the
+        # fixture's own per-harness inputs.
+        fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        fixture_keys = {
+            entry["harness_kind"]: next(
+                source["key"] for source in entry["sources"] if source["kind"] == "gateway"
+            )
+            for entry in fixture["harnesses"]
+            if any(source["kind"] == "gateway" for source in entry["sources"])
+        }
+        assert len(set(fixture_keys.values())) == len(fixture_keys), (
+            "the fixture's own gateway keys must already be distinct per harness"
+        )
+
         state, _ = agent_auth.render_agent_auth_state(
             _inputs(
-                (
-                    _selection(harness="claude", source_kind="gateway"),
-                    _selection(harness="codex", source_kind="gateway"),
-                )
+                tuple(
+                    _selection(harness=harness_kind, source_kind="gateway")
+                    for harness_kind in fixture_keys
+                ),
+                gateway_virtual_keys=fixture_keys,
             )
         )
-        keys = [
-            source["key"]
+        rendered_keys = {
+            entry["harness_kind"]: next(
+                source["key"] for source in entry["sources"] if source["kind"] == "gateway"
+            )
             for entry in state["harnesses"]
-            for source in entry["sources"]
-            if source["kind"] == "gateway"
-        ]
-        assert len(keys) == 2
-        assert len(set(keys)) == 1, (
-            "expected today's shared-key behavior; if this now fails, B3 has landed "
-            "per-harness keys — delete this test and assert distinctness instead"
+        }
+        assert rendered_keys == fixture_keys
+
+    def test_the_fixtures_provider_config_source_is_a_resolved_env_map(self) -> None:
+        # §4.3's ruling: opencode's third source demonstrates additive
+        # three-way composition. Its env map must already be opencode's real
+        # env-var names (AWS_BEARER_TOKEN_BEDROCK/AWS_REGION), not the vault's
+        # generic field names (region/bearerToken) -- feeding the fixture's
+        # own config_kind + a matching field map through the translation
+        # table must reproduce it exactly.
+        fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        fixture_opencode = next(
+            entry for entry in fixture["harnesses"] if entry["harness_kind"] == "opencode"
         )
+        fixture_provider_config = next(
+            source for source in fixture_opencode["sources"] if source["kind"] == "provider_config"
+        )
+        assert fixture_provider_config["config_kind"] == "aws_bedrock"
+
+        translated = agent_auth._translate_provider_config_env(
+            "opencode",
+            "aws_bedrock",
+            {"region": "us-east-1", "bearerToken": "bedrock-raw-0006"},
+        )
+        assert translated == fixture_provider_config["env"]

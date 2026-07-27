@@ -15,6 +15,9 @@ from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
 from proliferate.server.cloud.materialization import paths
 from proliferate.server.cloud.materialization.materialize import agent_auth
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+FIXTURE_PATH = REPO_ROOT / "fixtures/contracts/agent-auth-state/v2.json"
+
 USER_ID = uuid.uuid4()
 NOW = datetime(2026, 7, 1, tzinfo=UTC)
 REVISION = 4211
@@ -52,6 +55,7 @@ def _inputs(
     *,
     revision: int = REVISION,
     api_key_values: dict[uuid.UUID, str] | None = None,
+    provider_config_values: dict[uuid.UUID, tuple[str, dict[str, str]]] | None = None,
     enrollment_sync_status: str | None = "synced",
     gateway_virtual_key: str | None = "sk-litellm-vk",
     gateway_virtual_keys: dict[str, str] | None = None,
@@ -82,6 +86,7 @@ def _inputs(
         revision=revision,
         selections=selections,
         api_key_values=api_key_values or {},
+        provider_config_values=provider_config_values or {},
         enrollment_sync_status=enrollment_sync_status,
         gateway_virtual_keys=gateway_virtual_keys,
         gateway_base_url=gateway_base_url,
@@ -379,6 +384,252 @@ class TestRenderAgentAuthState:
         assert first == second
         assert fp1 == fp2
         _ = key_id
+
+
+class TestTranslateProviderConfigEnv:
+    """D3 brief §4.2's ruled table, one case per row (6 combinations)."""
+
+    def test_claude_aws_bedrock(self) -> None:
+        env = agent_auth._translate_provider_config_env(
+            "claude", "aws_bedrock", {"region": "us-east-1", "bearerToken": "bedrock-tok"}
+        )
+        assert env == {
+            "CLAUDE_CODE_USE_BEDROCK": "1",
+            "AWS_BEARER_TOKEN_BEDROCK": "bedrock-tok",
+            "AWS_REGION": "us-east-1",
+        }
+
+    def test_claude_azure_openai_foundry(self) -> None:
+        # UNVERIFIED judgment call (brief §0/§4.2/§8 item 4): resource derived
+        # from endpoint hostname, AUTH_TOKEN left unset. Gate 4's live run is
+        # authoritative; this pins today's ruled mapping only.
+        env = agent_auth._translate_provider_config_env(
+            "claude",
+            "azure_openai",
+            {
+                "endpoint": "https://my-foundry-resource.openai.azure.com",
+                "deployment": "claude-deploy",
+                "apiKey": "foundry-key-abcd",
+            },
+        )
+        assert env == {
+            "CLAUDE_CODE_USE_FOUNDRY": "1",
+            "ANTHROPIC_FOUNDRY_RESOURCE": "my-foundry-resource",
+            "ANTHROPIC_FOUNDRY_BASE_URL": "https://my-foundry-resource.openai.azure.com",
+            "ANTHROPIC_FOUNDRY_API_KEY": "foundry-key-abcd",
+        }
+        assert "ANTHROPIC_FOUNDRY_AUTH_TOKEN" not in env
+
+    def test_codex_aws_bedrock(self) -> None:
+        env = agent_auth._translate_provider_config_env(
+            "codex", "aws_bedrock", {"region": "us-west-2", "bearerToken": "bedrock-tok"}
+        )
+        assert env == {"AWS_BEARER_TOKEN_BEDROCK": "bedrock-tok", "AWS_REGION": "us-west-2"}
+
+    def test_codex_azure_openai_is_always_none(self) -> None:
+        # Pending per registry.json + D1's supported_provider_config_kinds
+        # exclusion (D3 brief §4.2 table row: "None always"). Defended here
+        # too rather than trusting the upstream gate alone.
+        env = agent_auth._translate_provider_config_env(
+            "codex",
+            "azure_openai",
+            {"endpoint": "https://x.openai.azure.com", "deployment": "d", "apiKey": "k"},
+        )
+        assert env is None
+
+    def test_opencode_aws_bedrock(self) -> None:
+        env = agent_auth._translate_provider_config_env(
+            "opencode", "aws_bedrock", {"region": "eu-west-1", "bearerToken": "bedrock-tok"}
+        )
+        assert env == {"AWS_BEARER_TOKEN_BEDROCK": "bedrock-tok", "AWS_REGION": "eu-west-1"}
+
+    def test_opencode_azure_openai_live_proven_pair(self) -> None:
+        # Live-test-proven (ledger 2026-07-26): AZURE_API_KEY + AZURE_RESOURCE_NAME
+        # is the working pair; AZURE_OPENAI_API_KEY is dead code. `deployment`
+        # is deliberately absent from the output (folds into a launch arg,
+        # brief §4.2/§8 item 3 — out of scope for this env-only translation).
+        env = agent_auth._translate_provider_config_env(
+            "opencode",
+            "azure_openai",
+            {
+                "endpoint": "https://proliferate-gw-aoai.openai.azure.com",
+                "deployment": "gpt-4o",
+                "apiKey": "azure-raw-key",
+            },
+        )
+        assert env == {
+            "AZURE_API_KEY": "azure-raw-key",
+            "AZURE_RESOURCE_NAME": "proliferate-gw-aoai",
+        }
+
+    def test_opencode_azure_hostname_derivation_edge_cases(self) -> None:
+        # The live-test evidence only confirms a bare resource name works;
+        # this asserts a full URL with a trailing slash/path also extracts
+        # cleanly (brief §6's explicitly-named edge case).
+        bare = agent_auth._translate_provider_config_env(
+            "opencode",
+            "azure_openai",
+            {"endpoint": "proliferate-gw-aoai", "deployment": "d", "apiKey": "k"},
+        )
+        assert bare is not None
+        assert bare["AZURE_RESOURCE_NAME"] == "proliferate-gw-aoai"
+
+        trailing_slash = agent_auth._translate_provider_config_env(
+            "opencode",
+            "azure_openai",
+            {"endpoint": "https://foo.openai.azure.com/", "deployment": "d", "apiKey": "k"},
+        )
+        assert trailing_slash is not None
+        assert trailing_slash["AZURE_RESOURCE_NAME"] == "foo"
+
+        with_path = agent_auth._translate_provider_config_env(
+            "opencode",
+            "azure_openai",
+            {
+                "endpoint": "https://foo.openai.azure.com/openai/deployments/x",
+                "deployment": "d",
+                "apiKey": "k",
+            },
+        )
+        assert with_path is not None
+        assert with_path["AZURE_RESOURCE_NAME"] == "foo"
+
+        # Not evidenced by the live run and not an expected D2 vault shape,
+        # but the function's contract is "first label of the hostname" — it
+        # must strip userinfo and a port rather than fold them into the
+        # returned resource name (review finding 5).
+        with_userinfo_and_port = agent_auth._translate_provider_config_env(
+            "opencode",
+            "azure_openai",
+            {
+                "endpoint": "https://user@foo.openai.azure.com:8443/path",
+                "deployment": "d",
+                "apiKey": "k",
+            },
+        )
+        assert with_userinfo_and_port is not None
+        assert with_userinfo_and_port["AZURE_RESOURCE_NAME"] == "foo"
+
+    def test_unsupported_harness_returns_none(self) -> None:
+        assert (
+            agent_auth._translate_provider_config_env(
+                "cursor", "aws_bedrock", {"region": "us-east-1", "bearerToken": "t"}
+            )
+            is None
+        )
+
+    def test_unknown_config_kind_returns_none(self) -> None:
+        assert agent_auth._translate_provider_config_env("claude", "not_a_real_kind", {}) is None
+
+    def test_missing_required_field_returns_none(self) -> None:
+        assert (
+            agent_auth._translate_provider_config_env("claude", "aws_bedrock", {"region": "x"})
+            is None
+        )
+
+
+class TestRenderProviderConfigSource:
+    def test_renders_resolved_env_map_on_the_wire(self) -> None:
+        key_id = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(
+                        harness="codex",
+                        source_kind="api_key",
+                        api_key_id=key_id,
+                    ),
+                ),
+                provider_config_values={
+                    key_id: ("aws_bedrock", {"region": "us-east-1", "bearerToken": "tok"})
+                },
+            )
+        )
+        assert state["harnesses"] == [
+            {
+                "harness_kind": "codex",
+                "sources": [
+                    {
+                        "kind": "provider_config",
+                        "config_kind": "aws_bedrock",
+                        "env": {"AWS_BEARER_TOKEN_BEDROCK": "tok", "AWS_REGION": "us-east-1"},
+                    }
+                ],
+            }
+        ]
+
+    def test_revoked_typed_entry_drops_the_source(self) -> None:
+        # Mirrors _render_api_key_source's revoked-key test: a typed entry
+        # that no longer resolves (revoked/vanished) is simply absent from
+        # provider_config_values, and its source is dropped rather than
+        # raising -- one unsatisfiable source never aborts the reconcile.
+        key_id = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(
+                        harness="codex",
+                        source_kind="api_key",
+                        api_key_id=key_id,
+                    ),
+                ),
+                provider_config_values={},
+            )
+        )
+        assert state["harnesses"] == []
+
+    def test_unsupported_combination_drops_the_source(self) -> None:
+        key_id = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(
+                        harness="codex",
+                        source_kind="api_key",
+                        api_key_id=key_id,
+                    ),
+                ),
+                provider_config_values={
+                    key_id: (
+                        "azure_openai",
+                        {"endpoint": "https://x.openai.azure.com", "apiKey": "k"},
+                    )
+                },
+            )
+        )
+        assert state["harnesses"] == []
+
+    def test_composes_with_gateway_and_bare_api_key_sources(self) -> None:
+        # The opencode three-way composition the contract fixture (§4.3)
+        # also pins: api_key < gateway < provider_config by the (kind,
+        # env_var_name) sort.
+        anthropic_id = uuid.uuid4()
+        bedrock_id = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(harness="opencode", source_kind="gateway"),
+                    _selection(
+                        harness="opencode",
+                        source_kind="api_key",
+                        api_key_id=anthropic_id,
+                        env_var_name="ANTHROPIC_API_KEY",
+                    ),
+                    _selection(
+                        harness="opencode",
+                        source_kind="api_key",
+                        api_key_id=bedrock_id,
+                    ),
+                ),
+                api_key_values={anthropic_id: "sk-ant-raw"},
+                provider_config_values={
+                    bedrock_id: ("aws_bedrock", {"region": "us-east-1", "bearerToken": "tok"})
+                },
+            )
+        )
+        assert [entry["harness_kind"] for entry in state["harnesses"]] == ["opencode"]
+        kinds = [source["kind"] for source in state["harnesses"][0]["sources"]]
+        assert kinds == ["api_key", "gateway", "provider_config"]
 
 
 class _SandboxIOSpy:

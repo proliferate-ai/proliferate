@@ -64,6 +64,16 @@ AGENT_AUTH_SOURCE_GATEWAY = "gateway"
 AGENT_AUTH_SOURCE_API_KEY = "api_key"
 AGENT_AUTH_SOURCE_KINDS = (AGENT_AUTH_SOURCE_GATEWAY, AGENT_AUTH_SOURCE_API_KEY)
 
+# The state.json WIRE kind for a rendered typed-vault source (D3 python brief
+# Sec4.1/Sec2). This is NOT a DB `source_kind` -- a typed-vault selection is
+# still persisted as source_kind='api_key' (D1 deliberately did not add a
+# third DB value; selections.py's `_validate_source` still only recognizes
+# AGENT_AUTH_SOURCE_KINDS above). Which wire `kind` a rendered api_key
+# selection gets is decided at RENDER time by the referenced AgentApiKey
+# row's vault `kind` (bare 'api_key' vs. a typed kind) -- never persisted
+# directly.
+AGENT_AUTH_SOURCE_PROVIDER_CONFIG = "provider_config"
+
 # "native" is NOT a selection source_kind — it is the empty-selection state (zero
 # enabled rows == the harness's own CLI login). It exists ONLY as an org-policy
 # allow-list value: listing "native" in allowed_routes permits native CLI login;
