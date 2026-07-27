@@ -17,7 +17,15 @@
 //
 // Idempotent; safe to run repeatedly. Exits nonzero on a missing source.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,9 +53,14 @@ function syncGeneratedCatalog() {
     return;
   }
   mkdirSync(GENERATED_DIR, { recursive: true });
-  cpSync(CATALOG_SOURCE, CATALOG_DEST);
+  // Minify: the copy is inlined `?raw` into the /login entry chunk, and the
+  // pretty-printed source costs ~2.6KB extra gzip against the WDU-1247-D1 cap.
+  writeFileSync(
+    CATALOG_DEST,
+    JSON.stringify(JSON.parse(readFileSync(CATALOG_SOURCE, "utf8"))),
+  );
   console.log(
-    `[copy-product-client-assets] synced agent catalog -> ${relative(REPO_ROOT, CATALOG_DEST)}`,
+    `[copy-product-client-assets] synced agent catalog (minified) -> ${relative(REPO_ROOT, CATALOG_DEST)}`,
   );
 }
 
