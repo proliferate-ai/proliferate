@@ -28,6 +28,7 @@ class _FakeProvider:
 def _sandbox(e2b_sandbox_id: str | None) -> SimpleNamespace:
     return SimpleNamespace(
         id=uuid.uuid4(),
+        owner_user_id=uuid.uuid4(),
         e2b_sandbox_id=e2b_sandbox_id,
         e2b_template_ref="e2b",
     )

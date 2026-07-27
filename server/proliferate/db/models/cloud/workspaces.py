@@ -83,3 +83,4 @@ class CloudWorkspace(Base):
         onupdate=utcnow,
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lost_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

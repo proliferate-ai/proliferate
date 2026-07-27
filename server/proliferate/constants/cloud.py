@@ -133,6 +133,7 @@ class CloudWorkspaceStatus(StrEnum):
     materializing = "materializing"
     needs_rematerialization = "needs_rematerialization"
     ready = "ready"
+    lost = "lost"
     archived = "archived"
     error = "error"
 
