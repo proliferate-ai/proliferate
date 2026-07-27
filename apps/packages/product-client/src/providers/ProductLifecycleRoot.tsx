@@ -1,7 +1,7 @@
 // @refresh reset
 // This hook-dense application root must remount after an HMR update so React
 // never reuses lifecycle hook cells from the module's previous topology.
-import { useEffect, useRef, type ReactNode } from "react"
+import { Suspense, lazy, useEffect, useRef, type ReactNode } from "react"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge"
 
@@ -14,7 +14,6 @@ import { useAppShortcuts } from "#product/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "#product/hooks/app/workflows/use-app-command-actions"
 import { useAgentAutoReconcile } from "#product/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useFirstRunAuthAdoption } from "#product/hooks/agents/lifecycle/use-first-run-auth-adoption"
-import { useGatewayCatalogMirrorSync } from "#product/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync"
 import { useLocalAuthStateSync } from "#product/hooks/agents/lifecycle/use-local-auth-state-sync"
 import { useLocalAutomationExecutor } from "#product/hooks/automations/lifecycle/use-local-automation-executor"
 import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner"
@@ -43,6 +42,16 @@ import { AppCommandActionsProvider } from "#product/providers/AppCommandActionsP
 import { DesktopProductLifecycleRoot } from "#product/providers/DesktopProductLifecycleRoot"
 import { AppErrorBoundary } from "#product/components/app/AppErrorBoundary"
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth"
+
+// The restart offer can only exist for an authenticated user (it follows an
+// acked auth switch), so the modal + session-restart machinery is lazy-loaded
+// and mounted only once authenticated — the login first-load chunk parses zero
+// bytes of restart-modal code (login runtime JS budget).
+const AuthRestartOfferRoot = lazy(() =>
+  import("#product/components/agents/AuthRestartOfferRoot").then((m) => ({
+    default: m.AuthRestartOfferRoot,
+  })),
+)
 
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
 
@@ -150,9 +159,6 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_auth_state_sync")
   useLocalAuthStateSync()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_auth_state_sync")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_gateway_catalog_mirror_sync")
-  useGatewayCatalogMirrorSync()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_gateway_catalog_mirror_sync")
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
@@ -211,6 +217,14 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   return (
     <AppCommandActionsProvider value={appCommandActions}>
       <DesktopProductLifecycleRoot />
+      {/* Restart offer after an acked auth switch (agent-auth.md, Proof C6).
+          Authenticated-only + lazy: the login shell never fetches or parses
+          the restart-modal chunk. */}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <AuthRestartOfferRoot />
+        </Suspense>
+      )}
       {children}
     </AppCommandActionsProvider>
   )

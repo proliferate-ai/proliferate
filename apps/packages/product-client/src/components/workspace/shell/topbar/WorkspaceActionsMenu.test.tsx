@@ -34,7 +34,7 @@ describe("WorkspaceActionsMenu", () => {
     const trigger = screen.getByRole("button", { name: "Chat actions" });
     expect(trigger.className).toContain("workspace-shell-icon-button");
     expect(trigger.className).toContain("workspace-shell-icon-button--flat");
-    expect(trigger.className).toContain("focus-ring");
+    expect(trigger.className).toContain("focus-visible:ring-2");
     expect(trigger.className).toContain("app-region-no-drag");
     expect(trigger.className).not.toContain("workspace-shell-icon-button--hover-rim");
   });

@@ -14,6 +14,39 @@ use crate::live::sessions::SessionStartupStrategy;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 
+// A9 Scope C: process-env guard for the revoked-credentials regression tests
+// below. Mirrors `service/create_tests.rs`'s local `EnvVarGuard` (the
+// `readiness` module's own guard is `pub(super)` and not reachable from
+// here) — every user must hold `test_support::ENV_MUTEX` for its whole body.
+struct EnvVarGuard {
+    name: &'static str,
+    original: Option<std::ffi::OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(name: &'static str, value: &std::ffi::OsStr) -> Self {
+        let original = std::env::var_os(name);
+        std::env::set_var(name, value);
+        Self { name, original }
+    }
+
+    fn remove(name: &'static str) -> Self {
+        let original = std::env::var_os(name);
+        std::env::remove_var(name);
+        Self { name, original }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        if let Some(original) = &self.original {
+            std::env::set_var(self.name, original);
+        } else {
+            std::env::remove_var(self.name);
+        }
+    }
+}
+
 fn seed_workspace(db: &Db) {
     test_support::seed_workspace_with_repo_root(db, "workspace-1", "local", "/tmp/workspace");
 }
@@ -696,3 +729,291 @@ fn fork_link_child_unique_index_rejects_multiple_fork_parents() {
 
     assert!(link_store.insert(&second_link).is_err());
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn ensure_live_session_rejects_a_resume_with_revoked_credentials() {
+    // A9 Scope C regression: the common live-start seam now checks
+    // `resolve_launch_agent`'s status (mirroring create_session's gate), so a
+    // dormant session whose agent's credentials regressed after creation
+    // (e.g. revoked) is refused here with the typed condition instead of
+    // falling through to a spawn attempt and a generic ACP-start failure.
+    // opencode is ProviderManaged with no required slot, so "nothing
+    // selected" is a real, deterministic credential gap (the Scope B fix).
+    use std::sync::Mutex;
+
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::sessions::runtime::EnsureLiveSessionError;
+    use crate::integrations::agent_cli::executable::make_executable;
+
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-resume-revoked-creds-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_path = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
+
+    // No enrolled agent-auth route and no provider env for opencode: a real
+    // credential gap, not the unconditional Ready the pre-fix bug produced.
+    let bin = runtime_home.join("opencode-acp");
+    std::fs::write(&bin, "#!/bin/sh
+exit 0
+").expect("write override binary");
+    make_executable(&bin).expect("make override binary executable");
+    let _program_guard =
+        EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", bin.as_os_str());
+    let empty_home = std::env::temp_dir().join(format!(
+        "anyharness-resume-revoked-creds-home-{}",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::create_dir_all(&empty_home).expect("create empty home");
+    let _home_guard = EnvVarGuard::set("HOME", empty_home.as_os_str());
+    let _openai_guard = EnvVarGuard::remove("OPENAI_API_KEY");
+    let _anthropic_guard = EnvVarGuard::remove("ANTHROPIC_API_KEY");
+    let _anthropic_token_guard = EnvVarGuard::remove("ANTHROPIC_AUTH_TOKEN");
+    let _gemini_guard = EnvVarGuard::remove("GEMINI_API_KEY");
+    let _google_guard = EnvVarGuard::remove("GOOGLE_API_KEY");
+
+    let state = crate::app::AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-revoked",
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+
+    let mut record = session_record("opencode");
+    record.workspace_id = "workspace-revoked".to_string();
+    state
+        .session_service
+        .store()
+        .insert(&record)
+        .expect("insert session");
+
+    let error = state
+        .session_runtime
+        .ensure_live_session(&record.id, None)
+        .await
+        .expect_err("a real opencode credential gap must be refused on resume");
+
+    match error {
+        EnsureLiveSessionError::AgentNotReady { agent_kind, .. } => {
+            assert_eq!(agent_kind, "opencode");
+        }
+        other => panic!("expected AgentNotReady, got {other:?}"),
+    }
+
+    let _ = std::fs::remove_dir_all(&runtime_home);
+    let _ = std::fs::remove_dir_all(&empty_home);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn ensure_live_session_reports_an_unsatisfiable_selection_as_route_auth_not_agent_not_ready() {
+    // Review fix (A9 Scope C, cycle 1, item A): the readiness gate added
+    // above must run AFTER the route-auth selection pre-check, mirroring
+    // create_session's deliberate order (service/create.rs: fail closed on
+    // an unsatisfiable selection BEFORE the readiness gate, so the auth
+    // problem is reported as itself instead of misread as "agent is not
+    // ready" — which reads to a user as "go install something" when the
+    // real answer is "your gateway budget is exhausted"). Before the fix,
+    // this scenario (an opencode state.json entry with present-but-empty
+    // sources — a selection the machine cannot honor, distinct from "no
+    // entry at all") resolved AgentNotReady(CredentialsRequired) on resume;
+    // pre-A9 (and post-fix) it resolves RouteAuth(SelectionMissing) /
+    // AGENT_ROUTE_SELECTION_MISSING, same as create_session would report
+    // for the identical state.
+    use std::sync::Mutex;
+
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::agents::route_auth::RouteAuthError;
+    use crate::domains::sessions::runtime::EnsureLiveSessionError;
+    use crate::integrations::agent_cli::executable::make_executable;
+
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-resume-selection-missing-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_path = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
+
+    let bin = runtime_home.join("opencode-acp");
+    std::fs::write(&bin, "#!/bin/sh
+exit 0
+").expect("write override binary");
+    make_executable(&bin).expect("make override binary executable");
+    let _program_guard = EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", bin.as_os_str());
+    let empty_home = std::env::temp_dir().join(format!(
+        "anyharness-resume-selection-missing-home-{}",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::create_dir_all(&empty_home).expect("create empty home");
+    let _home_guard = EnvVarGuard::set("HOME", empty_home.as_os_str());
+    let _openai_guard = EnvVarGuard::remove("OPENAI_API_KEY");
+    let _anthropic_guard = EnvVarGuard::remove("ANTHROPIC_API_KEY");
+    let _anthropic_token_guard = EnvVarGuard::remove("ANTHROPIC_AUTH_TOKEN");
+    let _gemini_guard = EnvVarGuard::remove("GEMINI_API_KEY");
+    let _google_guard = EnvVarGuard::remove("GOOGLE_API_KEY");
+
+    // Present-but-empty sources for opencode: a selection the machine cannot
+    // honor, per agent-auth.md's "present-but-empty fails closed" — distinct
+    // from an absent entry (which would be Native, no error at all).
+    let agent_auth_dir = runtime_home.join("agent-auth");
+    std::fs::create_dir_all(&agent_auth_dir).expect("create agent-auth dir");
+    std::fs::write(
+        agent_auth_dir.join("state.json"),
+        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"opencode","sources":[]}]}"#,
+    )
+    .expect("write agent-auth state");
+
+    let state = crate::app::AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-selection-missing",
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+
+    let mut record = session_record("opencode");
+    record.workspace_id = "workspace-selection-missing".to_string();
+    state
+        .session_service
+        .store()
+        .insert(&record)
+        .expect("insert session");
+
+    let error = state
+        .session_runtime
+        .ensure_live_session(&record.id, None)
+        .await
+        .expect_err("an unsatisfiable selection must be refused on resume");
+
+    match error {
+        EnsureLiveSessionError::RouteAuth(RouteAuthError::SelectionMissing {
+            harness_kind, ..
+        }) => {
+            assert_eq!(harness_kind, "opencode");
+        }
+        other => panic!("expected RouteAuth(SelectionMissing), got {other:?}"),
+    }
+
+    let _ = std::fs::remove_dir_all(&runtime_home);
+    let _ = std::fs::remove_dir_all(&empty_home);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn fork_session_rejects_a_parent_with_revoked_credentials() {
+    // A9 Scope C regression: fork shares the same common live-start seam
+    // (`ensure_live_session_handle` -> `start_live_session`) via
+    // `fork_session`, so a parent whose agent's credentials regressed gets
+    // the same typed `AgentNotReady`, not a generic ACP-start failure.
+    use std::sync::Mutex;
+
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::sessions::runtime::ForkSessionError;
+    use crate::integrations::agent_cli::executable::make_executable;
+
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-fork-revoked-creds-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_path = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
+
+    let bin = runtime_home.join("opencode-acp");
+    std::fs::write(&bin, "#!/bin/sh
+exit 0
+").expect("write override binary");
+    make_executable(&bin).expect("make override binary executable");
+    let _program_guard =
+        EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", bin.as_os_str());
+    let empty_home = std::env::temp_dir().join(format!(
+        "anyharness-fork-revoked-creds-home-{}",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::create_dir_all(&empty_home).expect("create empty home");
+    let _home_guard = EnvVarGuard::set("HOME", empty_home.as_os_str());
+    let _openai_guard = EnvVarGuard::remove("OPENAI_API_KEY");
+    let _anthropic_guard = EnvVarGuard::remove("ANTHROPIC_API_KEY");
+    let _anthropic_token_guard = EnvVarGuard::remove("ANTHROPIC_AUTH_TOKEN");
+    let _gemini_guard = EnvVarGuard::remove("GEMINI_API_KEY");
+    let _google_guard = EnvVarGuard::remove("GOOGLE_API_KEY");
+
+    let state = crate::app::AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-fork-revoked",
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+
+    let mut record = session_record("opencode");
+    record.workspace_id = "workspace-fork-revoked".to_string();
+    record.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
+    record.action_capabilities_json = Some(r#"{"fork":true}"#.to_string());
+    state
+        .session_service
+        .store()
+        .insert(&record)
+        .expect("insert session");
+
+    let error = state
+        .session_runtime
+        .fork_session(&record.id, None)
+        .await
+        .expect_err("a real opencode credential gap on the parent must refuse the fork");
+
+    match error {
+        ForkSessionError::AgentNotReady { agent_kind, .. } => {
+            assert_eq!(agent_kind, "opencode");
+        }
+        other => panic!("expected AgentNotReady, got {other:?}"),
+    }
+
+    let _ = std::fs::remove_dir_all(&runtime_home);
+    let _ = std::fs::remove_dir_all(&empty_home);
+}
+

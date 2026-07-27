@@ -282,7 +282,7 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
   return (
     <span
       ref={ref}
-      className={`file-source-line grid min-h-[var(--diffs-line-height)] ${
+      className={`group/line grid min-h-[var(--diffs-line-height)] gap-x-(--file-source-content-gap) text-(--diffs-fg) hover:bg-(--file-source-row-hover) ${
         wordWrap
           ? "grid-cols-[var(--diffs-column-number-width)_minmax(0,1fr)]"
           : "grid-cols-[var(--diffs-column-number-width)_max-content]"
@@ -295,7 +295,7 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
       style={style}
     >
       <span
-        className="file-source-line-number select-none bg-background px-2 text-right tabular-nums"
+        className="select-none bg-(--diffs-bg) px-2 text-right tabular-nums text-(--file-source-line-number) group-hover/line:text-(--file-source-line-number-hover)"
         data-column-number={lineNumber}
         data-gutter=""
         data-line-index={virtualIndex}
@@ -304,7 +304,7 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
         <span data-line-number-content="">{lineNumber}</span>
       </span>
       <span
-        className={`file-source-line-content min-w-0 ${
+        className={`min-w-0 px-(--file-source-content-padding-inline) [tab-size:2] ${
           wordWrap
             ? "whitespace-pre-wrap break-words"
             : "whitespace-pre"

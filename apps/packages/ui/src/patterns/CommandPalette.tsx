@@ -210,7 +210,7 @@ export function CommandPaletteItem({
 }: CommandPaletteItemProps) {
   return (
     <Command.Item
-      className={`flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-[5px] text-composer text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-list-hover ${className ?? ""}`}
+      className={`flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-[5px] text-composer text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-hover ${className ?? ""}`}
       {...props}
     />
   );

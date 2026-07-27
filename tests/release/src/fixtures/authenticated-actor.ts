@@ -24,7 +24,7 @@ import type { ActorKeyIdentity } from "../services/qualification-litellm.js";
  *   - never persists the generated password or raw virtual key in evidence.
  *
  * It MAY use the authenticated gateway-selection API
- * (`PUT {api_prefix}/v1/cloud/agent-gateway/selections/{harness_kind}?surface=…`)
+ * (`PUT {api_prefix}/v1/cloud/agent-auth/selections/{harness_kind}?surface=…`)
  * to select `gateway` for the representative harness — prerequisite state only.
  * The surface defaults to `local` (what the desktop pushes to a local runtime);
  * the managed-cloud scenario overrides it to `cloud` via `gatewaySurface` so the
@@ -56,7 +56,7 @@ import type { ActorKeyIdentity } from "../services/qualification-litellm.js";
  *     `server/proliferate/server/cloud/agent_gateway/models.py`); the synced
  *     value is `AGENT_GATEWAY_SYNC_STATUS_SYNCED = "synced"`
  *     (`server/proliferate/constants/agent_gateway.py`).
- *   - `PUT {api_prefix}/v1/cloud/agent-gateway/selections/{harness_kind}?surface=local`
+ *   - `PUT {api_prefix}/v1/cloud/agent-auth/selections/{harness_kind}?surface=local`
  *     body `{ sources: [{ sourceKind: "gateway", enabled: true }] }`
  *     (`AgentAuthSelectionsPutRequest`/`AgentAuthSourceInput`, same file).
  *   - Organization identity comes from `GET {api_prefix}/v1/organizations`
@@ -135,7 +135,7 @@ export interface AuthenticatedActorOptions {
    * durable intent after the exact enrollment resolves.
    */
   beginActorEnrollmentCustody?(params: { email: string }): Promise<{
-    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+    resolveAndTrack(params: { userId: string; enrollmentId: string; harnessKind: string }): Promise<ActorKeyIdentity>;
   }>;
   /**
    * Managed-cloud custody seam. Once the synced enrollment exposes the exact
@@ -147,6 +147,7 @@ export interface AuthenticatedActorOptions {
   resolveAndTrackActorSubjects?(params: {
     userId: string;
     enrollmentId: string;
+    harnessKind: string;
   }): Promise<ActorKeyIdentity>;
 }
 
@@ -315,7 +316,7 @@ export const defaultAuthenticatedActorTransport: AuthenticatedActorTransport = {
   },
   async putGatewaySelection(api, harnessKind, surface) {
     await api.put(
-      `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}?surface=${encodeURIComponent(surface)}`,
+      `/v1/cloud/agent-auth/selections/${encodeURIComponent(harnessKind)}?surface=${encodeURIComponent(surface)}`,
       { sources: [{ sourceKind: "gateway", enabled: true }] },
     );
   },
@@ -357,7 +358,7 @@ export async function authenticatedActor(
   const setupCommitPollMs = options.setupCommitPollMs ?? 250;
 
   let enrollmentCustody: {
-    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+    resolveAndTrack(params: { userId: string; enrollmentId: string; harnessKind: string }): Promise<ActorKeyIdentity>;
   } | undefined;
   let claim: Promise<{ email: string; password: string }>;
   if (explicitEmail !== undefined) {
@@ -435,6 +436,7 @@ export async function authenticatedActor(
   const gatewayKey = await (enrollmentCustody?.resolveAndTrack ?? options.resolveAndTrackActorSubjects ?? ((params) => world.gateway.resolveActorKey(params)))({
     userId: session.user_id,
     enrollmentId: enrollment.id,
+    harnessKind,
   });
 
   if (options.selectGatewayRoute !== false) {

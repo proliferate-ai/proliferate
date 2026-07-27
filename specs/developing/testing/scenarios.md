@@ -565,14 +565,6 @@ Temporary product-policy ruling (2026-07-22): Grok's strict chat-spend cell is
 typed unsupported because the live turn does not emit attributable token/spend
 totals. Its `T3-AUTHROUTE-1` user-key coverage remains required.
 
-### T3-UPDATE-1: harness convergence, both lanes (pre-verification of tier 4)
-The catalog-convergence chain (tier-4 registry rows) is asserted in both
-lanes as part of this wave, not deferred: bump the served catalog version on
-the target server → heartbeat → worker pushes catalog → runtime reconciles →
-**agent CLI reinstalled at the new pin**, verified in the sandbox AND on the
-desktop-local runtime. This is the "they update the way we described, not
-just locally but in the sandbox" requirement.
-
 ### T3-CFG-1: live config options apply in an existing session
 Added 2026-07-08 (Pablo: "occasionally this breaks"). In an **existing** chat
 session (not a fresh one), per harness: enumerate the harness's exposed

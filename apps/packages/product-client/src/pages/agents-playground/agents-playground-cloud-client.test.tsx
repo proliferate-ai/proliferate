@@ -11,9 +11,8 @@ import {
   useAgentApiKeys,
   useCreateAgentApiKey,
   usePutAuthSelections,
-  useRefreshAgentCatalog,
   useRevokeAgentApiKey,
-  useUpsertCatalogOverride,
+  useUpsertAgentModelOverride,
 } from "@proliferate/cloud-sdk-react";
 import { agentApiKeysKey } from "@proliferate/cloud-sdk-react/lib/query-keys";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -24,6 +23,7 @@ import { createAgentsPlaygroundCloudTransport } from "#product/pages/agents-play
 const EXISTING_KEY: AgentApiKey = {
   id: "key-1",
   title: "Existing playground key",
+  kind: "api_key",
   redactedHint: "sk-...old",
   status: "active",
   createdAt: "2026-07-01T00:00:00Z",
@@ -32,6 +32,7 @@ const EXISTING_KEY: AgentApiKey = {
 const REAL_SIGNED_IN_KEY: AgentApiKey = {
   id: "real-key",
   title: "Real signed-in key",
+  kind: "api_key",
   redactedHint: "sk-...real",
   status: "active",
   createdAt: "2026-07-01T00:00:00Z",
@@ -94,9 +95,9 @@ describe("Agents playground Cloud transport", () => {
       expect(screen.getByText("New playground key")).toBeTruthy();
     });
     expect(transport.requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
-      "GET /v1/cloud/agent-gateway/keys",
-      "POST /v1/cloud/agent-gateway/keys",
-      "GET /v1/cloud/agent-gateway/keys",
+      "GET /v1/cloud/agent-auth/keys",
+      "POST /v1/cloud/agent-auth/keys",
+      "GET /v1/cloud/agent-auth/keys",
     ]);
     expect(realRequestJson).not.toHaveBeenCalled();
     expect(outerQueryClient.getQueryData(agentApiKeysKey())).toEqual([REAL_SIGNED_IN_KEY]);
@@ -148,15 +149,14 @@ describe("Agents playground Cloud transport", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run fake Cloud mutations" }));
 
     await waitFor(() => {
-      expect(transport.requests).toHaveLength(5);
+      expect(transport.requests).toHaveLength(4);
     });
 
     expect(transport.requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
-      "POST /v1/cloud/agent-gateway/keys",
-      "DELETE /v1/cloud/agent-gateway/keys/key-1",
-      "PUT /v1/cloud/agent-gateway/selections/claude",
-      "POST /v1/cloud/agent-gateway/catalog/claude/refresh",
-      "PUT /v1/cloud/agent-gateway/catalog/claude/override",
+      "POST /v1/cloud/agent-auth/keys",
+      "DELETE /v1/cloud/agent-auth/keys/key-1",
+      "PUT /v1/cloud/agent-auth/selections/claude",
+      "PUT /v1/cloud/agent-models/claude/override",
     ]);
     expect(realRequestJson).not.toHaveBeenCalled();
     expect(outerQueryClient.getQueryData(agentApiKeysKey())).toEqual([REAL_SIGNED_IN_KEY]);
@@ -171,15 +171,13 @@ describe("Agents playground Cloud transport", () => {
         enabled: true,
       }),
     ]);
-    expect(snapshot.catalogs).toEqual(expect.arrayContaining([
+    expect(snapshot.agentModels).toEqual([
       expect.objectContaining({
         harnessKind: "claude",
-        surface: "local",
-        route: "gateway",
-        source: "probe",
+        origin: "snapshot",
         overrideApplied: true,
       }),
-    ]));
+    ]);
     expect(snapshot.overrides).toEqual([
       expect.objectContaining({
         harnessKind: "claude",
@@ -198,17 +196,17 @@ describe("Agents playground Cloud transport", () => {
 
     await expect(transport.client.requestJson({
       method: "DELETE",
-      path: "/v1/cloud/agent-gateway/keys/not-a-real-route/key-1",
+      path: "/v1/cloud/agent-auth/keys/not-a-real-route/key-1",
     })).rejects.toThrow("Unhandled Agents playground Cloud request");
     await expect(transport.client.requestJson({
       method: "PUT",
-      path: "/v1/cloud/agent-gateway/selections/not-a-real-route/claude",
+      path: "/v1/cloud/agent-auth/selections/not-a-real-route/claude",
       query: { surface: "local" },
       body: { sources: [{ sourceKind: "gateway", enabled: true }] },
     })).rejects.toThrow("Unhandled Agents playground Cloud request");
     await expect(transport.client.requestJson({
       method: "GET",
-      path: "/v1/cloud/agent-gateway/not-declared",
+      path: "/v1/cloud/agent-auth/not-declared",
     })).rejects.toThrow("Unhandled Agents playground Cloud request");
 
     const directClient = transport.client as unknown as Record<
@@ -289,8 +287,7 @@ function MutationProbe() {
   const createKey = useCreateAgentApiKey();
   const revokeKey = useRevokeAgentApiKey();
   const putSelections = usePutAuthSelections();
-  const refreshCatalog = useRefreshAgentCatalog();
-  const upsertOverride = useUpsertCatalogOverride();
+  const upsertOverride = useUpsertAgentModelOverride();
 
   async function runMutations() {
     await createKey.mutateAsync({ title: "New playground key", value: "sk-new-secret" });
@@ -301,10 +298,6 @@ function MutationProbe() {
       body: {
         sources: [{ sourceKind: "gateway", enabled: true }],
       },
-    });
-    await refreshCatalog.mutateAsync({
-      harnessKind: "claude",
-      body: { surface: "local", route: "gateway" },
     });
     await upsertOverride.mutateAsync({
       harnessKind: "claude",

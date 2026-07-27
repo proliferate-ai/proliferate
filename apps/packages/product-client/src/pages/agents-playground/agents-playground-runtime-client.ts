@@ -82,17 +82,17 @@ export function createAgentsPlaygroundRuntimeTransport({
       return jsonResponse({ agents: [launchOptions(agent)] });
     }
 
-    const gatewayModelsMatch = path.match(
-      /^\/v1\/agents\/([^/]+)\/catalog\/gateway-models$/,
+    // The composed observation surface (model-catalog.md "Runtime routes"):
+    // GET is the polled status, POST .../refresh is the param-less manual
+    // poke — both answer with the same composed status body.
+    const modelSnapshotMatch = path.match(
+      /^\/v1\/agents\/([^/]+)\/model-snapshot(\/refresh)?$/,
     );
-    if (gatewayModelsMatch && method === "GET") {
-      return jsonResponse(gatewayModels());
+    if (modelSnapshotMatch && method === "GET" && !modelSnapshotMatch[2]) {
+      return jsonResponse(modelSnapshotStatus(agent.kind));
     }
-    if (gatewayModelsMatch && method === "POST") {
-      return jsonResponse({
-        models: ["model-default", "model-fast"],
-        probedAt: "2026-07-18T18:00:00Z",
-      });
+    if (modelSnapshotMatch && method === "POST" && modelSnapshotMatch[2]) {
+      return jsonResponse(modelSnapshotStatus(agent.kind), 202);
     }
 
     throw new Error(
@@ -155,14 +155,26 @@ function launchOptions(agent: AgentSummary) {
   };
 }
 
-function gatewayModels() {
+function modelSnapshotStatus(kind: string) {
   return {
-    source: "probe",
+    agent: kind,
+    schemaVersion: 2,
+    probeEngine: "owner",
+    state: "idle",
     probedAt: "2026-07-18T18:00:00Z",
+    snapshotAgeSeconds: 120,
+    modelCount: 2,
+    modeCount: 1,
     models: [
-      { id: "model-default", displayName: "Recommended", provider: "provider" },
-      { id: "model-fast", displayName: "Fast", provider: "provider" },
+      { id: "model-default", name: "Recommended", provider: "provider" },
+      { id: "model-fast", name: "Fast", provider: "provider" },
     ],
+    modes: [{ id: "build", name: "Build" }],
+    attestation: { name: kind, version: "playground" },
+    installIdentity: { role: "agent_process", version: "playground", source: "pinned_archive" },
+    lastAttempt: { at: "2026-07-18T18:00:00Z", outcome: "ok", detail: null },
+    lastError: null,
+    warnings: [],
   };
 }
 
