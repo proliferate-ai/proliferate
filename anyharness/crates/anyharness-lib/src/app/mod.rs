@@ -208,8 +208,6 @@ impl AppState {
             agent_seed_store.clone(),
             AgentCatalogService::new(catalog_sync_service.clone()),
         ));
-        catalog_sync_service
-            .set_catalog_applied_poke(catalog_applied_reconcile_poke(agent_runtime.clone()));
         // Gateway model resolver (spec §2/§3): catalog gatewayPolicy + the
         // sqlite probe store -> the render plane's GatewayModelPlan.
         let gateway_model_resolver = Arc::new(GatewayModelResolver::new(
@@ -577,20 +575,6 @@ impl AppState {
             agent_login_terminal_service,
         })
     }
-}
-
-/// The reconcile poke: catalog sync stays free of any AgentRuntime
-/// dependency — it gets a capability that fire-and-forget kicks the one
-/// reconcile engine after a successful catalog swap.
-fn catalog_applied_reconcile_poke(agent_runtime: Arc<AgentRuntime>) -> Arc<dyn Fn() + Send + Sync> {
-    Arc::new(move || {
-        let agent_runtime = agent_runtime.clone();
-        tokio::spawn(async move {
-            // installed-only: a cloud-catalog swap updates already-installed
-            // agents to the new pins; missing agents install on demand.
-            agent_runtime.reconcile_installed_when_idle().await;
-        });
-    })
 }
 
 fn load_runtime_target_id() -> Option<String> {

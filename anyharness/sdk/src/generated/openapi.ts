@@ -212,15 +212,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/catalogs/agents": {
+    "/v1/catalogs/agents/version": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put: operations["apply_agent_catalog"];
+        get: operations["get_agent_catalog_version"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2044,6 +2044,17 @@ export interface components {
         AdvanceReplaySessionResponse: {
             advanced: boolean;
         };
+        /**
+         * @description The runtime's active agent catalog version and its provenance. Read-only:
+         *     the runtime binary is the only catalog transport, so there is no apply
+         *     response shape to report.
+         */
+        AgentCatalogVersionResponse: {
+            /** @description The `catalogVersion` string from the active document. */
+            catalogVersion: string;
+            /** @description Where the active catalog came from. Always `"bundled"`. */
+            source: string;
+        };
         /** @enum {string} */
         AgentCliAuthState: "authenticated" | "expired" | "absent" | "unsupported";
         /** @enum {string} */
@@ -2197,16 +2208,6 @@ export interface components {
              * @description The persisted document's revision.
              */
             revision: number;
-        };
-        /** @description Outcome of pushing an agent catalog document into the runtime. */
-        ApplyAgentCatalogResponse: {
-            /**
-             * @description True when the document replaced the active catalog (its version
-             *     differed); false when the runtime was already on that version.
-             */
-            applied: boolean;
-            fromVersion?: string | null;
-            toVersion?: string | null;
         };
         ArtifactStatus: {
             installed: boolean;
@@ -5923,36 +5924,22 @@ export interface operations {
             };
         };
     };
-    apply_agent_catalog: {
+    get_agent_catalog_version: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description Raw agent catalog JSON document (schema v1 or v2) */
-        requestBody: {
-            content: {
-                "application/json": string;
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description Catalog accepted (applied or already current) */
+            /** @description Active agent catalog version and source */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplyAgentCatalogResponse"];
-                };
-            };
-            /** @description Catalog payload rejected; active catalog unchanged */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
+                    "application/json": components["schemas"]["AgentCatalogVersionResponse"];
                 };
             };
         };

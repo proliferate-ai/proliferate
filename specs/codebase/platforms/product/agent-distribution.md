@@ -433,22 +433,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       that migrates legacy sandboxes. All of it — plus the
       `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes once
       the fleet is fully supervisor-owned.
-- [ ] The heartbeat catalog transport still exists: the server
-      advertises its served catalog version in heartbeat acks
-      (`record_heartbeat` in
-      [`runtime_workers/service.py`](../../../../server/proliferate/server/cloud/runtime_workers/service.py)),
-      the worker pushes the document into the runtime
-      ([`proliferate-worker/src/catalog_sync.rs`](../../../../anyharness/crates/proliferate-worker/src/catalog_sync.rs)),
-      and the runtime accepts it (`PUT /v1/catalogs/agents`,
-      [`catalog/sync.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/sync.rs)
-      with its catalog-applied reconcile poke, and the server-side
-      [`server/proliferate/server/catalogs/`](../../../../server/proliferate/server/catalogs/)
-      ETag serving that feeds it). All of it deletes under the
-      binary-only transport law above; the deletion removes the `PUT`
-      handler — the runtime keeps only `GET /v1/catalogs/agents/version`
-      (there is no bare GET full-document route on the runtime; the
-      full-document GET is the cloud server's `read_agent_catalog`, a
-      separate component that stays).
 - [ ] Installs are not yet automatic: the startup pass runs an
       `installed_only` reconcile (`reconcile_installed_when_idle` in
       [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)

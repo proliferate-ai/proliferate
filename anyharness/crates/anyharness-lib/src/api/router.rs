@@ -71,8 +71,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
         .route("/agent-auth/state", put(put_agent_auth_state))
         .route("/agent-auth/state", delete(delete_agent_auth_state))
-        // Catalogs (worker-pushed agent catalog document)
-        .route("/catalogs/agents", put(catalogs::apply_agent_catalog))
+        // Catalogs (read-only: the runtime binary is the only transport)
         .route(
             "/catalogs/agents/version",
             get(catalogs::get_agent_catalog_version),

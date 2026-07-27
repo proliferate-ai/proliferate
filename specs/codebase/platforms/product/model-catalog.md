@@ -401,13 +401,12 @@ a `model_snapshot_sync.rs` module runs on the Worker's
 shaped like the other per-tick convergence steps:
 
 1. After each successful heartbeat, GET the runtime's snapshot documents
-   over the narrow local AnyHarness surface it already uses (localhost +
-   optional runtime bearer, the same access pattern as today's
-   [catalog_sync.rs](../../../../anyharness/crates/proliferate-worker/src/catalog_sync.rs)).
+   over the narrow local AnyHarness surface the Worker already uses
+   (localhost + optional runtime bearer, the same access pattern as
+   `anyharness_update.rs`'s `/health` probe).
 2. Compare each entry's `probedAt` against the last-uploaded values held
-   in memory (like today's catalog ETag state — worth at most one
-   redundant upload after a Worker restart, which the server's
-   soft-versioned write absorbs idempotently).
+   in memory — worth at most one redundant upload after a Worker restart,
+   which the server's soft-versioned write absorbs idempotently.
 3. POST changed entries to the ingest route with the Worker's own bearer;
    the server resolves the owner from the Worker's sandbox row, so the
    payload carries no user identity.

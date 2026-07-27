@@ -314,7 +314,7 @@ async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/v1/catalogs/agents")
+                .uri("/v1/catalogs/agents/version")
                 .header(header::AUTHORIZATION, format!("Bearer {token}"))
                 .body(Body::empty())
                 .expect("expected request"),
@@ -1208,14 +1208,19 @@ fn assert_repo_root_persisted(state: &AppState, canonical_path: &str, payload: &
     assert_eq!(payload["path"], stored.path);
 }
 
+/// The binary is the only catalog transport (agent-distribution.md,
+/// "Convergence"): there is no route that can replace the active catalog, so a
+/// push attempt must not be routable at all — and the active version is
+/// unchanged after the attempt.
 #[tokio::test]
-async fn apply_agent_catalog_same_version_reports_already_current() {
+async fn the_runtime_exposes_no_catalog_push_route() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
         .expect("expected env mutex");
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state(false);
+    let version_before = state.catalog_sync_service.catalog_version();
     let bundled_json = serde_json::to_string(
         crate::domains::agents::catalog::bundled::bundled_agent_catalog_document(),
     )
@@ -1234,45 +1239,7 @@ async fn apply_agent_catalog_same_version_reports_already_current() {
         .await
         .expect("expected response");
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("read response body");
-    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
-    assert_eq!(payload["applied"], json!(false));
-    assert_eq!(payload.get("fromVersion"), None);
-    assert_eq!(payload.get("toVersion"), None);
-}
-
-#[tokio::test]
-async fn apply_agent_catalog_rejects_invalid_payload_without_state_change() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
-    let _guard = test_support::set_bearer_token_env(None);
-    let state = test_state(false);
-    let version_before = state.catalog_sync_service.catalog_version();
-    let app = build_router(state.clone());
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("PUT")
-                .uri("/v1/catalogs/agents")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from("{ not a catalog"))
-                .expect("expected request"),
-        )
-        .await
-        .expect("expected response");
-
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("read response body");
-    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
-    assert_eq!(payload["code"], "AGENT_CATALOG_REJECTED");
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert_eq!(state.catalog_sync_service.catalog_version(), version_before);
 }
 

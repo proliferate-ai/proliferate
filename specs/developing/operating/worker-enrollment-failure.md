@@ -170,23 +170,13 @@ missing.
 the request path, so a null or old value is not evidence that the token is
 unused.
 
-Legacy catalog convergence (deletion-pending — under the binary-only ruling
-the catalog rides the runtime binary and this whole path goes away) has
-separate evidence from binary convergence while it still runs:
-
-```text
-heartbeat desiredVersions.catalogVersion
-  -> AnyHarness GET /v1/catalogs/agents/version
-  -> public Cloud GET /v1/catalogs/agents when versions differ
-  -> authenticated AnyHarness PUT /v1/catalogs/agents
-```
-
-The Worker row does not persist the desired or active catalog version. Capture
-the advertised `catalogVersion` from the heartbeat/catalog response and the
-active version from AnyHarness using approved authenticated access; compare
-them with the Worker's bounded catalog-sync log lines. Once the deletion
-lands, the only catalog question is "which runtime version is this sandbox
-running" — `GET /v1/catalogs/agents/version` stays as the read-only answer.
+Catalog convergence is not a separate mechanism to debug: the catalog rides
+inside the runtime binary, so binary convergence IS catalog convergence. The
+only catalog question is "which catalog is this sandbox running", answered
+read-only by `GET /v1/catalogs/agents/version` on AnyHarness (via approved
+authenticated access). A version that looks stale is a binary-convergence
+question — check the desired AnyHarness version and the Supervisor activation
+evidence, not a document push.
 
 ## First response
 
