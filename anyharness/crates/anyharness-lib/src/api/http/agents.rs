@@ -26,6 +26,7 @@ use crate::domains::agents::auth::login_terminal::{
     get_agent_login_terminal as get_agent_login_terminal_session,
     start_agent_login_terminal_session,
 };
+use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 
 #[utoipa::path(
     get,
@@ -88,6 +89,16 @@ pub async fn install_agent(
         .agent_runtime
         .install_agent(&kind, install_request(req))
         .await?;
+    // Install-completed poke (model-catalog.md, "The snapshot reconciler": "both
+    // places an install finishes"). A snapshot is version-bound, so a fresh install
+    // is exactly when a harness's entries can have gone stale — and onboarding's
+    // "checking for latest models" step is this poke rendered, not a separate
+    // trigger. Fire-and-forget, after the response body is already decided.
+    ModelSnapshotService::poke_optional(
+        &state.automatic_poke_engine,
+        &kind,
+        PokeReason::InstallCompleted,
+    );
     Ok(Json(InstallAgentResponse {
         agent: to_summary(&outcome.agent, None),
         already_installed: outcome.already_installed,

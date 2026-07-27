@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 
 use axum::{
@@ -18,6 +18,7 @@ use super::router::build_router;
 use crate::{
     app::{test_support, AppState},
     domains::agents::{
+        installer::manifest::{record_entries, ManifestArtifact},
         model::{AgentKind, ArtifactRole},
         readiness::paths::artifact_root,
     },
@@ -95,6 +96,58 @@ fn install_fake_managed_registry_npm_binary(
     .expect("write fake managed registry npm binary");
     make_executable(&binary_path).expect("make fake managed registry npm binary executable");
     binary_path
+}
+
+/// Seeds a valid `AgentProcess` launcher on disk plus a matching install
+/// manifest entry, so BOTH gates the install path checks read this harness as
+/// already installed at its pinned version: the readiness surface
+/// (`RuntimeProbeTargets::is_installed`, via `managed_launcher_candidates`) reads
+/// the launcher file, and the installer's plan (`install_policy::plan_artifact`)
+/// reads the manifest to decide whether a pin mismatch forces a reinstall. Both
+/// have to agree, or `install_agent` either reports not-installed (readiness) or
+/// force-reinstalls over the network (the plan) despite the launcher sitting
+/// right there — which is exactly what would make the install-endpoint test
+/// below reach out to a real registry.
+///
+/// The script records that it ran (appending to `marker_path`) before exiting
+/// nonzero, so a REAL probe attempt reaching it (the mutation-check scenario in
+/// the poke-suppression tests below) leaves unmissable proof on disk instead of
+/// hanging out to `per_probe_timeout`.
+fn seed_fake_agent_process_launcher(
+    state: &AppState,
+    kind: AgentKind,
+    pinned_version: &str,
+    marker_path: &Path,
+) -> PathBuf {
+    let launcher_path = artifact_root(&state.runtime_home, &kind, &ArtifactRole::AgentProcess)
+        .join(format!("{}-launcher", kind.as_str()));
+    fs::create_dir_all(launcher_path.parent().expect("launcher parent"))
+        .expect("create fake agent process launcher dir");
+    fs::write(
+        &launcher_path,
+        format!(
+            "#!/bin/sh\necho ran >> \"{}\"\nexit 1\n",
+            marker_path.display()
+        ),
+    )
+    .expect("write fake agent process launcher");
+    make_executable(&launcher_path).expect("make fake agent process launcher executable");
+
+    record_entries(
+        &state.runtime_home,
+        kind.as_str(),
+        vec![ManifestArtifact {
+            role: "agent_process".to_string(),
+            version: Some(pinned_version.to_string()),
+            sha256: None,
+            source: "test_seed".to_string(),
+            installed_at: chrono::Utc::now().to_rfc3339(),
+            path: launcher_path.display().to_string(),
+        }],
+    )
+    .expect("record fake agent process manifest entry");
+
+    launcher_path
 }
 
 fn configure_direct_attach_auth(state: &AppState, target_id: &str) {
@@ -1494,4 +1547,260 @@ async fn model_snapshot_routes_require_bearer_auth() {
             "{method} {uri} must require bearer auth"
         );
     }
+}
+
+/// The auth-state routes still answer exactly as before now that they poke the probe
+/// engine, and the DELETE route pokes too.
+///
+/// The contract half is what matters: every poke is fire-and-forget, so neither route's
+/// status, body, nor latency may depend on a probe. Asserted through the real router so
+/// the wiring is exercised rather than the handler in isolation — a poke that blocked,
+/// panicked, or errored would surface here as a changed status.
+#[tokio::test]
+async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engine() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let app = build_router(test_state(false));
+
+    let document = json!({
+        "version": 2,
+        "revision": 4,
+        "harnesses": [
+            { "harness_kind": "opencode", "sources": [
+                { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-vk" }] },
+            // An api_key-only harness: the gateway-only scheduler this replaces would
+            // have skipped it entirely.
+            { "harness_kind": "codex", "sources": [
+                { "kind": "api_key", "env_var_name": "OPENAI_API_KEY", "key": "sk-openai" }] },
+        ],
+    });
+
+    let applied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/v1/agent-auth/state")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(document.to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(applied.status(), StatusCode::OK);
+    let body = to_bytes(applied.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["applied"], json!(true));
+    assert_eq!(
+        payload["revision"],
+        json!(4),
+        "the apply response must not wait on, or be altered by, a probe"
+    );
+
+    // A stale revision is still a typed 409, and pokes nothing new.
+    let stale = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/v1/agent-auth/state")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "version": 2, "revision": 1, "harnesses": [] }).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+
+    // And the clear route keeps its 204 while poking every harness.
+    let cleared = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/v1/agent-auth/state")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(cleared.status(), StatusCode::NO_CONTENT);
+}
+
+/// The install endpoint keeps its error contract now that it pokes.
+///
+/// The poke sits AFTER the fallible install, so a failed install must still surface its
+/// own typed error rather than anything the poke did. An unknown harness kind is the
+/// cheapest way to prove that ordering without downloading a real harness into the
+/// test's temp home.
+///
+/// The complementary case — the handler poking for a harness that ended up not
+/// installed — is asserted in the engine suite
+/// (`model_snapshot::wiring_tests::poking_an_uninstalled_harness_records_nothing`),
+/// where the outcome is observable: nothing written, not even a failed attempt.
+#[tokio::test]
+async fn the_install_endpoint_keeps_its_error_contract_while_poking() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let app = build_router(test_state(false));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/not-a-harness/install")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({}).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(
+        response.status(),
+        StatusCode::NOT_FOUND,
+        "an unknown harness is still a typed 404, not a poke-induced 500"
+    );
+}
+
+
+/// **Guards against the poke-suppression seam regressing silently.**
+/// `automatic_poke_engine` is the ONE handle that decides whether an automatic
+/// poke may ever spawn a real harness process — `None` under `#[cfg(test)]`, the
+/// always-live engine in production. `model_snapshot_service` is the always-present
+/// sibling used for reads and the manual refresh. A handler that quietly swapped
+/// from the former to the latter would keep every OTHER router test in this file
+/// green, because those only assert status codes — they cannot distinguish "poked"
+/// from "silently did nothing" (see `model_snapshot::wiring_tests`'s doc comment on
+/// `the_optional_poke_seam_pokes_when_wired_and_no_ops_when_suppressed`, which makes
+/// the identical point one layer down).
+///
+/// This drives the real HTTP handlers against a genuinely installed harness — a
+/// fake launcher script that appends to `marker_path` before exiting, so ANY probe
+/// attempt against it (including one that then fails the ACP handshake) leaves
+/// unmissable proof on disk — and asserts the marker stays untouched. Confirmed to
+/// fail against the regression it guards: swapping either handler's
+/// `&state.automatic_poke_engine` argument for
+/// `&Some(state.model_snapshot_service.clone())` turns this red (verified locally,
+/// then reverted; see the PR body / commit message for the exact mutation and its
+/// failure output).
+#[tokio::test]
+async fn agent_auth_state_routes_never_probe_while_the_automatic_engine_is_suppressed() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let state = test_state(false);
+    let marker_path = state.runtime_home.join("probe-ran.marker");
+    seed_fake_agent_process_launcher(&state, AgentKind::OpenCode, "1.18.3", &marker_path);
+    let app = build_router(state.clone());
+
+    // Names opencode with a gateway source, which classifies its `gateway` auth
+    // context active — exactly the shape an unsuppressed `AuthApplied` poke would
+    // spawn a real probe against.
+    let document = json!({
+        "version": 2,
+        "revision": 1,
+        "harnesses": [
+            { "harness_kind": "opencode", "sources": [
+                { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-vk" }] },
+        ],
+    });
+    let applied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/v1/agent-auth/state")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(document.to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(applied.status(), StatusCode::OK);
+
+    // Clearing state fans the (would-be) poke out to every installed harness —
+    // opencode is the only one seeded here, so it is still in scope.
+    let cleared = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/v1/agent-auth/state")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(cleared.status(), StatusCode::NO_CONTENT);
+
+    // A generous window: a real probe would spawn its child and write the marker
+    // well within it, long before `per_probe_timeout` would even matter.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        !marker_path.exists(),
+        "no automatic poke may reach an installed harness while the engine is suppressed: {:?}",
+        std::fs::read_to_string(&marker_path)
+    );
+}
+
+/// [`agent_auth_state_routes_never_probe_while_the_automatic_engine_is_suppressed`]'s
+/// sibling for the install endpoint's poke (site c). The seeded launcher plus its
+/// matching manifest entry make the install a genuine skip (`alreadyInstalled:
+/// true`, no network), so this proves the SAME suppression through the one poke
+/// site the other test cannot reach.
+#[tokio::test]
+async fn the_install_endpoint_never_probes_while_the_automatic_engine_is_suppressed() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let state = test_state(false);
+    let marker_path = state.runtime_home.join("probe-ran.marker");
+    seed_fake_agent_process_launcher(&state, AgentKind::OpenCode, "1.18.3", &marker_path);
+    let app = build_router(state.clone());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/opencode/install")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({}).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(
+        payload["alreadyInstalled"],
+        json!(true),
+        "the seeded launcher + manifest must make this a skip, not a network install"
+    );
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        !marker_path.exists(),
+        "no automatic poke may reach the installed harness while the engine is suppressed: {:?}",
+        std::fs::read_to_string(&marker_path)
+    );
 }

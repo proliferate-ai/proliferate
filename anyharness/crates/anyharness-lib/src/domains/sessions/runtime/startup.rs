@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::settings::resolve_settings_deltas;
+use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
@@ -370,11 +371,20 @@ impl SessionRuntime {
         let session_launch_env =
             build_session_launch_env(&resolved_agent, record.requested_model_id.as_deref())
                 .map_err(StartSessionError::Internal)?;
-        // Launch-time lazy trigger (spec §2c): if the current revision has no
-        // probe row, kick a background probe so the next launch has fresh data.
-        // Never blocks this launch — it already used seed data above.
-        self.gateway_model_resolver
-            .schedule_launch_probe_if_stale(&record.agent_kind, &self.runtime_home);
+        // Session-launch BACKSTOP (model-catalog.md, "The snapshot reconciler"):
+        // any probe a machine missed self-heals at the next launch. Fire-and-forget,
+        // placed after route resolution and before the spawn, exactly where the old
+        // gateway-only trigger sat — this launch already validated against whatever
+        // is fresh now and never waits for the probe.
+        //
+        // Unlike its predecessor this is staleness-gated per (harness, auth context)
+        // rather than per gateway revision, so a launch on a machine with fresh
+        // entries costs one in-memory gate evaluation and no spawn.
+        ModelSnapshotService::poke_optional(
+            &self.model_snapshot,
+            &record.agent_kind,
+            PokeReason::SessionLaunch,
+        );
         // Catalog settings: resolve persisted toggle values into launch-time
         // deltas (extra CLI args, extra env vars). The surface is always "local"
         // for local runtime launches (cloud sandboxes use their own surface).

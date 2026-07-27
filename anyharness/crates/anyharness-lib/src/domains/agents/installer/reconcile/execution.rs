@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
+use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 use crate::domains::agents::installer::progress::{
     InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
 };
@@ -131,6 +132,10 @@ impl AgentReconcileService {
         requested_agent_kinds: Vec<AgentKind>,
         agent_seed_store: Option<AgentSeedStore>,
         catalog: Option<AgentCatalogService>,
+        // The probe engine, poked per agent as each install finishes. Threaded in
+        // exactly as `agent_seed_store` and `catalog` are, and `None` in tests for
+        // the same reason: a job that pokes nothing must stay constructible.
+        model_snapshot: Option<Arc<ModelSnapshotService>>,
         surface: RuntimeSurface,
         admission: AgentReconcileAdmission,
     ) -> Result<AgentReconcileJobSnapshot, AgentReconcileStartError> {
@@ -217,6 +222,7 @@ impl AgentReconcileService {
                 surface,
                 progress,
                 agent_seed_store,
+                model_snapshot,
             )
             .await;
         });
@@ -254,6 +260,7 @@ async fn run_reconcile_job(
     surface: RuntimeSurface,
     progress: Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
     agent_seed_store: Option<AgentSeedStore>,
+    model_snapshot: Option<Arc<ModelSnapshotService>>,
 ) {
     // Defense in depth around the single visible job slot: even if future
     // callers change admission policy, blocking installers never mutate the
@@ -404,6 +411,22 @@ async fn run_reconcile_job(
             }
         };
         finish_agent_components(&progress, &kind, terminal_phase);
+        // Install-completed poke, per agent (model-catalog.md, "The snapshot
+        // reconciler"). This is the SOLE guarantor of probe-after-install ordering:
+        // the startup poke returns at admission and so cannot promise it, while this
+        // fires after the one harness that just converged, naming only that harness.
+        //
+        // Only on `Completed`. A `Failed` install leaves the previous binary in place
+        // and nothing to re-observe; a `Skipped` one installed nothing at all. Poking
+        // either would spend a real harness spawn to re-confirm an unchanged identity
+        // the gate would then call fresh anyway.
+        if probe_after_install(terminal_phase) {
+            ModelSnapshotService::poke_optional(
+                &model_snapshot,
+                kind.as_str(),
+                PokeReason::InstallCompleted,
+            );
+        }
 
         let _ = update_job(&jobs, &job_id, |job| {
             job.results.push(result);
@@ -480,6 +503,23 @@ fn apply_progress_update(
     component.phase = update.phase;
     component.downloaded_bytes = component.downloaded_bytes.max(update.downloaded_bytes);
     component.download_size_bytes = update.download_size_bytes.or(component.download_size_bytes);
+}
+
+/// Does this terminal install phase warrant a re-probe?
+///
+/// Only `Completed`. A `Failed` install leaves the previous binary in place and a
+/// `Skipped` one installed nothing, so neither changed the install identity a
+/// snapshot entry is bound to — poking either would spend a real harness spawn to
+/// re-confirm an identity the gate would then call fresh anyway.
+fn probe_after_install(phase: InstallProgressPhase) -> bool {
+    matches!(phase, InstallProgressPhase::Completed)
+}
+
+/// The predicate above, for the poke-wiring suite. Exposed rather than duplicated so
+/// the assertion cannot drift from the branch the job actually takes.
+#[cfg(test)]
+pub(crate) fn probe_after_install_for_test(phase: InstallProgressPhase) -> bool {
+    probe_after_install(phase)
 }
 
 fn finish_agent_components(

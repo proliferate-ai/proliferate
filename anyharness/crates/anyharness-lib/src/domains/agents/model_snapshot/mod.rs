@@ -18,6 +18,7 @@
 //! - [`detail`] makes a harness's own error text safe to persist (pure),
 //! - [`backoff`] spreads the retry ladder (pure),
 //! - [`attempt`] executes one admitted attempt and persists its outcome,
+//! - [`universe`] projects fresh entries into the launch-validation universe,
 //! - this file is the reconciler: the gate, the coalescing, and the pokes.
 //!
 //! **Four independent brakes**, because each stops a different runaway:
@@ -42,6 +43,7 @@ pub mod probe;
 pub mod staleness;
 pub mod status;
 pub mod targets;
+pub mod universe;
 
 #[cfg(test)]
 mod engine_tests;
@@ -49,6 +51,10 @@ mod engine_tests;
 mod runner_tests;
 #[cfg(test)]
 mod staleness_tests;
+#[cfg(test)]
+mod universe_tests;
+#[cfg(test)]
+mod wiring_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
 
@@ -102,6 +108,65 @@ struct ContextSlot {
     /// them, which is the whole coalescing mechanism.
     attempt_gate: tokio::sync::Mutex<()>,
     state: Mutex<ContextRuntimeState>,
+}
+
+/// RAII guard over one [`ContextSlot`]'s live state, for the lifetime of a single
+/// attempt (F-036).
+///
+/// Before this guard, `run_attempt` set `Queued`/`Running`/`Idle` as three bare
+/// statements straddling three await points (the harness gate, the machine-wide
+/// semaphore, and the probe itself). Dropping the caller's future anywhere
+/// between the first write and the last — a client that disconnects mid
+/// `refresh_now`, a task that gets aborted — skipped the final `Idle` write and
+/// left the slot pinned at `Queued` or `Running` forever, because `gate_admits`
+/// treats both as in-flight and refuses every subsequent poke for that key. A
+/// wedge like that is invisible from the status surface too: it reads a
+/// plausible `queued`/`running` forever, exactly the lie the design note beside
+/// `ContextRuntimeState::live` says the engine must not tell.
+///
+/// The fix mirrors two guards this module already has: `ProbeScratch`
+/// (`route_auth/probe_materialization/scratch.rs`) removes its scratch root on
+/// `Drop`, and the `CancellationToken` guard in `probe.rs` fires cancellation on
+/// `Drop`. Both make their piece of attempt state correct by construction,
+/// covering return, `?`, panic and future-drop alike. The live state was the one
+/// piece of attempt state that never got the same treatment.
+struct LiveStateGuard {
+    slot: Arc<ContextSlot>,
+}
+
+impl LiveStateGuard {
+    /// Admits the attempt: sets `Queued` immediately, BEFORE the harness gate and
+    /// the machine-wide semaphore, so a probe that is genuinely pending never
+    /// reports `idle`.
+    fn admit(slot: Arc<ContextSlot>) -> Self {
+        let guard = Self { slot };
+        guard.set(status::LiveState::Queued);
+        guard
+    }
+
+    /// The attempt cleared both concurrency waits and is now inside the probe
+    /// itself.
+    fn running(&self) {
+        self.set(status::LiveState::Running);
+    }
+
+    fn set(&self, live: status::LiveState) {
+        self.slot
+            .state
+            .lock()
+            .expect("model snapshot slot poisoned")
+            .live = live;
+    }
+}
+
+impl Drop for LiveStateGuard {
+    fn drop(&mut self) {
+        // Every exit out of `run_attempt` lands here: the success return, the
+        // failure return, an early `?`, a panic unwinding through the frame, or —
+        // the case F-036 proved reachable — the whole future being dropped
+        // without any of `run_attempt`'s own code running again.
+        self.set(status::LiveState::Idle);
+    }
 }
 
 pub struct ModelSnapshotService {
@@ -224,8 +289,24 @@ impl ModelSnapshotService {
     }
 
     /// Poke one harness's active contexts.
+    ///
+    /// **The single chokepoint for the manual-refresh-only law.** Every poke site
+    /// funnels through here — `poke_all` and `poke_harnesses` both delegate — so an
+    /// excluded harness is unreachable by an automatic poke no matter which site
+    /// raised it. Enforcing it at the call sites instead is exactly the bug this
+    /// shape prevents: the exclusion previously lived only in the whole-machine
+    /// enumeration, so the four pokes that name a harness directly bypassed it and
+    /// spawned `cursor-agent` unattended.
     pub fn poke_harness(self: Arc<Self>, harness_kind: &str, reason: PokeReason) {
         if !self.is_owner() {
+            return;
+        }
+        if !reason.is_user_initiated() && !self.targets.allows_automatic_probe(harness_kind) {
+            tracing::debug!(
+                harness = harness_kind,
+                reason = reason.as_str(),
+                "skipping an automatic probe for a manual-refresh-only harness"
+            );
             return;
         }
         if !self.targets.is_installed(harness_kind) {
@@ -243,9 +324,48 @@ impl ModelSnapshotService {
         }
     }
 
+    /// Poke one harness through an OPTIONAL engine handle — the shape every automatic
+    /// call site has, since each of them holds `Option<Arc<ModelSnapshotService>>`
+    /// (`None` means this build's pokes are suppressed, never "probe anyway").
+    ///
+    /// A named function rather than an `if let` repeated at five sites, so a test can
+    /// drive the exact code those sites run. Asserting a handler's status code proves
+    /// only that the poke did not break the response; asserting through here proves the
+    /// poke reached the engine and named the right harness.
+    pub fn poke_optional(
+        engine: &Option<Arc<Self>>,
+        harness_kind: &str,
+        reason: PokeReason,
+    ) {
+        if let Some(engine) = engine.clone() {
+            engine.poke_harness(harness_kind, reason);
+        }
+    }
+
+    /// [`ModelSnapshotService::poke_optional`]'s whole-machine sibling.
+    pub fn poke_all_optional(engine: &Option<Arc<Self>>, reason: PokeReason) {
+        if let Some(engine) = engine.clone() {
+            engine.poke_all(reason);
+        }
+    }
+
+    /// [`ModelSnapshotService::poke_optional`] for a named set of harnesses.
+    pub fn poke_harnesses_optional(
+        engine: &Option<Arc<Self>>,
+        harness_kinds: &[String],
+        reason: PokeReason,
+    ) {
+        if let Some(engine) = engine.clone() {
+            engine.poke_harnesses(harness_kinds, reason);
+        }
+    }
+
     /// Poke exactly the harnesses an applied auth document names. The FINGERPRINT
     /// gate, not the handler, then decides which actually re-probe.
     pub fn poke_harnesses(self: Arc<Self>, harness_kinds: &[String], reason: PokeReason) {
+        if !self.is_owner() {
+            return;
+        }
         for harness in harness_kinds {
             self.clone().poke_harness(harness, reason);
         }
@@ -439,13 +559,11 @@ impl ModelSnapshotService {
         backoff::jittered_backoff_seconds(harness_kind, auth_context_id, attempt, base_seconds)
     }
 
-    /// Set the live state, so a polling surface can tell "waiting for a slot" from
-    /// "a harness process is running" from "nothing is happening".
-    fn set_live_state(&self, slot: &ContextSlot, live: status::LiveState) {
-        slot.state
-            .lock()
-            .expect("model snapshot slot poisoned")
-            .live = live;
+    /// Admit an attempt to `slot`'s live state, RAII-style: `Queued` immediately,
+    /// `Idle` on `Drop` — regardless of which of `run_attempt`'s exits runs,
+    /// including a future dropped mid-probe (F-036). See [`LiveStateGuard`].
+    fn admit_attempt(&self, slot: Arc<ContextSlot>) -> LiveStateGuard {
+        LiveStateGuard::admit(slot)
     }
 
     fn harness_gate(&self, harness_kind: &str) -> Arc<tokio::sync::Mutex<()>> {

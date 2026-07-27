@@ -107,10 +107,18 @@ async fn a_probe_waiting_for_a_slot_reports_queued_not_idle() {
                 .await;
         })
     };
-    // Let both reach the engine while the runner is still gated.
-    for _ in 0..8 {
-        tokio::task::yield_now().await;
-    }
+    // Wait for both to reach the engine while the runner is still gated. A fixed
+    // yield count cannot do this: the spawns above may be on other workers.
+    wait_until("both contexts admitted", || {
+        let status = service.status("opencode", chrono::Utc::now());
+        status
+            .contexts
+            .iter()
+            .filter(|context| context.state != super::super::status::LiveState::Idle)
+            .count()
+            == 2
+    })
+    .await;
 
     let status = service.status("opencode", chrono::Utc::now());
     let states: Vec<super::super::status::LiveState> =
@@ -286,3 +294,93 @@ async fn a_second_poke_against_a_fresh_entry_does_nothing() {
         "the staleness gate alone must refuse the second poke"
     );
 }
+
+/// F-036 — a dropped `refresh_now` must not wedge the slot at `Running` forever.
+///
+/// Before the RAII guard, the live state was three bare `set_live_state` calls
+/// straddling three await points. Aborting the task that runs `refresh_now`
+/// drops the whole future — including the local frame that would have run the
+/// final `Idle` write — anywhere inside that span, and `gate_admits`
+/// (`mod.rs`) treats `Queued`/`Running` as in-flight and refuses every
+/// subsequent poke for that key. That is exactly what a client disconnecting
+/// mid-refresh does to an axum handler future: "the user closed the settings
+/// pane while it was refreshing" is not exotic, it is the common case for a
+/// 240s-timeout probe behind a semaphore of one.
+///
+/// This spawns a `refresh_now` against a gated fake runner, waits for the
+/// attempt to actually be `Running` (inside the probe, past both concurrency
+/// gates), aborts the task, and asserts both halves of the fix: (a) the slot's
+/// live state settles back to `Idle`, not stuck `Running`; and (b) the key is
+/// not wedged — a subsequent `probe_if_stale` still reaches the runner.
+#[tokio::test]
+async fn an_aborted_refresh_settles_to_idle_and_leaves_the_key_pokeable() {
+    let home = seeded_home("abort-wedge", "opencode");
+    let (runner, release) = FakeRunner::gated();
+    let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
+    let service = Arc::new(ModelSnapshotService::with_parts(
+        home.path().to_path_buf(),
+        plan,
+        Arc::new(FixedTargets::single("opencode", vec![gateway_context()])),
+        runner.clone(),
+        ProbeEngineConfig {
+            min_reprobe_interval: Duration::ZERO,
+            ..test_config()
+        },
+    ));
+
+    // Mirrors the axum handler: a manual refresh, spawned so it can be
+    // cancelled independently, exactly as a dropped request future would be.
+    let refresh_service = service.clone();
+    let handle = tokio::spawn(async move {
+        let _ = refresh_service.refresh_now("opencode", "gateway").await;
+    });
+
+    // Wait for the attempt to be genuinely IN the probe — past the harness gate
+    // and the semaphore — not merely queued, so the abort lands inside the
+    // window F-036 identified as droppable.
+    wait_until("the refresh reaches the gated runner as Running", || {
+        service
+            .status("opencode", chrono::Utc::now())
+            .contexts
+            .iter()
+            .any(|context| context.state == super::super::status::LiveState::Running)
+    })
+    .await;
+
+    handle.abort();
+    // `abort()` only schedules cancellation; join before asserting so the
+    // guard's `Drop` has actually run.
+    let _ = handle.await;
+
+    assert_eq!(
+        runner.count(),
+        1,
+        "the aborted attempt reached the runner exactly once"
+    );
+
+    let settled = service.status("opencode", chrono::Utc::now());
+    let gateway = settled
+        .contexts
+        .iter()
+        .find(|context| context.auth_context_id == "gateway")
+        .expect("gateway context in status");
+    assert_eq!(
+        gateway.state,
+        super::super::status::LiveState::Idle,
+        "a dropped refresh must not leave the context pinned at Running (F-036)"
+    );
+
+    // The key must not be wedged: release the (now-abandoned) gate and poke
+    // again — a real probe has to land, proving `gate_admits` does not still
+    // see this key as in-flight.
+    release.send(true).expect("release");
+    service
+        .probe_if_stale("opencode", "gateway", PokeReason::Startup)
+        .await;
+    assert_eq!(
+        runner.count(),
+        2,
+        "subsequent pokes for this key must still reach the runner after the abort"
+    );
+}
+

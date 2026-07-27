@@ -104,6 +104,22 @@ pub(crate) fn gateway_context() -> AgentCatalogAuthContext {
     }
 }
 
+/// Cursor's real catalog shape: one login context whose signals are an env var OR a
+/// keychain discovery. Cursor has NO gateway route at all
+/// (`render.rs` returns `UnsupportedRoute`), so a gateway-context fixture would fail
+/// materialization rather than exercise the policy under test.
+pub(crate) fn cursor_login_context() -> AgentCatalogAuthContext {
+    AgentCatalogAuthContext {
+        id: "cursor-login".to_string(),
+        auth_slot_id: Some("cursor".to_string()),
+        description: None,
+        signals: Some(AgentCatalogAuthSignal::AnyOf(vec![
+            AgentCatalogAuthSignal::Env("CURSOR_API_KEY".to_string()),
+            AgentCatalogAuthSignal::Discovery("cursor-keychain".to_string()),
+        ])),
+    }
+}
+
 pub(crate) fn env_context(id: &str, slot: &str, vars: &[&str]) -> AgentCatalogAuthContext {
     AgentCatalogAuthContext {
         id: id.to_string(),
@@ -124,6 +140,9 @@ pub(crate) struct FixedTargets {
     pub(crate) contexts: BTreeMap<String, Vec<String>>,
     pub(crate) catalog_contexts: BTreeMap<String, Vec<AgentCatalogAuthContext>>,
     pub(crate) installed: Vec<String>,
+    /// Harnesses no AUTOMATIC poke may probe — the fake's stand-in for the
+    /// production manual-refresh-only list.
+    pub(crate) manual_refresh_only: Vec<String>,
 }
 
 impl FixedTargets {
@@ -134,13 +153,22 @@ impl FixedTargets {
             contexts: BTreeMap::from([(harness.to_string(), ids)]),
             catalog_contexts: BTreeMap::from([(harness.to_string(), contexts)]),
             installed: vec![harness.to_string()],
+            manual_refresh_only: Vec::new(),
         }
     }
 }
 
 impl ProbeTargets for FixedTargets {
     fn auto_harnesses(&self) -> Vec<String> {
-        self.harnesses.clone()
+        self.harnesses
+            .iter()
+            .filter(|kind| self.allows_automatic_probe(kind))
+            .cloned()
+            .collect()
+    }
+
+    fn allows_automatic_probe(&self, harness_kind: &str) -> bool {
+        !self.manual_refresh_only.iter().any(|kind| kind == harness_kind)
     }
 
     fn active_contexts(&self, harness_kind: &str) -> Vec<String> {
@@ -186,26 +214,39 @@ impl CountingPlanProducer {
     }
 }
 
-impl GatewayModelResolve for CountingPlanProducer {
-    fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+impl CountingPlanProducer {
+    /// The memoized resolve both trait methods share, plus whether the seed FLOOR was
+    /// used. Modelled on the real planner so the engine's warning path is exercised
+    /// through the same shape production takes.
+    fn resolve_with_floor(&self, harness_kind: &str) -> (GatewayModelPlan, bool) {
         let mut memo = self.memo.lock().expect("memo poisoned");
+        let fetch_fails = *self.fetch_fails.lock().expect("flag poisoned");
         let models = memo
             .entry(harness_kind.to_string())
             .or_insert_with(|| {
                 self.fetch_count.fetch_add(1, Ordering::SeqCst);
-                if *self.fetch_fails.lock().expect("flag poisoned") {
+                if fetch_fails {
                     self.seed_models.clone()
                 } else {
                     self.models.lock().expect("models poisoned").clone()
                 }
             })
             .clone();
-        GatewayModelPlan {
-            default_model: Some("model-default".to_string()),
-            native_default_model: Some("model-native".to_string()),
-            small_fast_model: Some("model-small".to_string()),
-            models,
-        }
+        (
+            GatewayModelPlan {
+                default_model: Some("model-default".to_string()),
+                native_default_model: Some("model-native".to_string()),
+                small_fast_model: Some("model-small".to_string()),
+                models,
+            },
+            fetch_fails,
+        )
+    }
+}
+
+impl GatewayModelResolve for CountingPlanProducer {
+    fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+        self.resolve_with_floor(harness_kind).0
     }
 
     fn invalidate_gateway_plan(&self, harness_kind: &str) {
@@ -213,6 +254,14 @@ impl GatewayModelResolve for CountingPlanProducer {
             .lock()
             .expect("memo poisoned")
             .remove(harness_kind);
+    }
+
+    fn resolve_gateway_models_blocking(
+        &self,
+        harness_kind: &str,
+        _revision: i64,
+    ) -> (GatewayModelPlan, bool) {
+        self.resolve_with_floor(harness_kind)
     }
 }
 
@@ -371,5 +420,28 @@ pub(crate) fn snapshot(harness_kind: &str, auth_context: &str, models: &[String]
             })
             .collect(),
         warnings: Vec::new(),
+    }
+}
+
+/// Wait until `condition` holds, or fail after a generous bound.
+///
+/// Every poke is a fire-and-forget `tokio::spawn`, so a test that wants to observe its
+/// effect has to wait for another task. A fixed `yield_now` loop does NOT do that: on
+/// a multi-thread runtime the spawned task may be on another worker, so yielding N
+/// times guarantees nothing about its progress — the count only ever happens to be
+/// enough on a fast, idle machine. That is precisely how two of these tests passed
+/// locally and failed on CI once neighbouring tests added contention.
+///
+/// The bound is deliberately far larger than the work (which is microseconds against a
+/// fake runner): a real failure fails the assertion inside `condition` at the call
+/// site, and only a genuinely stuck engine reaches the timeout.
+pub(crate) async fn wait_until(label: &str, mut condition: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !condition() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting for: {label}"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
 }

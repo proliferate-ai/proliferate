@@ -64,6 +64,7 @@ async fn full_scope_pass_admits_every_absent_agent_instead_of_skipping_it() {
             // before it can reach the network.
             None,
             // Local: cursor is NOT carved out here, so it must be admitted too.
+            None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
@@ -143,6 +144,7 @@ async fn the_cloud_surface_reaches_the_predicate_and_carves_out_only_cursor() {
             false,
             false,
             Vec::new(),
+            None,
             None,
             None,
             RuntimeSurface::Cloud,

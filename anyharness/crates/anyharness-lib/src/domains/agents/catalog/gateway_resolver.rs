@@ -1,21 +1,27 @@
-//! Catalog-resolved gateway model plans (spec §3).
+//! The LEGACY gateway model resolver: `gateway_model_probe` sqlite rows plus the
+//! catalog's `gatewayPolicy`.
 //!
-//! Turns "(harness, revision)" into a [`GatewayModelPlan`] the render plane
-//! consumes directly. The plan's model list is the latest probe rows for the
-//! revision (else the catalog's `gatewayPolicy.seedModels`), filtered by the
-//! harness's `gatewayPolicy.providers`; the default/small-fast pins come from
-//! `session.defaults["gateway"]` / `gatewayPolicy.roles`. This is where the
-//! model-id constants that used to live in the render layer now come from —
-//! all as catalog data, never code.
+//! Two jobs are left here, both on their way out. It still backs the legacy
+//! `GET /v1/agents/{kind}/catalog/gateway-models` read route (the enrichment join
+//! plus the seed-vs-probe freshness label the desktop All-Models tab renders), which
+//! the model-snapshot route cutover replaces; and it still owns the model-family
+//! normalizer and provider table that the picker's enrichment join uses, which
+//! relocate with the old-chain deletion.
+//!
+//! It is NO LONGER on the render path. `render_profile` now takes its plan from
+//! `gateway_plan::GatewayModelPlanner`, because this resolver's model list comes
+//! from probe rows keyed on `state.json`'s GLOBAL revision — so any harness's key
+//! rotation invalidated every harness's list, and an opencode gateway probe over a
+//! missing row would have observed only the seed ids the launch itself wrote.
+//! Nothing here schedules a probe any more either: launch-time re-observation is a
+//! poke of the model-snapshot reconciler.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use super::gateway_probe::{probe_gateway_models, GatewayProbeStore};
 use super::schema::{AgentCatalogGatewayPolicy, AgentCatalogModel};
 use super::sync::CatalogSyncService;
-use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;
-use crate::domains::agents::route_auth::{load_state_file, GatewayModelPlan, GatewayModelResolve};
+use crate::domains::agents::route_auth::{GatewayModelPlan, GatewayModelResolve};
 
 /// The gateway model context key the catalog uses for gateway-route curation
 /// (matches the `gateway` auth-context id and `defaults["gateway"]`).
@@ -42,7 +48,7 @@ const NATIVE_CONTEXT_PRECEDENCE: &[&str] = &[
 /// from that provider's context default — never from `defaults["gateway"]` (a
 /// gateway-only model id would 404 against the user's own account) and never from
 /// a Rust constant (the catalog owns model names).
-fn native_default_model(defaults: &std::collections::BTreeMap<String, String>) -> Option<String> {
+pub(super) fn native_default_model(defaults: &std::collections::BTreeMap<String, String>) -> Option<String> {
     NATIVE_CONTEXT_PRECEDENCE
         .iter()
         .find_map(|context| defaults.get(*context).cloned())
@@ -223,7 +229,7 @@ fn model_matches_provider(provider: &str, model_id: &str) -> bool {
 
 /// Filter `models` to those served by any of `providers`. Empty `providers`
 /// means "all" — no filtering (opencode/grok).
-fn filter_by_providers(models: Vec<String>, providers: &[String]) -> Vec<String> {
+pub(super) fn filter_by_providers(models: Vec<String>, providers: &[String]) -> Vec<String> {
     if providers.is_empty() {
         return models;
     }
@@ -352,30 +358,6 @@ impl GatewayModelResolver {
         )
     }
 
-    /// The gateway (base_url, key) for a harness from the current state file,
-    /// if a gateway source exists.
-    fn gateway_credentials(
-        &self,
-        harness_kind: &str,
-        runtime_home: &Path,
-    ) -> Option<(String, String)> {
-        let state = load_state_file(runtime_home).ok().flatten()?;
-        // Absent harness and present-but-empty are the same answer here: no
-        // gateway credentials to plan with. Fail-closed refusal is the launch
-        // path's job, not the model planner's.
-        let source = state
-            .sources_for(harness_kind)
-            .unwrap_or_default()
-            .iter()
-            .find(|source| source.kind == SOURCE_KIND_GATEWAY)?;
-        let base_url = source
-            .base_url
-            .clone()
-            .filter(|url| !url.trim().is_empty())?;
-        let key = source.key.clone().filter(|key| !key.trim().is_empty())?;
-        Some((base_url, key))
-    }
-
     /// Probe now and record the result, returning the probed model list. Used
     /// by the manual refresh endpoint (spec §2b), which surfaces probe errors.
     pub async fn refresh_now(
@@ -402,54 +384,11 @@ impl GatewayModelResolver {
         }
         Ok(models)
     }
-
-    /// Probe now and record (spec §2a/§2c). Best-effort: probe failures are
-    /// logged and swallowed so a slow/unreachable gateway never surfaces as a
-    /// launch or apply error.
-    pub async fn probe_and_record(
-        &self,
-        harness_kind: &str,
-        revision: i64,
-        base_url: &str,
-        key: &str,
-    ) {
-        if let Err(error) = self.refresh_now(harness_kind, revision, base_url, key).await {
-            tracing::warn!(harness = harness_kind, revision, %error, "gateway model probe failed");
-        }
-    }
 }
 
 impl GatewayModelResolve for GatewayModelResolver {
     fn resolve_gateway_models(&self, harness_kind: &str, revision: i64) -> GatewayModelPlan {
         self.resolve_with_source(harness_kind, revision).0
-    }
-
-    fn schedule_launch_probe_if_stale(&self, harness_kind: &str, runtime_home: &Path) {
-        // Only schedule when a gateway source exists and no probe row is
-        // present for the current revision (spec §2c). Never blocks the launch.
-        let Some((base_url, key)) = self.gateway_credentials(harness_kind, runtime_home) else {
-            return;
-        };
-        let state_revision = load_state_file(runtime_home)
-            .ok()
-            .flatten()
-            .map(|state| state.revision)
-            .unwrap_or(0);
-        match self.probe_store.latest(harness_kind, state_revision) {
-            Ok(Some(_)) => return, // fresh enough for this revision
-            Ok(None) => {}
-            Err(error) => {
-                tracing::warn!(harness = harness_kind, %error, "gateway probe staleness check failed");
-                return;
-            }
-        }
-        let resolver = self.clone();
-        let harness = harness_kind.to_string();
-        tokio::spawn(async move {
-            resolver
-                .probe_and_record(&harness, state_revision, &base_url, &key)
-                .await;
-        });
     }
 }
 

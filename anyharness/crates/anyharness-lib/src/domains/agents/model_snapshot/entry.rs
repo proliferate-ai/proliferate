@@ -9,6 +9,7 @@ use super::document::{
     AttemptOutcome, InstallIdentity, SnapshotAttempt, SnapshotAttestation, SnapshotEntry,
     SnapshotMode, SnapshotModel, SnapshotObservedDefaults,
 };
+use crate::domains::agents::catalog::gateway_plan::SEED_FALLBACK_WARNING;
 
 /// Project a raw `ProbeSnapshot` into the document's entry shape.
 ///
@@ -19,9 +20,18 @@ pub(super) fn entry_from_snapshot(
     snapshot: crate::live::sessions::probe::ProbeSnapshot,
     fingerprint: String,
     install_identity: Option<InstallIdentity>,
+    used_seed_floor: bool,
     now: DateTime<Utc>,
 ) -> SnapshotEntry {
     let at = now.to_rfc3339();
+    // The honest signal that this particular observation is not a discovery. A
+    // gateway probe rendered over the seed floor watches the harness read back the
+    // very ids the floor just wrote into its config, so the entry must say so rather
+    // than present a tautology as the gateway's model set.
+    let mut warnings = snapshot.warnings;
+    if used_seed_floor && !warnings.iter().any(|warning| warning == SEED_FALLBACK_WARNING) {
+        warnings.push(SEED_FALLBACK_WARNING.to_string());
+    }
     SnapshotEntry {
         probed_at: at.clone(),
         mechanism: "acp".to_string(),
@@ -54,7 +64,7 @@ pub(super) fn entry_from_snapshot(
             model_id: snapshot.current_model_id,
             mode_id: snapshot.current_mode_id,
         }),
-        warnings: snapshot.warnings,
+        warnings,
         last_attempt: SnapshotAttempt {
             at,
             outcome: AttemptOutcome::Ok,
