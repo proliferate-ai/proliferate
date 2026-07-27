@@ -297,13 +297,16 @@ fn trial_verified_models_stay_launchable_against_the_real_probe_fixture() {
         assert_eq!(selection.model_id.as_deref(), Some(id));
     }
 
-    // A NON-trial model the same observation omits is refused — the two behaviors
-    // asserted against one universe, so the flag is provably what separates them.
-    let non_trial = agent
+    // Against the real catalog, every `anthropic-api` model is either one of the
+    // fixture's four observed selectors or `viaTrialOnly`. This asserts that set is
+    // empty, not merely convenient — a future catalog addition that is neither
+    // observed nor trial-flagged would silently skip the refusal check below instead
+    // of failing loudly, so the emptiness itself is pinned first.
+    let unexempt_and_unobserved: Vec<&str> = agent
         .session
         .models
         .iter()
-        .find(|model| {
+        .filter(|model| {
             model.availability.any_of.iter().any(|id| id == "anthropic-api")
                 && model
                     .provenance
@@ -312,15 +315,15 @@ fn trial_verified_models_stay_launchable_against_the_real_probe_fixture() {
                     != Some(true)
                 && !["default", "opus[1m]", "sonnet", "haiku"].contains(&model.id.as_str())
         })
-        .map(|model| model.id.clone());
-    if let Some(non_trial) = non_trial {
-        assert!(
-            catalog
-                .validate_launch_in_universe("claude", &active, Some(&non_trial), None, &universe)
-                .is_err(),
-            "{non_trial} is neither observed nor trial-verified, so it must be refused"
-        );
-    }
+        .map(|model| model.id.as_str())
+        .collect();
+    assert!(
+        unexempt_and_unobserved.is_empty(),
+        "the real catalog's anthropic-api models are all either observed by the fixture \
+         or viaTrialOnly; {unexempt_and_unobserved:?} would need the refusal this test \
+         cannot currently exercise — extend the fixture's observed set or this test's \
+         explicit refusal case instead of leaving it untested"
+    );
 }
 
 /// A model observed only under a variant id stays launchable by its BASE id.
