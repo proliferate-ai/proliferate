@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { GoalBar } from "@proliferate/product-ui/activity/GoalBar";
 import type { ScenarioKey } from "#product/config/playground";
+import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import {
   GOAL_ACTIVE_LONG,
   GOAL_ACTIVE_MULTILINE,
@@ -13,8 +14,6 @@ import {
   GOAL_MET_LONG_OBJECTIVE,
   GOAL_PAUSED,
 } from "#product/lib/domain/chat/__fixtures__/playground/goal-fixtures";
-
-const NOOP = () => {};
 
 /**
  * Every goal bar state from static fixtures: live pursuing (short/long
@@ -113,13 +112,13 @@ function PlaygroundGoalBar({
       defaultEditing={defaultEditing}
       defaultResultExpanded={defaultResultExpanded}
       pendingWrite={pendingWrite}
-      onEdit={NOOP}
-      onPause={NOOP}
-      onResume={NOOP}
-      onClear={NOOP}
-      onDismiss={NOOP}
-      onCancelCompose={NOOP}
-      onSetNewGoal={NOOP}
+      onEdit={noop}
+      onPause={noop}
+      onResume={noop}
+      onClear={noop}
+      onDismiss={noop}
+      onCancelCompose={noop}
+      onSetNewGoal={noop}
     />
   );
 }

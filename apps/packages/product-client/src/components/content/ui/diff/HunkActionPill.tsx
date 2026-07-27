@@ -36,7 +36,7 @@ export function HunkActionPill({
 
   return (
     <div
-      className={`absolute right-2 top-0 z-10 flex items-center gap-0.5 rounded-md border border-border/50 bg-[var(--codex-diffs-surface)] px-0.5 py-0.5 shadow-popover transition-opacity duration-hover ${revealClasses}`}
+      className={`absolute right-2 top-0 z-10 flex items-center gap-0.5 rounded-md border border-border/50 bg-[var(--diff-view-surface)] px-0.5 py-0.5 shadow-popover transition-opacity duration-hover ${revealClasses}`}
     >
       {isUnstaged && (
         <Tooltip content="Revert hunk">

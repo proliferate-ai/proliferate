@@ -37,7 +37,7 @@ vi.mock("#product/stores/toast/toast-store", () => ({
 
 // ConfirmationDialog wraps Radix Dialog (no jsdom polyfills) — stub to plain
 // buttons so the revoke flow is exercisable.
-vi.mock("@proliferate/ui/primitives/ConfirmationDialog", () => ({
+vi.mock("@proliferate/ui/patterns/ConfirmationDialog", () => ({
   ConfirmationDialog: ({
     open,
     confirmLabel,

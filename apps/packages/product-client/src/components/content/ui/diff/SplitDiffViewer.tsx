@@ -38,7 +38,7 @@ import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 const SPLIT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",
   backgroundColor: "var(--diffs-bg)",
-  "--diffs-bg": "var(--codex-diffs-surface)",
+  "--diffs-bg": "var(--diff-view-surface)",
   "--diffs-addition-color": "var(--diffs-addition-color-override)",
   "--diffs-deletion-color": "var(--diffs-deletion-color-override)",
   "--diffs-min-number-column-width": "4ch",
@@ -141,7 +141,7 @@ function SplitCollapsedCells({
         onClick={onExpand}
         aria-label={`Expand ${section.lineCount} unmodified lines`}
         title={`${section.lineCount} unmodified lines`}
-        className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] cursor-pointer items-center justify-center bg-[var(--codex-diffs-separator-surface)] border-0 p-0 text-muted-foreground/60 transition-colors hover:text-foreground"
+        className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] cursor-pointer items-center justify-center bg-[var(--diff-view-separator-surface)] border-0 p-0 text-muted-foreground/60 transition-colors hover:text-foreground"
       >
         <DiffCollapsedGutterIcon />
       </Button>
@@ -154,7 +154,7 @@ function SplitCollapsedCells({
         onClick={onExpand}
         aria-label={`Expand ${section.lineCount} unmodified lines`}
         title={`${section.lineCount} unmodified lines`}
-        className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
+        className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--diff-view-separator-surface)] p-0 text-left font-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
       >
         <DiffCollapsedContentLabel
           lineCount={section.lineCount}
@@ -179,7 +179,7 @@ function SplitGapCells({
       <div
         data-gutter=""
         data-separator="gap-expander"
-        className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-center justify-center bg-[var(--codex-diffs-separator-surface)]"
+        className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-center justify-center bg-[var(--diff-view-separator-surface)]"
       >
         {canExpand && (
           <DiffGapGutterControls gap={gap} onExpand={onExpand} />
@@ -188,7 +188,7 @@ function SplitGapCells({
       <div
         data-content=""
         data-separator="gap-expander"
-        className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)]"
+        className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--diff-view-separator-surface)]"
       >
         {canExpand ? (
           <DiffGapContentLabel
@@ -430,7 +430,7 @@ export function SplitDiffViewer({
           data-interactive-line-numbers=""
           tabIndex={0}
           style={preStyle}
-          className={`m-0 grid bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
+          className={`m-0 grid bg-[var(--diff-view-surface)] p-0 font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
             wrapLongLines
               ? "w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
               : "w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"

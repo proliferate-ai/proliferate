@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { MoreHorizontal } from "@proliferate/ui/icons";
-import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
+import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 
 export function PaneOptionsMenu({

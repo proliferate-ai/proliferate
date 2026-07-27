@@ -12,7 +12,7 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { CurrentUserInvitationsSection } from "#product/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { AUTH_ACCOUNT_LABELS, CONNECT_SERVER_LABELS } from "#product/copy/auth/auth-copy";

@@ -11,7 +11,7 @@ import {
 
 const SIDEBAR_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";
 const SIDEBAR_DIFF_SURFACE_STYLE = {
-  "--codex-diffs-surface-override": "var(--color-diff-surface)",
+  "--diff-view-surface-override": "var(--color-diff-surface)",
 } as CSSProperties;
 
 export function PlaygroundSidebarGitDiff() {

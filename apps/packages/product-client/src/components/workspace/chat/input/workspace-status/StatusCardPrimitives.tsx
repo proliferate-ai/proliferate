@@ -6,7 +6,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@proliferate/ui/kit/Tooltip";
+} from "@proliferate/ui/primitives/tooltip-primitive";
 
 /**
  * The codex card anatomy (reference/codex/status/card.html), extracted from

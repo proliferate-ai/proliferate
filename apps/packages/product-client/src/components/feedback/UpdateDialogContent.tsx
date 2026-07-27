@@ -1,7 +1,7 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
+import { ProliferateIcon } from "@proliferate/ui/icons/proliferate-icons";
 
 export interface UpdateDialogContentProps {
   availableVersion: string | null;

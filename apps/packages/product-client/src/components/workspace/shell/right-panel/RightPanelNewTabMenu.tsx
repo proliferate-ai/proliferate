@@ -4,7 +4,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@proliferate/ui/kit/DropdownMenu";
+} from "@proliferate/ui/primitives/DropdownMenu";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import {
   AppShellPlusIcon,
