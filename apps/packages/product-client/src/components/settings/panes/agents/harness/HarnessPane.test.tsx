@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
@@ -137,27 +137,30 @@ vi.mock("#product/stores/toast/toast-store", () => ({
 }));
 
 // ModalShell (Radix Dialog) has no jsdom polyfills here — stub the picker to a
-// deterministic button that fires onSelect when the modal is open.
+// deterministic button that fires onSubmit (provider + pasted key) when open.
 vi.mock("./ProviderPickerModal", () => ({
   ProviderPickerModal: ({
     open,
-    onSelect,
-    onClose,
+    onSubmit,
   }: {
     open: boolean;
-    onSelect: (provider: { id: string; displayName: string; envVarNames: string[] }) => void;
-    onClose: () => void;
+    onSubmit: (
+      provider: { id: string; displayName: string; envVarNames: string[] },
+      value: string,
+    ) => void;
   }) =>
     open ? (
       <button
         type="button"
         onClick={() => {
-          onSelect({
-            id: "openrouter",
-            displayName: "OpenRouter",
-            envVarNames: ["OPENROUTER_API_KEY"],
-          });
-          onClose();
+          onSubmit(
+            {
+              id: "openrouter",
+              displayName: "OpenRouter",
+              envVarNames: ["OPENROUTER_API_KEY"],
+            },
+            "sk-openrouter",
+          );
         }}
       >
         pick-openrouter
@@ -761,7 +764,7 @@ describe("HarnessPane authentication", () => {
     );
   });
 
-  it("prefills a new row from the opencode provider picker", () => {
+  it("prefills a new row from the opencode provider picker", async () => {
     // Seed an api_key selection so the API key detail section is visible.
     state.selections.data = [{
       id: "sel-key",
@@ -779,10 +782,40 @@ describe("HarnessPane authentication", () => {
     renderPane("opencode");
 
     fireEvent.click(screen.getByRole("button", { name: /Add provider/ }));
-    fireEvent.click(screen.getByRole("button", { name: "pick-openrouter" }));
+    // The picker is React.lazy (its logo map must stay out of the login chunk).
+    const pick = await screen.findByRole("button", { name: "pick-openrouter" });
+    fireEvent.click(pick);
 
-    // New row shows env var name (read-only display since it has a value).
-    expect(screen.getByText("OPENROUTER_API_KEY")).toBeTruthy();
+    // Write 1: the vault api_key entry, from the inline paste field.
+    expect(createKeyMutate).toHaveBeenCalledWith(
+      { title: "OpenRouter API key", value: "sk-openrouter" },
+      expect.anything(),
+    );
+
+    // Write 2: one selection row (env var = provider's first registry env var,
+    // provider_hint = provider id), once the vault create resolves.
+    const lastCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
+    const onSuccess = lastCall?.[1]?.onSuccess;
+    await act(async () => {
+      onSuccess?.({ id: "key-openrouter" });
+    });
+
+    expect(putMutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: {
+          sources: expect.arrayContaining([
+            {
+              sourceKind: "api_key",
+              apiKeyId: "key-openrouter",
+              envVarName: "OPENROUTER_API_KEY",
+              providerHint: "openrouter",
+              enabled: true,
+            },
+          ]),
+        },
+      }),
+      expect.anything(),
+    );
   });
 
   it("disables the gateway toggle with a subtitle when the gateway is unavailable", () => {
