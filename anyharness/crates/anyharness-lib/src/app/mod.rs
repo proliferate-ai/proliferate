@@ -13,9 +13,7 @@ use crate::domains::activity::feeds::FeedService;
 use crate::domains::activity::runtime::{ActivityRuntime, ActivitySessionHooks};
 use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::store::ActivityStore;
-use crate::domains::agents::catalog::gateway_probe::GatewayProbeStore;
 use crate::domains::agents::catalog::gateway_plan::GatewayModelPlanner;
-use crate::domains::agents::catalog::gateway_resolver::GatewayModelResolver;
 use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::agents::model_snapshot::targets::RuntimeProbeTargets;
 use crate::domains::agents::model_snapshot::ModelSnapshotService;
@@ -119,7 +117,6 @@ pub struct AppState {
     pub agent_seed_store: AgentSeedStore,
     pub agent_runtime: Arc<AgentRuntime>,
     pub catalog_sync_service: Arc<CatalogSyncService>,
-    pub gateway_model_resolver: Arc<GatewayModelResolver>,
     /// The probe engine, for READS and for the user-initiated refresh: the status
     /// route and the launch-validation universe.
     pub model_snapshot_service: Arc<ModelSnapshotService>,
@@ -228,13 +225,6 @@ impl AppState {
             // would put a process-global read inside the reconcile loop.
             crate::domains::agents::runtime::RuntimeSurface::from_env(),
         );
-        // Gateway model resolver: still the producer behind the legacy
-        // gateway-models read route (its enrichment + freshness-source projection),
-        // which the route cutover deletes.
-        let gateway_model_resolver = Arc::new(GatewayModelResolver::new(
-            catalog_sync_service.clone(),
-            GatewayProbeStore::new(db.clone()),
-        ));
         // The RENDER plane's plan producer: catalog gatewayPolicy plus a memoized
         // live `GET /v1/models`. It replaces the resolver on the render path
         // because the resolver read its model list from the revision-keyed
@@ -592,7 +582,6 @@ impl AppState {
             agent_seed_store,
             agent_runtime,
             catalog_sync_service,
-            gateway_model_resolver,
             model_snapshot_service,
             automatic_poke_engine,
             agent_reconcile_service,

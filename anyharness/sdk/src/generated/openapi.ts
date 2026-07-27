@@ -2842,7 +2842,10 @@ export interface components {
             models: components["schemas"]["GatewayModelEntry"][];
             /** @description When a probe supplied the list (RFC3339); absent for seed. */
             probedAt?: string | null;
-            /** @description `"seed"` (no probe yet) or `"probe"` (a live probe supplied the list). */
+            /**
+             * @description `"seed"` (no snapshot entry yet) or `"probe"` (a snapshot observation
+             *     supplied the list).
+             */
             source: string;
         };
         /** @description Response payload for fetching the current live session config snapshot. */
@@ -4012,8 +4015,9 @@ export interface components {
         /** @description Result of a manual gateway refresh. */
         RefreshGatewayResponse: {
             /**
-             * @description The freshly probed model ids — exactly what the gateway returned, with
-             *     no client-side provider filtering applied anywhere downstream.
+             * @description The freshly probed model ids — exactly what the snapshot entry now
+             *     carries for the gateway context, with no client-side provider
+             *     filtering applied anywhere downstream.
              */
             models: string[];
             /** @description The probe timestamp (RFC3339). */
@@ -5826,8 +5830,17 @@ export interface operations {
                     "application/json": components["schemas"]["RefreshGatewayResponse"];
                 };
             };
-            /** @description No gateway selection for this harness */
-            400: {
+            /** @description Unknown agent kind or no gateway route active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description This runtime does not own the probe engine, or its local auth config is unusable */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,8 +1,8 @@
 pub mod bundled;
 pub mod gateway_plan;
 pub mod gateway_probe;
-pub mod gateway_resolver;
 pub mod loader;
+pub mod projection;
 pub mod schema;
 pub mod selection;
 pub mod service;

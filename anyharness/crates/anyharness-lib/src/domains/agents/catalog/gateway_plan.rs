@@ -38,7 +38,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::gateway_probe::probe_gateway_models;
-use super::gateway_resolver::native_default_model;
+use super::projection::native_default_model;
 use super::schema::{AgentCatalogGatewayPolicy, AgentCatalogModel};
 use super::sync::CatalogSyncService;
 use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;

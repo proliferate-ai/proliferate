@@ -11,7 +11,7 @@ use std::path::Path;
 use super::SessionService;
 use crate::domains::agents::auth::context::{classify, ActiveAuthContexts};
 use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
-use crate::domains::agents::catalog::gateway_resolver;
+use crate::domains::agents::catalog::projection;
 use crate::domains::agents::catalog::schema::{
     AgentCatalogModelControl, AgentCatalogSessionControl,
 };
@@ -162,7 +162,7 @@ impl SessionService {
                         is_default: default_model_id.as_deref() == Some(model.id.as_str()),
                         default_opt_in: None,
                         description: model.description.clone(),
-                        provider: gateway_resolver::provider_for_model(&model.id)
+                        provider: projection::provider_for_model(&model.id)
                             .map(str::to_string),
                         status: Some(model.status),
                         effort: projected_model_effort(&model.controls),
