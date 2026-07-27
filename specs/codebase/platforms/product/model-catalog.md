@@ -577,7 +577,11 @@ because both read the same universe.
   staleness visible when the snapshot is old.
 - **Provider badges**: every served model entry carries its origin — the
   auth context that served it, and the `provider` namespace — as explicit
-  fields, so the UI never infers origin from a model name.
+  fields, so the UI never infers origin from a model name. The desktop
+  launch-catalog merge now plumbs `provider` through instead of dropping it
+  (C3); no consuming surface renders it yet — the composer's badge still
+  calls `getProviderDisplayName(harnessKind)` rather than reading the
+  field, so today's badge is still name-inferred in practice.
 
 ## Model identity
 
@@ -807,10 +811,29 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       the gateway-context special case of the machine snapshot and is
       replaced by it (jointly ruled with the agent-distribution and
       model-gateway gap lists).
-- [ ] No staleness UI exists: `probed_at` is stored on cloud snapshots but
-      no surface renders "refreshed N minutes ago" or "needs refresh",
-      and no auth fingerprint exists to compute staleness from.
-- [ ] Model entries do not carry provider namespace or serving-context as
-      explicit fields; the frontend derives what it can from ids.
+- [ ] Staleness UI for the local/native/api_key routes and the no-runtime
+      cloud picker: the runtime-gateway path now polls
+      `GET /v1/agents/{kind}/model-snapshot` (A7's route) and renders
+      "refreshed N minutes ago" / "needs refresh" from its `ContextStatus`
+      (C3, [HarnessAllModelsSection](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAllModelsSection.tsx)).
+      The other routes still show no staleness — their picker sources
+      (cloud catalog snapshot, no-runtime signed-out local) have no per-auth-
+      context machine-snapshot document to poll yet (blocked on the cloud
+      snapshot re-key, B4/C2).
+- [ ] Model entries do not carry serving-context (the auth context that
+      served them) as an explicit field; `AgentLaunchModelOption` and
+      `GatewayModelEntry` (contract/`agent_gateway_catalog.rs`) have no
+      per-model context attribution today, only a harness-level kind. This
+      matters once a harness materializes several auth contexts at once
+      (opencode's multi-provider case); the gateway route's single fixed
+      context needed no tagging to render correctly (C3).
+- [ ] `provider` is now plumbed through the desktop launch-catalog merge
+      instead of being silently dropped
+      ([cloud-launch-catalog.ts](../../../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts),
+      C3), but no surface reads it yet: the composer's provider badge still
+      calls `getProviderDisplayName(harnessKind)`
+      ([provider-display.ts](../../../../apps/packages/product-client/src/lib/domain/agents/provider-display.ts))
+      rather than the field on the model itself. Removing that inference is
+      the remaining step.
 - [ ] Onboarding contains no "checking for latest models" step (the
       surface rendering the install-completed and auth-applied pokes).

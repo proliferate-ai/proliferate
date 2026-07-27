@@ -39,6 +39,7 @@ export {
   anyHarnessReconcileAgentsMutationKey,
   anyHarnessAgentGatewayModelsKey,
   anyHarnessAgentGatewayModelsPrefixKey,
+  anyHarnessAgentModelSnapshotStatusKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspacePurgePreflightKey,
@@ -108,6 +109,12 @@ export {
   useAgentGatewayModelsQuery,
   useRefreshAgentGatewayModelsMutation,
 } from "./hooks/agent-gateway-catalog.js";
+export {
+  useModelSnapshotStatusQuery,
+  useRefreshModelSnapshotMutation,
+  resolveModelSnapshotRefetchInterval,
+  MODEL_SNAPSHOT_ACTIVE_INTERVAL_MS,
+} from "./hooks/model-snapshot.js";
 export {
   useRepoRootsQuery,
   useReadRepoRootFileMutation,
