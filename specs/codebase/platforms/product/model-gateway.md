@@ -357,22 +357,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       (`managed-cloud-fixture-smoke-1.ts`, `t3-bill-4.ts`). The code's only
       product-server producer was the server-side catalog prober, which the
       model-catalog re-key deleted.
-- [ ] **The account model is not org-only yet.** Personal enrollments
-      (`subject_kind='user'`, `user-<uuid>` teams) exist beside org rows;
-      the free signup grant lands on a personal billing subject; and both
-      enrollment paths mint the same shared LiteLLM user id
-      (`user-<uuid>`, `enrollment.py`) rather than per-(org, member)
-      identities. The unification: delete the personal subject shape,
-      re-parent existing personal teams onto each user's default org, move
-      grants to the org subject, mint per-org LiteLLM users, and re-mint
-      keys under them (the enrollment fingerprint machinery absorbs the
-      re-mint as ordinary shape drift).
-- [ ] **The interim funding-follows-attribution guard deletes with the
-      unification.** Today a member's org enrollment governs only when the
-      org subject is funded, else the personal enrollment
-      ([budget.py](../../../../server/proliferate/server/cloud/agent_gateway/budget.py)
-      `get_gateway_enrollment_for_user`, including the unstable
-      first-membership-by-org-name choice); under the ruling, sessions
-      always resolve the default org's enrollment, and the guard — plus its
-      "no grant means unlimited" branch — is replaced by the fail-closed
-      unfunded-org law in the body.
