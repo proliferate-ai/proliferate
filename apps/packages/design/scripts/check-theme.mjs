@@ -7,10 +7,9 @@
  * and then compiles that CSS through the real Tailwind pipeline so a malformed
  * `@theme`/`@utility` block fails the design build instead of a consumer app.
  *
- * It additionally pins the frozen census numbers (dispositions / removals /
- * aliases / provenance tags), the motion values shared with `motion.ts`, the
- * React Native bridge shape, and the ownership rule that global token VALUES
- * only ever live in generated CSS — never in `src/css/dom.css` or
+ * It additionally pins the per-token provenance discipline, the motion values
+ * shared with `motion.ts`, the React Native bridge shape, and the ownership
+ * rule that global token VALUES only ever live in generated CSS — never in
  * `src/css/product.css`.
  */
 import { readFile } from "node:fs/promises";
@@ -22,10 +21,7 @@ import { compile } from "tailwindcss";
 import { motion } from "../dist/motion.js";
 import {
   colors,
-  currentTokenDispositions,
-  legacyAliasNames,
   radius,
-  removedTokenNames,
   themeTokens,
   timing,
   typography,
@@ -127,83 +123,11 @@ assert(
 await compile(generated, { base: root });
 
 /* ------------------------------------------------------------------ *
- * 2. Frozen census: dispositions, removals, aliases, provenance
+ * 2. Ramp resets, provenance, @theme fallback discipline
  * ------------------------------------------------------------------ */
 
-assert(
-  Object.keys(currentTokenDispositions).length === 285,
-  `expected 285 frozen dispositions, got ${Object.keys(currentTokenDispositions).length}`,
-);
-assert(removedTokenNames.length === 70, `expected 70 removed names, got ${removedTokenNames.length}`);
-assert(
-  legacyAliasNames.length === 15,
-  `expected 15 compatibility aliases, got ${legacyAliasNames.length}`,
-);
-assert(
-  JSON.stringify([...legacyAliasNames].sort()) ===
-    JSON.stringify([
-      "--color-accent",
-      "--color-composer-border",
-      "--color-composer-control-hover",
-      "--color-list-hover",
-      "--color-popover-accent",
-      "--color-popover-ring",
-      "--color-sidebar-accent",
-      "--color-sidebar-border",
-      "--shadow-composer",
-      "--shadow-floating",
-      "--shadow-floating-dark",
-      "--workspace-shell-action-hover-background",
-      "--workspace-shell-tab-active-background",
-      "--workspace-shell-tab-hover-background",
-      "--workspace-shell-tab-selected-background",
-    ]),
-  "compatibility alias set drifted from the frozen 15-name census",
-);
 assert(generated.includes("  --text-*: initial;"), "the closed ramp must reset stock text tokens");
 assert(generated.includes("  --color-*: initial;"), "the mono palette must reset stock colors");
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-let shipped = 0;
-let retuned = 0;
-for (const [currentName, finalName] of Object.entries(currentTokenDispositions)) {
-  if (finalName === null) {
-    assert(
-      !new RegExp(`^\\s*${escapeRegExp(currentName)}\\s*:`, "m").test(generated),
-      `${currentName} is disposed but still declared in generated CSS`,
-    );
-    continue;
-  }
-  assert(finalName in themeTokens, `${currentName} maps to missing final token ${finalName}`);
-  const { provenance } = themeTokens[finalName];
-  if (provenance === "[SHIPPED]") shipped += 1;
-  if (provenance.startsWith("[RETUNE:")) retuned += 1;
-}
-// `--color-composer-background` moved from [SHIPPED] to
-// [RETUNE:surface/composer-opaque], `--color-composer-backdrop-filter`
-// followed it (the composer-goes-opaque follow-on: light's blur has nothing
-// left to blur once the surface is opaque), and `--color-sidebar` moved from
-// [SHIPPED] to [RETUNE:sidebar/reference-surface] (round-2 sidebar retune,
-// previously [RETUNE:sidebar/surface-recess]). The diffs retune
-// ([RETUNE:diffs/addition-deletion-color-alias]) aliases
-// `--color-diff-added`/`--color-diff-deleted` and their six
-// `--diffs-bg-*-override` dark-mode literals onto `--color-git-green`/
-// `--color-git-red` so the diff pane matches the reference's addition/
-// deletion hues instead of a separate, unreferenced green/red pair. The
-// session-header retune ([RETUNE:header/quiet-active-tab]) aliases
-// `--workspace-shell-tab-active-background` onto `--color-selected` (it
-// was already in the retuned tally as [RETUNE:state/overlay], so the tag
-// changes but no disposition crosses) and `--workspace-shell-tab-active-border`
-// onto `--color-border`, moving one more disposition from shipped into
-// retuned — twelve crossings in total.
-// The 285-name disposition census itself is unchanged: the three
-// transcript-measure/turn-rhythm additions are net-new tokens, and this map
-// is frozen to the names that existed BEFORE the retune.
-assert(shipped === 164, `expected 164 shipped dispositions, got ${shipped}`);
-assert(retuned === 51, `expected 51 retuned dispositions, got ${retuned}`);
 
 for (const [name, value] of tokenEntries) {
   assert(value.provenance.length > 0, `${name} is missing provenance`);
@@ -212,15 +136,6 @@ for (const [name, value] of tokenEntries) {
   assert(
     !/color-mix\(|var\(/.test(value.themeFallback),
     `${name} @theme fallback must be a resolved literal, got ${value.themeFallback}`,
-  );
-}
-
-for (const aliasName of legacyAliasNames) {
-  const value = themeTokens[aliasName];
-  assert(value.dark === value.light, `${aliasName} is an alias and must not vary by mode`);
-  assert(
-    /^var\(--[a-z0-9-]+\) \/\* legacy-alias \*\/$/.test(value.dark),
-    `${aliasName} must be an exact tagged var() alias, got ${value.dark}`,
   );
 }
 
@@ -273,7 +188,7 @@ for (const [tokenName, expected] of [
 function literal(name) {
   const token = themeTokens[name];
   if (token.themeFallback) return token.themeFallback;
-  const alias = token.dark.match(/^var\((--[a-z0-9-]+)\)(?: \/\* legacy-alias \*\/)?$/);
+  const alias = token.dark.match(/^var\((--[a-z0-9-]+)\)$/);
   return alias?.[1] ? literal(alias[1]) : token.dark;
 }
 
@@ -486,38 +401,39 @@ assert(
   "the generated theme must contain exactly one flattened light root",
 );
 
-const sources = {};
-for (const name of ["dom.css", "product.css"]) {
-  const source = await readFile(resolve(root, "src/css", name), "utf8");
-  sources[name] = source;
-  for (const { selector, body } of topLevelBlocks(source)) {
-    const ownsGlobalScope =
-      selector.startsWith("@theme") ||
-      /(^|\s):root(\[data-mode="(light|dark)"\])?$/.test(selector.trim());
-    if (!ownsGlobalScope) continue;
-    assert(
-      !/^\s*--[a-z0-9-]+\s*:/m.test(body),
-      `${name} re-introduces hand-authored global token values in ${selector.trim()}`,
-    );
-  }
+const productCss = await readFile(resolve(root, "src/css/product.css"), "utf8");
+for (const { selector, body } of topLevelBlocks(productCss)) {
+  const ownsGlobalScope =
+    selector.startsWith("@theme") ||
+    /(^|\s):root(\[data-mode="(light|dark)"\])?$/.test(selector.trim());
+  if (!ownsGlobalScope) continue;
+  assert(
+    !/^\s*--[a-z0-9-]+\s*:/m.test(body),
+    `product.css re-introduces hand-authored global token values in ${selector.trim()}`,
+  );
 }
 
-const domCss = sources["dom.css"];
-const productCss = sources["product.css"];
-const tailwindImport = domCss.indexOf('@import "tailwindcss";');
-const themeImport = domCss.indexOf('@import "../theme.css";');
+const tailwindImport = productCss.indexOf('@import "tailwindcss";');
+const themeImport = productCss.indexOf('@import "../theme.css";');
 // Line-anchored so prose in a comment can mention the at-rule without becoming
 // the "first @source" position.
-const firstSource = domCss.search(/^@source\s/m);
-assert(tailwindImport >= 0, "dom.css must import tailwindcss");
-assert(themeImport > tailwindImport, "dom.css must import the generated theme after tailwindcss");
+const firstSource = productCss.search(/^@source\s/m);
+assert(tailwindImport >= 0, "product.css must import tailwindcss");
+assert(
+  themeImport > tailwindImport,
+  "product.css must import the generated theme after tailwindcss",
+);
 assert(
   firstSource < 0 || themeImport < firstSource,
-  "dom.css must import the generated theme before the first @source (CSS import-order law)",
+  "product.css must import the generated theme before the first @source (CSS import-order law)",
 );
-const domRoot = topLevelBlocks(domCss).find(({ selector }) => selector === ":root")?.body ?? "";
-assert(/font-family:\s*var\(--font-sans\);/.test(domRoot), "dom.css :root must use var(--font-sans)");
-assert(!/\bInter\b/.test(domRoot), "dom.css :root must not hand-author a font stack");
+const productRoot =
+  topLevelBlocks(productCss).find(({ selector }) => selector === ":root")?.body ?? "";
+assert(
+  /font-family:\s*var\(--font-sans\);/.test(productRoot),
+  "product.css :root must use var(--font-sans)",
+);
+assert(!/\bInter\b/.test(productRoot), "product.css :root must not hand-author a font stack");
 
 /* ------------------------------------------------------------------ *
  * 6. Motion ownership inside the design package's own CSS
@@ -528,12 +444,6 @@ for (const declaration of [
   "animation: stream-word-in var(--activity-stream-reveal-fade) linear both;",
   "animation: brand-mark-settle var(--duration-emphasized) var(--ease-standard);",
   "animation: web-sidebar-panel-slide-in var(--duration-panel) var(--ease-spring);",
-]) {
-  assert(domCss.includes(declaration), `dom.css lost the exact motion declaration: ${declaration}`);
-}
-
-for (const declaration of [
-  "animation: panel-in var(--duration-panel) var(--ease-out-quint);",
   "animation: modal-overlay-in var(--duration-enter) var(--ease-out-quint);",
   "animation: modal-overlay-out var(--duration-exit) var(--ease-standard) forwards;",
   "animation: modal-panel-in var(--duration-enter) var(--ease-out-quint);",
@@ -548,7 +458,6 @@ for (const declaration of [
   "animation: thinking-band-sweep var(--activity-update-ready-sweep) ease-in-out 1 both;",
   "animation: thinking-band-glyphs-sweep var(--activity-update-ready-sweep) ease-in-out 1 both;",
   "animation: update-pill-in var(--duration-emphasized) var(--ease-spring);",
-  "animation: toast-in var(--duration-enter) var(--ease-out-quint);",
   "animation: dialog-pop-in var(--duration-enter) var(--ease-out-quint);",
   "transition: opacity var(--duration-hover) var(--ease-standard);",
   "transition-duration: var(--duration-hover);",
@@ -591,7 +500,6 @@ function checkRawMotionAuthority(css, sourceName) {
   }
 }
 
-checkRawMotionAuthority(domCss, "dom.css");
 checkRawMotionAuthority(productCss, "product.css");
 checkRawMotionAuthority(generated, "dist/theme.css");
 
@@ -620,7 +528,4 @@ assert(
   `manifest entry count (${seen.size}) does not match themeTokens (${tokenEntries.length})`,
 );
 
-console.log(
-  `check-theme: ok (${tokenEntries.length} live tokens, ${shipped} shipped, ${retuned} retuned, ` +
-    `${removedTokenNames.length} removals, ${legacyAliasNames.length} aliases)`,
-);
+console.log(`check-theme: ok (${tokenEntries.length} live tokens)`);

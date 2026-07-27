@@ -60,7 +60,7 @@ export function ActivityAggregatePopover({
           size="unstyled"
           // Same cap treatment as the production activity card: cancel the
           // dock's px-5 inset so the cap shares the composer's outer edges.
-          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-[var(--color-composer-border)] bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
+          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
           aria-label={`Workspace activity: ${facts.map((fact) => fact.label).join(", ")}`}
         >
           <span className="flex min-w-0 flex-1 items-center overflow-hidden">
@@ -153,7 +153,7 @@ export function ActivityAggregatePopover({
                   onOpenSubagentsPane();
                   close();
                 }}
-                className="relative isolate flex min-h-8 w-full min-w-0 items-center justify-start gap-2 py-1 text-left text-ui-sm text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-[''] hover:before:bg-list-hover focus-visible:outline-none focus-visible:before:bg-list-hover"
+                className="relative isolate flex min-h-8 w-full min-w-0 items-center justify-start gap-2 py-1 text-left text-ui-sm text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-[''] hover:before:bg-hover focus-visible:outline-none focus-visible:before:bg-hover"
                 aria-label={`Open subagents pane: ${aggregate.total} ${aggregate.total === 1 ? "subagent" : "subagents"}`}
               >
                 <AgentGlyphStack ids={agents.map((agent) => agent.id)} />
@@ -192,7 +192,7 @@ function PopoverActionRow({
       variant="unstyled"
       size="unstyled"
       onClick={onClick}
-      className="relative isolate flex min-h-8 w-full min-w-0 items-center justify-start gap-2 py-1 text-left text-ui-sm text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-[''] hover:before:bg-list-hover focus-visible:outline-none focus-visible:before:bg-list-hover"
+      className="relative isolate flex min-h-8 w-full min-w-0 items-center justify-start gap-2 py-1 text-left text-ui-sm text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-[''] hover:before:bg-hover focus-visible:outline-none focus-visible:before:bg-hover"
     >
       <span className="flex w-[18px] shrink-0 items-center justify-start text-muted-foreground">
         {icon}

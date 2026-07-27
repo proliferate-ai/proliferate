@@ -1,9 +1,4 @@
-import type { AgentLaunchOptionsResponse, GatewayModelEntry } from "@anyharness/sdk";
-import type {
-  AgentAuthRoute,
-  AgentAuthSelection,
-  AgentAuthSurface,
-} from "@proliferate/cloud-sdk";
+import type { AgentLaunchOptionsResponse } from "@anyharness/sdk";
 
 export interface HarnessCatalogModelEffort {
   values: string[];
@@ -91,30 +86,6 @@ export function normalizeCatalogModels(
   return normalized;
 }
 
-// The runtime's resolved gateway model plan (contract §1/§5): each id is joined
-// onto the bundled catalog, so entries carry enriched display metadata
-// (probe-only ids stay sparse `{ id, provider? }`). There's no override layering
-// (the runtime doesn't know about cloud catalog overrides), so every resolved
-// model is enabled; the table disables the toggle for this source (see
-// HarnessAllModelsSection).
-export function normalizeGatewayModels(
-  models: readonly GatewayModelEntry[],
-): HarnessCatalogModel[] {
-  return models
-    .filter((model) => model.id.length > 0)
-    .map((model) => ({
-      id: model.id,
-      displayName: normalizeString(model.displayName) ?? model.id,
-      description: normalizeString(model.description),
-      provider: normalizeString(model.provider),
-      status: normalizeString(model.status),
-      effort: normalizeEffort(model.effort),
-      fastMode: typeof model.fastMode === "boolean" ? model.fastMode : null,
-      modes: normalizeModes(model.modes),
-      enabled: true,
-    }));
-}
-
 // Local Settings must be useful without a Proliferate Cloud session. The
 // AnyHarness launch catalog is already the runtime-resolved source used by the
 // composer, so normalize that response directly instead of requiring a cloud
@@ -140,39 +111,6 @@ export function normalizeRuntimeLaunchModels(
   }));
 }
 
-// native/api_key routes probe on the CLIENT (catalog.py's refresh_catalog
-// contract): rich live probing is deferred, so v1 sources the payload from the
-// local AnyHarness runtime's already-resolved launch catalog (the same
-// bundled catalog-v2 model list `useAgentLaunchOptionsQuery` feeds the session
-// model picker) instead of spawning a harness process. Returns null when the
-// runtime has no ready models for this harness — the caller should show a
-// "runtime unavailable" toast and skip the server call rather than upload an
-// empty snapshot.
-export function buildRuntimeCatalogModelsJson(
-  harnessKind: string,
-  launchOptions: AgentLaunchOptionsResponse | undefined,
-): string | null {
-  const agent = launchOptions?.agents.find((entry) => entry.kind === harnessKind);
-  if (!agent || agent.models.length === 0) {
-    return null;
-  }
-  const entries = agent.models.map((model) => ({
-    id: model.id,
-    displayName: model.displayName,
-    ...(model.aliases && model.aliases.length > 0 ? { aliases: model.aliases } : {}),
-    // Forward the runtime-enriched catalog fields so cloud snapshots stored from
-    // this upload carry the same richness as the gateway-models endpoint (the
-    // server's parse_models_json preserves arbitrary keys beside `id`).
-    ...(model.description != null ? { description: model.description } : {}),
-    ...(model.provider != null ? { provider: model.provider } : {}),
-    ...(model.status != null ? { status: model.status } : {}),
-    ...(model.effort != null ? { effort: model.effort } : {}),
-    ...(model.fastMode != null ? { fastMode: model.fastMode } : {}),
-    ...(model.modes != null ? { modes: model.modes } : {}),
-  }));
-  return JSON.stringify(entries);
-}
-
 // Overrides have no GET endpoint, so the enabled-set is reconstructed from the
 // layered catalog (this pane is the only override writer) and re-upserted as a
 // whole `update` patch on every toggle.
@@ -196,29 +134,9 @@ export function buildEnabledOverridePatchJson(
   return JSON.stringify({ update });
 }
 
-export function defaultRouteForSurface(surface: AgentAuthSurface): AgentAuthRoute {
-  return surface === "cloud" ? "gateway" : "native";
-}
-
-// The catalog is scoped per (surface, route); resolve which route's catalog to
-// show from the enabled selection sources. Gateway wins over an api_key source;
-// an empty (native) scope falls back to the surface default.
-export function catalogRouteForSurface(
-  harnessKind: string,
-  surface: AgentAuthSurface,
-  selections: readonly AgentAuthSelection[],
-): AgentAuthRoute {
-  const scope = selections.filter(
-    (entry) =>
-      entry.harnessKind === harnessKind
-      && entry.surface === surface
-      && entry.enabled,
-  );
-  if (scope.some((entry) => entry.sourceKind === "gateway")) {
-    return "gateway";
-  }
-  if (scope.some((entry) => entry.sourceKind === "api_key")) {
-    return "api_key";
-  }
-  return defaultRouteForSurface(surface);
-}
+// The route/auth-context helpers that used to live here
+// (`defaultRouteForSurface`, `catalogRouteForSurface`,
+// `apiKeyProviderHintForSurface`, `authContextIdForRoute`,
+// `NATIVE_AUTH_CONTEXT_ID_BY_HARNESS`) are deleted with the composed cloud
+// re-key (model-catalog.md §Cloud routes): the layered read is keyed by
+// (owner, harness) alone, so the pane no longer resolves a per-context scope.

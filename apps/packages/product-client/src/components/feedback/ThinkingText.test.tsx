@@ -7,22 +7,18 @@ import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
-const desktopCss = readFileSync(
+const productCss = readFileSync(
   resolve(testDir, "../../../../../packages/design/src/css/product.css"),
   "utf8",
 );
-const domCss = readFileSync(
-  resolve(testDir, "../../../../../packages/design/src/css/dom.css"),
-  "utf8",
-);
 
-/** The gleam block (dom.css — shared with web): first keyframes to marker. */
+/** The gleam block (product.css — shared with web): first keyframes to marker. */
 function thinkingSection(): string {
-  const start = domCss.indexOf("@keyframes thinking-band-sweep");
-  const end = domCss.indexOf("/* ---- end thinking indicator ---- */");
+  const start = productCss.indexOf("@keyframes thinking-band-sweep");
+  const end = productCss.indexOf("/* ---- end thinking indicator ---- */");
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
-  return domCss.slice(start, end);
+  return productCss.slice(start, end);
 }
 
 afterEach(() => {
@@ -73,8 +69,7 @@ describe("thinking gleam css contract", () => {
 
   it("is inert on hover — no hover rules on the gleam", () => {
     expect(thinkingSection()).not.toContain(":hover");
-    expect(domCss).not.toContain(".thinking-text:hover");
-    expect(desktopCss).not.toContain(".thinking-text:hover");
+    expect(productCss).not.toContain(".thinking-text:hover");
   });
 
   it("keeps the duration/easing knobs", () => {
@@ -99,12 +94,10 @@ describe("thinking gleam css contract", () => {
   });
 
   it("has no resurrected dead streaming css", () => {
-    for (const css of [desktopCss, domCss]) {
-      expect(css).not.toContain("streaming-fade");
-      expect(css).not.toContain("streaming-tail-mask");
-      expect(css).not.toContain("pulse-running");
-      expect(css).not.toContain("pulse-dot");
-    }
+    expect(productCss).not.toContain("streaming-fade");
+    expect(productCss).not.toContain("streaming-tail-mask");
+    expect(productCss).not.toContain("pulse-running");
+    expect(productCss).not.toContain("pulse-dot");
   });
 });
 

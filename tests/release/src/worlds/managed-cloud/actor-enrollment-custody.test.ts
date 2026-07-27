@@ -39,10 +39,10 @@ test("intent is exact-run owned and promotes to the deterministic provider bindi
   }), /outside the exact run/);
   const actor: ActorKeyIdentity = {
     userId: "user-1", enrollmentId: "enrollment-1234", teamId: "team-1",
-    litellmUserId: "user-user-1", keyAlias: "vk-user-user-1-enrollme",
+    litellmUserId: "user-user-1", keyAlias: "vk-user-user-1-claude-enrollme",
     tokenId: "token-secret", tokenIdHash: "hash",
   };
-  const bound = bindActorEnrollment(intent, actor);
+  const bound = bindActorEnrollment(intent, actor, "claude");
   assert.equal(bound.state, "bound");
   assert.equal(bound.teamAlias, "user-user-1");
   assert.ok(!encodeActorEnrollmentCustody(bound).includes(actor.tokenId));

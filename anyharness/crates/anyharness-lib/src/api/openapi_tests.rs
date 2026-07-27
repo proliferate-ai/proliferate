@@ -21,7 +21,7 @@ fn openapi_registers_workspace_and_session_paths() {
         "/v1/workspaces/{workspace_id}/setup-rerun",
         "/v1/workspaces/{workspace_id}/setup-start",
         "/v1/agents/launch-options",
-        "/v1/catalogs/agents",
+        "/v1/catalogs/agents/version",
         "/v1/sessions",
         "/v1/sessions/{session_id}",
         "/v1/sessions/{session_id}/title",
@@ -61,6 +61,13 @@ fn openapi_registers_workspace_and_session_paths() {
     ] {
         assert!(paths.contains_key(path), "missing OpenAPI path: {path}");
     }
+
+    // The binary is the only catalog transport (agent-distribution.md,
+    // "Convergence"): the published contract must carry no document-push route.
+    assert!(
+        !paths.contains_key("/v1/catalogs/agents"),
+        "the runtime must publish no catalog push route"
+    );
 }
 
 #[test]

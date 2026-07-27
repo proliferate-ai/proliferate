@@ -119,7 +119,7 @@ async def _grant_unlimited_cloud(organization_id: str) -> None:
 
 
 def _policy_path(organization_id: str) -> str:
-    return f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy"
+    return f"/v1/cloud/organizations/{organization_id}/agent-auth/policy"
 
 
 class TestOrgAgentPolicyAuth:

@@ -301,7 +301,6 @@ export function WorkspaceItem({
               <PopoverMenuItem
                 icon={<Trash className="icon-paired shrink-0 text-muted-foreground" />}
                 label="Delete workspace"
-                variant="sidebar"
                 onClick={() => {
                   close();
                   setDoneConfirmOpen(false);
@@ -310,7 +309,6 @@ export function WorkspaceItem({
               />
               <PopoverMenuItem
                 label="Cancel"
-                variant="sidebar"
                 onClick={() => {
                   close();
                   setDoneConfirmOpen(false);
@@ -323,7 +321,6 @@ export function WorkspaceItem({
                 <PopoverMenuItem
                   icon={<Pencil className="icon-paired shrink-0 text-muted-foreground" />}
                   label="Rename"
-                  variant="sidebar"
                   onClick={() => {
                     close();
                     handleRenameCommand();
@@ -340,7 +337,6 @@ export function WorkspaceItem({
                       className="text-muted-foreground"
                     />
                   )}
-                  variant="sidebar"
                   onClick={() => {
                     close();
                     handleCopyWorkspaceLocationCommand();
@@ -353,7 +349,6 @@ export function WorkspaceItem({
                   label={pullRequestNumber !== null
                     ? `Open pull request #${pullRequestNumber}`
                     : "Open pull request"}
-                  variant="sidebar"
                   onClick={() => {
                     close();
                     handleOpenPullRequestCommand();
@@ -370,7 +365,6 @@ export function WorkspaceItem({
                       className="text-muted-foreground"
                     />
                   )}
-                  variant="sidebar"
                   onClick={() => {
                     close();
                     handleCopyBranchNameCommand();
@@ -381,7 +375,6 @@ export function WorkspaceItem({
                 <PopoverMenuItem
                   icon={<Trash className="icon-paired shrink-0 text-muted-foreground" />}
                   label="Delete workspace..."
-                  variant="sidebar"
                   onClick={() => {
                     handleMarkDoneCommand();
                   }}
@@ -391,7 +384,6 @@ export function WorkspaceItem({
                 <PopoverMenuItem
                   icon={<Archive className="icon-paired shrink-0 text-muted-foreground" />}
                   label="Archive..."
-                  variant="sidebar"
                   onClick={() => { close(); handleArchiveCommand(); }}
                 />
               )}
@@ -399,7 +391,6 @@ export function WorkspaceItem({
                 <PopoverMenuItem
                   icon={<Archive className="icon-paired shrink-0 text-muted-foreground" />}
                   label="Unarchive"
-                  variant="sidebar"
                   onClick={() => { close(); handleUnarchiveCommand(); }}
                 />
               )}
@@ -408,7 +399,6 @@ export function WorkspaceItem({
                   key={command.kind}
                   icon={<GitBranchIcon className="icon-paired shrink-0 text-muted-foreground" />}
                   label={command.blocker ? `${command.label} — ${command.blocker}` : command.label}
-                  variant="sidebar"
                   onClick={() => {
                     close();
                     onAvailabilityCommand?.(command.kind);

@@ -11,39 +11,95 @@ use crate::domains::agents::model::{
     CredentialState, ResolvedAuthSlot,
 };
 
-/// Determine the credential state for an agent by checking env vars first,
-/// then running provider-specific local discovery, then falling back to
-/// login-required or missing-env as appropriate.
+/// Which environment a credential lookup is allowed to read.
+///
+/// This distinction IS the ambient-env projection law (agent-distribution.md,
+/// "Readiness projection"): *"Credential detection reads only the workspace's
+/// composed env plus registry-declared variables — never the host process's
+/// ambient environment at large, so a global var on the machine cannot make
+/// every workspace look authenticated."*
+///
+/// The law is scoped, and the scope is the whole point, so it is a type rather
+/// than an inference. Passing an empty map used to silently mean "fall back to
+/// ambient", which is exactly the leak the law forbids: a workspace whose
+/// composed env happens to be empty must not inherit the host's variables.
+#[derive(Debug, Clone, Copy)]
+pub enum CredentialEnvScope<'a> {
+    /// No workspace is in view — the host-global settings read (`GET /v1/agents`
+    /// and friends). The host process env is the honest answer here, because it
+    /// IS what a spawn inherits and there is no workspace for it to
+    /// over-authenticate.
+    ///
+    /// "What a spawn inherits" is checkable: `live/sessions/driver/process.rs`
+    /// builds the agent command with `.envs(&spawn_env)` and never calls
+    /// `env_clear`, so the child gets the runtime's process env plus the launch
+    /// delta. Route-auth's explicit removals are applied last, on top.
+    HostAmbient,
+    /// A workspace-scoped check. ONLY the workspace's composed env counts; the
+    /// host process env is out of bounds even when the composed env is empty.
+    Workspace(&'a BTreeMap<String, String>),
+}
+
+impl CredentialEnvScope<'_> {
+    /// Whether a registry-declared variable is satisfied in this scope.
+    ///
+    /// Enforces the non-empty law (agent-distribution.md): *"An env credential
+    /// counts only if the variable is set **and non-empty**; `ANTHROPIC_API_KEY=""`
+    /// is absent, not present."* A whitespace-only value is likewise absent — it
+    /// is what a trailing `KEY=` in an env file parses to, and no provider
+    /// accepts it.
+    fn provides(&self, var: &str) -> bool {
+        let value = match self {
+            Self::HostAmbient => std::env::var(var).ok(),
+            Self::Workspace(env) => env.get(var).cloned(),
+        };
+        value.is_some_and(|value| !value.trim().is_empty())
+    }
+}
+
+/// Determine the credential state for an agent from the HOST-ambient env plus
+/// local discovery. For a workspace-scoped answer use
+/// [`detect_credentials_with_env`].
 pub fn detect_credentials(auth: &AuthSpec, home_dir: &Path) -> CredentialState {
     detect_auth_slots(auth, home_dir).0
 }
 
+/// Workspace-scoped credential state: the composed workspace env plus local
+/// discovery, never the host's ambient env.
 pub fn detect_credentials_with_env(
     auth: &AuthSpec,
     home_dir: &Path,
-    additional_env: &BTreeMap<String, String>,
+    workspace_env: &BTreeMap<String, String>,
 ) -> CredentialState {
-    detect_auth_slots_with_env(auth, home_dir, additional_env).0
+    detect_auth_slots_with_env(auth, home_dir, workspace_env).0
 }
 
 pub fn detect_auth_slots(
     auth: &AuthSpec,
     home_dir: &Path,
 ) -> (CredentialState, Vec<ResolvedAuthSlot>) {
-    detect_auth_slots_with_env(auth, home_dir, &BTreeMap::new())
+    detect_auth_slots_in_scope(auth, home_dir, CredentialEnvScope::HostAmbient)
 }
 
 pub fn detect_auth_slots_with_env(
     auth: &AuthSpec,
     home_dir: &Path,
-    additional_env: &BTreeMap<String, String>,
+    workspace_env: &BTreeMap<String, String>,
+) -> (CredentialState, Vec<ResolvedAuthSlot>) {
+    detect_auth_slots_in_scope(auth, home_dir, CredentialEnvScope::Workspace(workspace_env))
+}
+
+pub fn detect_auth_slots_in_scope(
+    auth: &AuthSpec,
+    home_dir: &Path,
+    scope: CredentialEnvScope<'_>,
 ) -> (CredentialState, Vec<ResolvedAuthSlot>) {
     let slots = auth
         .slots
         .iter()
         .map(|slot| ResolvedAuthSlot {
             spec: slot.clone(),
-            credential_state: detect_slot_credentials(slot, home_dir, additional_env),
+            credential_state: detect_slot_credentials(slot, home_dir, scope),
         })
         .collect::<Vec<_>>();
 
@@ -89,20 +145,18 @@ pub fn detect_cli_auth_state(auth: &AuthSpec, home_dir: &Path) -> Option<CliAuth
     }
 }
 
+/// One slot's rung-by-rung credential ladder: declared env (in scope, non-empty)
+/// -> provider-specific local discovery -> login policy -> missing.
 fn detect_slot_credentials(
     slot: &AuthSlotSpec,
     home_dir: &Path,
-    additional_env: &BTreeMap<String, String>,
+    scope: CredentialEnvScope<'_>,
 ) -> CredentialState {
     if slot.env_vars.is_empty() && slot.discovery == CredentialDiscoveryKind::None {
         return CredentialState::MissingEnv;
     }
 
-    if slot
-        .env_vars
-        .iter()
-        .any(|var| additional_env.contains_key(var) || std::env::var(var).is_ok())
-    {
+    if slot.env_vars.iter().any(|var| scope.provides(var)) {
         return CredentialState::Ready;
     }
 
@@ -121,7 +175,27 @@ fn detect_slot_credentials(
 
 fn aggregate_credential_state(auth: &AuthSpec, slots: &[ResolvedAuthSlot]) -> CredentialState {
     match auth.readiness_policy {
-        AuthReadinessPolicy::None | AuthReadinessPolicy::ProviderManaged => CredentialState::Ready,
+        AuthReadinessPolicy::None => CredentialState::Ready,
+        // A9 fix (was: unconditional Ready alongside `None`, agent-auth.md
+        // gap "Opencode's method state is projection-derived"). ProviderManaged
+        // means the harness resolves PROVIDER auth itself at prompt time (no
+        // launcher-side gate needed for *which* provider it picks) — it does
+        // NOT mean "credential-less". Opencode's real auth state is its
+        // selection set (agent-auth.md, "Readiness interplay"): none of its
+        // slots are `required_for_readiness` (any one provider suffices), so
+        // this reads every slot rather than filtering to required ones, and
+        // is Ready only when at least one slot's ladder actually resolves.
+        // Falling back to `None`'s structural Ready here made
+        // `apply_launch_route_upgrade`'s `already_ready` unconditionally true
+        // for opencode, so an enrolled route (or lack of one) never affected
+        // its readiness — selections stopped mattering for the one signal
+        // that is supposed to reflect them everywhere.
+        AuthReadinessPolicy::ProviderManaged => {
+            if slots.is_empty() || slots.iter().any(|slot| slot_is_ready(&slot)) {
+                return CredentialState::Ready;
+            }
+            preferred_missing_state(slots.iter().collect())
+        }
         AuthReadinessPolicy::AnyRequiredSlot => {
             let required = required_slots(slots);
             if required.is_empty() {

@@ -220,6 +220,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0065_execution_store_identity",
         include_str!("sql/0065_execution_store_identity.sql"),
     ),
+    (
+        "0066_drop_gateway_model_probe",
+        include_str!("sql/0066_drop_gateway_model_probe.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

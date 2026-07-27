@@ -10,7 +10,7 @@ import {
 describe("workspace chrome classes", () => {
   it("adds one main-sidebar edge only for transparent Desktop chrome", () => {
     expect(resolveMainSidebarEdgeClassName({ desktop: true, transparent: true }))
-      .toBe("border-r border-sidebar-border");
+      .toBe("border-r border-border");
     expect(resolveMainSidebarEdgeClassName({ desktop: true, transparent: false })).toBe("");
     expect(resolveMainSidebarEdgeClassName({ desktop: false, transparent: true })).toBe("");
   });
@@ -30,7 +30,7 @@ describe("workspace chrome classes", () => {
       sidebarOpen: true,
     })).toEqual({
       root: "bg-sidebar",
-      contentShell: "bg-background rounded-tl-2xl border-l border-sidebar-border border-t",
+      contentShell: "bg-background rounded-tl-2xl border-l border-border border-t",
       header: "flex h-[46px] shrink-0 items-center bg-background border-b border-border/70",
     });
 
@@ -60,7 +60,7 @@ describe("workspace chrome classes", () => {
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: true,
-    }).contentShell).toBe("bg-background rounded-tl-2xl border-l border-t border-sidebar-border");
+    }).contentShell).toBe("bg-background rounded-tl-2xl border-l border-t border-border");
   });
 
   it("preserves editor tab classes", () => {

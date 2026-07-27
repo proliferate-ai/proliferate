@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 .venv/
+# Also ignore a `.venv` SYMLINK, which the trailing-slash pattern above does not
+# match: a worktree that points at the main checkout's venv would otherwise let
+# `git add server/` commit the link, and CI's `uv venv .venv` then fails with
+# "File exists".
+.venv
 
 reference/
 

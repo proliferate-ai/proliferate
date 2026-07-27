@@ -590,6 +590,11 @@ pub struct ResolvedAgent {
     pub native: Option<ResolvedArtifact>,
     pub agent_process: ResolvedArtifact,
     pub spawn: Option<SpawnSpec>,
+    /// True when the enrolled agent-auth route, not a locally-detected
+    /// credential, is why this agent is credential-ready — so a consumer that
+    /// means "the vendor CLI is logged in here" can exclude that case. See
+    /// `apply_launch_route_upgrade` (readiness/service.rs), its only writer.
+    pub credentials_from_route: bool,
 }
 
 /// Machine-local resolved credential state for one auth slot.

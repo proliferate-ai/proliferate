@@ -232,8 +232,8 @@ describe("GitPanel", () => {
     expect(html).toContain("border-transparent bg-transparent");
     expect(html).toContain("hover:bg-surface-elevated-secondary");
     expect(html).toContain("data-[state=open]:bg-surface-elevated-secondary");
-    expect(html).not.toContain("hover:border-sidebar-border");
-    expect(html).not.toContain("data-[state=open]:border-sidebar-border");
+    expect(html).not.toContain("hover:border-border");
+    expect(html).not.toContain("data-[state=open]:border-border");
   });
 
   it("renders the branch target selector as plain text until hover or open", () => {
@@ -251,9 +251,9 @@ describe("GitPanel", () => {
     expect(html).toContain("border-transparent bg-transparent");
     expect(html).toContain("hover:bg-surface-elevated-secondary");
     expect(html).toContain("data-[state=open]:bg-surface-elevated-secondary");
-    expect(html).not.toContain("border-sidebar-border bg-surface-elevated-secondary");
-    expect(html).not.toContain("hover:bg-sidebar-accent");
-    expect(html).not.toContain("data-[state=open]:bg-sidebar-accent");
+    expect(html).not.toContain("border-border bg-surface-elevated-secondary");
+    expect(html).not.toContain("hover:bg-hover");
+    expect(html).not.toContain("data-[state=open]:bg-hover");
   });
 
   it("exposes collapse-all, jump-to-file, and options controls without the tree overlay", () => {

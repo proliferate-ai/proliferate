@@ -69,7 +69,6 @@ export function SidebarRepositoriesHeader({
                       key={variant}
                       onClick={() => onToggleWorkspaceType(variant)}
                       disabled={disabled}
-                      variant="sidebar"
                       icon={(
                         <SidebarWorkspaceVariantIcon
                           variant={variant}

@@ -318,7 +318,7 @@ export function PublishDialog({
 }
 
 /* Codex cmdk-item recipe: rounded-lg row, icon slot + truncating label,
- * list-hover paint on the selected/primary row, disabled rows dimmed, and
+ * hover paint on the selected/primary row, disabled rows dimmed, and
  * the primary row carries the ⌘⏎ hint. */
 function PublishActionRow({
   icon,
@@ -345,7 +345,7 @@ function PublishActionRow({
       disabled={disabled}
       onClick={onClick}
       className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-ui text-foreground disabled:opacity-25 ${
-        active ? "bg-list-hover" : "hover:bg-list-hover"
+        active ? "bg-hover" : "hover:bg-hover"
       }`}
     >
       <span className="flex w-[18px] shrink-0 items-center justify-start text-muted-foreground">
