@@ -139,6 +139,40 @@ app's output contract.
 **Any future preview that looks unstyled: check this rule survived the
 Tailwind compile before debugging the component.**
 
+### Designs render from STATIC css — hence the safelist
+
+Second structural finding, as consequential as the dark surface. Tailwind
+only emits a utility it actually sees in a scanned source, so a bundle
+compiled from the DS packages alone carries **only the classes the DS
+itself happens to use**. Verified missing before the fix: `gap-12`,
+`text-2xl`, `grid-cols-3`, `mt-16`, `icon-tight` — all things a design
+agent composing new layout writes constantly. There is no error path:
+the class simply does nothing and the design is silently mis-laid-out.
+
+`.design-sync/css/ds-source.css` therefore ends with an `@source
+inline(...)` safelist covering the standard spacing/sizing/layout/type
+scales plus the DS's own semantic roles, generated from the token
+authority (126 `--color-*` roles, 17 `--text-*` scales). Compiled CSS
+grows 273 KB → 485 KB; that is the correct trade.
+
+**The DS resets Tailwind's defaults.** `theme.css` opens with
+`--color-*: initial; --text-*: initial`, which wipes Tailwind's stock
+palette and type ramp. So:
+
+- `text-2xl` / `text-sm` / `bg-slate-500` **do not exist in this DS** and
+  are correctly absent from the compiled CSS — do not "fix" that.
+- The only type scales are the DS's 17: `text-body`, `text-body-emphasis`,
+  `text-chat`, `text-chat-meta`, `text-composer`, `text-heading`,
+  `text-hero`, `text-markdown-inline-code`, `text-message`,
+  `text-readable-code`, `text-sidebar-brand`, `text-sidebar-nav`,
+  `text-sidebar-row`, `text-title`, `text-ui`, `text-ui-sm`,
+  `text-workspace-title`.
+- Colour utilities take the semantic role names only (`bg-surface-elevated`,
+  `text-muted-foreground`, `border-border`, …).
+
+This is the single most important thing the conventions header must
+teach the design agent.
+
 ### Known render warns (triaged as legitimate — a warn NOT listed here is new)
 
 - `[FONT_MISSING] "Manrope"` — benign. Bare `Manrope` appears only as a
@@ -174,11 +208,25 @@ exports (spot-checked: `Home`, `GitHub`, `ArrowDown`, `Sparkles`,
 ## Status / where this stopped
 
 Build and `package-validate.mjs` are clean (exit 0, 5 non-blocking warns,
-all triaged above). **Preview authoring is in progress**: `Button` is
-authored and graded `good` on all three cells (Variants / Sizes /
-States) — it was the calibration component and it earned its keep by
-surfacing the dark-surface defect above. The other 183 components still
-ship the honest floor card. **Nothing uploaded**: `DesignSync` returned an
+all triaged above). **Preview authoring is in progress**: 11 components
+authored and graded `good` on every cell — Button, Badge, Input,
+Textarea, Label, Select, ShortcutBadge, ProgressBar, UserAvatar,
+Spinner, SkeletonBlock. The calibration set earned its keep twice, in
+each case catching a defect that would have degraded every design:
+the dark-surface bug and the static-CSS safelist gap above. The
+remaining 173 components ship the honest floor card.
+
+Authoring loop that works (solo, no fan-out used):
+`.design-sync/previews/<Name>.tsx` → `node .ds-sync/lib/preview-rebuild.mjs
+--components <names>` → `node .ds-sync/package-capture.mjs --components
+<names>` → Read `ds-bundle/_screenshots/review/<group>__<Name>.png` →
+write `.design-sync/.cache/review/<Name>.grade.json`. Preview files
+import from the bare package specifier (`@proliferate/ui`); the
+converter shims it to the window global, so subpath imports are neither
+needed nor correct. **Use the EXPORT name, not the registry label** —
+`Skeleton` in the playground registry is exported as `SkeletonBlock`,
+and a mismatched filename is silently skipped ("not in
+.stories-map.json"). **Nothing uploaded**: `DesignSync` returned an
 authorization error in this remote (claude.ai/code) session
 (`/design-login` needs an interactive terminal); resolve via Claude
 Design's "Send to Claude Code Web". `config.json` therefore has **no

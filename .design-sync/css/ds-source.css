@@ -33,3 +33,53 @@ html body {
   background: var(--color-background);
   color: var(--color-foreground);
 }
+
+/* Safelist: designs are rendered from STATIC css.
+ *
+ * Tailwind only emits a utility it actually sees in a scanned source, so a
+ * bundle compiled from the DS packages alone contains only the classes the
+ * DS itself happens to use. A design agent composing new layout writes
+ * ordinary utilities (gap-12, text-2xl, grid-cols-3, mt-16 — all verified
+ * MISSING before this block) and would get nothing: silently broken layout
+ * in every generated design, with no error anywhere.
+ *
+ * The DS colour/type roles below are generated from the token authority
+ * (--color-* / --text-* in theme.css), so this list follows the tokens
+ * rather than duplicating them. Regenerate via .design-sync/make-safelist.mjs.
+ */
+@source inline("{p,px,py,pt,pr,pb,pl,m,mx,my,mt,mr,mb,ml,gap,gap-x,gap-y,space-x,space-y}-{0,0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,11,12,14,16,20,24,28,32}");
+@source inline("{w,h,size,min-w,min-h,max-w,max-h}-{0,1,2,3,4,5,6,7,8,9,10,11,12,14,16,20,24,28,32,40,48,56,64,72,80,96,full,screen,fit,min,max,auto,px}");
+@source inline("max-w-{xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl,prose,none}");
+@source inline("{flex,inline-flex,grid,inline-grid,block,inline-block,inline,hidden,contents}");
+@source inline("flex-{row,row-reverse,col,col-reverse,wrap,nowrap,1,auto,initial,none,shrink,grow}");
+@source inline("{shrink,grow}-{0,1}");
+@source inline("grid-cols-{1,2,3,4,5,6,7,8,9,10,11,12,none,subgrid}");
+@source inline("grid-rows-{1,2,3,4,5,6,none,subgrid}");
+@source inline("col-span-{1,2,3,4,5,6,7,8,9,10,11,12,full}");
+@source inline("{items,justify,content,self,place-items,place-content}-{start,end,center,between,around,evenly,stretch,baseline,normal}");
+@source inline("{static,relative,absolute,fixed,sticky}");
+@source inline("{top,right,bottom,left,inset,inset-x,inset-y}-{0,1,2,3,4,6,8,auto,full}");
+@source inline("z-{0,10,20,30,40,50,auto}");
+@source inline("overflow-{auto,hidden,visible,scroll,clip}");
+@source inline("overflow-{x,y}-{auto,hidden,visible,scroll}");
+@source inline("rounded{,-none,-xs,-sm,-md,-lg,-xl,-2xl,-3xl,-4xl,-full}");
+@source inline("rounded-{t,r,b,l,tl,tr,br,bl}-{none,sm,md,lg,xl,2xl,3xl,full}");
+@source inline("border{,-0,-2,-4,-8}");
+@source inline("border-{t,r,b,l,x,y}{,-0,-2,-4}");
+@source inline("{font-,}{thin,light,normal,medium,semibold,bold,extrabold}");
+@source inline("text-{left,center,right,justify,start,end}");
+@source inline("text-{xs,sm,base,lg,xl,2xl,3xl,4xl,5xl,6xl}");
+@source inline("leading-{none,tight,snug,normal,relaxed,loose,3,4,5,6,7,8,9,10}");
+@source inline("tracking-{tighter,tight,normal,wide,wider,widest}");
+@source inline("{truncate,text-nowrap,text-wrap,text-balance,break-words,whitespace-nowrap,whitespace-pre-wrap}");
+@source inline("{opacity,}-{0,5,10,20,25,30,40,50,60,70,75,80,90,95,100}");
+@source inline("{shadow,shadow-sm,shadow-md,shadow-lg,shadow-xl,shadow-2xl,shadow-none}");
+@source inline("{cursor-pointer,cursor-default,cursor-not-allowed,select-none,pointer-events-none,pointer-events-auto}");
+@source inline("transition{,-all,-colors,-opacity,-transform,-shadow}");
+@source inline("duration-{75,100,150,200,300,500,700,1000}");
+
+/* DS semantic roles, generated from the token authority. */
+@source inline("{bg,text,border,ring,fill,stroke,from,to,divide}-{accent-foreground,active,background,border,border-heavy,border-light,brand-logo-tile,card,card-foreground,code-block-background,composer-backdrop-filter,composer-background,composer-control-active-foreground,composer-control-foreground,composer-control-muted-foreground,composer-send-background,composer-send-foreground,composer-shadow,compute-target-amber,compute-target-blue,compute-target-green,compute-target-orange,compute-target-pink,compute-target-purple,compute-target-red,compute-target-slate,compute-target-teal,delegated-agent-1,delegated-agent-2,delegated-agent-3,delegated-agent-4,delegated-agent-5,delegated-agent-6,delegated-agent-7,delegated-agent-8,destructive,destructive-foreground,destructive-subtle,diff-added,diff-chat-file-header-hover-surface,diff-chat-file-header-surface,diff-chat-inline-tool-header-hover-surface,diff-chat-inline-tool-header-surface,diff-chat-turn-header-surface,diff-chat-turn-icon-surface,diff-code-surface,diff-deleted,diff-header-surface,diff-main-surface,diff-panel-surface,diff-sidebar-file-header-hover-surface,diff-sidebar-file-header-surface,diff-surface,faint,file-icon-accent,file-icon-folder,file-icon-muted,file-icon-neutral,file-icon-red,foreground,foreground-secondary,foreground-tertiary,git-green,git-red,git-yellow,highlight,highlight-muted,hover,info,input,link-foreground,muted,muted-foreground,overlay,popover,popover-foreground,pr-merged,primary,primary-foreground,prose-border,ring,scrollbar-thumb,scrollbar-thumb-active,secondary-foreground,selected,sidebar,sidebar-accent-foreground,sidebar-background,sidebar-foreground,sidebar-muted-foreground,sidebar-primary,sidebar-ring,special,status-in-progress,success,success-subtle,surface,surface-control,surface-editor,surface-elevated,surface-elevated-secondary,surface-under,terminal-black,terminal-blue,terminal-bright-black,terminal-bright-blue,terminal-bright-cyan,terminal-bright-green,terminal-bright-magenta,terminal-bright-red,terminal-bright-white,terminal-bright-yellow,terminal-cyan,terminal-green,terminal-magenta,terminal-red,terminal-white,terminal-yellow,text-caret,text-selection,warning,warning-border,warning-foreground,warning-subtle,window-control-close,window-control-minimize}");
+@source inline("text-{body,body-emphasis,chat,chat-meta,composer,heading,hero,markdown-inline-code,message,readable-code,sidebar-brand,sidebar-nav,sidebar-row,title,ui,ui-sm,workspace-title}");
+@source inline("hover:{bg,text,border}-{accent-foreground,active,background,border,border-heavy,border-light,brand-logo-tile,card,card-foreground,code-block-background,composer-backdrop-filter,composer-background,composer-control-active-foreground,composer-control-foreground,composer-control-muted-foreground,composer-send-background,composer-send-foreground,composer-shadow,compute-target-amber,compute-target-blue,compute-target-green,compute-target-orange,compute-target-pink,compute-target-purple,compute-target-red,compute-target-slate,compute-target-teal,delegated-agent-1,delegated-agent-2,delegated-agent-3,delegated-agent-4,delegated-agent-5,delegated-agent-6,delegated-agent-7,delegated-agent-8,destructive,destructive-foreground,destructive-subtle,diff-added,diff-chat-file-header-hover-surface,diff-chat-file-header-surface,diff-chat-inline-tool-header-hover-surface,diff-chat-inline-tool-header-surface,diff-chat-turn-header-surface,diff-chat-turn-icon-surface,diff-code-surface,diff-deleted,diff-header-surface,diff-main-surface,diff-panel-surface,diff-sidebar-file-header-hover-surface,diff-sidebar-file-header-surface,diff-surface,faint,file-icon-accent,file-icon-folder,file-icon-muted,file-icon-neutral,file-icon-red,foreground,foreground-secondary,foreground-tertiary,git-green,git-red,git-yellow,highlight,highlight-muted,hover,info,input,link-foreground,muted,muted-foreground,overlay,popover,popover-foreground,pr-merged,primary,primary-foreground,prose-border,ring,scrollbar-thumb,scrollbar-thumb-active,secondary-foreground,selected,sidebar,sidebar-accent-foreground,sidebar-background,sidebar-foreground,sidebar-muted-foreground,sidebar-primary,sidebar-ring,special,status-in-progress,success,success-subtle,surface,surface-control,surface-editor,surface-elevated,surface-elevated-secondary,surface-under,terminal-black,terminal-blue,terminal-bright-black,terminal-bright-blue,terminal-bright-cyan,terminal-bright-green,terminal-bright-magenta,terminal-bright-red,terminal-bright-white,terminal-bright-yellow,terminal-cyan,terminal-green,terminal-magenta,terminal-red,terminal-white,terminal-yellow,text-caret,text-selection,warning,warning-border,warning-foreground,warning-subtle,window-control-close,window-control-minimize}");
+@source inline("{icon-status,icon-tight,icon-paired,icon-button,icon-inline}");
