@@ -464,55 +464,15 @@ apps/packages/product-client/src/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Worktree creation does not fetch: the plain create path
-      ([runtime/worktrees.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/worktrees.rs))
-      never fetches and bases on the clone's local state; cloud freshness
-      holds only because the server's clone-refresh script runs in the same
-      request, and local/Desktop creates get whatever the clone has. The
-      exact-ref path's fetch is unbounded and silently swallowed
-      (`fetch_branch_if_possible`, no timeout, no `GIT_TERMINAL_PROMPT=0`,
-      result discarded). Implement the bounded, classified, surfaced fetch
-      in both paths.
-- [ ] Callers supply `target_path`: it is a required contract field (an
-      omitted path is a 400), the cloud server invents
-      `/home/user/workspace/worktrees/<owner>/<repo>/<branch>-<id8>`
-      ([provisioning.py](../../../../server/proliferate/server/cloud/workspaces/provisioning.py)),
-      and one unit test pins the literal string. Make the field optional
-      with a runtime default-placement branch (the workflow-placement
-      pattern); nothing downstream depends on the path — the server keeps
-      only workspace and repo-root ids after creation.
 - [ ] Repository-environment delete reclaims nothing and no clone-delete
       primitive exists anywhere in AnyHarness (no route, no store method).
       Build the clone-delete primitive under the same fence discipline as
       retire, then pair repository-environment deletion with an after-commit
       reclaim.
-- [ ] Git identity is not materialized at all: the only implementation was
-      deleted with its parked domain (#823), the calling stage survives as
-      unimportable dead code
-      ([git_identity.py](../../../../server/proliferate/server/automations/worker/cloud_execution/stages/git_identity.py)),
-      and every user commit today carries git's auto-derived fallback
-      (`user <user@<sandbox-hostname>>`). Reintroduce materialization with
-      the resolution rules above; delete the dead stage and the orphaned
-      `configure_git_identity`/`ensure_repo_checkout` command kinds
-      ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
-- [ ] No disk axis: the resource-pressure collector measures CPU and memory
-      only (no statvfs anywhere in the runtime), the composer card shows
-      CPU/memory rows without disk, no threshold notification exists
-      (surfaces are pull-only), and the inventory row carries no
-      last-activity timestamp for suggesting stale worktrees. Add the disk
-      axis to
-      [resource_pressure.rs](../../../../anyharness/crates/anyharness-lib/src/observability/resource_pressure.rs)
-      and the health contract, last activity to the inventory row, and the
-      client-side threshold surface.
-- [ ] Disk exhaustion is untyped: only checkout exit codes 42/43/44 are
-      classified; ENOSPC from any in-sandbox command flattens into the
-      generic runtime-not-ready receipt
-      ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
-      Detect and type it.
-- [ ] The `prune_workspace_worktree` cloud command kind is dead — an enum
-      member and DB-constraint slot with no producer, payload, or consumer
-      ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
-      Delete it; the paired retire is the real mechanism.
+- [ ] The inventory row carries no last-activity timestamp
+      ([inventory.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs)),
+      so the disk-pressure surface cannot suggest *stale* worktrees to
+      delete, only big ones. Add last activity to the inventory row.
 - [ ] The clone create/refresh script bypasses AnyHarness's own repo-root
       acquisition (`acquire_repo_root` /
       [clone.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/clone.rs)),

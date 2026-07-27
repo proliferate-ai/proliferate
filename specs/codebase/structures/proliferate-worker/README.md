@@ -152,7 +152,7 @@ For behavior outside the crate, use the current owners:
 
 - [Server structure](../server/README.md)
 - [AnyHarness structure](../anyharness/README.md)
-- [Sandbox provisioning](../../platforms/product/sandbox-provisioning.md)
+- [Sandbox lifecycle](../../platforms/product/sandbox-lifecycle.md)
 - [Repository environments and workspace provisioning](../../platforms/product/workspace-provisioning.md)
 - [Billing](../../platforms/product/billing.md)
 

@@ -6,7 +6,7 @@ Current gap: the managed-Target UI described here is not implemented.
 
 Date: 2026-05-20.
 
-Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
+Depends on: [`sandbox-lifecycle.md`](../../../platforms/product/sandbox-lifecycle.md),
 [`mcp-skills.md`](../../../platforms/product/mcp-skills.md), and
 [`agent-auth.md`](../../../platforms/product/agent-auth.md).
 
@@ -118,7 +118,10 @@ every other spec owns its page content:
 
 Hard:
 
-- [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md): Compute pane
+- the cloud sandbox provisioning platform (document retired; absorbed by
+  [`sandbox-lifecycle.md`](../../../platforms/product/sandbox-lifecycle.md) —
+  the `sandbox_profile` / `sandbox_profile_target_state` schema this pane
+  consumes currently has no owning platform document): Compute pane
   consumes `sandbox_profile` and `sandbox_profile_target_state`.
 - [`mcp-skills.md`](../../../platforms/product/mcp-skills.md): Plugins page
   rows show `enabled`, `public_to_org`, `auth_status`,

@@ -426,7 +426,7 @@ and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runti
   Worker sidecar is optional.
 - Generic MCP session assembly belongs to [MCP runtime](mcp-runtime.md).
 - Sandbox lifecycle belongs to
-  [Cloud sandbox provisioning](sandbox-provisioning.md).
+  [sandbox-lifecycle.md](sandbox-lifecycle.md).
 - Server vendor adapters follow the
   [Server integrations structure](../../structures/server/guides/integrations.md).
 

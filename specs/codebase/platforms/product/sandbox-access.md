@@ -124,16 +124,26 @@ genuinely does not exist yet — never stamped, or cleared by provider loss
 Because that 409 means "nothing has been stamped yet", every request-time
 access path resolves through
 `load_cloud_sandbox_runtime_access_or_repair`, which returns the identical
-409 *and* schedules one background materialization for the sandbox
-(lifecycle's cold-access law owns the mechanism and its stampede guard).
-The wire contract is unchanged — provisioning takes tens of seconds, far
-too long to hold a request — but the caller's retry is now waiting on work
-that is actually running. Materialization-internal callers keep using the
-bare loader: they are already inside the operation that does the repair.
-That law also settles what used to be lifecycle's open cold-start
-choreography question in favor of provision-on-access: there is no
-wake-and-poll handshake to add, because the poll the client already does
-against the unchanged 409 *is* the handshake.
+409 *and* schedules one background materialization for the sandbox —
+mechanism, stampede guards, and tradeoffs owned by lifecycle's cold-access
+law ([sandbox-lifecycle.md](sandbox-lifecycle.md)), not restated here.
+Materialization-internal callers keep using the bare loader: they are
+already inside the operation that does the repair.
+
+Under lifecycle's chain-completion law this state is the exception, not
+the first-contact choreography: a healthy user's sandbox is provisioned
+when their GitHub authority chain completes and is at worst *paused*
+thereafter — and paused is warm, waking under forwarded traffic with no
+409 involved. A caller actually sees this 409 in two situations only:
+provider loss cleared the stamped access, or the caller is pre-chain and
+was never provisioned. What the caller sees is this document's contract:
+the client classifies the code as a not-ready error and absorbs it on a
+provision-scale budget — 45 retries × 2 s (~90 s, sized to a full cold
+provision) against the generic not-ready budget below — rendering the
+ordinary connecting affordance while the scheduled repair runs
+([workspace-connection-retry.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts)).
+No wake-and-poll handshake exists, and none is wanted: the retry against
+the unchanged 409 is the wait.
 
 Adjacent `CloudApiError` codes (repository access, agent-gateway catalog,
 …) are their platforms' business and are not access-gating
@@ -156,10 +166,14 @@ The caller's path from a cloud workspace id to runtime traffic:
    Readiness is structural, not polled: a workspace with no stamped
    runtime workspace id throws typed `workspace_not_ready` (409); no cloud
    client throws `cloud_client_unavailable` (401).
-3. **Retry flatly while not ready** — 750 ms fixed delay, 8 attempts, no
-   backoff; retry on `workspace_not_ready`, any 5xx, or a network
-   `TypeError`, rethrow on anything else. React Query's native `retry` is
-   the loop
+3. **Retry flatly while not ready, on the budget the error names** — two
+   fixed-delay budgets, no backoff, both in
+   [workspace-connection-retry.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts):
+   the generic not-ready budget (750 ms × 8) for `workspace_not_ready`,
+   any 5xx, or a network `TypeError`, and the provision-scale budget
+   (2 s × 45, ~90 s) for `cloud_sandbox_runtime_not_ready`, whose repair
+   is a real provision that takes tens of seconds. Anything else
+   rethrows. React Query's native `retry` is the loop
    ([use-cloud-workspace-connection.ts](../../../../apps/packages/product-client/src/hooks/access/cloud/use-cloud-workspace-connection.ts),
    `staleTime` 30 s) — there is no hand-rolled poller.
 4. **Call the gateway** — the resolved connection is an ordinary
@@ -266,10 +280,11 @@ cloud/sdk/src/client/
   never renders the entry points.
 - Billing hold at spend time: typed 402; the client shows the block with
   the decision detail; no retry helps until the subject state changes.
-- Runtime access material missing: typed 409
-  `cloud_sandbox_runtime_not_ready`; the same request schedules the
-  materialization that repairs it, so the retry resolves once provisioning
-  finishes. The repair is always a materialization, never a gateway retry.
+- Runtime access material missing (provider loss, or a pre-chain caller):
+  typed 409 `cloud_sandbox_runtime_not_ready`; the same request schedules
+  the materialization that repairs it, and the client waits it out on the
+  provision-scale budget rendering the connecting affordance. The repair
+  is always a materialization, never a gateway retry.
 - Workspace not yet stamped with a runtime id: typed client-side
   `workspace_not_ready`, absorbed by the flat retry; visible only if
   8 × 750 ms elapses.
@@ -290,6 +305,8 @@ cloud/sdk/src/client/
   [test_cloud_sandbox_gateway_service.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_service.py).
 - Cold access still 409s and schedules one repair:
   [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py).
+- Client-side retry classification and the two budgets:
+  [workspace-connection-retry.test.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.test.ts).
 - Pending, landing with the gap PRs: shared-classifier unit tests; a
   contract test that the wire carries no unpopulated branchable fields.
 

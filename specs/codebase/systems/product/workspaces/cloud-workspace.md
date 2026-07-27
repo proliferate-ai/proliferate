@@ -143,3 +143,11 @@ apps/packages/product-client/src/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
+- [ ] The threshold notification is unbuilt: the status card shows the
+      cloud CPU/Memory/Disk rows, but nothing watches the disk axis for
+      the pressure threshold or surfaces "your cloud machine is running
+      low on space — here are your worktrees"
+      ([EnvironmentStatusCard.tsx](../../../../../apps/packages/product-client/src/components/workspace/chat/input/EnvironmentStatusCard.tsx)).
+      Build the client-side threshold trigger and copy, pointing into the
+      existing worktrees dialog and its delete actions (pull-plus-
+      threshold only — founder ruling, content spec).
