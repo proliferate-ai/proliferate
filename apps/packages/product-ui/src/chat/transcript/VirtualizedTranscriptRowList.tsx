@@ -8,8 +8,7 @@ import {
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
   TRANSCRIPT_TOP_PADDING_PX,
-  TranscriptScrollToBottomButton,
-  TranscriptTurnNavigator,
+  TranscriptFloatingControls,
   resolveTranscriptBottomInsets,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
@@ -407,11 +406,10 @@ export function VirtualizedTranscriptRowList({
         virtualItems={virtualItems}
         virtualizationMode={virtualizationMode}
       />
-      <TranscriptTurnNavigator />
-      <TranscriptScrollToBottomButton
-        visible={!isPinnedToBottom}
+      <TranscriptFloatingControls
         bottomInsetPx={bottomInsetPx}
-        onClick={handleScrollToBottomClick}
+        isPinnedToBottom={isPinnedToBottom}
+        onScrollToBottomClick={handleScrollToBottomClick}
       />
     </div>
   );

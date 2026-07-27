@@ -281,6 +281,35 @@ export function TranscriptTurnNavigator({
   );
 }
 
+/**
+ * The transcript's floating overlay controls, as one call site.
+ *
+ * Both row lists (full and virtualized) mount the identical set above their
+ * rows, so the glue lives here instead of being duplicated per list: the
+ * turn navigator in the top-right gutter and the scroll-to-bottom pill above
+ * the composer. A new floating control is added here once, not twice.
+ */
+export function TranscriptFloatingControls({
+  bottomInsetPx,
+  isPinnedToBottom,
+  onScrollToBottomClick,
+}: {
+  bottomInsetPx: number;
+  isPinnedToBottom: boolean;
+  onScrollToBottomClick: () => void;
+}) {
+  return (
+    <>
+      <TranscriptTurnNavigator />
+      <TranscriptScrollToBottomButton
+        visible={!isPinnedToBottom}
+        bottomInsetPx={bottomInsetPx}
+        onClick={onScrollToBottomClick}
+      />
+    </>
+  );
+}
+
 export function TranscriptHistoryLoadingRow() {
   return (
     <div className="flex justify-center pb-3 text-muted-foreground" role="status">

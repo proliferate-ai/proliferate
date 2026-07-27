@@ -19,9 +19,8 @@ import {
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
   TRANSCRIPT_TOP_PADDING_PX,
+  TranscriptFloatingControls,
   TranscriptHistoryLoadingRow,
-  TranscriptScrollToBottomButton,
-  TranscriptTurnNavigator,
   resolveTranscriptBottomInsets,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
@@ -303,11 +302,10 @@ export function FullTranscriptRowList({
           />
         )}
       </AutoHideScrollArea>
-      <TranscriptTurnNavigator />
-      <TranscriptScrollToBottomButton
-        visible={!isPinnedToBottom}
+      <TranscriptFloatingControls
         bottomInsetPx={bottomInsetPx}
-        onClick={handleScrollToBottomClick}
+        isPinnedToBottom={isPinnedToBottom}
+        onScrollToBottomClick={handleScrollToBottomClick}
       />
     </div>
   );
