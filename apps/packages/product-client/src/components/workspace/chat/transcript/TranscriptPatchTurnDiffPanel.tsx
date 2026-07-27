@@ -92,7 +92,7 @@ export function TranscriptPatchTurnDiffPanel({
     <div className="mb-2 flex max-w-full flex-col overflow-hidden rounded-lg border border-border bg-diff-panel-surface text-chat text-foreground [--turn-diff-row-padding-x:0.75rem] [--turn-diff-row-padding-y:0.25rem]">
       <ChatDiffLineWrapContextMenu trigger={header} />
       {!singleFile && (
-        <div className="flex flex-col border-t border-border [--codex-diffs-header-padding-x:var(--turn-diff-row-padding-x)] [--codex-diffs-header-padding-y:var(--turn-diff-row-padding-y)]">
+        <div className="flex flex-col border-t border-border [--diff-view-header-padding-x:var(--turn-diff-row-padding-x)] [--diff-view-header-padding-y:var(--turn-diff-row-padding-y)]">
           {visibleFiles.map((fp) => {
             const combinedPatch = fp.patches.join("\n");
             const displayPolicy = resolveDiffDisplayPolicy({

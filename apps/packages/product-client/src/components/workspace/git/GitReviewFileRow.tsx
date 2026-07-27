@@ -34,7 +34,7 @@ type OpenFile = (path: string) => Promise<void>;
 // background — unchanged diff lines carry no tint (the [data-git-review-document]
 // rules in design product.css flatten the context surface to match).
 const SIDEBAR_DIFF_SURFACE_STYLE = {
-  "--codex-diffs-surface-override": "var(--color-background)",
+  "--diff-view-surface-override": "var(--color-background)",
 } as CSSProperties;
 
 // Header row (min-h-9 + py) height estimate for content-visibility sizing.
