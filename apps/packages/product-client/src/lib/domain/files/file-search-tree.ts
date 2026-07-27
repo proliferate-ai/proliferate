@@ -13,7 +13,7 @@ export interface FileSearchTreeDirectory {
 }
 
 /**
- * Groups flat file-search matches into directory groups, Codex-style:
+ * Groups flat file-search matches into directory groups, reference-style:
  * one row per parent directory (chains of single-child directories are
  * collapsed into a single compressed label), with matched files nested
  * under it. Root-level matches are grouped under a "" directory.
@@ -48,7 +48,7 @@ const KEEP_FULL_EDGES = 1;
 
 /**
  * Middle-truncates each interior path segment of a long directory label,
- * Codex-style: "docs/processes/legal/troubleshooting-notes" becomes
+ * reference-style: "docs/processes/legal/troubleshooting-notes" becomes
  * "docs/proc…/le…/troubleshooting-notes" — first and last segments stay
  * readable, interior segments are shortened.
  */

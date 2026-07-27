@@ -58,7 +58,7 @@ vi.mock("@proliferate/ui/primitives/PopoverMenuItem", () => ({
   ),
 }));
 
-vi.mock("@proliferate/ui/primitives/ConfirmationDialog", () => ({
+vi.mock("@proliferate/ui/patterns/ConfirmationDialog", () => ({
   ConfirmationDialog: ({
     description,
     loading,
@@ -79,7 +79,7 @@ vi.mock("@proliferate/ui/primitives/ConfirmationDialog", () => ({
   ) : null,
 }));
 
-vi.mock("@proliferate/ui/layout/ShortcutBadge", () => ({
+vi.mock("@proliferate/ui/primitives/ShortcutBadge", () => ({
   ShortcutBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
 
@@ -92,7 +92,7 @@ vi.mock("#product/hooks/workspaces/ui/use-repo-group-native-context-menu", async
   useRepoGroupNativeContextMenu: () => ({ onContextMenuCapture: vi.fn() }),
 }));
 
-vi.mock("@proliferate/ui/layout/SidebarActionButton", () => ({
+vi.mock("@proliferate/ui/patterns/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     title,
@@ -147,7 +147,6 @@ describe("RepoGroup new workspace command scope", () => {
     const { unmount } = render(
       <RepoGroup
         name="Repo A"
-        count={1}
         collapsed={false}
         onToggleCollapsed={vi.fn()}
         newWorkspaceCommandScope={scope}
@@ -168,7 +167,6 @@ describe("RepoGroup new workspace command scope", () => {
     render(
       <RepoGroup
         name="Repo A"
-        count={1}
         collapsed={false}
         environmentKind="local_cloud"
         onToggleCollapsed={vi.fn()}
@@ -184,7 +182,6 @@ describe("RepoGroup new workspace command scope", () => {
     render(
       <RepoGroup
         name="Repo A"
-        count={1}
         collapsed={false}
         environmentKind="local"
         isGitHubRepo
@@ -212,7 +209,6 @@ describe("RepoGroup new workspace command scope", () => {
     render(
       <RepoGroup
         name="Repo A"
-        count={0}
         collapsed={false}
         environmentKind="cloud"
         onToggleCollapsed={vi.fn()}
@@ -236,7 +232,6 @@ describe("RepoGroup new workspace command scope", () => {
     render(
       <RepoGroup
         name="Repo A"
-        count={0}
         collapsed={false}
         environmentKind="cloud"
         onToggleCollapsed={vi.fn()}

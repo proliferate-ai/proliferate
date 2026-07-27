@@ -46,7 +46,7 @@ import { useChatTranscriptRow } from "@proliferate/product-ui/chat/transcript/Ch
 const CHAT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",
   backgroundColor: "var(--diffs-bg)",
-  "--diffs-bg": "var(--codex-diffs-surface)",
+  "--diffs-bg": "var(--diff-view-surface)",
   "--diffs-addition-color": "var(--diffs-addition-color-override)",
   "--diffs-deletion-color": "var(--diffs-deletion-color-override)",
   "--diffs-min-number-column-width": "4ch",
@@ -78,7 +78,7 @@ function ChatGutterSeparatorLine({ children }: { children?: React.ReactNode }) {
   return (
     <div
       data-separator="simple"
-      className="diff-gutter-cell flex min-h-[var(--diffs-line-height)] items-center justify-center bg-[var(--codex-diffs-separator-surface)]"
+      className="diff-gutter-cell flex min-h-[var(--diffs-line-height)] items-center justify-center bg-[var(--diff-view-separator-surface)]"
     >
       {children}
     </div>
@@ -155,7 +155,7 @@ function ChatCollapsedRow({
       onClick={onExpand}
       aria-label={`Expand ${section.lineCount} unmodified lines`}
       title={`${section.lineCount} unmodified lines`}
-      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
+      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--diff-view-separator-surface)] p-0 text-left font-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
     >
       <DiffCollapsedContentLabel
         lineCount={section.lineCount}
@@ -303,7 +303,7 @@ function ChatContentColumn({
             <div
               key={row.key}
               data-separator="gap-expander"
-              className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)]"
+              className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--diff-view-separator-surface)]"
             >
               <DiffGapContentLabel
                 gap={row.gap}
@@ -507,7 +507,7 @@ export function ChatDiffViewer({
         data-interactive-line-numbers=""
         tabIndex={0}
         style={CHAT_DIFF_PRE_STYLE}
-        className={`m-0 w-full bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
+        className={`m-0 w-full bg-[var(--diff-view-surface)] p-0 font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
           wrapLongLines ? "min-w-0" : "min-w-max"
         }`}
       >

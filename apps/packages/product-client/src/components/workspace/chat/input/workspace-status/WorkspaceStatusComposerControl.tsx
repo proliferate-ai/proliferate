@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   AppShellReviewIcon,

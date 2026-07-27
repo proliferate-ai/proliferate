@@ -2,8 +2,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "../src/settings/SettingsRow";
-import { SettingsSection } from "../src/settings/SettingsSection";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "../src/patterns/SettingsRow";
+import { SettingsSection } from "../src/patterns/SettingsSection";
 
 describe("SETTINGS_CONTROL_WIDTH_CLASS", () => {
   it("is the shared 240px control width", () => {

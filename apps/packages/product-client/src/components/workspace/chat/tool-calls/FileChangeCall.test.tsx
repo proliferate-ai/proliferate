@@ -54,7 +54,7 @@ describe("FileChangeCall", () => {
 
     expect(html).toContain("README.md");
     expect(html).toContain("Edited");
-    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-chat-inline-tool-header-surface)");
+    expect(html).toContain("--diff-view-header-surface:var(--color-diff-chat-inline-tool-header-surface)");
     expect(html).toContain("hover:bg-[var(--color-diff-chat-inline-tool-header-hover-surface)]");
     expect(html).toContain("data-diff-surface=\"chat\"");
     expect(html).toContain("thread-diff-virtualized");

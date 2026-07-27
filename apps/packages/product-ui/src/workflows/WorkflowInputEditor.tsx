@@ -4,7 +4,7 @@ import type {
   WorkflowInputType,
   WorkflowValidationIssue,
 } from "@proliferate/product-domain/workflows/definition";
-import { Checkbox } from "@proliferate/ui/kit/Checkbox";
+import { Checkbox } from "@proliferate/ui/primitives/checkbox-primitive";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";

@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cloud } from "lucide-react";
-import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { resolveRepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";

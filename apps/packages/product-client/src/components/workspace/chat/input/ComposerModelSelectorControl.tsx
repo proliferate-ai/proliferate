@@ -10,11 +10,11 @@ import type {
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
-import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import { ArrowUpRight, Check, Plus, Settings } from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";

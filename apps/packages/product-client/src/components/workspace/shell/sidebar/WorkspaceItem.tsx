@@ -14,7 +14,7 @@ import {
 } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
@@ -167,8 +167,14 @@ export function WorkspaceItem({
         onAction={onIndicatorAction}
       />
       {cloudStatusDefinition && (
-        <span className={`shrink-0 rounded-full border px-1.5 py-0 text-ui-sm uppercase tracking-[0.12em] ${cloudStatusDefinition.className}`}>
-          {cloudStatusDefinition.label}
+        <span className="flex shrink-0 items-center gap-1">
+          <span
+            aria-hidden="true"
+            className={`size-1.5 shrink-0 rounded-full ${cloudStatusDefinition.dotClassName}`}
+          />
+          <span className={`text-ui-sm ${cloudStatusDefinition.textClassName}`}>
+            {cloudStatusDefinition.label}
+          </span>
         </span>
       )}
       {gitDetail}

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { IntegrationConnectDialog, type IntegrationConnectSubmit } from "#product/components/settings/panes/integrations/IntegrationConnectDialog";
 import { IntegrationRow } from "#product/components/settings/panes/integrations/IntegrationRow";

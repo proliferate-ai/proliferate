@@ -122,15 +122,15 @@
     "apps/packages/product-ui/src/sidebar/ProductSidebarRepositories.tsx|z-10": 1,
     "apps/packages/product-ui/src/sidebar/ProductSidebarThreads.tsx|z-10": 1,
     "apps/packages/product-ui/src/workspaces/WorkspacesSurface.tsx|z-40": 1,
-    "apps/packages/ui/src/kit/AlertDialog.tsx|z-50": 2,
     "apps/packages/ui/src/kit/ContextMenu.tsx|z-50": 2,
-    "apps/packages/ui/src/kit/Dialog.tsx|z-50": 2,
-    "apps/packages/ui/src/kit/DropdownMenu.tsx|z-50": 2,
-    "apps/packages/ui/src/kit/Popover.tsx|z-50": 1,
-    "apps/packages/ui/src/kit/Tooltip.tsx|z-50": 1,
-    "apps/packages/ui/src/layout/PageContentFrame.tsx|z-30": 1,
-    "apps/packages/ui/src/primitives/ModalShell.tsx|z-10": 1,
-    "apps/packages/ui/src/primitives/PopoverButton.tsx|z-50": 1
+    "apps/packages/ui/src/patterns/ModalShell.tsx|z-10": 1,
+    "apps/packages/ui/src/patterns/PageContentFrame.tsx|z-30": 1,
+    "apps/packages/ui/src/primitives/AlertDialog.tsx|z-50": 2,
+    "apps/packages/ui/src/primitives/Dialog.tsx|z-50": 2,
+    "apps/packages/ui/src/primitives/DropdownMenu.tsx|z-50": 2,
+    "apps/packages/ui/src/primitives/Popover.tsx|z-50": 1,
+    "apps/packages/ui/src/primitives/PopoverButton.tsx|z-50": 1,
+    "apps/packages/ui/src/primitives/tooltip-primitive.tsx|z-50": 1
   },
   "unvirtualizedLongLists": {
     "apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx|rows": 2,

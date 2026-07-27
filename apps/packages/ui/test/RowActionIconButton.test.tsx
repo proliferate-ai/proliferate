@@ -2,8 +2,8 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { RowActionIconButton } from "../src/layout/RowActionIconButton";
-import { SidebarActionButton } from "../src/layout/SidebarActionButton";
+import { RowActionIconButton } from "../src/primitives/RowActionIconButton";
+import { SidebarActionButton } from "../src/patterns/SidebarActionButton";
 
 afterEach(cleanup);
 

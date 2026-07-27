@@ -6,7 +6,7 @@ import {
   useLlmBalance,
 } from "@proliferate/cloud-sdk-react";
 import { BillingSettingsPane } from "@proliferate/product-ui/billing/BillingSettingsPane";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 import {
   BillingAutoTopUpCard,
   BillingPlanCard,

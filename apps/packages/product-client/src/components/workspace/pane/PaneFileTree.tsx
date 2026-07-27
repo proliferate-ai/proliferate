@@ -3,7 +3,7 @@ import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { ChevronRight, Search } from "@proliferate/ui/icons";
 
 export interface PaneFileTreeNode<TData = unknown> {

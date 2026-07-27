@@ -10,7 +10,7 @@ export const mobileTypography = {
 export const mobileTiming = timing;
 
 /**
- * React Native shadow props stay hand-authored numeric objects (retune-spec §6):
+ * React Native shadow props stay hand-authored numeric objects:
  * CSS shadow strings are never parsed into RN objects. Each entry is
  * comment-linked to the CSS shadow role it approximates.
  */

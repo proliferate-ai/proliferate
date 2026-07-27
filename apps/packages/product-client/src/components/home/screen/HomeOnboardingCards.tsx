@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { RowActionIconButton } from "@proliferate/ui/layout/RowActionIconButton";
+import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
 import { GitHub, Settings, SlidersHorizontal, Spinner, X } from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import type {

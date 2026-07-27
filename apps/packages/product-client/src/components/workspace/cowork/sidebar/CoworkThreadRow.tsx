@@ -1,8 +1,5 @@
 import type { CoworkThread } from "@anyharness/sdk";
-import {
-  ChevronDown,
-  ChevronRight,
-} from "@proliferate/ui/icons";
+import { ChevronRight } from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
@@ -55,9 +52,9 @@ export function CoworkThreadRow({
           }}
           className="rounded focus-visible:outline-offset-[-2px]"
         >
-          {expanded
-            ? <ChevronDown className="icon-compact" />
-            : <ChevronRight className="icon-compact" />}
+          <ChevronRight
+            className={`icon-compact transition-transform ${expanded ? "rotate-90" : ""}`}
+          />
         </IconButton>
       ) : null}
     />

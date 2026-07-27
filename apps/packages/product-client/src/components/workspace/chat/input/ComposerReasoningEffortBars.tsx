@@ -8,7 +8,7 @@ import {
 import { resolveSessionControlTooltip } from "#product/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { LevelBarsButton } from "@proliferate/ui/primitives/LevelBarsButton";
+import { LevelBarsButton } from "@proliferate/ui/patterns/LevelBarsButton";
 
 // Tier-label tint ladder for ultra-capable ladders. Ultra keeps the
 // codex-convention purple (same hue as --color-pr-merged); max keeps the app

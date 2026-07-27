@@ -182,13 +182,28 @@ for (const [currentName, finalName] of Object.entries(currentTokenDispositions))
   if (provenance === "[SHIPPED]") shipped += 1;
   if (provenance.startsWith("[RETUNE:")) retuned += 1;
 }
-// [CHAT-01] moved `--color-composer-background` from [SHIPPED] to
-// [RETUNE:surface/composer-translucent], so one disposition crosses from the
-// shipped tally into the retuned one. The 285-name disposition census itself is
-// unchanged: the three [CHAT-04] additions are net-new tokens, and this map is
-// frozen to the names that existed BEFORE the retune.
-assert(shipped === 175, `expected 175 shipped dispositions, got ${shipped}`);
-assert(retuned === 40, `expected 40 retuned dispositions, got ${retuned}`);
+// `--color-composer-background` moved from [SHIPPED] to
+// [RETUNE:surface/composer-opaque], `--color-composer-backdrop-filter`
+// followed it (the composer-goes-opaque follow-on: light's blur has nothing
+// left to blur once the surface is opaque), and `--color-sidebar` moved from
+// [SHIPPED] to [RETUNE:sidebar/reference-surface] (round-2 sidebar retune,
+// previously [RETUNE:sidebar/surface-recess]). The diffs retune
+// ([RETUNE:diffs/addition-deletion-color-alias]) aliases
+// `--color-diff-added`/`--color-diff-deleted` and their six
+// `--diffs-bg-*-override` dark-mode literals onto `--color-git-green`/
+// `--color-git-red` so the diff pane matches the reference's addition/
+// deletion hues instead of a separate, unreferenced green/red pair. The
+// session-header retune ([RETUNE:header/quiet-active-tab]) aliases
+// `--workspace-shell-tab-active-background` onto `--color-selected` (it
+// was already in the retuned tally as [RETUNE:state/overlay], so the tag
+// changes but no disposition crosses) and `--workspace-shell-tab-active-border`
+// onto `--color-border`, moving one more disposition from shipped into
+// retuned — twelve crossings in total.
+// The 285-name disposition census itself is unchanged: the three
+// transcript-measure/turn-rhythm additions are net-new tokens, and this map
+// is frozen to the names that existed BEFORE the retune.
+assert(shipped === 164, `expected 164 shipped dispositions, got ${shipped}`);
+assert(retuned === 51, `expected 51 retuned dispositions, got ${retuned}`);
 
 for (const [name, value] of tokenEntries) {
   assert(value.provenance.length > 0, `${name} is missing provenance`);

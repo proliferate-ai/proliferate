@@ -1,1 +1,1 @@
-export { Checkbox } from "../kit/Checkbox";
+export { Checkbox } from "./checkbox-primitive";

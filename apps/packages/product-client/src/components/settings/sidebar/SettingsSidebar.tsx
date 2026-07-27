@@ -17,9 +17,9 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react";
-import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
-import { ProviderIcon } from "@proliferate/ui/provider-icons";
-import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
+import { SidebarNavRow } from "@proliferate/ui/patterns/SidebarNavRow";
+import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { SettingsEyebrow } from "@proliferate/product-ui/patterns/SettingsEyebrow";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
 import { HarnessStatusDot } from "#product/components/settings/sidebar/HarnessStatusDot";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";

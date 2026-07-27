@@ -1,5 +1,5 @@
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
 import { ExternalLink } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";

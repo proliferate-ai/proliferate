@@ -15,8 +15,8 @@ import {
   MoreHorizontal,
   Search,
 } from "@proliferate/ui/icons";
-import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
-import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
+import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
+import { PaneOptionsMenuItem } from "@proliferate/ui/patterns/PaneOptionsMenuItem";
 import {
   POPOVER_FRAME_CLASS,
   POPOVER_SURFACE_CLASS,
@@ -187,10 +187,10 @@ function FileBreadcrumbs({
       aria-label="File path"
       className="hide-scrollbar flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
     >
-      {/* Codex breadcrumbs sit one step below chat-body size; --text-ui is
-          our body-minus-one that scales with appearance presets. The line
-          height must clear descenders — leading-none clips "g"/"p" inside the
-          nav's scroll container. */}
+      {/* The reference breadcrumbs sit one step below chat-body size;
+          --text-ui is our body-minus-one that scales with appearance
+          presets. The line height must clear descenders — leading-none clips
+          "g"/"p" inside the nav's scroll container. */}
       <ol className="flex min-w-max flex-1 items-center gap-1 text-ui text-muted-foreground">
         {crumbs.map((part, index) => {
           const isLast = index === crumbs.length - 1;

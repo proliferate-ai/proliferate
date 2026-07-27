@@ -13,7 +13,7 @@ import {
 import { useChatDraftValue } from "#product/hooks/chat/ui/use-chat-draft-state";
 import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
-import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
+import { ComposerTextareaFrame } from "@proliferate/ui/patterns/ComposerTextareaFrame";
 import { QueuedPromptEditBanner } from "#product/components/workspace/chat/input/QueuedPromptEditBanner";
 import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 
@@ -85,7 +85,10 @@ export function ChatInputDraftArea({
             className="relative overflow-y-auto"
             style={{
               minHeight: `${WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
-              maxHeight: `calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows})`,
+              // Capped at 25dvh so the draft area never crowds out the
+              // transcript above it on short viewports, even when maxRows
+              // would otherwise let it grow taller.
+              maxHeight: `min(calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows}), 25dvh)`,
             }}
           >
             <ComposerRichTextEditor
