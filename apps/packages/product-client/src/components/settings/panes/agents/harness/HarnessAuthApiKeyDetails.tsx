@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -18,7 +18,15 @@ import {
 } from "#product/lib/domain/settings/provider-config-fields";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { HarnessAuthApiKeyRow } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyRow";
-import { ProviderPickerModal } from "#product/components/settings/panes/agents/harness/ProviderPickerModal";
+
+// Lazy: the picker pulls in the vendored provider-logo asset map (170+ marks),
+// which must never reach the login-path chunk (login JS budget gate,
+// scripts/measure-login-runtime-budget.mjs).
+const ProviderPickerModal = lazy(async () => ({
+  default: (
+    await import("#product/components/settings/panes/agents/harness/ProviderPickerModal")
+  ).ProviderPickerModal,
+}));
 
 /**
  * §4 — API keys. The container is now a flat titled section (no card, no
@@ -48,6 +56,13 @@ export function ApiKeyDetails({
     (candidate) => !usedEnvVars.has(candidate.envVarName),
   );
 
+  // Providers this harness already has a row for — always expanded in the
+  // picker (agent-auth.md §5: "already-configured providers are the ones a
+  // returning user came for").
+  const configuredProviderIds = editor.editorState.rows
+    .map((row) => row.providerHint)
+    .filter((hint): hint is string => typeof hint === "string" && hint.length > 0);
+
   // Typed provider-config kinds (Bedrock/Azure) this harness may offer. Empty
   // for EVERY harness until D1 lands registry.json's `providerConfig`
   // declarations (agents-impl-plan.md §4) — see
@@ -69,6 +84,27 @@ export function ApiKeyDetails({
             envVarSuggestion?.providerHint ?? null,
             created.id,
           );
+        },
+        onError: (error) => {
+          showToast(error.message || HARNESS_PANE_COPY.addApiKeyError);
+        },
+      },
+    );
+  }
+
+  // §5's two writes: a vault api_key entry, then one selection row whose
+  // env_var_name is the provider's first registry env var and whose
+  // provider_hint is the provider id (display-only).
+  function handleProviderSubmit(
+    provider: { id: string; displayName: string; envVarNames: readonly string[] },
+    value: string,
+  ) {
+    createKey.mutate(
+      { title: `${provider.displayName} API key`, value },
+      {
+        onSuccess: (created) => {
+          setProviderModalOpen(false);
+          editor.addBoundApiKey(provider.envVarNames[0] ?? "", provider.id, created.id);
         },
         onError: (error) => {
           showToast(error.message || HARNESS_PANE_COPY.addApiKeyError);
@@ -213,13 +249,16 @@ export function ApiKeyDetails({
         onSubmit={handleAddKeyModalSubmit}
       />
 
-      {editor.multiSource ? (
-        <ProviderPickerModal
-          open={providerModalOpen}
-          onClose={() => setProviderModalOpen(false)}
-          onSelect={(provider) =>
-            editor.addRow(provider.envVarNames[0] ?? "", provider.id)}
-        />
+      {editor.multiSource && providerModalOpen ? (
+        <Suspense fallback={null}>
+          <ProviderPickerModal
+            open
+            onClose={() => setProviderModalOpen(false)}
+            configuredProviderIds={configuredProviderIds}
+            submitting={createKey.isPending}
+            onSubmit={handleProviderSubmit}
+          />
+        </Suspense>
       ) : null}
 
       {openProviderConfigKind ? (
