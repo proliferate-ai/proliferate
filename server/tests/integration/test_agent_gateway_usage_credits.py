@@ -54,6 +54,22 @@ async def _link_github_identity(db_session: AsyncSession, *, user_id: uuid.UUID)
     await db_session.flush()
 
 
+async def _claude_key_id(db_session: AsyncSession, enrollment_id: uuid.UUID) -> str:
+    """The "claude" per-harness child key's virtual_key_id for an enrollment.
+
+    Post-B2 the parent enrollment row carries no key of its own — every
+    gateway-capable harness gets its own child key (model-gateway.md
+    §Account model). Tests here drive spend rows tagged ``claude-sonnet-4-5``,
+    so "claude" is the representative per-harness key throughout this file.
+    """
+    enrollment_key = await store.get_active_enrollment_key(
+        db_session, enrollment_id=enrollment_id, harness_kind="claude"
+    )
+    assert enrollment_key is not None
+    assert enrollment_key.virtual_key_id is not None
+    return enrollment_key.virtual_key_id
+
+
 class StubLiteLLM:
     """Stubs the admin surfaces the enrollment + importer services call."""
 
@@ -101,10 +117,18 @@ class StubLiteLLM:
         alias: str | None = None,
         max_budget: float | None = None,
         metadata: dict[str, object] | None = None,
+        models: list[str] | None = None,
     ):
         self.token_counter += 1
         token_id = f"token-{self.token_counter}"
-        self.minted.append({"alias": alias, "token_id": token_id, "metadata": metadata or {}})
+        self.minted.append(
+            {
+                "alias": alias,
+                "token_id": token_id,
+                "metadata": metadata or {},
+                "models": models,
+            }
+        )
         from proliferate.integrations.litellm import LiteLLMVirtualKey
 
         return LiteLLMVirtualKey(
@@ -209,13 +233,14 @@ async def test_importer_is_idempotent_across_overlapping_windows(
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
     enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is not None
+    assert enrollment.virtual_key_id is None
+    claude_key_id = await _claude_key_id(db_session, enrollment.id)
 
     occurred = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
     stub_litellm.spend_rows = [
         _spend_row(
             request_id="req-1",
-            api_key=enrollment.virtual_key_id,
+            api_key=claude_key_id,
             spend=0.10,
             occurred_at=occurred,
         )
@@ -260,14 +285,15 @@ async def test_same_day_spend_is_imported(
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
     enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is not None
+    assert enrollment.virtual_key_id is None
+    claude_key_id = await _claude_key_id(db_session, enrollment.id)
 
     now = datetime(2026, 7, 1, 12, 10, tzinfo=UTC)
     occurred = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)  # earlier the same day
     stub_litellm.spend_rows = [
         _spend_row(
             request_id="req-today",
-            api_key=enrollment.virtual_key_id,
+            api_key=claude_key_id,
             spend=0.10,
             occurred_at=occurred,
         )
@@ -291,14 +317,19 @@ async def test_exhaustion_disables_key_and_flips_budget_status(
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
     enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is not None
+    assert enrollment.virtual_key_id is None
     assert enrollment.budget_status == "ok"
+    claude_key_id = await _claude_key_id(db_session, enrollment.id)
+    all_key_ids = {
+        key.virtual_key_id
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
+    }
 
     occurred = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
     stub_litellm.spend_rows = [
         _spend_row(
             request_id="req-exhaust",
-            api_key=enrollment.virtual_key_id,
+            api_key=claude_key_id,
             spend=0.05,  # far past the 0.001 grant
             occurred_at=occurred,
         )
@@ -308,8 +339,9 @@ async def test_exhaustion_disables_key_and_flips_budget_status(
     assert result.imported == 1
     assert result.exhausted_subjects == 1
 
-    # The VK was disabled via the LiteLLM admin client.
-    assert stub_litellm.disabled_keys == [enrollment.virtual_key_id]
+    # Every per-harness key was disabled via the LiteLLM admin client
+    # (exhaustion is subject-wide, not per-harness).
+    assert set(stub_litellm.disabled_keys) == all_key_ids
 
     refreshed = await store.get_enrollment_for_user(db_session, user_id=user_id)
     assert refreshed is not None
@@ -321,7 +353,7 @@ async def test_exhaustion_disables_key_and_flips_budget_status(
     # Re-running does not re-disable an already-exhausted key.
     again = await run_usage_import(db_session, now=datetime(2026, 7, 1, 12, 20, tzinfo=UTC))
     assert again.exhausted_subjects == 0
-    assert stub_litellm.disabled_keys == [enrollment.virtual_key_id]
+    assert set(stub_litellm.disabled_keys) == all_key_ids
 
 
 @pytest.mark.asyncio
@@ -365,7 +397,8 @@ async def test_is_gateway_budget_available(
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
     enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is not None
+    assert enrollment.virtual_key_id is None
+    claude_key_id = await _claude_key_id(db_session, enrollment.id)
 
     # Fresh grant, no usage → available.
     assert await is_gateway_budget_available(db_session, user_id) is True
@@ -374,7 +407,7 @@ async def test_is_gateway_budget_available(
     stub_litellm.spend_rows = [
         _spend_row(
             request_id="req-drain",
-            api_key=enrollment.virtual_key_id,
+            api_key=claude_key_id,
             spend=6.0,
             occurred_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
         )
@@ -425,7 +458,8 @@ async def test_exhausted_budget_withholds_gateway_key_from_state_render(
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
     enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is not None
+    assert enrollment.virtual_key_id is None
+    claude_key_id = await _claude_key_id(db_session, enrollment.id)
 
     await put_auth_selections(
         db_session,
@@ -435,17 +469,20 @@ async def test_exhausted_budget_withholds_gateway_key_from_state_render(
         sources=[DesiredAuthSource(source_kind="gateway")],
     )
 
-    # With credit remaining, the render hands out the gateway key.
+    # With credit remaining, the render hands out the claude harness's own
+    # per-harness gateway key (model-gateway.md §Account model). `claude_key_id`
+    # is the token hash (spend-log `api_key`), not the rendered secret value —
+    # only presence is asserted here.
     state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
     sources = [s for h in state["harnesses"] for s in h["sources"]]
     assert any(s["kind"] == "gateway" and s.get("key") for s in sources)
 
     # Drain the grant; simulate the first wall failing by NOT relying on the
-    # key-disable — the render alone must now withhold the key.
+    # key-disable — the render alone must now withhold the key regardless.
     stub_litellm.spend_rows = [
         _spend_row(
             request_id="req-wall2",
-            api_key=enrollment.virtual_key_id,
+            api_key=claude_key_id,
             spend=6.0,
             occurred_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
         )
@@ -456,45 +493,6 @@ async def test_exhausted_budget_withholds_gateway_key_from_state_render(
     state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
     sources = [s for h in state["harnesses"] for s in h["sources"]]
     assert not any(s["kind"] == "gateway" for s in sources)
-
-
-@pytest.mark.asyncio
-async def test_exhausted_budget_blocks_gateway_catalog_refresh_with_402(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-    stub_litellm: StubLiteLLM,
-) -> None:
-    from proliferate.server.cloud.agent_gateway import catalog as catalog_service
-    from proliferate.server.cloud.errors import CloudApiError
-
-    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
-    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
-    user_id = await _create_user(db_session)
-    await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is not None
-
-    stub_litellm.spend_rows = [
-        _spend_row(
-            request_id="req-catalog-drain",
-            api_key=enrollment.virtual_key_id,
-            spend=6.0,
-            occurred_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
-        )
-    ]
-    await run_usage_import(db_session, now=datetime(2026, 7, 1, 12, 10, tzinfo=UTC))
-
-    with pytest.raises(CloudApiError) as excinfo:
-        await catalog_service.refresh_catalog(
-            db_session,
-            user_id=user_id,
-            harness_kind="claude",
-            surface="local",
-            route="gateway",
-            models_json=None,
-        )
-    assert excinfo.value.code == "agent_gateway_credits_exhausted"
-    assert excinfo.value.status_code == 402
 
 
 @pytest.mark.asyncio
@@ -522,7 +520,7 @@ async def test_available_budget_leaves_state_render_and_no_grant_unblocked(
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
     enrollment = await ensure_user_enrollment(db_session, user_id)
-    assert enrollment.virtual_key_id is not None
+    assert enrollment.virtual_key_id is None
 
     await put_auth_selections(
         db_session,

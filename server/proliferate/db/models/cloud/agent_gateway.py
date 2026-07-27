@@ -33,8 +33,13 @@ from proliferate.db.models.base import Base, utcnow
 class AgentApiKey(Base):
     """A titled secret in a user's personal key vault.
 
-    Provider-agnostic: the key is bound to a provider only when a selection row
-    references it under a specific ``env_var_name`` (see AgentAuthSelection).
+    Provider-agnostic for the bare-secret ``kind='api_key'`` default: the key
+    is bound to a provider only when a selection row references it under a
+    specific ``env_var_name`` (see AgentAuthSelection). A typed ``kind``
+    (``aws_bedrock``, ``azure_openai``) instead carries the harness's own
+    provider-config JSON document (agent-auth.md's "The vault"); a selection
+    referencing a typed entry names no ``env_var_name`` — the typed kind
+    carries its own env mapping, applied by the harness's render recipe.
     """
 
     __tablename__ = "agent_api_key"
@@ -42,6 +47,10 @@ class AgentApiKey(Base):
         CheckConstraint(
             "status IN ('active', 'revoked')",
             name="ck_agent_api_key_status",
+        ),
+        CheckConstraint(
+            "kind IN ('api_key', 'aws_bedrock', 'azure_openai')",
+            name="ck_agent_api_key_kind",
         ),
         Index("ix_agent_api_key_user_status", "user_id", "status"),
     )
@@ -52,6 +61,15 @@ class AgentApiKey(Base):
         index=True,
     )
     title: Mapped[str] = mapped_column(Text)
+    # 'api_key' (default): value_ciphertext decrypts to one opaque secret
+    # string. 'aws_bedrock' | 'azure_openai': value_ciphertext decrypts to a
+    # JSON document (region+credentials / endpoint+deployment+key) — see
+    # proliferate.utils.crypto.{encrypt_json,decrypt_json}.
+    kind: Mapped[str] = mapped_column(
+        Text,
+        default="api_key",
+        server_default=text("'api_key'"),
+    )
     value_ciphertext: Mapped[str] = mapped_column(Text)
     encryption_key_id: Mapped[str] = mapped_column(Text)
     redacted_hint: Mapped[str] = mapped_column(Text)
@@ -268,28 +286,93 @@ class AgentGatewayEnrollment(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class AgentCatalogSnapshot(Base):
-    """Probed (or seeded) model catalog per (harness, surface, route, owner)."""
+class AgentGatewayEnrollmentKey(Base):
+    """One per-(enrollment, harness) LiteLLM virtual key (model-gateway.md §Account model).
 
-    __tablename__ = "agent_catalog_snapshot"
+    Child of ``agent_gateway_enrollment``: an enrollment's LiteLLM team stays
+    the single money/attribution boundary, but each gateway-capable
+    harness_kind gets its own virtual key scoped to that harness's access
+    group (``{"models": [harness_kind]}`` at ``/key/generate``). Keys never
+    carry a budget — the team is the only budget layer
+    (model-gateway.md "Account model" table); ``max_budget`` is not a column
+    on this table by design, unlike the parent enrollment row which still
+    tracks the team's budget separately.
+    """
+
+    __tablename__ = "agent_gateway_enrollment_key"
     __table_args__ = (
-        CheckConstraint(
-            "surface IN ('local', 'cloud')",
-            name="ck_agent_catalog_snapshot_surface",
-        ),
-        CheckConstraint(
-            "route IN ('native', 'api_key', 'gateway')",
-            name="ck_agent_catalog_snapshot_route",
-        ),
-        CheckConstraint(
-            "source IN ('probe', 'seed', 'override', 'runtime-mirror')",
-            name="ck_agent_catalog_snapshot_source",
+        UniqueConstraint(
+            "enrollment_id",
+            "harness_kind",
+            name="uq_agent_gateway_enrollment_key_scope",
         ),
         Index(
-            "ix_agent_catalog_snapshot_scope",
+            "ux_agent_gateway_enrollment_key_active_scope",
+            "enrollment_id",
             "harness_kind",
-            "surface",
-            "route",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+        Index("ix_agent_gateway_enrollment_key_virtual_key_id", "virtual_key_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    enrollment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agent_gateway_enrollment.id", ondelete="CASCADE"),
+        index=True,
+    )
+    harness_kind: Mapped[str] = mapped_column(String(64))
+    virtual_key_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    virtual_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    virtual_key_ciphertext_key_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    sync_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentModelSnapshot(Base):
+    """One cloud-sandbox machine observation per (harness, auth context, owner).
+
+    Every row is a machine's observation at rest, uploaded by the Worker
+    (model-catalog.md §The cloud snapshot). Three consequences are in the schema:
+    no ``surface`` (only the cloud sandbox's document syncs); no ``source`` and
+    ``owner_user_id`` NOT NULL (the server never generates snapshots, so there is
+    no ownerless seed row — the seed tier is a read-time fallback to the served
+    shipped catalog); and ``snapshot_json`` holding one machine-document entry
+    verbatim (models, modes, attestation, warnings), not a models-only payload.
+
+    Soft-versioned: a write deactivates prior active rows for the scope and
+    inserts the new one, so retained inactive rows are the audit trail that makes
+    "what changed between refreshes" answerable without storing diffs.
+
+    Deliberately **no unique key on the scope** (model-catalog.md §Storage: "the
+    soft-versioning discipline is kept as-is"). A partial unique index over
+    ``status = 'active'`` was built here first and withdrawn: uploads are
+    fire-and-forget from the Worker's convergence tick, so two racing ticks would
+    turn a benign duplicate into a 500 the Worker cannot act on. Consequence the
+    reader must know: "the active row" is plural in principle, so reads order by
+    ``(probed_at DESC, id DESC)`` — the tie-break is required, not cosmetic,
+    since a re-sent entry repeats its ``probedAt``. The next write collapses it.
+    """
+
+    __tablename__ = "agent_model_snapshot"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'inactive')",
+            name="ck_agent_model_snapshot_status",
+        ),
+        Index(
+            "ix_agent_model_snapshot_scope",
+            "harness_kind",
+            "auth_context_id",
             "owner_user_id",
             "probed_at",
         ),
@@ -297,16 +380,16 @@ class AgentCatalogSnapshot(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     harness_kind: Mapped[str] = mapped_column(String(64))
-    surface: Mapped[str] = mapped_column(String(16))
-    route: Mapped[str] = mapped_column(String(16))
-    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    # Catalog auth-context id ('anthropic-api', 'gateway', 'baseline', …) — the
+    # exact strings the shipped catalog declares and the runtime's snapshot
+    # document is keyed by, never a new vocabulary.
+    auth_context_id: Mapped[str] = mapped_column(String(64))
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
-        nullable=True,
     )
-    models_json: Mapped[str] = mapped_column(Text)
+    snapshot_json: Mapped[str] = mapped_column(Text)
     probed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    source: Mapped[str] = mapped_column(String(16), default="probe")
     status: Mapped[str] = mapped_column(String(16), default="active")
 
 

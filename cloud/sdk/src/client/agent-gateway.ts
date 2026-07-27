@@ -1,34 +1,35 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   AgentApiKey,
-  AgentAuthRoute,
   AgentAuthSelection,
   AgentAuthState,
   AgentAuthSurface,
   AgentGatewayCapabilities,
-  AgentGatewayCatalog,
-  AgentGatewayCatalogOverride,
   AgentGatewayEnrollment,
+  AgentModelOverride,
+  AgentModels,
   CreateAgentApiKeyRequest,
-  MirrorAgentGatewayCatalogRequest,
   OrgAgentPolicy,
   OrgAgentPolicyViolationListResponse,
   PutAuthSelectionsRequest,
-  RefreshAgentGatewayCatalogRequest,
   UpdateOrgAgentPolicyRequest,
-  UpsertAgentGatewayCatalogOverrideRequest,
+  UpsertAgentModelOverrideRequest,
 } from "../types/index.js";
 
 function selectionsPath(harnessKind: string): string {
-  return `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}`;
+  return `/v1/cloud/agent-auth/selections/${encodeURIComponent(harnessKind)}`;
 }
 
-function catalogPath(harnessKind: string): string {
-  return `/v1/cloud/agent-gateway/catalog/${encodeURIComponent(harnessKind)}`;
+// B4 re-key (model-catalog.md §Cloud routes): the cloud snapshot moved from
+// /v1/cloud/agent-gateway/catalog/* to its own /v1/cloud/agent-models/*
+// namespace, keyed by the catalog's own auth-context ids instead of the old
+// coarse surface+route pair. Hard cutover, no alias window (F-040).
+function agentModelsPath(harnessKind: string): string {
+  return `/v1/cloud/agent-models/${encodeURIComponent(harnessKind)}`;
 }
 
 function orgAgentPolicyPath(organizationId: string): string {
-  return `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/agent-gateway/policy`;
+  return `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/agent-auth/policy`;
 }
 
 // --- Key vault -------------------------------------------------------------
@@ -38,7 +39,7 @@ export async function listAgentApiKeys(
 ): Promise<AgentApiKey[]> {
   return client.requestJson<AgentApiKey[]>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/keys",
+    path: "/v1/cloud/agent-auth/keys",
   });
 }
 
@@ -48,7 +49,7 @@ export async function createAgentApiKey(
 ): Promise<AgentApiKey> {
   return client.requestJson<AgentApiKey>({
     method: "POST",
-    path: "/v1/cloud/agent-gateway/keys",
+    path: "/v1/cloud/agent-auth/keys",
     body: input,
   });
 }
@@ -59,7 +60,7 @@ export async function revokeAgentApiKey(
 ): Promise<AgentApiKey> {
   return client.requestJson<AgentApiKey>({
     method: "DELETE",
-    path: `/v1/cloud/agent-gateway/keys/${encodeURIComponent(keyId)}`,
+    path: `/v1/cloud/agent-auth/keys/${encodeURIComponent(keyId)}`,
   });
 }
 
@@ -71,7 +72,7 @@ export async function listAuthSelections(
 ): Promise<AgentAuthSelection[]> {
   return client.requestJson<AgentAuthSelection[]>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/selections",
+    path: "/v1/cloud/agent-auth/selections",
     query: surface ? { surface } : undefined,
   });
 }
@@ -96,69 +97,52 @@ export async function getAgentAuthState(
 ): Promise<AgentAuthState> {
   return client.requestJson<AgentAuthState>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/state",
+    path: "/v1/cloud/agent-auth/state",
     query: { surface },
   });
 }
 
-// --- Catalog ---------------------------------------------------------------
+// --- Agent models (cloud snapshot) -----------------------------------------
+//
+// The layered read only: model-catalog.md's B4 re-key absorbed the old
+// `refresh`/`mirror` product mutations into a single Worker-authenticated
+// ingest route (`POST .../refresh`, `authenticate_worker`) that a signed-in
+// product client cannot call — see server/proliferate/server/cloud/
+// agent_models/api.py. There is no product-client-callable write function
+// here; a manual "refresh" affordance returns in C3 once a real caller (the
+// runtime-facing surface, not this SDK) exists (F-040).
 
-export async function getAgentCatalog(
+export async function getAgentModels(
   harnessKind: string,
-  surface: AgentAuthSurface,
-  route: AgentAuthRoute = "gateway",
+  authContextId: string,
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentGatewayCatalog> {
-  return client.requestJson<AgentGatewayCatalog>({
+): Promise<AgentModels> {
+  return client.requestJson<AgentModels>({
     method: "GET",
-    path: catalogPath(harnessKind),
-    query: { surface, route },
+    path: agentModelsPath(harnessKind),
+    query: { authContextId },
   });
 }
 
-export async function refreshAgentCatalog(
+export async function upsertAgentModelOverride(
   harnessKind: string,
-  input: RefreshAgentGatewayCatalogRequest,
+  input: UpsertAgentModelOverrideRequest,
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentGatewayCatalog> {
-  return client.requestJson<AgentGatewayCatalog>({
-    method: "POST",
-    path: `${catalogPath(harnessKind)}/refresh`,
-    body: input,
-  });
-}
-
-export async function mirrorAgentCatalog(
-  harnessKind: string,
-  input: MirrorAgentGatewayCatalogRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentGatewayCatalog> {
-  return client.requestJson<AgentGatewayCatalog>({
-    method: "POST",
-    path: `${catalogPath(harnessKind)}/mirror`,
-    body: input,
-  });
-}
-
-export async function upsertAgentCatalogOverride(
-  harnessKind: string,
-  input: UpsertAgentGatewayCatalogOverrideRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentGatewayCatalogOverride> {
-  return client.requestJson<AgentGatewayCatalogOverride>({
+): Promise<AgentModelOverride> {
+  return client.requestJson<AgentModelOverride>({
     method: "PUT",
-    path: `${catalogPath(harnessKind)}/override`,
+    path: `${agentModelsPath(harnessKind)}/override`,
     body: input,
   });
 }
 
-export async function deleteAgentCatalogOverride(
+export async function deleteAgentModelOverride(
   harnessKind: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<void> {
   await client.requestJson<void>({
     method: "DELETE",
-    path: `${catalogPath(harnessKind)}/override`,
+    path: `${agentModelsPath(harnessKind)}/override`,
   });
 }
 

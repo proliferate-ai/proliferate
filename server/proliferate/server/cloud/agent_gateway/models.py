@@ -19,8 +19,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
     AgentAuthSelectionRecord,
-    AgentCatalogOverrideRecord,
-    AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentRecord,
     DesiredAuthSource,
     OrgMemberRouteSelectionRecord,
@@ -31,9 +29,10 @@ if TYPE_CHECKING:
 
 AgentAuthSurface = Literal["local", "cloud"]
 AgentAuthSourceKind = Literal["gateway", "api_key"]
-# Catalog snapshots retain a route dimension (native/api_key/gateway); the auth
-# selection path itself no longer speaks "route".
-AgentAuthRoute = Literal["native", "api_key", "gateway"]
+# The vault's closed kind vocabulary (agent-auth.md's "The vault" table);
+# mirrors constants.agent_gateway.AGENT_API_KEY_KINDS.
+AgentApiKeyKind = Literal["api_key", "aws_bedrock", "azure_openai"]
+AgentProviderConfigKind = Literal["aws_bedrock", "azure_openai"]
 
 
 class AgentGatewayBaseModel(BaseModel):
@@ -48,6 +47,7 @@ class AgentGatewayBaseModel(BaseModel):
 class AgentApiKeyResponse(AgentGatewayBaseModel):
     id: str
     title: str
+    kind: AgentApiKeyKind
     redacted_hint: str = Field(alias="redactedHint")
     status: str
     created_at: str = Field(alias="createdAt")
@@ -56,6 +56,14 @@ class AgentApiKeyResponse(AgentGatewayBaseModel):
 class AgentApiKeyCreateRequest(AgentGatewayBaseModel):
     title: str
     value: str
+
+
+class AgentProviderConfigCreateRequest(AgentGatewayBaseModel):
+    """Create a typed vault entry (D2's ``ProviderConfigCreatorSubmit`` shape)."""
+
+    title: str
+    kind: AgentProviderConfigKind
+    value: dict[str, str]
 
 
 # --------------------------------------------------------------------------- #
@@ -150,56 +158,6 @@ class AgentGatewayEnrollmentResponse(AgentGatewayBaseModel):
 
 
 # --------------------------------------------------------------------------- #
-# Catalog (P3 surface; auth-model-agnostic route dimension)
-# --------------------------------------------------------------------------- #
-
-
-class AgentGatewayCatalogResponse(AgentGatewayBaseModel):
-    """Layered catalog: latest snapshot (owner else seed) + caller override."""
-
-    harness_kind: str = Field(alias="harnessKind")
-    surface: AgentAuthSurface
-    route: AgentAuthRoute
-    models: list[dict[str, Any]]
-    snapshot_id: str | None = Field(alias="snapshotId")
-    probed_at: str | None = Field(alias="probedAt")
-    source: str | None
-    override_applied: bool = Field(alias="overrideApplied")
-
-
-class AgentGatewayCatalogRefreshRequest(AgentGatewayBaseModel):
-    surface: AgentAuthSurface
-    route: AgentAuthRoute
-    models_json: str | None = Field(default=None, alias="modelsJson")
-
-
-class AgentGatewayCatalogMirrorRequest(AgentGatewayBaseModel):
-    """A runtime's push of its own resolved probe result (contract §4).
-
-    Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
-    AnyHarness today), not the product UI, and ``probed_at`` reflects when the
-    runtime actually probed rather than when this request landed.
-    """
-
-    surface: AgentAuthSurface
-    route: AgentAuthRoute
-    models_json: str = Field(alias="modelsJson")
-    probed_at: str = Field(alias="probedAt")
-
-
-class AgentGatewayCatalogOverrideUpsertRequest(AgentGatewayBaseModel):
-    patch_json: str = Field(alias="patchJson")
-
-
-class AgentGatewayCatalogOverrideResponse(AgentGatewayBaseModel):
-    id: str
-    harness_kind: str = Field(alias="harnessKind")
-    patch_json: str = Field(alias="patchJson")
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
-
-
-# --------------------------------------------------------------------------- #
 # Org policy (flag-only)
 # --------------------------------------------------------------------------- #
 
@@ -246,6 +204,7 @@ def api_key_payload(record: AgentApiKeyRecord) -> AgentApiKeyResponse:
     return AgentApiKeyResponse(
         id=str(record.id),
         title=record.title,
+        kind=record.kind,  # type: ignore[arg-type]
         redacted_hint=record.redacted_hint,
         status=record.status,
         created_at=record.created_at.isoformat(),
@@ -285,39 +244,6 @@ def desired_source(input_source: AgentAuthSourceInput) -> DesiredAuthSource:
 
 def agent_auth_state_payload(state: dict[str, object]) -> AgentAuthStateResponse:
     return AgentAuthStateResponse.model_validate(state)
-
-
-def catalog_payload(
-    *,
-    harness_kind: str,
-    surface: AgentAuthSurface,
-    route: AgentAuthRoute,
-    models: list[dict[str, Any]],
-    snapshot: AgentCatalogSnapshotRecord | None,
-    override: AgentCatalogOverrideRecord | None,
-) -> AgentGatewayCatalogResponse:
-    return AgentGatewayCatalogResponse(
-        harness_kind=harness_kind,
-        surface=surface,
-        route=route,
-        models=models,
-        snapshot_id=str(snapshot.id) if snapshot is not None else None,
-        probed_at=snapshot.probed_at.isoformat() if snapshot is not None else None,
-        source=snapshot.source if snapshot is not None else None,
-        override_applied=override is not None,
-    )
-
-
-def catalog_override_payload(
-    record: AgentCatalogOverrideRecord,
-) -> AgentGatewayCatalogOverrideResponse:
-    return AgentGatewayCatalogOverrideResponse(
-        id=str(record.id),
-        harness_kind=record.harness_kind,
-        patch_json=record.patch_json,
-        created_at=record.created_at.isoformat(),
-        updated_at=record.updated_at.isoformat(),
-    )
 
 
 def org_agent_policy_payload(snapshot: OrgAgentPolicySnapshot) -> OrgAgentPolicyResponse:

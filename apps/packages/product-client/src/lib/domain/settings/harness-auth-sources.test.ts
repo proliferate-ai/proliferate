@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDesiredSources,
   deriveEditorState,
+  isGatewayCapableHarness,
   isMultiSourceHarness,
   isNativeState,
   isRowComplete,
@@ -120,10 +121,32 @@ describe("buildDesiredSources", () => {
     ).toEqual([{ sourceKind: "gateway", enabled: false }]);
   });
 
-  it("keeps the native-only cursor desired set empty", () => {
+  it("never emits a gateway source for cursor (no gateway recipe)", () => {
+    expect(isGatewayCapableHarness("cursor")).toBe(false);
     expect(
       buildDesiredSources("cursor", { gatewayEnabled: false, rows: [] }),
     ).toEqual([]);
+    // Even a true gatewayEnabled toggle never surfaces a gateway source for
+    // cursor — there is no capability state that would ever legalize it.
+    expect(
+      buildDesiredSources("cursor", { gatewayEnabled: true, rows: [] }),
+    ).toEqual([]);
+  });
+
+  it("wires a cursor api_key row (its only legal source)", () => {
+    const sources = buildDesiredSources("cursor", {
+      gatewayEnabled: false,
+      rows: [row({ envVarName: "CURSOR_API_KEY", providerHint: "cursor" })],
+    });
+    expect(sources).toEqual([
+      {
+        sourceKind: "api_key",
+        apiKeyId: "key-1",
+        envVarName: "CURSOR_API_KEY",
+        providerHint: "cursor",
+        enabled: true,
+      },
+    ]);
   });
 
   it("wires only complete rows and carries enabled/providerHint through", () => {

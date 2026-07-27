@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,7 +10,7 @@ from proliferate.server.catalogs.domain.schema import agent_catalog_schema_versi
 from proliferate.server.catalogs.service import (
     CATALOG_PATH,
     read_agent_catalog,
-    served_agent_catalog_version,
+    supported_provider_config_kinds,
 )
 
 
@@ -72,47 +71,81 @@ def test_agent_catalog_file_is_available_from_source_checkout() -> None:
     assert CATALOG_PATH.is_file()
 
 
-def test_served_agent_catalog_version_matches_served_document() -> None:
-    assert served_agent_catalog_version() == read_agent_catalog().catalog.catalogVersion
+def test_catalogs_service_exposes_no_heartbeat_version_advertiser() -> None:
+    """The binary is the only catalog transport (agent-distribution.md,
+    "Convergence"), so the server has no served-catalog-version to advertise on
+    the worker heartbeat. Only the full-document read (the live agent picker's
+    source) remains.
+    """
+    import proliferate.server.catalogs.service as catalogs_service
+
+    assert not hasattr(catalogs_service, "served_agent_catalog_version")
 
 
-def test_served_agent_catalog_version_is_generation_agnostic(tmp_path: Path) -> None:
-    document = tmp_path / "catalog.json"
-    document.write_text(
-        '{"schemaVersion": 2, "catalogVersion": "2026-07-01.1"}',
+def test_supported_provider_config_kinds_matches_track_d_scope() -> None:
+    # R9's full scope: claude/codex/opencode x {aws_bedrock, azure_openai};
+    # cursor/grok excluded (structural — no gateway recipe / no BYOK-cloud path).
+    # codex's azure_openai entry is declared but `pending` (agent-auth.md's
+    # Current-gaps: codex only reaches Azure via config.toml model_providers,
+    # which needs A5's injection mechanism), so it is excluded from "usable
+    # today" — codex reports only aws_bedrock until that lands.
+    assert supported_provider_config_kinds("claude") == ("aws_bedrock", "azure_openai")
+    assert supported_provider_config_kinds("codex") == ("aws_bedrock",)
+    assert supported_provider_config_kinds("opencode") == ("aws_bedrock", "azure_openai")
+    assert supported_provider_config_kinds("cursor") == ()
+    assert supported_provider_config_kinds("grok") == ()
+    assert supported_provider_config_kinds("not-a-real-harness") == ()
+
+
+def test_supported_provider_config_kinds_is_order_insensitive(tmp_path: Path) -> None:
+    reordered = tmp_path / "registry-reordered.json"
+    reordered.write_text(
+        '{"agents": [{"kind": "claude", "providerConfig": '
+        '[{"kind": "azure_openai", "label": "Azure OpenAI", "envVars": ["A"]}, '
+        '{"kind": "aws_bedrock", "label": "AWS Bedrock", "envVars": ["B"]}]}]}',
         encoding="utf-8",
     )
-
-    assert served_agent_catalog_version(document) == "2026-07-01.1"
-
-
-def test_served_agent_catalog_version_caches_until_mtime_changes(tmp_path: Path) -> None:
-    document = tmp_path / "catalog.json"
-    document.write_text('{"catalogVersion": "2026-06-10.6"}', encoding="utf-8")
-    mtime_ns = document.stat().st_mtime_ns
-
-    assert served_agent_catalog_version(document) == "2026-06-10.6"
-
-    document.write_text('{"catalogVersion": "2026-06-10.7"}', encoding="utf-8")
-    os.utime(document, ns=(mtime_ns, mtime_ns))
-    assert served_agent_catalog_version(document) == "2026-06-10.6"
-
-    os.utime(document, ns=(mtime_ns + 1, mtime_ns + 1))
-    assert served_agent_catalog_version(document) == "2026-06-10.7"
+    assert supported_provider_config_kinds("claude", path=reordered) == (
+        "aws_bedrock",
+        "azure_openai",
+    )
 
 
-def test_served_agent_catalog_version_handles_missing_or_invalid_document(
+def test_supported_provider_config_kinds_excludes_pending_entries(tmp_path: Path) -> None:
+    with_pending = tmp_path / "registry-with-pending.json"
+    with_pending.write_text(
+        '{"agents": [{"kind": "codex", "providerConfig": '
+        '[{"kind": "aws_bedrock", "label": "AWS Bedrock", "envVars": ["A"]}, '
+        '{"kind": "azure_openai", "label": "Azure OpenAI", "envVars": ["B"], '
+        '"pending": true, "pendingReason": "awaiting A5"}]}]}',
+        encoding="utf-8",
+    )
+    assert supported_provider_config_kinds("codex", path=with_pending) == ("aws_bedrock",)
+
+
+def test_supported_provider_config_kinds_handles_missing_or_invalid_document(
     tmp_path: Path,
 ) -> None:
-    assert served_agent_catalog_version(tmp_path / "absent.json") is None
+    assert supported_provider_config_kinds("claude", path=tmp_path / "absent.json") == ()
 
     broken = tmp_path / "broken.json"
     broken.write_text("not json", encoding="utf-8")
-    assert served_agent_catalog_version(broken) is None
+    assert supported_provider_config_kinds("claude", path=broken) == ()
 
-    versionless = tmp_path / "versionless.json"
-    versionless.write_text('{"schemaVersion": 2}', encoding="utf-8")
-    assert served_agent_catalog_version(versionless) is None
+    no_provider_config = tmp_path / "registry.json"
+    no_provider_config.write_text(
+        '{"agents": [{"kind": "claude"}]}',
+        encoding="utf-8",
+    )
+    assert supported_provider_config_kinds("claude", path=no_provider_config) == ()
+
+    with_provider_config = tmp_path / "registry-with-provider-config.json"
+    with_provider_config.write_text(
+        '{"agents": [{"kind": "claude", "providerConfig": '
+        '[{"kind": "aws_bedrock", "label": "AWS Bedrock", "envVars": []}]}]}',
+        encoding="utf-8",
+    )
+    assert supported_provider_config_kinds("claude", path=with_provider_config) == ("aws_bedrock",)
 
 
 def test_server_dockerfile_packages_agent_catalog() -> None:

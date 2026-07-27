@@ -84,6 +84,15 @@ export const HARNESS_PANE_COPY = {
   // catalog's fallback list, no probe yet) or "probed <time>" (a live probe).
   allModelsFreshnessSeed: "seed",
   allModelsFreshnessProbed: (time: string) => `probed ${time}`,
+  // Model-snapshot staleness (model-catalog.md "Failure modes" — age alone
+  // never blocks a launch, but the picker/settings surface must render it).
+  allModelsStaleNeedsRefresh: "needs refresh",
+  allModelsStaleRefreshing: "refreshing…",
+  // `ago` is the raw duration from formatSnapshotAge ("5m", "2h", "3d", or the
+  // literal "just now" — which must NOT get its own "ago" appended, hence the
+  // special case rather than a blind template).
+  allModelsFreshRefreshedAgo: (ago: string) =>
+    ago === "just now" ? "refreshed just now" : `refreshed ${ago} ago`,
   getApiKey: "Get an API key",
   recommendedBadge: "Recommended",
   // Method card labels.
@@ -101,11 +110,10 @@ export const HARNESS_PANE_COPY = {
   cliNotAuthenticated: "CLI not authenticated",
   cliAuthenticated: "Authenticated",
   // Native == the implicit empty state (contract §7): zero enabled sources.
+  // Same copy on both surfaces — the CLI's own login now runs identically
+  // whether that CLI is the desktop process or the one inside the sandbox.
   nativeStateLocal: "No auth configured — the CLI's own login is used.",
-  nativeStateCloud: "No auth configured — cloud runs stay disabled for this harness.",
   cliAlwaysActive: "Native logins always apply alongside other sources.",
-  cursorNativeDescription: (displayName: string) =>
-    `${displayName} authenticates with its own sign-in. There is nothing to configure here.`,
   signInDescription: (displayName: string) =>
     `Sign in to Proliferate Cloud to manage how ${displayName} authenticates to models.`,
   authenticationDescription: (displayName: string) =>
@@ -114,8 +122,6 @@ export const HARNESS_PANE_COPY = {
     `Could not update ${displayName} authentication.`,
   catalogRefreshError: (displayName: string) =>
     `Could not refresh the ${displayName} model catalog.`,
-  catalogRefreshRuntimeUnavailable: (displayName: string) =>
-    `Local runtime unavailable — could not read ${displayName} models.`,
   catalogOverrideError: (displayName: string) =>
     `Could not update the ${displayName} model catalog.`,
   installAction: (displayName: string) => `Install ${displayName}`,

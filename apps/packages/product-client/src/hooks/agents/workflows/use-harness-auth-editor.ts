@@ -116,7 +116,7 @@ export function useHarnessAuthEditor(
   const apiKeysQuery = useAgentApiKeys(authReady);
   const putSelections = usePutAuthSelections();
   const { agentsByKind } = useAgentCatalog();
-  const loginWorkflow = useAgentLoginTerminalWorkflow();
+  const loginWorkflow = useAgentLoginTerminalWorkflow(surface);
 
   // Local-authoritative editor: seeded once per (harness, surface) scope, then
   // every edit PUTs the full desired source list (contract §5). We never reseed

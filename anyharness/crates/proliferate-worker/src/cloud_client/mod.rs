@@ -77,11 +77,6 @@ pub struct DesiredVersions {
     /// on an unstamped/old server, which the worker treats as a no-op.
     #[serde(default)]
     pub anyharness: Option<String>,
-    /// The `catalogVersion` string the server currently serves. When this
-    /// differs from the runtime's active catalog the worker fetches and
-    /// pushes the new document.
-    #[serde(default)]
-    pub catalog_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -116,6 +111,21 @@ pub struct HeartbeatResponse {
     /// inputs) and for every non-flag-enabled target.
     #[serde(default)]
     pub supervisor_bridge: Option<SupervisorBridgeInputs>,
+}
+
+/// A Worker's upload of one changed model-snapshot entry (model-catalog.md
+/// "Write paths"/"Storage"): the ingest route absorbs today's separate
+/// `refresh`-with-payload and `mirror` routes. `snapshot_json` deliberately
+/// carries only the subset of the machine-document entry the cloud tier
+/// documents reading (`models`, `modes`, `attestation`, `warnings`) — see
+/// `model_snapshot_sync.rs` for why `authFingerprint`/`mechanism`/
+/// `installIdentity`/`lastAttempt` are never assembled here.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IngestModelSnapshotRequest {
+    pub auth_context_id: String,
+    pub snapshot_json: String,
+    pub probed_at: String,
 }
 
 /// Server-delivered D5 bridge inputs (R9R-002). Carried on the heartbeat ack so
@@ -188,6 +198,41 @@ impl CloudClient {
             .send()
             .await?;
         parse_json_response(response).await
+    }
+
+    /// Upload one changed model-snapshot entry to the cloud ingest route
+    /// (model-catalog.md "Cloud routes": `POST /v1/cloud/agent-models/{harness}/refresh`).
+    /// The server resolves the owner from the Worker's own sandbox row, so the
+    /// request body carries no user identity — only the Worker's bearer proves
+    /// which sandbox this is. Non-2xx (including a 403 from a desktop worker,
+    /// or a 404 against a server that predates this route) surfaces as
+    /// `WorkerError::Cloud` for the caller to log-and-swallow; this method
+    /// itself never retries.
+    pub async fn ingest_model_snapshot(
+        &self,
+        worker_token: &str,
+        harness_kind: &str,
+        request: &IngestModelSnapshotRequest,
+    ) -> Result<(), WorkerError> {
+        let response = self
+            .http
+            .post(format!(
+                "{}/v1/cloud/agent-models/{harness_kind}/refresh",
+                self.base_url
+            ))
+            .header(
+                reqwest::header::AUTHORIZATION,
+                auth::bearer_header(worker_token),
+            )
+            .json(request)
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(WorkerError::Cloud { status, body });
+        }
+        Ok(())
     }
 
     /// Fetch a pinned worker artifact via the server's redirect endpoint,
@@ -350,49 +395,6 @@ impl CloudClient {
             size_bytes,
         })
     }
-
-    /// Fetch the agent catalog document from the cloud server. Sends the
-    /// stored ETag (if any) as `If-None-Match`; a 304 means the cached
-    /// document is current. Returns `None` on 304, `Some((bytes, etag))` on
-    /// 200.
-    pub async fn fetch_agent_catalog(
-        &self,
-        worker_token: &str,
-        cached_etag: Option<&str>,
-    ) -> Result<Option<CatalogFetchResult>, WorkerError> {
-        let mut request = self
-            .http
-            .get(format!("{}/v1/catalogs/agents", self.base_url))
-            .header(
-                reqwest::header::AUTHORIZATION,
-                auth::bearer_header(worker_token),
-            );
-        if let Some(etag) = cached_etag {
-            request = request.header(reqwest::header::IF_NONE_MATCH, etag);
-        }
-        let response = request.send().await?;
-        let status = response.status();
-        if status == reqwest::StatusCode::NOT_MODIFIED {
-            return Ok(None);
-        }
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(WorkerError::Cloud { status, body });
-        }
-        let etag = response
-            .headers()
-            .get(reqwest::header::ETAG)
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_owned);
-        let bytes = response.bytes().await?.to_vec();
-        Ok(Some(CatalogFetchResult { bytes, etag }))
-    }
-}
-
-/// Result of a successful (non-304) catalog fetch from the cloud.
-pub struct CatalogFetchResult {
-    pub bytes: Vec<u8>,
-    pub etag: Option<String>,
 }
 
 /// A downloaded worker artifact plus the CDN URL the server's redirect
@@ -483,7 +485,6 @@ mod tests {
         let desired = response.desired_versions.expect("desiredVersions present");
         assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
         assert_eq!(desired.anyharness.as_deref(), Some("0.2.16"));
-        assert_eq!(desired.catalog_version, None);
     }
 
     #[test]
@@ -498,11 +499,15 @@ mod tests {
         let desired = response.desired_versions.expect("desiredVersions present");
         assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
         assert_eq!(desired.anyharness, None);
-        assert_eq!(desired.catalog_version, None);
     }
 
     #[test]
-    fn heartbeat_response_parses_catalog_version() {
+    fn heartbeat_response_ignores_a_legacy_servers_catalog_version() {
+        // The catalog is binary-only (agent-distribution.md "Convergence"), so
+        // the worker no longer models a served catalog version. A server that
+        // still advertises one — a not-yet-deployed or rolled-back server
+        // during the window this deletion rides out — must be acked normally
+        // with the field simply ignored, never a deserialization failure.
         let payload = br#"{
             "workerId": "worker",
             "desiredVersions": {
@@ -512,22 +517,10 @@ mod tests {
             }
         }"#;
         let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect("heartbeat ack with catalogVersion");
+            .expect("heartbeat ack from a server still advertising catalogVersion");
         let desired = response.desired_versions.expect("desiredVersions present");
-        assert_eq!(desired.catalog_version.as_deref(), Some("2026-07-06.1"));
-    }
-
-    #[test]
-    fn heartbeat_response_tolerates_absent_catalog_version() {
-        // Servers that predate catalog convergence omit the field.
-        let payload = br#"{
-            "workerId": "worker",
-            "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"}
-        }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect("heartbeat ack without catalogVersion");
-        let desired = response.desired_versions.expect("desiredVersions present");
-        assert_eq!(desired.catalog_version, None);
+        assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
+        assert_eq!(desired.anyharness.as_deref(), Some("0.2.16"));
     }
 
     #[test]

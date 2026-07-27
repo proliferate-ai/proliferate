@@ -11,9 +11,15 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_ADMIN
+from proliferate.constants.agent_gateway import (
+    AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
+    LLM_CREDIT_SOURCE_ADMIN,
+)
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
+from proliferate.db.models.cloud.agent_gateway import (
+    AgentGatewayEnrollment,
+    AgentGatewayEnrollmentKey,
+)
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
@@ -92,6 +98,7 @@ class StubLiteLLM:
         alias: str | None = None,
         max_budget: float | None = None,
         metadata: dict[str, Any] | None = None,
+        models: list[str] | None = None,
     ) -> LiteLLMVirtualKey:
         if self.fail_mint:
             raise LiteLLMIntegrationError("litellm_request_failed", "mint exploded")
@@ -107,6 +114,7 @@ class StubLiteLLM:
             "alias": alias,
             "max_budget": max_budget,
             "metadata": metadata or {},
+            "models": models,
         }
         self.minted.append(record)
         token_id = f"token-{len(self.minted)}"
@@ -165,26 +173,45 @@ async def test_user_enrollment_syncs_against_gateway(
     assert enrollment.sync_status == "synced"
     assert enrollment.litellm_team_id == f"team-user-{user_id}"
     assert enrollment.litellm_user_id == f"user-{user_id}"
-    assert enrollment.virtual_key_id == "token-1"
+    # Post-B2: the parent row carries no key material of its own — every
+    # gateway-capable harness gets its own child key (model-gateway.md
+    # §Account model).
+    assert enrollment.virtual_key_id is None
     assert enrollment.sync_fingerprint is not None
     assert f"user-{user_id}" in stub_litellm.users
-    minted = stub_litellm.minted[0]
-    assert minted["metadata"]["proliferate_user_id"] == str(user_id)
-    assert minted["metadata"]["proliferate_billing_subject_id"] == str(
-        enrollment.billing_subject_id
+    assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
+
+    enrollment_keys = await store.list_active_enrollment_keys(
+        db_session, enrollment_id=enrollment.id
     )
-    assert minted["max_budget"] == 5.0
-    assert (
-        await store.get_enrollment_virtual_key_decrypted(
-            db_session,
-            enrollment_id=enrollment.id,
+    assert {key.harness_kind for key in enrollment_keys} == set(
+        AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS
+    )
+    for enrollment_key in enrollment_keys:
+        minted = next(
+            record
+            for record in stub_litellm.minted
+            if record["metadata"]["proliferate_harness_kind"] == enrollment_key.harness_kind
         )
-        == "sk-litellm-1"
-    )
+        # Access-group scoping: exactly the harness's own group, never a budget.
+        assert minted["models"] == [enrollment_key.harness_kind]
+        assert minted["max_budget"] is None
+        assert minted["metadata"]["proliferate_user_id"] == str(user_id)
+        assert minted["metadata"]["proliferate_harness_kind"] == enrollment_key.harness_kind
+        assert minted["metadata"]["proliferate_billing_subject_id"] == str(
+            enrollment.billing_subject_id
+        )
+        assert (
+            await store.get_enrollment_key_virtual_key_decrypted(
+                db_session,
+                enrollment_key_id=enrollment_key.id,
+            )
+            is not None
+        )
 
     again = await ensure_user_enrollment(db_session, user_id)
     assert again.id == enrollment.id
-    assert len(stub_litellm.minted) == 1
+    assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
 
 
 @pytest.mark.asyncio
@@ -278,11 +305,24 @@ async def test_org_enrollment_is_per_member(
     first_enrollment = await ensure_org_enrollment(db_session, organization.id, first)
     second_enrollment = await ensure_org_enrollment(db_session, organization.id, second)
 
-    # Distinct rows and distinct virtual keys under the same shared org team.
+    # Distinct rows under the same shared org team, each with its own
+    # per-harness child keys (post-B2: the parent row carries no key itself).
     assert first_enrollment.id != second_enrollment.id
-    assert first_enrollment.virtual_key_id != second_enrollment.virtual_key_id
+    assert first_enrollment.virtual_key_id is None
+    assert second_enrollment.virtual_key_id is None
     assert first_enrollment.litellm_team_id == second_enrollment.litellm_team_id
-    assert len(stub_litellm.minted) == 2
+    assert len(stub_litellm.minted) == 2 * len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
+
+    first_keys = await store.list_active_enrollment_keys(
+        db_session, enrollment_id=first_enrollment.id
+    )
+    second_keys = await store.list_active_enrollment_keys(
+        db_session, enrollment_id=second_enrollment.id
+    )
+    first_key_ids = {key.virtual_key_id for key in first_keys}
+    second_key_ids = {key.virtual_key_id for key in second_keys}
+    # No overlap: every member's keys are distinct, even for the same harness.
+    assert first_key_ids.isdisjoint(second_key_ids)
 
 
 @pytest.mark.asyncio
@@ -291,39 +331,61 @@ async def test_user_enrollment_recovers_orphaned_key_on_retry(
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """A mint that landed but never committed must not wedge the retry."""
+    """A mint that landed but never committed must not wedge the retry.
+
+    Simulated on the "claude" child key specifically — orphan recovery is
+    per-(enrollment, harness), so this proves one harness's crash doesn't
+    force a re-mint of the other three already-synced harness keys.
+    """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     user_id = await _create_user(db_session)
 
     enrollment = await ensure_user_enrollment(db_session, user_id)
     assert enrollment.sync_status == "synced"
-    assert len(stub_litellm.minted) == 1
-    orphan_alias = stub_litellm.minted[0]["alias"]
+    assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
+    claude_key = await store.get_active_enrollment_key(
+        db_session, enrollment_id=enrollment.id, harness_kind="claude"
+    )
+    assert claude_key is not None
+    orphan_alias = next(
+        record["alias"]
+        for record in stub_litellm.minted
+        if record["metadata"]["proliferate_harness_kind"] == "claude"
+    )
     # The alias is still live in LiteLLM (the orphan).
     assert orphan_alias in stub_litellm.live_aliases
 
-    # Simulate a crash/rollback between mint and DB write: the key id was never
-    # persisted, so the row forgets the key while LiteLLM still holds the alias.
-    row = await db_session.get(AgentGatewayEnrollment, enrollment.id)
-    assert row is not None
-    row.virtual_key_id = None
-    row.virtual_key_ciphertext = None
-    row.virtual_key_ciphertext_key_id = None
-    row.sync_status = "failed"
+    # Simulate a crash/rollback between mint and DB write: the child key row
+    # forgets the key while LiteLLM still holds the alias. Flipping the
+    # parent enrollment back to pending (mirroring the migration backfill
+    # trigger) is what makes `ensure_user_enrollment` re-enter `_sync_enrollment`
+    # and re-attempt this harness.
+    key_row = await db_session.get(AgentGatewayEnrollmentKey, claude_key.id)
+    assert key_row is not None
+    key_row.virtual_key_id = None
+    key_row.virtual_key_ciphertext = None
+    key_row.virtual_key_ciphertext_key_id = None
+    enrollment_row = await db_session.get(AgentGatewayEnrollment, enrollment.id)
+    assert enrollment_row is not None
+    enrollment_row.sync_status = "pending"
     await db_session.flush()
 
-    # The retry must adopt-by-purge the orphan and re-mint (no duplicate-alias 400).
+    # The retry must adopt-by-purge the orphan and re-mint (no duplicate-alias
+    # 400) for "claude" only — the other three harnesses' keys are untouched.
     retried = await ensure_user_enrollment(db_session, user_id)
     assert retried.sync_status == "synced"
-    assert retried.virtual_key_id is not None
-    assert len(stub_litellm.minted) == 2
+    assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS) + 1
     assert orphan_alias in stub_litellm.deleted_aliases
     # Exactly one live key remains under the deterministic alias.
     assert orphan_alias in stub_litellm.live_aliases
+    retried_claude_key = await store.get_active_enrollment_key(
+        db_session, enrollment_id=enrollment.id, harness_kind="claude"
+    )
+    assert retried_claude_key is not None
     assert (
-        await store.get_enrollment_virtual_key_decrypted(
+        await store.get_enrollment_key_virtual_key_decrypted(
             db_session,
-            enrollment_id=enrollment.id,
+            enrollment_key_id=retried_claude_key.id,
         )
         is not None
     )

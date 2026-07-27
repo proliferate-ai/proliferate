@@ -134,15 +134,29 @@ triggered by the startup pass on every runtime boot
 walks the supported set and installs whatever the drift planner
 ([`installer/install_policy.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs))
 says is absent or stale. A user
-authenticates harnesses; they never install them. Completed installs
+authenticates harnesses; they never install them. The two carve-outs below
+are one named predicate
+([`installer/auto_install.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs)),
+deliberately not a side effect of the pass's scope: PATH protection must
+outrank every other rule, so it cannot be something a scope change can
+silently remove. Completed installs
 poke the model-snapshot reconciler ([model-catalog.md](model-catalog.md))
 so a newly converged harness re-probes its models without extra wiring.
 Two carve-outs:
 
 - An agent the user already provides on PATH is left alone: it is usable
   through readiness as-is, and a managed install would shadow their copy.
-- Cursor never installs in cloud. It is login-only with no headless
-  credential path, so a cloud install could never reach `Ready`.
+- Cursor never installs in cloud. Its readiness still resolves through a
+  headless credential path — an enabled `api_key` selection (agent-auth.md's
+  `CURSOR_API_KEY` slot) upgrades `CredentialsRequired` to `Ready` the same
+  way any other routed harness's selection does — but a cloud install would
+  still never reach `Ready` on its own: `cursor-agent`'s ACP process ignores
+  `CURSOR_API_KEY` at runtime and reads its native login from macOS Keychain
+  (`catalog_probe.rs`'s cursor-login/cursor-api arms), which no headless
+  Linux sandbox has. So cursor stays cloud-uninstallable for a real-binary
+  reason (no Keychain, no interactive login surface to seed one), not
+  because it lacks *any* credential path — the api_key path exists and is
+  legal, it just does not make the installed binary itself authenticate.
 
 Install topology per surface is then only about who pays the first
 download:
@@ -412,14 +426,20 @@ options in the composer.
 Deltas between this document and `main`, each struck by its follow-up PR:
 
 - [ ] `catalog.json` still carries gateway model names:
-      `session.gatewayPolicy` (`providers` client-side filter, `seedModels`
-      pre-probe fallback, `roles`) and gateway entries in
-      `session.defaults`. All of it leaves the catalog once proxy-side
-      access groups land (gateway spec gaps) and gateway model discovery
-      is a live `GET /v1/models` with the harness key; role choices move
-      gateway-side. The JS validator's seedModels checks go with it.
-- [ ] The Rust `gateway_resolver`/`gateway_probe` consume `gatewayPolicy`
-      and delete with it.
+      `session.gatewayPolicy` (`seedModels` pre-probe fallback, `roles`) and
+      gateway entries in `session.defaults`. (The `providers` client-side
+      filter that used to sit alongside them is gone — B5, superseded by
+      LiteLLM access-group tags.) The rest leaves the catalog once
+      gateway model discovery is a live `GET /v1/models` with the harness
+      key; role choices move gateway-side. The JS validator's seedModels
+      checks go with it.
+- [ ] `gateway_resolver.rs` is deleted (A9; its surviving logic relocated
+      to `catalog/projection.rs`) and `gateway_probe.rs` is trimmed to the
+      stateless `GET /v1/models` call the model-snapshot poke engine and
+      `gateway_plan.rs` both use. What's left: `gatewayPolicy.seedModels`
+      is still consumed (by `gateway_plan.rs`'s pre-probe floor and the
+      legacy gateway-models route's own pre-probe floor) — it leaves the
+      catalog only when the first bullet above does.
 - [ ] `specs/developing/operating/agent-catalog-update.md` documents
       `make catalog-update` and the probe-PR review procedure; until it
       lands, the producer sections of the old readiness doc are the only
@@ -433,40 +453,9 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       that migrates legacy sandboxes. All of it — plus the
       `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes once
       the fleet is fully supervisor-owned.
-- [ ] The heartbeat catalog transport still exists: the server
-      advertises its served catalog version in heartbeat acks
-      (`record_heartbeat` in
-      [`runtime_workers/service.py`](../../../../server/proliferate/server/cloud/runtime_workers/service.py)),
-      the worker pushes the document into the runtime
-      ([`proliferate-worker/src/catalog_sync.rs`](../../../../anyharness/crates/proliferate-worker/src/catalog_sync.rs)),
-      and the runtime accepts it (`PUT /v1/catalogs/agents`,
-      [`catalog/sync.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/sync.rs)
-      with its catalog-applied reconcile poke, and the server-side
-      [`server/proliferate/server/catalogs/`](../../../../server/proliferate/server/catalogs/)
-      ETag serving that feeds it). All of it deletes under the
-      binary-only transport law above; the deletion removes the `PUT`
-      handler — the runtime keeps only `GET /v1/catalogs/agents/version`
-      (there is no bare GET full-document route on the runtime; the
-      full-document GET is the cloud server's `read_agent_catalog`, a
-      separate component that stays).
-- [ ] Installs are not yet automatic: the startup pass runs an
-      `installed_only` reconcile (`reconcile_installed_when_idle` in
-      [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)
-      hardcodes it), so an absent opencode/grok stays `InstallRequired`
-      until a user clicks install, and session creation rejects a
-      non-`Ready` harness rather than converging it. The auto-install
-      law above (full supported set, PATH and cloud-cursor carve-outs)
-      is not yet implemented.
-- [ ] The readiness projection laws are not yet enforced: an empty env
-      var counts as present, the credential ladder falls back to the
-      host's ambient env unbounded
-      ([`auth/credentials.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs)),
-      the `Ready` gate runs only in `create_session` (resume/fork
-      live-starts spawn without re-checking), and `GET /v1/agents`
-      resolves native-only while launch resolves route-aware, so
-      settings and launch can disagree for routed harnesses. Also
-      known: claude's Node gate shells out uncached on every read, and
-      the journal-protected atomic activation guard
+- [ ] Two known readiness inefficiencies, neither a correctness law:
+      claude's Node gate shells out uncached on every read, and the
+      journal-protected atomic activation guard
       ([`installer/downloads/activation.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/downloads/activation.rs))
       covers only `Archive`-sourced agent-process installs (cursor,
       opencode) — claude's git install and codex/grok's npm installs

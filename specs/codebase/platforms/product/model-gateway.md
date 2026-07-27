@@ -42,11 +42,14 @@ Config laws, enforced by review (the file's comments restate them):
   import; an unknown id can pass traffic while mispricing it.
 - Every entry carries `model_info: {access_groups: [...]}` naming the
   harness group(s) it belongs to. Group names are exactly the harness
-  `harness_kind` identifiers (`claude`, `codex`, `opencode`, `cursor`,
-  `grok`) — no translation table; see LiteLLM's
+  `harness_kind` identifiers of the gateway-capable harnesses (`claude`,
+  `codex`, `opencode`, `grok`) — no translation table; see LiteLLM's
   [model access groups](https://docs.litellm.ai/docs/proxy/model_access_groups).
   This one reviewed file is therefore also the harness-to-model map; no
-  client-side model filtering exists anywhere.
+  client-side model filtering exists anywhere. `cursor` is deliberately
+  absent from the vocabulary: it is native-only (no gateway recipe exists
+  for it), so no model belongs to a `cursor` group and no `cursor` virtual
+  key is ever minted.
 - No dev shims. Because dev and prod run this exact file, any local
   convenience placed in it ships to production verbatim. Two shims are
   banned by name:
@@ -260,31 +263,53 @@ change detection and the promote flow.
 - Scoped-key verification: mint a key granted one group, assert
   `GET /v1/models` returns exactly that group and an out-of-group invoke
   403s. Verified live against the pinned image (v1.93.0, 2026-07-24).
+- Team-budget aggregation: spend from every key in a team aggregates against
+  that team's budget (the mechanism the whole per-harness-key account model
+  depends on) — confirmed standard LiteLLM behavior, live-verified against
+  the pinned image (v1.93.0, 2026-07-25) ahead of B2's per-(subject,harness)
+  minting.
 
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `config.yaml` entries carry no `access_groups` tags.
-- [ ] Enrollment mints one unscoped key per subject (it sees all models)
-      instead of per-harness group-scoped keys; existing enrollments need
-      rotation at migration.
-- [ ] Harness-to-model filtering is client-side (the Rust
-      `provider_for_model` prefix-matcher and catalog
-      `gatewayPolicy.providers`); both delete once proxy-side grants land.
-- [ ] `state.json`'s gateway payload carries one key, not a per-harness key
-      map (contract change owned by agent-auth).
-- [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
-      state, org policy, and catalog routes; `api.py`/`service.py`/
-      `models.py` split along the same three-domain line.
-- [ ] Team-budget aggregation across multiple keys is standard LiteLLM but
-      not yet live-proven on the pinned image (a short check before the
-      enrollment code PR freezes).
-- [ ] Enrollment copies `max_budget` onto the virtual key as well as the
-      team; keys must stop carrying budgets (the team cap already
-      aggregates, and N per-key copies of the mirror would drift).
-- [ ] Sessions for org members hand out the personal enrollment's key (the
-      state renderer and budget gate both resolve the personal
-      enrollment), so org members' gateway spend lands on their personal
-      subject today; org enrollment rows exist but are not what sessions
-      use.
+- [ ] The Rust `provider_for_model` prefix-matcher is a provisional stand-in
+      for provider-tagged catalog model entries; it now only labels enriched
+      gateway-model / launch-option rows for the UI (the client-side
+      `gatewayPolicy.providers` filter it used to back is gone — B5 — now
+      that LiteLLM access-group tags enforce harness-to-model scoping
+      server-side).
+- [ ] `api.py`/`service.py`/`models.py` still share one `agent_gateway`
+      package across the gateway-account and agent-auth domains (S1 split
+      only the URL prefixes: BYOK vault, selections, state, and org policy
+      now answer under `/v1/cloud/agent-auth/`, while this document's
+      `/v1/cloud/agent-gateway/` narrowed to enrollment + capabilities as
+      specified); the matching Python module split is still pending. Catalog
+      routes already live in their own `agent_models` module
+      (model-catalog.md §Cloud routes).
+- [ ] No product-server route emits `agent_gateway_credits_exhausted`
+      ([budget.py](../../../../server/proliferate/server/cloud/agent_gateway/budget.py)).
+      Exhaustion is enforced — the usage importer disables the LiteLLM virtual
+      keys, and the agent-auth state render withholds key material so the
+      runtime fails closed at launch — but neither wall answers a request with
+      that code, so a client cannot distinguish "exhausted" from a generic
+      gateway failure on the product surface. The release scenarios still
+      classify the string off the proxy response
+      (`managed-cloud-fixture-smoke-1.ts`, `t3-bill-4.ts`). The code's only
+      product-server producer was the server-side catalog prober, which the
+      model-catalog re-key deleted.
+- [ ] Which subject pays for an org member is decided by an interim
+      funding-follows-attribution guard, not a ruled policy. A member's org
+      enrollment governs their gateway sessions only when the org billing
+      subject is funded (a positive credit grant, or an explicitly configured
+      non-default org team budget); otherwise resolution falls back to the
+      member's personal enrollment
+      ([budget.py](../../../../server/proliferate/server/cloud/agent_gateway/budget.py)
+      `get_gateway_enrollment_for_user`). The guard exists because hosted
+      gives every user a default personal org: routing to an unfunded org
+      subject would make both enforcement walls open at once (no grant means
+      the ledger gate never blocks, and an org team budget of "0" means
+      *uncapped* in LiteLLM), so the member's personal credit would never be
+      consulted. The end state — whether an unfunded org may spend at all,
+      and how a member's personal credit relates to their org's — is a
+      founder ruling still pending.

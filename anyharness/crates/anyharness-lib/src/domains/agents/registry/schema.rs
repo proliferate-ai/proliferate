@@ -27,6 +27,44 @@ pub struct AgentRegistryAgent {
     pub auth: AgentRegistryAuth,
     #[serde(default)]
     pub docs_url: Option<String>,
+    /// Typed provider-config kinds this harness supports (agent-auth.md's
+    /// vault table: `aws_bedrock`, `azure_openai`). Empty/omitted means the
+    /// harness offers none — the settings UI's typed-secret create flow
+    /// (`getSupportedProviderConfigKinds`) is driven by this list, and a
+    /// vault entry of an undeclared kind is rejected at selection-write time
+    /// like any other invalid selection (agent-auth.md's "Two rules keep
+    /// typed kinds from sprawling"). Each declaration carries the env var
+    /// vocabulary of its config kind, INCLUDING the non-secret mode-switch
+    /// flags (e.g. claude's `CLAUDE_CODE_USE_FOUNDRY`) that only exist on
+    /// this side of the document — `auth.slots[]` does not repeat them.
+    /// Readers of the flag vocabulary must consult both.
+    #[serde(default)]
+    pub provider_config: Vec<AgentRegistryProviderConfig>,
+}
+
+/// One typed provider-config declaration: which vault `kind` this harness
+/// accepts, and the field-spec vocabulary its render recipe consumes to turn
+/// a decrypted vault JSON document into the harness's own env set. `envVars`
+/// reuses [`AgentRegistryAuthSlotEnvVar`]'s plain/tagged form so a Bedrock
+/// mode-switch flag (`CLAUDE_CODE_USE_BEDROCK`) and its credential vars share
+/// one vocabulary with auth slots instead of inventing a second one — a
+/// `flag`-kind entry here classifies exactly like one declared on a slot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistryProviderConfig {
+    pub kind: String,
+    pub label: String,
+    #[serde(default)]
+    pub env_vars: Vec<AgentRegistryAuthSlotEnvVar>,
+    /// True while the cell is built but live-unverified (e.g. codex's
+    /// `azure_openai` config.toml `model_providers` injection has never been
+    /// exercised against real Azure OpenAI): the server excludes a pending
+    /// kind from the selectable set, so no real selection can reach its
+    /// render arm until the dependency named in `pending_reason` clears.
+    #[serde(default)]
+    pub pending: bool,
+    #[serde(default)]
+    pub pending_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -321,5 +359,111 @@ mod tests {
             serde_json::to_value(&env_vars[0]).expect("serialize"),
             serde_json::json!("ANTHROPIC_API_KEY")
         );
+    }
+
+    #[test]
+    fn bundled_claude_declares_bedrock_and_azure_provider_config() {
+        let registry = bundled_agent_registry_document();
+        let claude = registry
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "claude")
+            .expect("claude agent");
+
+        let kinds: Vec<&str> = claude
+            .provider_config
+            .iter()
+            .map(|entry| entry.kind.as_str())
+            .collect();
+        assert_eq!(kinds, vec!["aws_bedrock", "azure_openai"]);
+
+        let bedrock = claude
+            .provider_config
+            .iter()
+            .find(|entry| entry.kind == "aws_bedrock")
+            .expect("claude aws_bedrock providerConfig");
+        assert_eq!(
+            bedrock
+                .env_vars
+                .iter()
+                .map(|env_var| env_var.name())
+                .collect::<Vec<_>>(),
+            vec![
+                "CLAUDE_CODE_USE_BEDROCK",
+                "AWS_BEARER_TOKEN_BEDROCK",
+                "AWS_REGION"
+            ]
+        );
+        assert_eq!(
+            bedrock.env_vars[0].kind(),
+            AgentRegistryEnvVarKind::Flag,
+            "the Bedrock mode switch must be tagged flag, not secret"
+        );
+    }
+
+    #[test]
+    fn bundled_codex_azure_openai_provider_config_is_pending() {
+        // The registry declares codex azure_openai's env-var vocabulary (Track
+        // D's full-scope intent), and D3-rust built the config.toml
+        // model_providers injection it needs -- but the cell is
+        // live-unverified (nobody has exercised codex against real Azure
+        // OpenAI). This pins that the declaration stays marked `pending`
+        // with a reason naming that debt, so it reads as honest scope
+        // rather than a working integration.
+        let registry = bundled_agent_registry_document();
+        let codex = registry
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "codex")
+            .expect("codex agent");
+
+        let azure = codex
+            .provider_config
+            .iter()
+            .find(|entry| entry.kind == "azure_openai")
+            .expect("codex azure_openai providerConfig");
+        assert!(azure.pending, "codex azure_openai must be marked pending");
+        let reason = azure
+            .pending_reason
+            .as_deref()
+            .expect("pending entry must carry a pendingReason");
+        assert!(
+            reason.contains("live-unverified"),
+            "pendingReason must name the live-verification debt: {reason}"
+        );
+
+        let bedrock = codex
+            .provider_config
+            .iter()
+            .find(|entry| entry.kind == "aws_bedrock")
+            .expect("codex aws_bedrock providerConfig");
+        assert!(
+            !bedrock.pending,
+            "codex aws_bedrock is env-var-driven and must not be pending"
+        );
+    }
+
+    #[test]
+    fn provider_config_defaults_to_empty_when_absent() {
+        let agent: AgentRegistryAgent = serde_json::from_value(serde_json::json!({
+            "kind": "grok",
+            "displayName": "Grok",
+            "agentProcess": {
+                "install": {
+                    "kind": "manual",
+                    "docsUrl": "https://example.com"
+                }
+            },
+            "launch": {
+                "executableName": "grok",
+                "defaultArgs": []
+            },
+            "auth": {
+                "readinessPolicy": "none",
+                "slots": []
+            }
+        }))
+        .expect("agent without providerConfig must parse");
+        assert!(agent.provider_config.is_empty());
     }
 }

@@ -47,16 +47,16 @@ const state = vi.hoisted(() => ({
   apiKeys: {
     data: [] as Array<Record<string, unknown>> | undefined,
   },
-  catalog: {
+  agentModels: {
     data: undefined as
       | {
         harnessKind: string;
-        surface: string;
-        route: string;
+        authContextId: string;
         models: Array<Record<string, unknown>>;
+        modes: Array<Record<string, unknown>>;
         snapshotId: string | null;
         probedAt: string | null;
-        source: string | null;
+        origin: string | null;
         overrideApplied: boolean;
       }
       | undefined,
@@ -100,7 +100,6 @@ const state = vi.hoisted(() => ({
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
-const refreshMutate = vi.hoisted(() => vi.fn());
 const overrideMutate = vi.hoisted(() => vi.fn());
 const refreshGatewayModelsMutate = vi.hoisted(() => vi.fn());
 const openAuthTerminal = vi.hoisted(() => vi.fn());
@@ -113,13 +112,12 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentGatewayEnrollment: () => state.enrollment,
   useAuthSelections: () => state.selections,
   useAgentApiKeys: () => state.apiKeys,
-  useAgentCatalog: () => state.catalog,
+  useAgentModels: () => state.agentModels,
   useAgentAuthState: () => ({ data: undefined, isLoading: false }),
   useOrgAgentPolicy: () => ({ data: undefined, isLoading: false }),
   usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
-  useRefreshAgentCatalog: () => ({ mutate: refreshMutate, isPending: false }),
-  useUpsertCatalogOverride: () => ({ mutate: overrideMutate, isPending: false }),
+  useUpsertAgentModelOverride: () => ({ mutate: overrideMutate, isPending: false }),
 }));
 
 // Local surface + gateway route reads the RUNTIME's resolved gateway models
@@ -134,6 +132,13 @@ vi.mock("@anyharness/sdk-react", () => ({ useAnyHarnessRuntimeContext: () => ({ 
   // resolved launch catalog (the session model picker's data source) —
   // mock stands in for that runtime read.
   useAgentLaunchOptionsQuery: () => state.launchOptions,
+  // Probe-status polling has no assertions in this suite; a static idle
+  // result keeps HarnessAllModelsSection's staleness badge inert here.
+  useModelSnapshotStatusQuery: () => ({ data: undefined, isLoading: false }),
+  // Refresh-mutation stub — this suite asserts on the legacy gateway
+  // mutation only; the model-snapshot refresh mutation has no assertions
+  // here but must exist or the component throws on render (C3-R1 fix).
+  useRefreshModelSnapshotMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
@@ -294,8 +299,8 @@ afterEach(() => {
   state.selections.data = [];
   state.selections.isLoading = false;
   state.apiKeys.data = [];
-  state.catalog.data = undefined;
-  state.catalog.isLoading = false;
+  state.agentModels.data = undefined;
+  state.agentModels.isLoading = false;
   state.agentsByKind = new Map();
   state.loginSessions = {};
   state.gatewayModels.data = undefined;
@@ -451,14 +456,37 @@ describe("HarnessPane authentication", () => {
     ).not.toBeNull();
   });
 
-  it("shows cursor as native-only with no controls", () => {
+  it("offers cursor api_key and CLI methods but never the gateway card", () => {
     renderPane("cursor");
 
-    expect(
-      screen.queryByText(/authenticates with its own sign-in/),
-    ).not.toBeNull();
+    // Cursor has no gateway recipe (agent-auth.md: "typed refusal, no gateway
+    // route exists for cursor") — the gateway card is omitted, not disabled.
     expect(screen.queryByRole("button", { name: "Proliferate gateway" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Add variable/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "API key" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "CLI login" })).toBeTruthy();
+  });
+
+  it("persists a cursor api_key selection using its CURSOR_API_KEY suggestion", () => {
+    state.apiKeys.data = [{
+      id: "key-1",
+      title: "Cursor key",
+      redactedHint: "sk-...abcd",
+      status: "active",
+      createdAt: "2026-07-01T00:00:00Z",
+    }];
+    renderPane("cursor");
+
+    fireEvent.click(screen.getByRole("button", { name: "API key" }));
+    expect(screen.getByText("No API key configured.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Add API key/ }));
+    expect(screen.getByTestId("add-key-modal")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "submit-add-key" }));
+    expect(createKeyMutate).toHaveBeenCalledWith(
+      { title: "Test key", value: "sk-test-value" },
+      expect.anything(),
+    );
   });
 
   it("offers Add provider only for opencode when API key method is active", () => {
@@ -741,17 +769,17 @@ describe("HarnessPane authentication", () => {
 
 describe("HarnessPane all models", () => {
   it("renders the layered catalog grid in the All Models section", () => {
-    state.catalog.data = {
+    state.agentModels.data = {
       harnessKind: "claude",
-      surface: "local",
-      route: "native",
+      authContextId: "anthropic-oauth",
       models: [
         { id: "sonnet", displayName: "Sonnet 4.6" },
         { id: "haiku", displayName: "Haiku 4.5", enabled: false },
       ],
+      modes: [{ id: "build" }],
       snapshotId: "snap-1",
       probedAt: null,
-      source: "seed",
+      origin: "snapshot",
       overrideApplied: true,
     };
     renderPane("claude");
@@ -763,82 +791,38 @@ describe("HarnessPane all models", () => {
     expect(screen.getAllByRole("switch").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("refreshes the catalog for a native/api_key route using the runtime's resolved models", () => {
-    state.catalog.data = {
+  // The cloud-snapshot ingest route (POST /agent-models/{h}/refresh) is
+  // Worker-authenticated only (F-040) — no product client can ever call it,
+  // so the native/api_key/cloud-surface branch renders no Refresh button at
+  // all (see HarnessAllModelsSection's `canManuallyRefresh`).
+  it("renders no Refresh button for a native/api_key route (no callable refresh exists)", () => {
+    state.agentModels.data = {
       harnessKind: "claude",
-      surface: "local",
-      route: "native",
+      authContextId: "anthropic-oauth",
       models: [],
+      modes: [],
       snapshotId: null,
       probedAt: null,
-      source: null,
+      origin: null,
       overrideApplied: false,
-    };
-    state.launchOptions.data = {
-      agents: [
-        {
-          kind: "claude",
-          displayName: "Claude Code",
-          defaultModelId: "sonnet",
-          models: [{ id: "sonnet", displayName: "Sonnet 4.6", isDefault: true }],
-        },
-      ],
     };
     renderPane("claude");
 
-
-    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
-
-    expect(refreshMutate).toHaveBeenCalledWith(
-      {
-        harnessKind: "claude",
-        body: {
-          surface: "local",
-          route: "native",
-          modelsJson: JSON.stringify([{ id: "sonnet", displayName: "Sonnet 4.6" }]),
-        },
-      },
-      expect.anything(),
-    );
-    expect(showToast).not.toHaveBeenCalled();
-  });
-
-  it("shows a toast and skips the server call when the local runtime has no models for this harness", () => {
-    state.catalog.data = {
-      harnessKind: "claude",
-      surface: "local",
-      route: "native",
-      models: [],
-      snapshotId: null,
-      probedAt: null,
-      source: null,
-      overrideApplied: false,
-    };
-    // No launchOptions data mocked: stands in for a runtime that is
-    // unreachable, or one with no ready models for this harness yet.
-    renderPane("claude");
-
-
-    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
-
-    expect(refreshMutate).not.toHaveBeenCalled();
-    expect(showToast).toHaveBeenCalledWith(
-      "Local runtime unavailable — could not read Claude models.",
-    );
+    expect(screen.queryByRole("button", { name: /^Refresh$/ })).toBeNull();
   });
 
   it("upserts an override patch when a model is toggled off", () => {
-    state.catalog.data = {
+    state.agentModels.data = {
       harnessKind: "claude",
-      surface: "local",
-      route: "native",
+      authContextId: "anthropic-oauth",
       models: [
         { id: "sonnet", displayName: "Sonnet 4.6" },
         { id: "haiku", displayName: "Haiku 4.5", enabled: false },
       ],
+      modes: [{ id: "build" }],
       snapshotId: "snap-1",
       probedAt: null,
-      source: "seed",
+      origin: "snapshot",
       overrideApplied: true,
     };
     renderPane("claude");
@@ -927,6 +911,5 @@ describe("HarnessPane all models (local + gateway runtime)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 
     expect(refreshGatewayModelsMutate).toHaveBeenCalledWith("claude", expect.anything());
-    expect(refreshMutate).not.toHaveBeenCalled();
   });
 });

@@ -36,6 +36,20 @@ describe("hasDetectedNativeAuth", () => {
       ),
     ).toBe(false);
   });
+
+  it("rejects readiness that comes from an enrolled route, not a local credential", () => {
+    // Readiness is route-aware on every surface, so a gateway-routed harness
+    // reports credentialState "ready" with no vendor-CLI login. That is not
+    // NATIVE auth and must not be read as such.
+    expect(hasDetectedNativeAuth(agent({ credentialsFromRoute: true }))).toBe(
+      false,
+    );
+  });
+
+  it("treats an absent provenance flag as native (older runtimes were native-only)", () => {
+    const { credentialsFromRoute: _omitted, ...withoutFlag } = agent();
+    expect(hasDetectedNativeAuth(withoutFlag as AgentSummary)).toBe(true);
+  });
 });
 
 describe("resolveAgentAuthDisplay", () => {
@@ -104,6 +118,42 @@ describe("planFirstRunAuthAdoption", () => {
     expect(actions).toEqual([
       { harnessKind: "claude", surface: "local" },
     ]);
+  });
+
+  it("still preselects the gateway when the only 'ready' harness is route-upgraded", () => {
+    // Regression guard for the route-aware readiness read: a harness that reads
+    // "ready" because a route supplies its credentials is NOT detected native
+    // auth, so it must not suppress gateway preselection for the rest. Before
+    // the provenance flag this returned [] and silently disabled first-run
+    // adoption for every harness on the machine.
+    const actions = planFirstRunAuthAdoption({
+      agents: [
+        agent({ kind: "claude", credentialsFromRoute: true }),
+        agent({ kind: "codex", credentialState: "login_required" }),
+      ],
+      selectionCount: 0,
+      gatewayEnabled: true,
+    });
+
+    expect(actions).toEqual([
+      { harnessKind: "claude", surface: "local" },
+      { harnessKind: "codex", surface: "local" },
+    ]);
+  });
+
+  it("still defers to a genuine native login alongside a routed harness", () => {
+    // The other direction: one genuine native login still means "leave
+    // everything alone", even when a different harness is route-ready.
+    const actions = planFirstRunAuthAdoption({
+      agents: [
+        agent({ kind: "claude", credentialsFromRoute: true }),
+        agent({ kind: "codex" }),
+      ],
+      selectionCount: 0,
+      gatewayEnabled: true,
+    });
+
+    expect(actions).toEqual([]);
   });
 
   it("does nothing when nothing is detected and the gateway is disabled", () => {

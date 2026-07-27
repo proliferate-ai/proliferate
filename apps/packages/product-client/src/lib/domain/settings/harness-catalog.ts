@@ -140,39 +140,6 @@ export function normalizeRuntimeLaunchModels(
   }));
 }
 
-// native/api_key routes probe on the CLIENT (catalog.py's refresh_catalog
-// contract): rich live probing is deferred, so v1 sources the payload from the
-// local AnyHarness runtime's already-resolved launch catalog (the same
-// bundled catalog-v2 model list `useAgentLaunchOptionsQuery` feeds the session
-// model picker) instead of spawning a harness process. Returns null when the
-// runtime has no ready models for this harness — the caller should show a
-// "runtime unavailable" toast and skip the server call rather than upload an
-// empty snapshot.
-export function buildRuntimeCatalogModelsJson(
-  harnessKind: string,
-  launchOptions: AgentLaunchOptionsResponse | undefined,
-): string | null {
-  const agent = launchOptions?.agents.find((entry) => entry.kind === harnessKind);
-  if (!agent || agent.models.length === 0) {
-    return null;
-  }
-  const entries = agent.models.map((model) => ({
-    id: model.id,
-    displayName: model.displayName,
-    ...(model.aliases && model.aliases.length > 0 ? { aliases: model.aliases } : {}),
-    // Forward the runtime-enriched catalog fields so cloud snapshots stored from
-    // this upload carry the same richness as the gateway-models endpoint (the
-    // server's parse_models_json preserves arbitrary keys beside `id`).
-    ...(model.description != null ? { description: model.description } : {}),
-    ...(model.provider != null ? { provider: model.provider } : {}),
-    ...(model.status != null ? { status: model.status } : {}),
-    ...(model.effort != null ? { effort: model.effort } : {}),
-    ...(model.fastMode != null ? { fastMode: model.fastMode } : {}),
-    ...(model.modes != null ? { modes: model.modes } : {}),
-  }));
-  return JSON.stringify(entries);
-}
-
 // Overrides have no GET endpoint, so the enabled-set is reconstructed from the
 // layered catalog (this pane is the only override writer) and re-upserted as a
 // whole `update` patch on every toggle.
@@ -221,4 +188,55 @@ export function catalogRouteForSurface(
     return "api_key";
   }
   return defaultRouteForSurface(surface);
+}
+
+/** The enabled api_key selection's provider hint for (harness, surface), if any. */
+export function apiKeyProviderHintForSurface(
+  harnessKind: string,
+  surface: AgentAuthSurface,
+  selections: readonly AgentAuthSelection[],
+): string | null {
+  const match = selections.find(
+    (entry) =>
+      entry.harnessKind === harnessKind
+      && entry.surface === surface
+      && entry.enabled
+      && entry.sourceKind === "api_key",
+  );
+  return match?.providerHint ?? null;
+}
+
+// The B4 cloud snapshot re-key (model-catalog.md §Cloud routes) keys the
+// layered read by the catalog's own auth-context id ("anthropic-api",
+// "gateway", "baseline", …), not the coarse native/api_key/gateway route this
+// pane already tracks for its route cards. There is no per-machine
+// classification wired into product-client yet (Current gaps: the
+// `model_snapshot/` reconciler that would report the ACTIVE context doesn't
+// exist), so this is a best-effort static mapping, not a real classification:
+// the gateway route has an exact 1:1 context id; the api_key route derives the
+// catalog's "<provider>-api" convention from the bound key's provider hint;
+// native (no key bound; the CLI's own login) falls back to a harness's
+// declared oauth/native context. An id that turns out wrong for a given
+// harness degrades gracefully — the server tolerates unknown context ids by
+// serving an empty catalog rather than erroring (model-catalog.md
+// §Storage/§Cloud routes) — it never breaks the pane.
+const NATIVE_AUTH_CONTEXT_ID_BY_HARNESS: Readonly<Record<string, string>> = {
+  claude: "anthropic-oauth",
+  codex: "openai-oauth",
+  cursor: "cursor-login",
+  opencode: "baseline",
+};
+
+export function authContextIdForRoute(
+  harnessKind: string,
+  route: AgentAuthRoute,
+  apiKeyProviderHint: string | null,
+): string {
+  if (route === "gateway") {
+    return "gateway";
+  }
+  if (route === "api_key" && apiKeyProviderHint) {
+    return `${apiKeyProviderHint}-api`;
+  }
+  return NATIVE_AUTH_CONTEXT_ID_BY_HARNESS[harnessKind] ?? "baseline";
 }

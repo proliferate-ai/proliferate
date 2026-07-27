@@ -33,7 +33,6 @@ from proliferate.integrations.sandbox import (
     SandboxRuntimeContext,
     get_sandbox_provider,
 )
-from proliferate.server.catalogs.service import served_agent_catalog_version
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
@@ -342,7 +341,6 @@ async def record_heartbeat(
         desired_versions=WorkerDesiredVersions(
             worker=worker_pin,
             anyharness=anyharness_pin,
-            catalog_version=served_agent_catalog_version(),
         ),
         desired_topology=desired_topology,
         supervisor_bridge=supervisor_bridge,

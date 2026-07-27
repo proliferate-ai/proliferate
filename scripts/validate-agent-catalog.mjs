@@ -171,10 +171,10 @@ function validateCatalog(catalog) {
   }
 }
 
-// The per-harness gateway curation block (schemaVersion 2): providers is the
-// compat group (empty/omitted = all providers), roles pins model-role ids
-// (e.g. small_fast) that used to live in Rust consts, seedModels is the
-// pre-probe fallback model list. All optional; validated structurally only.
+// The per-harness gateway curation block (schemaVersion 2): roles pins
+// model-role ids (e.g. small_fast) that used to live in Rust consts,
+// seedModels is the pre-probe fallback model list. All optional; validated
+// structurally only.
 function validateGatewayPolicy(kind, gatewayPolicy, gatewayRowIds) {
   if (gatewayPolicy === undefined) return;
   if (typeof gatewayPolicy !== "object" || gatewayPolicy === null || Array.isArray(gatewayPolicy)) {
@@ -187,7 +187,6 @@ function validateGatewayPolicy(kind, gatewayPolicy, gatewayRowIds) {
       fail(`${kind}: gatewayPolicy.${field} must be an array of non-empty strings`);
     }
   };
-  stringArray(gatewayPolicy.providers, "providers");
   stringArray(gatewayPolicy.seedModels, "seedModels");
   // Every seedModel must be a
   // first-class session.models row tagged with gateway availability.

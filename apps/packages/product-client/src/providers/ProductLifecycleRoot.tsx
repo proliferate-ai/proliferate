@@ -14,7 +14,6 @@ import { useAppShortcuts } from "#product/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "#product/hooks/app/workflows/use-app-command-actions"
 import { useAgentAutoReconcile } from "#product/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useFirstRunAuthAdoption } from "#product/hooks/agents/lifecycle/use-first-run-auth-adoption"
-import { useGatewayCatalogMirrorSync } from "#product/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync"
 import { useLocalAuthStateSync } from "#product/hooks/agents/lifecycle/use-local-auth-state-sync"
 import { useLocalAutomationExecutor } from "#product/hooks/automations/lifecycle/use-local-automation-executor"
 import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner"
@@ -150,9 +149,6 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_auth_state_sync")
   useLocalAuthStateSync()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_auth_state_sync")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_gateway_catalog_mirror_sync")
-  useGatewayCatalogMirrorSync()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_gateway_catalog_mirror_sync")
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")

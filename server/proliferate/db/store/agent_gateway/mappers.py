@@ -6,9 +6,10 @@ from proliferate.db.models.cloud.agent_gateway import (
     AgentApiKey,
     AgentAuthSelection,
     AgentCatalogOverride,
-    AgentCatalogSnapshot,
     AgentGatewayEnrollment,
+    AgentGatewayEnrollmentKey,
     AgentLlmUsageImportCursor,
+    AgentModelSnapshot,
     LlmCreditGrant,
     OrgAgentPolicy,
 )
@@ -16,9 +17,10 @@ from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
     AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
-    AgentCatalogSnapshotRecord,
+    AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
+    AgentModelSnapshotRecord,
     LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
 )
@@ -33,6 +35,7 @@ def api_key_record(row: AgentApiKey) -> AgentApiKeyRecord:
         status=row.status,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        kind=row.kind,
     )
 
 
@@ -73,16 +76,27 @@ def enrollment_record(row: AgentGatewayEnrollment) -> AgentGatewayEnrollmentReco
     )
 
 
-def catalog_snapshot_record(row: AgentCatalogSnapshot) -> AgentCatalogSnapshotRecord:
-    return AgentCatalogSnapshotRecord(
+def enrollment_key_record(row: AgentGatewayEnrollmentKey) -> AgentGatewayEnrollmentKeyRecord:
+    return AgentGatewayEnrollmentKeyRecord(
+        id=row.id,
+        enrollment_id=row.enrollment_id,
+        harness_kind=row.harness_kind,
+        virtual_key_id=row.virtual_key_id,
+        sync_fingerprint=row.sync_fingerprint,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        revoked_at=row.revoked_at,
+    )
+
+
+def model_snapshot_record(row: AgentModelSnapshot) -> AgentModelSnapshotRecord:
+    return AgentModelSnapshotRecord(
         id=row.id,
         harness_kind=row.harness_kind,
-        surface=row.surface,
-        route=row.route,
+        auth_context_id=row.auth_context_id,
         owner_user_id=row.owner_user_id,
-        models_json=row.models_json,
+        snapshot_json=row.snapshot_json,
         probed_at=row.probed_at,
-        source=row.source,
         status=row.status,
     )
 

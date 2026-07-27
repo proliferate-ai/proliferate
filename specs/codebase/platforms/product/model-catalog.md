@@ -101,6 +101,12 @@ auth-context id** — the exact strings the catalog already declares and
       "probedAt": "2026-07-24T09:12:03Z",
       "mechanism": "acp",
       "attestation": { "name": "opencode", "version": "0.3.112" },
+      "installIdentity": {
+        "role": "agent_process",
+        "version": "1.18.3",
+        "sha256": "9b4f9f1b1c00…",
+        "source": "pinned_archive"
+      },
       "authFingerprint": "sha256:9f2c…",
       "models": [
         {
@@ -136,7 +142,8 @@ Field contract per entry:
 | --- | --- |
 | `probedAt` | Timestamp of the last **successful** observation; the lists below are from this run |
 | `mechanism` | `acp`; present so a future cheaper mechanism can coexist, but every context today probes over ACP |
-| `attestation` | The ACP `initialize` `agent_info` (`name`, `version`) — ties the entry to an exact install |
+| `attestation` | The ACP `initialize` `agent_info` (`name`, `version`) — diagnostics about the binary that answered, never a staleness input (see [Staleness](#staleness)) |
+| `installIdentity` | The install manifest's `agent_process` artifact (`version`, `sha256`, `source`) read at probe time — the staleness baseline. Absent when the manifest carried none |
 | `authFingerprint` | Digest of the credential material the context resolved to at probe time (env values, discovery-file digests, or the gateway key), computed from the same launch facts the auth classifier reads |
 | `models` | Observed models; `provider` preserved verbatim when the harness namespaces (`provider/model`), derived from the serving context otherwise |
 | `modes` | Observed modes |
@@ -207,25 +214,64 @@ the worst-covered harness to the best-covered one.
 
 ### Staleness
 
-An entry is stale exactly when its recorded identity no longer matches the
-machine — never merely because time passed:
+Three reasons invalidate an entry, and nothing else does. Two are identity
+reasons — the machine moved out from under the observation — and the third
+is a bounded time budget for the changes no identity can see:
 
-1. **Harness moved**: `attestation.version` differs from the install
-   manifest's `agent_process` version for this harness. Every entry is
-   version-bound, the gateway context included — the same spawn observed
-   it.
+1. **Harness moved**: the entry's recorded `installIdentity` differs from
+   the install manifest's `agent_process` artifact read now. The
+   comparison is **manifest against manifest**, in one namespace by
+   construction: equal iff `sha256` matches when both sides carry one,
+   else iff `version` matches when both sides carry one. `sha256` is the
+   stronger signal and is preferred because it moves even when a version
+   string is reused (a `latest` republish, a re-pinned git sha).
 2. **Auth moved**: `authFingerprint` differs from the current fingerprint
    of that context's credential material (for the gateway context: the
    virtual key and base URL).
+3. **TTL expired**: `probedAt` is older than this entry's TTL — 24h plus a
+   deterministic per-entry offset derived from `(harness, context)`,
+   spreading a machine's entries across a 6h window so they never
+   co-expire into one thundering herd at boot.
 
-Nothing else invalidates. In particular, staleness is deliberately scoped
-per (harness, context) via the fingerprint rather than keyed on
-`state.json`'s global `revision` — the revision bumps on *any* harness's
-auth mutation, so keying on it (as today's `gateway_model_probe` table
-does,
+**Why the ACP attestation is not the identity.** The attestation
+(`agent_info.version`) and the install manifest are different namespaces:
+claude's manifest records the registry's pinned git sha while its
+attestation reports its own semantic version, and cursor and grok report
+no `agent_info` at all. Comparing across them makes every such entry
+permanently stale — a probe storm on every startup, every launch and every
+auth apply that backoff cannot damp, because those probes *succeed*. The
+attestation is kept as diagnostics about the binary that answered; the
+staleness baseline is the manifest-derived `installIdentity`.
+
+**An unobservable identity is never a staleness reason.** When either side
+of the comparison is absent — no manifest, no `agent_process` version (a
+`source: "path"` dev install records none), or an entry written before the
+field existed — the identity comparison is **indeterminate**, which is not
+stale. Only reasons 2 and 3, or a missing entry, can then invalidate it. A
+surface must not claim a version binding for an indeterminate entry.
+
+**Why a TTL at all, given the identity rules.** Two changes are invisible
+to every identity: the gateway adding or removing a model (the virtual key
+and base URL are unchanged, so `authFingerprint` does not move) and a
+keychain-backed context rotating its credential (no file and no env value
+to fingerprint, so its fingerprint is constant by construction). Without a
+time bound those entries are pinned for the life of the credential. Age
+still never blocks a launch and never deletes truth: a TTL-expired entry
+keeps serving its last good lists while the reconciler re-probes.
+
+Staleness is deliberately scoped per (harness, context) via the
+fingerprint rather than keyed on `state.json`'s global `revision` — the
+revision bumps on *any* harness's auth mutation, so keying on it (as
+today's `gateway_model_probe` table does,
 [persistence/sql/0051_gateway_model_probe.sql](../../../../anyharness/crates/anyharness-lib/src/persistence/sql/0051_gateway_model_probe.sql))
 invalidates every harness's observation whenever one harness's key
 changes. The fingerprint makes invalidation exactly as wide as the change.
+
+Precedence is identity before time, so the surface names the real cause.
+And independently of every rule above, an attempt that completed inside
+the last minute is never retried: the reconciler holds a 60-second
+completed-attempt floor per (harness, context) so a mis-stated rule can
+cost at most one probe per minute rather than one per poke.
 
 A stale entry is not deleted: it renders as "needs refresh" until the
 reconciler re-probes it, and launch validation stops trusting it (falling
@@ -274,12 +320,15 @@ blocks the operation that raised it:
   picker shows a re-probing state rather than stale data presented as
   current; you switch now, the probe catches up.
 - **Session launch** (backstop): starting a session pokes the reconciler
-  for that harness, adopted from today's launch-time gateway probe
-  (`schedule_launch_probe_if_stale` in
-  [catalog/gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs),
-  explicitly "never blocks this
-  launch"). Any probe a machine missed gets self-healed at the next
-  launch; the launch itself validates against whatever is fresh now.
+  for that harness
+  ([runtime/startup.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs),
+  placed exactly where the old gateway-only trigger sat, "never blocks this
+  launch"). Unlike that predecessor (revision-keyed, per gateway context
+  only) this poke is staleness-gated per (harness, auth context), so a
+  launch on a machine with fresh entries costs one in-memory gate
+  evaluation and no spawn. Any probe a machine missed gets self-healed at
+  the next launch; the launch itself validates against whatever is fresh
+  now.
 - **Manual refresh**: the settings surface forces a re-probe per harness,
   with "refreshed N minutes ago", "needs refresh", and "refreshing"
   states read straight off `probedAt`, the staleness rules, and
@@ -288,18 +337,57 @@ blocks the operation that raised it:
 Pickers never poke; opening a menu reads the document as it is.
 
 Probe status reaches clients the way install status already does: as
-polled state, not push events. The runtime exposes the document's
-`probedAt`/`lastAttempt` per (harness, context); surfaces poll and render
-"last probed at X" exactly as they poll the reconcile job snapshot today.
+polled state, not push events. `GET /v1/agents/{kind}/model-snapshot`
+answers per (harness, context) with the document's
+`probedAt`/`lastAttempt`, a server-computed `snapshotAgeSeconds`, the
+`stale`/`staleReason` verdict, whether the identity comparison was
+determinate, and the engine's live `state` (`idle` | `queued` | `running` |
+`backoff` — `queued` is a probe admitted to its slot but still waiting on
+the per-harness gate or the machine-wide semaphore, which at a cap of one
+is the common case and must not read as `idle`); surfaces poll and render
+it exactly as they poll the reconcile job snapshot today. The credential-derived `authFingerprint` is never on
+the wire — the boolean `stale` plus its reason is the whole client
+contract.
 
 Runner constraints, enforced by the probe code itself and stated here so
 the wiring does not rediscover them: `probe_agent` requires the install
 to exist (install-before-probe is checked, not conventional), must run
 inside a tokio `LocalSet` (the ACP connection uses `spawn_local`; a bare
 `tokio::spawn` will not do), and carries no overall timeout of its own —
-the reconciler bounds each probe. Probes for one harness run serially;
-the reconciler stays off the install reconcile's single job slot so a
-slow probe never delays an install.
+the reconciler bounds each probe, on the probe's own thread so a
+cancelled or timed-out attempt kills its child rather than leaking it.
+Probes for one harness run serially; the reconciler stays off the install
+reconcile's single job slot so a slow probe never delays an install.
+Concurrent pokes for one (harness, context) coalesce onto a single spawn:
+losers re-check the staleness gate after queueing and observe the
+winner's entry.
+
+**Probing materializes into a probe-owned scratch root**, a sibling of
+`agent-auth/` under the runtime home, never into the live auth homes: the
+recipes are byte-identical to a launch with exactly one substitution, the
+materialization root. That keeps a probe out of the launch GC's blast
+radius, keeps it from writing into the config dir a running session is
+reading, and makes "time on disk" equal one probe attempt — the scratch
+is owned by the probe's thread and removed on every exit path. Deciding
+whether to probe writes nothing at all: the staleness gate reads state and
+stats discovery files, and only an actual probe materializes credentials.
+
+**One probe engine per runtime home.** The engine holds an advisory
+exclusive lock on the runtime home; a second runtime sharing that home
+(a dev sidecar beside the desktop) degrades to read-only — it serves the
+document and the status surface, and it neither probes nor sweeps
+abandoned scratch roots. Probing is convergence, not correctness: the
+read-only runtime loses nothing a later poke on the owner cannot restore,
+whereas two probe engines against one home is the unsound configuration.
+The status surface reports which mode it is in, and a forced refresh on a
+non-owner is refused rather than silently ignored.
+
+**Cursor is manual-refresh only.** Its credential lives in the macOS
+keychain, so an unattended spawn can surface an OS keychain prompt with no
+user-visible cause. Every other harness's active contexts are probed
+under the pokes below; cursor's entry is written only when a user asks for
+it. (Cursor is also an attestation-less harness, so its entry is never
+identity-stale — auth changes and the TTL are its refresh paths.)
 
 The same reconciler runs everywhere. A cloud sandbox's runtime probes
 under the same pokes and writes the same document; the Worker syncs that
@@ -401,13 +489,12 @@ a `model_snapshot_sync.rs` module runs on the Worker's
 shaped like the other per-tick convergence steps:
 
 1. After each successful heartbeat, GET the runtime's snapshot documents
-   over the narrow local AnyHarness surface it already uses (localhost +
-   optional runtime bearer, the same access pattern as today's
-   [catalog_sync.rs](../../../../anyharness/crates/proliferate-worker/src/catalog_sync.rs)).
+   over the narrow local AnyHarness surface the Worker already uses
+   (localhost + optional runtime bearer, the same access pattern as
+   `anyharness_update.rs`'s `/health` probe).
 2. Compare each entry's `probedAt` against the last-uploaded values held
-   in memory (like today's catalog ETag state — worth at most one
-   redundant upload after a Worker restart, which the server's
-   soft-versioned write absorbs idempotently).
+   in memory — worth at most one redundant upload after a Worker restart,
+   which the server's soft-versioned write absorbs idempotently.
 3. POST changed entries to the ingest route with the Worker's own bearer;
    the server resolves the owner from the Worker's sandbox row, so the
    payload carries no user identity.
@@ -418,7 +505,7 @@ shaped like the other per-tick convergence steps:
 machine: the desktop picker always has its runtime attached and reads the
 document live, and no machineless surface consumes a local observation —
 they all pick models for cloud execution. Today's 60-second
-[useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
+`useGatewayCatalogMirrorSync` (deleted)
 polling loop deletes with no replacement.
 
 ## Serving and merge
@@ -493,7 +580,11 @@ because both read the same universe.
   staleness visible when the snapshot is old.
 - **Provider badges**: every served model entry carries its origin — the
   auth context that served it, and the `provider` namespace — as explicit
-  fields, so the UI never infers origin from a model name.
+  fields, so the UI never infers origin from a model name. The desktop
+  launch-catalog merge now plumbs `provider` through instead of dropping it
+  (C3); no consuming surface renders it yet — the composer's badge still
+  calls `getProviderDisplayName(harnessKind)` rather than reading the
+  field, so today's badge is still name-inferred in practice.
 
 ## Model identity
 
@@ -559,17 +650,38 @@ word belongs to the agent-distribution document):
 Snapshot identity on the wire matches the tables: harness, auth
 context id, `probedAt`. Renames are hard cutovers with no alias windows;
 all consumers are first-party (pre-launch ruling): the cloud SDK's
-agent-gateway catalog functions, the sdk-react hooks
-(`useAgentCatalog`, `useRefreshAgentCatalog`, `useMirrorAgentCatalog`,
-`useUpsertCatalogOverride`, `useDeleteCatalogOverride`), the mirror-sync
-hook, and the settings All Models surface.
+agent-models functions (`getAgentModels`, `upsertAgentModelOverride`,
+`deleteAgentModelOverride` — no product-client refresh/mirror function,
+since the single ingest route is Worker-authenticated only), the
+sdk-react hooks (`useAgentModels`, `useUpsertAgentModelOverride`,
+`useDeleteAgentModelOverride`), the mirror-sync hook (deleted with no
+replacement — see below), and the settings All Models surface.
 
 ### Runtime routes
 
-The runtime exposes the machine document to its local clients: read the
-snapshot per harness — including `probedAt` and `lastAttempt`, the polled
-status surfaces render — and force a re-probe (the manual-refresh poke).
-These replace the runtime's gateway-models-only endpoints.
+The runtime exposes the machine document to its local clients. These
+replace the runtime's gateway-models-only endpoints:
+
+- `GET /v1/agents/{kind}/model-snapshot`: the polled status surface above —
+  per-context `probedAt`, `snapshotAgeSeconds`, `lastAttempt`, `lastError`,
+  `stale`/`staleReason`, `identityComparable`, the engine's `state` and
+  `nextAttemptAt`, the manifest-derived `installIdentity`, and the engine's
+  ownership mode. Model and mode lists come off the same document read — the
+  `models`/`modes` arrays ride alongside `modelCount`/`modeCount` (S2b added
+  the arrays; the counts predate them and stay for whatever already reads
+  just a badge). The Worker's `model_snapshot_sync.rs` is this route's first
+  consumer of the arrays: it has no other local surface to read the full
+  entry from.
+- `POST /v1/agents/{kind}/model-snapshot/refresh?authContextId=`: force a
+  re-probe of ONE context (the manual-refresh poke), awaiting it. The
+  parameter is required: a forced refresh of every active context would hold
+  one request for as long as the probe timeout times the number of contexts,
+  and a surface that wants "refresh everything" issues one request per
+  context and polls the status route for progress. `202` with the status
+  body; `400` when `authContextId` is absent; `404` when the harness or the
+  context is not active here; `409` when this runtime does not own the probe
+  engine, or when this machine's local auth configuration cannot be probed
+  for that context; `502` only when a probe actually ran and failed.
 
 ## Code map
 
@@ -579,15 +691,40 @@ act):
 
 ```
 anyharness-lib/src/domains/agents/model_snapshot/
-├── mod.rs                # ModelSnapshotService: the domain's public face
-├── document.rs           # wire schema + atomic read/write (mirrors installer/manifest.rs)
-├── fingerprint.rs        # auth-context fingerprint from launch facts
-├── staleness.rs          # pure validity rules (mirrors installer/install_policy.rs)
-├── probe.rs              # per-context invocation of live/sessions/probe::probe_agent
-│                         #   (LocalSet, per-probe timeout, serial per harness)
-├── reconcile.rs          # the reconciler + its pokes (startup, install-completed,
+├── mod.rs                # ModelSnapshotService: the reconciler — gate, coalescing,
+│                         #   per-harness serialization, the completed-attempt floor,
+│                         #   backoff, and the pokes (startup, install-completed,
 │                         #   auth-applied, session-launch backstop, manual refresh)
-└── projection.rs         # universe construction + enrichment join inputs
+├── config.rs             # tunables, poke vocabulary, ownership mode, refresh error
+├── document.rs           # wire schema + atomic 0600 read/write (mirrors installer/manifest.rs)
+├── entry.rs              # ProbeSnapshot -> document entry (pure translation)
+├── fingerprint.rs        # auth-context fingerprint from the probe seam's material
+├── lock.rs               # the single-writer engine lock (one engine per runtime home)
+├── probe.rs              # per-context invocation of live/sessions/probe::probe_agent
+│                         #   on a thread that owns both the child and the scratch
+├── reads.rs              # document/entry/status reads (available in read-only mode)
+├── staleness.rs          # pure validity rules (mirrors installer/install_policy.rs)
+├── status.rs             # the polled status projection (pure)
+├── targets.rs            # which (harness, context) pairs may be probed
+└── universe.rs           # fresh entries -> the launch-validation universe, behind a
+                          #   seam so validation needs no probe engine
+```
+
+The picker-facing enrichment join stays where it is today (`catalog/` and the
+frontend), so this module has no `projection.rs`: it owns the observation, not
+the merge. `universe.rs` is the one projection it does own, and only because the
+FRESHNESS rule is its own — a stale entry stops counting, and nothing outside
+this module knows that rule.
+
+The route-auth side owns the probe's materialization seam, because it is the
+same render plane a launch uses:
+
+```
+anyharness-lib/src/domains/agents/route_auth/
+└── probe_materialization.rs   # the two-phase seam: probe_auth_material (read-only,
+    ├── scoping.rs             #   every gate evaluation) / materialize_for_probe
+    └── scratch.rs             #   (only when probing); per-context source scoping;
+                               #   the probe-owned scratch root + orphan sweep
 ```
 
 New server package, mirroring `agent_gateway/`'s shape:
@@ -604,20 +741,35 @@ server/proliferate/server/cloud/agent_models/
 | Layer | Path | Owns |
 | --- | --- | --- |
 | Machine snapshot | `anyharness-lib/src/domains/agents/model_snapshot/` (new; beside [installer/](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/manifest.rs) whose manifest/policy conventions it mirrors) | Document, probes, fingerprints, staleness, triggers, projection |
-| Launch validation | [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs), [sessions/service/launch_options.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/service/launch_options.rs) | Snapshot-first universe, `SelectionUnsupported`, picker projection |
+| Launch validation | [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs) + [catalog/selection.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/selection.rs) + [catalog/universe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/universe.rs), [sessions/service/launch_options.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/service/launch_options.rs) | Snapshot-first universe, `SelectionUnsupported`, picker projection |
+| Gateway model plan | [catalog/gateway_plan.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_plan.rs) | The surviving `GET /v1/models` materialization fetch: memoized 5 min, seed models as a warned floor, never snapshot truth |
 | Cloud snapshot | `server/proliferate/server/cloud/agent_models/` (new; today's routes in [agent_gateway/api.py](../../../../server/proliferate/server/cloud/agent_gateway/api.py), tables in [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py)) | Layered reads, ingest, overrides, soft-versioned history |
 | Cloud sync | `proliferate-worker/src/model_snapshot_sync.rs` (new; on the tick in [proliferate-worker/src/runtime.rs](../../../../anyharness/crates/proliferate-worker/src/runtime.rs)) | Heartbeat-tick upload of changed entries |
 | Picker composition | [cloud-launch-catalog.ts](../../../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts) and the chat/model domain | Merge precedence, identity normalization, visibility filtering, badges |
 
-Deleted by this design:
-[catalog/gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)
-and
-[catalog/gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs)
-(with the `gateway_model_probe` sqlite
-table), the `gatewayPolicy` seed fallback (agent-distribution gap), and
-the frontend
-[useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
-polling hook.
+Deleted by this design (A9):
+[catalog/gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)'s
+persistence half (`GatewayProbeStore`/`GatewayProbeRow`)
+and `catalog/gateway_resolver.rs` entirely (with the `gateway_model_probe`
+sqlite table) — its surviving pure logic (`native_default_model`,
+`provider_for_model`, `normalize_model_family`, plus the enrichment join
+relocated from the legacy route) now lives in
+[catalog/projection.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/projection.rs).
+Still pending: the `gatewayPolicy` seed fallback as a SERVING tier
+(agent-distribution gap). The frontend `useGatewayCatalogMirrorSync`
+polling hook is already gone — the route cutover deleted it once the
+route it polled read the snapshot.
+
+Two pieces of that chain deliberately survive, and both are materialization
+rather than observation. `probe_gateway_models`' tolerant `GET /v1/models` fetch
+moves into `gateway_plan.rs`, because a harness whose gateway config enumerates
+models needs the proxy's list to WRITE that config before any spawn. And
+`gatewayPolicy.seedModels` survives as a floor under that fetch, because
+`render_opencode_gateway` hard-fails on an empty models map — so a failed fetch
+must still yield a launchable list. An entry produced over that floor carries a
+`"gateway model plan fell back to seed models"` warning, because the probe then
+observes exactly the ids the floor just wrote into the harness's own config:
+a tautology, and not a discovery of what the gateway serves.
 
 ## Failure modes
 
@@ -640,77 +792,119 @@ polling hook.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] No runtime-triggered probe exists. `probe_agent()`
-      ([live/sessions/probe.rs](../../../../anyharness/crates/anyharness-lib/src/live/sessions/probe.rs))
-      is invoked only by the
-      `catalog-probe` CLI inside the central pipeline; none of the
-      reconciler's pokes runs it on user machines, and the
-      `model_snapshot/` module and its document do not exist. The poke
-      sites themselves are already in the code: the startup pass
-      (`spawn_startup_pass` in
-      [domains/agents/runtime.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)),
-      the two install-completion
-      points (the reconcile job's per-agent completion in
-      [installer/reconcile/execution.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/reconcile/execution.rs)
-      and the synchronous install endpoint), the auth-apply handler's
-      `schedule_gateway_probes` call
-      ([api/http/agent_auth.rs](../../../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs)),
-      and the launch-time `schedule_launch_probe_if_stale`
-      ([catalog/gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs))
-      — the last two probe gateway
-      model ids today and are replaced by pokes of the general
-      reconciler.
-- [ ] Launch validation (`validate_launch` in
-      [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs))
-      checks the
-      shipped catalog's model list only; probed capability never enters
-      the universe.
-- [ ] The cloud snapshot exists (`agent_catalog_snapshot` in
-      [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py))
-      but is keyed by
-      coarse route (`native`/`api_key`/`gateway`) instead of auth context,
-      stores a models-only payload, carries ownerless seed rows and a
-      `source` column (both leave: seed becomes a read-time fallback to
-      the served shipped catalog), and is read only by the settings "All
-      Models" tab. Composer, web, mobile, automations, and workflows all
-      read the shipped catalog instead. The re-key (route →
-      `auth_context_id`, `models_json` → `snapshot_json`, table rename)
-      is one migration; the soft-versioning write pattern is kept.
-- [ ] The server has three catalog write paths (`refresh` with optional
-      payload, `mirror` with `source="runtime-mirror"`, and overrides —
-      all in
-      [agent_gateway/api.py](../../../../server/proliferate/server/cloud/agent_gateway/api.py));
-      the first two collapse into the single ingest route, and the
-      server-side gateway discovery inside `refresh` (enrollment lookup,
-      virtual-key decrypt, `GET /v1/models`) deletes — the server never
-      generates snapshots.
-- [ ] The gateway model plan chain —
-      [gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs),
-      [gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)
-      with its `gateway_model_probe` sqlite table
-      (keyed on the global `state.json` revision, so any harness's auth
-      change invalidates every harness's probe), the `gatewayPolicy` seed
-      fallback, and the 60-second
-      [useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
-      poll — is
-      the gateway-context special case of the machine snapshot and is
-      replaced by it (jointly ruled with the agent-distribution and
-      model-gateway gap lists).
-- [ ] No staleness UI exists: `probed_at` is stored on cloud snapshots but
-      no surface renders "refreshed N minutes ago" or "needs refresh",
-      and no auth fingerprint exists to compute staleness from.
-- [ ] Model entries do not carry provider namespace or serving-context as
-      explicit fields; the frontend derives what it can from ids.
-- [ ] Route rename `/v1/cloud/agent-gateway/catalog/*` →
-      `/v1/cloud/agent-models/*` (hard cutover; first-party consumers:
-      the catalog functions in
-      [cloud/sdk/src/client/agent-gateway.ts](../../../../cloud/sdk/src/client/agent-gateway.ts),
-      the sdk-react agent-gateway catalog hooks in
-      [cloud/sdk-react/src/hooks/agent-gateway.ts](../../../../cloud/sdk-react/src/hooks/agent-gateway.ts),
-      the mirror-sync hook, and
-      [HarnessAllModelsSection](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAllModelsSection.tsx)).
+- [ ] The picker does not project the machine snapshot yet. Launch validation
+      does (`validate_launch_in_universe` in
+      [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs),
+      reading
+      [catalog/universe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/universe.rs)),
+      so an observed model launches; but `models`/`visible_models` — and
+      therefore the runtime's launch options — still read the shipped catalog
+      alone, so an observed-only model is launchable without appearing in any
+      menu. Closing this is the [enrichment join](#enrichment-join) plus the
+      explicit provider/serving-context fields two bullets down: a model shown
+      with no curated display name or control wiring would be worse than one
+      absent from the menu. Note the asymmetry is pre-existing and in the safe
+      direction — the shipped catalog already carries trial-verified models a
+      harness does not advertise.
+- [ ] **The legacy gateway-models route now serves seed data only**, and this is a
+      deliberate, bounded regression rather than a latent bug. The poke wiring
+      deleted the last two writers of the `gateway_model_probe` table (the
+      auth-apply scheduler and the launch-time trigger), while
+      `resolve_with_source` behind
+      `GET /v1/agents/{kind}/catalog/gateway-models` still reads only that table
+      — so it reports `source: "seed"` until a user presses the legacy Refresh.
+      Two consumers regress for the length of the window: the settings **All
+      Models** tab shows the seed list with no probe freshness, and the
+      desktop→cloud **mirror push**
+      (`gateway-catalog-mirror.ts`, since deleted by the route cutover,
+      pushed only `source === "probe"`) stops, so machineless surfaces keep
+      serving whatever they last received. The window closes when this route's
+      consumers move to the snapshot route: the mirror consumer is **deleted** by
+      the route cutover and the snapshot re-key, and the All Models tab is
+      rebuilt on the runtime status/snapshot surface. Restoring a writer here
+      would mean re-creating the revision-keyed table this design deletes, so
+      the fix is the cutover, not a patch. **Deploy implication: this must not
+      ship to users without the route cutover and the snapshot re-key in the
+      same release train.**
+- [ ] The cloud snapshot is read only by the settings "All Models" tab.
+      Composer, web, mobile, automations, and workflows all read the shipped
+      catalog instead. (The store itself is re-keyed: `agent_model_snapshot`
+      in
+      [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py).)
+- [ ] The retained `inactive` snapshot rows have no retention bound. They are
+      the audit trail this document relies on to answer "what changed between
+      refreshes", so they must not simply be deleted on write — but nothing
+      prunes them either, and every Worker upload for every (user, harness,
+      auth context) appends one forever. The document owes a retention rule
+      (keep N per scope, or an age bound) and the sweep that enforces it.
+- [ ] `gateway_resolver.rs` (with its `gateway_model_probe` sqlite table,
+      keyed on the global `state.json` revision so any harness's auth
+      change invalidated every harness's probe) is deleted, and the two
+      legacy routes it backed (`GET .../catalog/gateway-models`,
+      `POST .../catalog/refresh-gateway`) now read/poke the model-snapshot
+      service instead of the old resolver — same URLs, new backend, kept
+      because the desktop All-Models tab still calls them (A9). The
+      refresh route's precondition NARROWED in the swap: the old handler
+      only required a gateway source with a non-empty baseUrl+key; the
+      new one runs `ModelSnapshotService::refresh_now`, which additionally
+      requires this runtime to own the probe engine (409 if another
+      runtime holds the lock) and the harness to be locally installed
+      (404 if not) before it will probe. A read-only or not-yet-installed
+      runtime that could refresh before A9 now gets a typed rejection
+      instead — the OpenAPI doc for the route lists the new response
+      codes (404/409/502) but not this reasoning, hence this note. One
+      piece remains, TODO: the `gatewayPolicy` seed fallback (still
+      consumed by `gateway_plan.rs`'s pre-probe floor and the legacy
+      route's own pre-probe floor — leaves when the catalog-side bullet
+      above does). The 60-second `useGatewayCatalogMirrorSync` poll is
+      gone — the route cutover deleted it once the route it polled
+      became snapshot-backed.
+- [ ] Staleness UI for the local/native/api_key routes and the no-runtime
+      cloud picker: the runtime-gateway path now polls
+      `GET /v1/agents/{kind}/model-snapshot` (A7's route) and renders
+      "refreshed N minutes ago" / "needs refresh" from its `ContextStatus`
+      (C3, [HarnessAllModelsSection](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAllModelsSection.tsx)).
+      The other routes still show no staleness — their picker sources
+      (cloud catalog snapshot, no-runtime signed-out local) have no per-auth-
+      context machine-snapshot document to poll yet (blocked on the cloud
+      snapshot re-key, B4/C2).
+- [ ] Model entries do not carry serving-context (the auth context that
+      served them) as an explicit field; `AgentLaunchModelOption` and
+      `GatewayModelEntry` (contract/`agent_gateway_catalog.rs`) have no
+      per-model context attribution today, only a harness-level kind. This
+      matters once a harness materializes several auth contexts at once
+      (opencode's multi-provider case); the gateway route's single fixed
+      context needed no tagging to render correctly (C3).
+- [ ] `provider` is now plumbed through the desktop launch-catalog merge
+      instead of being silently dropped
+      ([cloud-launch-catalog.ts](../../../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts),
+      C3), but no surface reads it yet: the composer's provider badge still
+      calls `getProviderDisplayName(harnessKind)`
+      ([provider-display.ts](../../../../apps/packages/product-client/src/lib/domain/agents/provider-display.ts))
+      rather than the field on the model itself. Removing that inference is
+      the remaining step.
 - [ ] Onboarding contains no "checking for latest models" step (the
       surface rendering the install-completed and auth-applied pokes).
-- [ ] Probe status is not pollable: no runtime endpoint exposes
-      `probedAt`/`lastAttempt` per (harness, context) the way
-      `GET /v1/agents/reconcile` exposes install progress.
+- [x] ~~Nothing uploads the cloud sandbox's fresh machine snapshot yet: the
+      Worker's heartbeat tick has no~~
+      [model_snapshot_sync.rs](../../../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs)
+      ~~step, so every machineless consumer (web new-chat, mobile,
+      automations, workflow editors) serves whatever the cloud snapshot last
+      held — stale or entirely absent for a harness that has never been
+      manually refreshed through the legacy route. Closing this means the
+      module this doc already names in "Write paths"/"Code map".~~ **Closed
+      by S2b**: the module now runs on every heartbeat tick, GETs the
+      runtime's model-snapshot status per harness
+      (`GET /v1/agents/{kind}/model-snapshot`, whose response this same PR
+      extends with the `models`/`modes` arrays the route's own doc comment
+      always promised — see the "Runtime routes" note below), diffs
+      `probedAt` against an in-memory last-pushed cache, and POSTs changed
+      contexts to `POST /v1/cloud/agent-models/{harness}/refresh` with the
+      Worker's bearer. **Narrowing, not fully closing**: the cloud route
+      itself ships on a separate branch (B4/C2) not yet merged as of this
+      PR, so against today's `main` the POST 404s and is logged-and-swallowed
+      like any other convergence failure — the sync is inert, not broken,
+      until that route lands. It is also inherently cloud-sandbox-only: the
+      ingest route's `resolve_upload_owner` refuses `runtime_kind !=
+      "cloud_sandbox"` with a 403, so a desktop Worker's attempt always logs
+      a swallowed 403, which is correct — "Desktop does not sync" above.

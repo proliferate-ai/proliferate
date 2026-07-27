@@ -36,13 +36,13 @@ function fakeWorld(): ReadyLocalWorld {
     runtime: { baseUrl: "http://127.0.0.1:9002", client: undefined as never },
     renderer: { baseUrl: "http://127.0.0.1:9003", browser: undefined as never },
     gateway: {
-      resolveActorKey: async ({ userId, enrollmentId }: { userId: string; enrollmentId: string }) =>
+      resolveActorKey: async ({ userId, enrollmentId, harnessKind }: { userId: string; enrollmentId: string; harnessKind: string }) =>
         ({
           userId,
           enrollmentId,
           teamId: "team-1",
           litellmUserId: "litellm-user-1",
-          keyAlias: `vk-user-${userId}-${enrollmentId.slice(0, 8)}`,
+          keyAlias: `vk-user-${userId}-${harnessKind}-${enrollmentId.slice(0, 8)}`,
           tokenId: "token-1",
           tokenIdHash: "hash-1",
         }) satisfies ActorKeyIdentity,
@@ -141,7 +141,7 @@ test("authenticatedActor drives claim -> login -> org lookup -> enrollment poll 
   assert.equal(actor.userId, "user-1");
   assert.equal(actor.organizationId, "org-1");
   assert.equal(actor.enrollmentId, "enrollment-1");
-  assert.equal(actor.gatewayKey.keyAlias, "vk-user-user-1-enrollme");
+  assert.equal(actor.gatewayKey.keyAlias, "vk-user-user-1-claude-enrollme");
   assert.equal(actor.session.access_token, "access-1");
   // Never persists the raw password anywhere on the returned actor.
   assert.equal(JSON.stringify(actor).includes(actor.session.access_token), true);
@@ -182,7 +182,7 @@ test("authenticatedActor durably hands off synced enrollment custody before any 
       updatedAt: "2026-01-01T00:00:00Z",
     }),
   });
-  const custody: Array<{ userId: string; enrollmentId: string }> = [];
+  const custody: Array<{ userId: string; enrollmentId: string; harnessKind: string }> = [];
 
   await assert.rejects(
     () => authenticatedActor(world, "owner", {
@@ -194,7 +194,7 @@ test("authenticatedActor durably hands off synced enrollment custody before any 
     /simulated crash before scenario trackActorSubjects/,
   );
 
-  assert.deepEqual(custody, [{ userId: "user-1", enrollmentId: "enrollment-1" }]);
+  assert.deepEqual(custody, [{ userId: "user-1", enrollmentId: "enrollment-1", harnessKind: "claude" }]);
   assert.ok(!calls.some((call) => call.startsWith("putGatewaySelection")));
 });
 

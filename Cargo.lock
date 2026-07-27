@@ -391,6 +391,7 @@ dependencies = [
  "futures",
  "hmac",
  "jsonwebtoken",
+ "libc",
  "nucleo-matcher",
  "portable-pty",
  "reqwest 0.12.28",
@@ -4235,7 +4236,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.3.46"
+version = "0.3.49"
 dependencies = [
  "base64 0.22.1",
  "chrono",

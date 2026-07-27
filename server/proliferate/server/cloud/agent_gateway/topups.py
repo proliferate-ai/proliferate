@@ -42,7 +42,10 @@ from proliferate.constants.agent_gateway import (
     LLM_CREDIT_SOURCE_TOPUP,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
-from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
+from proliferate.db.store.agent_gateway import (
+    AgentGatewayEnrollmentKeyRecord,
+    AgentGatewayEnrollmentRecord,
+)
 from proliferate.db.store.agent_gateway.records import LlmCreditGrantRecord
 from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.integrations import litellm
@@ -50,6 +53,7 @@ from proliferate.integrations import stripe as stripe_billing
 from proliferate.integrations.litellm import LiteLLMIntegrationError
 from proliferate.integrations.stripe import StripeIntegrationError
 from proliferate.server.cloud.agent_gateway.enrollment import (
+    build_enrollment_key_fingerprint,
     enrollment_key_alias,
     enrollment_key_metadata,
     enrollment_subject_label,
@@ -248,16 +252,40 @@ async def _reactivate_enrollment(
     *,
     budget: float | None,
 ) -> None:
-    virtual_key_id = enrollment.virtual_key_id
-    if enrollment.budget_status != AGENT_GATEWAY_BUDGET_STATUS_OK and virtual_key_id is not None:
-        try:
-            await litellm.enable_virtual_key(key_or_token_id=virtual_key_id)
-        except LiteLLMIntegrationError:
-            # /key/unblock unavailable on this proxy build: hard-replace the
-            # key (delete + mint keeps the alias) and persist the new value.
-            virtual_key_id = await _remint_virtual_key(db, enrollment, budget=budget)
-    # Always rewrite the LiteLLM budget: ``budget`` is the granted allowance
-    # for a hard-capped subject, or ``None`` (explicit uncap) for an
+    """Unblock (or re-mint) every per-harness child key and rewrite budgets.
+
+    Post-B2, budget is a team-only concern (model-gateway.md §Account
+    model) — child keys never carry ``max_budget``, so only
+    ``update_team_budget`` runs; ``set_key_budget`` per key would put a
+    budget back on keys, which R2 forbids.
+    """
+    was_blocked = enrollment.budget_status != AGENT_GATEWAY_BUDGET_STATUS_OK
+    reminted = 0
+    if was_blocked:
+        for enrollment_key in await agent_gateway_store.list_active_enrollment_keys(
+            db,
+            enrollment_id=enrollment.id,
+        ):
+            if enrollment_key.virtual_key_id is None:
+                continue
+            try:
+                await litellm.enable_virtual_key(key_or_token_id=enrollment_key.virtual_key_id)
+            except LiteLLMIntegrationError:
+                # /key/unblock unavailable on this proxy build: hard-replace
+                # the key (delete + mint keeps the alias) and persist the new
+                # value.
+                await _remint_enrollment_key(db, enrollment, enrollment_key)
+                reminted += 1
+    # One materialization pass per enrollment, not per re-minted key: the
+    # render reads every child key at once, so N passes for N keys would only
+    # re-render identical state N times (the last pass is the only one whose
+    # inputs are complete anyway).
+    if reminted and enrollment.user_id is not None:
+        await materialization_service.schedule_materialize_agent_auth(
+            db, user_id=enrollment.user_id
+        )
+    # Always rewrite the team's LiteLLM budget: ``budget`` is the granted
+    # allowance for a hard-capped subject, or ``None`` (explicit uncap) for an
     # overage-enabled one. Skipping the ``None`` case would leave an overage
     # subject pinned at whatever cap its enrollment set, so the top-up charges
     # but the key never unblocks.
@@ -266,12 +294,7 @@ async def _reactivate_enrollment(
             team_id=enrollment.litellm_team_id,
             max_budget=budget,
         )
-    if virtual_key_id:
-        await litellm.set_key_budget(
-            key_or_token_id=virtual_key_id,
-            max_budget=budget,
-        )
-    if enrollment.budget_status != AGENT_GATEWAY_BUDGET_STATUS_OK:
+    if was_blocked:
         await agent_gateway_store.set_enrollment_budget_status(
             db,
             enrollment_id=enrollment.id,
@@ -279,37 +302,44 @@ async def _reactivate_enrollment(
         )
 
 
-async def _remint_virtual_key(
+async def _remint_enrollment_key(
     db: AsyncSession,
     enrollment: AgentGatewayEnrollmentRecord,
-    *,
-    budget: float | None,
-) -> str | None:
-    if enrollment.virtual_key_id is None or enrollment.litellm_team_id is None:
-        return enrollment.virtual_key_id
+    enrollment_key: AgentGatewayEnrollmentKeyRecord,
+) -> None:
+    """Delete+mint one child key, keeping its alias and access-group scope.
+
+    Materialization is scheduled by the caller once per enrollment, not here —
+    see ``_reactivate_enrollment``.
+    """
+    if enrollment_key.virtual_key_id is None or enrollment.litellm_team_id is None:
+        return
     label = enrollment_subject_label(enrollment)
+    key_alias = enrollment_key_alias(enrollment, enrollment_key.harness_kind)
     minted = await litellm.rotate_virtual_key(
-        key_or_token_id=enrollment.virtual_key_id,
+        key_or_token_id=enrollment_key.virtual_key_id,
         user_id=enrollment.litellm_user_id or label,
         team_id=enrollment.litellm_team_id,
-        alias=enrollment_key_alias(enrollment),
-        max_budget=budget,
-        metadata=enrollment_key_metadata(enrollment),
+        alias=key_alias,
+        # Keys never carry a budget (R2): omit max_budget on the re-mint too.
+        metadata=enrollment_key_metadata(enrollment, enrollment_key.harness_kind),
+        models=[enrollment_key.harness_kind],
     )
-    await agent_gateway_store.mark_enrollment_synced(
+    await agent_gateway_store.upsert_enrollment_key(
         db,
         enrollment_id=enrollment.id,
-        litellm_team_id=enrollment.litellm_team_id,
-        litellm_user_id=enrollment.litellm_user_id,
+        harness_kind=enrollment_key.harness_kind,
         virtual_key_id=minted.token_id or None,
         virtual_key=minted.key,
-        sync_fingerprint=enrollment.sync_fingerprint,
+        # Recomputed from the team + alias this key was just minted under.
+        # Copying ``enrollment_key.sync_fingerprint`` forward would carry a
+        # stale value describing the pre-remint state, defeating the drift
+        # comparison the fingerprint exists for.
+        sync_fingerprint=build_enrollment_key_fingerprint(
+            team_id=enrollment.litellm_team_id,
+            key_alias=key_alias,
+        ),
     )
-    if enrollment.user_id is not None:
-        await materialization_service.schedule_materialize_agent_auth(
-            db, user_id=enrollment.user_id
-        )
-    return minted.token_id or None
 
 
 async def run_llm_topups(

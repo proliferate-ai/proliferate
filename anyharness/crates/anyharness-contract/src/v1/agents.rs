@@ -69,6 +69,17 @@ pub struct AgentSummary {
     pub native: Option<ArtifactStatus>,
     pub agent_process: ArtifactStatus,
     pub credential_state: AgentCredentialState,
+    /// True when the enrolled agent-auth route — not a credential detected on
+    /// this machine — is what makes `credentialState` read `ready`.
+    ///
+    /// Readiness is route-aware on every surface (agent-distribution.md's
+    /// route-aware law: settings and launch must agree), so `ready` alone no
+    /// longer means "the vendor CLI is logged in here". A client that means the
+    /// latter — first-run native-auth adoption, CLI login chrome — must exclude
+    /// the route-upgraded case. Absent on older runtimes; treat absent as
+    /// `false` (the pre-route-aware meaning, which is what those runtimes had).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub credentials_from_route: bool,
     pub readiness: AgentReadinessState,
     pub supports_login: bool,
     pub expected_env_vars: Vec<String>,

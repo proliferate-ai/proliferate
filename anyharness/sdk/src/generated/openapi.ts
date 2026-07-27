@@ -196,6 +196,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{kind}/model-snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_model_snapshot_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/model-snapshot/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh_model_snapshot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/revoked-jtis": {
         parameters: {
             query?: never;
@@ -212,15 +244,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/catalogs/agents": {
+    "/v1/catalogs/agents/version": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put: operations["apply_agent_catalog"];
+        get: operations["get_agent_catalog_version"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2044,6 +2076,17 @@ export interface components {
         AdvanceReplaySessionResponse: {
             advanced: boolean;
         };
+        /**
+         * @description The runtime's active agent catalog version and its provenance. Read-only:
+         *     the runtime binary is the only catalog transport, so there is no apply
+         *     response shape to report.
+         */
+        AgentCatalogVersionResponse: {
+            /** @description The `catalogVersion` string from the active document. */
+            catalogVersion: string;
+            /** @description Where the active catalog came from. Always `"bundled"`. */
+            source: string;
+        };
         /** @enum {string} */
         AgentCliAuthState: "authenticated" | "expired" | "absent" | "unsupported";
         /** @enum {string} */
@@ -2177,6 +2220,18 @@ export interface components {
             agentProcess: components["schemas"]["ArtifactStatus"];
             cliAuthState?: null | components["schemas"]["AgentCliAuthState"];
             credentialState: components["schemas"]["AgentCredentialState"];
+            /**
+             * @description True when the enrolled agent-auth route — not a credential detected on
+             *     this machine — is what makes `credentialState` read `ready`.
+             *
+             *     Readiness is route-aware on every surface (agent-distribution.md's
+             *     route-aware law: settings and launch must agree), so `ready` alone no
+             *     longer means "the vendor CLI is logged in here". A client that means the
+             *     latter — first-run native-auth adoption, CLI login chrome — must exclude
+             *     the route-upgraded case. Absent on older runtimes; treat absent as
+             *     `false` (the pre-route-aware meaning, which is what those runtimes had).
+             */
+            credentialsFromRoute?: boolean;
             displayName: string;
             docsUrl?: string | null;
             expectedEnvVars: string[];
@@ -2197,16 +2252,6 @@ export interface components {
              * @description The persisted document's revision.
              */
             revision: number;
-        };
-        /** @description Outcome of pushing an agent catalog document into the runtime. */
-        ApplyAgentCatalogResponse: {
-            /**
-             * @description True when the document replaced the active catalog (its version
-             *     differed); false when the runtime was already on that version.
-             */
-            applied: boolean;
-            fromVersion?: string | null;
-            toVersion?: string | null;
         };
         ArtifactStatus: {
             installed: boolean;
@@ -2441,6 +2486,54 @@ export interface components {
             textTruncated?: boolean | null;
             /** @enum {string} */
             type: "tool_result_text";
+        };
+        ContextStatus: {
+            /**
+             * @description Whether the auth classifier currently counts this context as active. A
+             *     just-deactivated context keeps its observation with `active: false`.
+             */
+            active: boolean;
+            /** @description Diagnostics about the binary that answered — NOT the staleness input. */
+            attestation?: Record<string, never> | null;
+            authContextId: string;
+            /**
+             * @description `false` ⇒ the identity comparison was indeterminate; render no version
+             *     claim.
+             */
+            identityComparable: boolean;
+            lastAttempt?: Record<string, never> | null;
+            /**
+             * @description `lastAttempt.detail` when the last attempt failed. Lifted to its own field
+             *     so a surface can render an error without knowing the attempt shape.
+             */
+            lastError?: string | null;
+            modeCount: number;
+            modelCount: number;
+            /**
+             * @description The full model list off the same document read as `modelCount`. Added
+             *     alongside the count (never replacing it — model-catalog.md:660 always
+             *     said this route serves "model and mode lists off the same document
+             *     read"; the count-only shape undershot that, and this is the fix) so a
+             *     machineless-surface uploader (the Worker's `model_snapshot_sync`) has
+             *     something to read besides raw disk access to a document it should not
+             *     know the layout of.
+             */
+            models?: Record<string, never>[];
+            /** @description The full mode list, same rationale as `models` above. */
+            modes?: Record<string, never>[];
+            /** @description Set iff `state == backoff`. */
+            nextAttemptAt?: string | null;
+            /** @description Last SUCCESSFUL observation. Never regresses on failure. */
+            probedAt?: string | null;
+            /**
+             * Format: int64
+             * @description Server-computed so every surface renders the same age from one clock.
+             */
+            snapshotAgeSeconds?: number | null;
+            stale: boolean;
+            staleReason?: string | null;
+            state: components["schemas"]["ModelSnapshotLiveState"];
+            warnings?: string[];
         };
         CoworkArtifactDetailResponse: {
             artifact: components["schemas"]["CoworkArtifactSummary"];
@@ -2753,13 +2846,18 @@ export interface components {
         /** @description Resolved gateway model plan for the local surface. */
         GatewayModelsResponse: {
             /**
-             * @description The resolved, provider-filtered models — each id enriched with the
-             *     bundled catalog row (or bare `{ id, provider? }` for probe-only ids).
+             * @description The resolved gateway models — each id enriched with the bundled
+             *     catalog row (or bare `{ id, provider? }` for probe-only ids). No
+             *     client-side provider filtering is applied; server-side access groups
+             *     (once B1 lands) own scoping.
              */
             models: components["schemas"]["GatewayModelEntry"][];
             /** @description When a probe supplied the list (RFC3339); absent for seed. */
             probedAt?: string | null;
-            /** @description `"seed"` (no probe yet) or `"probe"` (a live probe supplied the list). */
+            /**
+             * @description `"seed"` (no snapshot entry yet) or `"probe"` (a snapshot observation
+             *     supplied the list).
+             */
             source: string;
         };
         /** @description Response payload for fetching the current live session config snapshot. */
@@ -3395,6 +3493,32 @@ export interface components {
             values: string[];
         };
         /**
+         * @description The engine's live view of one context. In-memory only, so a restart reports
+         *     `Idle` — which is true: nothing is running.
+         *
+         *     `Queued` is distinct from `Running` on purpose: a probe admitted to its slot but
+         *     still waiting on the per-harness gate or the machine-wide semaphore is neither
+         *     "nothing is happening" (which is what `Idle` would tell a polling UI, wrongly)
+         *     nor "a harness process exists".
+         * @example idle
+         * @enum {string}
+         */
+        ModelSnapshotLiveState: "idle" | "queued" | "running" | "backoff";
+        ModelSnapshotStatus: {
+            agent: string;
+            contexts: components["schemas"]["ContextStatus"][];
+            /** @description The staleness baseline, manifest-derived. `null` when unobservable. */
+            installIdentity?: Record<string, never> | null;
+            /**
+             * @description `owner` | `readonly` — visible rather than mysterious when a second
+             *     runtime shares this home.
+             * @example owner
+             */
+            probeEngine: string;
+            /** Format: int32 */
+            schemaVersion: number;
+        };
+        /**
          * @description A product-normalized live session control derived from raw ACP config options.
          *
          *     This is the product semantics layer used by clients to render consistent
@@ -3903,8 +4027,9 @@ export interface components {
         /** @description Result of a manual gateway refresh. */
         RefreshGatewayResponse: {
             /**
-             * @description The freshly probed model ids (unfiltered — exactly what the gateway
-             *     returned; the resolver applies provider filtering when building plans).
+             * @description The freshly probed model ids — exactly what the snapshot entry now
+             *     carries for the gateway context, with no client-side provider
+             *     filtering applied anywhere downstream.
              */
             models: string[];
             /** @description The probe timestamp (RFC3339). */
@@ -5717,8 +5842,17 @@ export interface operations {
                     "application/json": components["schemas"]["RefreshGatewayResponse"];
                 };
             };
-            /** @description No gateway selection for this harness */
-            400: {
+            /** @description Unknown agent kind or no gateway route active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description This runtime does not own the probe engine, or its local auth config is unusable */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5890,6 +6024,100 @@ export interface operations {
             };
         };
     };
+    get_model_snapshot_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-auth-context model snapshot status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSnapshotStatus"];
+                };
+            };
+            /** @description Unknown agent kind */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    refresh_model_snapshot: {
+        parameters: {
+            query: {
+                /** @description The auth context to re-probe (required) */
+                authContextId: string;
+            };
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Re-probe completed; the status body reflects it */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSnapshotStatus"];
+                };
+            };
+            /** @description Missing authContextId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unknown agent kind or inactive auth context */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description This runtime does not own the probe engine, or its local auth config is unusable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The forced probe ran and failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     push_revoked_jtis: {
         parameters: {
             query?: never;
@@ -5923,36 +6151,22 @@ export interface operations {
             };
         };
     };
-    apply_agent_catalog: {
+    get_agent_catalog_version: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description Raw agent catalog JSON document (schema v1 or v2) */
-        requestBody: {
-            content: {
-                "application/json": string;
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description Catalog accepted (applied or already current) */
+            /** @description Active agent catalog version and source */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplyAgentCatalogResponse"];
-                };
-            };
-            /** @description Catalog payload rejected; active catalog unchanged */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
+                    "application/json": components["schemas"]["AgentCatalogVersionResponse"];
                 };
             };
         };

@@ -11,8 +11,8 @@ import {
   agentAuthSelectionsKey,
   agentAuthStateKey,
   agentGatewayCapabilitiesKey,
-  agentGatewayCatalogKey,
   agentGatewayEnrollmentKey,
+  agentModelsKey,
   controlPlaneHealthKey,
 } from "@proliferate/cloud-sdk-react/lib/query-keys";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
@@ -130,6 +130,7 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
         {
           id: "key-1",
           title: "OpenRouter production",
+          kind: "api_key",
           redactedHint: "sk-or-...9f2",
           status: "active",
           createdAt: "2026-07-01T00:00:00Z",
@@ -137,6 +138,7 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
         {
           id: "key-2",
           title: "Anthropic personal",
+          kind: "api_key",
           redactedHint: "sk-ant-...3e1",
           status: "active",
           createdAt: "2026-06-15T00:00:00Z",
@@ -303,25 +305,31 @@ function seedCloudQueries(
     user_id: "agents-playground",
     harnesses: [],
   });
-  for (const surface of ["local", "cloud"] as const) {
-    for (const route of ["native", "api_key", "gateway"] as const) {
-      client.setQueryData(
-        agentGatewayCatalogKey(scenario.harnessKind, surface, route),
-        {
-          harnessKind: scenario.harnessKind,
-          surface,
-          route,
-          models: [
-            { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
-            { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
-          ],
-          snapshotId: "playground-snapshot",
-          probedAt: "2026-07-18T18:00:00Z",
-          source: "probe",
-          overrideApplied: false,
-        },
-      );
-    }
+  // B4 re-key (model-catalog.md §Cloud routes): the layered read is keyed by
+  // (harnessKind, authContextId), not (surface, route) — seed every context id
+  // this harness's catalog entry declares (matches
+  // agents-playground-cloud-client.ts's AUTH_CONTEXT_IDS).
+  const authContextIds: Record<"claude" | "opencode", readonly string[]> = {
+    claude: ["bedrock", "anthropic-api", "anthropic-oauth", "gateway"],
+    opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline", "gateway"],
+  };
+  for (const authContextId of authContextIds[scenario.harnessKind]) {
+    client.setQueryData(
+      agentModelsKey(scenario.harnessKind, authContextId),
+      {
+        harnessKind: scenario.harnessKind,
+        authContextId,
+        models: [
+          { id: "model-default", displayName: "Recommended", provider: "provider", enabled: true },
+          { id: "model-fast", displayName: "Fast", provider: "provider", enabled: true },
+        ],
+        modes: [{ id: "build" }],
+        origin: "snapshot",
+        snapshotId: "playground-snapshot",
+        probedAt: "2026-07-18T18:00:00Z",
+        overrideApplied: false,
+      },
+    );
   }
 
   if (scenario.id === "api-keys-loading") {
