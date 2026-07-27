@@ -36,17 +36,22 @@ interface SidebarStatusGlyphProps {
 export function SidebarStatusGlyph({
   indicator,
 }: SidebarStatusGlyphProps): ReactNode {
+  // One shared tier for every activity state: the waiting clock, the running
+  // spinner, and the error/warning badge must render at the same size so the
+  // trailing cell never appears to jump as a row moves between states. The
+  // reference draws these at 14px against the 12px row text — exactly
+  // --icon-indicator; --icon-control (16px) reads visibly oversized there.
   switch (indicator.kind) {
     case "error":
-      return <CircleAlert className="icon-control text-destructive" />;
+      return <CircleAlert className="icon-indicator text-destructive" />;
     case "worktree_missing":
-      return <CircleAlert className="icon-control text-warning-foreground" />;
+      return <CircleAlert className="icon-indicator text-warning-foreground" />;
     case "waiting_input":
     case "waiting_plan":
-      return <Clock className="icon-control text-info" />;
+      return <Clock className="icon-indicator text-info" />;
     case "iterating":
     case "queued_prompt":
-      return <Spinner className="icon-control text-sidebar-foreground" />;
+      return <Spinner className="icon-indicator text-sidebar-foreground" />;
   }
 }
 
@@ -61,8 +66,12 @@ export function SidebarStatusIndicatorView({
   const action = "action" in indicator ? indicator.action : null;
   const glyph = <SidebarStatusGlyph indicator={indicator} />;
 
+  // Both branches occupy the same fixed 20px cell (h-5 min-w-5, centered) so
+  // the glyph's vertical center is identical whether or not the indicator is
+  // actionable — mixed cell sizes are what made adjacent rows' indicators sit
+  // at visibly different heights.
   return (
-    <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
+    <Tooltip content={indicator.tooltip} className="flex h-5 min-w-5 shrink-0 items-center justify-center">
       {action && onAction ? (
         <IconButton
           tone="sidebar"
@@ -72,12 +81,12 @@ export function SidebarStatusIndicatorView({
             event.stopPropagation();
             onAction(action);
           }}
-          className="!size-4 !px-0 hover:bg-transparent"
+          className="!size-5 !p-0 hover:bg-transparent"
         >
           {glyph}
         </IconButton>
       ) : (
-        <span role="img" aria-label={indicator.tooltip} className="inline-flex items-center justify-center">{glyph}</span>
+        <span role="img" aria-label={indicator.tooltip} className="flex h-5 min-w-5 items-center justify-center">{glyph}</span>
       )}
     </Tooltip>
   );

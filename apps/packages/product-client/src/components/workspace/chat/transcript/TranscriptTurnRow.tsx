@@ -295,7 +295,6 @@ export function TranscriptTurnRow({
           showCopyButton={assistantFooterMode === "copy"}
           reserveSlot={assistantFooterMode === "reserved"}
           timestampLabel={tailAssistantActionTime}
-          alwaysVisible={isFinalCompletedTurn}
           metMarker={metMarker}
         />
       </div>
