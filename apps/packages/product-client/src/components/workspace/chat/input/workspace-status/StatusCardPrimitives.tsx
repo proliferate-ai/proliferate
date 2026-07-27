@@ -109,12 +109,12 @@ export function StatusRow({
         size="unstyled"
         title={title}
         onClick={onSelect}
-        className={`${STATUS_ROW_CLASS} cursor-pointer hover:before:bg-list-hover`}
+        className={`${STATUS_ROW_CLASS} cursor-pointer hover:before:bg-hover`}
       >
         {body}
       </Button>
     )
-    : <div className={`${STATUS_ROW_CLASS} hover:before:bg-list-hover`}>{body}</div>;
+    : <div className={`${STATUS_ROW_CLASS} hover:before:bg-hover`}>{body}</div>;
 
   if (!hoverItems || hoverItems.length === 0) {
     return row;
@@ -132,7 +132,7 @@ export function StatusRow({
           side="left"
           sideOffset={14}
           collisionPadding={12}
-          className="pointer-events-none flex w-80 flex-col rounded-xl bg-popover/90 p-0 py-1 font-normal shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm"
+          className="pointer-events-none flex w-80 flex-col rounded-xl bg-popover/90 p-0 py-1 font-normal shadow-popover ring-[0.5px] ring-border backdrop-blur-sm"
         >
           <div className="flex max-h-72 flex-col gap-0.5 overflow-y-auto px-3">
             {hoverItems.map((item) => (

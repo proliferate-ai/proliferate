@@ -353,7 +353,7 @@ export function FullFlowPrototype() {
 
         {/* Global Agents pane: navigation only. */}
         {paneOpen ? (
-          <aside className="w-72 shrink-0 border-l border-sidebar-border">
+          <aside className="w-72 shrink-0 border-l border-border">
             <GlobalAgentsPanePrototype
               parents={paneParents}
               archived={workspace.archived.map((session) => ({

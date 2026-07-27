@@ -382,10 +382,12 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // LOCAL-6 requires the gateway turn to run on a NEW session (the cell
     // asserts gatewayTurn.sessionId !== userKeyTurn.sessionId). Do not use the
     // in-workspace "+" here: it eagerly creates a session with the old user-key
-    // model before the caller can select the gateway model. That create is
-    // correctly rejected as SESSION_MODEL_GATED, after which the picker tries
-    // to patch the old session and receives SESSION_CONFIG_REJECTED (Actions
-    // run 29862527425). Return to the standalone home composer instead; the
+    // model before the caller can select the gateway model. That create can be
+    // refused with the single typed refusal (SESSION_MODEL_UNSUPPORTED — the
+    // model no longer resolves against the composed observation), after which
+    // the picker tries to patch the old session and receives
+    // SESSION_CONFIG_REJECTED (Actions run 29862527425, observed under the
+    // pre-cut gated code). Return to the standalone home composer instead; the
     // caller selects the gateway model there and explicitly reselects the same
     // prepared repo before Send, so session creation starts with the new route
     // and model from the outset.

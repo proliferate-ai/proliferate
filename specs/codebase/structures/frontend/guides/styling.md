@@ -33,14 +33,12 @@ Shared token ownership:
 - `apps/packages/design/dist/theme.css` is generated from those tokens and exposes
   shared CSS theme variables plus shared non-product animation utilities for
   Desktop/Web. Do not hand-edit generated theme output.
-- `apps/packages/design/src/css/dom.css` owns the shared Desktop/Web DOM entrypoint:
-  Tailwind setup, shared package `@source` entries, shared reset/root/body
-  defaults, shared scrollbar utilities, and shared Proliferate global classes.
-  Apps import this as `@proliferate/design/dom.css`.
 - `apps/packages/design/src/css/product.css` owns the shared Desktop/Web
-  product theme and global styles: fonts, theme presets, and global runtime
-  selectors. Desktop imports this as `@proliferate/design/product.css`; Web
-  will import it at its later cutover.
+  product entrypoint: Tailwind setup, shared package `@source` entries, shared
+  reset/root/body defaults, fonts, shared scrollbar utilities, and global
+  runtime selectors. The ProductClient package entry imports it as
+  `@proliferate/design/product.css`, and `apps/web/src/index.css` imports the
+  same stylesheet.
 - `apps/packages/design/src/css/desktop.css` owns genuine Desktop/native-only
   CSS (drag regions and other Tauri-specific overrides). Desktop imports this
   as `@proliferate/design/desktop.css`.
@@ -69,15 +67,17 @@ Theme decisions belong in tokens, not ad hoc callsite classes.
 ## Sidebar Tokens
 
 Components rendered inside the right panel or sidebar background
-(`bg-sidebar-background`) must use sidebar-specific tokens:
+(`bg-sidebar-background`) use the shared state tokens for interaction paint and
+sidebar-specific tokens for text:
 
-- `bg-sidebar-accent` / `hover:bg-sidebar-accent` for hover and active states
+- `bg-hover` / `hover:bg-hover` for hover and active states, `bg-selected` for
+  persistent selection — the same three state roles as everywhere else
 - `text-sidebar-foreground` / `text-sidebar-muted-foreground` for text
-- `border-sidebar-border` for borders
+- `border-border` for borders
 
-Do not use generic `bg-accent` or `hover:bg-muted` inside sidebar surfaces —
-those resolve to different colors and look wrong against the sidebar
-background.
+Do not use `hover:bg-muted` or ad-hoc overlays inside sidebar surfaces — the
+shared state tokens are what keep the shell, sidebar, lists and menus from
+drifting apart.
 
 ## No Partial-Opacity Hover Transitions on Glyphs
 
@@ -131,7 +131,7 @@ For card-like containers (diff cards, file entries, settings items):
 - Border radius: `rounded-lg` with `overflow-clip`
 - Spacing between cards: `gap-2`
 
-Do not use `bg-sidebar-accent/30` or similar opacity-based backgrounds that
+Do not use `bg-hover/30` or similar opacity-based backgrounds that
 shift meaning across themes. `bg-foreground/5` is theme-stable.
 
 ## RTL Truncation for File Paths
@@ -214,7 +214,7 @@ hover, disabled, and loading states.
 
 When using primitives from `apps/packages/ui/**`, shared product components
 from `apps/packages/product-ui/**`, or connected surfaces from
-`apps/packages/product-surfaces/**`, import `@proliferate/design/dom.css`;
+`apps/packages/product-surfaces/**`, import `@proliferate/design/product.css`;
 that shared entrypoint owns the Tailwind package source scanning.
 
 Reusable icons belong in app/package primitive icon modules, not inline inside
@@ -252,7 +252,7 @@ Global CSS is for:
 Component-specific styling belongs with the component or primitive, not in
 `index.css`.
 
-Shared element resets in `dom.css` (e.g. the `a` color/underline reset) must
+Shared element resets in `product.css` (e.g. the `a` color/underline reset) must
 live in `@layer base`, never unlayered. Tailwind v4 puts utilities in
 `@layer utilities`, and unlayered CSS beats every layer regardless of
 specificity — an unlayered reset silently strips intentional utility classes
@@ -262,8 +262,9 @@ escapes an `a` reset and looks fine while the equivalent `<a>` does not, which i
 exactly how this hides.
 
 App stylesheets should be import-only where possible. `apps/web/src/index.css`
-imports only `@proliferate/design/dom.css`. `apps/desktop/src/index.css`
-imports app-owned third-party CSS (xterm) plus `@proliferate/design/product.css`
-and `@proliferate/design/desktop.css`; `product.css` itself imports the shared
-DOM entrypoint. Mobile uses `apps/mobile/src/styles/**` and
-`@proliferate/design/react-native`, not DOM CSS.
+imports only `@proliferate/design/product.css`. Desktop imports
+`@proliferate/design/desktop.css` in `apps/desktop/src/main.tsx`; the shared
+product theme rides with the compiled ProductClient package entry, whose
+`index.css` imports `@proliferate/design/product.css`. Mobile uses
+`apps/mobile/src/styles/**` and `@proliferate/design/react-native`, not DOM
+CSS.

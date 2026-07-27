@@ -28,6 +28,9 @@ const STATIC_HARNESS_ENV_VARS: Readonly<Record<string, readonly HarnessEnvVarSug
   claude: [{ envVarName: "ANTHROPIC_API_KEY", providerHint: "anthropic" }],
   codex: [{ envVarName: "OPENAI_API_KEY", providerHint: "openai" }],
   grok: [{ envVarName: "XAI_API_KEY", providerHint: "xai" }],
+  // Cursor's only auth slot (catalog registry.json auth.slots[0].envVars) — an
+  // account key, not a provider key, so it has no fallback registry entry.
+  cursor: [{ envVarName: "CURSOR_API_KEY", providerHint: "cursor" }],
   // OpenCode fronts every provider in the vendored registry, but its own
   // catalog auth contexts (catalogs/agents/catalog.json -> opencode.authContexts)
   // list anthropic-api / ANTHROPIC_API_KEY first as the canonical default, so

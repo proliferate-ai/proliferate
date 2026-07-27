@@ -8,14 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_KIND_API_KEY,
     AGENT_API_KEY_STATUS_ACTIVE,
     AGENT_API_KEY_STATUS_REVOKED,
+    AGENT_API_KEY_TYPED_KINDS,
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
 )
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey
 from proliferate.db.store.agent_gateway.mappers import api_key_record
 from proliferate.db.store.agent_gateway.records import AgentApiKeyRecord
-from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 
 
@@ -41,9 +43,47 @@ async def create_agent_api_key(
     row = AgentApiKey(
         user_id=user_id,
         title=title,
+        kind=AGENT_API_KEY_KIND_API_KEY,
         value_ciphertext=encrypt_text(value),
         encryption_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
         redacted_hint=build_redacted_hint(value),
+        status=AGENT_API_KEY_STATUS_ACTIVE,
+    )
+    db.add(row)
+    await db.flush()
+    return api_key_record(row)
+
+
+async def create_agent_provider_config(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    title: str,
+    kind: str,
+    value: dict[str, str],
+) -> AgentApiKeyRecord:
+    """Create a typed vault entry (agent-auth.md's vault table).
+
+    ``value`` is the field-spec's key -> entered-value map (D2's
+    ``ProviderConfigCreatorSubmit.value``); it is JSON-encrypted verbatim, so
+    the redacted hint cannot reuse ``build_redacted_hint``'s single-secret-tail
+    convention — there is no one string to show a fragment of. The title is
+    the only human-facing label for a typed entry, same as the redacted-hint
+    caveat already documented for the bare-secret kind.
+    """
+    if not title.strip():
+        raise ValueError("Agent API key title must not be empty.")
+    if kind not in AGENT_API_KEY_TYPED_KINDS:
+        raise ValueError(f"Unsupported provider-config kind: {kind}")
+    if not value or not all(v.strip() for v in value.values()):
+        raise ValueError("Provider-config values must be non-empty strings.")
+    row = AgentApiKey(
+        user_id=user_id,
+        title=title,
+        kind=kind,
+        value_ciphertext=encrypt_json(value),
+        encryption_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+        redacted_hint=f"{kind}:{len(value)} field(s)",
         status=AGENT_API_KEY_STATUS_ACTIVE,
     )
     db.add(row)
@@ -93,16 +133,55 @@ async def get_agent_api_key_decrypted(
     user_id: UUID,
     api_key_id: UUID,
 ) -> tuple[AgentApiKeyRecord, str] | None:
-    """Internal-use fetch of the raw key value for materialization."""
+    """Internal-use fetch of the raw key value for materialization.
+
+    Scoped to ``kind='api_key'`` rows only, so a typed vault entry is
+    invisible here — the caller cannot accidentally decrypt a Bedrock/Azure
+    JSON document as a plain string. Materialization dispatches on the
+    referencing selection's shape (agent-auth.md's selection-model table: an
+    ``api_key`` source names an ``env_var_name`` only when the entry is
+    bare), so it already knows which of this fetch or
+    ``get_agent_provider_config_decrypted`` applies before calling either.
+    """
     row = (
         await db.execute(
             select(AgentApiKey).where(
                 AgentApiKey.id == api_key_id,
                 AgentApiKey.user_id == user_id,
                 AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
+                AgentApiKey.kind == AGENT_API_KEY_KIND_API_KEY,
             )
         )
     ).scalar_one_or_none()
     if row is None:
         return None
     return api_key_record(row), decrypt_text(row.value_ciphertext)
+
+
+async def get_agent_provider_config_decrypted(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    api_key_id: UUID,
+) -> tuple[AgentApiKeyRecord, dict[str, str]] | None:
+    """Internal-use fetch of a typed vault entry's decrypted field map.
+
+    Symmetric with ``get_agent_api_key_decrypted`` for the bare-secret kind;
+    materialization (D3) picks whichever fetch matches the referenced row's
+    ``kind`` — there is no ``env_var_name`` on a selection referencing a typed
+    entry (agent-auth.md's selection-model table), so the caller already
+    knows which fetch applies before calling either.
+    """
+    row = (
+        await db.execute(
+            select(AgentApiKey).where(
+                AgentApiKey.id == api_key_id,
+                AgentApiKey.user_id == user_id,
+                AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
+                AgentApiKey.kind.in_(AGENT_API_KEY_TYPED_KINDS),
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    return api_key_record(row), decrypt_json(row.value_ciphertext)

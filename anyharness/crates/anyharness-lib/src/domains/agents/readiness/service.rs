@@ -9,7 +9,7 @@ use super::compatibility::detect_runtime_compatibility_issue;
 use super::overrides::resolve_agent_process_override;
 use super::status::compute_readiness;
 use crate::domains::agents::auth::credentials::{
-    detect_auth_slots, detect_auth_slots_with_env, detect_cli_auth_state,
+    detect_auth_slots_in_scope, detect_cli_auth_state, CredentialEnvScope,
 };
 use crate::domains::agents::model::*;
 
@@ -26,14 +26,56 @@ use super::paths::{
     artifact_root, managed_registry_binary_for_names, managed_registry_npm_binary_for_names,
 };
 
+/// Host-scoped readiness with the enrolled agent-auth route layered on, which is
+/// what every read surface wants.
+///
+/// Route-awareness here is the settings/launch-agreement law
+/// (agent-distribution.md, "Readiness projection"): *"The settings read surface
+/// and the launch path resolve readiness the same way (route-aware); the UI never
+/// shows `CredentialsRequired` for a harness that would launch fine."* Before
+/// this, `GET /v1/agents` resolved native-only while launch resolved route-aware,
+/// so a gateway-enrolled harness with no native login read `CredentialsRequired`
+/// in settings and launched fine — the projection lied on the one surface a user
+/// reads.
+///
+/// The route can only clear the credential rungs; see
+/// [`route_credentials_upgrade_status`].
 pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {
-    resolve_agent_with_env(descriptor, runtime_home, &BTreeMap::new())
+    let resolved = resolve_agent_unrouted(descriptor, runtime_home);
+    apply_launch_route_upgrade(resolved, descriptor, runtime_home)
 }
 
+/// Readiness from artifacts + the HOST-ambient env + local discovery ONLY, with
+/// no agent-auth route consulted. This answers the narrower question "is the
+/// vendor CLI installed and logged in on this machine", which is what the login
+/// flow needs (an enrolled gateway route must not suppress the login command) and
+/// what the install path reports.
+pub fn resolve_agent_unrouted(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+) -> ResolvedAgent {
+    resolve_agent_in_scope(descriptor, runtime_home, CredentialEnvScope::HostAmbient)
+}
+
+/// Workspace-scoped readiness: the composed workspace env, never the host's
+/// ambient env (agent-distribution.md's ambient law). No route layered on — use
+/// [`resolve_launch_agent`] for the launch answer.
 pub fn resolve_agent_with_env(
     descriptor: &AgentDescriptor,
     runtime_home: &Path,
-    additional_env: &BTreeMap<String, String>,
+    workspace_env: &BTreeMap<String, String>,
+) -> ResolvedAgent {
+    resolve_agent_in_scope(
+        descriptor,
+        runtime_home,
+        CredentialEnvScope::Workspace(workspace_env),
+    )
+}
+
+fn resolve_agent_in_scope(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    scope: CredentialEnvScope<'_>,
 ) -> ResolvedAgent {
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 
@@ -73,11 +115,8 @@ pub fn resolve_agent_with_env(
         agent_process.message = Some(message.clone());
     }
 
-    let (credential_state, auth_slots) = if additional_env.is_empty() {
-        detect_auth_slots(&descriptor.auth, &home_dir)
-    } else {
-        detect_auth_slots_with_env(&descriptor.auth, &home_dir, additional_env)
-    };
+    let (credential_state, auth_slots) =
+        detect_auth_slots_in_scope(&descriptor.auth, &home_dir, scope);
 
     let cli_auth_state = detect_cli_auth_state(&descriptor.auth, &home_dir);
 
@@ -110,6 +149,9 @@ pub fn resolve_agent_with_env(
         native,
         agent_process,
         spawn,
+        // Set only by `apply_launch_route_upgrade`; this layer knows nothing
+        // about routes.
+        credentials_from_route: false,
     }
 }
 
@@ -139,37 +181,56 @@ pub fn resolve_agent_with_env(
 /// [`route_credentials_upgrade_status`]).
 ///
 /// The launch paths (`create_session`, `ensure_live_session`/`start_live_session`,
-/// and `resolved_workspace_launch_options`) use this. Native-readiness surfaces
-/// (`GET /v1/agents`, login, reconcile, probe) keep using
-/// [`resolve_agent`]/[`resolve_agent_with_env`]: they answer "is the vendor CLI
-/// installed and logged in", which is a different question from "can the runtime
-/// launch this agent through the enrolled route".
+/// and `resolved_workspace_launch_options`) use this. It differs from the
+/// settings read ([`resolve_agent`]) ONLY in env scope — workspace-composed vs
+/// host-ambient — because both are now route-aware; that shared route layer is
+/// what makes the two surfaces agree.
 pub fn resolve_launch_agent(
     descriptor: &AgentDescriptor,
     runtime_home: &Path,
     workspace_env: &BTreeMap<String, String>,
 ) -> ResolvedAgent {
-    let mut resolved = resolve_agent_with_env(descriptor, runtime_home, workspace_env);
+    let resolved = resolve_agent_with_env(descriptor, runtime_home, workspace_env);
+    apply_launch_route_upgrade(resolved, descriptor, runtime_home)
+}
+
+/// The ONE place a resolved agent absorbs its enrolled agent-auth route. Both the
+/// settings read and the launch path go through it, which is precisely how they
+/// are kept from disagreeing (agent-distribution.md's route-aware law).
+///
+/// A no-op when the agent is already credential-ready (the route has nothing to
+/// add) or when no route is in effect for this harness.
+fn apply_launch_route_upgrade(
+    mut resolved: ResolvedAgent,
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+) -> ResolvedAgent {
     let already_ready = matches!(
         resolved.credential_state,
         CredentialState::Ready | CredentialState::ReadyViaLocalAuth
     );
-    if !already_ready
-        && crate::domains::agents::route_auth::launch_route_provides_credentials(
+    if already_ready
+        || !crate::domains::agents::route_auth::launch_route_provides_credentials(
             runtime_home,
             descriptor.kind.as_str(),
         )
     {
-        let upgraded = route_credentials_upgrade_status(resolved.status);
-        if upgraded == ResolvedAgentStatus::Ready {
-            // The route supplies credentials the launcher injects at spawn.
-            // `ReadyViaLocalAuth` is the closest existing state: ready via a
-            // non-env, runtime-materialized credential rather than a workspace
-            // env var.
-            resolved.credential_state = CredentialState::ReadyViaLocalAuth;
-        }
-        resolved.status = upgraded;
+        return resolved;
     }
+    let upgraded = route_credentials_upgrade_status(resolved.status);
+    if upgraded == ResolvedAgentStatus::Ready {
+        // The route supplies credentials the launcher injects at spawn.
+        // `ReadyViaLocalAuth` is the closest existing state: ready via a
+        // non-env, runtime-materialized credential rather than a workspace
+        // env var.
+        resolved.credential_state = CredentialState::ReadyViaLocalAuth;
+        // Record the PROVENANCE of that readiness. Route-upgraded-ready and
+        // natively-ready are the same `credential_state` on the wire, so a
+        // consumer that means "the vendor CLI is logged in" (first-run adoption,
+        // CLI status chrome) needs this flag to tell them apart.
+        resolved.credentials_from_route = true;
+    }
+    resolved.status = upgraded;
     resolved
 }
 

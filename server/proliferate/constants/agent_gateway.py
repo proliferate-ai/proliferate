@@ -3,6 +3,28 @@
 AGENT_API_KEY_STATUS_ACTIVE = "active"
 AGENT_API_KEY_STATUS_REVOKED = "revoked"
 
+# A vault entry's `kind` says how to interpret its ciphertext (agent-auth.md's
+# "The vault" table). `api_key` (the default) is one opaque secret string,
+# applied as the single env var named by the referencing selection; each typed
+# kind decrypts to a JSON document applied as the harness's own provider env
+# set. Which harness may pick which typed kind is a registry declaration
+# (registry.json's `providerConfig`), not this tuple — this is the closed
+# vocabulary of storable shapes only.
+AGENT_API_KEY_KIND_API_KEY = "api_key"
+AGENT_API_KEY_KIND_AWS_BEDROCK = "aws_bedrock"
+AGENT_API_KEY_KIND_AZURE_OPENAI = "azure_openai"
+AGENT_API_KEY_KINDS = (
+    AGENT_API_KEY_KIND_API_KEY,
+    AGENT_API_KEY_KIND_AWS_BEDROCK,
+    AGENT_API_KEY_KIND_AZURE_OPENAI,
+)
+# Typed kinds only — excludes the bare-secret default, which a selection wires
+# through `env_var_name` rather than by referencing the kind directly.
+AGENT_API_KEY_TYPED_KINDS = (
+    AGENT_API_KEY_KIND_AWS_BEDROCK,
+    AGENT_API_KEY_KIND_AZURE_OPENAI,
+)
+
 AGENT_AUTH_SURFACE_LOCAL = "local"
 AGENT_AUTH_SURFACE_CLOUD = "cloud"
 AGENT_AUTH_SURFACES = (AGENT_AUTH_SURFACE_LOCAL, AGENT_AUTH_SURFACE_CLOUD)
@@ -10,9 +32,20 @@ AGENT_AUTH_SURFACES = (AGENT_AUTH_SURFACE_LOCAL, AGENT_AUTH_SURFACE_CLOUD)
 # Auth selections are keyed by harness. The set mirrors the supported cloud
 # agent kinds; validating against it keeps unbounded/junk path params out of the
 # VARCHAR(64) column (an over-length value would otherwise surface as a 500).
-# cursor is intentionally absent: it has no gateway recipe and takes no sources
-# (native only), so no selection row may target it.
-AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok")
+# cursor takes selection rows too — it has no gateway recipe (excluded from
+# AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS below), but its single api_key slot
+# (CURSOR_API_KEY) is a normal selection like any other single-source harness.
+AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok", "cursor")
+
+# Harnesses whose launch supports the gateway (virtual-key) recipe. Lives here
+# (not in server/cloud/agent_gateway/selection_rules.py) so the db/store layer
+# can consult it too without violating the store→server import boundary
+# (check_server_boundaries.py) — the store uses it to skip the disabled
+# gateway revision-marker row for a harness that can never carry one; the
+# validator uses it to reject a gateway source outright. cursor is absent: it
+# has no gateway recipe (agent-auth.md's per-harness recipe table — "typed
+# refusal, no gateway route exists for cursor").
+AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS = ("claude", "codex", "opencode", "grok")
 
 # A selection row is either the gateway (virtual key) or a single direct
 # api_key (a raw provider key bound to an env var). There is no native
@@ -20,6 +53,16 @@ AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok")
 AGENT_AUTH_SOURCE_GATEWAY = "gateway"
 AGENT_AUTH_SOURCE_API_KEY = "api_key"
 AGENT_AUTH_SOURCE_KINDS = (AGENT_AUTH_SOURCE_GATEWAY, AGENT_AUTH_SOURCE_API_KEY)
+
+# The state.json WIRE kind for a rendered typed-vault source (D3 python brief
+# Sec4.1/Sec2). This is NOT a DB `source_kind` -- a typed-vault selection is
+# still persisted as source_kind='api_key' (D1 deliberately did not add a
+# third DB value; selections.py's `_validate_source` still only recognizes
+# AGENT_AUTH_SOURCE_KINDS above). Which wire `kind` a rendered api_key
+# selection gets is decided at RENDER time by the referenced AgentApiKey
+# row's vault `kind` (bare 'api_key' vs. a typed kind) -- never persisted
+# directly.
+AGENT_AUTH_SOURCE_PROVIDER_CONFIG = "provider_config"
 
 # "native" is NOT a selection source_kind — it is the empty-selection state (zero
 # enabled rows == the harness's own CLI login). It exists ONLY as an org-policy
@@ -73,20 +116,21 @@ AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY = "registration"
 AGENT_USAGE_EVENT_STATUS_IMPORTED = "imported"
 AGENT_USAGE_EVENT_STATUS_NEEDS_REVIEW = "needs_review"
 
-AGENT_CATALOG_SNAPSHOT_SOURCE_RUNTIME_MIRROR = "runtime-mirror"
-AGENT_CATALOG_SNAPSHOT_SOURCES = (
-    "probe",
-    "seed",
-    "override",
-    AGENT_CATALOG_SNAPSHOT_SOURCE_RUNTIME_MIRROR,
-)
-AGENT_CATALOG_SNAPSHOT_STATUS_ACTIVE = "active"
-AGENT_CATALOG_SNAPSHOT_STATUS_INACTIVE = "inactive"
+# The snapshot table has no ``source`` column (model-catalog.md §Storage): every
+# row is a machine observation the Worker uploaded, so there is nothing to
+# discriminate. Only the soft-versioning status survives.
+AGENT_MODEL_SNAPSHOT_STATUS_ACTIVE = "active"
+AGENT_MODEL_SNAPSHOT_STATUS_INACTIVE = "inactive"
 
 # harness_kind is a free-form slug (selections accept arbitrary kinds),
 # but it is bounded to keep snapshot cardinality sane and to stay within the
 # String(64) column (an over-long value would otherwise 500 on insert).
 AGENT_HARNESS_KIND_MAX_LENGTH = 64
+
+# The machine-document schema version the ingest route accepts
+# (model-catalog.md §Wire schema): schemaVersion 2 is the composed observation
+# — one entry per harness, no per-context map, no fingerprint.
+AGENT_MODEL_SNAPSHOT_SCHEMA_VERSION = 2
 
 AGENT_USAGE_IMPORT_CURSOR_ID = "default"
 

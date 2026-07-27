@@ -43,7 +43,7 @@ implementation such as Tauri, browser auth transport, and vendor bootstrap.
 
 ```text
 apps/packages/
-  design/src/        tokens.ts · css/{dom.css,product.css,desktop.css} · react-native.ts
+  design/src/        tokens.ts · css/{product.css,desktop.css} · react-native.ts
   ui/src/            primitives/ · patterns/ · icons/ · lib/ · utils/ · overlays/
   product-domain/src/<domain>/
   product-ui/src/    patterns/ · <domain>/<surface>/
@@ -73,7 +73,7 @@ Mobile: `design/react-native` + `product-domain` + SDK only. **Never**
 The shared tier of app `styles/` + tokens. Owns serializable design values and generated CSS — tokens, DOM CSS, React Native-safe token values.
 
 ```text
-design/src/tokens.ts · css/{dom.css,product.css,desktop.css} · react-native.ts · dist/theme.css
+design/src/tokens.ts · css/{product.css,desktop.css} · react-native.ts · dist/theme.css
 ```
 
 Must not hold product copy, product status colors, route concepts, or component behavior. Imports token source + build tooling only — never React, app code, SDK clients, stores, providers, query clients, or product concepts.

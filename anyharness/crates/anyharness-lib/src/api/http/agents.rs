@@ -26,6 +26,7 @@ use crate::domains::agents::auth::login_terminal::{
     get_agent_login_terminal as get_agent_login_terminal_session,
     start_agent_login_terminal_session,
 };
+use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 
 #[utoipa::path(
     get,
@@ -88,6 +89,16 @@ pub async fn install_agent(
         .agent_runtime
         .install_agent(&kind, install_request(req))
         .await?;
+    // Install-completed poke (model-catalog.md, "The snapshot reconciler": "both
+    // places an install finishes"). A snapshot is version-bound, so a fresh install
+    // is exactly when a harness's entries can have gone stale — and onboarding's
+    // "checking for latest models" step is this poke rendered, not a separate
+    // trigger. Fire-and-forget, after the response body is already decided.
+    ModelSnapshotService::poke_optional(
+        &state.automatic_poke_engine,
+        &kind,
+        PokeReason::InstallCompleted,
+    );
     Ok(Json(InstallAgentResponse {
         agent: to_summary(&outcome.agent, None),
         already_installed: outcome.already_installed,
@@ -195,7 +206,21 @@ pub async fn close_agent_login_terminal(
     State(state): State<AppState>,
     Path(terminal_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    // Read the record before closing: the poke below needs the harness kind, and
+    // the close consumes the terminal.
+    let terminal =
+        get_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service).await?;
     close_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service).await?;
+    // Login-terminal-closed poke (model-catalog.md, "Freshness is event-driven"):
+    // a native login performed through the product's login terminal changes the
+    // harness's own credentials, so terminal exit pokes the probe. Fire-and-forget
+    // after the close is already decided. (A login performed entirely outside the
+    // product has no event; the unconditional startup pass is the safety net.)
+    ModelSnapshotService::poke_optional(
+        &state.automatic_poke_engine,
+        &terminal.kind,
+        PokeReason::LoginTerminal,
+    );
     Ok(StatusCode::NO_CONTENT)
 }
 

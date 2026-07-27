@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db import session_ops as db_session
 from proliferate.server.cloud.agent_gateway.enrollment import (
     ensure_org_enrollment,
-    ensure_user_enrollment,
+    ensure_signup_enrollment,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,8 +27,10 @@ type AfterCommit = Callable[[], Coroutine[None, None, None]]
 
 
 async def _enroll_user(user_id: UUID) -> None:
+    # Org-only shape (model-gateway.md §Account model): the user is enrolled
+    # into their default org; no personal-subject enrollment is created.
     async with db_session.open_async_transaction() as db:
-        await ensure_user_enrollment(db, user_id)
+        await ensure_signup_enrollment(db, user_id)
 
 
 async def _enroll_organization(organization_id: UUID, user_id: UUID) -> None:
@@ -78,12 +80,13 @@ def schedule_agent_gateway_user_enrollment(
     *,
     db: AsyncSession | None = None,
 ) -> None:
-    """Schedule enrollment for a user.
+    """Schedule org-only enrollment for a user (into their default org).
 
     Passing the request ``db`` defers scheduling until after its transaction
-    commits so the enrollment task (own session) can see a freshly created
-    user row; rows that never commit never enroll. Without a ``db`` the task
-    starts immediately (customerio-scheduler pattern).
+    commits so the enrollment task (own session) can see the freshly created
+    user row AND the default org minted alongside it; rows that never commit
+    never enroll. Without a ``db`` the task starts immediately
+    (customerio-scheduler pattern).
     """
     name = f"agent-gateway-enroll-user-{user_id}"
     if db is None:

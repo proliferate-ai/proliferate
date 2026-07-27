@@ -62,11 +62,9 @@ config + single-process lock + local SQLite
   -> after each successful heartbeat, repair that fresh gateway credential if
      a revoked predecessor overwrote the shared file
   -> use desiredVersions to converge, in order:
-       agent catalog (DELETION PENDING: binary-only transport ruling —
-         the catalog ships inside the runtime binary; catalog_sync.rs and
-         the heartbeat catalog version are scheduled for removal, see
-         agent-distribution.md Current gaps)
-       AnyHarness binary:
+       AnyHarness binary (which IS the agent-catalog update: the catalog
+         ships inside the runtime binary — binary-only transport, see
+         agent-distribution.md "Convergence"):
          supervisor-owned target -> write a mailbox update request
          legacy target (when enabled) -> in-place swap (deprecated)
        Worker binary:
@@ -94,7 +92,6 @@ src/
 ├── process_lock.rs
 ├── versions.rs
 ├── integration_gateway.rs
-├── catalog_sync.rs
 ├── self_update.rs
 ├── anyharness_update.rs
 ├── supervisor_bridge.rs
@@ -128,7 +125,6 @@ inventory, or materialization subsystems.
 | `main.rs`, `runtime.rs` | CLI entry, dependency construction, one heartbeat-and-convergence loop | Product workflows or background task supervision | [Runtime](guides/runtime.md) |
 | `identity/**` | Enrollment request, durable Worker credential, fingerprint | Sandbox identity, command identity, re-enrollment policy | [Identity](guides/identity.md) |
 | `lifecycle/heartbeat.rs` | Heartbeat cadence, request, and acknowledgement | Update execution or server-side liveness policy | [Lifecycle](guides/lifecycle.md) |
-| `catalog_sync.rs` | Compare catalog versions, fetch from Cloud, push to AnyHarness — **deletion pending**: the catalog is binary-only ([agent-distribution.md](../../platforms/product/agent-distribution.md) Current gaps); do not extend | General AnyHarness access | [Lifecycle](guides/lifecycle.md), [Clients](guides/clients.md) |
 | `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target | [Lifecycle](guides/lifecycle.md) |
 | `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target | [Lifecycle](guides/lifecycle.md) |
 | `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](guides/lifecycle.md) |
@@ -165,15 +161,11 @@ main
 runtime
   -> process_lock + store + cloud_client + identity
   -> lifecycle/heartbeat
-  -> catalog_sync
   -> anyharness_update
   -> self_update
 
 identity
   -> cloud_client (enroll) + store (durable identity) + config sanitation
-
-catalog_sync
-  -> cloud_client (catalog fetch) + narrow direct AnyHarness GET/PUT
 
 self_update / anyharness_update
   -> heartbeat response + cloud_client artifact downloads
@@ -190,9 +182,8 @@ store and cloud_client
   -> root support only
 ```
 
-`catalog_sync.rs` currently owns its narrow AnyHarness GET/PUT calls directly,
-and `anyharness_update.rs` owns its health probe. There is no general
-`anyharness_client` boundary in this crate.
+`anyharness_update.rs` owns its narrow AnyHarness health probe directly. There
+is no general `anyharness_client` boundary in this crate.
 
 ## Hard Rules
 

@@ -155,8 +155,8 @@ describe("pending empty-session creation", () => {
       type: "about:blank",
       title: "Model is not available",
       status: 400,
-      detail: "caller-facing gated-model detail",
-      code: "SESSION_MODEL_GATED",
+      detail: "caller-facing unsupported-model detail",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance: VALID_RUNTIME_INCIDENT_RECEIPT,
     });
     const wrappedError = Object.assign(new Error("resume failed"), {
@@ -190,7 +190,7 @@ describe("pending empty-session creation", () => {
       title: "Model is not available",
       status: 400,
       detail: rawDetail,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance,
     });
     const wrappedError = Object.assign(new Error("resume failed"), {
@@ -208,9 +208,9 @@ describe("pending empty-session creation", () => {
     const [capturedError, captureContext] = captureException.mock.calls[0];
     expect(capturedError).toMatchObject({
       name: "AnyHarnessError",
-      message: "AnyHarness request failed (SESSION_MODEL_GATED)",
+      message: "AnyHarness request failed (SESSION_MODEL_UNSUPPORTED)",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
     });
     expect(capturedError).not.toBe(wrappedError);
     expect("problem" in capturedError).toBe(false);
