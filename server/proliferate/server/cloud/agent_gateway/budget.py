@@ -22,7 +22,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.agent_gateway import AGENT_GATEWAY_SUBJECT_KIND_USER
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
@@ -50,19 +49,17 @@ _ZERO = Decimal("0")
 AGENT_GATEWAY_CREDITS_EXHAUSTED_CODE = "agent_gateway_credits_exhausted"
 
 
-def _explicit_default_budget_configured(subject_kind: str) -> bool:
+def _explicit_default_budget_configured() -> bool:
     """Whether the deployment configured a real (positive) default team budget.
 
-    Both budget settings default to a value LiteLLM would read as *uncapped*
-    ("0"/empty), so only a strictly positive configured value counts as a
-    funding source. This is the one non-ledger way a subject can be funded:
-    a deployment that runs no credit ledger at all caps spend with the
-    configured LiteLLM team budget instead.
+    The org budget setting defaults to a value LiteLLM would read as
+    *uncapped* ("0"/empty), so only a strictly positive configured value
+    counts as a funding source. This is the one non-ledger way a subject can
+    be funded: a deployment that runs no credit ledger at all caps spend with
+    the configured LiteLLM team budget instead. Orgs are the only billing
+    subject, so there is exactly one such setting.
     """
-    if subject_kind == AGENT_GATEWAY_SUBJECT_KIND_USER:
-        raw = settings.agent_gateway_default_user_budget_usd.strip()
-    else:
-        raw = settings.agent_gateway_default_org_budget_usd.strip()
+    raw = settings.agent_gateway_default_org_budget_usd.strip()
     if not raw:
         return False
     try:
@@ -79,28 +76,22 @@ async def get_gateway_enrollment_for_user(
 
     v1 payer law (model-gateway.md §Account model): the payer is the user's
     DEFAULT org — the org their identity was placed into at signup, i.e. the
-    earliest active membership — always. There is no funding guard and no
-    funded-org fallback: whether the resolved subject is funded is enforced
-    at the budget layer (:func:`is_gateway_budget_available`, plus the
-    LiteLLM team-budget mirror flooring unfunded subjects at the exhausted
-    floor), never by re-routing payment to a different subject.
-
-    A user whose default org has no org enrollment row yet still resolves
-    their personal enrollment, as does an org-less user. That personal shape
-    is pre-migration residue: deleting it and re-parenting personal
-    enrollments onto the default org is the org-only unification (D-2), not
-    this resolver's concern.
+    earliest active membership — always, unconditionally. There is no funding
+    guard, no funded-org fallback, and no personal-enrollment fallback (the
+    D-3 migration re-parented all pre-D-2 personal rows onto each user's
+    default org and retired them): whether the resolved subject is funded is
+    enforced at the budget layer (:func:`is_gateway_budget_available`, plus
+    the LiteLLM team-budget mirror flooring unfunded subjects at the
+    exhausted floor), never by re-routing payment to a different subject.
     """
     default_org = await organization_store.get_default_organization_for_user(db, user_id)
-    if default_org is not None:
-        org_enrollment = await agent_gateway_store.get_enrollment_for_organization(
-            db,
-            organization_id=default_org.organization.id,
-            user_id=user_id,
-        )
-        if org_enrollment is not None:
-            return org_enrollment
-    return await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    if default_org is None:
+        return None
+    return await agent_gateway_store.get_enrollment_for_organization(
+        db,
+        organization_id=default_org.organization.id,
+        user_id=user_id,
+    )
 
 
 async def is_gateway_budget_available(db: AsyncSession, user_id: UUID) -> bool:
@@ -131,5 +122,5 @@ async def is_gateway_budget_available(db: AsyncSession, user_id: UUID) -> bool:
         enrollment.billing_subject_id,
     )
     if balance.granted_usd <= _ZERO:
-        return _explicit_default_budget_configured(enrollment.subject_kind)
+        return _explicit_default_budget_configured()
     return balance.remaining_usd > _ZERO

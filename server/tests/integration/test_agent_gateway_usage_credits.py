@@ -1,4 +1,10 @@
-"""Usage importer + LLM credit integration tests (real Postgres, stubbed LiteLLM)."""
+"""Usage importer + LLM credit integration tests (real Postgres, stubbed LiteLLM).
+
+Signups are org-only (model-gateway.md §Account model): the enrolled subject
+is the user's default org, the free signup grant lands on that org's billing
+subject, and spend imports debit the org ledger. Proof ledger: D2 (one free
+grant per GitHub identity, ever; creating orgs mints nothing) lives here.
+"""
 
 from __future__ import annotations
 
@@ -14,13 +20,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.models.auth import AuthIdentity, User
 from proliferate.db.models.cloud.agent_gateway import AgentLlmUsageEvent
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
+from proliferate.db.store.billing_subjects import (
+    ensure_organization_billing_subject,
+    ensure_personal_billing_subject,
+)
 from proliferate.integrations.litellm import LiteLLMSpendLogEntry
 from proliferate.server.cloud.agent_gateway import enrollment as enrollment_service
 from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
-from proliferate.server.cloud.agent_gateway.enrollment import ensure_user_enrollment
-from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free_credit_grant
+from proliferate.server.cloud.agent_gateway.enrollment import (
+    ensure_org_enrollment,
+    ensure_signup_enrollment,
+)
+from proliferate.server.cloud.agent_gateway.free_credits import ensure_signup_free_credit_grant
 from proliferate.server.cloud.agent_gateway.usage_import import (
     is_gateway_budget_available,
     run_usage_import,
@@ -40,18 +54,51 @@ async def _create_user(db_session: AsyncSession) -> uuid.UUID:
     return user.id
 
 
-async def _link_github_identity(db_session: AsyncSession, *, user_id: uuid.UUID) -> None:
-    subject = f"gh-{uuid.uuid4().hex[:12]}"
+async def _link_github_identity(
+    db_session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    provider_subject: str | None = None,
+) -> str:
+    subject = provider_subject or f"gh-{uuid.uuid4().hex[:12]}"
     db_session.add(
         AuthIdentity(
             user_id=user_id,
             provider="github",
             provider_subject=subject,
-            email=f"{subject}@example.com",
+            email=f"gh-{uuid.uuid4().hex[:8]}@example.com",
             email_verified=True,
         )
     )
     await db_session.flush()
+    return subject
+
+
+async def _place_in_org(db_session: AsyncSession, *, user_id: uuid.UUID) -> uuid.UUID:
+    """Create an org with an active membership for the user (signup placement)."""
+    organization = Organization(name=f"Usage Org {uuid.uuid4().hex[:6]}")
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=user_id,
+            role="member",
+            status="active",
+        )
+    )
+    await db_session.flush()
+    return organization.id
+
+
+async def _signup_enrollment(
+    db_session: AsyncSession, user_id: uuid.UUID
+) -> AgentGatewayEnrollmentRecord:
+    """The org-only signup shape: default org placement + enrollment."""
+    await _place_in_org(db_session, user_id=user_id)
+    enrollment = await ensure_signup_enrollment(db_session, user_id)
+    assert enrollment is not None
+    return enrollment
 
 
 async def _claude_key_id(db_session: AsyncSession, enrollment_id: uuid.UUID) -> str:
@@ -191,23 +238,29 @@ def _spend_row(
 
 
 @pytest.mark.asyncio
-async def test_free_credit_granted_once_and_deduped(
+async def test_free_credit_lands_on_default_org_once_and_deduped(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The signup grant lands on the default org's billing subject, never the
+    personal one, and repeated passes never double-credit."""
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
+    org_id = await _place_in_org(db_session, user_id=user_id)
 
-    first = await ensure_user_free_credit_grant(db_session, user_id)
-    second = await ensure_user_free_credit_grant(db_session, user_id)
+    first = await ensure_signup_free_credit_grant(db_session, user_id)
+    second = await ensure_signup_free_credit_grant(db_session, user_id)
     assert first is True
     assert second is True  # idempotent: returns the existing grant
 
-    subject = await ensure_personal_billing_subject(db_session, user_id)
-    balance = await store.get_remaining_credit_usd(db_session, subject.id)
+    org_subject = await ensure_organization_billing_subject(db_session, org_id)
+    balance = await store.get_remaining_credit_usd(db_session, org_subject.id)
     assert balance.granted_usd == Decimal("5")  # not doubled
     assert balance.remaining_usd == Decimal("5")
+    personal_subject = await ensure_personal_billing_subject(db_session, user_id)
+    personal_balance = await store.get_remaining_credit_usd(db_session, personal_subject.id)
+    assert personal_balance.granted_usd == Decimal("0")
 
 
 @pytest.mark.asyncio
@@ -217,9 +270,154 @@ async def test_free_credit_skipped_without_github_identity(
 ) -> None:
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
     user_id = await _create_user(db_session)
+    await _place_in_org(db_session, user_id=user_id)
 
-    granted = await ensure_user_free_credit_grant(db_session, user_id)
+    granted = await ensure_signup_free_credit_grant(db_session, user_id)
     assert granted is False
+
+
+@pytest.mark.asyncio
+async def test_free_credit_skipped_without_default_org(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No default org yet → nothing to land the grant on; nothing personal
+    is minted in its place."""
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+
+    granted = await ensure_signup_free_credit_grant(db_session, user_id)
+    assert granted is False
+    personal_subject = await ensure_personal_billing_subject(db_session, user_id)
+    balance = await store.get_remaining_credit_usd(db_session, personal_subject.id)
+    assert balance.granted_usd == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_d2_second_account_on_same_github_identity_gets_no_grant(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D2 (half 1): one grant per GitHub identity, ever.
+
+    A second product account on the same GitHub identity (the human unlinked
+    it from the first account and linked it to a fresh one) — its own default
+    org and all — reserves nothing: the ``free_cloud_allocation`` row already
+    belongs to the first account's default-org subject.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    first_user = await _create_user(db_session)
+    github_subject = await _link_github_identity(db_session, user_id=first_user)
+    first_org = await _place_in_org(db_session, user_id=first_user)
+    assert await ensure_signup_free_credit_grant(db_session, first_user) is True
+
+    second_user = await _create_user(db_session)
+    # Move the identity: AuthIdentity is unique per (provider, subject), so a
+    # "second account on the same identity" is a re-linked row.
+    identity = (
+        await db_session.execute(
+            select(AuthIdentity).where(
+                AuthIdentity.provider == "github",
+                AuthIdentity.provider_subject == github_subject,
+            )
+        )
+    ).scalar_one()
+    identity.user_id = second_user
+    await db_session.flush()
+    second_org = await _place_in_org(db_session, user_id=second_user)
+
+    assert await ensure_signup_free_credit_grant(db_session, second_user) is False
+    second_subject = await ensure_organization_billing_subject(db_session, second_org)
+    balance = await store.get_remaining_credit_usd(db_session, second_subject.id)
+    assert balance.granted_usd == Decimal("0")
+    first_subject = await ensure_organization_billing_subject(db_session, first_org)
+    first_balance = await store.get_remaining_credit_usd(db_session, first_subject.id)
+    assert first_balance.granted_usd == Decimal("5")
+
+
+@pytest.mark.asyncio
+async def test_d2_creating_additional_orgs_mints_nothing(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """D2 (half 2): joining/creating more orgs never mints another grant.
+
+    The member's enrollment into a second org re-runs the deduped grant, but
+    the credit stays on the DEFAULT org's subject: the joining member never
+    brings their free grant into the new org (invite-farming is worthless).
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+    default_org = await _place_in_org(db_session, user_id=user_id)
+    enrollment = await ensure_signup_enrollment(db_session, user_id)
+    assert enrollment is not None
+
+    # The user later creates/joins a second org; its member enrollment runs.
+    later_org = await _place_in_org(db_session, user_id=user_id)
+    await ensure_org_enrollment(db_session, later_org, user_id)
+
+    default_subject = await ensure_organization_billing_subject(db_session, default_org)
+    later_subject = await ensure_organization_billing_subject(db_session, later_org)
+    default_balance = await store.get_remaining_credit_usd(db_session, default_subject.id)
+    later_balance = await store.get_remaining_credit_usd(db_session, later_subject.id)
+    assert default_balance.granted_usd == Decimal("5")  # still exactly one grant
+    assert later_balance.granted_usd == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_pre_migration_personal_claim_blocks_the_org_grant(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An identity that already claimed on a personal subject gets nothing.
+
+    Pre-D-2 users hold their free grant on the personal billing subject; the
+    org-targeted grant must see the claimed allocation and refuse, or the
+    D-3 migration window would double-credit every existing user.
+    """
+    from proliferate.constants.agent_gateway import (
+        AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY,
+        LLM_CREDIT_SOURCE_FREE_SIGNUP,
+    )
+    from proliferate.db.store.billing_subjects import (
+        ensure_agent_gateway_free_credit_allocation,
+    )
+
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+    # Legacy claim: allocation + grant on the personal subject (pre-D-2 shape).
+    personal_subject = await ensure_personal_billing_subject(db_session, user_id)
+    assert (
+        await ensure_agent_gateway_free_credit_allocation(
+            db_session,
+            user_id=user_id,
+            billing_subject=personal_subject,
+            period_key=AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY,
+        )
+        is True
+    )
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=personal_subject.id,
+        user_id=user_id,
+        source=LLM_CREDIT_SOURCE_FREE_SIGNUP,
+        amount_usd=Decimal("5"),
+        source_ref=f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{personal_subject.id}",
+    )
+
+    org_id = await _place_in_org(db_session, user_id=user_id)
+    assert await ensure_signup_free_credit_grant(db_session, user_id) is False
+
+    org_subject = await ensure_organization_billing_subject(db_session, org_id)
+    org_balance = await store.get_remaining_credit_usd(db_session, org_subject.id)
+    assert org_balance.granted_usd == Decimal("0")
+    personal_balance = await store.get_remaining_credit_usd(db_session, personal_subject.id)
+    assert personal_balance.granted_usd == Decimal("5")  # untouched, not doubled
 
 
 @pytest.mark.asyncio
@@ -232,7 +430,7 @@ async def test_importer_is_idempotent_across_overlapping_windows(
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await _signup_enrollment(db_session, user_id)
     assert enrollment.virtual_key_id is None
     claude_key_id = await _claude_key_id(db_session, enrollment.id)
 
@@ -284,7 +482,7 @@ async def test_same_day_spend_is_imported(
     stub_litellm.enforce_date_window = True
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await _signup_enrollment(db_session, user_id)
     assert enrollment.virtual_key_id is None
     claude_key_id = await _claude_key_id(db_session, enrollment.id)
 
@@ -316,7 +514,7 @@ async def test_exhaustion_disables_key_and_flips_budget_status(
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "0.001")
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await _signup_enrollment(db_session, user_id)
     assert enrollment.virtual_key_id is None
     assert enrollment.budget_status == "ok"
     claude_key_id = await _claude_key_id(db_session, enrollment.id)
@@ -343,7 +541,7 @@ async def test_exhaustion_disables_key_and_flips_budget_status(
     # (exhaustion is subject-wide, not per-harness).
     assert set(stub_litellm.disabled_keys) == all_key_ids
 
-    refreshed = await store.get_enrollment_for_user(db_session, user_id=user_id)
+    refreshed = await store.get_enrollment_by_id(db_session, enrollment_id=enrollment.id)
     assert refreshed is not None
     assert refreshed.budget_status == "exhausted"
 
@@ -396,7 +594,7 @@ async def test_is_gateway_budget_available(
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await _signup_enrollment(db_session, user_id)
     assert enrollment.virtual_key_id is None
     claude_key_id = await _claude_key_id(db_session, enrollment.id)
 
@@ -457,7 +655,7 @@ async def test_exhausted_budget_withholds_gateway_key_from_state_render(
     )
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await _signup_enrollment(db_session, user_id)
     assert enrollment.virtual_key_id is None
     claude_key_id = await _claude_key_id(db_session, enrollment.id)
 
@@ -515,7 +713,7 @@ async def test_configured_default_budget_keeps_a_grantless_subject_open(
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     # Free credits disabled: no grant. The explicit default budget funds it.
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "0")
-    monkeypatch.setattr(settings, "agent_gateway_default_user_budget_usd", "5")
+    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "5")
     monkeypatch.setattr(
         settings,
         "agent_gateway_litellm_public_base_url",
@@ -523,7 +721,7 @@ async def test_configured_default_budget_keeps_a_grantless_subject_open(
     )
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await _signup_enrollment(db_session, user_id)
     assert enrollment.virtual_key_id is None
 
     await put_auth_selections(
@@ -560,7 +758,7 @@ async def test_unfunded_subject_fails_closed_at_gate_and_render(
 
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "0")
-    monkeypatch.setattr(settings, "agent_gateway_default_user_budget_usd", "0")
+    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
     monkeypatch.setattr(
         settings,
         "agent_gateway_litellm_public_base_url",
@@ -568,7 +766,7 @@ async def test_unfunded_subject_fails_closed_at_gate_and_render(
     )
     user_id = await _create_user(db_session)
     await _link_github_identity(db_session, user_id=user_id)
-    enrollment = await ensure_user_enrollment(db_session, user_id)
+    enrollment = await _signup_enrollment(db_session, user_id)
     assert enrollment.virtual_key_id is None
 
     await put_auth_selections(

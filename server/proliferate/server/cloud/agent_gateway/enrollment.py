@@ -1,12 +1,23 @@
-"""Eager LiteLLM enrollment for users and organizations.
+"""Eager LiteLLM enrollment under the org-only account model.
 
-Every enrollment ensures the durable row first (idempotent), then — when the
-gateway is enabled — provisions the LiteLLM team, user, and one
-access-group-scoped virtual key per gateway-capable harness_kind (child
-``agent_gateway_enrollment_key`` rows; model-gateway.md §Account model), and
-marks the enrollment row synced. Failures mark the row failed; the backfill
-worker retries pending/failed rows and discovers users created before the
-hooks existed.
+Orgs are the only billing subject (model-gateway.md §Account model): every
+enrollment is a member INTO an org — one LiteLLM team per org
+(``org-<uuid>``), one LiteLLM user per (org, member)
+(``org-<org>-user-<uuid>``, never one global user spanning orgs), and one
+access-group-scoped virtual key per (member, gateway-capable harness) (child
+``agent_gateway_enrollment_key`` rows). Every enrollment ensures the durable
+row first (idempotent), then — when the gateway is enabled — provisions the
+LiteLLM shape and marks the row synced. Failures mark the row failed; the
+backfill worker retries pending/failed rows and discovers active org
+memberships whose enroll hook was lost.
+
+There is no personal enrollment path anymore: the D-3 migration
+(``migration.migrate_legacy_enrollments``) re-parents pre-D-2
+``subject_kind='user'`` residue onto each user's default org and retires the
+personal rows, and the old shared ``user-<uuid>`` LiteLLM identity is not
+mintable anywhere — the sync fingerprints below cover the LiteLLM user
+identity, so an enrollment whose keys were minted under the old scheme drifts
+to ``pending`` and the next pass revokes and re-mints them.
 """
 
 from __future__ import annotations
@@ -23,19 +34,15 @@ from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
     AGENT_AUTH_SURFACE_LOCAL,
-    AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
-    AGENT_GATEWAY_SUBJECT_KIND_USER,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
-from proliferate.db.store.billing_subjects import (
-    ensure_organization_billing_subject,
-    ensure_personal_billing_subject,
-)
+from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
-from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free_credit_grant
+from proliferate.server.cloud.agent_gateway.free_credits import ensure_signup_free_credit_grant
 from proliferate.server.cloud.materialization import service as materialization_service
 
 logger = logging.getLogger(__name__)
@@ -56,49 +63,60 @@ _GATEWAY_CAPABLE_HARNESS_KINDS = AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS
 _EXHAUSTED_BUDGET_FLOOR_USD = Decimal("0.01")
 
 
-def build_sync_fingerprint(*, team_id: str, budget: str, key_alias: str) -> str:
-    """Stable hash of the provisioned LiteLLM state, used to detect drift."""
-    material = f"{team_id}|{budget}|{key_alias}"
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()
-
-
 def build_enrollment_key_set_fingerprint(
     *,
     team_id: str,
+    litellm_user_id: str,
     subject_label: str,
     harness_kinds: Sequence[str],
 ) -> str:
     """Fingerprint of the whole key *set* an enrollment is expected to hold.
 
     This is the parent row's ``sync_fingerprint`` and the value
-    ``ensure_user_enrollment``/``ensure_org_enrollment`` re-compute and compare
-    on every pass: a mismatch flips the row back to ``pending`` so the next
-    sync provisions whatever the set is now supposed to contain. It therefore
-    covers exactly the three inputs that decide the set's shape:
+    ``ensure_org_enrollment`` re-computes and compares on every pass: a
+    mismatch flips the row back to ``pending`` so the next sync provisions
+    whatever the set is now supposed to contain. It therefore covers exactly
+    the inputs that decide the set's shape:
 
     * ``team_id`` — the LiteLLM team the keys live under,
+    * ``litellm_user_id`` — the per-(org, member) LiteLLM identity the keys
+      are minted under. This is what migrates pre-D-2 rows off the old shared
+      ``user-<uuid>`` identity: their stored fingerprint can never match a
+      material that includes ``org-<org>-user-<id>``, so they reopen and the
+      per-key check below revokes and re-mints (model-gateway.md §Account
+      model — "changing the identity scheme flips enrollments to pending"),
     * ``subject_label`` — what every key alias is derived from, and
     * the sorted gateway-capable ``harness_kinds`` — one key per entry.
 
     It deliberately does NOT cover the mirrored team budget. That mirror moves
     with every spend and top-up and is already rewritten by the importer and
     top-up loops; folding it in would re-sync on every login while repairing
-    nothing the sync path owns. Per-key drift (a key's own alias) is tracked
-    separately on each child row via :func:`build_sync_fingerprint`.
+    nothing the sync path owns. Per-key drift is tracked separately on each
+    child row via :func:`build_enrollment_key_fingerprint`.
     """
-    material = f"{team_id}|{subject_label}|{','.join(sorted(harness_kinds))}"
+    material = f"{team_id}|{litellm_user_id}|{subject_label}|{','.join(sorted(harness_kinds))}"
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def build_enrollment_key_fingerprint(*, team_id: str, key_alias: str) -> str:
-    """Fingerprint of one child key's provisioned identity (team + its alias).
+def build_enrollment_key_fingerprint(
+    *,
+    team_id: str,
+    litellm_user_id: str,
+    key_alias: str,
+) -> str:
+    """Fingerprint of one child key's provisioned identity (team, user, alias).
 
     Per-key counterpart of :func:`build_enrollment_key_set_fingerprint`. Every
-    writer of a child row computes it from that row's *current* team and alias
-    — a re-mint must never copy the previous row's value forward, or the stored
-    fingerprint would describe state the key no longer has.
+    writer of a child row computes it from that row's *current* team, LiteLLM
+    user, and alias — a re-mint must never copy the previous row's value
+    forward, or the stored fingerprint would describe state the key no longer
+    has. Because the LiteLLM user is part of the material, a key minted under
+    the pre-migration shared ``user-<uuid>`` identity can never match the
+    expected value, which is what makes ``_sync_one_harness_key`` revoke and
+    re-mint it under ``org-<org>-user-<uuid>``.
     """
-    return build_sync_fingerprint(team_id=team_id, budget="", key_alias=key_alias)
+    material = f"{team_id}|{litellm_user_id}|{key_alias}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def _parse_budget(raw: str) -> float | None:
@@ -170,9 +188,13 @@ async def _mint_virtual_key_idempotent(
 
 
 def enrollment_subject_label(enrollment: AgentGatewayEnrollmentRecord) -> str:
-    if enrollment.user_id is not None:
-        return f"user-{enrollment.user_id}"
-    return f"org-{enrollment.organization_id}"
+    """The (org, member) label every key alias is derived from.
+
+    Org-only (model-gateway.md §Account model): there is no user branch —
+    a pre-migration personal row never reaches an alias computation because
+    the D-3 migration retires it instead of re-syncing it.
+    """
+    return f"org-{enrollment.organization_id}-user-{enrollment.user_id}"
 
 
 def enrollment_key_alias(enrollment: AgentGatewayEnrollmentRecord, harness_kind: str) -> str:
@@ -211,6 +233,7 @@ async def _reopen_if_key_set_drifted(
     db: AsyncSession,
     enrollment: AgentGatewayEnrollmentRecord,
     *,
+    litellm_user_id: str,
     subject_label: str,
 ) -> AgentGatewayEnrollmentRecord:
     """Flip a synced enrollment back to ``pending`` when its key set drifted.
@@ -219,9 +242,11 @@ async def _reopen_if_key_set_drifted(
     write-only column: the expected set is recomputed from today's inputs
     (:func:`build_enrollment_key_set_fingerprint`) and compared to what the row
     was last synced against. A mismatch — a new gateway-capable harness kind,
-    a moved team, a changed subject label — reopens the row so ``_sync_enrollment``
-    mints whatever is missing on the next pass (each per-harness mint is
-    idempotent, so nothing already present is re-minted).
+    a moved team, a changed subject label, a changed LiteLLM identity scheme
+    (the pre-D-2 shared ``user-<uuid>`` user) — reopens the row so
+    ``_sync_enrollment`` provisions whatever the set is now supposed to
+    contain on the next pass (each per-harness mint is idempotent, so a key
+    already minted under the current identity is never re-minted).
 
     A row that never recorded a fingerprint is left alone: pre-fingerprint rows
     would otherwise re-sync forever with nothing to fix.
@@ -232,6 +257,7 @@ async def _reopen_if_key_set_drifted(
         return enrollment
     expected = build_enrollment_key_set_fingerprint(
         team_id=enrollment.litellm_team_id,
+        litellm_user_id=litellm_user_id,
         subject_label=subject_label,
         harness_kinds=_GATEWAY_CAPABLE_HARNESS_KINDS,
     )
@@ -250,42 +276,28 @@ async def _reopen_if_key_set_drifted(
     )
 
 
-async def ensure_user_enrollment(
+async def ensure_signup_enrollment(
     db: AsyncSession,
     user_id: UUID,
-) -> AgentGatewayEnrollmentRecord:
-    subject = await ensure_personal_billing_subject(db, user_id)
-    enrollment = await agent_gateway_store.ensure_enrollment_row(
-        db,
-        subject_kind=AGENT_GATEWAY_SUBJECT_KIND_USER,
-        billing_subject_id=subject.id,
-        user_id=user_id,
-    )
-    if not settings.agent_gateway_enabled:
-        return enrollment
-    # Grant free credits (deduped) before syncing so the LiteLLM budget can
-    # mirror the resulting remaining balance. Runs every pass; idempotent.
-    await ensure_user_free_credit_grant(db, user_id)
-    enrollment = await _reopen_if_key_set_drifted(
-        db,
-        enrollment,
-        subject_label=f"user-{user_id}",
-    )
-    if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
-        return enrollment
-    budget_raw = await _remaining_credit_budget_raw(
-        db,
-        billing_subject_id=subject.id,
-        fallback=settings.agent_gateway_default_user_budget_usd,
-    )
-    return await _sync_enrollment(
-        db,
-        enrollment=enrollment,
-        team_alias=f"user-{user_id}",
-        litellm_user_id=f"user-{user_id}",
-        subject_label=f"user-{user_id}",
-        budget_raw=budget_raw,
-    )
+) -> AgentGatewayEnrollmentRecord | None:
+    """Enroll a (possibly brand-new) user under the org-only account model.
+
+    The signup/onboarding entrypoint: resolves the user's default org (the
+    org their identity was placed into at signup — always created before the
+    enrollment task runs) and enrolls the member into it. No personal-subject
+    enrollment is ever created (model-gateway.md §Account model — orgs are
+    the only billing subject). A user with no active membership yet gets
+    nothing here; the backfill worker's membership discovery enrolls them
+    once a membership exists.
+    """
+    default_org = await organization_store.get_default_organization_for_user(db, user_id)
+    if default_org is None:
+        logger.info(
+            "Agent gateway signup enrollment deferred: user has no default org yet",
+            extra={"user_id": str(user_id)},
+        )
+        return None
+    return await ensure_org_enrollment(db, default_org.organization.id, user_id)
 
 
 async def _remaining_credit_budget_raw(
@@ -325,23 +337,34 @@ async def ensure_org_enrollment(
 ) -> AgentGatewayEnrollmentRecord:
     """Enroll one member under the org team.
 
-    Per spec §2.3 the virtual key is per (user, team): every org member gets
-    their own key under the shared org team/budget so gateway spend is
-    attributable to the member who spent it.
+    The one enrollment shape (model-gateway.md §Account model): the org team
+    (``org-<uuid>``) holds the budget, the member gets a per-(org, member)
+    LiteLLM user (``org-<org>-user-<uuid>`` — never one global user spanning
+    orgs, so any user-scoped LiteLLM control is org-scoped by construction),
+    and every gateway-capable harness gets its own access-group-scoped key
+    under that user, so gateway spend is attributable to the member who
+    spent it.
     """
     subject = await ensure_organization_billing_subject(db, organization_id)
     enrollment = await agent_gateway_store.ensure_enrollment_row(
         db,
-        subject_kind=AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
         billing_subject_id=subject.id,
         organization_id=organization_id,
         user_id=user_id,
     )
     if not settings.agent_gateway_enabled:
         return enrollment
+    # Grant the signup free credit (deduped per GitHub identity) before
+    # syncing so the LiteLLM budget can mirror the resulting balance. The
+    # grant always lands on the member's DEFAULT org's billing subject —
+    # which may not be this org when the member was invited here — so a
+    # joining member never brings their free grant into an org. Runs every
+    # pass; idempotent.
+    await ensure_signup_free_credit_grant(db, user_id)
     enrollment = await _reopen_if_key_set_drifted(
         db,
         enrollment,
+        litellm_user_id=f"org-{organization_id}-user-{user_id}",
         subject_label=f"org-{organization_id}-user-{user_id}",
     )
     if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
@@ -365,10 +388,11 @@ async def ensure_org_enrollment(
         db,
         enrollment=enrollment,
         team_alias=f"org-{organization_id}",
-        # Per-member attribution (spec §2.3): the member's key is minted under
-        # their own LiteLLM user, matching their personal enrollment, so org
-        # spend rows stay attributable to the member who spent them.
-        litellm_user_id=f"user-{user_id}",
+        # One LiteLLM user per (org, member) — `org-<org>-user-<uuid>`
+        # (model-gateway.md §Account model). Never the old shared global
+        # `user-<uuid>`: a user spanning orgs would make any user-scoped
+        # LiteLLM control (per-member caps) leak across org boundaries.
+        litellm_user_id=f"org-{organization_id}-user-{user_id}",
         subject_label=f"org-{organization_id}-user-{user_id}",
         budget_raw=budget_raw,
     )
@@ -387,20 +411,47 @@ async def _sync_one_harness_key(
     """Mint (or leave alone) the (enrollment, harness) child key, idempotently.
 
     Skips the mint entirely when an active child key already exists for this
-    harness — this is the retry-after-partial-failure path, mirroring the
-    pre-B2 single-key behavior of never re-minting a key we already hold.
+    harness *with the expected provisioned identity* — this is the
+    retry-after-partial-failure path, mirroring the pre-B2 single-key behavior
+    of never re-minting a key we already hold. A held key whose fingerprint
+    does not match — minted under a different team, alias, or LiteLLM user
+    (the pre-D-2 shared ``user-<uuid>`` identity) — is revoked on the proxy
+    and re-minted under the current per-(org, member) identity: this is the
+    re-mint half of the fingerprint drift machinery, and per-key granularity
+    means a crash mid-set never re-mints the keys already converted.
     """
+    key_user_id = litellm_user_id or team_alias
+    key_alias = _key_alias(enrollment.id, subject_label, harness_kind)
+    expected_fingerprint = build_enrollment_key_fingerprint(
+        team_id=team_id,
+        litellm_user_id=key_user_id,
+        key_alias=key_alias,
+    )
     existing = await agent_gateway_store.get_active_enrollment_key(
         db,
         enrollment_id=enrollment.id,
         harness_kind=harness_kind,
     )
     if existing is not None and existing.virtual_key_id is not None:
-        return
-    key_alias = _key_alias(enrollment.id, subject_label, harness_kind)
+        if existing.sync_fingerprint == expected_fingerprint:
+            return
+        # Revoke-before-re-mint: the old key (e.g. minted under the shared
+        # `user-<uuid>` LiteLLM user) must stop existing, not just be
+        # forgotten — a client already holding it would otherwise keep using
+        # it forever. `delete_virtual_key` tolerates an already-deleted key
+        # (a retry of a delete whose DB write rolled back), so this can never
+        # wedge the sync.
+        logger.info(
+            "Agent gateway enrollment key identity drifted; revoking and re-minting",
+            extra={
+                "enrollment_id": str(enrollment.id),
+                "harness_kind": harness_kind,
+            },
+        )
+        await litellm.delete_virtual_key(key_or_token_id=existing.virtual_key_id)
     metadata = enrollment_key_metadata(enrollment, harness_kind)
     minted = await _mint_virtual_key_idempotent(
-        user_id=litellm_user_id or team_alias,
+        user_id=key_user_id,
         team_id=team_id,
         alias=key_alias,
         metadata=metadata,
@@ -412,10 +463,7 @@ async def _sync_one_harness_key(
         harness_kind=harness_kind,
         virtual_key_id=minted.token_id or None,
         virtual_key=minted.key,
-        sync_fingerprint=build_enrollment_key_fingerprint(
-            team_id=team_id,
-            key_alias=key_alias,
-        ),
+        sync_fingerprint=expected_fingerprint,
     )
 
 
@@ -504,14 +552,13 @@ async def _sync_enrollment(
             litellm_user_id=litellm_user_id,
             virtual_key_id=None,
             virtual_key=None,
-            # Fingerprints the expected *key set* (team + alias subject +
-            # gateway-capable harness kinds), which is exactly what
-            # `_reopen_if_key_set_drifted` re-computes and compares on the next
-            # pass. The old value hashed the budget and mislabeled
-            # `subject_label` as a `key_alias`, describing neither the set nor
-            # any real alias.
+            # Fingerprints the expected *key set* (team + LiteLLM user
+            # identity + alias subject + gateway-capable harness kinds), which
+            # is exactly what `_reopen_if_key_set_drifted` re-computes and
+            # compares on the next pass.
             sync_fingerprint=build_enrollment_key_set_fingerprint(
                 team_id=team_id,
+                litellm_user_id=litellm_user_id or team_alias,
                 subject_label=subject_label,
                 harness_kinds=_GATEWAY_CAPABLE_HARNESS_KINDS,
             ),
@@ -555,7 +602,16 @@ async def _sync_enrollment(
 
 
 async def backfill_enrollments(db: AsyncSession, *, limit: int = 50) -> int:
-    """Sync pending/failed enrollments and enroll users missing rows.
+    """Sync pending/failed enrollments and enroll memberships missing rows.
+
+    Discovery is org-only: a lost signup/org-join hook leaves an active
+    membership with no enrollment row, which would otherwise never self-heal.
+    There is deliberately no bare-user discovery — enrollment rows are only
+    ever org-shaped, and a user with no membership yet has no org to bill
+    (their default org is created at signup, so this is a transient state).
+    Pre-migration personal rows are never re-synced here: converting them is
+    the D-3 migration's job (``migration.migrate_legacy_enrollments``, which
+    the worker runs ahead of this pass).
 
     Work is bounded to ``limit`` subjects per invocation. Returns the number
     of subjects processed.
@@ -563,29 +619,13 @@ async def backfill_enrollments(db: AsyncSession, *, limit: int = 50) -> int:
     processed = 0
     pending = await agent_gateway_store.list_enrollments_needing_sync(db, limit=limit)
     for enrollment in pending:
-        is_user = enrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_USER
-        if is_user and enrollment.user_id is not None:
-            await ensure_user_enrollment(db, enrollment.user_id)
-        elif enrollment.organization_id is not None and enrollment.user_id is not None:
+        if enrollment.organization_id is not None and enrollment.user_id is not None:
             await ensure_org_enrollment(db, enrollment.organization_id, enrollment.user_id)
         processed += 1
 
     remaining = limit - processed
     if remaining <= 0:
         return processed
-    missing_user_ids = await agent_gateway_store.list_user_ids_missing_enrollment(
-        db,
-        limit=remaining,
-    )
-    for user_id in missing_user_ids:
-        await ensure_user_enrollment(db, user_id)
-        processed += 1
-
-    remaining = limit - processed
-    if remaining <= 0:
-        return processed
-    # Symmetric org recovery: a lost org-join hook leaves an active membership
-    # with no enrollment row, which would otherwise never self-heal.
     missing_memberships = await agent_gateway_store.list_org_memberships_missing_enrollment(
         db,
         limit=remaining,

@@ -9,6 +9,7 @@ full load → render chain of ``build_agent_auth_state`` against a real DB.
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient
@@ -17,10 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.models.cloud.agent_gateway import AgentAuthSelection
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as agent_gateway_store
-from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.agent_gateway import DesiredAuthSource
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import (
+    ensure_organization_billing_subject,
+    ensure_personal_billing_subject,
+)
+from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.materialization.materialize import agent_auth
 from tests.integration.test_agent_gateway_api import _authed_user, _put_selections
@@ -270,6 +276,51 @@ class TestEnsureOnSwitchMaterialization:
         assert sandbox_operations == []
 
 
+async def _org_enrollment_for(
+    db_session: AsyncSession,
+    user_id: uuid.UUID,
+):
+    """Default-org enrollment row for the user (org-only account model).
+
+    Signup already placed the registered user into a default org; the
+    enrollment row must live there or the org-only resolver never finds it.
+    """
+    default_org = await organization_store.get_default_organization_for_user(db_session, user_id)
+    if default_org is not None:
+        organization_id = default_org.organization.id
+    else:
+        organization = Organization(name=f"Materialize Org {uuid.uuid4().hex[:6]}")
+        db_session.add(organization)
+        await db_session.flush()
+        db_session.add(
+            OrganizationMembership(
+                organization_id=organization.id,
+                user_id=user_id,
+                role="member",
+                status="active",
+            )
+        )
+        await db_session.flush()
+        organization_id = organization.id
+    subject = await ensure_organization_billing_subject(db_session, organization_id)
+    # Fund the org: every real default org is funded by the signup grant, and
+    # an unfunded org fails closed (the renderer would withhold the key this
+    # suite is asserting on).
+    await agent_gateway_store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=subject.id,
+        source="admin",
+        amount_usd=Decimal("5"),
+    )
+    enrollment = await agent_gateway_store.ensure_enrollment_row(
+        db_session,
+        billing_subject_id=subject.id,
+        organization_id=organization_id,
+        user_id=user_id,
+    )
+    return organization_id, enrollment
+
+
 class TestBuildAgentAuthStateSyncedGateway:
     """End-to-end: a synced enrollment's cloud gateway selection renders v2.
 
@@ -310,18 +361,12 @@ class TestBuildAgentAuthStateSyncedGateway:
             sources=[DesiredAuthSource(source_kind="gateway")],
         )
 
-        subject = await ensure_personal_billing_subject(db_session, user_id)
-        enrollment = await agent_gateway_store.ensure_enrollment_row(
-            db_session,
-            subject_kind="user",
-            billing_subject_id=subject.id,
-            user_id=user_id,
-        )
+        org_id, enrollment = await _org_enrollment_for(db_session, user_id)
         await agent_gateway_store.mark_enrollment_synced(
             db_session,
             enrollment_id=enrollment.id,
             litellm_team_id="team-1",
-            litellm_user_id=f"user-{user_id}",
+            litellm_user_id=f"org-{org_id}-user-{user_id}",
             virtual_key_id=None,
             virtual_key=None,
             sync_fingerprint="fp-1",
@@ -385,18 +430,12 @@ class TestBuildAgentAuthStateSyncedGateway:
                 sources=[DesiredAuthSource(source_kind="gateway")],
             )
 
-        subject = await ensure_personal_billing_subject(db_session, user_id)
-        enrollment = await agent_gateway_store.ensure_enrollment_row(
-            db_session,
-            subject_kind="user",
-            billing_subject_id=subject.id,
-            user_id=user_id,
-        )
+        org_id, enrollment = await _org_enrollment_for(db_session, user_id)
         await agent_gateway_store.mark_enrollment_synced(
             db_session,
             enrollment_id=enrollment.id,
             litellm_team_id="team-1",
-            litellm_user_id=f"user-{user_id}",
+            litellm_user_id=f"org-{org_id}-user-{user_id}",
             virtual_key_id=None,
             virtual_key=None,
             sync_fingerprint="fp-set",
