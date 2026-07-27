@@ -11,7 +11,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.agent_gateway import AGENT_AUTH_HARNESS_KINDS, LLM_CREDIT_SOURCE_ADMIN
+from proliferate.constants.agent_gateway import (
+    AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
+    LLM_CREDIT_SOURCE_ADMIN,
+)
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import (
     AgentGatewayEnrollment,
@@ -176,12 +179,14 @@ async def test_user_enrollment_syncs_against_gateway(
     assert enrollment.virtual_key_id is None
     assert enrollment.sync_fingerprint is not None
     assert f"user-{user_id}" in stub_litellm.users
-    assert len(stub_litellm.minted) == len(AGENT_AUTH_HARNESS_KINDS)
+    assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
 
     enrollment_keys = await store.list_active_enrollment_keys(
         db_session, enrollment_id=enrollment.id
     )
-    assert {key.harness_kind for key in enrollment_keys} == set(AGENT_AUTH_HARNESS_KINDS)
+    assert {key.harness_kind for key in enrollment_keys} == set(
+        AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS
+    )
     for enrollment_key in enrollment_keys:
         minted = next(
             record
@@ -206,7 +211,7 @@ async def test_user_enrollment_syncs_against_gateway(
 
     again = await ensure_user_enrollment(db_session, user_id)
     assert again.id == enrollment.id
-    assert len(stub_litellm.minted) == len(AGENT_AUTH_HARNESS_KINDS)
+    assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
 
 
 @pytest.mark.asyncio
@@ -306,7 +311,7 @@ async def test_org_enrollment_is_per_member(
     assert first_enrollment.virtual_key_id is None
     assert second_enrollment.virtual_key_id is None
     assert first_enrollment.litellm_team_id == second_enrollment.litellm_team_id
-    assert len(stub_litellm.minted) == 2 * len(AGENT_AUTH_HARNESS_KINDS)
+    assert len(stub_litellm.minted) == 2 * len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
 
     first_keys = await store.list_active_enrollment_keys(
         db_session, enrollment_id=first_enrollment.id
@@ -337,7 +342,7 @@ async def test_user_enrollment_recovers_orphaned_key_on_retry(
 
     enrollment = await ensure_user_enrollment(db_session, user_id)
     assert enrollment.sync_status == "synced"
-    assert len(stub_litellm.minted) == len(AGENT_AUTH_HARNESS_KINDS)
+    assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
     claude_key = await store.get_active_enrollment_key(
         db_session, enrollment_id=enrollment.id, harness_kind="claude"
     )
@@ -369,7 +374,7 @@ async def test_user_enrollment_recovers_orphaned_key_on_retry(
     # 400) for "claude" only — the other three harnesses' keys are untouched.
     retried = await ensure_user_enrollment(db_session, user_id)
     assert retried.sync_status == "synced"
-    assert len(stub_litellm.minted) == len(AGENT_AUTH_HARNESS_KINDS) + 1
+    assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS) + 1
     assert orphan_alias in stub_litellm.deleted_aliases
     # Exactly one live key remains under the deterministic alias.
     assert orphan_alias in stub_litellm.live_aliases

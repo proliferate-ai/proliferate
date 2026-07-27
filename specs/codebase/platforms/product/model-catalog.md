@@ -756,10 +756,9 @@ sqlite table) — its surviving pure logic (`native_default_model`,
 relocated from the legacy route) now lives in
 [catalog/projection.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/projection.rs).
 Still pending: the `gatewayPolicy` seed fallback as a SERVING tier
-(agent-distribution gap) and the frontend
-[useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
-polling hook, whose justification erodes now that the route it polls reads
-the snapshot (C-track follow-up).
+(agent-distribution gap). The frontend `useGatewayCatalogMirrorSync`
+polling hook is already gone — the route cutover deleted it once the
+route it polled read the snapshot.
 
 Two pieces of that chain deliberately survive, and both are materialization
 rather than observation. `probe_gateway_models`' tolerant `GET /v1/models` fetch
@@ -817,8 +816,8 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       Two consumers regress for the length of the window: the settings **All
       Models** tab shows the seed list with no probe freshness, and the
       desktop→cloud **mirror push**
-      ([gateway-catalog-mirror.ts](../../../../apps/packages/product-client/src/lib/domain/agents/gateway-catalog-mirror.ts)
-      pushes only `source === "probe"`) stops, so machineless surfaces keep
+      (`gateway-catalog-mirror.ts`, since deleted by the route cutover,
+      pushed only `source === "probe"`) stops, so machineless surfaces keep
       serving whatever they last received. The window closes when this route's
       consumers move to the snapshot route: the mirror consumer is **deleted** by
       the route cutover and the snapshot re-key, and the All Models tab is
@@ -853,16 +852,13 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       (404 if not) before it will probe. A read-only or not-yet-installed
       runtime that could refresh before A9 now gets a typed rejection
       instead — the OpenAPI doc for the route lists the new response
-      codes (404/409/502) but not this reasoning, hence this note. Two
-      pieces remain, both TODO: the `gatewayPolicy` seed fallback (still
+      codes (404/409/502) but not this reasoning, hence this note. One
+      piece remains, TODO: the `gatewayPolicy` seed fallback (still
       consumed by `gateway_plan.rs`'s pre-probe floor and the legacy
       route's own pre-probe floor — leaves when the catalog-side bullet
-      above does), and the 60-second
-      [useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
-      poll, whose only real justification (keeping the cloud mirror fed
-      while the runtime-side probe was gateway-only) is gone now that the
-      route it polls is snapshot-backed — a C-track follow-up, not touched
-      by this Rust change.
+      above does). The 60-second `useGatewayCatalogMirrorSync` poll is
+      gone — the route cutover deleted it once the route it polled
+      became snapshot-backed.
 - [ ] Staleness UI for the local/native/api_key routes and the no-runtime
       cloud picker: the runtime-gateway path now polls
       `GET /v1/agents/{kind}/model-snapshot` (A7's route) and renders
