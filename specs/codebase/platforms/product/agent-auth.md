@@ -211,10 +211,12 @@ Document laws:
   dead source omitted — and a launch that then resolves zero usable
   sources for a still-selected route is refused with a typed error. A
   selection never silently degrades to the user's personal credentials.
-- **`revision` is monotonic and the write guard.** The runtime rejects a
-  pushed document whose revision is lower than the persisted one and
-  accepts equal revisions as content-authoritative (key rotation without
-  a selection change)
+- **`revision` is a backstop, not the mechanism.** Correctness of delivery
+  lives in serialized, latest-wins pushes and the acknowledgement below;
+  change detection is the content fingerprint. The revision has exactly one
+  job: the runtime rejects a *delayed, out-of-order* push whose revision is
+  lower than the persisted one, and accepts equal revisions as
+  content-authoritative (key rotation without a selection change)
   ([state.rs `apply_state_file`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)).
 - **`issuing_server_origin` is the server-switch guard.** The desktop
   stamps the document with the origin it fetched from; the runtime
@@ -226,6 +228,41 @@ Document laws:
   A desktop repointed at a different control plane can never inject the
   abandoned server's gateway key.
 
+### Applied means acknowledged
+
+An auth change is not *real* until the target runtime has confirmed the
+applied document, and the UI says so:
+
+- **Pending → applied.** A selection write shows as *pending* on its surface
+  until the runtime acknowledges the applied `state.json`. A failed delivery
+  is a visible pending state — never a silently stale runtime. The
+  acknowledgement is also the trigger for the model-catalog probe
+  ([model-catalog.md](model-catalog.md)'s auth-applied event), so the picker
+  refreshes itself the moment the new world is real.
+- **A cloud switch ensures the sandbox.** A `cloud`-surface selection write
+  ensures the user's sandbox (provision-or-wake — always possible, since
+  cloud auth editing sits behind the provisioning onboarding), materializes
+  the document into it, and completes on the runtime's ack. The old
+  "no-op if the sandbox has not booted" branch remains only for the
+  never-provisioned case, which bootstrap covers.
+- **Latest wins.** Rapid switches coalesce: the delivery pushes the latest
+  rendered document, never replaying intermediates (the desktop hook's
+  serialized operation queue; the cloud scheduler's after-commit read of
+  committed truth).
+- **Enrollment sync pokes both surfaces.** An enrollment reaching `synced`
+  re-materializes cloud *and* invalidates the local-surface state so the
+  desktop re-pulls — a state pulled before sync completed (gateway source
+  dropped as unsatisfiable) must not persist until the next unrelated
+  mutation.
+- **Running sessions are offered a restart.** Auth applies at launch only,
+  so running sessions keep the old world — including billing the old route.
+  After the ack, the surface shows a modal — *"Restart running sessions on
+  old auth?"* / **Restart now** / **No** — scoped to running sessions of the
+  switched harness on the switched surface. Restart is an in-place relaunch
+  (transcript kept; the resume path re-runs route_auth and the readiness
+  gate). Declining leaves the sessions to run out their lives on the old
+  auth.
+
 ### Cloud delivery
 
 The materialization worker writes the file directly into the user's
@@ -236,7 +273,8 @@ sandbox
   the standard materialization steps
   ([materialize/sandbox.py](../../../../server/proliferate/server/cloud/materialization/materialize/sandbox.py))
   — so a fresh sandbox has the document before its first session. After
-  that, on every auth-relevant event: a selection write, an enrollment
+  that, on every auth-relevant event: a selection write (which ensures the
+  sandbox, per the acknowledgement contract above), an enrollment
   reaching `synced`, and a top-up reactivating an exhausted subject each
   call `schedule_materialize_agent_auth`.
 - **How it runs.** Through the same asynchronous after-commit application
@@ -266,9 +304,18 @@ pushes into its embedded runtime
 
 - **When it runs.** On app start once signed in with a healthy runtime,
   and again whenever an auth mutation (selection PUT, vault
-  create/revoke) invalidates the auth-state query. Sync requires only
-  sign-in and a healthy local runtime — a self-hosted user with no cloud
-  compute still gets gateway and BYOK routes locally.
+  create/revoke) or an enrollment reaching `synced` invalidates the
+  auth-state query. Sync requires only sign-in and a healthy local
+  runtime — a self-hosted user with no cloud compute still gets gateway
+  and BYOK routes locally.
+- **Onboarding blocks the step, never the signup.** Account creation never
+  waits on LiteLLM (enrollment is fire-and-forget at signup). The desktop
+  first-run flow — auto-install, then first-run adoption defaulting the
+  gateway for harnesses without native logins, then this sync loop — is
+  what delivers the first `state.json`, and the onboarding "setting up"
+  step awaits the runtime's ack with a short grace window (~20s) before
+  degrading to a visible pending badge and letting the user proceed. It
+  never hard-blocks.
 - **The loop.** `GET /v1/cloud/agent-auth/state?surface=local` (the same
   renderer as the cloud materializer, scoped to the `local`-surface
   selections) → fingerprint-compare against the last pushed document →
@@ -588,8 +635,31 @@ shape change is made by changing the fixture — which breaks whichever side lag
 
 ## Current gaps
 
-Deltas between this document and `main`, each struck by its follow-up PR:
+Deltas between this document and the integration stack
+(`agents/integration-rc1`), each struck by its follow-up PR:
 
+- [ ] **Delivery is not acknowledged.** No pending→applied UI exists: a
+      selection write renders as done when the server commits, not when the
+      runtime confirms the applied document, and a failed desktop push is a
+      logged warning the user never sees. The whole
+      [Applied means acknowledged](#applied-means-acknowledged) contract —
+      the ack itself, the pending state, and the ack-fired probe — is
+      unimplemented.
+- [ ] **A cloud selection write does not ensure the sandbox.** The
+      materialization task still no-ops when the sandbox is asleep or
+      unprovisioned, so a cloud switch made from web/desktop settings lands
+      only at the next wake; the ensure-on-switch (provision-or-wake)
+      trigger is unimplemented.
+- [ ] **Enrollment sync does not poke the local surface.** Reaching
+      `synced` re-materializes cloud only; a desktop that pulled state
+      before sync completed keeps a keyless document until the next
+      unrelated mutation or app restart.
+- [ ] **No restart offer exists.** Nothing surfaces running sessions after
+      an auth switch; they silently continue (and bill) on the old world
+      with no modal and no way to see it.
+- [ ] **Onboarding has no ack-gated "setting up" step.** First-run adoption
+      fires and the state lands whenever it lands; nothing in onboarding
+      awaits the ack or renders the pending/degraded path.
 - [ ] **Selections cannot yet reference a typed vault entry.** D3's python
       arm built the render half of this gap: `state.json` now has a
       `provider_config` wire source

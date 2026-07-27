@@ -115,12 +115,21 @@ freely-recreatable stateless container.
 
 ## Account model
 
-One LiteLLM [team](https://docs.litellm.ai/docs/proxy/users) per billing
-subject; the budget lives on the team and mirrors the subject's remaining
-credit. Inside the team, one
+**Orgs are the only billing subject.** There is no personal subject and no
+self-pay/company-pay split: a "personal org" is simply the default org
+created at signup that nobody else has joined, and it bills like any other
+org. One law downstream of that: the whole account shape has exactly one
+form.
+
+One LiteLLM [team](https://docs.litellm.ai/docs/proxy/users) per org
+(`org-<uuid>`) — the org's wallet; the budget lives on the team and mirrors
+the org's remaining credit. One LiteLLM user per **(org, member)**
+(`org-<org>-user-<uuid>`) — never one global user spanning orgs, so any
+user-scoped LiteLLM control is org-scoped by construction. Under each
+member's LiteLLM user, one
 [virtual key](https://docs.litellm.ai/docs/proxy/virtual_keys) per
-(subject, harness), each granted its harness's access group by name
-(`{"models": ["claude"]}` at `/key/generate`). The key is the whole
+(member, gateway-capable harness), each granted its harness's access group
+by name (`{"models": ["claude"]}` at `/key/generate`). The key is the whole
 differentiator: one deployment, one public URL, and what a key can see and
 invoke is determined proxy-side by its group grant and team budget.
 
@@ -128,15 +137,28 @@ invoke is determined proxy-side by its group grant and team budget.
   so discovery-based CLIs (grok) see the right list with no client logic.
 - Invoking an out-of-group model returns 403 `key_model_access_denied`.
 - Spend from every key in the team aggregates against the team budget.
-  LiteLLM can enforce further
-  [budget layers](https://docs.litellm.ai/docs/proxy/users)
-  (key, user, team member) simultaneously; only the team layer is used
-  here. When org-wide gateway access arrives (parked until team-wide
-  automations), the expected shape is one team per Proliferate org with
-  per-member keys; whether members get individual caps (LiteLLM
-  team-member budgets, open-source) is unruled. LiteLLM's organizations
+- Per-member, per-harness spend attribution falls out of per-key spend rows
+  for free; charts read our imported ledger, never the proxy.
+- Per-member caps, when wanted, are one call per member — either a LiteLLM
+  team-member budget or a budget on the member's per-org LiteLLM user (the
+  two are equivalent now that users never span orgs). The forbidden shape
+  is a budget on any identity that spans teams. LiteLLM's organizations
   entity above teams is enterprise-licensed and not assumed here.
-- Per-harness spend attribution falls out of per-key spend rows for free.
+
+**Which org pays (v1): the user's default org, always.** Sessions resolve
+the default org's enrollment; there is no per-workspace payer resolution
+and no funded-org fallback logic. Billing a session to the org that owns
+its workspace is the parked end state (it requires the delivered
+`state.json` to carry per-org key material — an agent-auth contract change
+— and is deferred with it).
+
+**An unfunded org fails closed.** An org with no credit grant and no
+explicitly configured budget gets no gateway: the state renderer withholds
+key material and launches refuse with a typed error. No "no ledger means
+unlimited" branch, and never a literal `0` budget handed to LiteLLM (which
+reads 0 as *uncapped*). This is safe because every default org is funded by
+the signup grant; a genuinely unfunded org is an honest "billing not set
+up" state, not a trap.
 
 ### Billing integration
 
@@ -150,26 +172,27 @@ keys:
 
 | LiteLLM entity | Maps to | Owns |
 | --- | --- | --- |
-| team | billing subject | money: pooled budget mirror, overage-uncapped mode, reactivation |
-| user | the person | per-member caps within a team, when org billing needs them |
-| key | (subject, harness) | access: group grant and per-harness spend attribution; never a budget |
+| team | the org | money: pooled budget mirror, overage-uncapped mode, reactivation |
+| user | (org, member) | identity + optional per-member caps, org-scoped by construction |
+| key | (org, member, harness) | access: group grant and spend attribution; never a budget |
 
 Two consequences billing can rely on:
 
-- The gateway's primitives to billing are subject-level: enroll, set
-  budget, disable, reactivate — each fanning out to the subject's N keys
+- The gateway's primitives to billing are org-level: enroll, set budget,
+  disable, reactivate — each fanning out to the org's N member keys
   internally. Billing code never counts keys, so key granularity can
   change without touching billing.
-- Per-member caps, if org billing adopts them, are LiteLLM team-member
-  budgets scoped to the org team — not LiteLLM user-level budgets. The
-  same LiteLLM user spans a member's personal team and org team, so a
-  user-level budget would wrongly bind personal spend against an org cap.
-  Org enrollment already mints each member's key under their own LiteLLM
-  user for attribution, so adding a member cap later is one API call, not
-  a re-enrollment.
+- Credit grants are the only funding interface: the free signup grant
+  (landing on the human's default org, deduped per GitHub identity — one
+  grant per human, and creating orgs mints nothing), top-up grants, and
+  seat-minted grants (paid seats → grants, `source='seat'`, idempotent by
+  `source_ref`; the seat→grant wiring itself belongs to billing's separate
+  pass — this platform only consumes the resulting ledger rows). A joining
+  member never brings their free grant into an org; it stays on their
+  default org forever, which is what keeps invite-farming worthless.
 
-- The credit ledger on the billing subject is authoritative: grants (free
-  credits, top-ups) minus imported spend debits.
+- The credit ledger on the org's billing subject is authoritative: grants
+  (free credits, seats, top-ups) minus imported spend debits.
 - The usage importer pages the proxy's `/spend/logs`, resolves each row's
   virtual key back to an enrollment and billing subject, and writes
   deduped debit rows. After importing it reconciles every affected
@@ -178,23 +201,28 @@ Two consequences billing can rely on:
   closed. Re-enabling happens the same way in reverse when credit
   returns.
 - The LiteLLM team budget mirrors the ledger; it is a backstop against
-  importer lag, not the meter. Capped subjects get their remaining credit
-  as the team budget, floored at a small positive value when exhausted
-  (LiteLLM reads a budget of 0 as uncapped). Subjects with no credit
-  grants run against a configured default budget; for them the mirror is
-  the only cap.
+  importer lag, not the meter. Funded orgs get their remaining credit as
+  the team budget, floored at a small positive value when exhausted
+  (LiteLLM reads a budget of 0 as uncapped). An org with no grants and no
+  explicitly configured budget is not mirrored at a default — it is
+  unfunded, and unfunded fails closed (no key material, typed launch
+  refusal).
 - Overage-enabled subjects get no proxy budget at all: the proxy is
   uncapped for them, and the guardrail is the ledger plus the top-up
   loop. When such a subject drops below the top-up threshold, a Stripe
   charge lands as a new credit grant and reactivates the enrollment
   (keys unblocked, budgets raised).
 
-Enrollment is the idempotent provisioning of this shape for one subject:
-ensure the team (with budget), the LiteLLM user, and the per-harness keys;
-encrypt the raw keys (Fernet) on the enrollment row; track a sync status.
-Virtual keys have no user-facing CRUD anywhere; they exist only through
-enrollment and surface only inside rendered `state.json`. Free-credit
-grants run before sync so the LiteLLM budget mirrors the resulting balance.
+Enrollment is the idempotent provisioning of this shape for one
+(org, member): ensure the org team (with budget), the member's per-org
+LiteLLM user, and the member's per-harness keys; encrypt the raw keys
+(Fernet) on enrollment rows; track a sync status whose fingerprint covers
+the expected key-set shape, so adding a gateway-capable harness (or
+changing the identity scheme) flips enrollments to `pending` and the next
+pass re-mints. Virtual keys have no user-facing CRUD anywhere; they exist
+only through enrollment and surface only inside rendered `state.json`.
+Free-credit grants run before sync so the LiteLLM budget mirrors the
+resulting balance.
 
 ## Control plane vs data plane
 
@@ -298,18 +326,22 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       (`managed-cloud-fixture-smoke-1.ts`, `t3-bill-4.ts`). The code's only
       product-server producer was the server-side catalog prober, which the
       model-catalog re-key deleted.
-- [ ] Which subject pays for an org member is decided by an interim
-      funding-follows-attribution guard, not a ruled policy. A member's org
-      enrollment governs their gateway sessions only when the org billing
-      subject is funded (a positive credit grant, or an explicitly configured
-      non-default org team budget); otherwise resolution falls back to the
-      member's personal enrollment
+- [ ] **The account model is not org-only yet.** Personal enrollments
+      (`subject_kind='user'`, `user-<uuid>` teams) exist beside org rows;
+      the free signup grant lands on a personal billing subject; and both
+      enrollment paths mint the same shared LiteLLM user id
+      (`user-<uuid>`, `enrollment.py`) rather than per-(org, member)
+      identities. The unification: delete the personal subject shape,
+      re-parent existing personal teams onto each user's default org, move
+      grants to the org subject, mint per-org LiteLLM users, and re-mint
+      keys under them (the enrollment fingerprint machinery absorbs the
+      re-mint as ordinary shape drift).
+- [ ] **The interim funding-follows-attribution guard deletes with the
+      unification.** Today a member's org enrollment governs only when the
+      org subject is funded, else the personal enrollment
       ([budget.py](../../../../server/proliferate/server/cloud/agent_gateway/budget.py)
-      `get_gateway_enrollment_for_user`). The guard exists because hosted
-      gives every user a default personal org: routing to an unfunded org
-      subject would make both enforcement walls open at once (no grant means
-      the ledger gate never blocks, and an org team budget of "0" means
-      *uncapped* in LiteLLM), so the member's personal credit would never be
-      consulted. The end state — whether an unfunded org may spend at all,
-      and how a member's personal credit relates to their org's — is a
-      founder ruling still pending.
+      `get_gateway_enrollment_for_user`, including the unstable
+      first-membership-by-org-name choice); under the ruling, sessions
+      always resolve the default org's enrollment, and the guard — plus its
+      "no grant means unlimited" branch — is replaced by the fail-closed
+      unfunded-org law in the body.
