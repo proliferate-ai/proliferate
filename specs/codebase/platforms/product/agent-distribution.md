@@ -134,7 +134,12 @@ triggered by the startup pass on every runtime boot
 walks the supported set and installs whatever the drift planner
 ([`installer/install_policy.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs))
 says is absent or stale. A user
-authenticates harnesses; they never install them. Completed installs
+authenticates harnesses; they never install them. The two carve-outs below
+are one named predicate
+([`installer/auto_install.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs)),
+deliberately not a side effect of the pass's scope: PATH protection must
+outrank every other rule, so it cannot be something a scope change can
+silently remove. Completed installs
 poke the model-snapshot reconciler ([model-catalog.md](model-catalog.md))
 so a newly converged harness re-probes its models without extra wiring.
 Two carve-outs:
@@ -433,14 +438,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       that migrates legacy sandboxes. All of it — plus the
       `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes once
       the fleet is fully supervisor-owned.
-- [ ] Installs are not yet automatic: the startup pass runs an
-      `installed_only` reconcile (`reconcile_installed_when_idle` in
-      [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)
-      hardcodes it), so an absent opencode/grok stays `InstallRequired`
-      until a user clicks install, and session creation rejects a
-      non-`Ready` harness rather than converging it. The auto-install
-      law above (full supported set, PATH and cloud-cursor carve-outs)
-      is not yet implemented.
 - [ ] The `Ready` gate still runs only in `create_session`: resume and
       fork live-starts spawn without re-checking, so credentials revoked
       after a session exists fail downstream at spawn instead of with

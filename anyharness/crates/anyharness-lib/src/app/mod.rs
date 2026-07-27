@@ -207,6 +207,10 @@ impl AppState {
             agent_reconcile_service.clone(),
             agent_seed_store.clone(),
             AgentCatalogService::new(catalog_sync_service.clone()),
+            // Read once, here: the auto-install pass needs the surface for the
+            // cursor-in-cloud carve-out, and reading it at the decision point
+            // would put a process-global read inside the reconcile loop.
+            crate::domains::agents::runtime::RuntimeSurface::from_env(),
         ));
         // Gateway model resolver (spec §2/§3): catalog gatewayPolicy + the
         // sqlite probe store -> the render plane's GatewayModelPlan.

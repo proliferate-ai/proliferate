@@ -45,6 +45,14 @@ class TestRuntimeLaunchEnvExport:
         assert env["ANYHARNESS_RUNTIME_TARGET_ID"] == str(target_id)
         assert env["PROLIFERATE_SANDBOX_ID"] == "e2b-provider-sandbox"
 
+    def test_declares_the_cloud_surface_for_the_auto_install_carve_out(self) -> None:
+        # The runtime's auto-install startup pass needs the surface for exactly one
+        # carve-out: cursor never installs in cloud (login-only, no headless
+        # credential path, so it could never reach `Ready`). Consumed by
+        # `RuntimeSurface::from_env` in anyharness-lib.
+        env = build_runtime_env("tok", anyharness_data_key="key")
+        assert env["ANYHARNESS_RUNTIME_SURFACE"] == "cloud"
+
     def test_exports_pin_when_stamped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("RUNTIME_VERSION", "3.4.5")
         env = build_runtime_env("tok", anyharness_data_key="key")

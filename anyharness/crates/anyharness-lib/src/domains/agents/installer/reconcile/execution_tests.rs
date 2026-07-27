@@ -47,6 +47,7 @@ async fn compatible_admission_reuses_active_job() {
             Vec::new(),
             None,
             None,
+            RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
         .await
@@ -88,6 +89,7 @@ async fn reinstall_request_is_rejected_while_non_reinstall_job_runs() {
             vec![AgentKind::Codex],
             None,
             None,
+            RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
         .await
@@ -157,6 +159,7 @@ async fn empty_registry_job_completes() {
             Vec::new(),
             None,
             None,
+            RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
         .await
@@ -194,6 +197,7 @@ async fn reconcile_job_remains_queued_while_another_disk_writer_runs() {
             vec![AgentKind::Codex],
             None,
             None,
+            RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
         .await
@@ -238,6 +242,7 @@ async fn installed_only_skips_uninstalled_agents() {
             Vec::new(),
             None,
             None,
+            RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
         .await
@@ -300,6 +305,7 @@ async fn full_reconcile_is_rejected_while_installed_only_job_runs() {
             Vec::new(),
             None,
             None,
+            RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
         .await
@@ -347,6 +353,7 @@ async fn installed_only_reuses_in_flight_installed_only_job() {
             Vec::new(),
             None,
             None,
+            RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
         .await
@@ -383,6 +390,7 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
         service.clone(),
         AgentSeedStore::not_configured_dev(),
         catalog.clone(),
+        RuntimeSurface::Local,
     ));
     let active_pin = catalog
         .pin_overrides("codex")
@@ -421,6 +429,7 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
             Vec::new(),
             None,
             Some(catalog.clone()),
+            RuntimeSurface::Local,
             AgentReconcileAdmission::RequireIdle,
         )
         .await
@@ -429,7 +438,7 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
 
     let poke = tokio::spawn({
         let runtime = runtime.clone();
-        async move { runtime.reconcile_installed_when_idle().await }
+        async move { runtime.reconcile_when_idle().await }
     });
 
     drop(writer);
@@ -438,20 +447,31 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
         .expect("poke should admit a post-terminal pass")
         .expect("poke task should complete");
 
+    // A genuinely new job was admitted, at FULL scope, against the active
+    // catalog. We assert admission rather than completion: the startup poke is
+    // now a full-scope pass, so completing it would mean really downloading and
+    // installing every supported harness into this temp home — minutes of
+    // network work in a unit test. The install mechanics have their own coverage;
+    // what belongs here is that the poke survives a busy slot and admits the
+    // right SHAPE of job.
     let fresh = timeout(Duration::from_secs(3), async {
         loop {
             let snapshot = service.snapshot().await;
-            if snapshot.status == AgentReconcileJobStatus::Completed {
+            if snapshot.job_id.as_deref().is_some_and(|id| id != first_id) {
                 return snapshot;
             }
             sleep(Duration::from_millis(10)).await;
         }
     })
     .await
-    .expect("fresh active-catalog pass should complete");
+    .expect("the poke should admit a fresh post-terminal pass");
     assert_ne!(fresh.job_id.as_deref(), Some(first_id.as_str()));
-    assert!(fresh.installed_only);
-    assert!(fresh.agent_kinds.is_empty());
+    assert!(
+        !fresh.installed_only,
+        "the startup poke is FULL scope now (A6): an absent agent must install, \
+         not be skipped as 'installs on demand at session start'"
+    );
+    assert!(fresh.agent_kinds.is_empty(), "the pass covers every kind");
     let job = service.job.lock().await;
     let used_pins = job
         .as_ref()
@@ -463,6 +483,10 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
         used_pins.agent_process_source,
         Some(ResolvedPinSource::Npm { package, .. }) if package == active_package
     ));
+    drop(job);
 
     let _ = std::fs::remove_dir_all(home);
 }
+
+#[path = "surface_threading_tests.rs"]
+mod surface_threading;

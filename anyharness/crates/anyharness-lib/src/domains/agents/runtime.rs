@@ -22,6 +22,42 @@ pub struct AgentRuntime {
     reconcile_service: Arc<AgentReconcileService>,
     seed_store: AgentSeedStore,
     catalog_service: super::catalog::service::AgentCatalogService,
+    surface: RuntimeSurface,
+}
+
+/// Which surface this runtime is serving. The auto-install pass needs it for
+/// exactly one carve-out (agent-distribution.md, "Installation"):
+///
+/// > Cursor never installs in cloud. It is login-only with no headless credential
+/// > path, so a cloud install could never reach `Ready`.
+///
+/// It is a constructor argument rather than an env read at the point of use so the
+/// decision is a pure, testable function of its inputs — the alternative would put
+/// a process-global read inside the reconcile loop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RuntimeSurface {
+    /// Desktop sidecar or a developer's local `anyharness serve`. Every supported
+    /// harness may auto-install.
+    #[default]
+    Local,
+    /// A cloud sandbox. Cursor is excluded (see above); everything else installs.
+    Cloud,
+}
+
+/// The env var the cloud sandbox bootstrap sets to declare its surface
+/// (`server/proliferate/server/cloud/runtime/bootstrap.py`). Absent means local,
+/// which is the safe default: it can only ever ENABLE a cursor auto-install that
+/// then fails to reach `Ready`, never suppress an install a surface needs.
+pub const ANYHARNESS_RUNTIME_SURFACE_ENV: &str = "ANYHARNESS_RUNTIME_SURFACE";
+
+impl RuntimeSurface {
+    /// Read the surface from the process env once, at wiring time.
+    pub fn from_env() -> Self {
+        match std::env::var(ANYHARNESS_RUNTIME_SURFACE_ENV) {
+            Ok(value) if value.trim().eq_ignore_ascii_case("cloud") => Self::Cloud,
+            _ => Self::Local,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -88,12 +124,14 @@ impl AgentRuntime {
         reconcile_service: Arc<AgentReconcileService>,
         seed_store: AgentSeedStore,
         catalog_service: super::catalog::service::AgentCatalogService,
+        surface: RuntimeSurface,
     ) -> Self {
         Self {
             runtime_home,
             reconcile_service,
             seed_store,
             catalog_service,
+            surface,
         }
     }
 
@@ -263,6 +301,7 @@ impl AgentRuntime {
                 requested_agent_kinds,
                 Some(self.seed_store.clone()),
                 Some(self.catalog_service.clone()),
+                self.surface,
                 AgentReconcileAdmission::ReuseCompatible,
             )
             .await?)
@@ -270,9 +309,22 @@ impl AgentRuntime {
 
     /// Internal startup/catalog pokes must not disappear merely because a
     /// foreground scoped update owns the one observable reconcile slot. Wait
-    /// for that job to settle, then atomically admit a fresh installed-only
-    /// pass against the latest catalog. HTTP callers retain compatible reuse.
-    pub async fn reconcile_installed_when_idle(&self) {
+    /// for that job to settle, then atomically admit a fresh pass against the
+    /// latest catalog. HTTP callers retain compatible reuse.
+    ///
+    /// The pass is **full scope**, not installed-only. agent-distribution.md,
+    /// "Installation": *"Installation is automatic. Every harness supported on a
+    /// surface converges with no user action: absent means install, drifted means
+    /// reinstall, and both are the same mechanism… A user authenticates harnesses;
+    /// they never install them."* With `installed_only`, an absent opencode or
+    /// grok was explicitly `Skipped` and stayed `InstallRequired` until a user
+    /// clicked install — and session create then rejected the harness rather than
+    /// converging it.
+    ///
+    /// The two carve-outs the law names are NOT dropped with the flag; they move
+    /// into `auto_install_decision` (installer/auto_install.rs) where they are a
+    /// tested predicate rather than a side effect of a boolean.
+    pub async fn reconcile_when_idle(&self) {
         loop {
             let result = self
                 .reconcile_service
@@ -280,10 +332,12 @@ impl AgentRuntime {
                     built_in_registry(),
                     self.runtime_home.clone(),
                     false,
-                    true,
+                    // Full scope: install what is absent, reinstall what drifted.
+                    false,
                     Vec::new(),
                     Some(self.seed_store.clone()),
                     Some(self.catalog_service.clone()),
+                    self.surface,
                     AgentReconcileAdmission::RequireIdle,
                 )
                 .await;
@@ -292,7 +346,7 @@ impl AgentRuntime {
                 Err(AgentReconcileStartError::Busy(job_id)) => {
                     tracing::debug!(
                         active_job_id = %job_id,
-                        "installed-only reconcile poke waiting for active job"
+                        "internal reconcile poke waiting for active job"
                     );
                     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
                 }
@@ -301,12 +355,15 @@ impl AgentRuntime {
     }
 
     /// Runtime startup pass (desktop sidecar AND cloud workers): hydrate the
-    /// bundled agent seed if it hasn't been laid down yet, then run an
-    /// installed-only reconcile so already-installed agents track the catalog
-    /// pins. Non-blocking (boots the HTTP server immediately), best-effort
-    /// (failures are recorded in the seed/reconcile snapshots, never fatal),
-    /// and idempotent: missing non-seeded agents install on demand at session
-    /// start, and an up-to-date machine does no work.
+    /// bundled agent seed if it hasn't been laid down yet, then reconcile the
+    /// full supported set to the catalog's pins — installing what is absent and
+    /// reinstalling what drifted.
+    ///
+    /// Non-blocking (boots the HTTP server immediately), best-effort (failures
+    /// are recorded in the seed/reconcile snapshots, never fatal), and
+    /// idempotent: an up-to-date machine does no work. Seed hydration still runs
+    /// first, so seeded agents are already present and the pass is a no-op for
+    /// them rather than a redundant download.
     pub fn spawn_startup_pass(self: Arc<Self>) {
         tokio::spawn(async move {
             if self.seed_store.hydration_pending() {
@@ -317,7 +374,7 @@ impl AgentRuntime {
                 })
                 .await;
             }
-            self.reconcile_installed_when_idle().await;
+            self.reconcile_when_idle().await;
         });
     }
 }
