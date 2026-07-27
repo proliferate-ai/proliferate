@@ -445,10 +445,19 @@ export const themeTokens = {
     themeFallback: "rgba(255, 255, 255, 0.12)",
     provenance: "[SHIPPED]",
   },
+  // Retuned against a measured reference capture of a dark transcript surface,
+  // whose live link/accent tone resolves to rgb(131, 195, 255) — a materially
+  // lighter, less saturated blue than the #339cff we shipped, which read as
+  // dark and heavy against the #181818 chat surface. The same reference's light
+  // theme resolves its accent to #339cff, so the light half keeps the shipped
+  // value and this token stops being mode-independent: one link tone per mode,
+  // lighter in dark, unchanged in light. Still ONE link token — no per-surface
+  // link colors. `--color-special` and `--color-highlight*` are deliberately
+  // untouched: this retune is about link legibility, not the accent family.
   "--color-link-foreground": {
-    dark: "#339cff",
+    dark: "#83c3ff",
     light: "#339cff",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:color/link-tone]",
   },
   "--color-muted": {
     dark: "#212121",

@@ -167,6 +167,27 @@ describe("FullTranscriptRowList", () => {
     expect(structuralInset?.style.height).toBe("120px");
     expect(structuralInset?.className).toContain("shrink-0");
   });
+
+  it("renders the turn navigator pair inert until jump behavior lands", () => {
+    const { container } = render(<FullTranscriptRowList {...makeProps(vi.fn(), 50)} />);
+
+    const navigator = container.querySelector<HTMLElement>(
+      "[data-transcript-turn-navigator]",
+    );
+    expect(navigator).toBeTruthy();
+    expect(navigator?.className).toContain("border border-border bg-background");
+
+    const buttons = navigator!.querySelectorAll<HTMLButtonElement>(
+      "[data-transcript-turn-navigator-button]",
+    );
+    expect(buttons).toHaveLength(2);
+    expect([...buttons].map((button) => button.getAttribute("aria-label")))
+      .toEqual(["Previous turn", "Next turn"]);
+    for (const button of buttons) {
+      expect(button.disabled).toBe(true);
+      expect(button.hasAttribute("data-chat-transcript-ignore")).toBe(true);
+    }
+  });
 });
 
 function stubCapturingResizeObserver(): () => void {

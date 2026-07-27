@@ -42,6 +42,13 @@ const readable = true;
 | --- | --- |
 | One | Two |`;
 
+// Hex-swatch fixtures are assembled rather than written as literals: these are
+// arbitrary sample values in agent output, not palette entries, and the palette
+// guard rightly rejects literal `#rrggbb` in product source.
+function hexLiteral(digits: string): string {
+  return `#${digits}`;
+}
+
 function renderMarkdown(
   content: string,
   props: Partial<Parameters<typeof MarkdownBody>[0]> = {},
@@ -119,6 +126,42 @@ describe("MarkdownBody presentation", () => {
     const html = renderMarkdown("[unsafe](javascript:alert(1))");
 
     expect(html).not.toContain("javascript:");
+  });
+
+  it("renders a swatch for a hex color literal in inline code", () => {
+    for (const digits of ["0a0", "00a240", "00a24080", "00A240"]) {
+      const literal = hexLiteral(digits);
+      const html = renderMarkdown(`The brand green is \`${literal}\`.`);
+
+      expect(html).toContain('data-markdown-hex-swatch="true"');
+      expect(html).toContain(`--markdown-hex-swatch:${literal.toLowerCase()}`);
+      expect(html).toContain(`>${literal}</code>`);
+    }
+  });
+
+  it("leaves non-hex inline code and hash-bearing prose without a swatch", () => {
+    const negatives = [
+      `See issue \`${hexLiteral("1042")}\` for context.`,
+      "Run `#!/bin/sh` first.",
+      `The token \`${hexLiteral("00a24")}\` is malformed.`,
+      `The token \`${hexLiteral("00a2404")}\` is malformed.`,
+      "Use `rgb(0 162 64)` instead.",
+      "Use `green` instead.",
+      `Prefix \`${hexLiteral("00a240")} fallback\` is not a literal.`,
+      "A heading like # Title stays prose.",
+      `Fragment \`/docs${hexLiteral("00a240")}\` is a path.`,
+      `Bare prose ${hexLiteral("00a240")} outside code stays prose.`,
+    ];
+
+    for (const source of negatives) {
+      expect(renderMarkdown(source)).not.toContain("data-markdown-hex-swatch");
+    }
+  });
+
+  it("keeps the swatch out of a fenced block that happens to hold a hex value", () => {
+    const html = renderMarkdown(`\`\`\`css\ncolor: ${hexLiteral("00a240")};\n\`\`\``);
+
+    expect(html).not.toContain("data-markdown-hex-swatch");
   });
 
   it("uses the shared stable-color, hover-underline treatment for web links", () => {

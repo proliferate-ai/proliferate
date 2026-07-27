@@ -21,6 +21,7 @@ import {
   TRANSCRIPT_TOP_PADDING_PX,
   TranscriptHistoryLoadingRow,
   TranscriptScrollToBottomButton,
+  TranscriptTurnNavigator,
   resolveTranscriptBottomInsets,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
@@ -302,6 +303,7 @@ export function FullTranscriptRowList({
           />
         )}
       </AutoHideScrollArea>
+      <TranscriptTurnNavigator />
       <TranscriptScrollToBottomButton
         visible={!isPinnedToBottom}
         bottomInsetPx={bottomInsetPx}

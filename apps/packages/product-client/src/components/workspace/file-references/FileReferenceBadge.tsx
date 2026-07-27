@@ -14,7 +14,11 @@ import {
 } from "#product/components/workspace/file-references/FileReferenceMenu";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { useFileReferenceNativeContextMenu } from "#product/hooks/workspaces/ui/files/use-file-reference-native-context-menu";
-import type { ResolvedFileReference } from "#product/lib/domain/files/path-references";
+import { getFileVisual } from "#product/lib/domain/files/file-visuals";
+import {
+  fileReferenceBasename,
+  inlineFileReferenceLabel,
+} from "#product/lib/domain/files/path-references";
 
 type FileReferenceBadgeVariant = "inline" | "chip";
 
@@ -39,14 +43,27 @@ export function FileReferenceBadge({
 }: FileReferenceBadgeProps) {
   const actions = useFileReferenceActions({ rawPath, workspacePath });
   const { onContextMenuCapture } = useFileReferenceNativeContextMenu(actions);
-  const resolvedBasename = basename ?? extractBasename(actions.reference.workspacePath ?? actions.reference.path);
+  const resolvedBasename = basename
+    ?? fileReferenceBasename(actions.reference.workspacePath ?? actions.reference.path);
   const iconPath = actions.reference.workspacePath ?? actions.reference.path;
   const displayLabel = label
-    ?? (variant === "chip" ? resolvedBasename : inlineReferenceLabel(actions.reference));
+    ?? (variant === "chip"
+      ? resolvedBasename
+      : inlineFileReferenceLabel(actions.reference));
+  // Outside-the-workspace inline references used to always show the generic
+  // path-mention glyph. A referenced file whose extension maps to a real
+  // file-type glyph (markdown, images, source languages — the single
+  // extension→visual table in file-visuals.ts) now shows that glyph instead, so
+  // `README.md` and `logo.svg` read as the kinds of file they are wherever they
+  // appear. Only genuinely unclassifiable names keep the mention glyph.
+  const hasFileTypeGlyph =
+    actions.pathKind !== "directory"
+    && getFileVisual(resolvedBasename, iconPath, "file").kind !== "default";
   const useExternalInlineIcon =
     variant === "inline"
     && !actions.reference.workspacePath
-    && Boolean(actions.reference.absolutePath);
+    && Boolean(actions.reference.absolutePath)
+    && !hasFileTypeGlyph;
   const iconShellClassName = variant === "inline"
     ? "relative mr-[3px] inline-block h-[1lh] w-3.5 shrink-0 align-bottom"
     : "inline-flex shrink-0 items-center justify-center";
@@ -137,15 +154,3 @@ function resolveBadgeClassName(
   ].filter(Boolean).join(" ");
 }
 
-function inlineReferenceLabel(reference: ResolvedFileReference): string {
-  const path = reference.workspacePath ?? reference.path;
-  if (reference.line === null) {
-    return path;
-  }
-  return `${path} (line ${reference.line})`;
-}
-
-function extractBasename(path: string): string {
-  const segments = path.split(/[\\/]/).filter(Boolean);
-  return segments[segments.length - 1] ?? path;
-}

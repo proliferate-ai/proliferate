@@ -362,17 +362,21 @@ what lets a diff retune its greens without moving every success badge.
 | --- | --- | --- | --- |
 | `--color-primary` | `#ffffff` | `#1a1c1f` | Primary action fill. |
 | `--color-primary-foreground` | `#0d0d0d` | `#ffffff` | Text on that fill. |
-| `--color-link-foreground` | `#339cff` | `#339cff` | Links. |
+| `--color-link-foreground` | `#83c3ff` | `#339cff` | Links. |
 | `--color-special` | `#339cff` | `#339cff` | Accent for highlighted/special affordances. |
 | `--color-ring` | 28% | 30% | Focus ring. |
 | `--color-highlight` | `rgba(51, 156, 255, 0.12)` | `#e5f3ff` | Search/selection highlight fill. |
 
 **Primary is the inverted foreground pair, not a brand hue.** The primary button
 is white-on-near-black in dark and near-black-on-white in light. The product's
-one chromatic accent is a single blue, `#339cff`, and it is mode-independent:
-links, special affordances and highlight tints all resolve to it, so blue always
-means "this is a link or a called-out thing" and never "this is the primary
-action".
+one chromatic accent is a single blue hue, so blue always means "this is a link
+or a called-out thing" and never "this is the primary action". `--color-special`
+and `--color-highlight` hold that hue at `#339cff` in both modes.
+`--color-link-foreground` is the one member of the family that is *not*
+mode-independent: dark carries a lighter step of the same hue (`#83c3ff`) because
+`#339cff` link text sits too dark against the dark surfaces to read as clickable
+at prose weight, while light keeps `#339cff`, which needs the contrast the other
+way. It is still a single link token — there are no per-surface link colors.
 
 The focus ring is one of only two tokens in the whole authority where the
 symmetric-opacity rule is broken on purpose — the light half carries a different

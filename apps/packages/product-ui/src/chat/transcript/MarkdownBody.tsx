@@ -17,6 +17,10 @@ import { ProviderLinkMention } from "./ProviderLinkMention";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "./TranscriptLinkStyles";
 import { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 import {
+  MARKDOWN_INLINE_CODE_CLASS,
+  MarkdownInlineCode,
+} from "./MarkdownInlineCode";
+import {
   ChatContentSearchQueryContext,
   useChatContentSearchPaint,
   type ChatContentSearchPaint,
@@ -433,7 +437,7 @@ function MarkdownCode({
     return (
       <code
         {...rest}
-        className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 align-baseline font-mono text-foreground"
+        className={MARKDOWN_INLINE_CODE_CLASS}
         data-markdown-inline-code="true"
         dangerouslySetInnerHTML={dangerouslySetInnerHTML}
       />
@@ -453,14 +457,12 @@ function MarkdownCode({
   if (renderedInlineCode !== null && renderedInlineCode !== undefined) {
     return <>{renderedInlineCode}</>;
   }
+  // Inline code owns its own presentation module, including the hex-colour
+  // swatch that precedes a `#rgb`/`#rrggbb`/`#rrggbbaa` literal.
   return (
-    <code
-      {...rest}
-      className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 align-baseline font-mono text-foreground"
-      data-markdown-inline-code="true"
-    >
+    <MarkdownInlineCode {...rest} code={codeString}>
       {children}
-    </code>
+    </MarkdownInlineCode>
   );
 }
 
