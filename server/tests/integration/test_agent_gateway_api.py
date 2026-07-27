@@ -782,3 +782,35 @@ class TestAgentAuthState:
             params={"surface": "local"},
         )
         assert response.status_code == 401
+
+
+class TestOldAgentGatewayRoutesAreGone:
+    @pytest.mark.asyncio
+    async def test_the_old_agent_gateway_routes_are_gone(self, client: AsyncClient) -> None:
+        """S1 moved the vault/selections/state/org-policy routes off
+        ``/agent-gateway`` onto ``/agent-auth`` (enrollment + capabilities
+        stayed put, model-gateway.md's gateway-account concerns). Any request
+        that still lands on the old prefix must 404, not silently resolve to
+        something else -- a shadowed route here would mean the old client
+        SDKs land on an endpoint with different auth/behavior instead of a
+        clean, loud failure.
+        """
+        _, headers = await _authed_user(client)
+        organization_id = uuid.uuid4()
+        for path, method in (
+            ("/v1/cloud/agent-gateway/keys", "get"),
+            ("/v1/cloud/agent-gateway/keys", "post"),
+            ("/v1/cloud/agent-gateway/keys/provider-config", "post"),
+            (f"/v1/cloud/agent-gateway/keys/{uuid.uuid4()}", "delete"),
+            ("/v1/cloud/agent-gateway/selections", "get"),
+            ("/v1/cloud/agent-gateway/selections/claude", "put"),
+            ("/v1/cloud/agent-gateway/state", "get"),
+            (f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy", "get"),
+            (f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy", "put"),
+            (
+                f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy/violations",
+                "get",
+            ),
+        ):
+            response = await getattr(client, method)(path, headers=headers)
+            assert response.status_code == 404, f"{method} {path}"
