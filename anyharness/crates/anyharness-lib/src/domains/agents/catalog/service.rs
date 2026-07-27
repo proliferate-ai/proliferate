@@ -157,27 +157,44 @@ pub struct ResolvedSelection {
     pub mode_id: Option<String>,
 }
 
+/// Which truth judged a refused model selection. Carried so the refusal
+/// detail can name the active universe — never a per-context enumeration
+/// (the composed observation has no contexts), and static text only, so no
+/// credential material can ride along.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActiveUniverse {
+    /// The machine's composed observation exists and is the truth.
+    MachineObservation,
+    /// No observation exists yet; the shipped catalog's declarations for the
+    /// active auth contexts serve as the seed.
+    CatalogSeed,
+}
+
+impl ActiveUniverse {
+    /// Human-readable name for refusal details. Deliberately static.
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::MachineObservation => "the machine's composed observation",
+            Self::CatalogSeed => "the shipped catalog under the active auth contexts",
+        }
+    }
+}
+
 /// Structured launch-selection rejections (expected outcomes, not errors).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SelectionUnsupported {
     UnknownAgent {
         agent_kind: String,
     },
-    /// The requested model is not in the catalog (by id, alias, or variant).
-    UnknownModel {
+    /// The requested model cannot launch: it resolves to nothing the active
+    /// universe serves — absent from the composed observation (trial-verified
+    /// catalog rows exempt), or, pre-probe, undeclared by the shipped catalog
+    /// under the active auth contexts. The single typed refusal
+    /// (`SESSION_MODEL_UNSUPPORTED`, model-catalog.md "Launch validation");
+    /// `active_universe` names which truth refused.
+    UnsupportedModel {
         model_id: String,
-    },
-    /// In the catalog, but not available under the active auth contexts.
-    /// Carries the requested spelling separately from the canonical catalog
-    /// identity so callers retain the exact rejected selection without
-    /// confusing an alias or variant with the model that owned the gate.
-    /// `required_contexts` is `availability.anyOf` — the unlock condition.
-    ModelGated {
-        requested_model_id: String,
-        canonical_model_id: String,
-        active_contexts: Vec<String>,
-        required_contexts: Vec<String>,
-        catalog_version: String,
+        active_universe: ActiveUniverse,
     },
     UnsupportedMode {
         mode_id: String,
@@ -302,10 +319,11 @@ impl ActiveCatalog {
     /// Settled semantics:
     /// - Requested model resolves by id, alias, probe-observed variant id,
     ///   or `variantSyntax` composition (base model + values validated
-    ///   against the base model's controls). Unresolvable -> `UnknownModel`.
+    ///   against the base model's controls). Unresolvable ->
+    ///   `UnsupportedModel`.
     /// - Availability beats visibility: the resolved base model must be
-    ///   available under the active contexts (`ModelGated` otherwise), but
-    ///   need not be `defaultVisible`.
+    ///   available under the active universe (`UnsupportedModel` otherwise),
+    ///   but need not be `defaultVisible`.
     /// - No requested model -> curation default for the first active context
     ///   carrying one (`session.defaults`), else the first visible available
     ///   model in document order, else `None` (harness default) — defaults
@@ -346,12 +364,11 @@ impl ActiveCatalog {
     ///    pre-launch rejection instead of a provider 403 mid-session.
     ///    Trial-verified rows are exempt (see `universe.rs`).
     ///
-    /// `UnknownModel` means "absent from the observation AND the catalog".
-    /// `ModelGated`'s `required_contexts` is the catalog's `availability.anyOf`
-    /// verbatim — curated unlock guidance, since the composed observation carries
-    /// no per-context attribution. (The gated taxonomy itself is slated for
-    /// deletion with the validation re-cut; until then the payload stays
-    /// catalog-derived.)
+    /// Every unservable intent gets the same `UnsupportedModel` refusal —
+    /// there is no gated middle state and no enumeration of which auth would
+    /// serve the model. An interactive picker cannot construct such a request
+    /// (the picker is the observation); the answer to "why isn't my model
+    /// here" is the settings surface, not a launch error.
     pub fn validate_launch_in_universe(
         &self,
         kind: &str,
@@ -365,6 +382,11 @@ impl ActiveCatalog {
             .ok_or_else(|| SelectionUnsupported::UnknownAgent {
                 agent_kind: kind.to_string(),
             })?;
+        let active_universe = if universe.has_observation() {
+            ActiveUniverse::MachineObservation
+        } else {
+            ActiveUniverse::CatalogSeed
+        };
 
         let requested = model_id.map(str::trim).filter(|id| !id.is_empty());
         let resolved = match requested {
@@ -374,15 +396,18 @@ impl ActiveCatalog {
                     // observation: the shipped catalog is a snapshot of a nightly
                     // probe, so a model the gateway or the provider added since is
                     // genuinely launchable and genuinely absent here.
-                    return self.validate_observed_only_model(agent, requested, mode_id, universe);
+                    return self.validate_observed_only_model(
+                        agent,
+                        requested,
+                        mode_id,
+                        universe,
+                        active_universe,
+                    );
                 };
                 if !model_is_available(resolved.model, contexts, universe) {
-                    return Err(SelectionUnsupported::ModelGated {
-                        requested_model_id: requested.to_string(),
-                        canonical_model_id: resolved.model.id.clone(),
-                        active_contexts: contexts.ids().to_vec(),
-                        required_contexts: resolved.model.availability.any_of.clone(),
-                        catalog_version: self.document.catalog_version.clone(),
+                    return Err(SelectionUnsupported::UnsupportedModel {
+                        model_id: requested.to_string(),
+                        active_universe,
                     });
                 }
                 Some(resolved)
@@ -410,19 +435,21 @@ impl ActiveCatalog {
     /// agent-level vocabulary, since no model row exists to carry a `mode` control.
     ///
     /// One question, one answer: the composed observation either carries the id
-    /// (a launch right now would show it — resolve) or it does not (`UnknownModel`).
-    /// There is no "observed under another context" middle state, because the
-    /// observation has no contexts.
+    /// (a launch right now would show it — resolve) or it does not
+    /// (`UnsupportedModel`). There is no "observed under another context"
+    /// middle state, because the observation has no contexts.
     fn validate_observed_only_model(
         &self,
         agent: &AgentCatalogAgent,
         requested: &str,
         mode_id: Option<&str>,
         universe: &ObservedUniverse,
+        active_universe: ActiveUniverse,
     ) -> Result<ResolvedSelection, SelectionUnsupported> {
         if !universe.observes_id(requested) {
-            return Err(SelectionUnsupported::UnknownModel {
+            return Err(SelectionUnsupported::UnsupportedModel {
                 model_id: requested.to_string(),
+                active_universe,
             });
         }
         let mode_id = validate_mode(agent, None, mode_id)?;

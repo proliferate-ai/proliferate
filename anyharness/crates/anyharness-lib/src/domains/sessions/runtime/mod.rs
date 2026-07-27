@@ -16,7 +16,7 @@ use super::mcp_bindings::model::SessionMcpServer;
 use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
-use super::service::{ModelGatedContext, SessionService};
+use super::service::SessionService;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
@@ -83,14 +83,14 @@ impl SessionRuntime {
 #[derive(Debug)]
 pub enum CreateAndStartSessionError {
     Invalid(String),
+    /// The requested model cannot launch under the active universe — the one
+    /// typed refusal for every unservable model intent
+    /// (`SESSION_MODEL_UNSUPPORTED`).
     ModelUnsupported {
         agent_kind: String,
         model_id: String,
+        active_universe: crate::domains::agents::catalog::service::ActiveUniverse,
     },
-    /// A known model is gated behind inactive auth contexts. Carries the
-    /// unlock condition (`required_contexts`) for the API layer; an
-    /// unresolvable model uses `ModelUnsupported` instead.
-    ModelGated(ModelGatedContext),
     ModeUnsupported {
         agent_kind: String,
         mode_id: String,

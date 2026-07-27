@@ -578,15 +578,6 @@ function normalizeProblemDetails(
   if (typeof source.instance === "string" || source.instance === null) {
     problem.instance = source.instance;
   }
-  if (
-    source.requiredContexts === null
-    || (
-      Array.isArray(source.requiredContexts)
-      && source.requiredContexts.every((context) => typeof context === "string")
-    )
-  ) {
-    problem.requiredContexts = source.requiredContexts;
-  }
 
   return problem;
 }

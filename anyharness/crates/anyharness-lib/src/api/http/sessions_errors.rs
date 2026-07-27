@@ -106,11 +106,14 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
         CreateAndStartSessionError::ModelUnsupported {
             agent_kind,
             model_id,
+            active_universe,
         } => ApiError::bad_request(
-            format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
+            format!(
+                "model '{model_id}' is not supported for agent '{agent_kind}': not served by {}",
+                active_universe.describe()
+            ),
             "SESSION_MODEL_UNSUPPORTED",
         ),
-        CreateAndStartSessionError::ModelGated(context) => ApiError::model_gated(context),
         CreateAndStartSessionError::ModeUnsupported {
             agent_kind,
             mode_id,
@@ -381,9 +384,9 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
+    use crate::domains::agents::catalog::service::ActiveUniverse;
     use crate::domains::sessions::model::{AgentStartupExitError, RequestedModeApplyError};
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
-    use crate::domains::sessions::service::ModelGatedContext;
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
     #[test]
@@ -428,26 +431,26 @@ mod tests {
         assert_eq!(mapped.into_response().status(), StatusCode::CONFLICT);
     }
 
+    /// The single refusal for an unservable model intent: 400
+    /// `SESSION_MODEL_UNSUPPORTED`, with a detail naming the active universe
+    /// and carrying no per-context unlock enumeration.
     #[test]
-    fn model_gated_maps_to_bad_request() {
-        let mapped = super::map_create_session_error(CreateAndStartSessionError::ModelGated(
-            ModelGatedContext {
-                workspace_id: "workspace-1".to_string(),
-                attempted_session_id: None,
-                agent_kind: "claude".to_string(),
-                requested_model_id: "opus".to_string(),
-                canonical_model_id: "opus".to_string(),
-                active_contexts: vec!["anthropic-oauth".to_string()],
-                required_contexts: vec!["anthropic-api".to_string()],
-                catalog_version: "2026-07-18".to_string(),
-            },
-        ));
+    fn unsupported_model_maps_to_the_single_refusal_naming_the_active_universe() {
+        let mapped = super::map_create_session_error(CreateAndStartSessionError::ModelUnsupported {
+            agent_kind: "claude".to_string(),
+            model_id: "opus".to_string(),
+            active_universe: ActiveUniverse::MachineObservation,
+        });
 
         assert_eq!(mapped.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(mapped.code(), Some("SESSION_MODEL_GATED"));
-        assert!(mapped
-            .instance()
-            .is_some_and(|instance| instance.starts_with("urn:proliferate:anyharness:incident:")));
+        assert_eq!(mapped.code(), Some("SESSION_MODEL_UNSUPPORTED"));
+        assert_eq!(
+            mapped.detail(),
+            Some(
+                "model 'opus' is not supported for agent 'claude': \
+                 not served by the machine's composed observation"
+            )
+        );
         assert_eq!(mapped.into_response().status(), StatusCode::BAD_REQUEST);
     }
 

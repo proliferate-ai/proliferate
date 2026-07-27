@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use super::loader::parse_agent_catalog_json;
 use super::schema::draft_catalog_json;
-use super::service::{ActiveCatalog, SelectionUnsupported};
+use super::service::{ActiveCatalog, ActiveUniverse, SelectionUnsupported};
 use super::universe::ObservedUniverse;
 use crate::domains::agents::auth::context::ActiveAuthContexts;
 
@@ -83,10 +83,13 @@ fn an_observation_unlocks_a_catalog_model_the_catalog_gates() {
     let catalog = draft_catalog();
     let active = contexts(&["gateway"]);
 
-    let gated = catalog
+    let refused = catalog
         .validate_launch("claude", &active, Some("claude-opus-4-8"), None)
         .expect_err("the shipped catalog does not serve this model over the gateway");
-    assert!(matches!(gated, SelectionUnsupported::ModelGated { .. }));
+    assert!(matches!(
+        refused,
+        SelectionUnsupported::UnsupportedModel { .. }
+    ));
 
     let universe = observed(&["claude-opus-4-8", "claude-sonnet-4-5"]);
     let selection = catalog
@@ -113,7 +116,7 @@ fn an_observed_but_uncatalogued_model_is_launchable_under_its_own_id() {
         catalog
             .validate_launch("claude", &active, Some(brand_new), None)
             .expect_err("absent from the shipped catalog"),
-        SelectionUnsupported::UnknownModel { .. }
+        SelectionUnsupported::UnsupportedModel { .. }
     ));
 
     let universe = observed(&[brand_new]);
@@ -124,11 +127,11 @@ fn an_observed_but_uncatalogued_model_is_launchable_under_its_own_id() {
     assert_eq!(selection.launch_model_id.as_deref(), Some(brand_new));
 }
 
-/// An uncatalogued id the observation does NOT carry is `UnknownModel` — there is
+/// An uncatalogued id the observation does NOT carry is refused — there is
 /// no "observed under another context" middle state, because the composed
 /// observation has no contexts.
 #[test]
-fn an_uncatalogued_model_the_observation_lacks_is_unknown() {
+fn an_uncatalogued_model_the_observation_lacks_is_refused() {
     let catalog = draft_catalog();
     let universe = observed(&["claude-sonnet-4-5"]);
 
@@ -141,11 +144,14 @@ fn an_uncatalogued_model_the_observation_lacks_is_unknown() {
             &universe,
         )
         .expect_err("neither the catalog nor the observation knows it");
-    assert!(matches!(error, SelectionUnsupported::UnknownModel { .. }));
+    assert!(matches!(
+        error,
+        SelectionUnsupported::UnsupportedModel { .. }
+    ));
 }
 
 /// **Garbage is still garbage.** An id nothing observed and the catalog does not carry
-/// is `UnknownModel`, whatever else the universe holds.
+/// is refused, whatever else the universe holds.
 #[test]
 fn garbage_is_rejected_even_with_a_rich_universe() {
     let catalog = draft_catalog();
@@ -172,23 +178,30 @@ fn garbage_is_rejected_even_with_a_rich_universe() {
                 garbage.trim().is_empty(),
                 "only a blank request may resolve to a default, got {selection:?} for {garbage:?}"
             ),
-            Err(SelectionUnsupported::UnknownModel { model_id }) => {
+            Err(SelectionUnsupported::UnsupportedModel { model_id, .. }) => {
                 assert_eq!(model_id, garbage)
             }
-            Err(other) => panic!("expected UnknownModel for {garbage:?}, got {other:?}"),
+            Err(other) => panic!("expected UnsupportedModel for {garbage:?}, got {other:?}"),
         }
     }
 }
 
-/// **The downgraded-key case: the observation refuses, pre-launch.**
+/// **Proof B8 (single refusal).** A saved model intent the active universe
+/// cannot serve gets exactly one typed refusal — `UnsupportedModel`, the
+/// `SESSION_MODEL_UNSUPPORTED` wire code — naming the universe that refused
+/// and enumerating nothing (no gated middle state, no `availability.anyOf`
+/// payload, no per-context anything).
 ///
-/// When a gateway key loses access to a model, the proxy stops listing it and the
-/// machine's composed observation records that. Launch then refuses — rather than
-/// accepting and meeting a provider 403 mid-session: same outcome, discovered
-/// later, attributed to the wrong layer. The refusal is model-scoped, never a
-/// blanket distrust of the observation.
+/// This is the downgraded-key case: when a gateway key loses access to a
+/// model, the proxy stops listing it and the machine's composed observation
+/// records that. Launch then refuses — rather than accepting and meeting a
+/// provider 403 mid-session: same outcome, discovered later, attributed to
+/// the wrong layer. The refusal is model-scoped, never a blanket distrust of
+/// the observation, and it fires ONLY for a model in neither the observation
+/// nor the trial-verified catalog set (the trial exemption is pinned by
+/// `trial_verified_models_stay_launchable_against_the_real_probe_fixture`).
 #[test]
-fn a_model_the_observation_no_longer_serves_is_refused_before_launch() {
+fn proof_b8_an_unservable_intent_gets_the_single_unsupported_refusal() {
     let catalog = draft_catalog();
     let active = contexts(&["gateway", "anthropic-oauth"]);
     // The auth still serves sonnet and haiku, but opus-4-6 has been revoked.
@@ -197,9 +210,18 @@ fn a_model_the_observation_no_longer_serves_is_refused_before_launch() {
     let error = catalog
         .validate_launch_in_universe("claude", &active, Some("claude-opus-4-6"), None, &downgraded)
         .expect_err("the machine's own observation says the composed auth cannot serve it");
-    assert!(
-        matches!(error, SelectionUnsupported::ModelGated { .. }),
-        "a catalog model the observation lacks is refused: {error:?}"
+    assert_eq!(
+        error,
+        SelectionUnsupported::UnsupportedModel {
+            model_id: "claude-opus-4-6".to_string(),
+            active_universe: ActiveUniverse::MachineObservation,
+        },
+        "one refusal, naming the universe and nothing else"
+    );
+    assert_eq!(
+        ActiveUniverse::MachineObservation.describe(),
+        "the machine's composed observation",
+        "the refusal detail names the universe with static, credential-free text"
     );
 
     // A model the same observation DOES carry still launches.
@@ -212,6 +234,82 @@ fn a_model_the_observation_no_longer_serves_is_refused_before_launch() {
             &downgraded,
         )
         .expect("an observed model still launches under the same auth");
+
+    // Pre-probe the same refusal fires from the seed, distinguished only by
+    // the universe it names.
+    let pre_probe = catalog
+        .validate_launch_in_universe(
+            "claude",
+            &contexts(&["anthropic-oauth"]),
+            Some("opus[1m]"),
+            None,
+            &ObservedUniverse::empty(),
+        )
+        .expect_err("api-only model is unservable under oauth pre-probe");
+    assert_eq!(
+        pre_probe,
+        SelectionUnsupported::UnsupportedModel {
+            model_id: "opus[1m]".to_string(),
+            active_universe: ActiveUniverse::CatalogSeed,
+        }
+    );
+}
+
+/// **Proof B8 (grep gate).** The gated taxonomy no longer exists anywhere in
+/// the anyharness tree — runtime crates, contract crate, and SDK sources —
+/// so the deleted concepts stay deleted. The needles are assembled at
+/// runtime, which keeps this file from tripping its own gate.
+#[test]
+fn proof_b8_the_gated_taxonomy_stays_deleted() {
+    let anyharness_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crates/anyharness-lib sits two levels under anyharness/")
+        .to_path_buf();
+    assert!(
+        anyharness_root.join("crates").is_dir() && anyharness_root.join("sdk").is_dir(),
+        "grep gate must scan the anyharness tree, resolved {anyharness_root:?}"
+    );
+
+    let needles = [
+        format!("SESSION_MODEL_{}", "GATED"),
+        format!("required{}contexts", '_'),
+        format!("required{}ontexts", 'C'),
+        format!("Model{}", "Gated"),
+    ];
+    let mut offenders = Vec::new();
+    scan_for_needles(&anyharness_root, &needles, &mut offenders);
+    assert!(
+        offenders.is_empty(),
+        "the gated launch taxonomy must stay deleted; found: {offenders:#?}"
+    );
+}
+
+/// Recursive text scan for the grep gate. Skips build output and vendored
+/// dependency trees; everything else in the anyharness tree is fair game.
+fn scan_for_needles(dir: &std::path::Path, needles: &[String], offenders: &mut Vec<String>) {
+    let entries = std::fs::read_dir(dir).expect("readable directory");
+    for entry in entries {
+        let entry = entry.expect("readable directory entry");
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if path.is_dir() {
+            if matches!(name.as_ref(), "target" | "node_modules" | "dist" | ".git") {
+                continue;
+            }
+            scan_for_needles(&path, needles, offenders);
+            continue;
+        }
+        let Ok(contents) = std::fs::read_to_string(&path) else {
+            continue; // Non-UTF-8 (binary) files carry no source symbols.
+        };
+        for needle in needles {
+            if contents.contains(needle.as_str()) {
+                offenders.push(format!("{}: {needle}", path.display()));
+            }
+        }
+    }
 }
 
 /// **Trial-verified rows survive the observation's silence**, against the real

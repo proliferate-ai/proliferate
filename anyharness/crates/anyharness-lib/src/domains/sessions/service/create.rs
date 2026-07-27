@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use uuid::Uuid;
 
-use super::{CreateSessionError, CreateSessionOutcome, ModelGatedContext, SessionService};
+use super::{CreateSessionError, CreateSessionOutcome, SessionService};
 use crate::domains::agents::auth::context::classify;
 use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
 use crate::domains::agents::catalog::service::{ActiveCatalog, SelectionUnsupported};
@@ -337,38 +337,23 @@ fn map_selection_unsupported(
         SelectionUnsupported::UnknownAgent { agent_kind } => {
             CreateSessionError::Invalid(format!("unknown agent kind: {agent_kind}"))
         }
-        SelectionUnsupported::UnknownModel { model_id } => CreateSessionError::ModelUnsupported {
-            agent_kind: agent_kind.to_string(),
+        SelectionUnsupported::UnsupportedModel {
             model_id,
-        },
-        SelectionUnsupported::ModelGated {
-            requested_model_id,
-            canonical_model_id,
-            active_contexts,
-            required_contexts,
-            catalog_version,
+            active_universe,
         } => {
             tracing::info!(
                 workspace_id,
                 attempted_session_id,
                 agent_kind,
-                requested_model_id = %requested_model_id,
-                canonical_model_id = %canonical_model_id,
-                active_contexts = ?active_contexts,
-                required_contexts = ?required_contexts,
-                catalog_version = %catalog_version,
-                "session create rejected: model gated behind inactive auth contexts"
+                model_id = %model_id,
+                active_universe = active_universe.describe(),
+                "session create rejected: model not served by the active universe"
             );
-            CreateSessionError::ModelGated(ModelGatedContext {
-                workspace_id: workspace_id.to_string(),
-                attempted_session_id: attempted_session_id.map(ToOwned::to_owned),
+            CreateSessionError::ModelUnsupported {
                 agent_kind: agent_kind.to_string(),
-                requested_model_id,
-                canonical_model_id,
-                active_contexts,
-                required_contexts,
-                catalog_version,
-            })
+                model_id,
+                active_universe,
+            }
         }
         SelectionUnsupported::UnsupportedMode { mode_id } => CreateSessionError::ModeUnsupported {
             agent_kind: agent_kind.to_string(),
