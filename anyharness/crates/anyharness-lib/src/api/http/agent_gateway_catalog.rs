@@ -140,6 +140,7 @@ pub async fn get_gateway_models(
     State(state): State<AppState>,
     Path(kind): Path<String>,
 ) -> Result<Json<GatewayModelsResponse>, ApiError> {
+    super::agent_model_snapshot::ensure_path_safe_identifier(&kind, "kind")?;
     // The gateway-route auth context id is a fixed, catalog-wide constant
     // (matches `defaults["gateway"]` and the render plane's context id) — every
     // gateway-capable harness in the bundled catalog declares exactly this id,
@@ -226,6 +227,7 @@ pub async fn refresh_gateway_models(
     State(state): State<AppState>,
     Path(kind): Path<String>,
 ) -> Result<Json<RefreshGatewayResponse>, ApiError> {
+    super::agent_model_snapshot::ensure_path_safe_identifier(&kind, "kind")?;
     // A poke of the same forced re-probe the model-snapshot refresh route runs,
     // scoped to the gateway context — the simplest honest shape per ruling §3
     // (mirror, not fork, the manual-refresh seam).
@@ -254,11 +256,7 @@ mod tests {
         controls.insert(
             "effort".to_string(),
             AgentCatalogModelControl {
-                values: vec![
-                    "low".to_string(),
-                    "medium".to_string(),
-                    "high".to_string(),
-                ],
+                values: vec!["low".to_string(), "medium".to_string(), "high".to_string()],
                 default: None,
                 observed_value: Some("medium".to_string()),
             },
@@ -285,7 +283,8 @@ mod tests {
     #[test]
     fn to_wire_preserves_enrichment() {
         let model = catalog_model("claude-sonnet-4-5");
-        let enriched = projection::enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
+        let enriched =
+            projection::enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
         let wire = to_wire(enriched);
 
         assert_eq!(wire.id, "claude-sonnet-4-5");
