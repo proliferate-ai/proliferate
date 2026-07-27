@@ -7,6 +7,7 @@ export type CloudWorkspaceStatus =
   | "materializing"
   | "needs_rematerialization"
   | "ready"
+  | "lost"
   | "archived"
   | "error";
 

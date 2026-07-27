@@ -14,6 +14,11 @@ from proliferate.server.version import runtime_version_pin
 from proliferate.utils.telemetry_mode import is_vendor_telemetry_enabled
 
 _ANYHARNESS_DEFER_STARTUP_RETENTION_ENV = "ANYHARNESS_DEFER_STARTUP_RETENTION"
+_ANYHARNESS_WORKTREES_ROOT_ENV = "ANYHARNESS_WORKTREES_ROOT"
+_ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV = (
+    "ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION"
+)
+_CLOUD_MANAGED_WORKTREES_ROOT = "/home/user/workspace/worktrees"
 # Consumed by `RuntimeSurface::from_env` (anyharness-lib domains/agents/runtime.rs).
 _ANYHARNESS_RUNTIME_SURFACE_ENV = "ANYHARNESS_RUNTIME_SURFACE"
 
@@ -105,7 +110,11 @@ def build_runtime_env(
 ) -> dict[str, str]:
     env: dict[str, str] = {
         "ANYHARNESS_DEV_CORS": "1",
+        # Keep cloud worktrees under the user workspace so the retention fence and
+        # inventory see them; enable auto-run while the startup pass stays deferred.
         _ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: "1",
+        _ANYHARNESS_WORKTREES_ROOT_ENV: _CLOUD_MANAGED_WORKTREES_ROOT,
+        _ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV: "1",
         # Declare the surface so the runtime's auto-install startup pass can apply
         # the one surface-dependent carve-out: cursor never installs in cloud
         # (login-only, no headless credential path, so it could never reach

@@ -1,12 +1,11 @@
-"""Service-layer wake/ensure billing gate (spec §4.3, issue #1036).
+"""Service-layer ensure billing gate (spec §4.3, issue #1036).
 
 The resume gate used to live only in ``connect_ready_sandbox``. ``POST
-/cloud-sandbox/wake`` and ``POST /cloud-sandbox/ensure`` route through
-``wake_cloud_sandbox`` / ``ensure_cloud_sandbox_ready`` in the cloud-sandbox
-service, which only ensured the DB row, so an exhausted owner got a
-``status: ready`` sandbox back instead of a 402. These tests pin that both
-service entry points now run ``assert_cloud_sandbox_resume_allowed_for_owner``
-before any row is created, enforce-mode only.
+/cloud-sandbox/ensure`` routes through ``ensure_cloud_sandbox_ready`` in the
+cloud-sandbox service, which once only ensured the DB row, so an exhausted
+owner got a ``status: ready`` sandbox back instead of a 402. These tests pin
+that ensure runs ``assert_cloud_sandbox_resume_allowed_for_owner`` before any
+row is created, enforce-mode only.
 """
 
 from __future__ import annotations
@@ -32,15 +31,12 @@ from proliferate.db.store.billing_subjects import (
     ensure_personal_billing_subject,
 )
 from proliferate.server.billing.authorization import CloudSandboxResumeBlockedError
-from proliferate.server.cloud.cloud_sandboxes.service import (
-    ensure_cloud_sandbox_ready,
-    wake_cloud_sandbox,
-)
+from proliferate.server.cloud.cloud_sandboxes.service import ensure_cloud_sandbox_ready
 
 
 async def _create_user(db_session: AsyncSession) -> uuid.UUID:
     user = User(
-        email=f"wake-gate-{uuid.uuid4().hex[:10]}@example.com",
+        email=f"ensure-gate-{uuid.uuid4().hex[:10]}@example.com",
         hashed_password="unused-oauth-only",
         is_active=True,
         is_superuser=False,
@@ -77,25 +73,6 @@ async def _seed_healthy_user(db_session: AsyncSession) -> uuid.UUID:
 
 
 @pytest.mark.asyncio
-async def test_wake_denied_when_exhausted(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """/wake for an exhausted owner raises the structured 402 before creating a row."""
-    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    user_id = await _seed_exhausted_user(db_session)
-
-    with pytest.raises(CloudSandboxResumeBlockedError) as excinfo:
-        await wake_cloud_sandbox(db_session, SimpleNamespace(id=user_id))
-
-    assert excinfo.value.status_code == 402
-    assert excinfo.value.code == "billing_start_blocked"
-    # The gate must run before ensure_personal_cloud_sandbox_exists stages a row.
-    await db_session.rollback()
-    assert await sandbox_store.load_personal_cloud_sandbox(db_session, user_id) is None
-
-
-@pytest.mark.asyncio
 async def test_ensure_denied_when_exhausted(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
@@ -114,31 +91,31 @@ async def test_ensure_denied_when_exhausted(
 
 
 @pytest.mark.asyncio
-async def test_wake_allowed_for_healthy_user(
+async def test_ensure_allowed_for_healthy_user(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A user with fresh trial credits is not exhausted: wake creates the row."""
+    """A user with fresh trial credits is not exhausted: ensure creates the row."""
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
     monkeypatch.setattr(settings, "pro_billing_enabled", False)
     user_id = await _seed_healthy_user(db_session)
 
-    sandbox = await wake_cloud_sandbox(db_session, SimpleNamespace(id=user_id))
+    sandbox = await ensure_cloud_sandbox_ready(db_session, SimpleNamespace(id=user_id))
 
     assert sandbox is not None
     assert sandbox.owner_user_id == user_id
 
 
 @pytest.mark.asyncio
-async def test_wake_noop_outside_enforce_mode(
+async def test_ensure_noop_outside_enforce_mode(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Observe mode never blocks a wake, even for an exhausted owner."""
+    """Observe mode never blocks ensure, even for an exhausted owner."""
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_OBSERVE)
     user_id = await _seed_exhausted_user(db_session)
 
-    sandbox = await wake_cloud_sandbox(db_session, SimpleNamespace(id=user_id))
+    sandbox = await ensure_cloud_sandbox_ready(db_session, SimpleNamespace(id=user_id))
 
     assert sandbox is not None
     assert sandbox.owner_user_id == user_id

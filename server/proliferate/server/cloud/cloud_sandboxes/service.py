@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.sandbox import get_sandbox_provider
@@ -67,11 +68,9 @@ async def ensure_cloud_sandbox_ready(
     # LIVE billing gate (spec §4.3): an exhausted owner must not wake or ensure a
     # cloud sandbox. Gate BEFORE ensure_personal_cloud_sandbox_exists stages a
     # new-row INSERT, since the gate commits its audit row before raising. No-op
-    # unless CLOUD_BILLING_MODE=enforce. wake_cloud_sandbox delegates here, so
-    # both /cloud-sandbox/wake and /cloud-sandbox/ensure inherit this gate; the
-    # GitHub-App trigger path calls ensure_personal_cloud_sandbox_exists directly
-    # and is intentionally left ungated so a brand-new user's initial row still
-    # gets created.
+    # unless CLOUD_BILLING_MODE=enforce. The GitHub-App trigger path calls
+    # ensure_personal_cloud_sandbox_exists directly and is intentionally left
+    # ungated so a brand-new user's initial row still gets created.
     require_cloud_provisioning_configured()
     await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=user.id)
     return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
@@ -102,10 +101,6 @@ async def ensure_personal_cloud_sandbox_exists(
     return sandbox
 
 
-async def wake_cloud_sandbox(db: AsyncSession, user: _UserWithId) -> CloudSandboxValue:
-    return await ensure_cloud_sandbox_ready(db, user)
-
-
 async def destroy_cloud_sandbox(
     db: AsyncSession,
     user: _UserWithId,
@@ -117,6 +112,17 @@ async def destroy_cloud_sandbox(
     # never keep authenticating back to Cloud.
     await runtime_workers_store.revoke_active_workers_for_identity(db, cloud_sandbox_id=sandbox.id)
     destroyed = await sandbox_store.mark_cloud_sandbox_destroyed(db, sandbox.id)
+    await cloud_workspace_store.mark_cloud_workspaces_lost_for_sandbox(
+        db,
+        destroyed or sandbox,
+    )
+    # Import lazily to avoid the gateway -> cloud-sandbox service dependency
+    # becoming a module cycle.
+    from proliferate.server.cloud.gateway.service import (
+        invalidate_cloud_sandbox_gateway_access_for_user,
+    )
+
+    invalidate_cloud_sandbox_gateway_access_for_user(user.id)
     # Kill the provider VM so a destroyed row does not leave an E2B sandbox
     # running forever (it is created with on_timeout=pause + auto_resume, so it
     # never dies on its own). This MUST happen only after the DB destroy durably

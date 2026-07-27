@@ -1170,23 +1170,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/cloud-sandbox/wake": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Wake Cloud Sandbox Endpoint */
-        post: operations["wake_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_wake_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/workspaces": {
         parameters: {
             query?: never;
@@ -4577,7 +4560,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            status: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Runtimestatus
              * @enum {string}
@@ -7315,12 +7298,12 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            status: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Workspacestatus
              * @enum {string}
              */
-            workspaceStatus: "pending" | "materializing" | "ready" | "archived" | "error";
+            workspaceStatus: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Productlifecycle
              * @enum {string}
@@ -7501,12 +7484,12 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            status: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Workspacestatus
              * @enum {string}
              */
-            workspaceStatus: "pending" | "materializing" | "ready" | "archived" | "error";
+            workspaceStatus: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Productlifecycle
              * @enum {string}
@@ -9924,26 +9907,6 @@ export interface operations {
         };
     };
     ensure_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_ensure_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudSandboxResponse"];
-                };
-            };
-        };
-    };
-    wake_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_wake_post: {
         parameters: {
             query?: never;
             header?: never;
