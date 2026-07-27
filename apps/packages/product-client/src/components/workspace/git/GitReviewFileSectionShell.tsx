@@ -9,7 +9,7 @@ const REVIEW_HEADER_ACTION_CLASS =
   "size-6 shrink-0 rounded-md border-0 bg-transparent p-0 text-sidebar-muted-foreground transition-colors hover:bg-hover hover:text-sidebar-foreground active:bg-active focus-visible:ring-1 focus-visible:ring-sidebar-ring";
 
 /**
- * Flat review-document section: sticky Codex-style header (file icon,
+ * Flat review-document section: sticky reference-style header (file icon,
  * front-truncated path with dimmed directory, status chip, always-on +N/−N)
  * over the diff body. Replaces the FileDiffCard card look for the git pane.
  */
@@ -86,7 +86,7 @@ export function GitReviewFileSectionShell({
                 <span className="text-sidebar-foreground">{name}</span>
               </span>
             </span>
-            {/* Stats trail the title directly (Codex changes-pane layout),
+            {/* Stats trail the title directly (reference changes-pane layout),
                 not right-aligned; only hover actions pin to the edge. */}
             <span className="flex shrink-0 items-center gap-1.5">
               {showStagedChip && <GitReviewHeaderChip label="staged" />}
