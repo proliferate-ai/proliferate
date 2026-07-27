@@ -50,15 +50,17 @@ export function formatModelLeafName(name: string): string {
   }
 
   const remainder = match[1]!.trim();
-  // Already-spaced remainders are real labels: their remaining punctuation is
-  // meaningful (date suffixes like "Sonnet 4.5 (2025-09-29)") and must survive
-  // verbatim. Only an all-hyphen remainder has hyphens as word separators.
-  if (/\s/.test(remainder)) {
-    return remainder;
-  }
+  // Hyphens are word separators only in an all-hyphen remainder. Once a label
+  // already contains spaces, its hyphens are meaningful punctuation — a date
+  // suffix like "(2025-09-29)" must survive intact rather than becoming
+  // "(2025 09 29)".
+  const separator = /\s/.test(remainder) ? /\s+/ : "-";
 
+  // Title-casing runs either way. Splitting on spaces and then returning the
+  // pieces unchanged is what produced "4o mini" beside "Opus 5": the casing
+  // pass has to apply per word, not only to hyphen-separated names.
   return remainder
-    .split("-")
+    .split(separator)
     .filter(Boolean)
     .map((part) =>
       /^[a-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part

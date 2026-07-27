@@ -115,11 +115,6 @@ export const themeTokens = {
     themeFallback: "rgba(255, 255, 255, 0.05)",
     provenance: "[SHIPPED]",
   },
-  "--color-brand-logo-tile": {
-    dark: "hsl(0 0% 100%)",
-    light: "hsl(0 0% 100%)",
-    provenance: "[SHIPPED]",
-  },
   "--color-card": {
     dark: "#212121",
     light: "var(--color-surface-elevated)",

@@ -84,6 +84,21 @@ describe("formatModelLeafName", () => {
     expect(formatModelLeafName("GPT-5.5")).toBe("5.5");
   });
 
+  /**
+   * Title-casing applies per word regardless of separator. Skipping the pass
+   * whenever a label already contained a space — which is how the date-suffix
+   * shapes below were protected — is what put "4o mini" next to "Opus 5" in the
+   * same picker.
+   */
+  it.each([
+    ["GPT-4o mini", "4o Mini"],
+    ["GPT-4.1 mini", "4.1 Mini"],
+    ["GPT-4.1 nano", "4.1 Nano"],
+    ["GPT-5.4 mini Fast", "5.4 Mini Fast"],
+  ])("title-cases space-separated variant words: %s -> %s", (input, expected) => {
+    expect(formatModelLeafName(input)).toBe(expected);
+  });
+
   // Table-driven: the literal catalog `displayName` leaves for the
   // claude-<family>-5 bare-version ids (fable, sonnet), both the hyphenated
   // cursor form and the space-separated form, plus the pre-existing

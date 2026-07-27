@@ -97,32 +97,20 @@ function selectIconImage(
  * Shared centering box for both artwork branches. Deliberately chrome-free:
  * no border and no background plate, so a row reads as a column of brand
  * marks rather than a column of framed swatches. It contributes only the
- * layout box (default size-8, overridden via `className`) and the `text-ui`
- * font size that both artwork tiers below resolve their em-relative size
- * against.
+ * layout box — default size-8, overridden via `className` (callers pass a
+ * semantic icon tier).
+ *
+ * The artwork inside is sized as a share of THIS tile by
+ * `.integration-icon-tile` in the design CSS, keyed off the artwork's
+ * `data-integration-icon-artwork` branch. That relationship cannot be two
+ * independent em sizes: the tile resolved its em against the callsite font size
+ * and the artwork resolved its own against the same one, so their ratio was
+ * pinned at whatever the two tiers happened to be — above 1 for a tile a tier
+ * below the artwork, which made the mark larger than the box clipping it, and
+ * edge-to-edge even where the numbers agreed.
  */
 const TILE_BASE_CLASS =
-  "flex size-8 shrink-0 items-center justify-center overflow-hidden text-ui text-muted-foreground";
-
-/**
- * Artwork tier for the image branch, shared by every logo asset so they all
- * land at the same optical size. A semantic tier rather than the old
- * `size-full`, which let full-bleed artwork touch the tile border while
- * whitespace-padded artwork looked tiny by comparison.
- */
-const ARTWORK_CLASS = "icon-display object-contain";
-
-/**
- * [RETUNE:integration-icons/glyph-optical-weight] — the inline brand glyphs
- * are flat, full-bleed marks with no internal whitespace baked into their
- * paths, unlike the image logos (most of which already carry some breathing
- * room). At the image branch's tier they therefore read heavier than their
- * neighbours in an identical tile — most visibly the four-lobe
- * messaging-provider mark, which was the "gigantic" complaint. One tier down
- * for the whole glyph branch corrects that, rather than special-casing a
- * single namespace.
- */
-const GLYPH_ARTWORK_CLASS = "icon-large shrink-0";
+  "integration-icon-tile flex size-8 shrink-0 items-center justify-center overflow-hidden text-muted-foreground";
 
 interface IntegrationIconProps {
   /** The integration definition's namespace (e.g. "linear", "sentry"). */
@@ -134,10 +122,10 @@ interface IntegrationIconProps {
 /**
  * Brand icon tile for an integration provider, keyed by definition namespace.
  * Unknown namespaces (e.g. org-custom MCP definitions) fall back to a generic
- * plug glyph. Both artwork branches share one tile shell and resolve their
- * artwork size from one semantic icon tier per branch (see `ARTWORK_CLASS` /
- * `GLYPH_ARTWORK_CLASS`) so a new provider can't land at a divergent optical
- * size, no matter which branch it falls into.
+ * plug glyph. Both artwork branches share one tile shell and size their artwork
+ * as a share of that tile (`.integration-icon-tile` in the design CSS), so a
+ * new provider can't land at a divergent optical size and a caller only has to
+ * choose the tile's icon tier.
  */
 export function IntegrationIcon({ namespace, className }: IntegrationIconProps) {
   const resolvedMode = useResolvedMode();
@@ -151,13 +139,18 @@ export function IntegrationIcon({ namespace, className }: IntegrationIconProps) 
         src={selectIconImage(imageConfig, resolvedMode)}
         alt=""
         aria-hidden="true"
-        className={ARTWORK_CLASS}
+        data-testid="integration-icon-artwork"
+        data-integration-icon-artwork="image"
       />
     );
   } else {
     const Glyph = INTEGRATION_GLYPHS[namespace] ?? Plug;
     artwork = (
-      <Glyph aria-hidden="true" className={GLYPH_ARTWORK_CLASS} />
+      <Glyph
+        aria-hidden="true"
+        data-testid="integration-icon-artwork"
+        data-integration-icon-artwork="glyph"
+      />
     );
   }
 

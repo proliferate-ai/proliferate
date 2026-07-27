@@ -113,6 +113,13 @@ describe("resolveModelDisplayName", () => {
     ["claude-sonnet-4-5-20250929", "Sonnet 4.5"],
     ["claude-haiku-4-5-20251001", "Haiku 4.5"],
     ["claude-sonnet-5-20260101", "Sonnet 5"],
+    // Two-digit components. A single-digit pattern did not just mislabel these,
+    // it collapsed them: the minor group failed and the bare-major branch
+    // matched instead, so ".10" and ".11" both rendered as the plain major and
+    // became indistinguishable from each other and from ".0".
+    ["claude-opus-4-10", "Opus 4.10"],
+    ["claude-opus-4-11", "Opus 4.11"],
+    ["claude-sonnet-10-2", "Sonnet 10.2"],
   ];
 
   it.each(CLAUDE_MODEL_ID_CASES)("derives %s -> %s", (modelId, expected) => {

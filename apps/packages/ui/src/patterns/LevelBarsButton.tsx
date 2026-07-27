@@ -114,7 +114,7 @@ function useLevelBarStepTransition(currentIndex: number, levelCount: number): Le
     // Matches the animation-duration of .composer-level-bar-fill-in/
     // -drain-out (--activity-level-bar-step) and .composer-level-bars-wrap
     // (--duration-disclosure) in product.css. Holding the class for the full
-    // span matters more now that the step is a second long: clearing it early
+    // span matters more now that the step is half a second: clearing it early
     // would snap the bar to its final height mid-climb.
     const staggerSpan = isWrap ? 0 : Math.abs(currentIndex - prev) * LEVEL_BAR_TRANSITION_STAGGER_MS;
     const totalMs = isWrap

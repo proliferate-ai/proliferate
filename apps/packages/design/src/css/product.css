@@ -500,6 +500,37 @@ body {
   color: color-mix(in srgb, #339cff 64%, #003f7a 36%);
 }
 
+/* Integration brand marks. The tile takes its box from a semantic icon tier at
+   the callsite; the artwork inside is a SHARE OF THAT TILE, which is why the
+   relationship lives here instead of as a second icon tier at the callsite.
+   Two independent em sizes could not express it: the tile resolved its em
+   against the callsite font size and the artwork resolved its own against the
+   same one, so their ratio was pinned at whatever the two tiers happened to be
+   — above 1 for a tile a tier below the artwork, which made the mark larger
+   than the box clipping it. A share is inversion-proof at every tile size, so a
+   new callsite only chooses the tile's tier.
+   [RETUNE:integration-icons/glyph-optical-weight] — the inline glyph share is
+   the smaller of the two: those marks are flat and full-bleed, with none of the
+   internal whitespace most logo assets carry, so at the image share they read
+   heavier than their neighbours in an identical tile. The step between the two
+   shares is the same relative step the two icon tiers used to express. */
+.integration-icon-tile {
+  --integration-icon-image-share: 78%;
+  --integration-icon-glyph-share: 65%;
+}
+
+.integration-icon-tile > [data-integration-icon-artwork="image"] {
+  width: var(--integration-icon-image-share);
+  height: var(--integration-icon-image-share);
+  object-fit: contain;
+}
+
+.integration-icon-tile > [data-integration-icon-artwork="glyph"] {
+  width: var(--integration-icon-glyph-share);
+  height: var(--integration-icon-glyph-share);
+  flex-shrink: 0;
+}
+
 .file-source-view {
   --diff-view-surface: var(--color-background);
   --diffs-bg: var(--diff-view-surface);

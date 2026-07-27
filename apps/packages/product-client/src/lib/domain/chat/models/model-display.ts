@@ -162,8 +162,18 @@ function formatGeminiModelId(modelId: string): string | null {
 // the leading digit of a longer suffix: a `-1m` context marker on a bare id
 // ("claude-sonnet-5-1m") or a full date stamp on a bare id
 // ("claude-sonnet-5-20260101") would otherwise be misread as ".1" or ".2".
+//
+// Both components accept more than one digit. Matching a single digit did not
+// merely mislabel a two-digit version, it did so silently: on "claude-opus-4-10"
+// the minor group failed the lookahead and the pattern fell back to the
+// bare-major branch, so a ".10" release would render as "Opus 4" — the same
+// label as its own ".0", with distinct models collapsed onto one name and
+// nothing to signal it. The minor stays capped at two digits so a date stamp
+// can never be read as a version.
 function formatClaudeModelId(modelId: string): string | null {
-  const match = /claude-([a-z]+)-(\d)(?:-(\d)(?![\dm]))?(?:-[\d-]+)?/.exec(modelId);
+  const match = /claude-([a-z]+)-(\d+)(?:-(\d{1,2})(?![\dm]))?(?:-[\d-]+)?/.exec(
+    modelId,
+  );
   if (!match) {
     return null;
   }

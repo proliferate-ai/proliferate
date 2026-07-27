@@ -135,7 +135,7 @@ function ProviderRow({
 
   return (
     <StatusRow
-      icon={<IntegrationIcon namespace={provider.namespace} className="icon-paired rounded-sm [font-size:var(--text-composer)]" />}
+      icon={<IntegrationIcon namespace={provider.namespace} className="icon-paired" />}
       label={provider.displayName}
       trailing={(
         <span className="flex shrink-0 items-center gap-2">
