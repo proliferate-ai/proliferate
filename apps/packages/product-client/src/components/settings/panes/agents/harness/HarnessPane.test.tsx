@@ -69,14 +69,8 @@ const state = vi.hoisted(() => ({
     errorMessage: string | null;
     isStarting: boolean;
   }>,
-  gatewayModels: {
-    data: undefined as
-      | {
-        models: Array<Record<string, unknown>>;
-        source: "seed" | "probe";
-        probedAt?: string;
-      }
-      | undefined,
+  modelSnapshotStatus: {
+    data: undefined as Record<string, unknown> | undefined,
     isLoading: false,
   },
   launchOptions: {
@@ -101,7 +95,7 @@ const state = vi.hoisted(() => ({
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
 const overrideMutate = vi.hoisted(() => vi.fn());
-const refreshGatewayModelsMutate = vi.hoisted(() => vi.fn());
+const refreshModelSnapshotMutate = vi.hoisted(() => vi.fn());
 const openAuthTerminal = vi.hoisted(() => vi.fn());
 const closeAuthTerminal = vi.hoisted(() => vi.fn());
 const handleTerminalExit = vi.hoisted(() => vi.fn());
@@ -120,25 +114,22 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useUpsertAgentModelOverride: () => ({ mutate: overrideMutate, isPending: false }),
 }));
 
-// Local surface + gateway route reads the RUNTIME's resolved gateway models
-// (contract §5) instead of the cloud catalog — mock the anyharness SDK hooks
-// standing in for that runtime call.
-vi.mock("@anyharness/sdk-react", () => ({ useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }), useAgentGatewayModelsQuery: () => state.gatewayModels,
-  useRefreshAgentGatewayModelsMutation: () => ({
-    mutate: refreshGatewayModelsMutate,
+// The local surface reads the RUNTIME's composed observation
+// (model-catalog.md "The picker is the observation") — mock the anyharness
+// SDK hooks standing in for that runtime call.
+vi.mock("@anyharness/sdk-react", () => ({
+  useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }),
+  // Pre-first-observation seed: the runtime's resolved launch catalog (the
+  // session model picker's data source) — mock stands in for that runtime read.
+  useAgentLaunchOptionsQuery: () => state.launchOptions,
+  // The composed observation (one status document per harness): an absent
+  // document keeps HarnessAllModelsSection on the unverified seed path.
+  useModelSnapshotStatusQuery: () => state.modelSnapshotStatus,
+  // The param-less manual-refresh poke.
+  useRefreshModelSnapshotMutation: () => ({
+    mutate: refreshModelSnapshotMutate,
     isPending: false,
   }),
-  // native/api_key refreshes source their probe payload from the runtime's
-  // resolved launch catalog (the session model picker's data source) —
-  // mock stands in for that runtime read.
-  useAgentLaunchOptionsQuery: () => state.launchOptions,
-  // Probe-status polling has no assertions in this suite; a static idle
-  // result keeps HarnessAllModelsSection's staleness badge inert here.
-  useModelSnapshotStatusQuery: () => ({ data: undefined, isLoading: false }),
-  // Refresh-mutation stub — this suite asserts on the legacy gateway
-  // mutation only; the model-snapshot refresh mutation has no assertions
-  // here but must exist or the component throws on render (C3-R1 fix).
-  useRefreshModelSnapshotMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
@@ -303,8 +294,8 @@ afterEach(() => {
   state.agentModels.isLoading = false;
   state.agentsByKind = new Map();
   state.loginSessions = {};
-  state.gatewayModels.data = undefined;
-  state.gatewayModels.isLoading = false;
+  state.modelSnapshotStatus.data = undefined;
+  state.modelSnapshotStatus.isLoading = false;
   state.launchOptions.data = undefined;
   state.launchOptions.isLoading = false;
 });
@@ -767,8 +758,12 @@ describe("HarnessPane authentication", () => {
   });
 });
 
+// The layered read (observation-else-seed with the override patch) serves
+// machineless picking, so it is the CLOUD surface's source; the local surface
+// reads the composed observation instead (next describe).
 describe("HarnessPane all models", () => {
   it("renders the layered catalog grid in the All Models section", () => {
+    state.agentSurface = "cloud";
     state.agentModels.data = {
       harnessKind: "claude",
       authContextId: "anthropic-oauth",
@@ -796,6 +791,7 @@ describe("HarnessPane all models", () => {
   // so the native/api_key/cloud-surface branch renders no Refresh button at
   // all (see HarnessAllModelsSection's `canManuallyRefresh`).
   it("renders no Refresh button for a native/api_key route (no callable refresh exists)", () => {
+    state.agentSurface = "cloud";
     state.agentModels.data = {
       harnessKind: "claude",
       authContextId: "anthropic-oauth",
@@ -812,6 +808,7 @@ describe("HarnessPane all models", () => {
   });
 
   it("upserts an override patch when a model is toggled off", () => {
+    state.agentSurface = "cloud";
     state.agentModels.data = {
       harnessKind: "claude",
       authContextId: "anthropic-oauth",
@@ -847,69 +844,56 @@ describe("HarnessPane all models", () => {
   });
 });
 
-// Contract §5: local surface + gateway route reads the runtime's resolved
-// gateway model plan instead of the cloud catalog.
-function enableLocalGatewaySelection() {
-  state.selections.data = [{
-    id: "sel-gw",
-    harnessKind: "claude",
-    surface: "local",
-    sourceKind: "gateway",
-    apiKeyId: null,
-    keyTitle: null,
-    envVarName: null,
-    providerHint: null,
-    enabled: true,
-    createdAt: "2026-07-01T00:00:00Z",
-    updatedAt: "2026-07-01T00:00:00Z",
-  }];
-}
-
-describe("HarnessPane all models (local + gateway runtime)", () => {
-  it("reads the runtime's resolved gateway models instead of the cloud catalog", () => {
-    enableLocalGatewaySelection();
-    state.gatewayModels.data = {
-      models: [{ id: "claude-sonnet-4-5", displayName: "Sonnet 4.6", provider: "anthropic" }],
-      source: "seed",
+// The picker is the observation (model-catalog.md "Serving"): the local
+// surface renders the harness's ONE composed observation off the runtime's
+// status route — no per-context branching by route.
+describe("HarnessPane all models (local composed observation)", () => {
+  it("reads the composed observation instead of the cloud catalog", () => {
+    state.modelSnapshotStatus.data = {
+      agent: "claude",
+      schemaVersion: 2,
+      probeEngine: "owner",
+      state: "idle",
+      probedAt: "2026-07-02T20:00:00Z",
+      snapshotAgeSeconds: 90,
+      modelCount: 1,
+      modeCount: 0,
+      models: [{ id: "claude-sonnet-4-5", name: "Sonnet 4.6", provider: "anthropic" }],
+      modes: [],
     };
     renderPane("claude");
 
-
-
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
-    expect(screen.queryByText("seed")).not.toBeNull();
-    // No override capability for runtime-resolved models: the model switch is
-    // present (all resolved models are "on") but disabled.
+    expect(screen.queryByText("refreshed 1m ago")).not.toBeNull();
+    // No override capability for observation rows: the model switch is
+    // present (all observed models are "on") but disabled.
     const allSwitches = screen.getAllByRole("switch") as HTMLButtonElement[];
     const modelSwitch = allSwitches[allSwitches.length - 1]; // Last switch is the model toggle
     expect(modelSwitch.getAttribute("aria-checked")).toBe("true");
     expect(modelSwitch.disabled).toBe(true);
   });
 
-  it("shows a localized probed time when the runtime has a live probe", () => {
-    enableLocalGatewaySelection();
-    state.gatewayModels.data = {
-      models: [{ id: "claude-sonnet-4-5" }],
-      source: "probe",
-      probedAt: "2026-07-02T20:00:00Z",
+  it("marks the shipped-catalog seed as unverified before the first observation", () => {
+    state.modelSnapshotStatus.data = undefined;
+    state.launchOptions.data = {
+      agents: [{
+        kind: "claude",
+        displayName: "Claude Code",
+        defaultModelId: "claude-sonnet-4-5",
+        models: [{ id: "claude-sonnet-4-5", displayName: "Sonnet 4.6", isDefault: true }],
+      }],
     };
     renderPane("claude");
 
-
-
-    expect(
-      screen.queryByText(`probed ${new Date("2026-07-02T20:00:00Z").toLocaleString()}`),
-    ).not.toBeNull();
+    expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
+    expect(screen.queryByText("unverified")).not.toBeNull();
   });
 
-  it("hits the runtime refresh endpoint for local+gateway instead of the cloud refresh", () => {
-    enableLocalGatewaySelection();
-    state.gatewayModels.data = { models: [], source: "seed" };
+  it("hits the param-less runtime refresh endpoint for the local surface", () => {
     renderPane("claude");
-
 
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 
-    expect(refreshGatewayModelsMutate).toHaveBeenCalledWith("claude", expect.anything());
+    expect(refreshModelSnapshotMutate).toHaveBeenCalledWith("claude", expect.anything());
   });
 });

@@ -1,4 +1,4 @@
-import type { AgentLaunchOptionsResponse, GatewayModelEntry } from "@anyharness/sdk";
+import type { AgentLaunchOptionsResponse } from "@anyharness/sdk";
 import type {
   AgentAuthRoute,
   AgentAuthSelection,
@@ -89,30 +89,6 @@ export function normalizeCatalogModels(
     });
   }
   return normalized;
-}
-
-// The runtime's resolved gateway model plan (contract §1/§5): each id is joined
-// onto the bundled catalog, so entries carry enriched display metadata
-// (probe-only ids stay sparse `{ id, provider? }`). There's no override layering
-// (the runtime doesn't know about cloud catalog overrides), so every resolved
-// model is enabled; the table disables the toggle for this source (see
-// HarnessAllModelsSection).
-export function normalizeGatewayModels(
-  models: readonly GatewayModelEntry[],
-): HarnessCatalogModel[] {
-  return models
-    .filter((model) => model.id.length > 0)
-    .map((model) => ({
-      id: model.id,
-      displayName: normalizeString(model.displayName) ?? model.id,
-      description: normalizeString(model.description),
-      provider: normalizeString(model.provider),
-      status: normalizeString(model.status),
-      effort: normalizeEffort(model.effort),
-      fastMode: typeof model.fastMode === "boolean" ? model.fastMode : null,
-      modes: normalizeModes(model.modes),
-      enabled: true,
-    }));
 }
 
 // Local Settings must be useful without a Proliferate Cloud session. The

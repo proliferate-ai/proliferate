@@ -37,24 +37,6 @@ describe("session create failure presentation", () => {
     );
   });
 
-  it("maps gated model errors to actionable guidance without internal context ids", () => {
-    const error = new AnyHarnessError({
-      type: "about:blank",
-      title: "Bad request",
-      status: 400,
-      code: "SESSION_MODEL_GATED",
-      detail: "gated",
-      instance: null,
-      requiredContexts: ["anthropic-api", "gateway"],
-    });
-
-    expect(formatSessionCreateFailureMessage(error)).toBe(
-      "This model is not available for the current authentication method. Choose an available model or change agent authentication in Settings, then try again.",
-    );
-    expect(formatSessionCreateFailureMessage(error)).not.toContain("anthropic-api");
-    expect(formatSessionCreateFailureMessage(error)).not.toContain("gateway");
-  });
-
   it("identifies missing-worktree errors from the runtime code, the client gate, and causes", () => {
     const runtimeError = anyHarnessError(
       "WORKSPACE_DIRECTORY_MISSING",
@@ -70,7 +52,9 @@ describe("session create failure presentation", () => {
     expect(isWorkspaceDirectoryMissingError(clientGateError)).toBe(true);
     expect(isWorkspaceDirectoryMissingError(wrapped)).toBe(true);
     expect(isWorkspaceDirectoryMissingError(new Error("network down"))).toBe(false);
-    expect(isWorkspaceDirectoryMissingError(anyHarnessError("SESSION_MODEL_GATED", "gated"))).toBe(false);
+    expect(
+      isWorkspaceDirectoryMissingError(anyHarnessError("SESSION_MODEL_UNSUPPORTED", "unsupported")),
+    ).toBe(false);
   });
 
   it("preserves generic errors", () => {

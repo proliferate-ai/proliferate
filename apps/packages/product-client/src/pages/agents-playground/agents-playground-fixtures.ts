@@ -1,7 +1,7 @@
 import type { AgentSummary, ReconcileAgentsResponse } from "@anyharness/sdk";
 import {
-  anyHarnessAgentGatewayModelsKey,
   anyHarnessAgentLaunchOptionsKey,
+  anyHarnessAgentModelSnapshotStatusKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
 } from "@anyharness/sdk-react";
@@ -223,19 +223,34 @@ function seedHarnessQueries(
       }],
     },
   );
+  // The composed observation (model-catalog.md "Runtime routes"): one status
+  // document per harness, carrying the model/mode lists off the same document
+  // read that serves probedAt/lastAttempt and the provenance fields.
   client.setQueryData(
-    anyHarnessAgentGatewayModelsKey(
+    anyHarnessAgentModelSnapshotStatusKey(
       runtimeUrl,
       scenario.harnessKind,
       PLAYGROUND_CACHE_SCOPE,
     ),
     {
-      source: "probe",
+      agent: scenario.harnessKind,
+      schemaVersion: 2,
+      probeEngine: "owner",
+      state: "idle",
       probedAt: "2026-07-18T18:00:00Z",
+      snapshotAgeSeconds: 120,
+      modelCount: 2,
+      modeCount: 1,
       models: [
-        { id: "model-default", displayName: "Recommended", provider: "provider" },
-        { id: "model-fast", displayName: "Fast", provider: "provider" },
+        { id: "model-default", name: "Recommended", provider: "provider" },
+        { id: "model-fast", name: "Fast", provider: "provider" },
       ],
+      modes: [{ id: "build", name: "Build" }],
+      attestation: { name: scenario.harnessKind, version: "playground" },
+      installIdentity: { role: "agent_process", version: "playground", source: "pinned_archive" },
+      lastAttempt: { at: "2026-07-18T18:00:00Z", outcome: "ok", detail: null },
+      lastError: null,
+      warnings: [],
     },
   );
 }

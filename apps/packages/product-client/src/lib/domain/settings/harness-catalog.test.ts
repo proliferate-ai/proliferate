@@ -1,11 +1,10 @@
-import type { AgentLaunchOptionsResponse, GatewayModelEntry } from "@anyharness/sdk";
+import type { AgentLaunchOptionsResponse } from "@anyharness/sdk";
 import type { AgentAuthSelection } from "@proliferate/cloud-sdk";
 import { describe, expect, it } from "vitest";
 import {
   catalogRouteForSurface,
   defaultRouteForSurface,
   normalizeCatalogModels,
-  normalizeGatewayModels,
   normalizeRuntimeLaunchModels,
 } from "#product/lib/domain/settings/harness-catalog";
 
@@ -66,78 +65,6 @@ describe("catalogRouteForSurface", () => {
       selection({ id: "other-harness", harnessKind: "codex", sourceKind: "gateway", apiKeyId: null, envVarName: null }),
     ]);
     expect(route).toBe("native");
-  });
-});
-
-describe("normalizeGatewayModels", () => {
-  function gatewayModel(overrides: Partial<GatewayModelEntry> & { id: string }): GatewayModelEntry {
-    return overrides;
-  }
-
-  it("joins the runtime's enriched catalog fields and marks every row enabled", () => {
-    expect(
-      normalizeGatewayModels([
-        gatewayModel({
-          id: "claude-sonnet-4-5",
-          displayName: "Sonnet 4.6",
-          description: "Balanced coding model",
-          provider: "anthropic",
-          status: "active",
-          effort: { values: ["low", "medium", "high"], default: "medium" },
-          fastMode: true,
-          modes: ["default", "acceptEdits", "plan"],
-        }),
-      ]),
-    ).toEqual([
-      {
-        id: "claude-sonnet-4-5",
-        displayName: "Sonnet 4.6",
-        description: "Balanced coding model",
-        provider: "anthropic",
-        status: "active",
-        effort: { values: ["low", "medium", "high"], default: "medium" },
-        fastMode: true,
-        modes: ["default", "acceptEdits", "plan"],
-        enabled: true,
-      },
-    ]);
-  });
-
-  it("renders probe-only ids sparse (id-only, no display metadata)", () => {
-    expect(
-      normalizeGatewayModels([gatewayModel({ id: "gpt-5.5", provider: "openai" })]),
-    ).toEqual([
-      {
-        id: "gpt-5.5",
-        displayName: "gpt-5.5",
-        description: null,
-        provider: "openai",
-        status: null,
-        effort: null,
-        fastMode: null,
-        modes: null,
-        enabled: true,
-      },
-    ]);
-  });
-
-  it("drops empty ids and returns an empty list for no models", () => {
-    expect(
-      normalizeGatewayModels([gatewayModel({ id: "" }), gatewayModel({ id: "grok-5" })]),
-    ).toEqual([
-      {
-        id: "grok-5",
-        displayName: "grok-5",
-        description: null,
-        provider: null,
-        status: null,
-        effort: null,
-        fastMode: null,
-        modes: null,
-        enabled: true,
-      },
-    ]);
-    expect(normalizeGatewayModels([])).toEqual([]);
   });
 });
 
