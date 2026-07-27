@@ -40,7 +40,7 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "pointer-events-none z-50 animate-popover-in rounded-lg bg-popover/96 px-2.5 py-1 text-ui font-medium leading-tight text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm [transform-origin:var(--radix-tooltip-content-transform-origin)]",
+          "pointer-events-none z-50 animate-popover-in rounded-lg bg-popover/96 px-2.5 py-1 text-ui font-medium leading-tight text-popover-foreground shadow-popover ring-[0.5px] ring-border backdrop-blur-sm [transform-origin:var(--radix-tooltip-content-transform-origin)]",
           className,
         )}
         {...props}

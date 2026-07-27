@@ -32,7 +32,7 @@ export function AgentGlyphStack({
         {shown.map((id) => (
           <span
             key={id}
-            className="flex size-5 items-center justify-center rounded-full bg-popover ring-1 ring-popover-ring"
+            className="flex size-5 items-center justify-center rounded-full bg-popover ring-1 ring-border"
           >
             <AgentGlyph id={id} className="text-ui-sm icon-compact" />
           </span>
