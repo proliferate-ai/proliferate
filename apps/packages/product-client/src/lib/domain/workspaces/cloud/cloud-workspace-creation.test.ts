@@ -4,6 +4,7 @@ import {
   buildCloudWorkspaceAttemptFromRequest,
   buildConfiguredCloudRepoKeys,
   buildNextCloudWorkspaceAttempt,
+  cloudWorkspaceMenuLabel,
   collectTakenCloudWorkspaceSlugs,
   getCloudWorkspaceRepoTarget,
   isCloudWorkspaceBillingBlockError,
@@ -315,6 +316,24 @@ describe("cloud workspace creation helpers", () => {
       "Failed to start work: Cloud usage is paused because your included sandbox hours "
       + "are exhausted. Upgrade your plan in Settings → Billing.",
     );
+  });
+  it("drops the cloud qualifier when cloud is the only workspace kind on offer", () => {
+    const action = { kind: "create", label: "New cloud workspace" } as const;
+    expect(cloudWorkspaceMenuLabel({ action, localWorkspacesAvailable: true }))
+      .toBe("New cloud workspace");
+    expect(cloudWorkspaceMenuLabel({ action, localWorkspacesAvailable: false }))
+      .toBe("New workspace");
+  });
+
+  it("passes configure and hidden cloud states through unchanged", () => {
+    expect(cloudWorkspaceMenuLabel({
+      action: { kind: "configure", label: "Configure cloud" },
+      localWorkspacesAvailable: false,
+    })).toBe("Configure cloud");
+    expect(cloudWorkspaceMenuLabel({
+      action: { kind: "hidden", label: null },
+      localWorkspacesAvailable: false,
+    })).toBeUndefined();
   });
 });
 

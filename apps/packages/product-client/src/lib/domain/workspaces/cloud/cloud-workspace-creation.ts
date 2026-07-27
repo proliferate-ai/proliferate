@@ -73,6 +73,30 @@ export function cloudRepoActionStateFromReadiness(
   }
 }
 
+/**
+ * Menu label for the cloud create/configure action in a repo group's create
+ * popover.
+ *
+ * "New cloud workspace" only earns the qualifier where a local workspace is
+ * also on offer. When cloud is the only kind the group can create — a
+ * cloud-only repo, or any repo on a host without local workspaces — the
+ * qualifier describes a distinction the user cannot act on, so the item states
+ * the action plainly. Configure/loading labels are already specific and pass
+ * through unchanged.
+ */
+export function cloudWorkspaceMenuLabel(args: {
+  action: CloudRepoActionState;
+  localWorkspacesAvailable: boolean;
+}): string | undefined {
+  if (args.action.label === null) {
+    return undefined;
+  }
+  if (args.action.kind === "create" && !args.localWorkspacesAvailable) {
+    return "New workspace";
+  }
+  return args.action.label;
+}
+
 interface CloudRepoActionRepository {
   sourceRoot: string;
   gitOwner?: string | null;

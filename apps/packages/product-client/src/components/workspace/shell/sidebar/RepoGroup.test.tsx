@@ -201,6 +201,30 @@ describe("RepoGroup new workspace command scope", () => {
     expect(screen.getAllByRole("button", { name: "Set up Cloud" }).length).toBeGreaterThan(0);
   });
 
+  it("offers only the cloud action plus a desktop pointer where local workspaces are unsupported", () => {
+    render(
+      <RepoGroup
+        name="Repo A"
+        collapsed={false}
+        environmentKind="local_cloud"
+        localWorkspacesSupported={false}
+        cloudWorkspaceLabel="New workspace"
+        onCloudWorkspaceAction={vi.fn()}
+        onToggleCollapsed={vi.fn()}
+      >
+        <div>Workspace A</div>
+      </RepoGroup>,
+    );
+
+    expect(screen.queryByRole("button", { name: "New local workspace" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New worktree" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "New workspace" }).length)
+      .toBeGreaterThan(0);
+    expect(
+      screen.getByText("The Desktop app also runs workspaces on this machine."),
+    ).toBeTruthy();
+  });
+
   it("keeps removal pending until the Cloud mutation settles", async () => {
     let resolveRemoval!: () => void;
     const removal = new Promise<void>((resolve) => {

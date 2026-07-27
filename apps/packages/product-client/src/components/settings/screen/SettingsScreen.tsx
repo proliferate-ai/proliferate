@@ -32,6 +32,7 @@ import { SettingsScopeTabs } from "@proliferate/product-ui/patterns/SettingsScop
 import { ArrowLeft } from "lucide-react";
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useResize } from "#product/hooks/ui/layout/use-resize";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
@@ -124,6 +125,10 @@ export function SettingsScreen({
     max: WORKSPACE_SIDEBAR_MAX_WIDTH,
   });
 
+  // Only a host that actually paints macOS window buttons reserves room for
+  // them; on Web the inset was dead space above the nav.
+  const macWindowControlsInsetClass = useMacWindowControlsInsetClass();
+
   const activeScope = getSettingsScopeForSection(effectiveActiveSection);
   const handleScopeChange = (scope: typeof activeScope) => {
     if (scope === activeScope) {
@@ -135,7 +140,9 @@ export function SettingsScreen({
     <div className="flex h-screen flex-col bg-background text-foreground" data-telemetry-block>
       <header className="shrink-0 border-b border-border">
         <div
-          className="flex h-10 items-center gap-2 pl-[82px] pr-3"
+          className={`flex h-10 items-center gap-2 pr-3 ${
+            macWindowControlsInsetClass || "pl-3"
+          }`}
           data-tauri-drag-region="true"
         >
           <Button

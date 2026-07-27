@@ -36,6 +36,11 @@ export interface AddRepoFlowProps {
   options: readonly AddRepoFlowOption[];
   /** True while a local add is committing (disables entry options). */
   adding?: boolean;
+  /**
+   * Optional note under the entry options explaining what this host cannot
+   * offer. Authored by the host so this component stays copy-free.
+   */
+  entryNote?: string | null;
   error?: string | null;
   /** View model for the cloud step, wired by the host's controller layer. */
   cloudPicker?: CloudRepoPickerProps | null;
@@ -86,6 +91,7 @@ export function AddRepoFlow({
   step,
   options,
   adding = false,
+  entryNote = null,
   error = null,
   cloudPicker = null,
   clonePicker = null,
@@ -110,7 +116,12 @@ export function AddRepoFlow({
         data-telemetry-block
       >
         {step.kind === "entry" ? (
-          <AddRepoEntryStep options={options} onPickOption={onPickOption} disabled={adding} />
+          <AddRepoEntryStep
+            options={options}
+            onPickOption={onPickOption}
+            disabled={adding}
+            note={entryNote}
+          />
         ) : step.kind === "clone" ? (
           <AddRepoPickerStep
             title="Clone from GitHub"
@@ -138,10 +149,12 @@ function AddRepoEntryStep({
   options,
   onPickOption,
   disabled = false,
+  note = null,
 }: {
   options: readonly AddRepoFlowOption[];
   onPickOption: (option: AddRepoFlowOption) => void;
   disabled?: boolean;
+  note?: string | null;
 }) {
   const entries = options.map((option) => ENTRY_OPTION_DEFS[option]);
   const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -194,6 +207,11 @@ function AddRepoEntryStep({
           </Button>
         ))}
       </div>
+      {note ? (
+        <p className="mt-3 border-t border-border/60 pt-3 text-ui-sm text-muted-foreground">
+          {note}
+        </p>
+      ) : null}
     </div>
   );
 }

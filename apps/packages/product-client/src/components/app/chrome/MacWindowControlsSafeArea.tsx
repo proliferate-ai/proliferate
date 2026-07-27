@@ -1,24 +1,10 @@
 import { useEffect } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useHasMacWindowControls } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useTauriWindowActions } from "#product/hooks/access/tauri/use-window-actions";
 
-function isMacPlatform(): boolean {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  const nav = navigator as Navigator & {
-    userAgentData?: { platform?: string };
-  };
-  const platform = nav.userAgentData?.platform ?? navigator.platform;
-  return /\bmac/i.test(platform);
-}
-
 export function MacWindowControlsSafeArea() {
-  // `host.desktop !== null` is the same distinction the raw `__TAURI_INTERNALS__`
-  // probe made pre-move: a native Desktop host with window chrome to inset.
-  const isDesktop = useProductHost().desktop !== null;
-  const shouldRender = isDesktop && isMacPlatform();
+  // Single source of truth for "this host paints macOS window buttons".
+  const shouldRender = useHasMacWindowControls();
   const { applyMacWindowChrome } = useTauriWindowActions();
 
   useEffect(() => {
