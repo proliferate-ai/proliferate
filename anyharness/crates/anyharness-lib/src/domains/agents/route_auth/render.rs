@@ -13,7 +13,7 @@
 //! var; `gateway` sources run the per-harness recipe (the live-verified ones
 //! from `scripts/agent-gateway-smoke/HARNESS-MATRIX.md`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::json;
@@ -47,6 +47,22 @@ impl RenderedRouteAuth {
 
     fn remove(&mut self, key: &str) {
         self.remove.push(key.to_string());
+    }
+
+    /// Set a key AND record its name in `recorded`. Used only by the
+    /// `provider_config` arm, so [`sanitize_claude_ambient`] can tell a
+    /// rerouting flag THAT ARM composed (which it must keep — the flag IS the
+    /// route) from an arbitrary, user-named `api_key` var that merely collides
+    /// with one (which it must still strip). See that fn's doc for why the
+    /// distinction is load-bearing.
+    fn set_recorded(
+        &mut self,
+        recorded: &mut BTreeSet<String>,
+        key: &str,
+        value: impl Into<String>,
+    ) {
+        self.set(key, value);
+        recorded.insert(key.to_string());
     }
 }
 
@@ -123,9 +139,17 @@ fn render_native(
 /// composed delta: `sanitize_claude_ambient` keeps whatever this route actually
 /// set and removes the rest, so running it per-source would let an earlier
 /// source's var be removed on behalf of a later one.
-fn sanitize_claude_if_routed(harness_kind: &str, rendered: &mut RenderedRouteAuth) {
+///
+/// `provider_config_keys` is the set of env var names the `provider_config` arm
+/// itself composed — the ONLY source whose keys may exempt a rerouting flag from
+/// removal (see [`sanitize_claude_ambient`]).
+fn sanitize_claude_if_routed(
+    harness_kind: &str,
+    rendered: &mut RenderedRouteAuth,
+    provider_config_keys: &BTreeSet<String>,
+) {
     if harness_kind == AgentKind::Claude.as_str() {
-        sanitize_claude_ambient(rendered);
+        sanitize_claude_ambient(rendered, provider_config_keys);
     }
 }
 
@@ -135,10 +159,16 @@ fn render_sources(
     runtime_home: &Path,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let mut rendered = RenderedRouteAuth::default();
+    // The env var names the `provider_config` arm composed. Kept separate from
+    // `rendered.set` because only THIS arm's names may exempt a claude rerouting
+    // flag from sanitization — see `sanitize_claude_ambient`.
+    let mut provider_config_keys: BTreeSet<String> = BTreeSet::new();
     for source in &sources.sources {
         match source {
             ResolvedSource::ApiKey(profile) => {
                 // Fully generic: set exactly the requested var (contract §4).
+                // NOT recorded as a provider_config key: the name is user-chosen
+                // and must stay subject to claude's ambient strip list.
                 rendered.set(&profile.env_var_name, &profile.value);
             }
             ResolvedSource::Gateway(profile) => render_gateway(
@@ -156,15 +186,16 @@ fn render_sources(
                 sources.revision,
                 runtime_home,
                 &mut rendered,
+                &mut provider_config_keys,
             )?,
         }
     }
     // Every non-native route, not just the gateway one. See the fn's doc for the
     // reverse-contamination case this closes. Must run AFTER provider_config
     // composes too, so a claude provider_config source's mode-switch flag
-    // (e.g. CLAUDE_CODE_USE_BEDROCK) is what the sanitizer sees as "explicitly
-    // set" and keeps, rather than stripping it as stale ambient state.
-    sanitize_claude_if_routed(&sources.harness_kind, &mut rendered);
+    // (e.g. CLAUDE_CODE_USE_BEDROCK) is in `provider_config_keys` and kept,
+    // rather than stripped as stale ambient state.
+    sanitize_claude_if_routed(&sources.harness_kind, &mut rendered, &provider_config_keys);
     Ok(rendered)
 }
 
@@ -249,13 +280,22 @@ fn render_claude_gateway(
 /// route sets base-url + auth-token → those are kept; ambient ANTHROPIC_API_KEY
 /// is removed so a raw key cannot shadow the gateway token.
 ///
-/// Track D changes what "set" can mean for the rerouting flags themselves: a
-/// `provider_config` × `aws_bedrock`/`azure_openai` source legitimately SETS
-/// `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_FOUNDRY` (that flag IS the
-/// route), so these must also key off "did this render set it", exactly like
-/// the Anthropic selector loop below — never an unconditional remove, or a
-/// provider_config launch would sanitize away the very flag it just composed.
-fn sanitize_claude_ambient(rendered: &mut RenderedRouteAuth) {
+/// The rerouting flags are the ONE exception, and their exemption is deliberately
+/// narrower. Track D makes a `provider_config` × `aws_bedrock`/`azure_openai`
+/// source legitimately SET `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_FOUNDRY` —
+/// that flag IS the route, so stripping it would sanitize away the very thing the
+/// arm just composed. But the exemption keys off `provider_config_keys` (the keys
+/// the provider_config arm itself rendered), NOT off `rendered.set` at large,
+/// because the `api_key` arm sets an ARBITRARY, user-chosen env var name gated
+/// only by a shape regex server-side (`^[A-Z][A-Z0-9_]{0,127}$`, no denylist). An
+/// `api_key` row named `CLAUDE_CODE_USE_BEDROCK=1` would otherwise survive and
+/// reroute the launch to Bedrock with no Bedrock credential selected — exactly the
+/// hole described above, re-opened through the user's own naming. For those names
+/// the removal stays unconditional.
+fn sanitize_claude_ambient(
+    rendered: &mut RenderedRouteAuth,
+    provider_config_keys: &BTreeSet<String>,
+) {
     for key in [
         "CLAUDE_CODE_USE_BEDROCK",
         "CLAUDE_CODE_USE_VERTEX",
@@ -266,10 +306,18 @@ fn sanitize_claude_ambient(rendered: &mut RenderedRouteAuth) {
         "CLAUDE_CODE_USE_FOUNDRY",
         "AWS_BEARER_TOKEN_BEDROCK",
     ] {
-        if !rendered.set.contains_key(key) {
+        if !provider_config_keys.contains(key) {
             rendered.remove(key);
         }
     }
+    // DELIBERATELY NOT REMOVED: ambient `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/
+    // `AWS_SESSION_TOKEN`/`AWS_PROFILE`. `AWS_BEARER_TOKEN_BEDROCK` is used by the
+    // CLI as a direct auth header rather than through SigV4, so an ambient
+    // long-lived credential does not take precedence over the token we inject, and
+    // stripping the AWS credential chain would also break unrelated tooling the
+    // session legitimately inherits. Revisit if a precedence inversion is ever
+    // observed; the python arm makes the same call.
+    //
     // Remove each Anthropic selector we didn't explicitly set on this route, so
     // ambient values can't shadow the chosen credential path.
     for key in [
@@ -625,9 +673,20 @@ const AZURE_OPENAI_API_KEY_ENV: &str = "AZURE_OPENAI_API_KEY";
 /// real endpoint/deployment through, not a verified contract. Update these
 /// constants (and the registry) together when Gate 4 for this cell is
 /// scoped.
+///
+/// TODO(gate-4): the flip is NOT one line. Three things must land together, or
+/// no producer will ever emit these keys: (1) the registry's
+/// codex×azure_openai `providerConfig[].envVars` gains the endpoint/deployment
+/// names and drops `pending`; (2) the python arm's translation table gains the
+/// codex×azure_openai row (`_translate_provider_config_env` currently returns
+/// `None` for that cell — structurally excluded); (3) these constants are
+/// reconciled with whatever names (1) lands.
 const AZURE_OPENAI_ENDPOINT_ENV: &str = "AZURE_OPENAI_ENDPOINT";
 const AZURE_OPENAI_DEPLOYMENT_ENV: &str = "AZURE_OPENAI_DEPLOYMENT";
 
+/// `provider_config_keys` accumulates every env var name THIS arm sets. It is
+/// what lets [`sanitize_claude_ambient`] keep a rerouting flag this arm composed
+/// while still stripping an identically-named `api_key` var.
 fn render_provider_config(
     harness_kind: &str,
     profile: &ProviderConfigProfile,
@@ -635,6 +694,7 @@ fn render_provider_config(
     revision: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
+    provider_config_keys: &mut BTreeSet<String>,
 ) -> Result<(), RouteAuthError> {
     match (parse_harness(harness_kind)?, profile.config_kind.as_str()) {
         (AgentKind::Claude, _) | (AgentKind::OpenCode, _) => {
@@ -644,7 +704,7 @@ fn render_provider_config(
             // CLAUDE_CODE_USE_FOUNDRY) — no per-kind branch needed, per the
             // wire-contract ruling (D3 brief §2/§3.3).
             for (key, value) in &profile.env {
-                rendered.set(key, value);
+                rendered.set_recorded(provider_config_keys, key, value);
             }
             Ok(())
         }
@@ -667,12 +727,18 @@ fn render_provider_config(
                 revision,
             );
             rendered.set("CODEX_HOME", path_string(&codex_home));
+            // No ambient-key removals here, unlike `render_codex_gateway`: that
+            // recipe drops OPENAI_API_KEY/ANTHROPIC_API_KEY because its provider
+            // is only reachable through the config file, whereas
+            // `model_provider = "amazon-bedrock"` below pins the provider
+            // outright — an ambient OpenAI/Anthropic key has nothing to shadow.
+            // The asymmetry is intentional, not an omission.
             // AWS_REGION + AWS_BEARER_TOKEN_BEDROCK ride as plain env from the
             // already-resolved map (codex's built-in amazon-bedrock provider
             // reads its credential from env, same as claude/opencode) — NOT
             // interpolated into the TOML body.
             for (key, value) in &profile.env {
-                rendered.set(key, value);
+                rendered.set_recorded(provider_config_keys, key, value);
             }
             rendered.files.push(FileSpec {
                 path_family: PathFamily::CodexHome,
@@ -724,7 +790,7 @@ fn render_provider_config(
                 revision,
             );
             rendered.set("CODEX_HOME", path_string(&codex_home));
-            rendered.set(AZURE_OPENAI_API_KEY_ENV, api_key);
+            rendered.set_recorded(provider_config_keys, AZURE_OPENAI_API_KEY_ENV, api_key);
             rendered.files.push(FileSpec {
                 path_family: PathFamily::CodexHome,
                 revision,

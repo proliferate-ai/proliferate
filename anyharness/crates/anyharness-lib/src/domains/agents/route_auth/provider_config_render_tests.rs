@@ -158,6 +158,53 @@ fn claude_provider_config_azure_openai_foundry_flag_survives_generically() {
     );
 }
 
+/// The scoping proof for review B1: the exemption belongs to the
+/// `provider_config` arm's keys ONLY. Here one claude source is a
+/// provider_config setting `CLAUDE_CODE_USE_BEDROCK`, and a second is an
+/// `api_key` row whose user-chosen name collides with the OTHER rerouting flag.
+/// Bedrock (provider_config-composed) must survive; Foundry (api_key-named) must
+/// still be stripped. A `rendered.set`-wide exemption keeps both and fails here.
+/// (Render trusts the server's cardinality validation, so this composition is a
+/// render-layer probe of the sanitizer's scoping, not a claim about legality.)
+#[test]
+fn a_claude_api_key_named_like_a_flag_is_stripped_even_beside_a_provider_config_source() {
+    let home = TempHome::new("claude-pc-plus-flag-named-key");
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness(
+            "claude",
+            vec![
+                provider_config_source(
+                    "aws_bedrock",
+                    vec![
+                        ("CLAUDE_CODE_USE_BEDROCK", "1"),
+                        ("AWS_BEARER_TOKEN_BEDROCK", "bedrock-raw"),
+                    ],
+                ),
+                api_key_source("CLAUDE_CODE_USE_FOUNDRY", "1"),
+            ],
+        )],
+    ));
+
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+
+    assert!(
+        !rendered
+            .remove
+            .contains(&"CLAUDE_CODE_USE_BEDROCK".to_string()),
+        "the provider_config arm's own flag must survive, got removals {:?}",
+        rendered.remove
+    );
+    assert!(
+        rendered
+            .remove
+            .contains(&"CLAUDE_CODE_USE_FOUNDRY".to_string()),
+        "an api_key-named rerouting flag must still be stripped, got removals {:?}",
+        rendered.remove
+    );
+}
+
 // --- opencode ------------------------------------------------------------
 
 #[test]
