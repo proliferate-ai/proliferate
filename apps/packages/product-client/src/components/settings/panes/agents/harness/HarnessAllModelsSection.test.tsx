@@ -82,6 +82,16 @@ function composedStatus(
   };
 }
 
+/**
+ * §7's list is reference material, so the status row is also the disclosure and
+ * the pane opens with it collapsed (agent-auth.md pane anatomy §7). The
+ * collapsed subtree is aria-hidden, so role queries for the table's controls
+ * need the row clicked first.
+ */
+function expandModelList() {
+  fireEvent.click(screen.getByRole("button", { name: "All Models" }));
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -138,6 +148,7 @@ describe("HarnessAllModelsSection local surface (the composed observation)", () 
     expect(screen.queryByText("Modes: Build")).not.toBeNull();
     expect(screen.queryByText("unverified")).toBeNull();
     // Observation rows have no override endpoint: switches are on and disabled.
+    expandModelList();
     for (const element of screen.getAllByRole("switch")) {
       expect((element as HTMLButtonElement).disabled).toBe(true);
     }
@@ -288,6 +299,7 @@ describe("HarnessAllModelsSection cloud surface (the layered read)", () => {
     expect(screen.queryByRole("button", { name: /^Refresh$/ })).toBeNull();
     expect(screen.queryByText("unverified")).toBeNull();
 
+    expandModelList();
     fireEvent.click(screen.getAllByRole("switch")[0]);
     expect(upsertOverride).toHaveBeenCalledTimes(1);
     expect(refreshModelSnapshot).not.toHaveBeenCalled();

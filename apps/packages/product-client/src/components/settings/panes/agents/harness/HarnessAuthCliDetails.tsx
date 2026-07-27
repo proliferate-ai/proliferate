@@ -1,25 +1,17 @@
 import { useState } from "react";
-import { RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { AgentLoginTerminalPanel } from "#product/components/agents/AgentLoginTerminalPanel";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { isReadyAgent } from "#product/lib/domain/agents/status";
-import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
+import { HarnessStatusRow } from "#product/components/settings/panes/agents/harness/HarnessStatusRow";
 
 // Both surfaces now share this component unmodified: the login-terminal
 // workflow (editor.loginWorkflow) already resolves a surface-aware runtime
 // connection (local desktop runtime vs. the one Cloud sandbox), so nothing
 // here branches on surface anymore.
-export function CliDetails({
-  editor,
-  variant,
-}: {
-  editor: HarnessAuthEditorApi;
-  variant: HarnessBlockVariant;
-}) {
+export function CliDetails({ editor }: { editor: HarnessAuthEditorApi }) {
   const { localAgent, loginSession, loginWorkflow } = editor;
   // Surface-aware: on cloud this is the sandbox gateway's runtime URL
   // (CloudAnyHarnessRuntimeProvider), on local it's the desktop's own runtime —
@@ -27,6 +19,12 @@ export function CliDetails({
   const runtimeUrl = loginWorkflow.runtimeConnection.baseUrl;
   const { invalidateAgentListResources } = useAgentResourcesCache();
   const [refreshing, setRefreshing] = useState(false);
+  // §3: the native status row is clickable, and opens the choice between
+  // refreshing the status and running a login terminal session. The
+  // login-terminal flow itself is unchanged (login_terminal.rs over
+  // loginWorkflow.openAuthTerminal) — this ruling only moved its entry point
+  // onto the row that explains why it is needed.
+  const [choiceOpen, setChoiceOpen] = useState(false);
 
   function handleRefreshCredential() {
     if (!runtimeUrl.trim()) return;
@@ -66,39 +64,46 @@ export function CliDetails({
       || loginSession.terminal !== null
       || loginSession.errorMessage !== null);
 
-  return (
-    <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsCli}>
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          {cliIsExpired ? (
-            <p className="text-ui font-medium text-destructive">
-              CLI credentials expired
-            </p>
-          ) : cliIsAbsent || (canRunLogin && !cliAuthState) ? (
-            <p className="text-ui font-medium text-destructive">
-              {HARNESS_PANE_COPY.cliNotAuthenticated}
-            </p>
-          ) : isAuthenticated ? (
-            <p className="text-ui-sm text-muted-foreground">
-              {HARNESS_PANE_COPY.cliAuthenticated}
-            </p>
-          ) : (
-            <p className="text-ui-sm text-muted-foreground">
-              {HARNESS_PANE_COPY.nativeStateLocal}
-            </p>
-          )}
-          <IconButton
-            aria-label="Refresh credential status"
-            title="Refresh credential status"
-            disabled={refreshing}
-            onClick={handleRefreshCredential}
-          >
-            <RefreshCw className={`icon-paired ${refreshing ? "animate-spin" : ""}`} />
-          </IconButton>
-        </div>
+  const failing = cliIsExpired || cliIsAbsent || (canRunLogin && !cliAuthState);
+  const label = cliIsExpired
+    ? HARNESS_PANE_COPY.cliExpired
+    : failing
+      ? HARNESS_PANE_COPY.cliNotAuthenticated
+      : isAuthenticated
+        ? HARNESS_PANE_COPY.cliAuthenticated
+        : HARNESS_PANE_COPY.cliUnknown;
 
-        {canRunLogin ? (
-          <div>
+  return (
+    <HarnessStatusRow
+      data-harness-status="native"
+      label={label}
+      tone={failing ? "destructive" : isAuthenticated ? "success" : "neutral"}
+      // Saved and live state coexist (§3): the native row's saved fact is that
+      // no injected source is configured, so the CLI's own session is what a
+      // launch will use — it stays visible next to the live observation instead
+      // of being replaced by it.
+      savedState={editor.native ? HARNESS_PANE_COPY.nativeStateLocal : null}
+      description={HARNESS_PANE_COPY.nativeRowHint}
+      refreshing={refreshing}
+      onRefresh={handleRefreshCredential}
+      onClick={() => setChoiceOpen((open) => !open)}
+      expanded={choiceOpen}
+    >
+      {choiceOpen ? (
+        <div className="flex flex-wrap gap-2 pb-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={refreshing}
+            onClick={() => {
+              handleRefreshCredential();
+              setChoiceOpen(false);
+            }}
+          >
+            {HARNESS_PANE_COPY.nativeRefreshChoice}
+          </Button>
+          {localAgent?.supportsLogin ?? canRunLogin ? (
             <Button
               type="button"
               variant="primary"
@@ -110,16 +115,45 @@ export function CliDetails({
                     restart: Boolean(loginSession),
                   });
                 }
+                setChoiceOpen(false);
               }}
             >
               {loginSession?.isStarting
                 ? HARNESS_PANE_COPY.runLoginOpening
                 : HARNESS_PANE_COPY.runLogin}
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
+      ) : null}
 
-        {showLoginTerminal && loginSession ? (
+      {/* The direct login affordance stays outside the choice group whenever the
+          CLI actually needs a login, so the fix is one click from a failing row
+          (and so the qualification flow's "Authenticate" button is always
+          reachable). */}
+      {canRunLogin && !choiceOpen ? (
+        <div className="pb-3">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            disabled={loginSession?.isStarting ?? false}
+            onClick={() => {
+              if (localAgent) {
+                void loginWorkflow.openAuthTerminal(localAgent, {
+                  restart: Boolean(loginSession),
+                });
+              }
+            }}
+          >
+            {loginSession?.isStarting
+              ? HARNESS_PANE_COPY.runLoginOpening
+              : HARNESS_PANE_COPY.runLogin}
+          </Button>
+        </div>
+      ) : null}
+
+      {showLoginTerminal && loginSession ? (
+        <div className="pb-3">
           <AgentLoginTerminalPanel
             session={loginSession}
             baseUrl={loginWorkflow.runtimeConnection.baseUrl}
@@ -137,8 +171,8 @@ export function CliDetails({
               }
             }}
           />
-        ) : null}
-      </div>
-    </HarnessPanelBlock>
+        </div>
+      ) : null}
+    </HarnessStatusRow>
   );
 }

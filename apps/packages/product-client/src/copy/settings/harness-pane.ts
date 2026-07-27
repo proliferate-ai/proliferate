@@ -111,9 +111,35 @@ export const HARNESS_PANE_COPY = {
   detailsGateway: "Gateway",
   detailsApiKey: "API keys",
   detailsCli: "CLI login",
+  // §1 — the exit to the vendor tool's own documentation.
+  docsLink: "Docs",
+  // §3 — the shared status section. One question ("am I authenticated"), one
+  // answer shape, per method.
+  statusTitle: "Status",
+  gatewayAuthenticated: "Authenticated",
+  gatewayPending: "Not ready",
+  gatewayUnavailable: "Unavailable",
+  gatewaySaved: "Gateway route selected",
+  apiKeyAuthenticated: "Authenticated",
+  // Saved-vs-live coexistence (§3): a key IS in the vault and wired to a
+  // selection, but nothing is delivering it — "saved but failing", not either
+  // fact alone.
+  apiKeySavedNotActive: "Saved but not active",
+  apiKeyNotConfigured: "Not configured",
+  apiKeySaved: (count: number) => (count === 1 ? "1 key set" : `${count} keys set`),
+  apiKeyRowHint: "Whether a saved key is wired into the enabled selection.",
+  nativeRowHint: "The harness's own login session on this surface.",
+  nativeRefreshChoice: "Refresh status",
+  // §7 — probe status, on the same row component as §3.
+  probeObserved: "Observed",
+  probeNotYetRun: "Not probed yet",
+  probeModelCount: (count: number) =>
+    count === 1 ? "1 model" : `${count} models`,
   // CLI detail status.
-  cliNotAuthenticated: "CLI not authenticated",
+  cliNotAuthenticated: "Not authenticated",
+  cliExpired: "Credentials expired",
   cliAuthenticated: "Authenticated",
+  cliUnknown: "Unknown",
   // Native == the implicit empty state (contract §7): zero enabled sources.
   // Same copy on both surfaces — the CLI's own login now runs identically
   // whether that CLI is the desktop process or the one inside the sandbox.

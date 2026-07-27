@@ -4,15 +4,23 @@ import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPag
 import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
 import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { ArrowUpRight } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { CloudGuard } from "#product/components/cloud/CloudGuard";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { isMultiSourceHarness } from "#product/lib/domain/settings/harness-auth-sources";
 import { HarnessAllModelsSection } from "#product/components/settings/panes/agents/harness/HarnessAllModelsSection";
 import { HarnessAuthDetailsSection } from "#product/components/settings/panes/agents/harness/HarnessAuthDetailsSection";
-import { HarnessAuthSection, deriveSelectedMethod } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
+import { ApiKeyDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyDetails";
+import {
+  HarnessAuthSection,
+  deriveSelectedMethod,
+  isMultiSourceApiKeyConfigVisible,
+} from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
 import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
 import { HarnessSettingsSection } from "#product/components/settings/panes/agents/harness/HarnessSettingsSection";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
@@ -33,16 +41,44 @@ const SETTINGS_HARNESS_DISPLAY_NAMES: Record<string, string> = {
   opencode: "OpenCode",
 };
 
+/**
+ * §1 — Title and docs. Harness display name, one-line description, and an exit
+ * to the vendor's OWN documentation (`docsUrl`, declared per harness in the
+ * runtime registry and projected onto `AgentSummary`). The first thing a user
+ * needs from a vendor-tool pane is confirmation of which vendor tool it is.
+ *
+ * A harness whose registry entry declares no docsUrl simply renders no link —
+ * the affordance is never faked with a guessed URL.
+ */
+function HarnessDocsLink({ docsUrl }: { docsUrl: string | null | undefined }) {
+  if (!docsUrl) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="gap-1.5"
+      onClick={() => {
+        window.open(docsUrl, "_blank", "noopener,noreferrer");
+      }}
+    >
+      {HARNESS_PANE_COPY.docsLink}
+      <ArrowUpRight className="icon-compact" />
+    </Button>
+  );
+}
+
 export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const surface = useAgentSurfaceStore((state) => state.surface);
   const displayName = SETTINGS_HARNESS_DISPLAY_NAMES[harnessKind]
     ?? getProviderDisplayName(harnessKind);
+  const { agentsByKind } = useAgentCatalog();
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader
         title={displayName}
         description={HARNESS_PANE_COPY.surfaceDescription(surface, displayName)}
+        action={<HarnessDocsLink docsUrl={agentsByKind.get(harnessKind)?.docsUrl} />}
       />
 
       {surface === "cloud" ? (
@@ -124,11 +160,11 @@ function HarnessRuntimeSurface({
         </SettingsSection>
       ) : null}
 
-      {surface === "cloud" ? (
-        <HarnessSurfaceCloud harnessKind={harnessKind} displayName={displayName} />
-      ) : (
-        <HarnessSurfaceLocal harnessKind={harnessKind} displayName={displayName} />
-      )}
+      <HarnessAuthSurface
+        harnessKind={harnessKind}
+        displayName={displayName}
+        surface={surface}
+      />
     </>
   );
 }
@@ -178,7 +214,7 @@ function HarnessRuntimeStatusRow({
       data-harness-runtime-state={loading ? "loading" : error ? "error" : agent?.readiness ?? "missing"}
       label={(
         <span className="flex min-w-0 items-center gap-2.5">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
+          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-control text-muted-foreground">
             <ProviderIcon kind={harnessKind} className="icon-control" />
           </span>
           <span className="truncate">{displayName}</span>
@@ -191,83 +227,70 @@ function HarnessRuntimeStatusRow({
   );
 }
 
-function HarnessSurfaceCloud({
+/**
+ * The seven-section anatomy (agent-auth.md "Pane anatomy"), one component for
+ * both surfaces. The order is the ruling: identity → auth → whether that worked
+ * → keys → provider add → options → models, so the pane reads top to bottom as
+ * "which harness → how it authenticates → whether that worked → what else it
+ * can do → what it can run".
+ *
+ * Everything here is a flat titled section separated by the rows' own hairlines.
+ * There is no card, tile, or bordered box: a card implies a self-contained
+ * object, and these sections are facets of one harness.
+ */
+function HarnessAuthSurface({
   harnessKind,
   displayName,
+  surface,
 }: {
   harnessKind: string;
   displayName: string;
+  surface: AgentAuthSurface;
 }) {
-  const editor = useHarnessAuthEditor(harnessKind, displayName, "cloud");
+  const editor = useHarnessAuthEditor(harnessKind, displayName, surface);
   const selectedMethod = deriveSelectedMethod(editor);
+  const multiSource = isMultiSourceHarness(harnessKind);
+  // §4/§5 render whenever there is a key surface to show. For opencode this is
+  // NOT gated on a §2 choice (§2 "for opencode this section is not a gate"):
+  // its methods compose additively, so the key surface is reachable as soon as
+  // any row exists or the user starts configuring one.
+  const showKeys = multiSource
+    ? isMultiSourceApiKeyConfigVisible(editor)
+    : selectedMethod === "api_key";
 
   return (
     <>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface-elevated-secondary">
-        <HarnessAuthSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface="cloud"
-          editor={editor}
-          variant="panel"
-        />
-
-        <HarnessAuthDetailsSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          selectedMethod={selectedMethod}
-          editor={editor}
-          variant="panel"
-        />
-      </div>
-
-      <HarnessSettingsSection harnessKind={harnessKind} surface="cloud" variant="section" />
-
-      <HarnessAllModelsSection
+      {/* §2 — Auth method (radio semantics, uncarded). */}
+      <HarnessAuthSection
         harnessKind={harnessKind}
         displayName={displayName}
-        surface="cloud"
+        surface={surface}
+        editor={editor}
       />
-    </>
-  );
-}
 
-function HarnessSurfaceLocal({
-  harnessKind,
-  displayName,
-}: {
-  harnessKind: string;
-  displayName: string;
-}) {
-  const editor = useHarnessAuthEditor(harnessKind, displayName, "local");
-  const selectedMethod = deriveSelectedMethod(editor);
-
-  return (
-    <>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface-elevated-secondary">
-        <HarnessAuthSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface="local"
-          editor={editor}
-          variant="panel"
-        />
-
+      {/* §3 — Authenticated status, one row shape for every method. */}
+      {editor.authReady || surface === "cloud" ? (
         <HarnessAuthDetailsSection
           harnessKind={harnessKind}
-          displayName={displayName}
           selectedMethod={selectedMethod}
           editor={editor}
-          variant="panel"
         />
-      </div>
+      ) : null}
 
-      <HarnessSettingsSection harnessKind={harnessKind} surface="local" variant="section" />
+      {/* §4 + §5 — API keys and (opencode only) Add provider. */}
+      {showKeys ? (
+        <ApiKeyDetails harnessKind={harnessKind} editor={editor} />
+      ) : null}
 
+      {/* §6 — Harness-specific options, AFTER auth: these are options on top of
+          a working harness, so they sit below the thing that makes it work. */}
+      <HarnessSettingsSection harnessKind={harnessKind} surface={surface} />
+
+      {/* §7 — Model list, auto-collapsed, same status row as §3. */}
       <HarnessAllModelsSection
         harnessKind={harnessKind}
         displayName={displayName}
-        surface="local"
+        surface={surface}
       />
     </>
   );

@@ -1,7 +1,6 @@
-import type React from "react";
 import type { ReactNode } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
+import { Check } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { gatewaySubtitle } from "#product/copy/settings/agent-auth-copy";
@@ -10,7 +9,7 @@ import {
   isMultiSourceHarness,
   type AuthMethod,
 } from "#product/lib/domain/settings/harness-auth-sources";
-import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 
 export type { AuthMethod };
@@ -20,7 +19,6 @@ interface HarnessAuthSectionProps {
   displayName: string;
   surface: AgentAuthSurface;
   editor: HarnessAuthEditorApi;
-  variant?: HarnessBlockVariant;
 }
 
 /**
@@ -82,7 +80,6 @@ export function HarnessAuthSection({
   displayName,
   surface,
   editor,
-  variant = "section",
 }: HarnessAuthSectionProps) {
   // Cloud surface gating is now handled at the pane level by wrapping the
   // entire cloud surface content in CloudGuard. The local surface keeps its
@@ -91,11 +88,11 @@ export function HarnessAuthSection({
   // gets the route cards to store a key or pick a route.
   if (surface === "local" && !editor.authReady) {
     return (
-      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.signInTitle}>
+      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
         <p className="py-3 text-ui-sm text-muted-foreground">
           {HARNESS_PANE_COPY.signInDescription(displayName)}
         </p>
-      </HarnessPanelBlock>
+      </SettingsSection>
     );
   }
 
@@ -104,7 +101,6 @@ export function HarnessAuthSection({
       harnessKind={harnessKind}
       displayName={displayName}
       editor={editor}
-      variant={variant}
     />
   );
 }
@@ -113,20 +109,18 @@ interface HarnessAuthMethodsProps {
   harnessKind: string;
   displayName: string;
   editor: HarnessAuthEditorApi;
-  variant: HarnessBlockVariant;
 }
 
 function HarnessAuthMethods({
   harnessKind,
   displayName,
   editor,
-  variant,
 }: HarnessAuthMethodsProps): ReactNode {
   if (editor.selectionsQuery.isLoading) {
     return (
-      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.authenticationTitle}>
+      <SettingsSection title={HARNESS_PANE_COPY.authenticationTitle}>
         <p className="py-3 text-ui-sm text-muted-foreground">Loading authentication...</p>
-      </HarnessPanelBlock>
+      </SettingsSection>
     );
   }
 
@@ -165,8 +159,7 @@ function HarnessAuthMethods({
   }
 
   return (
-    <HarnessPanelBlock
-      variant={variant}
+    <SettingsSection
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
     >
@@ -183,11 +176,7 @@ function HarnessAuthMethods({
         </p>
       ) : null}
       <div
-        className={
-          gatewayCapable
-            ? "grid grid-cols-1 gap-2 sm:grid-cols-3"
-            : "grid grid-cols-1 gap-2 sm:grid-cols-2"
-        }
+        className="flex flex-col"
         data-harness-auth-section={harnessKind}
         data-harness-auth-delivery={editor.deliveryPending ? "pending" : "applied"}
         data-harness-selected-route={[...selectedMethods]
@@ -195,10 +184,9 @@ function HarnessAuthMethods({
           .join(" ")}
       >
         {gatewayCapable ? (
-          <MethodCard
+          <MethodRow
             label={HARNESS_PANE_COPY.methodGateway}
             description={HARNESS_PANE_COPY.methodGatewayDescription}
-            icon={<CloudIcon className="icon-large" />}
             selected={selectedMethods.has("gateway")}
             disabled={editor.gatewayLocked || editor.busy || gatewayCardDisallowed}
             disabledReason={
@@ -212,20 +200,18 @@ function HarnessAuthMethods({
             onClick={() => selectMethod("gateway")}
           />
         ) : null}
-        <MethodCard
+        <MethodRow
           label={HARNESS_PANE_COPY.methodApiKey}
           description={HARNESS_PANE_COPY.methodApiKeyDescription}
-          icon={<KeyRound className="icon-large" />}
           selected={selectedMethods.has("api_key")}
           disabled={editor.busy || apiKeyCardDisallowed}
           disabledReason={apiKeyCardDisallowed ? POLICY_TOOLTIP : undefined}
           routeOptionId={`${harnessKind}:api_key`}
           onClick={() => selectMethod("api_key")}
         />
-        <MethodCard
+        <MethodRow
           label={HARNESS_PANE_COPY.methodCli}
           description={HARNESS_PANE_COPY.methodCliDescription}
-          icon={<SquareTerminal className="icon-large" />}
           selected={selectedMethods.has("cli")}
           disabled={multiSource || editor.busy || nativeCardDisallowed}
           disabledReason={
@@ -239,7 +225,7 @@ function HarnessAuthMethods({
           onClick={() => selectMethod("cli")}
         />
       </div>
-    </HarnessPanelBlock>
+    </SettingsSection>
   );
 }
 
@@ -325,10 +311,9 @@ function handleMultiSourceSelect(method: AuthMethod, editor: HarnessAuthEditorAp
   }
 }
 
-interface MethodCardProps {
+interface MethodRowProps {
   label: string;
   description: string;
-  icon: React.ReactNode;
   selected: boolean;
   disabled?: boolean;
   disabledReason?: string;
@@ -337,18 +322,31 @@ interface MethodCardProps {
   onClick: () => void;
 }
 
-function MethodCard({
+/**
+ * One auth-method choice as a Conductor setting row (agent-auth.md §2: "rendered
+ * Conductor-style but NOT inside a card"): label and rationale on the left, the
+ * selected checkmark on the right, hairline separator between rows. The whole
+ * row is the hit target, and the pane's own section rules provide the structure
+ * that the retired tile grid used a border box for.
+ *
+ * The choice is one-of-N by behavior, not by markup: `handleSingleSourceSelect`
+ * drops the other sources on every pick (selection_rules.py's
+ * SINGLE_SOURCE_HARNESSES), so the control writes exactly one enabled source.
+ * `aria-pressed` is retained deliberately — the qualification DOM
+ * (tests/release/.../chat-authroute.ts) and the pane's own suite both read it as
+ * the selected-route signal.
+ */
+function MethodRow({
   label,
   description,
-  icon,
   selected,
   disabled,
   disabledReason,
   routeOptionId,
   onClick,
-}: MethodCardProps) {
+}: MethodRowProps) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="border-t border-border first:border-t-0">
       <Button
         variant="unstyled"
         size="unstyled"
@@ -358,30 +356,28 @@ function MethodCard({
         disabled={disabled}
         data-harness-route-option={routeOptionId}
         className={[
-          "relative flex min-h-28 min-w-0 flex-col items-start justify-end gap-1 overflow-hidden rounded-lg border px-4 py-3.5 text-left transition-colors sm:min-h-32",
-          selected
-            ? "border-foreground/20 bg-selected text-foreground"
-            : "border-border bg-background text-muted-foreground hover:border-foreground/10 hover:bg-hover active:bg-active",
-          disabled ? "pointer-events-none opacity-50" : "",
+          "flex w-full min-h-[2.875rem] items-center justify-between gap-4 py-3 text-left transition-colors",
+          disabled ? "pointer-events-none opacity-50" : "hover:text-foreground",
         ].join(" ")}
         onClick={onClick}
       >
-        {selected ? (
-          <Check className="absolute right-2.5 top-2.5 icon-paired text-foreground" />
-        ) : null}
-        <span className="mb-auto inline-flex size-8 items-center justify-center rounded-md bg-foreground/5">
-          {icon}
+        <span className="min-w-0 space-y-1">
+          <span
+            className={[
+              "block text-ui font-medium leading-5",
+              selected ? "text-foreground" : "text-muted-foreground",
+            ].join(" ")}
+          >
+            {label}
+          </span>
+          <span className="block max-w-2xl whitespace-normal text-ui-sm font-normal text-muted-foreground">
+            {disabled && disabledReason ? disabledReason : description}
+          </span>
         </span>
-        <span className="text-ui-sm font-medium text-current">{label}</span>
-        <span className="w-full whitespace-normal text-ui-sm font-normal text-muted-foreground">
-          {description}
+        <span className="flex size-5 shrink-0 items-center justify-center">
+          {selected ? <Check className="icon-paired text-foreground" /> : null}
         </span>
       </Button>
-      {disabled && disabledReason ? (
-        <p className="px-1 text-ui-sm text-muted-foreground">
-          {disabledReason}
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -270,6 +270,14 @@ function renderPane(harnessKind = "claude") {
   );
 }
 
+/**
+ * §7's model list opens collapsed behind its own status row (agent-auth.md pane
+ * anatomy §7), so the model toggles are aria-hidden until the row is clicked.
+ */
+function expandModelList() {
+  fireEvent.click(screen.getByRole("button", { name: "All Models" }));
+}
+
 function gatewayCard() {
   return screen.getByRole("button", { name: "Proliferate gateway" }) as HTMLButtonElement;
 }
@@ -880,6 +888,7 @@ describe("HarnessPane all models", () => {
 
 
 
+    expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     // 2 model toggles + 1 settings switch (Pass model).
     expect(screen.getAllByRole("switch").length).toBeGreaterThanOrEqual(2);
@@ -922,6 +931,7 @@ describe("HarnessPane all models", () => {
     renderPane("claude");
 
 
+    expandModelList();
     // First switch(es) are settings switches; model switches come later in DOM.
     const allSwitches = screen.getAllByRole("switch");
     const sonnetSwitch = allSwitches[allSwitches.length - 2]; // Second-to-last is first model
@@ -960,8 +970,9 @@ describe("HarnessPane all models (local composed observation)", () => {
     };
     renderPane("claude");
 
-    expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     expect(screen.queryByText("refreshed 1m ago")).not.toBeNull();
+    expandModelList();
+    expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     // No override capability for observation rows: the model switch is
     // present (all observed models are "on") but disabled.
     const allSwitches = screen.getAllByRole("switch") as HTMLButtonElement[];

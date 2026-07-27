@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
 import {
   ProviderConfigCreatorModal,
@@ -16,20 +17,25 @@ import {
   type ProviderConfigKind,
 } from "#product/lib/domain/settings/provider-config-fields";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
 import { HarnessAuthApiKeyRow } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyRow";
 import { ProviderPickerModal } from "#product/components/settings/panes/agents/harness/ProviderPickerModal";
 
+/**
+ * §4 — API keys. The container is now a flat titled section (no card, no
+ * bordered panel), matching the Conductor rhythm; the key components themselves
+ * (ApiKeyCreatorModal, KeyPicker via HarnessAuthApiKeyRow) are untouched.
+ *
+ * §4's typed "Configure Bedrock"/"Configure Azure" affordances are owned by the
+ * in-flight typed-config work and are deliberately NOT rebuilt here: the
+ * existing `providerConfigKinds` buttons stay exactly as they were (they render
+ * only once the registry declares providerConfig, which is still never today).
+ */
 export function ApiKeyDetails({
   harnessKind,
-  displayName,
   editor,
-  variant,
 }: {
   harnessKind: string;
-  displayName: string;
   editor: HarnessAuthEditorApi;
-  variant: HarnessBlockVariant;
 }) {
   const apiKeys = editor.apiKeysQuery.data ?? [];
   const { providerModalOpen, setProviderModalOpen } = useProviderModal();
@@ -93,11 +99,7 @@ export function ApiKeyDetails({
   const hasRows = editor.editorState.rows.length > 0;
 
   return (
-    <HarnessPanelBlock
-      variant={variant}
-      title={HARNESS_PANE_COPY.detailsApiKey}
-      description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
-    >
+    <SettingsSection title={HARNESS_PANE_COPY.detailsApiKey}>
       {hasRows ? (
         <div className="space-y-3">
           <div className="flex flex-col">
@@ -231,7 +233,7 @@ export function ApiKeyDetails({
           onSubmit={handleProviderConfigSubmit}
         />
       ) : null}
-    </HarnessPanelBlock>
+    </SettingsSection>
   );
 }
 

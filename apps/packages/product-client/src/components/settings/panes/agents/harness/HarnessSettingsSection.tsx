@@ -10,7 +10,6 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
-import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
 
 // --------------------------------------------------------------------------- #
 // Catalog-declared settings (mirrors catalogs/agents/catalog.json)
@@ -46,13 +45,17 @@ const CATALOG_SETTINGS: Record<string, CatalogSetting[]> = {
 interface HarnessSettingsSectionProps {
   harnessKind: string;
   surface: AgentAuthSurface;
-  variant?: HarnessBlockVariant;
 }
 
+/**
+ * §6 — Harness-specific options. A flat titled section of setting rows, the
+ * same rhythm as every other section of the pane: the bordered panel this used
+ * to render inside is gone, because these are facets of one harness rather than
+ * a self-contained object.
+ */
 export function HarnessSettingsSection({
   harnessKind,
   surface,
-  variant = "section",
 }: HarnessSettingsSectionProps) {
   const allSettings = CATALOG_SETTINGS[harnessKind];
   const settings = allSettings?.filter((s) => s.surfaces.includes(surface));
@@ -61,28 +64,8 @@ export function HarnessSettingsSection({
     return null;
   }
 
-  // When rendering as a standalone section (not inside a parent panel), the
-  // title sits ABOVE the card as a section heading (matching SettingsSection /
-  // the All Models section), and the bordered panel starts directly with rows.
-  if (variant === "section") {
-    return (
-      <SettingsSection title={HARNESS_PANE_COPY.harnessSettingsTitle}>
-        <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated-secondary px-4 py-1">
-          {settings.map((setting) => (
-            <HarnessSettingRow
-              key={setting.key}
-              harnessKind={harnessKind}
-              surface={surface}
-              setting={setting}
-            />
-          ))}
-        </div>
-      </SettingsSection>
-    );
-  }
-
   return (
-    <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.harnessSettingsTitle}>
+    <SettingsSection title={HARNESS_PANE_COPY.harnessSettingsTitle}>
       {settings.map((setting) => (
         <HarnessSettingRow
           key={setting.key}
@@ -91,7 +74,7 @@ export function HarnessSettingsSection({
           setting={setting}
         />
       ))}
-    </HarnessPanelBlock>
+    </SettingsSection>
   );
 }
 
