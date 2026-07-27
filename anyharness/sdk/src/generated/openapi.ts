@@ -2834,8 +2834,10 @@ export interface components {
         /** @description Resolved gateway model plan for the local surface. */
         GatewayModelsResponse: {
             /**
-             * @description The resolved, provider-filtered models — each id enriched with the
-             *     bundled catalog row (or bare `{ id, provider? }` for probe-only ids).
+             * @description The resolved gateway models — each id enriched with the bundled
+             *     catalog row (or bare `{ id, provider? }` for probe-only ids). No
+             *     client-side provider filtering is applied; server-side access groups
+             *     (once B1 lands) own scoping.
              */
             models: components["schemas"]["GatewayModelEntry"][];
             /** @description When a probe supplied the list (RFC3339); absent for seed. */
@@ -4010,8 +4012,8 @@ export interface components {
         /** @description Result of a manual gateway refresh. */
         RefreshGatewayResponse: {
             /**
-             * @description The freshly probed model ids (unfiltered — exactly what the gateway
-             *     returned; the resolver applies provider filtering when building plans).
+             * @description The freshly probed model ids — exactly what the gateway returned, with
+             *     no client-side provider filtering applied anywhere downstream.
              */
             models: string[];
             /** @description The probe timestamp (RFC3339). */
