@@ -61,6 +61,10 @@ vi.mock("#product/lib/infra/measurement/measurement-port", async (importOriginal
   recordBootDiagnosticOnce: vi.fn(),
 }));
 
+vi.mock("#product/components/agents/AuthRestartOfferRoot", () => ({
+  AuthRestartOfferRoot: () => null,
+}));
+
 const desktopLifecycleMountCount = vi.hoisted(() => ({ value: 0 }));
 vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
   DesktopProductLifecycleRoot: () => {

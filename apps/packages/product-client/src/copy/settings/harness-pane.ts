@@ -123,6 +123,15 @@ export const HARNESS_PANE_COPY = {
   // Applied means acknowledged (agent-auth.md): shown from a selection write
   // until the surface's runtime confirms the delivered auth state.
   deliveryPending: "Applying…",
+  // Restart offer (agent-auth.md "Running sessions are offered a restart",
+  // Proof C6). Title and action labels are founder-settled copy — do not
+  // reword them.
+  restartModalTitle: "Restart running sessions on old auth?",
+  restartModalConfirm: "yes, restart now",
+  restartModalDecline: "no",
+  restartModalDescription:
+    "These sessions are still running on the previous authentication. "
+    + "Restarting relaunches them on the new auth and keeps their transcripts.",
   catalogRefreshError: (displayName: string) =>
     `Could not refresh the ${displayName} model catalog.`,
   catalogOverrideError: (displayName: string) =>

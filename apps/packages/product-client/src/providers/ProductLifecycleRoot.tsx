@@ -39,6 +39,7 @@ import {
   recordBootDiagnosticOnce,
 } from "#product/lib/infra/measurement/measurement-port"
 import { AppCommandActionsProvider } from "#product/providers/AppCommandActionsProvider"
+import { AuthRestartOfferRoot } from "#product/components/agents/AuthRestartOfferRoot"
 import { DesktopProductLifecycleRoot } from "#product/providers/DesktopProductLifecycleRoot"
 import { AppErrorBoundary } from "#product/components/app/AppErrorBoundary"
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth"
@@ -207,6 +208,8 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   return (
     <AppCommandActionsProvider value={appCommandActions}>
       <DesktopProductLifecycleRoot />
+      {/* Restart offer after an acked auth switch (agent-auth.md, Proof C6). */}
+      <AuthRestartOfferRoot />
       {children}
     </AppCommandActionsProvider>
   )
