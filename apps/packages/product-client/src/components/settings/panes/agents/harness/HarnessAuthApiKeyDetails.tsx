@@ -241,11 +241,30 @@ export function ApiKeyDetails({
               size="sm"
               className="gap-1.5"
               disabled={editor.busy}
-              onClick={() => editor.setAddKeyModalOpen(true)}
+              onClick={() =>
+                editor.multiSource
+                  ? setProviderModalOpen(true)
+                  : editor.setAddKeyModalOpen(true)
+              }
             >
               <Plus className="icon-paired" />
-              {HARNESS_PANE_COPY.addApiKey}
+              {editor.multiSource
+                ? HARNESS_PANE_COPY.addProvider
+                : HARNESS_PANE_COPY.addApiKey}
             </Button>
+            {editor.multiSource ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                disabled={editor.busy}
+                onClick={() => editor.setAddKeyModalOpen(true)}
+              >
+                <Plus className="icon-paired" />
+                {HARNESS_PANE_COPY.addApiKey}
+              </Button>
+            ) : null}
             {providerConfigKinds.map((kind) => (
               <Button
                 key={kind}
