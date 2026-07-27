@@ -114,8 +114,10 @@ every other spec owns its page content:
   Billing platform -> Billing and Usage & Limits pane content
 ```
 
-> Shipped correction: no pane named "Agent Authentication" was ever
-> shipped under spec 02. The Agents scope ships as the per-harness
+> Shipped correction: a pane named "Agent Authentication" (sidebar label
+> "Authentication") did ship under spec 02, then was torn down by
+> PR #814 (`f0f8403fa`, "tear down Bifrost gateway stack") and replaced
+> by the API key pool page. The Agents scope ships as the per-harness
 > panes (`agent-claude`/`agent-codex`/`agent-opencode`/`agent-grok`)
 > plus `agent-api-keys`; the old `agent-authentication` id redirects to
 > `agent-api-keys` (see the staleness note at the top).
@@ -262,7 +264,10 @@ subfolders:
 ```
 
 > Shipped correction: `AgentAuthenticationPane.tsx` and the
-> `agent-authentication/` subfolder do not exist. The Agents scope ships
+> `agent-authentication/` subfolder do not exist; both were removed by
+> PR #814 (`f0f8403fa`). `AgentDefaultsPane.tsx` also does not exist; it
+> was removed by PR #1100 (`7d5894807`) — see the correction on the
+> `agent-defaults` ownership row in §5.2. The Agents scope ships
 > as `panes/agents/harness/` (per-harness pane, auth method cards, CLI
 > login details) and `panes/agents/api-keys/` (the key pool), with
 > selection/vault contracts owned by
@@ -559,6 +564,14 @@ SETTINGS_CONTENT_SECTIONS = [
 ]
 ```
 
+> Shipped correction: same as the §4.1 correction above — the registered
+> array
+> ([config/settings.ts](../../../../../apps/packages/product-client/src/config/settings.ts))
+> carries `agent-claude`/`agent-codex`/`agent-opencode`/`agent-grok`/
+> `agent-api-keys` instead of `agent-authentication`/`agent-defaults`,
+> plus `integrations`, `repo-actions`, and `repo-environment`; `keyboard`,
+> `archived-chats`, and `compute` were removed.
+
 Renamed ids:
 
 ```text
@@ -643,8 +656,12 @@ Agents
                                        agent_run_config rows; visible to
                                        chat, automations, Slack, web,
                                        mobile, Desktop
-  (shipped: AgentDefaultsPane was never built; the `agent-defaults` id
-   redirects to `agent-claude` — see `normalizeSettingsSection` in
+  (shipped: `AgentDefaultsPane` was built (added by `ec1271420`, "Add
+   agent launch defaults settings"), registered, and rendered with a
+   "Defaults" sidebar row, then removed by PR #1100 (`7d5894807`,
+   "remove Agent Defaults settings page; defaults from catalog +
+   last-used-wins"); the `agent-defaults` id now redirects to
+   `agent-claude` — see `normalizeSettingsSection` in
    navigation.ts:41-48.)
   agent-authentication      spec 02   CloudAgentAuthLibrary (per-org and
                                        personal credentials) + per-target
@@ -840,9 +857,10 @@ AgentRunConfigSelector
     AgentDefaultsPane (spec 03)
     Automation create dialog (spec 06)
     Slack bot config (spec 07)
-  (shipped: never built — AgentDefaultsPane, its one listed consumer,
-   was never built either; the component is a zero-hit grep across
-   apps/desktop and apps/packages on main)
+  (shipped: `AgentRunConfigSelector` was never built — a zero-hit grep
+   across apps/desktop and apps/packages on main. Its one listed
+   consumer, `AgentDefaultsPane`, was built but was removed by PR #1100
+   (`7d5894807`); see the correction on the `agent-defaults` row above.)
 
 RuntimeReadinessPanel
   apps/desktop/src/components/settings/shared/RuntimeReadinessPanel.tsx
@@ -1130,6 +1148,9 @@ apps/desktop/src/lib/domain/telemetry/events.ts
 8. Deep-link params (`?section=…&target=…`, `&credential=…`,
    `&kind=…`, `&repo=…`) work: opening a deep link scrolls the focus
    element into view and opens the relevant detail card.
+   (shipped: `&credential=` and `&kind=` do not exist — `FOCUS_PARAM_NAMES`
+    in navigation.ts has neither; see the §5.7 correction. Only
+    `&target=` and `&repo=` are real deep-link params.)
 9. Telemetry events `settings_pane_opened`, `settings_pane_closed`,
     `admin_gate_blocked` are emitted with the new section ids and
     use vocabulary from §5.3.
