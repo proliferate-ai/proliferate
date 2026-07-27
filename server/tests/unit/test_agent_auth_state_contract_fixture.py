@@ -36,11 +36,24 @@ class TestAgentAuthStateContractFixture:
         for entry in fixture["harnesses"]:
             assert set(entry) <= {"harness_kind", "sources", "settings"}
             for source in entry["sources"]:
-                assert source["kind"] in ("gateway", "api_key")
+                # "provider_config" (Track D — opencode's aws_bedrock row) is
+                # asserted by SHAPE only here, not by this renderer's own
+                # output: this branch's `render_agent_auth_state` does not
+                # emit that kind yet (that lands on the D3-python producer
+                # branch, on a different base). It is included in the fixture
+                # so the Rust consumer can pin the shape byte-identically
+                # against that branch's fixture. See
+                # `test_this_renderer_does_not_produce_provider_config_yet`
+                # below for the explicit known-gap tripwire.
+                assert source["kind"] in ("gateway", "api_key", "provider_config")
                 if source["kind"] == "gateway":
                     assert set(source) == {"kind", "base_url", "key"}
-                else:
+                elif source["kind"] == "api_key":
                     assert set(source) == {"kind", "env_var_name", "value"}
+                else:
+                    assert set(source) == {"kind", "config_kind", "env"}
+                    assert isinstance(source["env"], dict)
+                    assert source["env"], "a provider_config source must carry a non-empty env map"
 
     def test_this_renderer_produces_the_fixtures_empty_sources_semantics(self) -> None:
         # The half of the contract this renderer owns TODAY: a selected harness
@@ -69,12 +82,22 @@ class TestAgentAuthStateContractFixture:
         # A fixture the producer could never emit is worse than no fixture: the
         # consumer would pin a document shape that never reaches a sandbox. This
         # renderer sorts a harness's sources by (kind, env_var_name), and
-        # "api_key" < "gateway" — so opencode's api_key row comes FIRST. Feed the
-        # renderer the fixture's own opencode inputs and compare kind-for-kind.
+        # "api_key" < "gateway" < "provider_config" — so opencode's api_key row
+        # comes FIRST, gateway second. Feed the renderer the fixture's own
+        # gateway/api_key opencode inputs and compare kind-for-kind against the
+        # fixture's own gateway/api_key PREFIX — the fixture's third
+        # (provider_config) source is not something this branch's renderer can
+        # produce yet (see the known-gap test below), so it is excluded from
+        # this comparison rather than asserted here.
         fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
         fixture_opencode = next(
             entry for entry in fixture["harnesses"] if entry["harness_kind"] == "opencode"
         )
+        fixture_opencode_producible_kinds = [
+            source["kind"]
+            for source in fixture_opencode["sources"]
+            if source["kind"] != "provider_config"
+        ]
         anthropic_id = uuid.uuid4()
         state, _ = agent_auth.render_agent_auth_state(
             _inputs(
@@ -95,16 +118,37 @@ class TestAgentAuthStateContractFixture:
         rendered_opencode = next(
             entry for entry in state["harnesses"] if entry["harness_kind"] == "opencode"
         )
-        assert [source["kind"] for source in rendered_opencode["sources"]] == [
-            source["kind"] for source in fixture_opencode["sources"]
-        ], (
-            "the fixture's per-harness source order must be the order this renderer "
+        assert [
+            source["kind"] for source in rendered_opencode["sources"]
+        ] == fixture_opencode_producible_kinds, (
+            "the fixture's per-harness source order (excluding provider_config, "
+            "not yet producible on this branch) must be the order this renderer "
             "emits — api_key before gateway, by the (kind, env_var_name) sort"
         )
-        assert [source["kind"] for source in fixture_opencode["sources"]] == [
-            "api_key",
-            "gateway",
-        ]
+        assert fixture_opencode_producible_kinds == ["api_key", "gateway"]
+
+    def test_this_renderer_does_not_produce_provider_config_yet(self) -> None:
+        # KNOWN GAP, owned by the D3-python producer branch
+        # (`agents/d3-provider-apply-python`, on `agents/d1-provider-configs`
+        # — a different base from this branch). The fixture's opencode entry
+        # carries a THIRD source (`provider_config` / `aws_bedrock`) added so
+        # the Rust consumer (D3-rust) can pin that shape byte-identically
+        # against that branch's own fixture. This branch's own
+        # `render_agent_auth_state` has no typed-provider-config translation
+        # and cannot emit that kind — asserted here so whoever lands D3's
+        # producer work on THIS branch's lineage has to delete this test
+        # rather than discovering the gap by a silently-wrong fixture.
+        fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        fixture_opencode = next(
+            entry for entry in fixture["harnesses"] if entry["harness_kind"] == "opencode"
+        )
+        assert "provider_config" in [source["kind"] for source in fixture_opencode["sources"]]
+        assert not hasattr(agent_auth, "AGENT_AUTH_SOURCE_PROVIDER_CONFIG"), (
+            "expected today's gap (no provider_config translation on this branch); "
+            "if this now fails, the producer has landed provider_config support here "
+            "— delete this test and extend the order/shape tests above to cover it "
+            "through the real renderer instead of asserting fixture shape alone"
+        )
 
     def test_per_harness_gateway_keys_are_not_produced_yet(self) -> None:
         # KNOWN GAP, owned by Track B (B3, branch `agents/b3-renderer-key-map`).

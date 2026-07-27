@@ -50,6 +50,14 @@
           "kind": "gateway",
           "base_url": "https://llm.proliferate.example",
           "key": "sk-vk-opencode-0003"
+        },
+        {
+          "kind": "provider_config",
+          "config_kind": "aws_bedrock",
+          "env": {
+            "AWS_BEARER_TOKEN_BEDROCK": "bedrock-raw-0006",
+            "AWS_REGION": "us-east-1"
+          }
         }
       ],
       "settings": {

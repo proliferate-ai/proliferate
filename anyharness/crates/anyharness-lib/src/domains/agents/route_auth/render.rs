@@ -22,7 +22,9 @@ use crate::domains::agents::model::AgentKind;
 
 use super::materialize::{self, FileSpec, PathFamily};
 use super::plan::GatewayModelPlan;
-use super::profile::{AgentRuntimeAuthProfile, GatewayProfile, HarnessSources, ResolvedSource};
+use super::profile::{
+    AgentRuntimeAuthProfile, GatewayProfile, HarnessSources, ProviderConfigProfile, ResolvedSource,
+};
 use super::RouteAuthError;
 
 /// The rendered launch delta for a route-auth profile (two-phase, contract §4).
@@ -147,10 +149,21 @@ fn render_sources(
                 runtime_home,
                 &mut rendered,
             )?,
+            ResolvedSource::ProviderConfig(profile) => render_provider_config(
+                &sources.harness_kind,
+                profile,
+                plan,
+                sources.revision,
+                runtime_home,
+                &mut rendered,
+            )?,
         }
     }
     // Every non-native route, not just the gateway one. See the fn's doc for the
-    // reverse-contamination case this closes.
+    // reverse-contamination case this closes. Must run AFTER provider_config
+    // composes too, so a claude provider_config source's mode-switch flag
+    // (e.g. CLAUDE_CODE_USE_BEDROCK) is what the sanitizer sees as "explicitly
+    // set" and keeps, rather than stripping it as stale ambient state.
     sanitize_claude_if_routed(&sources.harness_kind, &mut rendered);
     Ok(rendered)
 }
@@ -235,6 +248,13 @@ fn render_claude_gateway(
 /// The rules key off which vars THIS render set, not off providers: the gateway
 /// route sets base-url + auth-token → those are kept; ambient ANTHROPIC_API_KEY
 /// is removed so a raw key cannot shadow the gateway token.
+///
+/// Track D changes what "set" can mean for the rerouting flags themselves: a
+/// `provider_config` × `aws_bedrock`/`azure_openai` source legitimately SETS
+/// `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_FOUNDRY` (that flag IS the
+/// route), so these must also key off "did this render set it", exactly like
+/// the Anthropic selector loop below — never an unconditional remove, or a
+/// provider_config launch would sanitize away the very flag it just composed.
 fn sanitize_claude_ambient(rendered: &mut RenderedRouteAuth) {
     for key in [
         "CLAUDE_CODE_USE_BEDROCK",
@@ -246,7 +266,9 @@ fn sanitize_claude_ambient(rendered: &mut RenderedRouteAuth) {
         "CLAUDE_CODE_USE_FOUNDRY",
         "AWS_BEARER_TOKEN_BEDROCK",
     ] {
-        rendered.remove(key);
+        if !rendered.set.contains_key(key) {
+            rendered.remove(key);
+        }
     }
     // Remove each Anthropic selector we didn't explicitly set on this route, so
     // ambient values can't shadow the chosen credential path.
@@ -379,15 +401,23 @@ fn render_codex_native(
 /// [`codex_config_toml`] below — the property that keeps the variants
 /// comparable and stops a new route from inventing its own TOML.
 ///
-/// Track D (typed provider configs) adds its variants HERE, next to their
-/// siblings:
-/// - `Azure { base_url, api_version, deployment }` → a
-///   `[model_providers.azure]` block with `wire_api = "responses"` (Azure OpenAI
-///   speaks the Responses API on recent api-versions; `env_key` names the vault-
-///   supplied key var).
-/// - `Bedrock { region }` → `model_provider = "amazon-bedrock"`, codex's
-///   BUILT-IN upstream provider, so NO `[model_providers.*]` block at all — the
-///   one variant that adds a provider without adding a table.
+/// Track D (typed provider configs) adds two variants:
+/// - `Bedrock { default_model }` → `model_provider = "amazon-bedrock"`,
+///   codex's BUILT-IN upstream provider, so NO `[model_providers.*]` block at
+///   all — the one variant that adds a provider without adding a table
+///   (confirmed against catalog_probe.rs's corrected comment: the probe's own
+///   custom `[model_providers.bedrock]` table is a PROBE-specific choice for
+///   /v1/responses enumeration, not a statement about codex's real needs).
+///   `region`/credential ride as plain env from `profile.env`, never
+///   interpolated into the TOML body.
+/// - `Azure { base_url, deployment, env_key }` → a `[model_providers.azure]`
+///   block with `wire_api = "responses"` (Azure OpenAI's Responses-API-
+///   compatible surface) and `env_key` naming the vault-supplied credential
+///   var, mirroring the gateway recipe's `env_key = "PROLIFERATE_GATEWAY_KEY"`
+///   pattern. **UNVERIFIED** (brief §5/§8 item 2): nobody has live-tested
+///   codex against real Azure OpenAI, and the registry's `pending` flag on
+///   codex×azure_openai stays `true` until Gate 4 passes — this arm exists so
+///   the eventual flip is a one-line registry change, not a code change.
 ///
 /// Adding either is a new arm here plus a new `ResolvedSource::ProviderConfig`
 /// arm in `render_sources`; no existing arm changes.
@@ -399,6 +429,18 @@ enum CodexConfigRecipe<'a> {
     Gateway {
         base_url: &'a str,
         default_model: &'a str,
+    },
+    /// Track D: the user's own AWS Bedrock account, via codex's built-in
+    /// `amazon-bedrock` provider. `default_model` is catalog-resolved from
+    /// `session.defaults["bedrock"]` ([`GatewayModelPlan::bedrock_default_model`]),
+    /// never a Rust constant.
+    Bedrock { default_model: &'a str },
+    /// Track D, UNVERIFIED (see enum doc): the user's own Azure OpenAI
+    /// account via codex's `[model_providers.azure]` config.toml injection.
+    Azure {
+        base_url: &'a str,
+        deployment: &'a str,
+        env_key: &'a str,
     },
 }
 
@@ -425,6 +467,35 @@ fn codex_config_toml(recipe: CodexConfigRecipe<'_>) -> String {
                  name = \"Proliferate Gateway\"\n\
                  base_url = \"{base_url}\"\n\
                  env_key = \"PROLIFERATE_GATEWAY_KEY\"\n\
+                 wire_api = \"responses\"\n"
+            )
+        }
+        CodexConfigRecipe::Bedrock { default_model } => {
+            // codex's BUILT-IN amazon-bedrock upstream: no [model_providers.*]
+            // table at all (D3 brief §9, confirmed against catalog_probe.rs's
+            // corrected comment). Credential + region ride as plain env from
+            // profile.env, set by the caller — never interpolated here.
+            format!(
+                "model_provider = \"amazon-bedrock\"\n\
+                 model = \"{default_model}\"\n"
+            )
+        }
+        CodexConfigRecipe::Azure {
+            base_url,
+            deployment,
+            env_key,
+        } => {
+            // UNVERIFIED (see CodexConfigRecipe::Azure's doc) -- built so the
+            // eventual registry flip is a one-line change, not a code change.
+            // The deployment name is the model selector for Azure OpenAI.
+            format!(
+                "model_provider = \"azure\"\n\
+                 model = \"{deployment}\"\n\
+                 \n\
+                 [model_providers.azure]\n\
+                 name = \"Azure OpenAI\"\n\
+                 base_url = \"{base_url}\"\n\
+                 env_key = \"{env_key}\"\n\
                  wire_api = \"responses\"\n"
             )
         }
@@ -532,6 +603,151 @@ fn render_grok_gateway(
         contents: None,
     });
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// provider_config route (Track D): "use my own cloud provider account" — the
+// env map's keys are ALREADY the harness's real names (Python resolved them;
+// see agent-auth.md's wire contract and state.rs's SOURCE_KIND_PROVIDER_CONFIG
+// doc). Rust's job is only to pick which per-harness arm to run.
+// ---------------------------------------------------------------------------
+
+/// The registry's declared credential var for codex×azure_openai (D1's
+/// registry.json `providerConfig[].envVars`), and the `env_key` codex's
+/// `[model_providers.azure]` block references — mirrors the gateway recipe's
+/// `env_key = "PROLIFERATE_GATEWAY_KEY"` pattern (D3 brief §5).
+const AZURE_OPENAI_API_KEY_ENV: &str = "AZURE_OPENAI_API_KEY";
+/// Placeholder env-var names for codex's Azure arm's base_url/deployment.
+/// **ASSUMPTION, flagged in the PR body**: the registry today declares ONLY
+/// `AZURE_OPENAI_API_KEY` for codex×azure_openai (the kind stays `pending`,
+/// so no real selection can reach this arm yet); these two names are this
+/// arm's placeholder expectation for when the registry is extended to wire a
+/// real endpoint/deployment through, not a verified contract. Update these
+/// constants (and the registry) together when Gate 4 for this cell is
+/// scoped.
+const AZURE_OPENAI_ENDPOINT_ENV: &str = "AZURE_OPENAI_ENDPOINT";
+const AZURE_OPENAI_DEPLOYMENT_ENV: &str = "AZURE_OPENAI_DEPLOYMENT";
+
+fn render_provider_config(
+    harness_kind: &str,
+    profile: &ProviderConfigProfile,
+    plan: &GatewayModelPlan,
+    revision: i64,
+    runtime_home: &Path,
+    rendered: &mut RenderedRouteAuth,
+) -> Result<(), RouteAuthError> {
+    match (parse_harness(harness_kind)?, profile.config_kind.as_str()) {
+        (AgentKind::Claude, _) | (AgentKind::OpenCode, _) => {
+            // Fully generic: the map's keys are already the harness's real
+            // env var names for EVERY config_kind claude/opencode support
+            // (including the mode-switch flags CLAUDE_CODE_USE_BEDROCK /
+            // CLAUDE_CODE_USE_FOUNDRY) — no per-kind branch needed, per the
+            // wire-contract ruling (D3 brief §2/§3.3).
+            for (key, value) in &profile.env {
+                rendered.set(key, value);
+            }
+            Ok(())
+        }
+        (AgentKind::Codex, "aws_bedrock") => {
+            // codex requires a model id in config.toml even on Bedrock, and
+            // the native/gateway defaults are wrong contexts for it (see
+            // GatewayModelPlan::bedrock_default_model's doc) — error rather
+            // than invent one.
+            let default_model = plan.bedrock_default_model.as_deref().ok_or_else(|| {
+                RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: "codex aws_bedrock requires a default model from the catalog \
+                             (defaults[\"bedrock\"])"
+                        .to_string(),
+                }
+            })?;
+            let codex_home = materialize::revision_dir_path(
+                runtime_home,
+                materialize::CODEX_HOME_PREFIX,
+                revision,
+            );
+            rendered.set("CODEX_HOME", path_string(&codex_home));
+            // AWS_REGION + AWS_BEARER_TOKEN_BEDROCK ride as plain env from the
+            // already-resolved map (codex's built-in amazon-bedrock provider
+            // reads its credential from env, same as claude/opencode) — NOT
+            // interpolated into the TOML body.
+            for (key, value) in &profile.env {
+                rendered.set(key, value);
+            }
+            rendered.files.push(FileSpec {
+                path_family: PathFamily::CodexHome,
+                revision,
+                contents: Some(
+                    codex_config_toml(CodexConfigRecipe::Bedrock { default_model }).into_bytes(),
+                ),
+            });
+            Ok(())
+        }
+        (AgentKind::Codex, "azure_openai") => {
+            // UNVERIFIED (see CodexConfigRecipe::Azure's doc): built so the
+            // registry flip from `pending` is a one-line change later, but
+            // NOT reachable today — the registry keeps codex×azure_openai
+            // `pending` and the server's `supported_provider_config_kinds`
+            // excludes it, so no real selection should ever construct this
+            // profile. Render it anyway rather than erroring, so a future
+            // flip needs no Rust change; the unit test in
+            // provider_config_render_tests.rs exercises this arm directly
+            // (not through the full pipeline, which cannot reach it yet).
+            let api_key = profile.env.get(AZURE_OPENAI_API_KEY_ENV).ok_or_else(|| {
+                RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: format!(
+                        "codex azure_openai requires '{AZURE_OPENAI_API_KEY_ENV}' in the resolved env map"
+                    ),
+                }
+            })?;
+            let base_url = profile.env.get(AZURE_OPENAI_ENDPOINT_ENV).ok_or_else(|| {
+                RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: format!(
+                        "codex azure_openai requires '{AZURE_OPENAI_ENDPOINT_ENV}' in the resolved env map"
+                    ),
+                }
+            })?;
+            let deployment = profile
+                .env
+                .get(AZURE_OPENAI_DEPLOYMENT_ENV)
+                .ok_or_else(|| RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: format!(
+                        "codex azure_openai requires '{AZURE_OPENAI_DEPLOYMENT_ENV}' in the resolved env map"
+                    ),
+                })?;
+            let codex_home = materialize::revision_dir_path(
+                runtime_home,
+                materialize::CODEX_HOME_PREFIX,
+                revision,
+            );
+            rendered.set("CODEX_HOME", path_string(&codex_home));
+            rendered.set(AZURE_OPENAI_API_KEY_ENV, api_key);
+            rendered.files.push(FileSpec {
+                path_family: PathFamily::CodexHome,
+                revision,
+                contents: Some(
+                    codex_config_toml(CodexConfigRecipe::Azure {
+                        base_url,
+                        deployment,
+                        env_key: AZURE_OPENAI_API_KEY_ENV,
+                    })
+                    .into_bytes(),
+                ),
+            });
+            Ok(())
+        }
+        (AgentKind::Cursor, _) | (AgentKind::Grok, _) => Err(RouteAuthError::UnsupportedRoute {
+            harness_kind: harness_kind.to_string(),
+            detail: format!("{harness_kind} has no provider-config recipe"),
+        }),
+        (_, other) => Err(RouteAuthError::UnsupportedRoute {
+            harness_kind: harness_kind.to_string(),
+            detail: format!("unknown provider-config kind '{other}'"),
+        }),
+    }
 }
 
 fn path_string(path: &Path) -> String {

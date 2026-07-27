@@ -591,12 +591,29 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       model-gateway migration (its gaps list carries the enrollment and
       `config.yaml` sides; this document owns the renderer's key lookup
       and the harness-side deletion of client model filtering).
-- [ ] **Typed provider configurations do not exist.** The vault has no
-      `kind` column and stores exactly one opaque string per entry; no
-      Bedrock/Azure payloads, no `provider_config` wire source, no
-      registry declaration of supported provider-config kinds. (The old
-      Bifrost `provider_kind` tables were dropped outright and are not a
-      starting point.)
+- [ ] **Typed provider configurations cannot be applied at launch.**
+      D3-rust closed the RUNTIME half of this gap: `state.json`'s
+      `AuthSource` now carries an optional `config_kind`/`env` pair, a
+      `provider_config` source resolves into a typed
+      `ProviderConfigProfile`, and the render plane composes it per
+      harness — claude/opencode set the already-resolved env map
+      generically (mode-switch flags included, e.g.
+      `CLAUDE_CODE_USE_BEDROCK`), and codex×`aws_bedrock` renders a real
+      `config.toml` (codex's built-in `amazon-bedrock` provider, model id
+      from the catalog's `session.defaults["bedrock"]`). The registry
+      (`catalogs/agents/registry.json`) now declares
+      `providerConfig[]` for claude/codex/opencode, mirroring the
+      envVars/flag vocabulary the runtime consumes. **Two things this PR
+      does not close:** (1) the VAULT/write side — whether the vault has
+      a `kind` column, stores typed Bedrock/Azure payloads, and lets a
+      selection actually reference one — lives on a separate corridor
+      (Track D1/D3-python) not yet merged into this lineage, so no real
+      user selection can reach this runtime code yet; (2) codex×`azure_openai`
+      renders a `config.toml` injection (mirroring the gateway recipe's
+      `env_key` pattern) but stays registry-`pending` — nobody has
+      live-verified codex against real Azure OpenAI, and the registry
+      only declares the API-key var today, not the endpoint/deployment
+      vars the render arm also expects.
 - [ ] **Cursor selections are rejected server-side.** `selection_rules.py`
       lists cursor as native-only and the store's harness allow-list
       excludes it, even though the registry declares `CURSOR_API_KEY` as

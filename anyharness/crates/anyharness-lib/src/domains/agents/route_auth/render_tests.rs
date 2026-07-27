@@ -487,3 +487,6 @@ mod native_render;
 
 #[path = "opencode_render_tests.rs"]
 mod opencode_render;
+
+#[path = "provider_config_render_tests.rs"]
+mod provider_config_render;

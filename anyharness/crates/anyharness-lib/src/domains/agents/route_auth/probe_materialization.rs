@@ -132,6 +132,18 @@ pub(crate) fn probe_auth_material_for_server(
                         .push((GATEWAY_KEY_DIGEST_NAME.to_string(), credential_value_digest(&profile.key)));
                     gateway_base_url = Some(profile.base_url.clone());
                 }
+                // `scope_profile_to_context` never matches a provider_config
+                // source into any context's scoped list today (Track D has
+                // no per-context probe materialization yet — see scoping.rs),
+                // so this arm is unreachable in practice. Digest it anyway
+                // rather than silently drop it, so an unexpected future
+                // match is still a fingerprint change, not a fingerprint
+                // that stays stable across a real credential rotation.
+                ResolvedSource::ProviderConfig(profile) => {
+                    for (key, value) in &profile.env {
+                        env_value_digests.push((key.clone(), credential_value_digest(value)));
+                    }
+                }
             }
         }
     }

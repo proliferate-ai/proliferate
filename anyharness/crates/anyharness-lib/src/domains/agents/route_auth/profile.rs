@@ -15,8 +15,11 @@
 //!
 //! [`Native`]: AgentRuntimeAuthProfile::Native
 
+use std::collections::BTreeMap;
+
 use super::state::{
     AgentAuthState, AuthSource, SOURCE_KIND_API_KEY, SOURCE_KIND_GATEWAY,
+    SOURCE_KIND_PROVIDER_CONFIG,
 };
 use super::RouteAuthError;
 
@@ -45,6 +48,7 @@ pub struct HarnessSources {
 pub enum ResolvedSource {
     Gateway(GatewayProfile),
     ApiKey(ApiKeyProfile),
+    ProviderConfig(ProviderConfigProfile),
 }
 
 /// A raw provider key destined for a free-form env var (contract §4: `api_key`
@@ -63,6 +67,18 @@ pub struct GatewayProfile {
     /// append `/v1`, etc. per the live matrix).
     pub base_url: String,
     pub key: String,
+}
+
+/// A typed provider config (Track D: "use my own cloud provider account" —
+/// Bedrock, Azure OpenAI/Foundry). `env` is ALREADY the harness's real env-var
+/// map: Python resolved the vault's generic fields into harness-correct names
+/// before the source ever reached Rust (agent-auth.md's wire contract). The
+/// per-harness recipe (render.rs) consumes `config_kind` only to pick which
+/// arm to run — never to rename a field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderConfigProfile {
+    pub config_kind: String,
+    pub env: BTreeMap<String, String>,
 }
 
 /// Resolve the auth profile for `harness_kind` from the loaded state.
@@ -131,6 +147,22 @@ fn resolve_source(
                 value,
             }))
         }
+        SOURCE_KIND_PROVIDER_CONFIG => {
+            let config_kind =
+                require_field(harness_kind, source.config_kind.as_deref(), "config_kind")?;
+            let env = source
+                .env
+                .clone()
+                .filter(|env| !env.is_empty())
+                .ok_or_else(|| RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: "source is missing required non-empty field 'env'".to_string(),
+                })?;
+            Ok(ResolvedSource::ProviderConfig(ProviderConfigProfile {
+                config_kind,
+                env,
+            }))
+        }
         unknown => Err(RouteAuthError::UnsupportedRoute {
             harness_kind: harness_kind.to_string(),
             detail: format!("unknown agent-auth source kind '{unknown}'"),
@@ -175,6 +207,8 @@ mod tests {
             key: Some(key.into()),
             env_var_name: None,
             value: None,
+            config_kind: None,
+            env: None,
         }
     }
 
@@ -185,6 +219,24 @@ mod tests {
             key: None,
             env_var_name: Some(env_var_name.into()),
             value: Some(value.into()),
+            config_kind: None,
+            env: None,
+        }
+    }
+
+    fn provider_config_source(config_kind: &str, env: &[(&str, &str)]) -> AuthSource {
+        AuthSource {
+            kind: SOURCE_KIND_PROVIDER_CONFIG.into(),
+            base_url: None,
+            key: None,
+            env_var_name: None,
+            value: None,
+            config_kind: Some(config_kind.into()),
+            env: Some(
+                env.iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            ),
         }
     }
 
@@ -388,6 +440,8 @@ mod tests {
                     key: None,
                     env_var_name: None,
                     value: None,
+                    config_kind: None,
+                    env: None,
                 }],
             )],
         );
@@ -408,6 +462,8 @@ mod tests {
                     key: Some("sk".into()),
                     env_var_name: None,
                     value: None,
+                    config_kind: None,
+                    env: None,
                 }],
             )],
         );
@@ -427,6 +483,8 @@ mod tests {
                     key: None,
                     env_var_name: Some("OPENAI_API_KEY".into()),
                     value: None,
+                    config_kind: None,
+                    env: None,
                 }],
             )],
         );
@@ -441,6 +499,81 @@ mod tests {
             vec![harness("claude", vec![gateway_source("   ", "sk")])],
         );
         let error = resolve_profile(Some(&state), "claude").expect_err("blank base_url");
+        assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
+    }
+
+    // --- provider_config (Track D) ---------------------------------------
+
+    #[test]
+    fn provider_config_source_resolves_with_its_already_resolved_env_map() {
+        let state = state(
+            2,
+            vec![harness(
+                "opencode",
+                vec![provider_config_source(
+                    "aws_bedrock",
+                    &[
+                        ("AWS_BEARER_TOKEN_BEDROCK", "bedrock-raw"),
+                        ("AWS_REGION", "us-east-1"),
+                    ],
+                )],
+            )],
+        );
+        let profile = resolve_profile(Some(&state), "opencode").expect("resolve");
+        match profile {
+            AgentRuntimeAuthProfile::Sources(sources) => {
+                assert_eq!(sources.sources.len(), 1);
+                match &sources.sources[0] {
+                    ResolvedSource::ProviderConfig(profile) => {
+                        assert_eq!(profile.config_kind, "aws_bedrock");
+                        assert_eq!(
+                            profile.env.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
+                            Some("bedrock-raw")
+                        );
+                        assert_eq!(
+                            profile.env.get("AWS_REGION").map(String::as_str),
+                            Some("us-east-1")
+                        );
+                    }
+                    other => panic!("expected ProviderConfig, got {other:?}"),
+                }
+            }
+            other => panic!("expected sources, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn provider_config_with_empty_env_is_selection_incomplete() {
+        let state = state(
+            1,
+            vec![harness("opencode", vec![provider_config_source("aws_bedrock", &[])])],
+        );
+        let error = resolve_profile(Some(&state), "opencode").expect_err("empty env");
+        assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
+    }
+
+    #[test]
+    fn provider_config_missing_config_kind_is_selection_incomplete() {
+        let state = state(
+            1,
+            vec![harness(
+                "opencode",
+                vec![AuthSource {
+                    kind: SOURCE_KIND_PROVIDER_CONFIG.into(),
+                    base_url: None,
+                    key: None,
+                    env_var_name: None,
+                    value: None,
+                    config_kind: None,
+                    env: Some(
+                        [("AWS_REGION".to_string(), "us-east-1".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                }],
+            )],
+        );
+        let error = resolve_profile(Some(&state), "opencode").expect_err("missing config_kind");
         assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
     }
 }

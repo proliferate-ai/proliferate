@@ -27,6 +27,11 @@ use crate::domains::agents::route_auth::{GatewayModelPlan, GatewayModelResolve};
 /// (matches the `gateway` auth-context id and `defaults["gateway"]`).
 const GATEWAY_CONTEXT_ID: &str = "gateway";
 
+/// The catalog default-model context key for a Track D `provider_config` ×
+/// `aws_bedrock` launch (matches `defaults["bedrock"]`). Deliberately
+/// excluded from `NATIVE_CONTEXT_PRECEDENCE` below — see that const's doc.
+const BEDROCK_CONTEXT_ID: &str = "bedrock";
+
 /// Auth-context ids to consult for a NATIVE launch's default model, in
 /// precedence order: an interactive login is the one a native launch most likely
 /// uses, and a raw provider key second. Deliberately excludes `gateway` (that is
@@ -300,7 +305,12 @@ impl GatewayModelResolver {
     fn policy_and_default(
         &self,
         harness_kind: &str,
-    ) -> (AgentCatalogGatewayPolicy, Option<String>, Option<String>) {
+    ) -> (
+        AgentCatalogGatewayPolicy,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) {
         let active = self.catalog_sync.active();
         let Some(agent) = active
             .document
@@ -308,12 +318,13 @@ impl GatewayModelResolver {
             .iter()
             .find(|agent| agent.kind == harness_kind)
         else {
-            return (AgentCatalogGatewayPolicy::default(), None, None);
+            return (AgentCatalogGatewayPolicy::default(), None, None, None);
         };
         let policy = agent.session.gateway_policy.clone().unwrap_or_default();
         let default_model = agent.session.defaults.get(GATEWAY_CONTEXT_ID).cloned();
         let native_default_model = native_default_model(&agent.session.defaults);
-        (policy, default_model, native_default_model)
+        let bedrock_default_model = agent.session.defaults.get(BEDROCK_CONTEXT_ID).cloned();
+        (policy, default_model, native_default_model, bedrock_default_model)
     }
 
     /// Resolve the plan AND its freshness source (for the desktop All-Models
@@ -323,7 +334,7 @@ impl GatewayModelResolver {
         harness_kind: &str,
         revision: i64,
     ) -> (GatewayModelPlan, GatewayModelSource) {
-        let (policy, default_model, native_default_model) =
+        let (policy, default_model, native_default_model, bedrock_default_model) =
             self.policy_and_default(harness_kind);
         let small_fast_model = policy.roles.get("small_fast").cloned();
 
@@ -351,6 +362,7 @@ impl GatewayModelResolver {
             GatewayModelPlan {
                 default_model,
                 native_default_model,
+                bedrock_default_model,
                 small_fast_model,
                 models,
             },

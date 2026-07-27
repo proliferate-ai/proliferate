@@ -20,6 +20,7 @@
 //!   (this includes a v1 / version-less file: no users exist, so there is no
 //!   back-compat — an old-shape file is simply malformed to this render plane)
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -36,6 +37,12 @@ pub const STATE_VERSION: i64 = 2;
 /// Source discriminants on the wire (contract §3).
 pub const SOURCE_KIND_GATEWAY: &str = "gateway";
 pub const SOURCE_KIND_API_KEY: &str = "api_key";
+/// A resolved typed provider-config source (Track D): `config_kind` names
+/// which per-harness recipe to run, and `env` is ALREADY the harness's real
+/// env-var map (Python resolved generic vault fields into harness-correct
+/// names before the source ever reached Rust -- see agent-auth.md's wire
+/// contract). Rust never renames a field here, only picks a render arm.
+pub const SOURCE_KIND_PROVIDER_CONFIG: &str = "provider_config";
 
 /// Resolve the absolute path of the agent-auth state file for a given
 /// AnyHarness runtime home. Single source of truth for the layout so delivery
@@ -57,6 +64,10 @@ pub fn state_file_path(runtime_home: &Path) -> PathBuf {
 /// source is resolved:
 /// - `gateway`: `base_url` + `key`
 /// - `api_key`: `env_var_name` + `value`
+/// - `provider_config`: `config_kind` + `env` (Track D). Deliberately its own
+///   fields rather than reusing `env_var_name`/`value` (those are `api_key`'s
+///   shape and reusing them would make the two kinds ambiguous to any
+///   future shape check).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthSource {
     pub kind: String,
@@ -68,6 +79,15 @@ pub struct AuthSource {
     pub env_var_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
+    /// `provider_config` only: which per-harness recipe to run (e.g.
+    /// `"aws_bedrock"`, `"azure_openai"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_kind: Option<String>,
+    /// `provider_config` only: the ALREADY-resolved, harness-real env-var map
+    /// (Python's job, not Rust's — see `SOURCE_KIND_PROVIDER_CONFIG`'s doc).
+    /// `BTreeMap` for deterministic serialization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env: Option<BTreeMap<String, String>>,
 }
 
 /// One harness's enabled sources (contract §3). Composition is just "a list of
@@ -266,6 +286,8 @@ mod tests {
             key: Some(key.into()),
             env_var_name: None,
             value: None,
+            config_kind: None,
+            env: None,
         }
     }
 
@@ -276,6 +298,8 @@ mod tests {
             key: None,
             env_var_name: Some(env_var_name.into()),
             value: Some(value.into()),
+            config_kind: None,
+            env: None,
         }
     }
 

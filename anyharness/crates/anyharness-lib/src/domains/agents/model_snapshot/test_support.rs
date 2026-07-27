@@ -238,6 +238,7 @@ impl CountingPlanProducer {
                 native_default_model: Some("model-native".to_string()),
                 small_fast_model: Some("model-small".to_string()),
                 models,
+                ..Default::default()
             },
             fetch_fails,
         )

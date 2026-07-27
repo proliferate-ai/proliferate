@@ -131,13 +131,32 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
 
     match resolve_profile(Some(&state), "opencode").expect("resolve") {
         AgentRuntimeAuthProfile::Sources(sources) => {
-            assert_eq!(sources.sources.len(), 2, "one direct api_key + gateway");
+            assert_eq!(
+                sources.sources.len(),
+                3,
+                "one direct api_key + gateway + provider_config (Track D)"
+            );
             // The producer sorts a harness's sources by (kind, env_var_name), and
-            // "api_key" < "gateway" — so the api_key row comes FIRST. The fixture
-            // has to carry the order the producer actually emits, or it is a
-            // document no reconcile could ever write.
+            // "api_key" < "gateway" < "provider_config" — so the api_key row comes
+            // FIRST, gateway second, provider_config third. The fixture has to
+            // carry the order the producer actually emits, or it is a document no
+            // reconcile could ever write.
             assert!(matches!(sources.sources[0], ResolvedSource::ApiKey(_)));
             assert!(matches!(sources.sources[1], ResolvedSource::Gateway(_)));
+            match &sources.sources[2] {
+                ResolvedSource::ProviderConfig(profile) => {
+                    assert_eq!(profile.config_kind, "aws_bedrock");
+                    assert_eq!(
+                        profile.env.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
+                        Some("bedrock-raw-0006")
+                    );
+                    assert_eq!(
+                        profile.env.get("AWS_REGION").map(String::as_str),
+                        Some("us-east-1")
+                    );
+                }
+                other => panic!("opencode's third source should be provider_config, got {other:?}"),
+            }
         }
         other => panic!("opencode should be routed, got {other:?}"),
     }

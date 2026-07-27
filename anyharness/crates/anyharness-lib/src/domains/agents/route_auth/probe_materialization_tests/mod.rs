@@ -207,6 +207,7 @@ fn plan_with(models: &[&str]) -> GatewayModelPlan {
         native_default_model: Some("gpt-5.5".to_string()),
         small_fast_model: Some("claude-haiku-4-5-20251001".to_string()),
         models: models.iter().map(|model| model.to_string()).collect(),
+        ..Default::default()
     }
 }
 
