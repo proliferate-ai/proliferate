@@ -20,7 +20,7 @@ anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 645 worksp
 anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 665 workspace purge handlers (+2b fail-closed all-session admission, PR1227-WORKSPACE-FENCE-01/02 admitted-set carry + under-exclusive-lease re-check, test-only purge proof seam module)
 anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs 823 worktree retention sweep (+PR1227-RETENTION-FENCE-01 permit/lease fencing + test proof seam, +Workflow creator-context exclusion until an explicit cleanup policy exists)
 anyharness/crates/anyharness-lib/src/api/session_admission_tests.rs 674 2b admission conflict-matrix + fail-closed purge/retire/mobility-export/destroy-source proofs + LOCK-01 permit-before-lease deadlock/source-order guards (+idempotent create)
-anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 708 provider filtering + family normalizer (bedrock/date/version forms) with tests (+absent-vs-empty sources_for comment)
+anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 869 provider filtering + family normalizer (bedrock/date/version forms) with tests (+native-default-model resolution and its tests, incl. the opencode any-non-gateway-fallback pin); documented split-later case
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 609 existing catalog validator router; unattended-mode invariants live in a focused submodule
 anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 classifier tests incl. gateway route activation + bedrock flag-only detection
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1893 existing AnyHarness oversized file (catalog-owned unattended default replaces local fallback helper)
@@ -67,5 +67,4 @@ anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 867 loops runtime 
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 642 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations
 anyharness/crates/anyharness-lib/src/domains/agents/model.rs 605 agents domain type barrel, previously exactly at the cap (+ResolvedAgent.credentials_from_route, the route-vs-native readiness provenance flag); split into model/ on next growth per guides/domains.md
-anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render_tests.rs 616 render-plane snapshot suite (+fail-closed rewrite, +the agent-auth-state contract-fixture submodule); split further on next growth
 server/tests/unit/test_agent_auth_materialization.py 614 renderer unit suite (+fail-closed rewrites, +the renderer-merge tripwire; the contract-fixture producer class split out to test_agent_auth_state_contract_fixture.py)

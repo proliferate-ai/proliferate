@@ -170,7 +170,7 @@ fn resolve_launch_route_auth_for_server(
     let revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
     let profile = resolve_profile(state.as_ref(), harness_kind)?;
     let plan = resolver.resolve_gateway_models(harness_kind, revision);
-    let rendered = render_profile(&profile, &plan, runtime_home)?;
+    let rendered = render_profile(&profile, harness_kind, &plan, runtime_home)?;
     for spec in &rendered.files {
         materialize::apply_file_spec(runtime_home, spec)?;
     }

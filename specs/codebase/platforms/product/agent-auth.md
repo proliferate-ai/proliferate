@@ -307,12 +307,16 @@ answers four questions in order:
    ([profile.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/profile.rs)).
    A source missing a required field is `SelectionIncomplete`; an unknown
    kind is `UnsupportedRoute`. Pure mapping, no filesystem.
-2. **What models does the world mention?** Gateway recipes embed model
-   names (codex's `config.toml` pins a default model; opencode's provider
-   block lists models). Those names come from the catalog's gateway
-   policy through the `GatewayModelResolve` seam
+2. **What models does the world mention?** Recipes embed model names
+   (codex's `config.toml` pins a default model on the native route as well
+   as the gateway one; opencode's provider block lists models). Those names
+   come from the catalog's `session.defaults` and gateway policy through the
+   `GatewayModelResolve` seam
    ([plan.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/plan.rs))
-   — model names are catalog data, never Rust constants.
+   — model names are catalog data, never Rust constants. The plan carries a
+   separate native default (resolved from the non-gateway auth contexts in
+   precedence order) so a native launch pins the model the user's own
+   provider serves rather than the gateway's.
 3. **What must the world contain?** Render every source, in order, into
    one composed delta: env vars to set, env vars to remove, files to
    write
@@ -353,13 +357,43 @@ launch side-effect-free and a retry idempotent.
 The render dispatch is a per-harness table; this is where "every harness
 has its own way of accepting auth" is paid for, in one place:
 
-| Harness | Gateway route | `api_key` route |
-| --- | --- | --- |
-| claude | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (the scoped key); optional `ANTHROPIC_SMALL_FAST_MODEL` from the catalog plan; isolated `CLAUDE_CONFIG_DIR` (stable dir, no file); ambient sanitization | the named env var; same ambient sanitization |
-| codex | isolated `CODEX_HOME=codex-home-<rev>/` with generated `config.toml` (provider `proliferate`, `base_url`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, catalog default model); removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var only |
-| opencode | isolated `XDG_CONFIG_HOME` + generated `opencode.json` adding only the `proliferate` provider (`apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"`, catalog model list); **`XDG_DATA_HOME` deliberately left ambient** so natively-logged-in providers coexist | the named env var, additive beside gateway and native |
-| grok | isolated `HOME=grok-home-<rev>/`, `GROK_MODELS_BASE_URL`, `XAI_API_KEY` (the scoped key) | the named env var |
-| cursor | typed refusal (`UnsupportedRoute`) — no gateway route exists for cursor | the named env var (`CURSOR_API_KEY`, cursor's registry-declared slot) |
+| Harness | Native route | Gateway route | `api_key` route |
+| --- | --- | --- | --- |
+| claude | nothing — the CLI finds its own login and config | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (the scoped key); optional `ANTHROPIC_SMALL_FAST_MODEL` from the catalog plan; isolated `CLAUDE_CONFIG_DIR` (stable dir, no file) | the named env var |
+| codex | isolated `CODEX_HOME=codex-native/` (stable, not revision-keyed) holding TWO files: a `config.toml` pinning only the catalog's native default model (no provider table — the credential is the user's own), and a copy of the user's own `auth.json`, because codex resolves credentials at `$CODEX_HOME/auth.json` and relocating the home relocates that lookup | isolated `CODEX_HOME=codex-home-<rev>/` with generated `config.toml` (provider `proliferate`, `base_url`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, catalog gateway default model); removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var only |
+| opencode | nothing | isolated `XDG_CONFIG_HOME` + generated `opencode.json` adding only the `proliferate` provider (`apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"`, catalog model list); **`XDG_DATA_HOME` deliberately left ambient** so natively-logged-in providers coexist | the named env var, additive beside gateway and native |
+| grok | nothing | isolated `HOME=grok-home-<rev>/`, `GROK_MODELS_BASE_URL`, `XAI_API_KEY` (the scoped key) | the named env var |
+| cursor | nothing | typed refusal (`UnsupportedRoute`) — no gateway route exists for cursor | the named env var (`CURSOR_API_KEY`, cursor's registry-declared slot) |
+
+Three properties of the table itself, all load-bearing:
+
+- **Native is a route with a recipe, not the absence of one.** Four harnesses
+  render nothing natively, but codex needs an isolated `CODEX_HOME` even on the
+  user's own login, because it reads its model from `config.toml` rather than
+  from env and must not inherit whatever a developer left in `~/.codex`. Keeping
+  that in this table — rather than in a second launch-env path — is what makes
+  the native and routed homes distinct directories that cannot shadow or GC each
+  other, and what keeps every codex `config.toml` in the system emitted by one
+  function.
+- **An isolated home must carry the credential it isolates away from.** Codex
+  resolves credentials at `$CODEX_HOME/auth.json`, so setting `CODEX_HOME` moves
+  the credential lookup along with the config — a config-only isolated home
+  launches a natively-logged-in user *unauthenticated*, and nothing later repairs
+  it (the login terminal adjusts only `PATH`, so `codex login` writes `~/.codex`
+  and never the isolated home). The native recipe therefore delivers the user's
+  own `auth.json` as its second file, read at apply time from the user's real
+  codex home so the render stays pure. On macOS, codex's keychain entry is keyed
+  on `sha256(canonical CODEX_HOME)` and so is unreachable from a relocated home;
+  this is covered because the credential reader consults the keychain first and
+  materializes its payload as `auth.json` bytes — the keychain login arrives as a
+  file the relocated home can read. The one accepted residual: a token refresh
+  the child performs lands in the isolated home rather than the user's keychain,
+  which cannot diverge because every launch re-copies from the source.
+- **Claude's ambient sanitization applies to every non-native route**, once over
+  the fully composed delta rather than per recipe: the rerouting flags
+  (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`, `AWS_BEARER_TOKEN_BEDROCK`)
+  are always removed, and each Anthropic selector the route did *not* itself set
+  is removed so an ambient value cannot shadow the chosen credential.
 
 Typed provider configs are a third column in spirit but not in code: a
 `provider_config` source renders its env map through the same generic
@@ -568,22 +602,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       action, though the login-terminal mechanism is surface-agnostic;
       wiring it up also revisits agent-distribution's cursor-in-cloud
       carve-out, which assumed no headless credential path.
-- [ ] **Codex has a second, competing isolated home.** Every codex launch
-      — including gateway-routed ones — also writes
-      `agent-auth/codex-local/` with a hardcoded `config.toml` pinning
-      `model = "gpt-5.5"` (a Rust-constant model pin, violating the
-      catalog-owns-model-names law) and a copy of the user's native
-      `auth.json`
-      ([launch_env.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/launch_env.rs));
-      route_auth's `CODEX_HOME` then shadows it for routed launches,
-      leaving unnecessary credential material on disk. Fold the native
-      codex home preparation into the route-auth recipe table as the
-      native recipe, sourced from the catalog.
-- [ ] **Claude's ambient sanitization only runs on the gateway route.**
-      An `api_key` selection sets its env var but does not strip ambient
-      `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_VERTEX`, so a
-      Bedrock-configured host reroutes a BYOK launch. The body requires
-      sanitization on every non-native route.
 - [ ] **Route prefix.** Vault, selections, state, and org policy still
       live under `/v1/cloud/agent-gateway/`; the split to
       `/v1/cloud/agent-auth/` (with catalog routes to the model-catalog
