@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSummary } from "@anyharness/sdk";
 import { useFirstRunAuthAdoption } from "#product/hooks/agents/lifecycle/use-first-run-auth-adoption";
@@ -54,6 +54,21 @@ function agent(overrides: Partial<AgentSummary> = {}): AgentSummary {
 
 const GATEWAY_BODY = { sources: [{ sourceKind: "gateway", enabled: true }] };
 
+/** The planner is dynamically imported (login-chunk split); let it settle. */
+async function flushAdoption() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+/** The decision ran (possibly adopting nothing) once the store has recorded it. */
+async function waitForDecision() {
+  await waitFor(() => {
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).not.toBeNull();
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -68,134 +83,145 @@ afterEach(() => {
 });
 
 describe("useFirstRunAuthAdoption", () => {
-  it("writes nothing when native creds are detected (native is implicit)", () => {
+  it("writes nothing when native creds are detected (native is implicit)", async () => {
     state.agents = [
       agent({ kind: "claude" }),
       agent({ kind: "codex", credentialState: "login_required" }),
     ];
 
     renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
 
     expect(putMutate).not.toHaveBeenCalled();
   });
 
-  it("is a no-op when selections already exist", () => {
+  it("is a no-op when selections already exist", async () => {
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
     state.selections.data = [
       { harnessKind: "claude", surface: "local", sourceKind: "gateway", enabled: true },
     ];
 
     renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
 
     expect(putMutate).not.toHaveBeenCalled();
   });
 
-  it("preselects the gateway when nothing is detected and the gateway is enabled", () => {
+  it("preselects the gateway when nothing is detected and the gateway is enabled", async () => {
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
 
     renderHook(() => useFirstRunAuthAdoption());
 
-    expect(putMutate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
     expect(putMutate).toHaveBeenCalledWith(
       { harnessKind: "claude", surface: "local", body: GATEWAY_BODY },
       expect.anything(),
     );
   });
 
-  it("does nothing when nothing is detected and the gateway is disabled", () => {
+  it("does nothing when nothing is detected and the gateway is disabled", async () => {
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
     state.capabilities.data = { gatewayEnabled: false };
 
     renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
 
     expect(putMutate).not.toHaveBeenCalled();
   });
 
-  it("waits for selections to load and then runs only once", () => {
+  it("waits for selections to load and then runs only once", async () => {
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
     state.selections.data = undefined;
 
     const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await flushAdoption();
     expect(putMutate).not.toHaveBeenCalled();
 
     state.selections.data = [];
     rerender();
-    expect(putMutate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
 
     rerender();
+    await flushAdoption();
     expect(putMutate).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for reconcile hydration to settle before deciding", () => {
+  it("waits for reconcile hydration to settle before deciding", async () => {
     // Mid-hydration: the reconcile job is still running, so the one-shot
     // decision must not fire off a stale snapshot.
     state.reconcileStatus = "running";
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
 
     const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await flushAdoption();
     expect(putMutate).not.toHaveBeenCalled();
 
     state.reconcileStatus = "completed";
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
     rerender();
 
-    expect(putMutate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
     expect(putMutate).toHaveBeenCalledWith(
       { harnessKind: "claude", surface: "local", body: GATEWAY_BODY },
       expect.anything(),
     );
   });
 
-  it("waits until a reconcile snapshot exists before deciding", () => {
+  it("waits until a reconcile snapshot exists before deciding", async () => {
     state.reconcileSnapshot = null;
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
 
     const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await flushAdoption();
     expect(putMutate).not.toHaveBeenCalled();
 
     state.reconcileSnapshot = {};
     rerender();
-    expect(putMutate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
   });
 
-  it("does nothing while cloud is inactive", () => {
+  it("does nothing while cloud is inactive", async () => {
     state.cloudActive = false;
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
 
     renderHook(() => useFirstRunAuthAdoption());
+    await flushAdoption();
 
     expect(putMutate).not.toHaveBeenCalled();
   });
 
   // Ack-gated onboarding step (agent-auth.md, Proof C7): the "setting up"
   // step reads the adoption decision from the auth-setup store.
-  it("records the adopted harness kinds for the onboarding step", () => {
+  it("records the adopted harness kinds for the onboarding step", async () => {
     state.agents = [
       agent({ kind: "claude", credentialState: "login_required" }),
       agent({ kind: "codex", credentialState: "login_required" }),
     ];
 
     renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
 
     const store = useAuthSetupOnboardingStore.getState();
     expect(store.adoptedHarnessKinds).toEqual(["claude", "codex"]);
     expect(store.adoptionStartedAt).not.toBeNull();
   });
 
-  it("records an empty adoption (native creds detected) so the step stays hidden", () => {
+  it("records an empty adoption (native creds detected) so the step stays hidden", async () => {
     state.agents = [agent({ kind: "claude" })];
 
     renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
 
     expect(putMutate).not.toHaveBeenCalled();
     expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
   });
 
-  it("records nothing while the decision has not run (cloud inactive)", () => {
+  it("records nothing while the decision has not run (cloud inactive)", async () => {
     state.cloudActive = false;
     state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
 
     renderHook(() => useFirstRunAuthAdoption());
+    await flushAdoption();
 
     expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
   });
