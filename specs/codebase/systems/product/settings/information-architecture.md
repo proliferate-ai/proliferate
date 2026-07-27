@@ -114,6 +114,12 @@ every other spec owns its page content:
   Billing platform -> Billing and Usage & Limits pane content
 ```
 
+> Shipped correction: no pane named "Agent Authentication" was ever
+> shipped under spec 02. The Agents scope ships as the per-harness
+> panes (`agent-claude`/`agent-codex`/`agent-opencode`/`agent-grok`)
+> plus `agent-api-keys`; the old `agent-authentication` id redirects to
+> `agent-api-keys` (see the staleness note at the top).
+
 ## 3. Dependencies
 
 Hard:
@@ -568,6 +574,10 @@ Legacy id:
                 needed.
 ```
 
+> Shipped correction: the "Agent Authentication" slice of this split
+> never shipped under that name; it landed as the per-harness panes
+> plus the `agent-api-keys` pool (see the staleness note at the top).
+
 Preserved id:
 
 ```text
@@ -633,6 +643,9 @@ Agents
                                        agent_run_config rows; visible to
                                        chat, automations, Slack, web,
                                        mobile, Desktop
+  (shipped: AgentDefaultsPane was never built; the `agent-defaults` id
+   redirects to `agent-claude` — see `normalizeSettingsSection` in
+   navigation.ts:41-48.)
   agent-authentication      spec 02   CloudAgentAuthLibrary (per-org and
                                        personal credentials) + per-target
                                        ComputeTargetAgentAuthCard. The
@@ -827,6 +840,9 @@ AgentRunConfigSelector
     AgentDefaultsPane (spec 03)
     Automation create dialog (spec 06)
     Slack bot config (spec 07)
+  (shipped: never built — AgentDefaultsPane, its one listed consumer,
+   was never built either; the component is a zero-hit grep across
+   apps/desktop and apps/packages on main)
 
 RuntimeReadinessPanel
   apps/desktop/src/components/settings/shared/RuntimeReadinessPanel.tsx
@@ -1164,6 +1180,9 @@ Manual smoke:
      -> Deep-linking an admin-only section redirects to General.
      -> Agents > Authentication is enabled (personal selection
         still allowed).
+     (shipped: there is no "Agents > Authentication" pane; the
+      per-harness panes and agent-api-keys have no admin gate, so
+      this is true in effect via the shipped path)
 
 2. Open Settings as an org owner.
      -> Org scope tab shows all admin rows, enabled.
