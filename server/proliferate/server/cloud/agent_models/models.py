@@ -1,10 +1,11 @@
 """Wire models for the cloud model-snapshot routes (camelCase aliases).
 
 Snapshot identity on the wire matches the table (model-catalog.md §Cloud
-routes): harness, auth context id, ``probedAt``. There is no ``surface`` and no
-``source``: the store holds cloud-sandbox observations only, and every row is a
-machine's observation, so the only tier distinction a client needs is whether
-the base came from an observation or the shipped seed — which ``origin`` carries.
+routes): harness and ``probedAt`` — one composed observation per harness, no
+``authContextId`` and no ``surface``: the store holds cloud-sandbox
+observations only, and every row is a machine's observation, so the only tier
+distinction a client needs is whether the base came from an observation or the
+shipped seed — which ``origin`` carries.
 """
 
 from __future__ import annotations
@@ -28,7 +29,6 @@ class AgentModelsResponse(AgentModelsBaseModel):
     """The layered read: owner's snapshot else shipped seed, + caller override."""
 
     harness_kind: str = Field(alias="harnessKind")
-    auth_context_id: str = Field(alias="authContextId")
     models: list[dict[str, Any]]
     modes: list[dict[str, Any]]
     #: Which tier supplied ``models``. ``snapshot`` means a machine observed this
@@ -45,15 +45,17 @@ class AgentModelsResponse(AgentModelsBaseModel):
 
 
 class AgentModelSnapshotIngestRequest(AgentModelsBaseModel):
-    """A Worker's upload of one changed machine-document entry.
+    """A Worker's upload of one changed machine document.
 
     Deliberately carries no user identity: the server resolves the owner from
-    the Worker's sandbox row. ``snapshotJson`` is one document entry verbatim
-    (camelCase ``probedAt``/``models``/``modes``/``attestation``/``warnings``),
-    stored as-is so the cloud tier serves exactly what the machine observed.
+    the Worker's sandbox row. And no ``authContextId``: one composed
+    observation per harness (the harness is in the path). ``snapshotJson`` is
+    the whole schemaVersion-2 document verbatim (camelCase
+    ``probedAt``/``models``/``modes``/``attestation``/``installIdentity``/
+    ``stateRevision``/``warnings``/``lastAttempt``), stored as-is so the cloud
+    tier serves exactly what the machine observed.
     """
 
-    auth_context_id: str = Field(alias="authContextId")
     snapshot_json: str = Field(alias="snapshotJson")
     probed_at: str = Field(alias="probedAt")
 
@@ -73,13 +75,11 @@ class AgentModelOverrideResponse(AgentModelsBaseModel):
 def models_payload(
     *,
     harness_kind: str,
-    auth_context_id: str,
     layered: LayeredModels,
 ) -> AgentModelsResponse:
     snapshot: AgentModelSnapshotRecord | None = layered.snapshot
     return AgentModelsResponse(
         harness_kind=harness_kind,
-        auth_context_id=auth_context_id,
         models=layered.models,
         modes=layered.modes,
         origin=layered.origin,

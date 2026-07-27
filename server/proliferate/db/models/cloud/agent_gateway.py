@@ -339,15 +339,18 @@ class AgentGatewayEnrollmentKey(Base):
 
 
 class AgentModelSnapshot(Base):
-    """One cloud-sandbox machine observation per (harness, auth context, owner).
+    """One cloud-sandbox machine observation per (harness, owner).
 
     Every row is a machine's observation at rest, uploaded by the Worker
-    (model-catalog.md §The cloud snapshot). Three consequences are in the schema:
+    (model-catalog.md §The cloud copy). Four consequences are in the schema:
     no ``surface`` (only the cloud sandbox's document syncs); no ``source`` and
     ``owner_user_id`` NOT NULL (the server never generates snapshots, so there is
     no ownerless seed row — the seed tier is a read-time fallback to the served
-    shipped catalog); and ``snapshot_json`` holding one machine-document entry
-    verbatim (models, modes, attestation, warnings), not a models-only payload.
+    shipped catalog); no ``auth_context_id`` (the per-context re-key is
+    superseded by the composed observation: one document per harness, keyed
+    (harness_kind, owner_user_id)); and ``snapshot_json`` holding the whole
+    machine document verbatim (schemaVersion 2: models, modes, attestation,
+    installIdentity, stateRevision, warnings), not a models-only payload.
 
     Soft-versioned: a write deactivates prior active rows for the scope and
     inserts the new one, so retained inactive rows are the audit trail that makes
@@ -372,7 +375,6 @@ class AgentModelSnapshot(Base):
         Index(
             "ix_agent_model_snapshot_scope",
             "harness_kind",
-            "auth_context_id",
             "owner_user_id",
             "probed_at",
         ),
@@ -380,10 +382,6 @@ class AgentModelSnapshot(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     harness_kind: Mapped[str] = mapped_column(String(64))
-    # Catalog auth-context id ('anthropic-api', 'gateway', 'baseline', …) — the
-    # exact strings the shipped catalog declares and the runtime's snapshot
-    # document is keyed by, never a new vocabulary.
-    auth_context_id: Mapped[str] = mapped_column(String(64))
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
