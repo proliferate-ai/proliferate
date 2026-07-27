@@ -330,13 +330,13 @@ function fakeAuthActorWorld(runDir: string): ReadyLocalWorld {
     runtime: { baseUrl: "http://127.0.0.1:9002", client: undefined as never },
     renderer: { baseUrl: "http://127.0.0.1:9003", browser: undefined as never },
     gateway: {
-      resolveActorKey: async ({ userId, enrollmentId }: { userId: string; enrollmentId: string }) =>
+      resolveActorKey: async ({ userId, enrollmentId, harnessKind }: { userId: string; enrollmentId: string; harnessKind: string }) =>
         ({
           userId,
           enrollmentId,
           teamId: "team-1",
           litellmUserId: "litellm-user-1",
-          keyAlias: `vk-user-${userId}-${enrollmentId.slice(0, 8)}`,
+          keyAlias: `vk-user-${userId}-${harnessKind}-${enrollmentId.slice(0, 8)}`,
           tokenId: "token-1",
           tokenIdHash: "hash-1",
         }) satisfies ActorKeyIdentity,

@@ -5,6 +5,7 @@ export type SettingsNavIconId =
   | "agent-api-keys"
   | "agent-claude"
   | "agent-codex"
+  | "agent-cursor"
   | "agent-grok"
   | "agent-opencode"
   | "appearance"
@@ -142,6 +143,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "agent-codex", label: "Codex", iconId: "agent-codex" },
           { kind: "section", id: "agent-opencode", label: "OpenCode", iconId: "agent-opencode" },
           { kind: "section", id: "agent-grok", label: "Grok", iconId: "agent-grok" },
+          { kind: "section", id: "agent-cursor", label: "Cursor", iconId: "agent-cursor" },
           { kind: "section", id: "agent-api-keys", label: "API keys", iconId: "agent-api-keys" },
         ],
       },
@@ -159,6 +161,7 @@ export const SETTINGS_HARNESS_SECTIONS = {
   "agent-codex": "codex",
   "agent-opencode": "opencode",
   "agent-grok": "grok",
+  "agent-cursor": "cursor",
 } as const satisfies Partial<Record<SettingsSection, string>>;
 
 export type SettingsHarnessSection = keyof typeof SETTINGS_HARNESS_SECTIONS;

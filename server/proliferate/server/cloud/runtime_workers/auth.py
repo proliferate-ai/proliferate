@@ -19,6 +19,11 @@ class WorkerAuthContext:
     owner_user_id: UUID
     organization_id: UUID | None
     runtime_kind: str
+    #: Present exactly when ``runtime_kind == "cloud_sandbox"`` (the DB check
+    #: constraint enforces the pairing). Cloud-only worker surfaces — the model
+    #: snapshot upload, whose spec says the desktop's document never syncs —
+    #: resolve the owner through this sandbox row rather than trusting the body.
+    cloud_sandbox_id: UUID | None
 
 
 def bearer_token_from_request(request: Request) -> str:
@@ -53,4 +58,5 @@ async def authenticate_worker(
         owner_user_id=worker.owner_user_id,
         organization_id=worker.organization_id,
         runtime_kind=worker.runtime_kind,
+        cloud_sandbox_id=worker.cloud_sandbox_id,
     )

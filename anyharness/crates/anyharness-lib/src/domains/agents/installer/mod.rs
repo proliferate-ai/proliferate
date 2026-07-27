@@ -1,4 +1,5 @@
 mod agent_process;
+pub mod auto_install;
 mod downloads;
 pub mod install_policy;
 mod lock;

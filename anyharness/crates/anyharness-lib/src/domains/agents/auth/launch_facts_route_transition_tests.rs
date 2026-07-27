@@ -60,7 +60,7 @@ fn codex_route_transitions_scope_model_validation_to_the_effective_provider() {
     assert_eq!(gateway_contexts.ids(), &["gateway".to_string()]);
     assert!(matches!(
         catalog.validate_launch("codex", &gateway_contexts, Some("gpt-5.6-sol"), None,),
-        Err(SelectionUnsupported::ModelGated { .. })
+        Err(SelectionUnsupported::UnsupportedModel { .. })
     ));
 
     std::fs::remove_file(home.join("agent-auth/state.json")).expect("clear to native");

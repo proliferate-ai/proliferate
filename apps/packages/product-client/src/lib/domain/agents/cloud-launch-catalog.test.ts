@@ -423,4 +423,42 @@ describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
       "opencode/big-pickle",
     ]);
   });
+
+  it("carries the runtime-resolved provider namespace onto the merged model (model-catalog.md \"Provider badges\")", () => {
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog(cloudCatalog());
+    const merged = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [{
+        kind: "opencode",
+        displayName: "OpenCode",
+        defaultModelId: "opencode/big-pickle",
+        models: [{
+          id: "opencode/big-pickle",
+          displayName: "OpenCode Zen/Big Pickle",
+          isDefault: true,
+          provider: "anthropic",
+        }],
+      }],
+    );
+
+    expect(merged[0]?.models[0]?.provider).toBe("anthropic");
+
+    // The cloud catalog carries no provider field yet — an unmatched runtime
+    // model (or a runtime response predating this field) must render sparse
+    // (null), never invent one from the id.
+    const withoutProvider = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [{
+        kind: "opencode",
+        displayName: "OpenCode",
+        defaultModelId: "opencode/big-pickle",
+        models: [{
+          id: "opencode/big-pickle",
+          displayName: "OpenCode Zen/Big Pickle",
+          isDefault: true,
+        }],
+      }],
+    );
+    expect(withoutProvider[0]?.models[0]?.provider).toBeNull();
+  });
 });

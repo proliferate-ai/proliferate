@@ -1,38 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAgentApiKey,
-  deleteAgentCatalogOverride,
+  deleteAgentModelOverride,
   getAgentAuthState,
-  getAgentCatalog,
   getAgentGatewayCapabilities,
   getAgentGatewayEnrollment,
+  getAgentModels,
   getOrgAgentPolicy,
   listAgentApiKeys,
   listAuthSelections,
   listOrgAgentPolicyViolations,
-  mirrorAgentCatalog,
   putAuthSelections,
-  refreshAgentCatalog,
   revokeAgentApiKey,
   updateOrgAgentPolicy,
-  upsertAgentCatalogOverride,
+  upsertAgentModelOverride,
   type AgentApiKey,
-  type AgentAuthRoute,
   type AgentAuthSelection,
   type AgentAuthState,
   type AgentAuthSurface,
   type AgentGatewayCapabilities,
-  type AgentGatewayCatalog,
-  type AgentGatewayCatalogOverride,
   type AgentGatewayEnrollment,
+  type AgentModelOverride,
+  type AgentModels,
   type CreateAgentApiKeyRequest,
-  type MirrorAgentGatewayCatalogRequest,
   type OrgAgentPolicy,
   type OrgAgentPolicyViolationListResponse,
   type PutAuthSelectionsRequest,
-  type RefreshAgentGatewayCatalogRequest,
   type UpdateOrgAgentPolicyRequest,
-  type UpsertAgentGatewayCatalogOverrideRequest,
+  type UpsertAgentModelOverrideRequest,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import {
@@ -42,9 +37,9 @@ import {
   agentAuthStateKey,
   agentAuthStateRootKey,
   agentGatewayCapabilitiesKey,
-  agentGatewayCatalogKey,
-  agentGatewayCatalogRootKey,
   agentGatewayEnrollmentKey,
+  agentModelsKey,
+  agentModelsRootKey,
   orgAgentPolicyKey,
   orgAgentPolicyViolationsKey,
 } from "../lib/query-keys.js";
@@ -55,25 +50,9 @@ export interface PutAuthSelectionsInput {
   body: PutAuthSelectionsRequest;
 }
 
-export interface AgentCatalogScope {
+export interface UpsertAgentModelOverrideInput {
   harnessKind: string;
-  surface: AgentAuthSurface;
-  route?: AgentAuthRoute;
-}
-
-export interface RefreshAgentCatalogInput {
-  harnessKind: string;
-  body: RefreshAgentGatewayCatalogRequest;
-}
-
-export interface MirrorAgentCatalogInput {
-  harnessKind: string;
-  body: MirrorAgentGatewayCatalogRequest;
-}
-
-export interface UpsertCatalogOverrideInput {
-  harnessKind: string;
-  body: UpsertAgentGatewayCatalogOverrideRequest;
+  body: UpsertAgentModelOverrideRequest;
 }
 
 // --- Key vault -------------------------------------------------------------
@@ -114,15 +93,26 @@ export function useRevokeAgentApiKey() {
 
 // --- Auth selections -------------------------------------------------------
 
+export interface AuthQueryPollOptions {
+  /**
+   * Re-fetch on an interval (ms). The delivery-ack pipeline uses this to
+   * observe pending→applied flips that land server-side (the cloud
+   * materializer's ack) without a client mutation to invalidate on.
+   */
+  refetchInterval?: number | false;
+}
+
 export function useAuthSelections(
   surface: AgentAuthSurface | null = null,
   enabled = true,
+  options: AuthQueryPollOptions = {},
 ) {
   const client = useCloudClient();
   return useQuery<AgentAuthSelection[]>({
     queryKey: agentAuthSelectionsKey(surface),
     queryFn: () => listAuthSelections(surface ?? undefined, client),
     enabled,
+    refetchInterval: options.refetchInterval ?? false,
   });
 }
 
@@ -153,74 +143,47 @@ export function usePutAuthSelections() {
   });
 }
 
-// --- Catalog ---------------------------------------------------------------
+// --- Agent models (cloud snapshot) -----------------------------------------
+//
+// The composed re-key (model-catalog.md §Cloud routes): the layered read is
+// scoped by harness alone — one composed observation per harness; the former
+// `authContextId` scope member is deleted. `useRefreshAgentCatalog` and
+// `useMirrorAgentCatalog` are DELETED, not renamed — the single ingest route
+// (`POST /agent-models/{h}/refresh`) is Worker-authenticated
+// (`authenticate_worker`), so no product client can call it; keeping a hook
+// that can only 403 would be a live export aimed at a dead call (F-040). A
+// manual "refresh" affordance for the settings All Models pane returns in C3
+// once a real caller exists.
 
-export function useAgentCatalog(scope: AgentCatalogScope, enabled = true) {
+export function useAgentModels(harnessKind: string, enabled = true) {
   const client = useCloudClient();
-  const route = scope.route ?? "gateway";
-  return useQuery<AgentGatewayCatalog>({
-    queryKey: agentGatewayCatalogKey(scope.harnessKind, scope.surface, route),
-    queryFn: () => getAgentCatalog(scope.harnessKind, scope.surface, route, client),
+  return useQuery<AgentModels>({
+    queryKey: agentModelsKey(harnessKind),
+    queryFn: () => getAgentModels(harnessKind, client),
     enabled,
   });
 }
 
-export function useRefreshAgentCatalog() {
+export function useUpsertAgentModelOverride() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
-  return useMutation<AgentGatewayCatalog, Error, RefreshAgentCatalogInput>({
-    mutationFn: ({ harnessKind, body }) => refreshAgentCatalog(harnessKind, body, client),
-    onSuccess: (data, { harnessKind, body }) => {
-      queryClient.setQueryData(
-        agentGatewayCatalogKey(harnessKind, body.surface, body.route),
-        data,
-      );
-    },
-  });
-}
-
-/**
- * Push a runtime-resolved gateway-probe result to the cloud mirror (contract
- * §4). The runtime itself holds no cloud session, so the desktop — the only
- * process here with an authenticated cloud client — calls this on the
- * runtime's behalf whenever it observes a fresh probe (see the desktop's
- * `useGatewayCatalogMirrorSync`). Not signed in => the caller simply never
- * invokes this; there is nothing to gate here.
- */
-export function useMirrorAgentCatalog() {
-  const client = useCloudClient();
-  const queryClient = useQueryClient();
-  return useMutation<AgentGatewayCatalog, Error, MirrorAgentCatalogInput>({
-    mutationFn: ({ harnessKind, body }) => mirrorAgentCatalog(harnessKind, body, client),
-    onSuccess: (data, { harnessKind, body }) => {
-      queryClient.setQueryData(
-        agentGatewayCatalogKey(harnessKind, body.surface, body.route),
-        data,
-      );
-    },
-  });
-}
-
-export function useUpsertCatalogOverride() {
-  const client = useCloudClient();
-  const queryClient = useQueryClient();
-  return useMutation<AgentGatewayCatalogOverride, Error, UpsertCatalogOverrideInput>({
+  return useMutation<AgentModelOverride, Error, UpsertAgentModelOverrideInput>({
     mutationFn: ({ harnessKind, body }) =>
-      upsertAgentCatalogOverride(harnessKind, body, client),
+      upsertAgentModelOverride(harnessKind, body, client),
     onSuccess: () => {
-      // Overrides are per-harness and layer over every (surface, route) view.
-      void queryClient.invalidateQueries({ queryKey: agentGatewayCatalogRootKey() });
+      // Overrides are per-harness and layer over every read of that harness.
+      void queryClient.invalidateQueries({ queryKey: agentModelsRootKey() });
     },
   });
 }
 
-export function useDeleteCatalogOverride() {
+export function useDeleteAgentModelOverride() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
   return useMutation<void, Error, string>({
-    mutationFn: (harnessKind) => deleteAgentCatalogOverride(harnessKind, client),
+    mutationFn: (harnessKind) => deleteAgentModelOverride(harnessKind, client),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: agentGatewayCatalogRootKey() });
+      void queryClient.invalidateQueries({ queryKey: agentModelsRootKey() });
     },
   });
 }
@@ -237,12 +200,16 @@ export function useAgentGatewayCapabilities(enabled = true) {
   });
 }
 
-export function useAgentGatewayEnrollment(enabled = true) {
+export function useAgentGatewayEnrollment(
+  enabled = true,
+  options: AuthQueryPollOptions = {},
+) {
   const client = useCloudClient();
   return useQuery<AgentGatewayEnrollment>({
     queryKey: agentGatewayEnrollmentKey(),
     queryFn: () => getAgentGatewayEnrollment(client),
     enabled,
+    refetchInterval: options.refetchInterval ?? false,
   });
 }
 

@@ -20,8 +20,8 @@ import {
  * token authority.
  *
  * Token VALUES now live only in apps/packages/design/src/tokens.ts and are
- * projected into dist/theme.css by scripts/generate-theme.mjs. dom.css and
- * product.css must therefore contain no global token declarations at all, and
+ * projected into dist/theme.css by scripts/generate-theme.mjs. product.css
+ * must therefore contain no global token declarations at all, and
  * the ladder this file locks is the generated one.
  *
  * applyAppearancePreference() re-writes every --text-* token on :root at boot
@@ -35,7 +35,6 @@ const testDir = dirname(fileURLToPath(import.meta.url));
 const designDir = resolve(testDir, "../../../../../design");
 const designCssDir = resolve(designDir, "src/css");
 const generatedThemeCss = readFileSync(resolve(designDir, "dist/theme.css"), "utf8");
-const domCss = readFileSync(resolve(designCssDir, "dom.css"), "utf8");
 const productCss = readFileSync(resolve(designCssDir, "product.css"), "utf8");
 
 /**
@@ -159,7 +158,6 @@ describe("generated design-package semantic text tokens", () => {
   });
 
   it("keeps authored CSS free of global theme declarations", () => {
-    expect(extractThemeBlocks(domCss)).toEqual([]);
     expect(extractThemeBlocks(productCss)).toEqual([]);
   });
 
@@ -357,16 +355,16 @@ describe("appearance scaling CSS defaults", () => {
   it("declares the approved semantic vector-glyph tiers", () => {
     for (const [property, value] of Object.entries(DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES)) {
       expect(themeDeclarations[property]).toBe(value);
-      expect(domCss).toContain(`@utility ${property.replace("--", "")}`);
+      expect(productCss).toContain(`@utility ${property.replace("--", "")}`);
     }
   });
 
   it("uses the native system stack through the generated font token and gives untyped text the UI fallback", () => {
     expect(themeDeclarations["--font-sans"]).toMatch(/^-apple-system, BlinkMacSystemFont,/);
-    const rootRule = readRule(domCss, /:root\s*\{([\s\S]*?)\}/);
+    const rootRule = readRule(productCss, /:root\s*\{([\s\S]*?)\}/);
     expect(rootRule).toContain("font-family: var(--font-sans);");
 
-    const bodyRule = readRule(domCss, /body\s*\{([\s\S]*?)\}/);
+    const bodyRule = readRule(productCss, /body\s*\{([\s\S]*?)\}/);
     expect(bodyRule).toContain("font-size: var(--text-ui);");
     expect(bodyRule).toContain("line-height: var(--text-ui--line-height);");
   });
@@ -376,14 +374,14 @@ describe("appearance scaling CSS defaults", () => {
     expect(themeDeclarations["--color-text-selection"]).toBe(
       "var(--color-highlight, var(--color-input))",
     );
-    expect(domCss).toContain("caret-color: var(--color-text-caret);");
-    expect(domCss).toContain("background-color: var(--color-text-selection);");
+    expect(productCss).toContain("caret-color: var(--color-text-caret);");
+    expect(productCss).toContain("background-color: var(--color-text-selection);");
     expect(productCss).toContain(".chat-selection-root ::selection");
     expect(productCss).toContain("background-color: var(--color-text-selection);");
   });
 
   it("keeps the spinner inline box stationary while its SVG owns motion", () => {
-    const spinnerRule = readRule(domCss, /\.proliferate-spinner\s*\{([\s\S]*?)\}/);
+    const spinnerRule = readRule(productCss, /\.proliferate-spinner\s*\{([\s\S]*?)\}/);
     expect(spinnerRule).toContain("animation: none !important;");
   });
 });

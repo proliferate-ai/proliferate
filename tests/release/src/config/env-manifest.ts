@@ -474,7 +474,7 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "route of the CLAUDE harness (and the LOCAL-6 route-change actor); stored + selected through the product " +
       "Settings UI as a user-owned credential, the user-key route must consume ZERO managed LLM credit and leave " +
       "the managed balance unchanged. Self-host lane: SELFHOST-INSTALL-1's SH-BASE-TURN cell stores it through the " +
-      "product (POST /v1/cloud/agent-gateway/keys) and the controller-local candidate AnyHarness spawns the harness " +
+      "product (POST /v1/cloud/agent-auth/keys) and the controller-local candidate AnyHarness spawns the harness " +
       "with the raw key (no LiteLLM/E2B). Distinct from RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY so the two " +
       "Anthropic-consuming harnesses (claude, opencode) stay isolated. Never enters logs or evidence.",
     whereItLives:

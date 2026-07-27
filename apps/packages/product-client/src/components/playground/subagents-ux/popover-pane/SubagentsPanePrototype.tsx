@@ -39,7 +39,7 @@ export function SubagentsPanePrototype({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar-background text-sidebar-foreground">
       {showHeader ? (
-        <div className="border-b border-sidebar-border px-4 py-3">
+        <div className="border-b border-border px-4 py-3">
           <p className="truncate text-ui font-medium text-sidebar-foreground">{parentTitle}</p>
           <p className="mt-0.5 truncate text-ui-sm text-sidebar-muted-foreground">{summary}</p>
         </div>
@@ -151,7 +151,7 @@ function PaneRow({
         aria-current={selected ? "true" : undefined}
         title={`${agent.label} · ${agent.harness} · ${agent.detail}`}
         onClick={onSelect}
-        className="flex min-w-0 flex-1 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sidebar-border"
+        className="flex min-w-0 flex-1 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
       >
         <AgentGlyph id={agent.id} />
         <span className="min-w-0 flex-1">

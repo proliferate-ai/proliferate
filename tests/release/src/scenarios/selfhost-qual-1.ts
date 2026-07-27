@@ -815,14 +815,15 @@ export async function enrollActorAndRunGatewayTurn(
       turnError = describe(error);
     }
 
-    // 7. Resolve the actor's PERSONAL virtual-key token on the instance LiteLLM
-    //    (the `api_key` its spend rows carry) — the key the gateway agent-auth
-    //    state actually rendered, preferred over any co-located org-enrollment
-    //    key. A resolution failure is a bounded fail-closed turn error.
+    // 7. Resolve the actor's PERSONAL, PER-HARNESS virtual-key token on the
+    //    instance LiteLLM (the `api_key` its spend rows carry) — the key the
+    //    gateway agent-auth state actually rendered for REPRESENTATIVE_HARNESS,
+    //    preferred over any co-located org-enrollment or sibling-harness key. A
+    //    resolution failure is a bounded fail-closed turn error.
     let virtualKeyTokenId = "";
     let tokenError: string | undefined;
     try {
-      virtualKeyTokenId = await litellmResolveActorKeyToken(world.control.ssh, actor.userId);
+      virtualKeyTokenId = await litellmResolveActorKeyToken(world.control.ssh, actor.userId, REPRESENTATIVE_HARNESS);
     } catch (error) {
       tokenError = describe(error);
     }

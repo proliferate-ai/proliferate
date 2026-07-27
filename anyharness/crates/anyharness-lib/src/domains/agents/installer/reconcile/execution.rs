@@ -7,13 +7,18 @@ use uuid::Uuid;
 
 use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
+use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 use crate::domains::agents::installer::progress::{
     InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
+};
+use crate::domains::agents::installer::auto_install::{
+    auto_install_decision, AgentInstallFacts,
 };
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
 use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole, ResolvedArtifact};
-use crate::domains::agents::readiness::service::resolve_agent;
+use crate::domains::agents::readiness::service::resolve_agent_unrouted;
+use crate::domains::agents::runtime::RuntimeSurface;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {
@@ -127,6 +132,11 @@ impl AgentReconcileService {
         requested_agent_kinds: Vec<AgentKind>,
         agent_seed_store: Option<AgentSeedStore>,
         catalog: Option<AgentCatalogService>,
+        // The probe engine, poked per agent as each install finishes. Threaded in
+        // exactly as `agent_seed_store` and `catalog` are, and `None` in tests for
+        // the same reason: a job that pokes nothing must stay constructible.
+        model_snapshot: Option<Arc<ModelSnapshotService>>,
+        surface: RuntimeSurface,
         admission: AgentReconcileAdmission,
     ) -> Result<AgentReconcileJobSnapshot, AgentReconcileStartError> {
         let (snapshot, progress) = {
@@ -209,8 +219,10 @@ impl AgentReconcileService {
                 runtime_home,
                 reinstall,
                 installed_only,
+                surface,
                 progress,
                 agent_seed_store,
+                model_snapshot,
             )
             .await;
         });
@@ -245,8 +257,10 @@ async fn run_reconcile_job(
     runtime_home: PathBuf,
     reinstall: bool,
     installed_only: bool,
+    surface: RuntimeSurface,
     progress: Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
     agent_seed_store: Option<AgentSeedStore>,
+    model_snapshot: Option<Arc<ModelSnapshotService>>,
 ) {
     // Defense in depth around the single visible job slot: even if future
     // callers change admission policy, blocking installers never mutate the
@@ -295,25 +309,45 @@ async fn run_reconcile_job(
         let agent_progress = progress.clone();
         let progress_kind = kind.clone();
         let result = match tokio::task::spawn_blocking(move || {
-            // installed-only scope (startup pass): only reconcile agents WE manage
-            // in runtime_home — update those to the catalog pins. Skip agents that
-            // are absent or only present via PATH (source != "managed"); a managed
-            // install over a PATH-provided agent would fail, and missing agents
-            // install on demand at session start. resolve_agent is side-effect-free.
-            if installed_only {
-                let is_managed = |artifact: &ResolvedArtifact| {
-                    artifact.installed && artifact.source.as_deref() == Some("managed")
+            // Should this pass touch this agent at all? Two carve-outs (a user's
+            // own PATH binary, cursor in cloud) plus the installed-only scope,
+            // decided by one named predicate rather than inferred from a boolean —
+            // see `installer::auto_install` for why that distinction matters.
+            //
+            // Resolution is side-effect-free, and unrouted because this reads
+            // ARTIFACTS only: an enrolled agent-auth route cannot change whether a
+            // binary is on PATH or managed-installed, so consulting it would be a
+            // state-file read per agent per pass with no effect on the decision.
+            {
+                let source_is = |artifact: &ResolvedArtifact, source: &str| {
+                    artifact.installed && artifact.source.as_deref() == Some(source)
                 };
-                let resolved = resolve_agent(&descriptor, &agent_runtime_home);
-                let managed_installed = is_managed(&resolved.agent_process)
-                    || resolved.native.as_ref().map(is_managed).unwrap_or(false);
-                if !managed_installed {
+                let resolved = resolve_agent_unrouted(&descriptor, &agent_runtime_home);
+                let any_artifact_is = |source: &str| {
+                    source_is(&resolved.agent_process, source)
+                        || resolved
+                            .native
+                            .as_ref()
+                            .is_some_and(|native| source_is(native, source))
+                };
+                let facts = AgentInstallFacts {
+                    has_path_artifact: any_artifact_is("path"),
+                    has_managed_artifact: any_artifact_is("managed"),
+                };
+                if let Err(skip) =
+                    auto_install_decision(&descriptor.kind, surface, installed_only, facts)
+                {
+                    tracing::debug!(
+                        agent_kind = descriptor.kind.as_str(),
+                        ?surface,
+                        installed_only,
+                        reason = skip.message(),
+                        "reconcile skipping agent"
+                    );
                     return AgentReconcileResult {
                         kind: descriptor.kind.clone(),
                         outcome: AgentReconcileOutcome::Skipped,
-                        message: Some(
-                            "not managed-installed; installs on demand at session start".into(),
-                        ),
+                        message: Some(skip.message().to_string()),
                         installed_artifacts: vec![],
                     };
                 }
@@ -377,6 +411,22 @@ async fn run_reconcile_job(
             }
         };
         finish_agent_components(&progress, &kind, terminal_phase);
+        // Install-completed poke, per agent (model-catalog.md, "The snapshot
+        // reconciler"). This is the SOLE guarantor of probe-after-install ordering:
+        // the startup poke returns at admission and so cannot promise it, while this
+        // fires after the one harness that just converged, naming only that harness.
+        //
+        // Only on `Completed`. A `Failed` install leaves the previous binary in place
+        // and nothing to re-observe; a `Skipped` one installed nothing at all. Poking
+        // either would spend a real harness spawn to re-confirm an unchanged identity
+        // the gate would then call fresh anyway.
+        if probe_after_install(terminal_phase) {
+            ModelSnapshotService::poke_optional(
+                &model_snapshot,
+                kind.as_str(),
+                PokeReason::InstallCompleted,
+            );
+        }
 
         let _ = update_job(&jobs, &job_id, |job| {
             job.results.push(result);
@@ -453,6 +503,23 @@ fn apply_progress_update(
     component.phase = update.phase;
     component.downloaded_bytes = component.downloaded_bytes.max(update.downloaded_bytes);
     component.download_size_bytes = update.download_size_bytes.or(component.download_size_bytes);
+}
+
+/// Does this terminal install phase warrant a re-probe?
+///
+/// Only `Completed`. A `Failed` install leaves the previous binary in place and a
+/// `Skipped` one installed nothing, so neither changed the install identity a
+/// snapshot entry is bound to — poking either would spend a real harness spawn to
+/// re-confirm an identity the gate would then call fresh anyway.
+fn probe_after_install(phase: InstallProgressPhase) -> bool {
+    matches!(phase, InstallProgressPhase::Completed)
+}
+
+/// The predicate above, for the poke-wiring suite. Exposed rather than duplicated so
+/// the assertion cannot drift from the branch the job actually takes.
+#[cfg(test)]
+pub(crate) fn probe_after_install_for_test(phase: InstallProgressPhase) -> bool {
+    probe_after_install(phase)
 }
 
 fn finish_agent_components(

@@ -50,7 +50,7 @@ pub fn collect_launch_env_facts(
         || collect_launch_env_facts_with_ambient(agent_kind, readiness_env, &ambient);
     match resolve_launch_auth_profile(runtime_home, agent_kind) {
         Ok(profile @ AgentRuntimeAuthProfile::Sources(_)) => {
-            let mut facts = collect_enrolled_source_facts(&profile);
+            let mut facts = collect_enrolled_source_facts(agent_kind, &profile);
             // OpenCode intentionally composes injected sources with its native
             // providers. Every other supported routed harness is single-source:
             // its selected route must mask ambient/native credentials exactly as
@@ -86,9 +86,21 @@ pub fn collect_launch_env_facts(
 ///   `Env(ANTHROPIC_API_KEY)`) never activates and the model menu comes back
 ///   empty. The Env fact carries presence only; the raw value is still rendered
 ///   into the launch env by the existing `render_profile` path at spawn time.
-fn collect_enrolled_source_facts(profile: &AgentRuntimeAuthProfile) -> Vec<CredentialFact> {
+/// - `provider_config` (Track D) → one fact per key in the already-resolved
+///   `env` map: [`CredentialFact::EnvFlag`] (with its real value) for a
+///   registry-declared flag var (e.g. `CLAUDE_CODE_USE_BEDROCK`,
+///   `CLAUDE_CODE_USE_FOUNDRY` — non-secret mode switches, named by the registry's
+///   `auth.slots[].envVars` UNION `providerConfig[].envVars`; see
+///   [`registry_flag_vars`] for why both halves must be read),
+///   else a presence-only [`CredentialFact::Env`] — same secrets rule as
+///   `api_key`.
+fn collect_enrolled_source_facts(
+    agent_kind: &str,
+    profile: &AgentRuntimeAuthProfile,
+) -> Vec<CredentialFact> {
     match profile {
         AgentRuntimeAuthProfile::Sources(sources) => {
+            let flag_vars = registry_flag_vars(agent_kind);
             let mut facts = Vec::new();
             let mut has_gateway = false;
             for source in &sources.sources {
@@ -97,6 +109,18 @@ fn collect_enrolled_source_facts(profile: &AgentRuntimeAuthProfile) -> Vec<Crede
                     ResolvedSource::ApiKey(api_key) => facts.push(CredentialFact::Env {
                         var: api_key.env_var_name.clone(),
                     }),
+                    ResolvedSource::ProviderConfig(provider_config) => {
+                        for (var, value) in &provider_config.env {
+                            if flag_vars.contains(var.as_str()) {
+                                facts.push(CredentialFact::EnvFlag {
+                                    var: var.clone(),
+                                    value: value.clone(),
+                                });
+                            } else {
+                                facts.push(CredentialFact::Env { var: var.clone() });
+                            }
+                        }
+                    }
                 }
             }
             // At most one gateway Route fact regardless of gateway source count;
@@ -110,6 +134,38 @@ fn collect_enrolled_source_facts(profile: &AgentRuntimeAuthProfile) -> Vec<Crede
         }
         AgentRuntimeAuthProfile::Native => Vec::new(),
     }
+}
+
+/// The registry-declared flag-kind env var names for `agent_kind` (e.g.
+/// claude's `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_FOUNDRY`). Reuses the
+/// same bundled-registry vocabulary [`collect_launch_env_facts_with_ambient`]
+/// already consults for native/ambient facts, so a `provider_config` source's
+/// mode-switch flag classifies identically to an ambient one.
+///
+/// Reads BOTH halves of the document's env-var vocabulary: `auth.slots[].envVars`
+/// AND `providerConfig[].envVars`. The second is not redundant — claude declares
+/// `CLAUDE_CODE_USE_BEDROCK` on its anthropic slot but `CLAUDE_CODE_USE_FOUNDRY`
+/// ONLY under `providerConfig[]`, so a slots-only read would classify the Foundry
+/// mode switch as a secret and emit a valueless `Env` fact that the classifier's
+/// exact var+value `EnvFlag` match can never satisfy.
+fn registry_flag_vars(agent_kind: &str) -> BTreeSet<String> {
+    bundled_agent_registry_document()
+        .agents
+        .iter()
+        .find(|agent| agent.kind == agent_kind)
+        .map(|agent| {
+            let slot_vars = agent.auth.slots.iter().flat_map(|slot| &slot.env_vars);
+            let provider_config_vars = agent
+                .provider_config
+                .iter()
+                .flat_map(|config| &config.env_vars);
+            slot_vars
+                .chain(provider_config_vars)
+                .filter(|env_var| env_var.kind() == AgentRegistryEnvVarKind::Flag)
+                .map(|env_var| env_var.name().to_string())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Pure-logic core: testable without mutating the process environment.
@@ -164,6 +220,10 @@ pub(crate) fn collect_launch_env_facts_with_ambient(
 #[cfg(test)]
 #[path = "launch_facts_route_transition_tests.rs"]
 mod route_transition_tests;
+
+#[cfg(test)]
+#[path = "launch_facts_provider_config_tests.rs"]
+mod provider_config_tests;
 
 #[cfg(test)]
 mod tests {

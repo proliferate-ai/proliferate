@@ -38,7 +38,7 @@ export function OrganizationSelectMenu({
           variant="unstyled"
           size="unstyled"
           aria-label={ariaLabel}
-          className={`flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-ui text-foreground outline-none transition-colors hover:bg-list-hover focus:outline-none focus:ring-1 focus:ring-ring ${className}`}
+          className={`flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-ui text-foreground outline-none transition-colors hover:bg-hover focus:outline-none focus:ring-1 focus:ring-ring ${className}`}
         >
           <span className="min-w-0 truncate">{selectedOption?.label ?? "Select"}</span>
           <ChevronDown className="icon-paired shrink-0 text-muted-foreground" />

@@ -21,7 +21,7 @@ const toneClasses: Record<BadgeTone, string> = {
   info: "border-info/25 bg-info/10 text-info",
   warning: "border-warning/30 bg-warning/10 text-warning",
   destructive: "border-destructive/30 bg-destructive/10 text-destructive",
-  sidebar: "border-sidebar-border bg-surface-control text-sidebar-muted-foreground",
+  sidebar: "border-border bg-surface-control text-sidebar-muted-foreground",
 };
 
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(

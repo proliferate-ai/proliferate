@@ -1,0 +1,102 @@
+import { useEffect, useState } from "react";
+import {
+  useAgentGatewayEnrollment,
+  useAuthSelections,
+} from "@proliferate/cloud-sdk-react";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import {
+  AUTH_SETUP_GRACE_MS,
+  resolveAuthSetupStep,
+  type AuthSetupStepState,
+} from "#product/lib/domain/agents/auth-onboarding";
+import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
+
+/** Poll cadence while the step awaits the delivery ack (matches the panes'
+ * DELIVERY_PENDING_POLL_MS — the acks land out-of-band, server- or
+ * sync-hook-side, so there is no client mutation to invalidate on). */
+const AUTH_SETUP_POLL_MS = 3000;
+
+/**
+ * The ack-gated onboarding "setting up" step (agent-auth.md, Proof C7).
+ *
+ * Signup/auth never waited on LiteLLM provisioning — enrollment runs in the
+ * background. After the first-run adoption posts its gateway selections
+ * (recorded in the auth-setup store), this step watches those selections'
+ * `applied` flags on the local surface, polling through the existing
+ * refetchInterval seam. It resolves to "applied" once every adopted selection
+ * is acknowledged under a synced enrollment; an unsynced (or unreadable)
+ * enrollment is the same pending state, never an error. If the ~20s grace
+ * window passes first the step auto-advances ("advanced") and the harness
+ * panes' ordinary pending indicator carries on — the step never hard-blocks.
+ *
+ * Both outcomes latch in the store, so polling stops and a later manual auth
+ * edit going pending never resurrects the onboarding card.
+ */
+export function useAuthSetupOnboardingStep(): AuthSetupStepState {
+  const { cloudActive } = useCloudAvailabilityState();
+  const adoptedHarnessKinds = useAuthSetupOnboardingStore(
+    (store) => store.adoptedHarnessKinds,
+  );
+  const adoptionStartedAt = useAuthSetupOnboardingStore(
+    (store) => store.adoptionStartedAt,
+  );
+  const settled = useAuthSetupOnboardingStore((store) => store.settled);
+  const markSettled = useAuthSetupOnboardingStore((store) => store.markSettled);
+
+  const watching =
+    settled === null
+    && adoptedHarnessKinds !== null
+    && adoptedHarnessKinds.length > 0;
+
+  // Grace window (~20s from the adoption writes): expiry only ever ADVANCES
+  // the step — it never blocks and never turns into an error state.
+  const [graceExpired, setGraceExpired] = useState(false);
+  useEffect(() => {
+    if (!watching || adoptionStartedAt === null) {
+      return;
+    }
+    const remaining = adoptionStartedAt + AUTH_SETUP_GRACE_MS - Date.now();
+    if (remaining <= 0) {
+      setGraceExpired(true);
+      return;
+    }
+    const timer = setTimeout(() => setGraceExpired(true), remaining);
+    return () => clearTimeout(timer);
+  }, [watching, adoptionStartedAt]);
+
+  const selectionsQuery = useAuthSelections("local", cloudActive && watching, {
+    refetchInterval: watching ? AUTH_SETUP_POLL_MS : false,
+  });
+  // Enrollment sync (keys minted) is part of the same pending truth: a state
+  // acked before sync lacks the key, and sync bumps the revision back to
+  // pending — so resolution requires synced AND applied.
+  const enrollmentQuery = useAgentGatewayEnrollment(cloudActive && watching, {
+    refetchInterval: watching ? AUTH_SETUP_POLL_MS : false,
+  });
+  // An errored enrollment read (e.g. the 404 before the row exists, or
+  // LiteLLM-down provisioning trouble) reads as an observed NON-synced state:
+  // pending, then the grace advances — never a failure.
+  const enrollmentSyncStatus =
+    enrollmentQuery.data?.syncStatus
+    ?? (enrollmentQuery.isError ? "none" : undefined);
+
+  const state: AuthSetupStepState =
+    settled
+    ?? resolveAuthSetupStep({
+      adoptedHarnessKinds,
+      selections: selectionsQuery.data,
+      enrollmentSyncStatus,
+      graceExpired,
+    });
+
+  useEffect(() => {
+    if (settled !== null) {
+      return;
+    }
+    if (state === "applied" || state === "advanced") {
+      markSettled(state);
+    }
+  }, [markSettled, settled, state]);
+
+  return state;
+}
