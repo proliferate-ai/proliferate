@@ -27,6 +27,32 @@ pub struct AgentRegistryAgent {
     pub auth: AgentRegistryAuth,
     #[serde(default)]
     pub docs_url: Option<String>,
+    /// Typed provider configurations this harness can be pointed at ("use my
+    /// own cloud provider account": Bedrock, Azure OpenAI/Foundry). Declares
+    /// the env var vocabulary of each config kind, INCLUDING the non-secret
+    /// mode-switch flags (e.g. claude's `CLAUDE_CODE_USE_FOUNDRY`) that only
+    /// exist on this side of the document — `auth.slots[]` does not repeat
+    /// them. Readers of the flag vocabulary must consult both.
+    #[serde(default)]
+    pub provider_config: Vec<AgentRegistryProviderConfig>,
+}
+
+/// One typed provider configuration a harness supports. `env_vars` uses the
+/// same plain-string-or-tagged form as an auth slot's, so a `flag`-kind entry
+/// here classifies exactly like one declared on a slot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistryProviderConfig {
+    pub kind: String,
+    pub label: String,
+    #[serde(default)]
+    pub env_vars: Vec<AgentRegistryAuthSlotEnvVar>,
+    /// True while the cell is built but live-unverified: the server excludes it
+    /// from the selectable kinds, so no real selection can reach its render arm.
+    #[serde(default)]
+    pub pending: bool,
+    #[serde(default)]
+    pub pending_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

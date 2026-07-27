@@ -89,8 +89,9 @@ pub fn collect_launch_env_facts(
 /// - `provider_config` (Track D) → one fact per key in the already-resolved
 ///   `env` map: [`CredentialFact::EnvFlag`] (with its real value) for a
 ///   registry-declared flag var (e.g. `CLAUDE_CODE_USE_BEDROCK`,
-///   `CLAUDE_CODE_USE_FOUNDRY` — non-secret mode switches, same vocabulary the
-///   native/ambient path already reads from the registry's `auth.slots[].envVars`),
+///   `CLAUDE_CODE_USE_FOUNDRY` — non-secret mode switches, named by the registry's
+///   `auth.slots[].envVars` UNION `providerConfig[].envVars`; see
+///   [`registry_flag_vars`] for why both halves must be read),
 ///   else a presence-only [`CredentialFact::Env`] — same secrets rule as
 ///   `api_key`.
 fn collect_enrolled_source_facts(
@@ -140,17 +141,26 @@ fn collect_enrolled_source_facts(
 /// same bundled-registry vocabulary [`collect_launch_env_facts_with_ambient`]
 /// already consults for native/ambient facts, so a `provider_config` source's
 /// mode-switch flag classifies identically to an ambient one.
+///
+/// Reads BOTH halves of the document's env-var vocabulary: `auth.slots[].envVars`
+/// AND `providerConfig[].envVars`. The second is not redundant — claude declares
+/// `CLAUDE_CODE_USE_BEDROCK` on its anthropic slot but `CLAUDE_CODE_USE_FOUNDRY`
+/// ONLY under `providerConfig[]`, so a slots-only read would classify the Foundry
+/// mode switch as a secret and emit a valueless `Env` fact that the classifier's
+/// exact var+value `EnvFlag` match can never satisfy.
 fn registry_flag_vars(agent_kind: &str) -> BTreeSet<String> {
     bundled_agent_registry_document()
         .agents
         .iter()
         .find(|agent| agent.kind == agent_kind)
         .map(|agent| {
-            agent
-                .auth
-                .slots
+            let slot_vars = agent.auth.slots.iter().flat_map(|slot| &slot.env_vars);
+            let provider_config_vars = agent
+                .provider_config
                 .iter()
-                .flat_map(|slot| &slot.env_vars)
+                .flat_map(|config| &config.env_vars);
+            slot_vars
+                .chain(provider_config_vars)
                 .filter(|env_var| env_var.kind() == AgentRegistryEnvVarKind::Flag)
                 .map(|env_var| env_var.name().to_string())
                 .collect()
@@ -210,6 +220,10 @@ pub(crate) fn collect_launch_env_facts_with_ambient(
 #[cfg(test)]
 #[path = "launch_facts_route_transition_tests.rs"]
 mod route_transition_tests;
+
+#[cfg(test)]
+#[path = "launch_facts_provider_config_tests.rs"]
+mod provider_config_tests;
 
 #[cfg(test)]
 mod tests {
