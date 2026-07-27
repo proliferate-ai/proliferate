@@ -260,9 +260,14 @@ The E2B sandbox `inc8wykyzzrz7y4161h67` is destroyed and confirmed unreachable.
   `scenarios.md:720-723` spec contradiction and the `ownerScope=personal`
   boundary question (`-5096852974`).
 - #1558 — typed-key write-gate and render evidence (`issuecomment-5096757219`).
-- #1553 — delivery / fails-closed evidence (`issuecomment-5096760290`).
+- #1553 — delivery / fails-closed evidence (`issuecomment-5096760290`); the E2B
+  cloud-delivery PASS with the byte-exact ack (`-5096949985`).
+- #1552 — the E2B observation-upload blocker with the `strings`-level root cause,
+  the five-harness read-contract table, and the confirmed AWAKE lag
+  (`-5096971006`).
 
 ## What is not merged
 
 Nothing was merged. The rewire sits committed on
-`agents/live-validation-runbook` at `addd8877e`, unpushed, for review.
+`agents/live-validation-runbook` at `addd8877e`, pushed and ready for Pablo's
+review; this report and the desktop checklist follow it on the same branch.
