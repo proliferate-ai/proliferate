@@ -369,7 +369,7 @@
             "envVars": [
               "OPENAI_API_KEY"
             ],
-            "discovery": "none",
+            "discovery": "opencode",
             "materialization": {
               "gatewayEnv": {
                 "protocolFacade": "openai",
@@ -404,7 +404,7 @@
               "ANTHROPIC_API_KEY",
               "ANTHROPIC_AUTH_TOKEN"
             ],
-            "discovery": "none",
+            "discovery": "opencode",
             "materialization": {
               "gatewayEnv": {
                 "protocolFacade": "anthropic",
@@ -431,7 +431,7 @@
               "GEMINI_API_KEY",
               "GOOGLE_API_KEY"
             ],
-            "discovery": "none",
+            "discovery": "opencode",
             "materialization": {
               "gatewayEnv": {
                 "protocolFacade": "genai",

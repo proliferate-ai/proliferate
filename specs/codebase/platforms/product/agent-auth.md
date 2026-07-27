@@ -786,6 +786,27 @@ Deltas between this document and the integration stack
       `agent_gateway` package) is still pending — S1 was URL-string-only by
       design, so the account/auth/policy code still lives in the single
       `agent_gateway` package regardless of which prefix its routes answer.
+- [ ] **Opencode's native detector throws away the provider key.**
+      *Implemented, pending merge* (`fix/opencode-detector-per-slot`): the
+      detector in
+      [auth/credentials.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs)
+      used to iterate `auth.json` discarding each provider name, collapsing
+      the whole multi-provider file into ONE Present/Expired/Absent verdict
+      that every opencode slot then read identically — an expired anthropic
+      oauth entry made the openai slot look expired, and an openai api key
+      made the gemini slot look logged in. It now keeps the provider key,
+      emits one verdict per key as `opencode-auth-json/<provider>`, and each
+      slot claims only the keys its registry `discoveryKinds` declare
+      (`AuthSlotSpec.discovery_kinds`, projected from
+      [registry.json](../../../../catalogs/agents/registry.json); opencode's
+      openai/anthropic/gemini slots now carry `discovery: "opencode"`
+      alongside opencode-zen). Per-slot verdicts ride the existing
+      `auth_slots` projection field — no new wire concept — and every
+      aggregate consumer (`credentialState`, `cliAuthState`) keeps the
+      best-of reading (Present > Expired > Absent), so a slot that declares
+      no kinds still reads the whole file. (`credentials_tests.rs`:
+      `opencode_provider_auth_keeps_one_verdict_per_provider_key`,
+      `opencode_slots_read_only_their_own_declared_provider_keys`)
 - [ ] **Cursor's api_key route reports a false Ready.** The api_key source
       is persisted and rendered for cursor, and readiness reports `Ready`
       for it — the check is kind-agnostic

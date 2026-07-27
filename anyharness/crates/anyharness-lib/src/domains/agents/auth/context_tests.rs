@@ -301,6 +301,7 @@ fn union_across_slots_for_multi_provider_descriptor() {
                 env_vars: vec!["ANTHROPIC_API_KEY".to_string()],
                 login: None,
                 discovery: CredentialDiscoveryKind::OpenCode,
+                discovery_kinds: Vec::new(),
                 materialization: AuthMaterializationSpec::default(),
             },
             AuthSlotSpec {
@@ -311,6 +312,7 @@ fn union_across_slots_for_multi_provider_descriptor() {
                 env_vars: vec!["OPENAI_API_KEY".to_string()],
                 login: None,
                 discovery: CredentialDiscoveryKind::OpenCode,
+                discovery_kinds: Vec::new(),
                 materialization: AuthMaterializationSpec::default(),
             },
         ],

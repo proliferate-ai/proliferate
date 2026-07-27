@@ -80,6 +80,7 @@ fn env_only_auth() -> AuthSpec {
             env_vars: vec![LADDER_VAR.into()],
             login: None,
             discovery: CredentialDiscoveryKind::None,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     }
@@ -145,11 +146,17 @@ fn host_ambient_env_var_counts_only_when_non_empty() {
     }
     {
         let _ambient = AmbientVarGuard::set(LADDER_VAR, "  ");
-        assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+        assert_eq!(
+            detect_credentials(&auth, &home),
+            CredentialState::MissingEnv
+        );
     }
     {
         let _ambient = AmbientVarGuard::remove(LADDER_VAR);
-        assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+        assert_eq!(
+            detect_credentials(&auth, &home),
+            CredentialState::MissingEnv
+        );
     }
 
     let _ = std::fs::remove_dir_all(&home);
@@ -211,6 +218,7 @@ fn ladder_falls_through_env_to_discovery_then_login_then_missing() {
             env_vars: vec![LADDER_VAR.into()],
             login: Some(test_login_spec()),
             discovery: CredentialDiscoveryKind::Claude,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -288,6 +296,7 @@ fn multi_var_slot_needs_one_non_empty_value() {
             env_vars: vec!["ANYHARNESS_LADDER_A".into(), "ANYHARNESS_LADDER_B".into()],
             login: None,
             discovery: CredentialDiscoveryKind::None,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -326,6 +335,7 @@ fn all_required_slots_rejects_an_empty_value_in_any_slot() {
         env_vars: vec![var.into()],
         login: None,
         discovery: CredentialDiscoveryKind::None,
+        discovery_kinds: Vec::new(),
         materialization: Default::default(),
     };
     let auth = AuthSpec {
@@ -344,7 +354,10 @@ fn all_required_slots_rejects_an_empty_value_in_any_slot() {
         CredentialState::MissingEnv
     );
 
-    env.insert("ANYHARNESS_LADDER_B".to_string(), "sk-also-real".to_string());
+    env.insert(
+        "ANYHARNESS_LADDER_B".to_string(),
+        "sk-also-real".to_string(),
+    );
     assert_eq!(
         detect_credentials_with_env(&auth, &home, &env),
         CredentialState::Ready
@@ -372,6 +385,7 @@ fn none_policy_stays_ready_under_the_tightened_ladder() {
             env_vars: vec![LADDER_VAR.into()],
             login: None,
             discovery: CredentialDiscoveryKind::OpenCode,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -405,6 +419,7 @@ fn provider_managed_follows_its_slot_ladder_under_the_tightened_ladder() {
             env_vars: vec![LADDER_VAR.into()],
             login: None,
             discovery: CredentialDiscoveryKind::OpenCode,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -422,4 +437,3 @@ fn provider_managed_follows_its_slot_ladder_under_the_tightened_ladder() {
 
     let _ = std::fs::remove_dir_all(&home);
 }
-

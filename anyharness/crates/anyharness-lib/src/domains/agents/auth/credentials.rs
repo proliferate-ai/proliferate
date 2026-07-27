@@ -3,7 +3,8 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyharness_credential_discovery::{
-    detect_local_auth_state as discover_local_auth_state, LocalAuthState, ProviderId,
+    detect_local_auth_state as discover_local_auth_state, fact_kinds::OPENCODE_AUTH_JSON_PREFIX,
+    LocalAuthState, ProviderId,
 };
 
 use crate::domains::agents::model::{
@@ -125,7 +126,7 @@ pub fn detect_cli_auth_state(auth: &AuthSpec, home_dir: &Path) -> Option<CliAuth
     let mut found_expired = false;
 
     for slot in &auth.slots {
-        match detect_local_auth(&slot.discovery, home_dir) {
+        match detect_local_auth(&slot.discovery, &slot.discovery_kinds, home_dir) {
             LocalAuthDetection::Present => {
                 found_authenticated = true;
             }
@@ -160,7 +161,7 @@ fn detect_slot_credentials(
         return CredentialState::Ready;
     }
 
-    match detect_local_auth(&slot.discovery, home_dir) {
+    match detect_local_auth(&slot.discovery, &slot.discovery_kinds, home_dir) {
         LocalAuthDetection::Present => return CredentialState::ReadyViaLocalAuth,
         LocalAuthDetection::Expired => return CredentialState::LoginRequired,
         LocalAuthDetection::Absent => {}
@@ -243,6 +244,7 @@ fn preferred_missing_state(slots: Vec<&ResolvedAuthSlot>) -> CredentialState {
 
 /// Local auth detection result: present, expired (credentials exist but past
 /// expiry), or absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalAuthDetection {
     Present,
     Expired,
@@ -250,12 +252,20 @@ enum LocalAuthDetection {
 }
 
 /// Dispatches to the right provider-specific detector based on the discovery kind.
-fn detect_local_auth(kind: &CredentialDiscoveryKind, home_dir: &Path) -> LocalAuthDetection {
+///
+/// `discovery_kinds` is the slot's registry-declared fact vocabulary. Only
+/// multi-provider detectors read it (opencode's `auth.json`); single-provider
+/// files have exactly one answer and cannot be narrowed.
+fn detect_local_auth(
+    kind: &CredentialDiscoveryKind,
+    discovery_kinds: &[String],
+    home_dir: &Path,
+) -> LocalAuthDetection {
     match kind {
         CredentialDiscoveryKind::None => LocalAuthDetection::Absent,
         CredentialDiscoveryKind::Claude => detect_shared_local_auth(ProviderId::Claude, home_dir),
         CredentialDiscoveryKind::Codex => detect_shared_local_auth(ProviderId::Codex, home_dir),
-        CredentialDiscoveryKind::OpenCode => detect_opencode_local_auth(home_dir),
+        CredentialDiscoveryKind::OpenCode => detect_opencode_slot_auth(home_dir, discovery_kinds),
         CredentialDiscoveryKind::Cursor => {
             if detect_cursor_local_auth(home_dir) {
                 LocalAuthDetection::Present
@@ -279,23 +289,41 @@ fn detect_shared_local_auth(provider: ProviderId, home_dir: &Path) -> LocalAuthD
     }
 }
 
-/// Check OpenCode-specific local auth file for any provider credential.
+/// One provider key's verdict in opencode's `auth.json`, keyed by the
+/// discovery-fact name the registry uses for it
+/// (`opencode-auth-json/<provider>`).
+///
+/// The provider key IS the addressing: opencode's file is multi-provider, so a
+/// whole-file verdict cannot tell "anthropic logged in" from "openai logged
+/// in", and every opencode slot then reads the same collapsed answer. Keeping
+/// the key lets each slot claim only its own entries (agent-auth.md,
+/// "Readiness interplay": opencode's slots are individually meaningful even
+/// though readiness is `provider_managed`).
+struct OpencodeProviderAuth {
+    fact_kind: String,
+    detection: LocalAuthDetection,
+}
+
+/// Check OpenCode's local auth file, PER provider key.
 ///
 /// Checks:
 /// - `~/.local/share/opencode/auth.json` for provider entries with `type: "api"` + `key`
 ///   or `type: "oauth"` + `access`, or `type: "wellknown"` + `token`.
 /// OAuth entries with an `expires` field (seconds epoch) in the past are treated as expired.
-fn detect_opencode_local_auth(home_dir: &Path) -> LocalAuthDetection {
+///
+/// Entries with no usable credential material are omitted entirely (absence),
+/// so a slot with no matching entry reads `Absent`.
+fn detect_opencode_provider_auth(home_dir: &Path) -> Vec<OpencodeProviderAuth> {
     let path = home_dir
         .join(".local")
         .join("share")
         .join("opencode")
         .join("auth.json");
     let Some(data) = read_json_file(&path) else {
-        return LocalAuthDetection::Absent;
+        return Vec::new();
     };
     let Some(obj) = data.as_object() else {
-        return LocalAuthDetection::Absent;
+        return Vec::new();
     };
 
     let now_secs = SystemTime::now()
@@ -303,9 +331,9 @@ fn detect_opencode_local_auth(home_dir: &Path) -> LocalAuthDetection {
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    let mut found_expired = false;
+    let mut providers = Vec::new();
 
-    for (_provider, value) in obj {
+    for (provider, value) in obj {
         let Some(config) = value.as_object() else {
             continue;
         };
@@ -320,19 +348,55 @@ fn detect_opencode_local_auth(home_dir: &Path) -> LocalAuthDetection {
         }
 
         // For oauth entries, check expiry if the `expires` field is present
-        if auth_type == "oauth" {
-            if let Some(expires_secs) = config.get("expires").and_then(|v| v.as_u64()) {
-                if expires_secs <= now_secs {
-                    found_expired = true;
-                    continue;
-                }
-            }
-        }
+        let expired = auth_type == "oauth"
+            && config
+                .get("expires")
+                .and_then(|v| v.as_u64())
+                .is_some_and(|expires_secs| expires_secs <= now_secs);
 
-        // Found a valid, non-expired credential
-        return LocalAuthDetection::Present;
+        providers.push(OpencodeProviderAuth {
+            fact_kind: format!("{OPENCODE_AUTH_JSON_PREFIX}{provider}"),
+            detection: if expired {
+                LocalAuthDetection::Expired
+            } else {
+                LocalAuthDetection::Present
+            },
+        });
     }
 
+    providers
+}
+
+/// One opencode slot's verdict: the best-of over the provider keys the slot's
+/// registry-declared `discoveryKinds` claim.
+///
+/// A slot that declares no kinds falls back to the whole-file best-of, which is
+/// the pre-per-slot behavior and the honest answer when nothing says which
+/// providers are the slot's own.
+fn detect_opencode_slot_auth(home_dir: &Path, discovery_kinds: &[String]) -> LocalAuthDetection {
+    let providers = detect_opencode_provider_auth(home_dir);
+    best_of_detections(providers.iter().filter_map(|provider| {
+        let claimed = discovery_kinds.is_empty()
+            || discovery_kinds
+                .iter()
+                .any(|declared| declared == &provider.fact_kind);
+        claimed.then_some(provider.detection)
+    }))
+}
+
+/// Present beats Expired beats Absent — the aggregate any caller asking "is
+/// there local auth at all" needs.
+fn best_of_detections(
+    detections: impl IntoIterator<Item = LocalAuthDetection>,
+) -> LocalAuthDetection {
+    let mut found_expired = false;
+    for detection in detections {
+        match detection {
+            LocalAuthDetection::Present => return LocalAuthDetection::Present,
+            LocalAuthDetection::Expired => found_expired = true,
+            LocalAuthDetection::Absent => {}
+        }
+    }
     if found_expired {
         LocalAuthDetection::Expired
     } else {

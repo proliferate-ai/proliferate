@@ -75,11 +75,15 @@ fn provider_managed_with_no_slot_credentials_is_missing_env_not_ready() {
             env_vars: vec![],
             login: None,
             discovery: CredentialDiscoveryKind::OpenCode,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
 
-    assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+    assert_eq!(
+        detect_credentials(&auth, &home),
+        CredentialState::MissingEnv
+    );
 
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -102,6 +106,7 @@ fn provider_managed_is_ready_when_any_slot_has_a_selected_credential() {
                 env_vars: vec!["OPENAI_API_KEY".into()],
                 login: None,
                 discovery: CredentialDiscoveryKind::OpenCode,
+                discovery_kinds: Vec::new(),
                 materialization: Default::default(),
             },
             AuthSlotSpec {
@@ -112,6 +117,7 @@ fn provider_managed_is_ready_when_any_slot_has_a_selected_credential() {
                 env_vars: vec![],
                 login: None,
                 discovery: CredentialDiscoveryKind::OpenCode,
+                discovery_kinds: Vec::new(),
                 materialization: Default::default(),
             },
         ],
@@ -143,7 +149,10 @@ fn detects_opencode_api_oauth_and_wellknown_auth() {
         std::fs::write(opencode_dir.join("auth.json"), auth_json).expect("write auth json");
 
         assert!(
-            matches!(detect_opencode_local_auth(&home), LocalAuthDetection::Present),
+            matches!(
+                detect_opencode_slot_auth(&home, &[]),
+                LocalAuthDetection::Present
+            ),
             "Expected Present for: {auth_json}"
         );
 
@@ -172,6 +181,7 @@ fn expired_claude_oauth_yields_login_required() {
             env_vars: vec![],
             login: Some(test_login_spec()),
             discovery: CredentialDiscoveryKind::Claude,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -205,6 +215,7 @@ fn valid_claude_oauth_yields_ready_via_local_auth() {
             env_vars: vec![],
             login: Some(test_login_spec()),
             discovery: CredentialDiscoveryKind::Claude,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -213,7 +224,10 @@ fn valid_claude_oauth_yields_ready_via_local_auth() {
     assert_eq!(detect_credentials(&auth, &home), CredentialState::Ready);
     // Slot-level should be ReadyViaLocalAuth
     let (_, slots) = detect_auth_slots(&auth, &home);
-    assert_eq!(slots[0].credential_state, CredentialState::ReadyViaLocalAuth);
+    assert_eq!(
+        slots[0].credential_state,
+        CredentialState::ReadyViaLocalAuth
+    );
 
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -240,6 +254,7 @@ fn expired_opencode_oauth_yields_login_required() {
             env_vars: vec![],
             login: Some(test_login_spec()),
             discovery: CredentialDiscoveryKind::OpenCode,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -267,8 +282,161 @@ fn ignores_empty_opencode_auth_entries() {
     )
     .expect("write auth json");
 
+    assert!(detect_opencode_provider_auth(&home).is_empty());
     assert!(matches!(
-        detect_opencode_local_auth(&home),
+        detect_opencode_slot_auth(&home, &[]),
+        LocalAuthDetection::Absent
+    ));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// The per-slot fixture: one provider with a usable api key, one with an
+/// EXPIRED oauth entry, one slot with no entry at all. The old whole-file
+/// detector collapsed all three into a single verdict, so opencode's gemini
+/// slot read the same state as its anthropic slot.
+fn write_mixed_opencode_auth(home: &std::path::Path) {
+    let opencode_dir = home.join(".local").join("share").join("opencode");
+    std::fs::create_dir_all(&opencode_dir).expect("create opencode dir");
+    std::fs::write(
+        opencode_dir.join("auth.json"),
+        r#"{
+          "openai": {"type":"api","key":"sk-openai"},
+          "anthropic": {"type":"oauth","access":"token","refresh":"r","expires":1}
+        }"#,
+    )
+    .expect("write auth json");
+}
+
+fn opencode_slot(id: &str, discovery_kinds: &[&str], env_vars: &[&str]) -> AuthSlotSpec {
+    AuthSlotSpec {
+        id: id.into(),
+        label: id.into(),
+        credential_provider_ids: vec![],
+        required_for_readiness: false,
+        env_vars: env_vars.iter().map(|var| (*var).to_string()).collect(),
+        login: None,
+        discovery: CredentialDiscoveryKind::OpenCode,
+        discovery_kinds: discovery_kinds
+            .iter()
+            .map(|kind| (*kind).to_string())
+            .collect(),
+        materialization: Default::default(),
+    }
+}
+
+#[test]
+fn opencode_provider_auth_keeps_one_verdict_per_provider_key() {
+    let home = make_temp_home();
+    write_mixed_opencode_auth(&home);
+
+    let providers = detect_opencode_provider_auth(&home);
+    let mut verdicts = providers
+        .iter()
+        .map(|provider| (provider.fact_kind.as_str(), provider.detection))
+        .collect::<Vec<_>>();
+    verdicts.sort_by_key(|(kind, _)| *kind);
+    assert_eq!(
+        verdicts,
+        vec![
+            ("opencode-auth-json/anthropic", LocalAuthDetection::Expired),
+            ("opencode-auth-json/openai", LocalAuthDetection::Present),
+        ]
+    );
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn opencode_slots_read_only_their_own_declared_provider_keys() {
+    let home = make_temp_home();
+    write_mixed_opencode_auth(&home);
+
+    let auth = AuthSpec {
+        readiness_policy: AuthReadinessPolicy::ProviderManaged,
+        slots: vec![
+            opencode_slot("openai", &["opencode-auth-json/openai"], &[]),
+            opencode_slot("anthropic", &["opencode-auth-json/anthropic"], &[]),
+            opencode_slot(
+                "gemini",
+                &["opencode-auth-json/google", "opencode-auth-json/gemini"],
+                &[],
+            ),
+        ],
+    };
+
+    let (aggregate, slots) = detect_auth_slots_with_env(&auth, &home, &Default::default());
+
+    assert_eq!(
+        slots[0].credential_state,
+        CredentialState::ReadyViaLocalAuth,
+        "openai's api key is its own"
+    );
+    assert_eq!(
+        slots[1].credential_state,
+        CredentialState::LoginRequired,
+        "anthropic's oauth entry is expired"
+    );
+    assert_eq!(
+        slots[2].credential_state,
+        CredentialState::MissingEnv,
+        "gemini has no entry in the file at all"
+    );
+    // Aggregate is best-of, so a routed/whole-agent caller sees the same
+    // Ready it saw before the per-slot split.
+    assert_eq!(aggregate, CredentialState::Ready);
+    assert_eq!(
+        detect_cli_auth_state(&auth, &home),
+        Some(CliAuthState::Authenticated)
+    );
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn opencode_aggregate_is_expired_when_every_matching_provider_is_expired() {
+    let home = make_temp_home();
+    let opencode_dir = home.join(".local").join("share").join("opencode");
+    std::fs::create_dir_all(&opencode_dir).expect("create opencode dir");
+    std::fs::write(
+        opencode_dir.join("auth.json"),
+        r#"{"anthropic":{"type":"oauth","access":"token","expires":1}}"#,
+    )
+    .expect("write auth json");
+
+    let auth = AuthSpec {
+        readiness_policy: AuthReadinessPolicy::ProviderManaged,
+        slots: vec![
+            opencode_slot("anthropic", &["opencode-auth-json/anthropic"], &[]),
+            opencode_slot("openai", &["opencode-auth-json/openai"], &[]),
+        ],
+    };
+
+    let (aggregate, slots) = detect_auth_slots_with_env(&auth, &home, &Default::default());
+    assert_eq!(slots[0].credential_state, CredentialState::LoginRequired);
+    assert_eq!(slots[1].credential_state, CredentialState::MissingEnv);
+    assert_eq!(aggregate, CredentialState::LoginRequired);
+    assert_eq!(
+        detect_cli_auth_state(&auth, &home),
+        Some(CliAuthState::Expired)
+    );
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// Declaring no kinds keeps the old whole-file reading, so a slot the registry
+/// has not yet addressed does not silently lose its credential.
+#[test]
+fn opencode_slot_without_declared_kinds_reads_the_whole_file() {
+    let home = make_temp_home();
+    write_mixed_opencode_auth(&home);
+
+    assert!(matches!(
+        detect_opencode_slot_auth(&home, &[]),
+        LocalAuthDetection::Present
+    ));
+    assert!(matches!(
+        detect_opencode_slot_auth(&home, &["opencode-auth-json/opencode".to_string()]),
         LocalAuthDetection::Absent
     ));
 
@@ -288,6 +456,7 @@ fn cli_auth_state_absent_when_env_ready_but_no_auth_file() {
             env_vars: vec!["OPENAI_API_KEY".into()],
             login: Some(test_login_spec()),
             discovery: CredentialDiscoveryKind::Codex,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -324,6 +493,7 @@ fn cli_auth_state_authenticated_when_auth_file_present() {
             env_vars: vec![],
             login: Some(test_login_spec()),
             discovery: CredentialDiscoveryKind::Claude,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -354,6 +524,7 @@ fn cli_auth_state_expired_when_auth_file_expired() {
             env_vars: vec![],
             login: Some(test_login_spec()),
             discovery: CredentialDiscoveryKind::Claude,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };
@@ -377,6 +548,7 @@ fn cli_auth_state_unsupported_when_no_discovery() {
             env_vars: vec![],
             login: None,
             discovery: CredentialDiscoveryKind::None,
+            discovery_kinds: Vec::new(),
             materialization: Default::default(),
         }],
     };

@@ -77,6 +77,7 @@ fn agent_registry_agent_to_descriptor(
                             message: login.message.clone(),
                         }),
                         discovery: parse_credential_discovery(slot.discovery.as_str())?,
+                        discovery_kinds: slot.discovery_kinds.clone(),
                         materialization: agent_registry_materialization_to_spec(
                             &slot.materialization,
                         ),

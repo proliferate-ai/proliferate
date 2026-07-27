@@ -339,6 +339,14 @@ pub struct AuthSlotSpec {
     pub env_vars: Vec<String>,
     pub login: Option<LoginSpec>,
     pub discovery: CredentialDiscoveryKind,
+    /// Named discovery fact kinds this slot's credentials may surface as
+    /// (registry `discoveryKinds`, e.g. `opencode-auth-json/anthropic`).
+    ///
+    /// For multi-provider auth files this is what makes detection
+    /// slot-addressable: opencode's `auth.json` holds one entry per provider
+    /// key, and a slot's declared kinds say WHICH keys are its own. Empty
+    /// means "not declared", which keeps the whole-file (best-of) reading.
+    pub discovery_kinds: Vec<String>,
     pub materialization: AuthMaterializationSpec,
 }
 
@@ -390,6 +398,7 @@ impl AuthSpec {
                 env_vars,
                 login,
                 discovery,
+                discovery_kinds: Vec::new(),
                 materialization: AuthMaterializationSpec::default(),
             }],
         }
