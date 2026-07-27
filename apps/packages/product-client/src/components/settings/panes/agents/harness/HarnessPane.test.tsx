@@ -308,6 +308,7 @@ function renderPane(harnessKind = "claude") {
  */
 function expandModelList() {
   fireEvent.click(screen.getByRole("button", { name: "All Models" }));
+}
 
 // One persisted opencode api_key selection — enough for the API-key detail
 // section (and its "Add provider" button) to render.
