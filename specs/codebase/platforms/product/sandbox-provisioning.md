@@ -10,8 +10,8 @@ workspaces, repository configuration, or AnyHarness runtime state.
 one product user
   -> one active cloud_sandbox row
   -> just-in-time E2B create/resume during materialization
-  -> direct AnyHarness launch and authenticated access
-  -> optional Proliferate Worker sidecar
+  -> Supervisor-owned runtime launch and authenticated AnyHarness access
+     (Supervisor starts and supervises AnyHarness and the Worker)
 ```
 
 `POST /v1/cloud/cloud-sandbox/ensure` and `POST
@@ -124,10 +124,10 @@ snapshot is never provider authority.
    active observation after a transient response uses the same fenced usage
    open in the failure transaction;
 7. resolve the provider endpoint and runtime context, then reuse a healthy
-   authenticated AnyHarness or launch it directly with the
+   authenticated AnyHarness or launch the Supervisor-owned runtime with the
    recorded or newly minted runtime credentials;
-8. when AnyHarness is launched, start Proliferate Worker as a detached,
-   best-effort sidecar; and
+8. when a launch happens, the detached Supervisor starts and supervises both
+   AnyHarness and the Worker (there is no separate Worker sidecar launch); and
 9. after launch/relaunch, persist ready status and encrypted runtime access
    only when the expected provider binding and attempt epoch are still current.
 
@@ -257,8 +257,9 @@ destroys that row.
   observation replaces it with a sanitized receipt.
 - Runtime access is usable only when URL, bearer ciphertext, and data-key
   ciphertext are all present.
-- Worker sidecar launch failures are logged and swallowed; diagnose Worker
-  liveness independently from AnyHarness health.
+- The Supervisor owns Worker startup and restarts; a missing or unhealthy
+  Worker does not make direct AnyHarness access unavailable, so diagnose
+  Worker liveness independently from AnyHarness health.
 - Automatic replacement is limited to authoritative absence of the exact
   persisted provider target. There is no general-purpose manual replacement
   operation, and existing AnyHarness workspace identities can still be
