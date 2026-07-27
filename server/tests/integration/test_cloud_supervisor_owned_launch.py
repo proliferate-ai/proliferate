@@ -311,8 +311,8 @@ class TestSupervisorLaunchCommandHardening:
         runtime_context = _runtime_context()
         command = build_detached_supervisor_launch_command(runtime_context)
         supervisor_binary = supervisor_binary_path(runtime_context)
-        assert f"test -x {supervisor_binary}" in command or (
-            f"test -x '{supervisor_binary}'" in command
+        assert f"if test -x {supervisor_binary}; then" in command or (
+            f"if test -x '{supervisor_binary}'; then" in command
         )
         # The guard must gate the nohup, not merely appear somewhere in the script.
         assert "test -x" in command
@@ -320,10 +320,17 @@ class TestSupervisorLaunchCommandHardening:
         nohup_index = command.index("nohup")
         assert guard_index < nohup_index
 
-    def test_guard_precedes_nohup_in_command_shape(self) -> None:
-        # `test -x ... && nohup ... &` -- the backgrounded nohup means the
-        # overall command does not block on (or propagate) the guard's
-        # failure; `set -eu` only affects the script up to the background job.
+    def test_guard_wraps_nohup_in_if_block_not_and_list(self) -> None:
+        # The guard must be `if test -x BIN; then\n  nohup ... &\nfi`, NOT
+        # the and-list `test -x BIN && nohup ... &`. In the and-list form the
+        # trailing `&` backgrounds the WHOLE and-list: the shell forks a
+        # subshell whose foreground child is the never-exiting supervisor, so
+        # the provider command stream stays open until the request times out
+        # (live-reproduced on E2B 2026-07-27: deadline_exceeded after
+        # timeout_seconds while the supervisor was in fact running) and
+        # materialization fails on a healthy runtime. Inside the `if` body
+        # the `&` binds to the nohup simple command, the launcher exits
+        # immediately, and a missing binary still exits 0.
         #
         # This is a string-shape assertion, not an executed-script assertion:
         # the generated command also carries `pgrep -f <pattern> ... kill
@@ -331,25 +338,25 @@ class TestSupervisorLaunchCommandHardening:
         # that pattern-match and kill against the real live process table --
         # there is no way to scope `pgrep -f` to a tmp_path, so actually
         # running this script (even with a tmp_path-rooted runtime_context)
-        # is unsafe. Assert the shape instead: the guard gates the nohup, the
-        # nohup is backgrounded with a trailing `&`, and there is no bare
-        # unguarded nohup anywhere in the command.
+        # is unsafe.
         runtime_context = _runtime_context()
         command = build_detached_supervisor_launch_command(runtime_context)
-        assert "&& nohup" in command
-        guard_index = command.index("test -x")
+        assert "&& nohup" not in command
+        assert "if test -x" in command
+        guard_index = command.index("if test -x")
         nohup_index = command.index("nohup")
-        assert guard_index < nohup_index
-        # The whole script is shell-quoted (`bash -lc '...'`), so the nohup
-        # line's trailing character is the closing quote, not `&` itself;
-        # strip a trailing quote char before checking the backgrounding `&`.
+        # kill_lines carry their own `fi` tokens, so look for the closing
+        # `fi` of the guard specifically: the first one after the nohup.
+        fi_index = command.index("\nfi", nohup_index)
+        assert guard_index < nohup_index < fi_index
+        # The whole script is shell-quoted (`bash -lc '...'`), so strip any
+        # trailing quote char before checking the backgrounding `&`.
         nohup_line = next(line for line in command.splitlines() if "nohup" in line)
         assert nohup_line.rstrip().rstrip("'\"").endswith("&")
-        # Every nohup invocation in the script must be guarded -- no bare
-        # `nohup ...` that isn't preceded by `&& ` on the same line.
+        # Every nohup invocation must live inside the guarded if-block body.
         for line in command.splitlines():
             if "nohup" in line:
-                assert "&& nohup" in line, line
+                assert line.startswith("  nohup"), line
 
     @pytest.mark.asyncio
     async def test_health_probe_timeout_logs_missing_binary_hint(
