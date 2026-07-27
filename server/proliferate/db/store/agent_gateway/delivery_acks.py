@@ -15,6 +15,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import AGENT_AUTH_SURFACES
@@ -49,28 +50,53 @@ async def record_delivery_ack(
     push as stale) — it must not move the stamp backwards, so the stored row
     is returned unchanged. An EQUAL revision is content-authoritative (key
     rotation without a selection edit) and updates the fingerprint.
+
+    Written as a single ``INSERT ... ON CONFLICT (user_id, surface) DO
+    UPDATE`` so two concurrent FIRST acks for the same scope cannot race a
+    check-then-insert into a unique-constraint failure: the loser of the
+    insert race lands in the conflict arm, where the same only-move-forward
+    revision predicate applies. A predicate-suppressed update (stale ack)
+    returns no row, and the stored stamp is re-read unchanged.
     """
     if surface not in AGENT_AUTH_SURFACES:
         raise ValueError(f"Unknown agent auth surface: {surface}")
-    row = await _load_row(db, user_id=user_id, surface=surface)
-    if row is None:
-        row = AgentAuthDeliveryAck(
-            user_id=user_id,
-            surface=surface,
-            acked_revision=revision,
-            acked_fingerprint=fingerprint,
-            acked_at=utcnow(),
+    now = utcnow()
+    row = (
+        await db.execute(
+            pg_insert(AgentAuthDeliveryAck)
+            .values(
+                user_id=user_id,
+                surface=surface,
+                acked_revision=revision,
+                acked_fingerprint=fingerprint,
+                acked_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                constraint="uq_agent_auth_delivery_ack_scope",
+                set_={
+                    "acked_revision": revision,
+                    "acked_fingerprint": fingerprint,
+                    "acked_at": now,
+                    "updated_at": now,
+                },
+                # Only move forward: strictly newer revisions advance the
+                # stamp; an equal revision refreshes the fingerprint (key
+                # rotation without a selection edit); an older one is inert.
+                where=AgentAuthDeliveryAck.acked_revision <= revision,
+            )
+            .returning(AgentAuthDeliveryAck)
         )
-        db.add(row)
-        await db.flush()
+    ).scalar_one_or_none()
+    if row is None:
+        # The conflict predicate suppressed the update — a delayed ack for a
+        # superseded document. The scope row necessarily exists.
+        row = await _load_row(db, user_id=user_id, surface=surface)
+        assert row is not None
+        # The suppressed UPDATE never reached the ORM, so the identity-mapped
+        # instance (if any) is already current; no refresh needed.
         return delivery_ack_record(row)
-    if revision < row.acked_revision:
-        return delivery_ack_record(row)
-    row.acked_revision = revision
-    row.acked_fingerprint = fingerprint
-    row.acked_at = utcnow()
-    row.updated_at = utcnow()
-    await db.flush()
     return delivery_ack_record(row)
 
 

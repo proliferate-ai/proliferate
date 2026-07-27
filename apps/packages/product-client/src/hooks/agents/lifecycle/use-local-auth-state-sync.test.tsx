@@ -185,6 +185,52 @@ describe("useLocalAuthStateSync", () => {
     warn.mockRestore();
   });
 
+  it("retries the ack alone on the next pass after a transient ack failure", async () => {
+    // The push succeeded — the runtime HAS the state — but the one-shot ack
+    // POST blipped. The next sync pass sees an unchanged document (nothing to
+    // re-push) with pushed !== acked, and retries only the stamp; without the
+    // retry the server would stay unacked and the panes on "Applying…"
+    // forever.
+    let state = gatewayState();
+    mocks.useAgentGatewayEnrollment.mockReturnValue({
+      data: { syncStatus: "synced" },
+      isError: false,
+    });
+    mocks.useAgentAuthState.mockImplementation(() => ({ data: state }));
+    mocks.applyAgentAuthState.mockResolvedValue({ applied: true, revision: 5 });
+    mocks.ackAgentAuthState
+      .mockRejectedValueOnce(new Error("ack endpoint blipped"))
+      .mockResolvedValue({ surface: "local" });
+    mocks.invalidateAgentLaunchReadinessResources.mockResolvedValue(undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const { rerender } = renderSyncHook(makeQueryClient());
+
+    await waitFor(() => expect(mocks.ackAgentAuthState).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+
+    // Next pass: the refetched document is unchanged (same content, new
+    // object identity, e.g. a query refetch) — recover the lost stamp.
+    state = gatewayState();
+    rerender();
+
+    await waitFor(() => expect(mocks.ackAgentAuthState).toHaveBeenCalledTimes(2));
+    expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(1);
+    expect(mocks.ackAgentAuthState).toHaveBeenLastCalledWith(
+      "local",
+      { revision: 5, fingerprint: "fp-gateway-5" },
+      expect.anything(),
+    );
+
+    // Once acked, further unchanged passes stamp nothing again.
+    state = gatewayState();
+    rerender();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mocks.ackAgentAuthState).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
   it("invalidates the auth-state query when the enrollment reaches synced (Proof C5 hook half)", async () => {
     // A state pulled before enrollment sync lacks the key; the server bumps
     // the surface revision on sync (C-1's server half) and this hook makes

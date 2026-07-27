@@ -51,7 +51,10 @@ const ENROLLMENT_SYNCED = "synced";
  * fingerprint) through `POST /v1/cloud/agent-auth/state/ack` — that stamp is
  * what flips the settings panes from "Applying…" to applied. A failed push
  * records no ack, so the selection stays visibly pending and is retried on
- * the next state change.
+ * the next state change. A push that succeeded while only the ack POST
+ * failed is retried ack-only on the next sync pass (pushed and acked
+ * fingerprints are tracked separately), so a transient network blip never
+ * leaves the server stamp — and the panes — stuck on "Applying…".
  */
 export function useLocalAuthStateSync() {
   // The local agent-auth push must NOT be gated on cloud COMPUTE (the old
@@ -68,6 +71,11 @@ export function useLocalAuthStateSync() {
   const cloudClient = useCloudClient();
   const queryClient = useQueryClient();
   const lastPushedRef = useRef<string | null>(null);
+  // Tracked SEPARATELY from last-pushed: a push can succeed while its ack
+  // POST fails transiently. Subsequent passes then see an unchanged document
+  // (no re-push needed) but pushed !== acked, and retry only the ack — the
+  // server stamp must not stay "Applying…" forever behind one lost request.
+  const lastAckedRef = useRef<string | null>(null);
   const lastScheduledRef = useRef<string | null>(null);
   const operationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const { invalidateAgentLaunchReadinessResources } = useAgentResourcesCache();
@@ -126,7 +134,41 @@ export function useLocalAuthStateSync() {
       // enqueue the same document again while an earlier route is in flight.
       lastPushedFingerprint: lastScheduledRef.current,
     });
+
+    // The runtime confirmed the applied document — report the delivery ack
+    // so the server's applied-vs-pending truth (and the settings panes)
+    // flips to applied. Echo the SERVED document identity: the runtime's
+    // accepted revision is `state.revision` (a stale lower-revision push
+    // errors out at the runtime), and `state.fingerprint` is the
+    // server-computed hash riding the GET /state response.
+    const reportDeliveryAck = async () => {
+      if (!(typeof state.fingerprint === "string" && state.fingerprint.length > 0)) {
+        return;
+      }
+      try {
+        await ackAgentAuthState(
+          "local",
+          { revision: state.revision, fingerprint: state.fingerprint },
+          cloudClient,
+        );
+        lastAckedRef.current = plan.fingerprint;
+        void queryClient.invalidateQueries({ queryKey: agentAuthSelectionsRootKey() });
+      } catch (error: unknown) {
+        // The runtime HAS the state; only the report failed. pushed !== acked
+        // now, so the next sync pass retries the ack without re-pushing.
+        console.warn("[agent-auth] local state delivery ack failed", error);
+      }
+    };
+
     if (plan.action === null) {
+      // Nothing to push — but a previously delivered document may still be
+      // unacked (transient ack failure). Retry the stamp alone.
+      if (
+        lastPushedRef.current === plan.fingerprint
+        && lastAckedRef.current !== plan.fingerprint
+      ) {
+        operationQueueRef.current = operationQueueRef.current.then(reportDeliveryAck);
+      }
       return;
     }
     lastScheduledRef.current = plan.fingerprint;
@@ -156,26 +198,7 @@ export function useLocalAuthStateSync() {
 
       lastPushedRef.current = plan.fingerprint;
 
-      // The runtime confirmed the applied document — report the delivery ack
-      // so the server's applied-vs-pending truth (and the settings panes)
-      // flips to applied. Echo the SERVED document identity: the runtime's
-      // accepted revision is `state.revision` (a stale lower-revision push
-      // errors out above), and `state.fingerprint` is the server-computed
-      // hash riding the GET /state response.
-      if (typeof state.fingerprint === "string" && state.fingerprint.length > 0) {
-        try {
-          await ackAgentAuthState(
-            "local",
-            { revision: state.revision, fingerprint: state.fingerprint },
-            cloudClient,
-          );
-          void queryClient.invalidateQueries({ queryKey: agentAuthSelectionsRootKey() });
-        } catch (error: unknown) {
-          // The runtime HAS the state; only the report failed. The next state
-          // change (or the cloud-side reconcile) re-stamps — never re-push.
-          console.warn("[agent-auth] local state delivery ack failed", error);
-        }
-      }
+      await reportDeliveryAck();
 
       try {
         await invalidateAgentLaunchReadinessResources(runtimeUrl);

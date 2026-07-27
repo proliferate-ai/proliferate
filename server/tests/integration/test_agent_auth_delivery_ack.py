@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.server.cloud.materialization.materialize import agent_auth
@@ -302,6 +302,59 @@ class TestDesktopAckFlipsPendingToApplied:
         assert cloud["claude"] == {True}
 
     @pytest.mark.asyncio
+    async def test_future_revision_ack_is_rejected_and_stamps_nothing(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # The fingerprint is trusted from the authenticated client by design
+        # (it can only misreport its own delivery state), but the revision is
+        # server-bounded: an ack claiming a revision beyond the surface's
+        # current rendered revision could never have been served, and
+        # accepting it would wedge the only-move-forward backstop against
+        # every later legitimate ack.
+        user_id, headers = await _authed_user(client)
+        key = await _create_key(client, headers)
+        await _put_api_key_selection(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            api_key_id=key["id"],
+            env_var_name="ANTHROPIC_API_KEY",
+        )
+        state = (await _get_state(client, headers, "local")).json()
+
+        from_the_future = await _ack_state(
+            client,
+            headers,
+            surface="local",
+            revision=state["revision"] + 60_000,
+            fingerprint=state["fingerprint"],
+        )
+        assert from_the_future.status_code == 400
+        assert from_the_future.json()["detail"]["code"] == "invalid_agent_auth_delivery_ack"
+        assert (
+            await agent_gateway_store.get_delivery_ack(
+                db_session, user_id=uuid.UUID(user_id), surface="local"
+            )
+        ) is None
+        assert {record["applied"] for record in await _list_selections(client, headers)} == {
+            False
+        }
+
+        # The normal flow — echoing the served identity — still acks.
+        acked = await _ack_state(
+            client,
+            headers,
+            surface="local",
+            revision=state["revision"],
+            fingerprint=state["fingerprint"],
+        )
+        assert acked.status_code == 200, acked.text
+        assert {record["applied"] for record in await _list_selections(client, headers)} == {
+            True
+        }
+
+    @pytest.mark.asyncio
     async def test_ack_validation_and_auth(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
         bad_revision = await _ack_state(
@@ -411,6 +464,39 @@ class TestDeliveryAckStore:
         assert (
             await agent_gateway_store.get_delivery_ack(db_session, user_id=uid, surface="cloud")
         ) is None
+
+    @pytest.mark.asyncio
+    async def test_concurrent_first_acks_upsert_instead_of_racing_unique_violation(
+        self, client: AsyncClient, db_session: AsyncSession, test_engine: object
+    ) -> None:
+        # Two concurrent FIRST acks for the same (user, surface): a
+        # check-then-insert would have both writers see no row and collide on
+        # uq_agent_auth_delivery_ack_scope. The upsert lands the loser in the
+        # ON CONFLICT arm, where the same only-move-forward predicate applies
+        # — whichever interleaving wins the insert, the final stamp is the
+        # higher revision and neither writer errors.
+        user_id, _ = await _authed_user(client)
+        uid = uuid.UUID(user_id)
+        session_factory = async_sessionmaker(test_engine, expire_on_commit=False)  # type: ignore[call-overload]
+
+        async def ack(revision: int, fingerprint: str) -> None:
+            async with session_factory() as session:
+                await agent_gateway_store.record_delivery_ack(
+                    session,
+                    user_id=uid,
+                    surface="local",
+                    revision=revision,
+                    fingerprint=fingerprint,
+                )
+                await session.commit()
+
+        await asyncio.gather(ack(5, "fp-5"), ack(6, "fp-6"))
+
+        final = await agent_gateway_store.get_delivery_ack(
+            db_session, user_id=uid, surface="local"
+        )
+        assert final is not None
+        assert (final.acked_revision, final.acked_fingerprint) == (6, "fp-6")
 
     @pytest.mark.asyncio
     async def test_unknown_surface_is_rejected(

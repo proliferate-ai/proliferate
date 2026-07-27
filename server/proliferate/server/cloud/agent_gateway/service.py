@@ -410,6 +410,16 @@ async def ack_auth_state_delivery(
     by ``GET /state``. Out-of-order (lower-revision) acks are inert in the
     store — a delayed confirmation of a superseded document never moves the
     stamp backwards.
+
+    Trust boundary: the FINGERPRINT is taken from the authenticated client by
+    design — it can only misreport its own delivery state, and it already
+    holds the keys the document carries, so a lie gains it nothing beyond a
+    wrong badge on its own settings. The REVISION, however, is server-bounded:
+    an ack claiming a revision higher than the surface's current rendered
+    revision (max ``updated_at`` over the surface's selection rows — the same
+    value ``GET /state`` serves) could never have been served, and accepting
+    it would wedge the store's only-move-forward backstop against every later
+    legitimate ack. Such an ack from the future is rejected with 400.
     """
     if revision < 0:
         raise CloudApiError(
@@ -422,6 +432,15 @@ async def ack_auth_state_delivery(
         raise CloudApiError(
             "invalid_agent_auth_delivery_ack",
             "fingerprint must be a 1-128 character string.",
+            status_code=400,
+        )
+    current_revision = _selection_scope_revision(
+        await agent_gateway_store.list_auth_selections(db, user_id=user_id, surface=surface)
+    )
+    if revision > current_revision:
+        raise CloudApiError(
+            "invalid_agent_auth_delivery_ack",
+            "ack from the future: revision exceeds the surface's current rendered revision.",
             status_code=400,
         )
     record = await agent_gateway_store.record_delivery_ack(
