@@ -85,6 +85,7 @@ fn openapi_registers_workspace_session_and_event_schemas() {
         "CreateWorktreeWorkspaceRequest",
         "SetupScriptStatus",
         "SetupScriptExecution",
+        "WorktreeBaseFetch",
         "CreateWorktreeWorkspaceResponse",
         "RestoreWorktreeWorkspaceOutcome",
         "RestoreWorktreeWorkspaceResponse",
