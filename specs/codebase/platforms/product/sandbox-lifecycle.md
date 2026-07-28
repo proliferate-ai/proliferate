@@ -509,9 +509,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       so "which live sandboxes still run the bad template" is not
       enumerable and rollback recovery of existing sandboxes stays manual.
       Persist the exact immutable tag at create time.
-- [ ] `_runtime_status` in
-      [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)
-      maps sandbox statuses `provisioning` and `stopped` that the enum and
-      check constraint do not allow; the runtime-status shape belongs to
-      [sandbox-access.md](sandbox-access.md), which cross-lists this
-      dead-branch deletion on its fix PR.
