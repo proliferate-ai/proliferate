@@ -7346,10 +7346,6 @@ export interface components {
             createdAt?: string | null;
             /** Readyat */
             readyAt?: string | null;
-            /** Actionblockkind */
-            actionBlockKind?: string | null;
-            /** Actionblockreason */
-            actionBlockReason?: string | null;
             /**
              * Postreadyphase
              * @default idle
@@ -7484,10 +7480,6 @@ export interface components {
              */
             generation: number;
             runtimeAuth?: components["schemas"]["WorkspaceRuntimeAuthState"];
-            /** Actionblockkind */
-            actionBlockKind?: string | null;
-            /** Actionblockreason */
-            actionBlockReason?: string | null;
         };
         /** WorkspaceSummary */
         WorkspaceSummary: {
@@ -7540,10 +7532,6 @@ export interface components {
             createdAt?: string | null;
             /** Readyat */
             readyAt?: string | null;
-            /** Actionblockkind */
-            actionBlockKind?: string | null;
-            /** Actionblockreason */
-            actionBlockReason?: string | null;
             /**
              * Postreadyphase
              * @default idle

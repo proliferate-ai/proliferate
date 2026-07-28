@@ -45,22 +45,11 @@ export function useWorkspaceRuntimeBlock() {
         return null;
       }
 
-      const cloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
-        (workspace) => workspace.id === cloudWorkspaceId,
-      );
-      if (cloudWorkspace?.actionBlockKind) {
-        return {
-          reason: cloudWorkspace.actionBlockReason ?? "Cloud usage is currently paused.",
-          directoryMissing: false,
-        };
-      }
-
       return null;
     },
     [
       selectedCloudRuntime.state,
       selectedCloudRuntime.workspaceId,
-      workspaceCollections?.cloudWorkspaces,
       workspaceCollections?.workspaces,
     ],
   );

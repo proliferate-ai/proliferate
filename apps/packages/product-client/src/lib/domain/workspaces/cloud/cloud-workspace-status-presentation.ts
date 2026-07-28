@@ -125,24 +125,6 @@ export function buildCloudWorkspaceStatusScreenModel(
     : "";
   const status = resolveCloudWorkspaceStatus(workspace) ?? "error";
 
-  if (workspace.actionBlockKind) {
-    const description = workspace.actionBlockReason
-      ?? descriptionForStartBlockReason(workspace.actionBlockKind);
-    return {
-      mode: "blocked",
-      pendingStage: null,
-      eyebrowTone: "pending",
-      title: titleForStartBlockReason(workspace.actionBlockKind),
-      description,
-      repoLabel,
-      branchLabel,
-      footer: {
-        kind: "status",
-        message: description,
-      },
-    };
-  }
-
   if (status === "error") {
     return {
       mode: "error",

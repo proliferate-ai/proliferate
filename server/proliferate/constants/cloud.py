@@ -335,10 +335,8 @@ CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS: Final = 86_400
 
 class CloudCommandKind(StrEnum):
     start_session = "start_session"
-    configure_git_identity = "configure_git_identity"
     ensure_repo_checkout = "ensure_repo_checkout"
     materialize_workspace = "materialize_workspace"
-    prune_workspace_worktree = "prune_workspace_worktree"
     materialize_environment = "materialize_environment"
     reconcile_agents = "reconcile_agents"
     send_prompt = "send_prompt"
@@ -382,10 +380,8 @@ class CloudCommandSource(StrEnum):
 SUPPORTED_CLOUD_COMMAND_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudCommandKind)
 ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,
-    CloudCommandKind.configure_git_identity.value,
     CloudCommandKind.ensure_repo_checkout.value,
     CloudCommandKind.materialize_workspace.value,
-    CloudCommandKind.prune_workspace_worktree.value,
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.reconcile_agents.value,
     CloudCommandKind.send_prompt.value,
@@ -398,7 +394,6 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
 )
 DEFAULT_CLOUD_WORKER_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,
-    CloudCommandKind.configure_git_identity.value,
     CloudCommandKind.ensure_repo_checkout.value,
     CloudCommandKind.materialize_workspace.value,
     CloudCommandKind.materialize_environment.value,

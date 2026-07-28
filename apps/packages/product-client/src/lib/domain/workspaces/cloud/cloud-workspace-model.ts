@@ -65,8 +65,6 @@ export interface CloudWorkspaceRuntimeSummary {
   environmentId: string | null;
   status: CloudRuntimeStatus;
   generation: number;
-  actionBlockKind?: string | null;
-  actionBlockReason?: string | null;
 }
 
 export interface CloudWorkspaceRepoRef {
@@ -163,8 +161,6 @@ export interface CloudWorkspaceSummary {
   updatedAt: string | null;
   createdAt: string | null;
   readyAt: string | null;
-  actionBlockKind?: string | null;
-  actionBlockReason?: string | null;
   postReadyPhase: string;
   postReadyFilesTotal: number;
   postReadyFilesApplied: number;
