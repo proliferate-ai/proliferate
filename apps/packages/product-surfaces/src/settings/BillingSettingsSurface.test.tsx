@@ -229,6 +229,53 @@ describe("BillingSettingsSurface", () => {
     expect(screen.queryByText("Mocked")).toBeNull();
   });
 
+  it("excludes expired grant remainders from the available compute balance", () => {
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        plan: "pro",
+        proBillingEnabled: true,
+        isPaidCloud: true,
+        includedManagedCloudHours: 20,
+        remainingManagedCloudHours: 0,
+        grantAllocations: [
+          {
+            grantType: "pro_period",
+            totalSeconds: 20 * 3600,
+            consumedSeconds: 0,
+            remainingSeconds: 20 * 3600,
+            active: false,
+          },
+          {
+            grantType: "pro_period",
+            totalSeconds: 20 * 3600,
+            consumedSeconds: 20 * 3600,
+            remainingSeconds: 0,
+            active: true,
+          },
+        ],
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: true,
+          loading: false,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/0 PCUs of 20 PCUs available/)).toBeTruthy();
+    expect(screen.queryByText(/20 PCUs of 40 PCUs available/)).toBeNull();
+  });
+
   it("renders retryable errors without inventing plan or balance data", () => {
     cloudHooks.useCloudBilling.mockReturnValue({
       data: undefined,
