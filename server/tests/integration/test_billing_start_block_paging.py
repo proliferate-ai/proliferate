@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_DECISION_READ_UNAVAILABLE,
     BILLING_MODE_ENFORCE,
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
 )
@@ -31,7 +32,10 @@ from proliferate.db.store.billing_subjects import (
     ensure_free_included_grant,
     ensure_personal_billing_subject,
 )
-from proliferate.server.billing.authorization import CloudSandboxResumeBlockedError
+from proliferate.server.billing.authorization import (
+    BillingStateUnavailableError,
+    CloudSandboxResumeBlockedError,
+)
 from proliferate.server.cloud.cloud_sandboxes.service import ensure_cloud_sandbox_ready
 from proliferate.server.cloud.materialization import runner as runner_module
 from tests.integration.billing_accounting_helpers import seed_usage_segment
@@ -144,6 +148,51 @@ async def test_runner_does_not_page_on_billing_block(
     assert logged[0]["billing_subject_id"] == str(subject_id)
     assert logged[0]["user_id"] == str(user_id)
     assert logged[0]["reason"] == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED
+
+
+@pytest.mark.asyncio
+async def test_runner_does_not_double_page_on_billing_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fail-closed billing-read denial pages once, at the gate — not twice.
+
+    ``_deny_unreadable_billing_state`` already fires ``report_critical`` before it
+    raises (law N6). If the runner also let it fall through to the generic
+    ``except Exception`` handler, one billing outage would open two pages per
+    background task, which is exactly the alert-fatigue shape the 2026-07 incident
+    was about.
+    """
+    monkeypatch.setattr(runner_module, "async_session_factory", _noop_session)
+
+    paged: list[object] = []
+    monkeypatch.setattr(
+        runner_module,
+        "report_critical",
+        lambda exc, **_: paged.append(exc),
+    )
+    warned: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        runner_module.logger,
+        "warning",
+        lambda _msg, *, extra=None: warned.append(extra or {}),
+    )
+
+    subject_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+
+    async def _unavailable(_db: object) -> None:
+        raise BillingStateUnavailableError(
+            billing_subject_id=subject_id,
+            owner_user_id=user_id,
+        )
+
+    await runner_module._run_with_fresh_session(_unavailable, {})
+
+    assert paged == []
+    assert len(warned) == 1
+    assert warned[0]["billing_subject_id"] == str(subject_id)
+    assert warned[0]["user_id"] == str(user_id)
+    assert warned[0]["decision_type"] == BILLING_DECISION_READ_UNAVAILABLE
 
 
 @pytest.mark.asyncio
