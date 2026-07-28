@@ -335,6 +335,53 @@
     },
     "Tooltip": {
       "cardMode": "column"
+    },
+    "ActivityChips": {
+      "cardMode": "single",
+      "primaryStory": "SummaryRow"
+    },
+    "CloudRepoPicker": {
+      "cardMode": "column"
+    },
+    "LoopsPanel": {
+      "cardMode": "column"
+    },
+    "ProliferateLivingMark": {
+      "cardMode": "column"
+    },
+    "RepoPicker": {
+      "cardMode": "single",
+      "primaryStory": "OpenMenu"
+    },
+    "SecretManagementPanel": {
+      "cardMode": "column"
+    },
+    "SessionControlIcon": {
+      "cardMode": "column"
+    },
+    "SubagentRosterRow": {
+      "cardMode": "column"
+    },
+    "TerminalRosterRow": {
+      "cardMode": "column"
+    },
+    "TerminalsRosterPanel": {
+      "cardMode": "column"
+    },
+    "Toaster": {
+      "cardMode": "single",
+      "primaryStory": "Notification"
+    },
+    "TooltipProvider": {
+      "cardMode": "single",
+      "primaryStory": "WrappedToolbar"
+    },
+    "CheckboxPrimitive": {
+      "cardMode": "column"
+    },
+    "TooltipPrimitive": {
+      "cardMode": "single",
+      "primaryStory": "OpenBubble"
     }
   }
 }

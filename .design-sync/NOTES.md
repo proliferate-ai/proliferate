@@ -240,6 +240,85 @@ never emitted. **The playground registry's `render()` is the accurate
 contract; the `.d.ts` is a hint.** Read the component source for anything
 with a callback or a row/item type.
 
+### Product bugs this sync surfaced (fix in the product, not here)
+
+Two defects found by rendering every component in isolation, both
+verified against source rather than taken on report:
+
+1. **`--color-warning` is invisible ink.** The token is
+   `rgba(255,180,50,0.15)`, an alpha *fill*, but components use it as
+   text via `text-warning`. Confirmed independently by five batches with
+   ever-widening reach: `Badge tone="warning"`, `ProductNotice`,
+   `RecentWorkStatusDot` attention tone, `BillingOwnerCard` start-blocked
+   plan, `BillingSettingsPane` checkout-cancel, `CloudRepoPicker`
+   disabled/archived rows, `GoalBar` blocked result, `LoopsPanel`
+   emulated chip, and four workflow branches (`WorkflowRunForm`
+   blockers, `WorkflowDefinitionEditor` catalog warning,
+   `WorkflowRunDetail` notice, every `tone:"warning"` status label —
+   cancellation-requested / target-lost / interrupted). The ink token is
+   `--color-warning-foreground` (`#ffb432`). Clearest repro:
+   `RecentWorkStatusDot`'s `SurfaceTones` cell (default vs sidebar side
+   by side). **Consequence for this sync:** those states are UNVERIFIED
+   by the sheets — affected cells were steered onto readable branches so
+   no card photographs a token bug, with the reason in each grade note.
+   The `Badge` `Tones` cell deliberately still shows it.
+2. **Multi-line highlighted code collapses onto one line in the chat
+   transcript.** `CodeBlockTokenContent`'s non-`showLineNumbers` branch
+   maps `CodeTokenLine` into `<code class="block whitespace-pre">`, but
+   `CodeTokenLine` emits a bare inline `<span>` with no trailing newline
+   for non-empty lines (verified: `CodeTokenLine.tsx:28-39`), and
+   shiki's tokens carry no newlines. `showLineNumbers` defaults to
+   `false` (`CodeBlock.tsx:37`) and both `renderTranscriptCodeBlock` and
+   `renderDesktopCodeBlock` rely on that default, so **every highlighted
+   fenced block in the transcript is affected.** Fix belongs in
+   `CodeTokenLine.tsx`. Worked around in-scope only: multi-line cells
+   pass `showLineNumbers`; un-guttered cells use one-line payloads.
+
+### Preview-authoring techniques that worked (reuse these)
+
+- **Reveal-on-hover without a style hack.** Several slots wrap children
+  in an `opacity-0` div a consumer cannot override, but also list
+  `group-focus-within` — focusing a button inside the slot on mount
+  photographs the genuine revealed state, no ring drawn. Applies to
+  `ProductSidebarSectionHeader.actions`, `RepoGroupHeader.action`,
+  `WorkspaceRow.hoverAction`, `ThreadRow.hoverAction`.
+- **Overlays photograph open with no config.** Radix portals mount on
+  `document.body`, outside the card's transformed wrapper, and per-cell
+  `?story=` capture renders one story per page at 900×700 — so
+  `defaultOpen` (plus `modal={false}` where offered) just works. The
+  `cardMode` overrides exist only for the product's live grid card,
+  where all stories mount at once.
+- **Components without a declarative open** (`EnvironmentSearchSelect`
+  doesn't forward `PopoverButton`'s `externalOpen`; `SettingsMenu`)
+  can be opened by clicking the real trigger in a mount effect.
+- **`Toaster`**: `toast` is importable from the bare specifier even
+  though it is absent from `manifest.exported` (the shim star-re-exports
+  the window global). Fire it in a mount effect with
+  `duration: Infinity` — the 4 s default races the capture settle.
+- **`DropdownMenuSub`** needs `DropdownMenuPortal` (the DS doesn't
+  portal sub-content, and `DropdownMenuContent` is `overflow-hidden`)
+  plus a controlled open on a post-mount timer — `defaultOpen` renders
+  nothing because it cannot anchor until the parent is measured.
+- **`TooltipPrimitive` is where the tooltip bubble gets captured.** The
+  styled `Tooltip` cannot (no `open` prop, internal `<span>` trigger, no
+  hover step in the harness). Placement traps: `side="right"` on a
+  toolbar's first button paints over the second; a bubble needs roughly
+  `gap-16` clearance from any caption.
+
+### Things that do not exist / do not resolve
+
+- `.chat-markdown` lives in product-client's `authenticated.css`, which
+  is NOT in the bundle — `MarkdownBody` previews must set their own
+  prose scale, and must avoid GFM tables (a bare `border` falls back to
+  white `currentColor`).
+- `POPOVER_SURFACE_CLASS`, `SETTINGS_EYEBROW_CLASS` are `.ts` leaves,
+  not components — absent from the window global; compose from
+  safelisted roles instead.
+- Icons that don't exist here (the product imports them from
+  `lucide-react`): `Paperclip`, `AtSign`, `Bot`, `Bell`, `Workflow`,
+  `LayoutGrid`. `Robot` / `BotMessageSquare` do exist.
+- `Spinner` photographs as a "C" mid-rotation — shipped behaviour.
+
 ### Known render warns (triaged as legitimate — a warn NOT listed here is new)
 
 - `[FONT_MISSING] "Manrope"` — benign. Bare `Manrope` appears only as a
@@ -272,32 +351,56 @@ exports (spot-checked: `Home`, `GitHub`, `ArrowDown`, `Sparkles`,
   1228 and fails with `Executable doesn't exist`.
 - Tailwind CLI **4.3.3**, matching the repo's `tailwindcss` version.
 
-## Status / where this stopped
+## Status
 
-Build and `package-validate.mjs` are clean (exit 0, 5 non-blocking warns,
-all triaged above). **Preview authoring is in progress**: 11 components
-authored and graded `good` on every cell — Button, Badge, Input,
-Textarea, Label, Select, ShortcutBadge, ProgressBar, UserAvatar,
-Spinner, SkeletonBlock. The calibration set earned its keep twice, in
-each case catching a defect that would have degraded every design:
-the dark-surface bug and the static-CSS safelist gap above. The
-remaining 173 components ship the honest floor card.
+Build and `package-validate.mjs` are clean. **All 133 components in the
+card set are authored and graded `good`** — 61 in wave 1 (the playground
+registry's sanctioned surface) and 72 in wave 2 (product surfaces with
+no registry entry, composed from their real call sites). Zero floor
+cards remain.
 
-Authoring loop that works (solo, no fan-out used):
-`.design-sync/previews/<Name>.tsx` → `node .ds-sync/lib/preview-rebuild.mjs
---components <names>` → `node .ds-sync/package-capture.mjs --components
-<names>` → Read `ds-bundle/_screenshots/review/<group>__<Name>.png` →
-write `.design-sync/.cache/review/<Name>.grade.json`. Preview files
-import from the bare package specifier (`@proliferate/ui`); the
-converter shims it to the window global, so subpath imports are neither
-needed nor correct. **Use the EXPORT name, not the registry label** —
-`Skeleton` in the playground registry is exported as `SkeletonBlock`,
-and a mismatched filename is silently skipped ("not in
-.stories-map.json"). **Nothing uploaded**: `DesignSync` returned an
-authorization error in this remote (claude.ai/code) session
-(`/design-login` needs an interactive terminal); resolve via Claude
-Design's "Send to Claude Code Web". `config.json` therefore has **no
-`projectId`**, and no project was created.
+**Nothing has been uploaded.** `DesignSync` returns an authorization
+error in this remote (claude.ai/code) session — `/design-login` needs an
+interactive terminal; the tool's own guidance is to use Claude Design's
+"Send to Claude Code Web". `config.json` therefore has **no
+`projectId`** and no project was created. Everything else is
+reproducible from this repo, so the upload is one driver run once
+authorization exists.
+
+### The authoring loop (solo or fanned out)
+
+`.design-sync/previews/<Name>.tsx` (2-6 named exports = one cell each)
+→ `node .ds-sync/lib/preview-rebuild.mjs --components <names>`
+→ `node .ds-sync/package-capture.mjs --components <names>`
+→ Read `ds-bundle/_screenshots/review/<group>__<Name>.png`
+→ write `.design-sync/.cache/review/<Name>.grade.json`.
+
+Preview files import from the **bare package specifier**
+(`@proliferate/ui`); the converter shims it to the window global, so
+subpath imports are neither needed nor correct. **Use the EXPORT name,
+not the registry label** — `Skeleton` in the playground registry is
+exported as `SkeletonBlock`, and a mismatched filename is silently
+skipped ("not in .stories-map.json").
+
+Fan-out worked well: 9 subagents over disjoint component sets, each
+running the full author→capture→view→grade loop, `preview-rebuild` and
+`package-capture` **scoped to their own components only** (an unscoped
+capture or any `package-build`/`package-validate` run rewrites shared
+state and corrupts parallel agents). Zero write-scope violations across
+all nine.
+
+### Sources of truth for props, in order
+
+1. A real call site — `grep -rn "<Name>" apps/packages/product-client/src
+   apps/packages/product-surfaces/src`. Best source by far.
+2. The component source under `apps/packages/{ui,product-ui}/src`.
+3. `apps/packages/product-ui/test/*.test.tsx` and the playground fixture
+   modules.
+4. The generated `<Name>.d.ts` — **a hint only**. It repeatedly omits
+   required callbacks (`onToggle`, `onSave`, `onChange`, `onNavSelect`,
+   `onApprove`) and never emits row/item types (`ModelTableRow`,
+   `SidebarNavItemView`, `PrStatusView`). `ProductSidebarSectionHeader`
+   changes shape entirely on whether `onToggleCollapsed` is a function.
 
 ## Re-sync risks
 
