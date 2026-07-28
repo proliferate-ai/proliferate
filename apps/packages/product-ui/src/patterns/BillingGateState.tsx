@@ -143,10 +143,13 @@ export function BillingBalanceNotice({
 }
 
 /**
- * The server's typed start-block reasons
- * (`server/proliferate/constants/billing.py` start-block kinds; also carried
- * on `BillingPlanInfo.startBlockReason`). `unknown` renders the generic
- * blocked state rather than leaking a raw code.
+ * Typed gate reasons. The seven compute values are the server's start-block
+ * kinds verbatim (`server/proliferate/constants/billing.py`, carried on
+ * `BillingPlanInfo.startBlockReason`). The two `llm_*` values are UI-level:
+ * the server's LLM vocabulary is `budget_status` `"exhausted"` /
+ * `"limit_reached"` (`constants/agent_gateway.py`), so an LLM surface must
+ * map that status here rather than passing it through. `unknown` renders
+ * the generic blocked state rather than leaking a raw code.
  */
 export type BillingGateReason =
   | "credits_exhausted"
@@ -155,6 +158,7 @@ export type BillingGateReason =
   | "payment_failed"
   | "external_billing_hold"
   | "admin_hold"
+  | "concurrency_limit"
   | "llm_credits_exhausted"
   | "llm_limit_reached"
   | "unknown";
@@ -254,12 +258,26 @@ export function billingGateView(
         secondaryAction: null,
       };
     case "admin_hold":
+      if (!opts.canManageBilling) {
+        return memberView("Account on hold", "Cloud usage is paused on this account.");
+      }
       return {
         kind: "admin",
         title: "Account on hold",
         description: "Cloud usage is paused on this account. Contact support to resolve the hold.",
         primaryAction: null,
         secondaryAction: openBilling,
+      };
+    case "concurrency_limit":
+      // Not a billing repair: the fix is freeing a sandbox slot, so no
+      // billing CTA (matches cloud-workspace-status-presentation copy).
+      return {
+        kind: "limit",
+        title: "Sandbox limit reached",
+        description:
+          "Archive or delete another cloud workspace before starting this one.",
+        primaryAction: null,
+        secondaryAction: null,
       };
     case "llm_credits_exhausted":
       if (!opts.canManageBilling) {
