@@ -278,14 +278,50 @@ describe("ComposerCommandEditor", () => {
     expect(textarea.textContent).not.toContain("](");
   });
 
+  it("renders an inserted file mention with its file glyph and path", async () => {
+    fileMentionMock.results = [
+      { path: "docs/guides/setup.md", name: "setup.md", parent: "docs/guides" },
+    ];
+    const { textarea } = renderEditor({ draft: createTextDraft("Open @set") });
+
+    fireEvent.keyDown(textarea, { key: "Enter", repeat: false });
+
+    await waitFor(() => {
+      expect(textarea.querySelector("[data-composer-file-mention]")).toBeTruthy();
+    });
+    const chip = textarea.querySelector<HTMLElement>("[data-composer-file-mention]")!;
+    // The path is the link target: machine-readable on the chip and on hover.
+    expect(chip.getAttribute("data-composer-file-mention")).toBe("docs/guides/setup.md");
+    expect(chip.title).toBe("docs/guides/setup.md");
+    // The glyph comes from the shared extension table, so a .md chip carries a
+    // real mark rather than a generic one, and contributes no text.
+    const glyph = chip.querySelector("[data-composer-file-mention-glyph]");
+    expect(glyph?.querySelector("svg")).toBeTruthy();
+    expect(glyph?.textContent).toBe("");
+    // The directory is painted next to the basename, and the basename is still
+    // the whole of the node's text.
+    const content = chip.querySelector("[data-composer-file-mention-content]");
+    expect(content?.getAttribute("data-composer-file-mention-directory")).toBe("docs/guides");
+    expect(chip.textContent).toBe("setup.md");
+  });
+
   it("renders a workspace file link from restored draft markdown as a chip", () => {
     const { textarea } = renderEditor({
       draft: createTextDraft("See [setup.md](docs/setup.md) please"),
     });
 
-    const chip = textarea.querySelector("[data-composer-file-mention]");
-    expect(chip?.getAttribute("data-composer-file-mention")).toBe("docs/setup.md");
-    expect(chip?.textContent).toBe("setup.md");
+    const chip = textarea.querySelector<HTMLElement>("[data-composer-file-mention]")!;
+    expect(chip.getAttribute("data-composer-file-mention")).toBe("docs/setup.md");
+    expect(chip.title).toBe("docs/setup.md");
+    expect(chip.querySelector("[data-composer-file-mention-glyph] svg")).toBeTruthy();
+    expect(
+      chip
+        .querySelector("[data-composer-file-mention-content]")
+        ?.getAttribute("data-composer-file-mention-directory"),
+    ).toBe("docs");
+    expect(chip.textContent).toBe("setup.md");
+    // Neither the glyph nor the painted directory may leak into the draft's
+    // text: the caret, selection, and markdown export all read this.
     expect(textarea.textContent).toBe("See setup.md please");
   });
 

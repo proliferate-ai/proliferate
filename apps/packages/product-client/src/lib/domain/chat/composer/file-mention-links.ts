@@ -38,6 +38,52 @@ export function workspaceFileBasename(path: string): string {
   return segments[segments.length - 1] ?? path;
 }
 
+/**
+ * Directory portion of a workspace path, as much of it as a composer chip can
+ * carry.
+ *
+ * A mention chip has to read as a file *reference*, which means the path has to
+ * be on it — but the composer is a narrow, single-line-ish surface, so a deep
+ * path cannot be allowed to dominate the chip and push the basename (the thing
+ * the user actually typed) out of the reading order. So the directory is elided
+ * rather than wrapped or scrolled, and the elision happens HERE rather than via
+ * CSS `text-overflow` for one reason: `text-overflow` drops the tail, and the
+ * tail of a directory chain is its most identifying part. `…/src/components`
+ * tells you where the file lives; `apps/packages/produc…` does not. The full
+ * path always remains on the chip as its tooltip and its link target, so this is
+ * purely how much of it is painted.
+ */
+const MENTION_DIRECTORY_LABEL_BUDGET = 32;
+
+export function composerFileMentionDirectoryLabel(path: string): string {
+  const segments = path.split(/[\\/]/).filter(Boolean).slice(0, -1);
+  if (segments.length === 0) {
+    // A file at the workspace root has no directory to show; the chip then
+    // carries the basename alone, which is already the whole path.
+    return "";
+  }
+
+  const kept: string[] = [];
+  let width = 0;
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index]!;
+    // +1 for the "/" that will join this segment to the ones after it.
+    const next = width + segment.length + (kept.length > 0 ? 1 : 0);
+    if (kept.length > 0 && next > MENTION_DIRECTORY_LABEL_BUDGET) {
+      return `…/${kept.join("/")}`;
+    }
+    kept.unshift(segment);
+    width = next;
+  }
+
+  if (width > MENTION_DIRECTORY_LABEL_BUDGET) {
+    // A single directory name longer than the whole budget: keep its tail, which
+    // is the part that distinguishes sibling directories from each other.
+    return `…${kept.join("/").slice(-MENTION_DIRECTORY_LABEL_BUDGET)}`;
+  }
+  return kept.join("/");
+}
+
 export function formatMarkdownFileLink(label: string, rawPath: string): string {
   const path = normalizeWorkspaceRelativePath(rawPath);
   if (!path) {
