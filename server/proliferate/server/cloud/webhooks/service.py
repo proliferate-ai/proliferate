@@ -19,6 +19,7 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sandboxes import (
     accept_destroyed_cloud_sandbox_provider_observation,
@@ -396,6 +397,10 @@ async def handle_e2b_webhook(
             )
             if updated is None:
                 return E2BWebhookReceipt()
+        await cloud_workspace_store.mark_cloud_workspaces_lost_for_sandbox(
+            db,
+            updated,
+        )
         await close_usage_segment_for_sandbox(
             db,
             sandbox_id=sandbox.id,

@@ -14,6 +14,7 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_RESUME,
 )
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store.billing_runtime_usage import UsageProviderBindingMismatchError
 from proliferate.db.store.cloud_sandbox_recovery import (
     adopt_ambiguous_cloud_sandbox_provider_sandbox,
@@ -103,6 +104,10 @@ async def persist_materialization_failure(
                 observation_started_at=observation_started_at,
             )
             if detached is not None:
+                await cloud_workspace_store.mark_cloud_workspaces_lost_for_sandbox(
+                    db,
+                    detached,
+                )
                 await close_cloud_sandbox_provider_usage(
                     db,
                     sandbox_id=sandbox_id,

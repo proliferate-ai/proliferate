@@ -224,9 +224,17 @@ async def test_missing_fallback_converges_paused_or_detached_commit_outcome(
         assert provider_sandbox_id == old_provider_id
         events.append("close")
 
+    async def _mark_lost(*_args: object, **_kwargs: object) -> int:
+        return 0
+
     monkeypatch.setattr(failures, "supersede_missing_cloud_sandbox_provider", _detach)
     monkeypatch.setattr(failures, "mark_cloud_sandbox_materialization_error", _mark)
     monkeypatch.setattr(failures, "close_cloud_sandbox_provider_usage", _close)
+    monkeypatch.setattr(
+        failures.cloud_workspace_store,
+        "mark_cloud_workspaces_lost_for_sandbox",
+        _mark_lost,
+    )
     observed_at = datetime(2026, 7, 17, tzinfo=UTC)
 
     matched, provider_id = await failures.persist_materialization_failure(

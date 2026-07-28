@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.sandbox import get_sandbox_provider
@@ -117,6 +118,10 @@ async def destroy_cloud_sandbox(
     # never keep authenticating back to Cloud.
     await runtime_workers_store.revoke_active_workers_for_identity(db, cloud_sandbox_id=sandbox.id)
     destroyed = await sandbox_store.mark_cloud_sandbox_destroyed(db, sandbox.id)
+    await cloud_workspace_store.mark_cloud_workspaces_lost_for_sandbox(
+        db,
+        destroyed or sandbox,
+    )
     # Kill the provider VM so a destroyed row does not leave an E2B sandbox
     # running forever (it is created with on_timeout=pause + auto_resume, so it
     # never dies on its own). This MUST happen only after the DB destroy durably
