@@ -4,7 +4,9 @@ import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/Aut
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter"
-import { Toaster } from "@proliferate/ui/primitives/Sonner"
+import { ToastHost } from "@proliferate/ui/patterns/ToastHost"
+import { useSupportModalStore } from "#product/stores/support/support-modal-store"
+import { useAutoUpdateDownload } from "#product/hooks/updates/lifecycle/use-auto-update-download"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
@@ -117,6 +119,10 @@ interface AppProps {
 // owns only the route tree, public feedback hosts, and toasts. Repository and
 // workspace hosts live behind the lazy authenticated product boundary.
 export function App({ RoutesComponent }: AppProps) {
+  // "Report a bug" in the toast details modal reuses the existing feedback
+  // modal rather than inventing a second reporting path.
+  const openSupportFeedback = useSupportModalStore((s) => s.openFeedback)
+
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
@@ -248,12 +254,25 @@ export function App({ RoutesComponent }: AppProps) {
           <Route path="*" element={<Navigate to="/" replace />} />
         </RoutesComponent>
         <SupportModalHost />
-        {/* Kit Sonner toaster: all toasts (update lifecycle + legacy
-            toast-store call sites, which now delegate to Sonner). */}
-        <Toaster />
+        {/* The single toast mount: the kit Toaster plus the one details modal
+            a `details: { kind: "modal" }` toast opens. Every toast in the app
+            goes through it, so the three weights, the visible cap and the
+            details destination are configured in exactly one place. */}
+        <ToastHost onReportBug={openSupportFeedback} />
         <UpdateToastPresenter />
+        <AutoUpdateDownloadMount />
       </ShortcutRevealProvider>
   )
+}
+
+/**
+ * Starts the download for an available update when automatic updates are on
+ * (the default). Mounted as a component so the hook lives inside the tree
+ * without giving `App` another effect to read past.
+ */
+function AutoUpdateDownloadMount() {
+  useAutoUpdateDownload()
+  return null
 }
 
 function WorktreeCleanupPolicySyncGate() {

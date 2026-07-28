@@ -50,6 +50,7 @@ export function GeneralPane() {
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
+    autoUpdateEnabled: state.autoUpdateEnabled,
     set: state.set,
   })));
 
@@ -148,6 +149,19 @@ export function GeneralPane() {
             <Switch
               checked={preferences.pasteAttachmentsEnabled}
               onChange={(value) => preferences.set("pasteAttachmentsEnabled", value)}
+            />
+          </SettingsRow>
+
+          {/* The auto-update opt-in lives here, not in a window that appears
+              when an update happens to be waiting: it is a standing preference,
+              and a preference is only findable where preferences are. */}
+          <SettingsRow
+            label="Keep Proliferate up to date"
+            description="Download updates in the background and offer to restart when they're ready"
+          >
+            <Switch
+              checked={preferences.autoUpdateEnabled}
+              onChange={(value) => preferences.set("autoUpdateEnabled", value)}
             />
           </SettingsRow>
       </SettingsSection>

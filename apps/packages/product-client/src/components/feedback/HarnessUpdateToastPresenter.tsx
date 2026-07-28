@@ -1,15 +1,8 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
 import type { ReconcileAgentsResponse } from "@anyharness/sdk";
-import { toast } from "@proliferate/ui/primitives/Sonner";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
-import { Spinner } from "@proliferate/ui/primitives/Spinner";
-import { X } from "lucide-react";
+import { dismissToast, showToast } from "@proliferate/ui/utils/show-toast";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import {
-  byteProgressPercent,
-  formatByteProgress,
-} from "#product/lib/domain/updates/byte-progress";
+import { formatByteProgress } from "#product/lib/domain/updates/byte-progress";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 
@@ -28,57 +21,6 @@ interface HarnessProgressToastOptions {
   toastId: string;
 }
 
-interface HarnessProgressToastCardProps {
-  byteLabel: string;
-  displayName: string;
-  percent: number | null;
-  targetLabel: string;
-  onDismiss: () => void;
-}
-
-function HarnessProgressToastCard({
-  byteLabel,
-  displayName,
-  percent,
-  targetLabel,
-  onDismiss,
-}: HarnessProgressToastCardProps) {
-  return (
-    <div className="w-full rounded-xl border border-border bg-popover p-3 text-foreground shadow-popover">
-      <div className="flex items-start gap-3">
-        <Spinner className="mt-0.5 icon-control shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3">
-            <p className="truncate text-ui-sm font-medium">Updating {displayName}</p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Dismiss agent update"
-              className="-mr-1 -mt-1 shrink-0"
-              onClick={onDismiss}
-            >
-              <X className="icon-paired" aria-hidden="true" />
-            </Button>
-          </div>
-          <p className="mt-0.5 text-ui-xs tabular-nums text-muted-foreground">
-            {targetLabel} · {byteLabel}
-          </p>
-          {percent !== null ? (
-            <ProgressBar
-              aria-label={`${targetLabel} agent tools download progress`}
-              aria-valuetext={byteLabel}
-              value={percent}
-              className="mt-2 h-1 w-full overflow-hidden rounded-full bg-surface-control"
-              indicatorClassName="h-full rounded-full bg-special transition-[width] duration-emphasized"
-            />
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function useHarnessProgressToast({
   snapshot,
   targetLabel,
@@ -90,7 +32,7 @@ function useHarnessProgressToast({
   const isActive = snapshot?.status === "queued" || snapshot?.status === "running";
 
   useEffect(() => () => {
-    toast.dismiss(toastId);
+    dismissToast(toastId);
   }, [toastId]);
 
   useEffect(() => {
@@ -104,18 +46,26 @@ function useHarnessProgressToast({
           const failed = snapshot.status === "failed"
             || progress?.components.some((component) => component.phase === "failed")
             || false;
-          toast(failed ? "Some agent tools could not update" : "Agent tools updated", {
-            id: toastId,
-            description: failed
-              ? `${targetLabel}: open the harness settings for details and retry.`
-              : `${targetLabel}: the installed harnesses and ACP adapters are ready.`,
-            duration: 4000,
-            closeButton: true,
-            action: undefined,
-            cancel: undefined,
-          });
+          // The outcome is a resolution, so it gets the weight its content
+          // earns: a success is a one-line receipt, a failure has a
+          // consequence to state and somewhere to go.
+          if (failed) {
+            showToast({
+              id: toastId,
+              weight: "announcement",
+              tone: "warning",
+              title: "Some agent tools could not update",
+              description: `${targetLabel}: the ones that updated are usable. Open agent settings to retry the rest.`,
+            });
+          } else {
+            showToast({
+              id: toastId,
+              message: `Agent tools updated · ${targetLabel}`,
+              tone: "success",
+            });
+          }
         } else if (!wasDismissed) {
-          toast.dismiss(toastId);
+          dismissToast(toastId);
         }
       }
       activeJobId.current = null;
@@ -140,30 +90,23 @@ function useHarnessProgressToast({
     const byteLabel = progress.downloadedBytes > 0 || totalBytes !== null
       ? formatByteProgress(progress.downloadedBytes, totalBytes)
       : `${progress.completedComponents} of ${progress.totalComponents} components`;
-    const percent = byteProgressPercent(progress.downloadedBytes, totalBytes);
 
-    toast.custom(
-      () => (
-        <HarnessProgressToastCard
-          byteLabel={byteLabel}
-          displayName={currentAgentLabel}
-          percent={percent}
-          targetLabel={targetLabel}
-          onDismiss={() => {
-            dismissedJobId.current = jobId;
-            toast.dismiss(toastId);
-          }}
-        />
-      ),
-      {
-        id: toastId,
-        duration: Infinity,
-        unstyled: true,
-        onDismiss: () => {
-          dismissedJobId.current = jobId;
-        },
+    // In-progress is a status line, not a panel. This used to be a
+    // hand-authored card with its own frame, its own close button and its own
+    // progress bar — a second toast look maintained by one flow. Reusing the
+    // same id means each tick replaces the live toast rather than stacking, so
+    // the mono suffix is the progress readout.
+    showToast({
+      id: toastId,
+      message: `Updating ${currentAgentLabel} · ${targetLabel}`,
+      code: byteLabel,
+      // No advertised end: the status weight has no duration to promise, and
+      // the terminal branch above replaces this toast when the job resolves.
+      duration: Number.POSITIVE_INFINITY,
+      onDismiss: () => {
+        dismissedJobId.current = jobId;
       },
-    );
+    });
   }, [isActive, progress, snapshot, targetLabel, toastId]);
 }
 

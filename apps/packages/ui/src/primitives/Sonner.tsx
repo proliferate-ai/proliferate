@@ -34,8 +34,23 @@ function important(classes: string): string {
     .join(" ");
 }
 
+/**
+ * Hard limit: three toasts visible; sonner collapses the rest behind the stack
+ * rather than growing an unbounded column. Same-id replacement (sonner's own
+ * behaviour for a repeated `id`) is what keeps a ticking flow — a download, a
+ * retry counter — from becoming four toasts about one thing.
+ */
+export const MAX_VISIBLE_TOASTS = 3;
+
+/**
+ * Hard limit: never taller than the three-line excerpt. If a message doesn't
+ * fit, it isn't a toast — so the frame clips instead of scrolling, which makes
+ * an over-long payload a visible bug rather than a silent panel.
+ */
+const TOAST_MAX_HEIGHT_CLASS = "!max-h-[168px] !overflow-hidden";
+
 const kitClassNames = {
-  toast: `${important(POPOVER_FRAME_CLASS)} !p-3 !gap-2 !text-ui-sm`,
+  toast: `${important(POPOVER_FRAME_CLASS)} !p-3 !gap-2 !text-ui-sm ${TOAST_MAX_HEIGHT_CLASS}`,
   title: "!text-ui-sm !font-medium !text-foreground",
   description: "!text-ui-sm !text-muted-foreground",
   icon: "!mr-2 !items-start",
@@ -60,6 +75,7 @@ export function Toaster({ toastOptions, ...props }: ComponentProps<typeof Sonner
       // Sonner's default 14px stack gap is wider than the 8px rhythm the rest
       // of the floating chrome uses.
       gap={8}
+      visibleToasts={MAX_VISIBLE_TOASTS}
       {...props}
       toastOptions={{
         ...toastOptions,

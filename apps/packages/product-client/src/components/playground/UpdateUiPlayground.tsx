@@ -1,15 +1,13 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { UPDATE_PREVIEW_STATES } from "#product/config/update-playground";
-import { UpdateDialogContent } from "#product/components/feedback/UpdateDialogContent";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
 import { UpdateUiPlaygroundControls } from "#product/components/playground/UpdateUiPlaygroundControls";
 
-const PREVIEW_VERSION = "0.1.42";
-
+// The standalone `?update=1` window preview is gone with the window itself: an
+// update is an event in the app, not a second app, and its one standing
+// setting ("Keep Proliferate up to date") moved to Settings → General.
 export function UpdateUiPlayground() {
-  const [sparkleAutoUpdate, setSparkleAutoUpdate] = useState(true);
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/60 px-7 py-5">
@@ -30,38 +28,6 @@ export function UpdateUiPlayground() {
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-8 px-7 py-7">
-        <PreviewSection
-          title="Standalone Update Window"
-          description="What the ?update=1 OS window would look like: its own window (mac chrome), mono-dark, version compare, auto-update opt-in, Install Update on our primary accent (not Sparkle blue). This is the exact UpdateDialogContent the real window will host."
-        >
-          <div className="flex justify-center rounded-xl border border-border/50 bg-background/40 px-6 py-12">
-            <div className="w-[540px] overflow-hidden rounded-2xl border border-border/70 bg-card shadow-modal">
-              {/* ui-foundation-escalation: these three dots are a mock of macOS
-                  traffic-light window chrome at its real 12px OS geometry, not
-                  product status glyphs, so the `icon-status` tier (0.55em ≈ 6.6px
-                  here) would misrender them. The gate's status-dot heuristic
-                  (self-closing span + rounded-full + bg-* + size-N) cannot tell
-                  the two apart; the three hits stay censused pending either a
-                  sanctioned STATUS_DOT_SOURCE_EXCEPTIONS entry for OS-chrome
-                  mocks or a dedicated window-control size token. */}
-              <div className="flex items-center gap-2 px-4 pt-4">
-                <span className="size-3 rounded-full bg-window-control-close" />
-                <span className="size-3 rounded-full bg-window-control-minimize" />
-                <span className="size-3 rounded-full bg-foreground/20" />
-              </div>
-              <UpdateDialogContent
-                availableVersion={PREVIEW_VERSION}
-                currentVersion="0.1.41"
-                autoUpdate={sparkleAutoUpdate}
-                onToggleAutoUpdate={setSparkleAutoUpdate}
-                onSkip={() => {}}
-                onRemindLater={() => {}}
-                onInstall={() => {}}
-              />
-            </div>
-          </div>
-        </PreviewSection>
-
         <PreviewSection
           title="Release notice card (sidebar footer)"
           description="The installed-release changelog card shown after an update. This is the production component at its sidebar-width constraint."

@@ -67,6 +67,7 @@ export function selectPersistedUserPreferencesSlice(
     coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
     worktreeAutoDeleteLimit: preferences.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: preferences.pasteAttachmentsEnabled,
+    autoUpdateEnabled: preferences.autoUpdateEnabled,
     reviewDefaultsByKind: preferences.reviewDefaultsByKind,
     reviewPersonalitiesByKind: preferences.reviewPersonalitiesByKind,
     acknowledgedReleaseVersion: preferences.acknowledgedReleaseVersion,

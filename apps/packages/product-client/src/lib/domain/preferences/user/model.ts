@@ -48,6 +48,13 @@ export interface UserPreferences {
   coworkWorkspaceDelegationEnabled: boolean;
   worktreeAutoDeleteLimit: number;
   pasteAttachmentsEnabled: boolean;
+  /**
+   * Keep Proliferate up to date: when on (the default), an available update
+   * downloads on its own and the sidebar pill is the only surface until it is
+   * ready. When off, the `available` phase surfaces a toast asking for the
+   * click, because then a click is genuinely required.
+   */
+  autoUpdateEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
   reviewPersonalitiesByKind: ReviewPersonalitiesByKind;
   acknowledgedReleaseVersion: string | null;
@@ -75,6 +82,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   coworkWorkspaceDelegationEnabled: true,
   worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
+  autoUpdateEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
   acknowledgedReleaseVersion: null,
@@ -104,6 +112,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   coworkWorkspaceDelegationEnabled: true,
   worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
+  autoUpdateEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
   acknowledgedReleaseVersion: null,

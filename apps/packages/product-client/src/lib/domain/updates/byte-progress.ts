@@ -13,6 +13,48 @@ export function formatByteProgress(
     : `${formatMegabytes(receivedBytes)} downloaded`;
 }
 
+/**
+ * Remaining download time from the average rate so far, as "10s left" /
+ * "2m left".
+ *
+ * An average is used rather than an instantaneous rate because the estimate is
+ * read on hover, one glance at a time: a rate sampled over the last event
+ * jitters wildly between glances and reads as a broken number, while the
+ * average only ever drifts. Returns null whenever the estimate would be a
+ * guess — no advertised total, nothing downloaded yet, or no elapsed time to
+ * divide by.
+ */
+export function formatRemainingTime(
+  receivedBytes: number | null,
+  totalBytes: number | null,
+  startedAt: number | null,
+  now: number,
+): string | null {
+  if (
+    receivedBytes === null
+    || receivedBytes <= 0
+    || totalBytes === null
+    || totalBytes <= 0
+    || startedAt === null
+  ) {
+    return null;
+  }
+  const elapsedMs = now - startedAt;
+  if (elapsedMs <= 0) {
+    return null;
+  }
+  const remainingBytes = Math.max(0, totalBytes - receivedBytes);
+  const bytesPerMs = receivedBytes / elapsedMs;
+  const remainingSeconds = Math.ceil(remainingBytes / bytesPerMs / 1000);
+  if (remainingSeconds < 1) {
+    return "almost done";
+  }
+  if (remainingSeconds < 60) {
+    return `${remainingSeconds}s left`;
+  }
+  return `${Math.ceil(remainingSeconds / 60)}m left`;
+}
+
 export function byteProgressPercent(
   receivedBytes: number,
   totalBytes: number | null,
