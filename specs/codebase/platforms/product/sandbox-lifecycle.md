@@ -221,6 +221,29 @@ Row status is one of `creating`, `ready`, `paused`, `error`, `destroyed`
   E2B's auto-resume brings a paused VM back under the forwarded traffic;
   a VM that resumes broken (dead runtime, stale token) is repaired by the
   next materialization operation, not by the gateway.
+- **A cold access resolution schedules its own repair.** When an access
+  path finds no stamped runtime access on the row — never materialized, or
+  cleared by provider loss — it still answers the typed 409
+  `cloud_sandbox_runtime_not_ready` (provisioning is far too slow to hold a
+  request open) *and* schedules one background materialization for that
+  sandbox
+  ([materialization/service.py](../../../../server/proliferate/server/cloud/materialization/service.py)).
+  The client's existing retry is therefore a wait, not a dead end. Two
+  things keep it from stampeding: a non-blocking cross-process Redis claim
+  keyed on the sandbox id, so N concurrent cold callers schedule at most
+  one run while it is in flight, and the per-sandbox materialization lock
+  below, which serializes any run that does start. The repair is still a
+  materialization operation and so inherits every gate above it — the
+  scheduler adds no gate of its own and bypasses none. Skipped for
+  destroyed rows (gone, not cold) and for deployments without managed-cloud
+  provisioning, where a background run could only fail. The claim is
+  in-process fire-and-forget, so a server restart during a provision strands
+  it: repair stays suppressed for that sandbox until the 900 s TTL lapses,
+  after which the next cold access schedules again — accepted, because the
+  TTL self-heals and the alternative (a durable queue) buys nothing at this
+  scale. This law is also the ruling on the previously-open cold-start
+  choreography question: cold access provisions on access, not by a separate
+  wake-and-poll handshake, and the client keeps polling the unchanged 409.
 
 Every transition has exactly one cause:
 
@@ -437,6 +460,10 @@ server/proliferate/
   [test_cloud_sandbox_recovery_invariants.py](../../../../server/tests/integration/test_cloud_sandbox_recovery_invariants.py),
   [test_cloud_sandbox_reconnect_self_heal.py](../../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py),
   [test_cloud_sandbox_orphan_reaper_lock.py](../../../../server/tests/integration/test_cloud_sandbox_orphan_reaper_lock.py).
+- Cold-access repair scheduling and its stampede guard:
+  [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py);
+  the claim primitive itself in
+  [test_redis_lock.py](../../../../server/tests/unit/test_redis_lock.py).
 - Template smoke:
   [smoke-cloud-template.mjs](../../../../scripts/smoke-cloud-template.mjs)
   (binaries present, Supervisor can start AnyHarness, sandbox killed on
@@ -452,16 +479,6 @@ server/proliferate/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Cold access is a dead end at the gateway: the 409
-      `cloud_sandbox_runtime_not_ready` fires whenever the row's runtime
-      access was never stamped or was cleared by provider loss
-      ([cloud_sandboxes/service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
-      and nothing on the access path starts the materialization that
-      would repair it — the client can only retry into the same 409.
-      Paused sandboxes are already fine (their stored address stays
-      valid, so forwarded traffic wakes them); the fix waits on the
-      cold-start choreography ruling (wake-and-poll vs
-      provision-on-access), still open.
 - [ ] `supervisor_owned_runtime` now defaults on
       ([config.py](../../../../server/proliferate/config.py)): the live E2B
       N-1 to N proof passed (2026-07-26), so newly (re)launched cloud
