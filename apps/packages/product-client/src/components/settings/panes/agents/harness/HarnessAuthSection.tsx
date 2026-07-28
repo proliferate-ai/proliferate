@@ -289,7 +289,7 @@ interface MethodCardProps {
 }
 
 /**
- * One auth-method choice as a Conductor-style card (design-handoff v2): 32px
+ * One auth-method choice as a card (design-handoff v2): 32px
  * icon tile pinned top, label + one-line rationale bottom, check icon top-right
  * when selected. The cards are a radio by behavior, not by markup:
  * `handleSingleSourceSelect` drops the other sources on every pick
