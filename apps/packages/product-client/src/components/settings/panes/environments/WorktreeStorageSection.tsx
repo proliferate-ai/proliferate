@@ -140,7 +140,7 @@ export function WorktreePolicyRow({
         <div
           role="group"
           aria-label="Ideal worktrees per repo"
-          className={`grid h-8 ${SETTINGS_CONTROL_WIDTH_CLASS} grid-cols-[2rem_minmax(0,1fr)_2rem] items-center overflow-hidden rounded-lg border border-transparent bg-foreground/5 text-foreground`}
+          className={`grid h-7 ${SETTINGS_CONTROL_WIDTH_CLASS} grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] items-center overflow-hidden rounded-lg border border-transparent bg-foreground/5 text-foreground`}
         >
           <Button
             type="button"
@@ -148,12 +148,12 @@ export function WorktreePolicyRow({
             size="icon"
             aria-label="Fewer ideal worktrees"
             disabled={value <= WORKTREE_AUTO_DELETE_LIMIT_MIN}
-            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+            className="h-7 w-7 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
             onClick={() => step(-1)}
           >
             <Minus className="icon-paired" />
           </Button>
-          <Label className="mb-0 flex h-8 min-w-16 cursor-text items-center justify-center gap-1.5 border-x border-border-light px-2">
+          <Label className="mb-0 flex h-7 min-w-16 cursor-text items-center justify-center gap-1.5 border-x border-border-light px-2">
             <WorktreeCountInput
               value={value}
               min={WORKTREE_AUTO_DELETE_LIMIT_MIN}
@@ -168,7 +168,7 @@ export function WorktreePolicyRow({
             size="icon"
             aria-label="More ideal worktrees"
             disabled={value >= WORKTREE_AUTO_DELETE_LIMIT_MAX}
-            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+            className="h-7 w-7 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
             onClick={() => step(1)}
           >
             <Plus className="icon-paired" />

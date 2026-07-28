@@ -69,12 +69,16 @@ export function AppearancePane() {
           />
         </SettingsRow>
 
+        {/* Stepper sits on the app's 28px control tier, matching the selects below
+            and the composer's controls. Plain `h-7` for now: the semantic
+            control-height tier utility is landing in the design layer, and this
+            converts to it without changing the rendered height. */}
         <SettingsRow
           label="Window zoom"
           description="Zoom everything in the window, like browser zoom. Font size settings are unaffected."
         >
           <div
-            className={`grid h-8 ${SETTINGS_CONTROL_WIDTH_CLASS} grid-cols-[2rem_minmax(0,1fr)_2rem] items-center overflow-hidden rounded-lg border border-transparent bg-foreground/5 text-foreground`}
+            className={`grid h-7 ${SETTINGS_CONTROL_WIDTH_CLASS} grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] items-center overflow-hidden rounded-lg border border-transparent bg-foreground/5 text-foreground`}
           >
             <Button
               type="button"
@@ -82,12 +86,12 @@ export function AppearancePane() {
               size="icon"
               aria-label="Zoom out"
               disabled={!canDecreaseZoom}
-              className="h-8 w-8 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+              className="h-7 w-7 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
               onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, -1))}
             >
               <Minus className="icon-paired" />
             </Button>
-            <div className="flex h-8 min-w-16 items-center justify-center border-x border-border-light px-3 text-ui font-medium text-foreground">
+            <div className="flex h-7 min-w-16 items-center justify-center border-x border-border-light px-3 text-ui font-medium text-foreground">
               {WINDOW_ZOOM_LABELS[windowZoomId]}
             </div>
             <Button
@@ -96,7 +100,7 @@ export function AppearancePane() {
               size="icon"
               aria-label="Zoom in"
               disabled={!canIncreaseZoom}
-              className="h-8 w-8 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+              className="h-7 w-7 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
               onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, 1))}
             >
               <Plus className="icon-paired" />
