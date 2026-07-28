@@ -156,4 +156,56 @@ describe("WorkspaceStatusComposerControl (resources + advanced)", () => {
     fireEvent.click(screen.getByText("1 worktree"));
     expect(onOpenWorktrees).toHaveBeenCalledTimes(1);
   });
+
+  it("shows CPU, Memory, and Disk rows for a cloud runtime with disk telemetry", () => {
+    render(
+      <WorkspaceStatusComposerControl
+        model={statusModel()}
+        environmentState={targetState({
+          target: {
+            key: "cloud:env-1",
+            label: "Cloud sandbox",
+            location: "cloud",
+            runtimeUrl: "https://cloud.example",
+            runtimeGeneration: null,
+            environmentId: "env-1",
+          },
+          resourcePressure: {
+            collectedAt: "2026-07-01T00:00:00Z",
+            level: "nominal",
+            pressurePercent: 63,
+            cpu: {
+              normalizedPercent: 24,
+              loadAverage1m: 0.96,
+              logicalCoreCount: 4,
+              idealMaxPercent: 80,
+            },
+            memory: {
+              percent: 42,
+              availableBytes: 9 * 1024 ** 3,
+              totalBytes: 16 * 1024 ** 3,
+              usedBytes: 7 * 1024 ** 3,
+              idealMaxPercent: 80,
+            },
+            disk: {
+              percent: 63,
+              availableBytes: 37 * 1024 ** 3,
+              totalBytes: 100 * 1024 ** 3,
+              usedBytes: 63 * 1024 ** 3,
+              idealMaxPercent: 80,
+            },
+          },
+        })}
+        onOpenWorktrees={vi.fn()}
+      />,
+    );
+    openCard();
+
+    expect(screen.getByText("CPU")).toBeTruthy();
+    expect(screen.getByText("24%")).toBeTruthy();
+    expect(screen.getByText("Memory")).toBeTruthy();
+    expect(screen.getByText("42%")).toBeTruthy();
+    expect(screen.getByText("Disk")).toBeTruthy();
+    expect(screen.getByText("63%")).toBeTruthy();
+  });
 });

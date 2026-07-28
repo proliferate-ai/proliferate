@@ -16194,6 +16194,41 @@
           }
         }
       },
+      "RuntimeDiskPressure": {
+        "type": "object",
+        "required": [
+          "usedBytes",
+          "totalBytes",
+          "availableBytes",
+          "percent",
+          "idealMaxPercent"
+        ],
+        "properties": {
+          "availableBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "idealMaxPercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "percent": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "RuntimeMemoryPressure": {
         "type": "object",
         "required": [
@@ -16255,6 +16290,16 @@
               },
               {
                 "$ref": "#/components/schemas/RuntimeCpuPressure"
+              }
+            ]
+          },
+          "disk": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeDiskPressure"
               }
             ]
           },

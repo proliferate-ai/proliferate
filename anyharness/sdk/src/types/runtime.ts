@@ -13,6 +13,7 @@ export type HealthResponse = components["schemas"]["HealthResponse"];
 export type RuntimeCapabilities = components["schemas"]["RuntimeCapabilities"];
 export type RuntimePressureLevel = components["schemas"]["RuntimePressureLevel"];
 export type RuntimeCpuPressure = components["schemas"]["RuntimeCpuPressure"];
+export type RuntimeDiskPressure = components["schemas"]["RuntimeDiskPressure"];
 export type RuntimeMemoryPressure = components["schemas"]["RuntimeMemoryPressure"];
 export type RuntimeResourcePressure = components["schemas"]["RuntimeResourcePressure"];
 export type AgentSeedHealth = components["schemas"]["AgentSeedHealth"];

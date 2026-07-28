@@ -4290,6 +4290,18 @@ export interface components {
             /** Format: double */
             normalizedPercent: number;
         };
+        RuntimeDiskPressure: {
+            /** Format: int64 */
+            availableBytes: number;
+            /** Format: double */
+            idealMaxPercent: number;
+            /** Format: double */
+            percent: number;
+            /** Format: int64 */
+            totalBytes: number;
+            /** Format: int64 */
+            usedBytes: number;
+        };
         RuntimeMemoryPressure: {
             /** Format: int64 */
             availableBytes: number;
@@ -4307,6 +4319,7 @@ export interface components {
         RuntimeResourcePressure: {
             collectedAt: string;
             cpu?: null | components["schemas"]["RuntimeCpuPressure"];
+            disk?: null | components["schemas"]["RuntimeDiskPressure"];
             level: components["schemas"]["RuntimePressureLevel"];
             memory?: null | components["schemas"]["RuntimeMemoryPressure"];
             /** Format: double */
