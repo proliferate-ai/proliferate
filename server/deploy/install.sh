@@ -213,7 +213,7 @@ DOWNLOAD_BASE="${PROLIFERATE_RELEASE_DOWNLOAD_BASE:-https://github.com/${REPO_SL
 read_env() {
   local file="$1" key="$2" line
   [[ -f "$file" ]] || return 0
-  line="$(grep -m1 "^${key}=" "$file" || true)"
+  line="$(grep "^${key}=" "$file" | tail -n1 || true)"
   [[ -n "$line" ]] || return 0
   printf '%s' "${line#*=}"
 }
@@ -585,7 +585,14 @@ confirm() {
 
 print_next_steps() {
   local site
-  site="$(read_env "$DEPLOY_DIR/.env.static" SITE_ADDRESS)"
+  # In --eval mode SITE_ADDRESS is blank in .env.static and only resolved (to
+  # an sslip.io host derived from the public IP) once bootstrap.sh writes
+  # .env.runtime. Prefer the resolved value; fall back to .env.static for
+  # --no-start installs that haven't bootstrapped yet.
+  site="$(read_env "$DEPLOY_DIR/.env.runtime" SITE_ADDRESS)"
+  if [[ -z "$site" ]]; then
+    site="$(read_env "$DEPLOY_DIR/.env.static" SITE_ADDRESS)"
+  fi
   local host="$site"
   host="${host#http://}"
   host="${host#https://}"
