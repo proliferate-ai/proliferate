@@ -19,6 +19,9 @@ from proliferate.integrations.sandbox import (
     SandboxProviderTargetUnavailableError,
 )
 from proliferate.server.billing.runtime_usage import close_cloud_sandbox_provider_usage
+from proliferate.server.cloud.gateway.service import (
+    invalidate_cloud_sandbox_gateway_access_for_user,
+)
 from proliferate.utils.time import utcnow
 
 _ACTIVE_STATES = {"ready", "running"}
@@ -63,6 +66,10 @@ async def detach_missing_provider(
     )
     if refreshed is None:
         return None
+    if refreshed.owner_user_id is not None:
+        invalidate_cloud_sandbox_gateway_access_for_user(
+            refreshed.owner_user_id,
+        )
     await cloud_workspace_store.mark_cloud_workspaces_lost_for_sandbox(
         db,
         refreshed,

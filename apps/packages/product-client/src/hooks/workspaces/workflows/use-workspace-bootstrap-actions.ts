@@ -52,6 +52,12 @@ import {
 } from "#product/hooks/workspaces/workflows/workspace-bootstrap-session-directory";
 import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
 import type { WorkspaceSelectionDeps } from "#product/hooks/workspaces/workflows/selection/types";
+import {
+  getCloudWorkspaceBillingBlockFromError,
+} from "#product/lib/access/cloud/workspace-connection-retry";
+import {
+  useCloudWorkspaceBillingBlockStore,
+} from "#product/stores/workspaces/cloud-workspace-billing-block-store";
 
 type BootstrapWorkspaceInput = Parameters<WorkspaceSelectionDeps["bootstrapWorkspace"]>[0];
 
@@ -222,6 +228,15 @@ export function useWorkspaceBootstrapActions() {
       }
       if (sessionsLoadResult.kind === "failed") {
         measurementFinishReason = "error_sanitized";
+        const billingBlock = getCloudWorkspaceBillingBlockFromError(
+          sessionsLoadResult.error,
+        );
+        if (billingBlock) {
+          useCloudWorkspaceBillingBlockStore
+            .getState()
+            .setBillingBlock(workspaceId, billingBlock);
+          return { sessions };
+        }
         await recoverFailedWorkspaceSessionDirectory({
           agentsByKind,
           latencyFlowId,
@@ -239,6 +254,7 @@ export function useWorkspaceBootstrapActions() {
         }, emptyWorkspaceBootstrapDeps);
         return { sessions };
       }
+      useCloudWorkspaceBillingBlockStore.getState().clearBillingBlock(workspaceId);
       sessions = sessionsLoadResult.sessions;
 
       if (!isCurrent()) {
@@ -350,10 +366,21 @@ export function useWorkspaceBootstrapActions() {
       }
 
       return { sessions };
-    } catch {
+    } catch (error) {
       measurementFinishReason = "error_sanitized";
       if (isCurrent()) {
-        enterWorkspaceSessionRecovery(workspaceId, logicalWorkspaceId, "session-selection-failed");
+        const billingBlock = getCloudWorkspaceBillingBlockFromError(error);
+        if (billingBlock) {
+          useCloudWorkspaceBillingBlockStore
+            .getState()
+            .setBillingBlock(workspaceId, billingBlock);
+        } else {
+          enterWorkspaceSessionRecovery(
+            workspaceId,
+            logicalWorkspaceId,
+            "session-selection-failed",
+          );
+        }
       }
       return { sessions };
     } finally {

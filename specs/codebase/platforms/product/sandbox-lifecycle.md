@@ -445,11 +445,6 @@ server/proliferate/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `POST /cloud-sandbox/wake` still exists and is byte-identical to
-      `ensure`
-      ([service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py));
-      collapse to `ensure` as a hard rename (pre-launch ruling, no alias
-      window) and update SDK/client callers.
 - [ ] Cold access is a dead end at the gateway: the 409
       `cloud_sandbox_runtime_not_ready` fires whenever the row's runtime
       access was never stamped or was cleared by provider loss

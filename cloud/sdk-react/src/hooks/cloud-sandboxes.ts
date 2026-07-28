@@ -3,7 +3,6 @@ import {
   destroyCloudSandbox,
   ensureCloudSandbox,
   getCloudSandbox,
-  wakeCloudSandbox,
   type CloudSandboxResponse,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
@@ -23,17 +22,6 @@ export function useEnsureCloudSandbox() {
   const queryClient = useQueryClient();
   return useMutation<CloudSandboxResponse, Error>({
     mutationFn: () => ensureCloudSandbox(client),
-    onSuccess: (response) => {
-      queryClient.setQueryData(cloudSandboxKey(), response);
-    },
-  });
-}
-
-export function useWakeCloudSandbox() {
-  const client = useCloudClient();
-  const queryClient = useQueryClient();
-  return useMutation<CloudSandboxResponse, Error>({
-    mutationFn: () => wakeCloudSandbox(client),
     onSuccess: (response) => {
       queryClient.setQueryData(cloudSandboxKey(), response);
     },
