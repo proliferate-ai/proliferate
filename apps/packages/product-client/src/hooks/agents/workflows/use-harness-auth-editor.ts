@@ -29,6 +29,17 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 // Poll cadence while a delivery ack is outstanding (pending → applied).
 const DELIVERY_PENDING_POLL_MS = 3000;
 
+/**
+ * Per-commit outcome hooks. A caller that must not report success before the
+ * selection PUT lands (the provider picker: it created a vault key first and
+ * has to revoke it if the PUT fails, or the key is orphaned) passes these; the
+ * default path stays toast-on-error.
+ */
+export interface CommitCallbacks {
+  onSuccess?: () => void;
+  onError?: (message: string) => void;
+}
+
 export interface HarnessAuthEditorApi {
   // Queries
   // The auth plane is ready: the user is signed into the control plane and it
@@ -86,7 +97,7 @@ export interface HarnessAuthEditorApi {
   setAddKeyModalOpen: (open: boolean) => void;
 
   // Handlers
-  commit: (next: HarnessAuthEditorState) => void;
+  commit: (next: HarnessAuthEditorState, callbacks?: CommitCallbacks) => void;
   handleGatewayToggle: (next: boolean) => void;
   handleRowEnabledToggle: (uid: string, next: boolean) => void;
   handleRowKeySelect: (uid: string, keyId: string) => void;
@@ -94,7 +105,12 @@ export interface HarnessAuthEditorApi {
   handleRowEnvVarBlur: () => void;
   handleRemoveRow: (uid: string) => void;
   addRow: (envVarName: string, providerHint: string | null) => void;
-  addBoundApiKey: (envVarName: string, providerHint: string | null, apiKeyId: string) => void;
+  addBoundApiKey: (
+    envVarName: string,
+    providerHint: string | null,
+    apiKeyId: string,
+    callbacks?: CommitCallbacks,
+  ) => void;
   handleAddVariable: () => void;
 }
 
@@ -225,23 +241,44 @@ export function useHarnessAuthEditor(
     harnessDisallowed || (allowedRoutes !== null && !allowedRoutes.includes("api_key"));
   const nativeDisallowed = allowedRoutes !== null && !allowedRoutes.includes("native");
 
-  function commit(next: HarnessAuthEditorState) {
+  function commit(next: HarnessAuthEditorState, callbacks: CommitCallbacks = {}) {
+    // Snapshot for rollback: the optimistic setState below would otherwise keep
+    // rendering a rejected row as wired until a reload.
+    const previous: HarnessAuthEditorState = { gatewayEnabled, rows };
+    const previousSig = lastPutSigRef.current;
     setGatewayEnabled(next.gatewayEnabled);
     setRows(next.rows);
     const sources = buildDesiredSources(harnessKind, next);
     const signature = JSON.stringify(sources);
-    // De-dupe redundant PUTs (e.g. blur with no effective change).
-    if (signature === lastPutSigRef.current) {
+    // De-dupe redundant PUTs (e.g. blur with no effective change). Nothing was
+    // sent, so the desired state already holds — that's a success for callers
+    // waiting on persistence.
+    if (signature === previousSig) {
+      callbacks.onSuccess?.();
       return;
     }
     lastPutSigRef.current = signature;
     putSelections.mutate(
       { harnessKind, surface, body: { sources } },
       {
+        onSuccess: () => {
+          callbacks.onSuccess?.();
+        },
         onError: (error: { message?: string }) => {
-          showToast(
-            error.message || HARNESS_PANE_COPY.selectionUpdateError(displayName),
-          );
+          // Roll the optimistic state back so the UI never claims a rejected
+          // selection is wired.
+          setGatewayEnabled(previous.gatewayEnabled);
+          setRows(previous.rows);
+          lastPutSigRef.current = previousSig;
+          const message =
+            error.message || HARNESS_PANE_COPY.selectionUpdateError(displayName);
+          // A caller that renders its own error owns the surfacing; don't
+          // double-report it as a toast too.
+          if (callbacks.onError) {
+            callbacks.onError(message);
+            return;
+          }
+          showToast(message);
         },
       },
     );
@@ -301,7 +338,12 @@ export function useHarnessAuthEditor(
     setRows((current) => [...current, newRow]);
   }
 
-  function addBoundApiKey(envVarName: string, providerHint: string | null, apiKeyId: string) {
+  function addBoundApiKey(
+    envVarName: string,
+    providerHint: string | null,
+    apiKeyId: string,
+    callbacks: CommitCallbacks = {},
+  ) {
     draftCounterRef.current += 1;
     const newRow: EditableApiKeyRow = {
       uid: `draft-${draftCounterRef.current}`,
@@ -310,12 +352,17 @@ export function useHarnessAuthEditor(
       providerHint,
       enabled: true,
     };
+    // Replacement semantics: at most one row per env var — the server keys a
+    // selection scope by (source_kind, env_var_name) and rejects duplicates,
+    // so binding a key to an already-bound var swaps the row in ONE commit
+    // (one PUT) rather than a remove-then-add pair racing each other.
+    const kept = rows.filter((row) => row.envVarName !== envVarName);
     // Single-source: enabling a new bound row disables everything else.
     const nextRows = multiSource
-      ? [...rows, newRow]
-      : [...rows.map((row) => ({ ...row, enabled: false })), newRow];
+      ? [...kept, newRow]
+      : [...kept.map((row) => ({ ...row, enabled: false })), newRow];
     const nextGateway = multiSource ? gatewayEnabled : false;
-    commit({ gatewayEnabled: nextGateway, rows: nextRows });
+    commit({ gatewayEnabled: nextGateway, rows: nextRows }, callbacks);
   }
 
   function handleAddVariable() {
