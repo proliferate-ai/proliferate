@@ -1,3 +1,14 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WorktreeBaseFetch {
+    Fetched,
+    NoRemote,
+    Failed { message: String },
+    TimedOut,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum GitOperation {
     #[default]
