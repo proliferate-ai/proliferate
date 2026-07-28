@@ -57,6 +57,37 @@ Bypassing is safe for work in progress: CI runs the same
 design package's `build` re-runs the theme equality check, so a bypassed
 violation is caught before merge rather than silently landing.
 
+## Shared Prebuilt Runtime
+
+Frontend-only worktrees may use one shared AnyHarness binary without compiling
+Rust in every worktree:
+
+```bash
+SKIP_RUST=1 \
+ANYHARNESS_DEV_RUNTIME_BIN=~/.proliferate-local/dev/runtime-bin/anyharness \
+make run PROFILE=<name>
+```
+
+`dev-artifacts-ready` executes that exact binary's `print-openapi` command and
+requires its contract to equal the checked-in AnyHarness SDK OpenAPI document.
+An executable merely existing at the path is not sufficient. Contract drift,
+including a frontend/SDK route absent from the binary, fails before the profile
+starts.
+
+Refresh the shared artifact only when no `cargo` or `rustc` process is active:
+
+```bash
+make refresh-dev-runtime-prebuilt
+```
+
+The target fails closed when another Rust build is running, builds AnyHarness
+from the current worktree with the repository version and exact Git SHA,
+verifies version and SDK contract, then atomically installs the binary at
+`~/.proliferate-local/dev/runtime-bin/anyharness`. Its adjacent
+`anyharness.json` receipt records the source SHA, version, SHA-256, SDK
+operation count, and installation time. Already-running profiles keep their
+existing process; restart them explicitly to pick up the replaced artifact.
+
 ## What Starts
 
 `make run PROFILE=<name>` launches the profile's:

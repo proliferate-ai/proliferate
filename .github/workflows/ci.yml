@@ -132,6 +132,8 @@ jobs:
           node --check scripts/ci-cd/pr-metadata.mjs
           node --check scripts/ci-cd/resolve-deploy-base.mjs
           node --check scripts/ci-cd/validate-pr-metadata.mjs
+          node --check scripts/ci-cd/verify-anyharness-sdk-compat.mjs
+          node --check scripts/dev-runtime-prebuilt.mjs
           node --check scripts/agent-catalog/build-catalog.mjs
           node --check scripts/agent-catalog/check-version-discipline.mjs
           node --check scripts/agent-catalog/resolve-pins.mjs

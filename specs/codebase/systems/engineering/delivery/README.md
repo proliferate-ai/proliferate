@@ -205,6 +205,13 @@ workflows all operate on the same immutable `sha-<12>` plus rolling
 `staging`/`production` family; they are separate entrypoints, not separate
 artifact identities.
 
+The Desktop artifact includes an AnyHarness sidecar built from the same exact
+source SHA. That embedded binary carries the Desktop release version and source
+SHA, and its generated OpenAPI must exactly match the checked-in AnyHarness SDK
+OpenAPI before Tauri packaging. The standalone `runtime-v*` coordinate remains
+distinct; Desktop does not substitute a mutable installed or PATH runtime for
+its staged sidecar.
+
 Server releases publish server and LiteLLM GHCR images with version and rolling
 `stable` tags, never commit-SHA image tags. A `server-v<version>` GitHub Release
 also holds the two Linux runtime bundles, CloudFormation template, installer,

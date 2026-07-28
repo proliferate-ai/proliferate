@@ -78,6 +78,13 @@ job publishes signed versioned artifacts plus immutable and rolling
 Release and the live manifests. Product-side update behavior remains owned by
 [Desktop Updates](../../codebase/systems/engineering/delivery/desktop-updates.md).
 
+The embedded AnyHarness is built from the same checked-out SHA and stamped with
+the Desktop release version plus that SHA. Before seed creation or Tauri
+packaging, the workflow requires its `--version` output to match and its
+`print-openapi` document to equal the checked-in AnyHarness SDK OpenAPI
+document. A missing renderer/SDK route or an unstamped/stale sidecar fails the
+release rather than producing a Desktop package.
+
 ## Runtime And SDK
 
 Runtime releases use `runtime-v<version>`. The workflow builds AnyHarness

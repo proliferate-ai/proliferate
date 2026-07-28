@@ -213,7 +213,9 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         run: |
-          cargo build --release -p anyharness --target "${{ matrix.target }}"
+          PROLIFERATE_BUILD_VERSION="$PROLIFERATE_RELEASE_VERSION" \
+          PROLIFERATE_BUILD_SHA="$(git rev-parse HEAD)" \
+            cargo build --release -p anyharness --target "${{ matrix.target }}"
           mkdir -p apps/desktop/src-tauri/binaries
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
             cp "target/${{ matrix.target }}/release/anyharness.exe" "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
@@ -221,6 +223,19 @@ jobs:
             cp "target/${{ matrix.target }}/release/anyharness" "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
             chmod +x "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
           fi
+
+      - name: Verify embedded AnyHarness identity and SDK compatibility
+        if: steps.filter.outputs.skip != 'true'
+        shell: bash
+        run: |
+          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
+            anyharness_bin="apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
+          else
+            anyharness_bin="apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
+          fi
+          node scripts/ci-cd/verify-anyharness-sdk-compat.mjs \
+            --binary "$anyharness_bin" \
+            --expected-version "$PROLIFERATE_RELEASE_VERSION"
 
       - name: Install seed packaging tools
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
@@ -372,8 +387,8 @@ jobs:
           ALLOW_UNSIGNED: ${{ inputs.allow_unsigned && 'true' || 'false' }}
         run: |
           desktop_version="$(node -p "require('./package.json').version")"
-          anyharness_version="$(grep '^version' ../../anyharness/crates/anyharness/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
-          short_sha="${GITHUB_SHA:0:12}"
+          anyharness_version="$PROLIFERATE_RELEASE_VERSION"
+          short_sha="$(git rev-parse --short=12 HEAD)"
 
           export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${desktop_version}+${short_sha}}"
           # Launch gate: ship with cloud compute hidden (identity/billing stay

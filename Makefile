@@ -35,6 +35,8 @@ PROD_DB_INSTANCE ?= proliferate-prod
 SQL ?= select version_num from alembic_version;
 LOCAL_CODEX_ACP ?= $(HOME)/codex-acp/target/debug/codex-acp
 DEV_ANYHARNESS_TARGET_DIR ?= target/runtime-local
+SHARED_DEV_RUNTIME_BIN ?= $(HOME)/.proliferate-local/dev/runtime-bin/anyharness
+SHARED_DEV_RUNTIME_TARGET_DIR ?= target/runtime-prebuilt
 CLOUD_SSH_WORKER_API_PORT ?= 8044
 CLOUD_SSH_WORKER_DB ?= proliferate_dev_ssh_worker_smoke
 DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
@@ -113,7 +115,7 @@ endif
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
-        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
+        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build refresh-dev-runtime-prebuilt web-build desktop-build build-frontend build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b \
@@ -143,6 +145,9 @@ dev-artifacts-ready:
 	elif grep -a -q "sidecar is not available\\|unsupported target placeholder" "$$runtime_bin" 2>/dev/null; then \
 		echo "AnyHarness runtime binary is a sidecar placeholder: $$runtime_bin"; \
 		missing_rust=1; \
+	elif ! node scripts/ci-cd/verify-anyharness-sdk-compat.mjs --binary "$$runtime_bin" --quiet; then \
+		echo "AnyHarness runtime binary is incompatible with the checked-in SDK: $$runtime_bin"; \
+		missing_rust=1; \
 	fi; \
 	for artifact in $(DEV_FRONTEND_ARTIFACTS); do \
 		if [ ! -d "$$artifact" ]; then \
@@ -154,7 +159,11 @@ dev-artifacts-ready:
 		if [ "$$missing_rust" = "1" ] && [ "$$missing_frontend" = "1" ]; then \
 			echo "Run: make build"; \
 		elif [ "$$missing_rust" = "1" ]; then \
-			echo "Run: make build-rust"; \
+			if [ -n "$(SKIP_RUST)" ] && [ "$(SKIP_RUST)" != "0" ]; then \
+				echo "Run when no cargo/rustc build is active: make refresh-dev-runtime-prebuilt"; \
+			else \
+				echo "Run: make build-rust"; \
+			fi; \
 		else \
 			echo "Run: make build-frontend"; \
 		fi; \
@@ -1555,6 +1564,28 @@ build-rust:
 	fi
 
 runtime-build: build-rust
+
+# Build, verify, and atomically install one source/SHA-stamped AnyHarness for
+# frontend-only worktrees. The pgrep gate is intentionally fail-closed because
+# this machine cannot safely run concurrent Rust builds.
+refresh-dev-runtime-prebuilt:
+	@if pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; then \
+		echo "Another Rust build is active; wait before refreshing the shared runtime." >&2; \
+		exit 1; \
+	fi
+	@set -e; \
+	source_sha=$$(git rev-parse HEAD); \
+	version=$$(cat VERSION); \
+	env -u CARGO_BUILD_TARGET \
+		CARGO_TARGET_DIR="$(SHARED_DEV_RUNTIME_TARGET_DIR)" \
+		PROLIFERATE_BUILD_VERSION="$$version" \
+		PROLIFERATE_BUILD_SHA="$$source_sha" \
+		$(CARGO) build --release -p anyharness; \
+	node scripts/dev-runtime-prebuilt.mjs \
+		--binary "$(SHARED_DEV_RUNTIME_TARGET_DIR)/release/anyharness" \
+		--destination "$(SHARED_DEV_RUNTIME_BIN)" \
+		--source-sha "$$source_sha" \
+		--version "$$version"
 
 desktop-build: cloud-sdk-build cloud-sdk-react-build sdk-build sdk-react-build shared-build
 	cd apps/desktop && pnpm exec tsc && pnpm exec vite build

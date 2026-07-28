@@ -30,6 +30,15 @@ desktop renderer.
 5. Packaged Tauri apps place external binaries next to the app executable. On
    macOS this means the sidecar binary is resolved from the app bundle's
    `Contents/MacOS` directory.
+6. The Desktop release workflow builds AnyHarness from the exact checked-out
+   release SHA, stamps it with the Desktop release version and source SHA,
+   copies that exact file into `binaries/`, and passes it back through
+   `ANYHARNESS_BIN` during the Tauri build.
+7. Before seed or Desktop packaging, the release workflow runs the staged
+   binary's `print-openapi` command and requires exact equality with
+   `anyharness/sdk/generated/openapi.json`. It also requires `--version` to
+   equal the Desktop release version. A renderer/SDK route that is absent from
+   the embedded binary therefore fails the release before a package is built.
 
 The Proliferate Worker binary follows the same staging/bundling model, but it
 is not the AnyHarness sidecar. It is launched on demand by desktop dispatch
