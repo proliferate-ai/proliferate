@@ -81,7 +81,7 @@ export function UserMessage({
         )}
         {shouldRenderTextBubble && (
           <div
-            className="max-w-[77%] break-words rounded-2xl bg-foreground/5 px-3 py-2 text-foreground"
+            className="max-w-[77%] break-words rounded-2xl border border-border bg-card px-3 py-2 text-foreground shadow-subtle"
             data-telemetry-mask
           >
             <div

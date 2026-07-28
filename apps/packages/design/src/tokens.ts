@@ -44,15 +44,15 @@ export const themeTokens = {
   },
   "--diff-view-context-number": {
     dark: "color-mix(in lab, var(--diff-view-surface) 98.5%, var(--diffs-mixer))",
-    light: "color-mix(in lab, var(--diff-view-surface) 98.5%, var(--diffs-mixer))",
+    light: "#f2f4f6",
     themeFallback: "#292929",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diff-view-context-surface": {
     dark: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-diff-main-surface))",
-    light: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-diff-main-surface))",
+    light: "#f7f8fa",
     themeFallback: "#252525",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diff-view-header-surface": {
     dark: "var(--color-diff-header-surface)",
@@ -61,15 +61,15 @@ export const themeTokens = {
   },
   "--diff-view-hover-surface": {
     dark: "color-mix(in srgb, var(--diff-view-surface) 92%, var(--color-diff-main-surface))",
-    light: "color-mix(in srgb, var(--diff-view-surface) 92%, var(--color-diff-main-surface))",
+    light: "#e9ecef",
     themeFallback: "#252525",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diff-view-separator-surface": {
     dark: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-foreground))",
-    light: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-foreground))",
+    light: "#dde1e6",
     themeFallback: "#333333",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diff-view-surface": {
     dark: "var(--color-diff-surface)",
@@ -83,37 +83,37 @@ export const themeTokens = {
   },
   "--color-active": {
     dark: "color-mix(in oklab, #ffffff 5.2%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 5.2%, transparent)",
+    light: "#dbdfe4",
     themeFallback: "rgba(255, 255, 255, 0.052)",
-    provenance: "[RETUNE:state/overlay]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-background": {
     dark: "#181818",
     light: "#ffffff",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-border": {
     dark: "color-mix(in oklab, #ffffff 8.4%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 8.4%, transparent)",
+    light: "#d5d9de",
     themeFallback: "rgba(255, 255, 255, 0.084)",
-    provenance: "[RETUNE:state/border]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-border-heavy": {
     dark: "color-mix(in oklab, #ffffff 12%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 12%, transparent)",
+    light: "#bfc5cc",
     themeFallback: "rgba(255, 255, 255, 0.12)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-border-light": {
     dark: "color-mix(in oklab, #ffffff 5%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 5%, transparent)",
+    light: "#e4e7ea",
     themeFallback: "rgba(255, 255, 255, 0.05)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-card": {
     dark: "#212121",
-    light: "var(--color-surface-elevated)",
-    provenance: "[SHIPPED]",
+    light: "#ffffff",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-card-foreground": {
     dark: "#ffffff",
@@ -140,22 +140,22 @@ export const themeTokens = {
   "--color-composer-background": {
     dark: "#2d2d2d",
     light: "#ffffff",
-    provenance: "[RETUNE:surface/composer-opaque]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-composer-control-active-foreground": {
     dark: "var(--color-foreground)",
-    light: "var(--color-foreground)",
-    provenance: "[SHIPPED]",
+    light: "#16181b",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-composer-control-foreground": {
     dark: "var(--color-muted-foreground)",
-    light: "color-mix(in oklab, var(--color-foreground) 55%, transparent)",
-    provenance: "[SHIPPED]",
+    light: "#5a5f66",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-composer-control-muted-foreground": {
     dark: "var(--color-faint)",
-    light: "color-mix(in oklab, var(--color-foreground) 50%, transparent)",
-    provenance: "[SHIPPED]",
+    light: "#686e76",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-composer-send-background": {
     dark: "var(--color-foreground)",
@@ -169,8 +169,8 @@ export const themeTokens = {
   },
   "--color-composer-shadow": {
     dark: "var(--shadow-subtle)",
-    light: "var(--shadow-subtle)",
-    provenance: "[RETUNE:elevation/near-flat]",
+    light: "0 1px 3px rgb(16 24 40 / 0.08), 0 4px 12px rgb(16 24 40 / 0.06)",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-compute-target-amber": {
     dark: "#b59a3a",
@@ -259,8 +259,8 @@ export const themeTokens = {
   },
   "--color-destructive": {
     dark: "#fa423e",
-    light: "#e02e2a",
-    provenance: "[SHIPPED]",
+    light: "#c02622",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-destructive-foreground": {
     dark: "#ffffff",
@@ -269,8 +269,8 @@ export const themeTokens = {
   },
   "--color-destructive-subtle": {
     dark: "rgba(250,66,62,0.12)",
-    light: "rgba(250,66,62,0.12)",
-    provenance: "[SHIPPED]",
+    light: "#fbe9e8",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-diff-added": {
     dark: "var(--color-git-green)",
@@ -279,9 +279,9 @@ export const themeTokens = {
   },
   "--color-diff-chat-file-header-hover-surface": {
     dark: "color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground))",
-    light: "color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground))",
+    light: "#e9ecef",
     themeFallback: "#2d2d2d",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-diff-chat-file-header-surface": {
     dark: "var(--color-diff-surface)",
@@ -290,9 +290,9 @@ export const themeTokens = {
   },
   "--color-diff-chat-inline-tool-header-hover-surface": {
     dark: "color-mix(in srgb, var(--color-diff-chat-inline-tool-header-surface) 97%, var(--color-foreground))",
-    light: "color-mix(in srgb, var(--color-diff-chat-inline-tool-header-surface) 97%, var(--color-foreground))",
+    light: "#e9ecef",
     themeFallback: "#282828",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-diff-chat-inline-tool-header-surface": {
     dark: "color-mix(in srgb, var(--color-diff-surface) 86%, var(--color-overlay))",
@@ -308,9 +308,9 @@ export const themeTokens = {
   },
   "--color-diff-chat-turn-icon-surface": {
     dark: "color-mix(in srgb, var(--color-background) 88%, var(--color-overlay))",
-    light: "color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground))",
+    light: "#e9ecef",
     themeFallback: "#151515",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-diff-code-surface": {
     dark: "#111111",
@@ -340,9 +340,9 @@ export const themeTokens = {
   },
   "--color-diff-sidebar-file-header-hover-surface": {
     dark: "color-mix(in srgb, var(--color-diff-sidebar-file-header-surface) 97%, var(--color-foreground))",
-    light: "color-mix(in srgb, var(--color-diff-sidebar-file-header-surface) 97%, var(--color-foreground))",
+    light: "#e9ecef",
     themeFallback: "#282828",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-diff-sidebar-file-header-surface": {
     dark: "var(--color-diff-chat-inline-tool-header-surface)",
@@ -351,15 +351,15 @@ export const themeTokens = {
   },
   "--color-diff-surface": {
     dark: "color-mix(in srgb, #181818 94%, #ffffff)",
-    light: "color-mix(in srgb, var(--color-surface) 94%, var(--color-foreground))",
+    light: "#f2f4f6",
     themeFallback: "#262626",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-faint": {
     dark: "color-mix(in oklab, #ffffff 50%, transparent)",
-    light: "var(--color-foreground-tertiary)",
+    light: "#686e76",
     themeFallback: "rgba(255, 255, 255, 0.5)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-file-icon-accent": {
     dark: "hsl(0 0% 89%)",
@@ -388,30 +388,30 @@ export const themeTokens = {
   },
   "--color-foreground": {
     dark: "#ffffff",
-    light: "#1a1c1f",
-    provenance: "[SHIPPED]",
+    light: "#16181b",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-foreground-secondary": {
     dark: "color-mix(in oklab, #ffffff 70%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 70%, transparent)",
+    light: "#5a5f66",
     themeFallback: "rgba(255, 255, 255, 0.7)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-foreground-tertiary": {
     dark: "color-mix(in oklab, #ffffff 50%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 50%, transparent)",
+    light: "#686e76",
     themeFallback: "rgba(255, 255, 255, 0.5)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-git-green": {
     dark: "#40c977",
-    light: "#00a240",
-    provenance: "[SHIPPED]",
+    light: "#0a7c3f",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-git-red": {
     dark: "#fa423e",
-    light: "#ba2623",
-    provenance: "[SHIPPED]",
+    light: "#c02622",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-git-yellow": {
     dark: "#ffd240",
@@ -420,30 +420,30 @@ export const themeTokens = {
   },
   "--color-highlight": {
     dark: "rgba(51, 156, 255, 0.12)",
-    light: "#e5f3ff",
-    provenance: "[SHIPPED]",
+    light: "#e4effc",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-highlight-muted": {
     dark: "rgba(51, 156, 255, 0.5)",
-    light: "#339cff",
-    provenance: "[SHIPPED]",
+    light: "#0b6bcb",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-hover": {
     dark: "color-mix(in oklab, #ffffff 7.8%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 7.8%, transparent)",
+    light: "#e4e7ea",
     themeFallback: "rgba(255, 255, 255, 0.078)",
-    provenance: "[RETUNE:state/overlay]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-info": {
     dark: "#339cff",
-    light: "#0285ff",
-    provenance: "[SHIPPED]",
+    light: "#0b6bcb",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-input": {
     dark: "color-mix(in oklab, #ffffff 12%, transparent)",
-    light: "var(--color-surface-control)",
+    light: "#c6ccd2",
     themeFallback: "rgba(255, 255, 255, 0.12)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   // Retuned against a measured reference capture of a dark transcript surface,
   // whose live link/accent tone resolves to rgb(131, 195, 255) — a materially
@@ -456,19 +456,19 @@ export const themeTokens = {
   // untouched: this retune is about link legibility, not the accent family.
   "--color-link-foreground": {
     dark: "#83c3ff",
-    light: "#339cff",
-    provenance: "[RETUNE:color/link-tone]",
+    light: "#0b6bcb",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-muted": {
     dark: "#212121",
-    light: "var(--color-surface-elevated-secondary)",
-    provenance: "[SHIPPED]",
+    light: "#f2f4f6",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-muted-foreground": {
     dark: "color-mix(in oklab, #ffffff 70%, transparent)",
-    light: "var(--color-foreground-secondary)",
+    light: "#5a5f66",
     themeFallback: "rgba(255, 255, 255, 0.7)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-overlay": {
     dark: "#000000",
@@ -478,7 +478,7 @@ export const themeTokens = {
   "--color-popover": {
     dark: "#2d2d2d",
     light: "#ffffff",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-popover-foreground": {
     dark: "#ffffff",
@@ -492,13 +492,13 @@ export const themeTokens = {
   },
   "--color-primary": {
     dark: "#ffffff",
-    light: "#1a1c1f",
-    provenance: "[SHIPPED]",
+    light: "#16181b",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-primary-foreground": {
     dark: "#0d0d0d",
     light: "#ffffff",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-prose-border": {
     dark: "color-mix(in oklab, #ffffff 8%, transparent)",
@@ -508,19 +508,19 @@ export const themeTokens = {
   },
   "--color-ring": {
     dark: "color-mix(in oklab, #ffffff 28%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 30%, transparent)",
+    light: "#0b6bcb",
     themeFallback: "rgba(255, 255, 255, 0.28)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-scrollbar-thumb": {
     dark: "rgba(255, 255, 255, 0.08)",
-    light: "rgba(13, 13, 13, 0.08)",
-    provenance: "[SHIPPED]",
+    light: "rgba(22,24,27,0.16)",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-scrollbar-thumb-active": {
     dark: "rgba(255, 255, 255, 0.16)",
-    light: "rgba(13, 13, 13, 0.16)",
-    provenance: "[SHIPPED]",
+    light: "rgba(22,24,27,0.28)",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-secondary-foreground": {
     dark: "#ffffff",
@@ -529,9 +529,9 @@ export const themeTokens = {
   },
   "--color-selected": {
     dark: "color-mix(in oklab, #ffffff 3.2%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 3.2%, transparent)",
+    light: "#dde1e6",
     themeFallback: "rgba(255, 255, 255, 0.032)",
-    provenance: "[RETUNE:state/overlay]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-sidebar": {
     // Round-2 measurement against the reference app's dark capture: the
@@ -539,8 +539,8 @@ export const themeTokens = {
     // surface, not recessed to --color-surface-under. Supersedes the
     // surface-recess ruling from the prior retune.
     dark: "#222222",
-    light: "var(--color-surface-under)",
-    provenance: "[RETUNE:sidebar/reference-surface]",
+    light: "#edf0f2",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-sidebar-accent-foreground": {
     dark: "#ffffff",
@@ -549,19 +549,19 @@ export const themeTokens = {
   },
   "--color-sidebar-background": {
     dark: "#181818",
-    light: "var(--color-background)",
-    provenance: "[SHIPPED]",
+    light: "#edf0f2",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-sidebar-foreground": {
     dark: "color-mix(in oklab, #ffffff 85%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 85%, transparent)",
+    light: "#16181b",
     themeFallback: "rgba(255, 255, 255, 0.85)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-sidebar-muted-foreground": {
     dark: "rgba(255, 255, 255, 0.481)",
-    light: "var(--color-foreground-tertiary)",
-    provenance: "[SHIPPED]",
+    light: "#545a61",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-sidebar-primary": {
     dark: "#ffffff",
@@ -575,8 +575,8 @@ export const themeTokens = {
   },
   "--color-special": {
     dark: "#339cff",
-    light: "#339cff",
-    provenance: "[SHIPPED]",
+    light: "#0b6bcb",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   /**
    * [RETUNE:color/special-foreground] — the accent had no paired text color, so
@@ -593,55 +593,55 @@ export const themeTokens = {
   },
   "--color-status-in-progress": {
     dark: "#ffcc33",
-    light: "#bd5800",
-    provenance: "[SHIPPED]",
+    light: "#8a5a00",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-success": {
     dark: "#40c977",
-    light: "#00a240",
-    provenance: "[SHIPPED]",
+    light: "#0a7c3f",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-success-subtle": {
     dark: "rgba(64,201,119,0.14)",
-    light: "rgba(64,201,119,0.14)",
-    provenance: "[SHIPPED]",
+    light: "#e6f4ec",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-surface": {
     dark: "#181818",
     light: "#ffffff",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-surface-control": {
     dark: "color-mix(in oklab, #2b2b2b 96%, transparent)",
-    light: "rgba(237, 237, 237, 0.4)",
+    light: "#ffffff",
     themeFallback: "rgba(43, 43, 43, 0.96)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-surface-editor": {
     dark: "#282828",
-    light: "#f7f7f7",
-    provenance: "[SHIPPED]",
+    light: "#f7f8fa",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-surface-elevated": {
     dark: "#212121",
     light: "#ffffff",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-surface-elevated-secondary": {
     dark: "color-mix(in oklab, #ffffff 3%, transparent)",
-    light: "color-mix(in oklab, var(--color-foreground) 2%, transparent)",
+    light: "#f2f4f6",
     themeFallback: "rgba(255, 255, 255, 0.03)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-surface-under": {
     dark: "#141414",
-    light: "#f9f9f9",
-    provenance: "[SHIPPED]",
+    light: "#edf0f2",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-terminal-black": {
     dark: "rgba(255, 255, 255, 0.5)",
-    light: "rgba(13, 13, 13, 0.5)",
-    provenance: "[SHIPPED]",
+    light: "#545a61",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-terminal-blue": {
     dark: "#339cff",
@@ -730,18 +730,18 @@ export const themeTokens = {
   },
   "--color-warning": {
     dark: "rgba(255, 180, 50, 0.15)",
-    light: "#fff8e6",
-    provenance: "[SHIPPED]",
+    light: "#fdf3dc",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-warning-border": {
     dark: "rgba(255, 180, 50, 0.25)",
-    light: "var(--color-border)",
-    provenance: "[SHIPPED]",
+    light: "#e8d9ae",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-warning-foreground": {
     dark: "#ffb432",
-    light: "var(--color-foreground)",
-    provenance: "[SHIPPED]",
+    light: "#8a5a00",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-warning-subtle": {
     dark: "rgba(242,201,76,0.14)",
@@ -795,21 +795,21 @@ export const themeTokens = {
   },
   "--diffs-bg-addition-hover-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-diff-added))",
-    light: "color-mix(in srgb, var(--diff-view-surface) 78%, var(--diffs-addition-color-override))",
+    light: "#d3ecdd",
     themeFallback: "#14311f",
-    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diffs-bg-addition-number-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-added))",
-    light: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-added))",
+    light: "#d9efe3",
     themeFallback: "#16241c",
-    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diffs-bg-addition-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, var(--color-diff-added))",
-    light: "color-mix(in srgb, var(--diff-view-surface) 84%, var(--diffs-addition-color-override))",
+    light: "#e3f3e9",
     themeFallback: "#15291d",
-    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diffs-bg-context-override": {
     dark: "var(--diff-view-context-surface)",
@@ -818,21 +818,21 @@ export const themeTokens = {
   },
   "--diffs-bg-deletion-hover-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-diff-deleted))",
-    light: "color-mix(in srgb, var(--diff-view-surface) 78%, var(--diffs-deletion-color-override))",
+    light: "#f7d8d6",
     themeFallback: "#3c1c1b",
-    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diffs-bg-deletion-number-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-deleted))",
-    light: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-deleted))",
+    light: "#f9e0de",
     themeFallback: "#2a1a1a",
-    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diffs-bg-deletion-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, var(--color-diff-deleted))",
-    light: "color-mix(in srgb, var(--diff-view-surface) 84%, var(--diffs-deletion-color-override))",
+    light: "#fbe9e8",
     themeFallback: "#301b1a",
-    provenance: "[RETUNE:diffs/addition-deletion-color-alias]",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--diffs-bg-separator-override": {
     dark: "var(--diff-view-separator-surface)",
@@ -1126,18 +1126,18 @@ export const themeTokens = {
   },
   "--shadow-modal": {
     dark: "0 25px 50px -12px rgb(0 0 0 / 0.5)",
-    light: "0 25px 50px -12px rgb(0 0 0 / 0.5)",
-    provenance: "[RETUNE:elevation/near-flat]",
+    light: "0 16px 40px rgb(16 24 40 / 0.16)",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--shadow-popover": {
     dark: "0 4px 12px rgb(0 0 0 / 0.12)",
-    light: "0 4px 12px rgb(0 0 0 / 0.12)",
-    provenance: "[RETUNE:elevation/near-flat]",
+    light: "0 4px 12px rgb(16 24 40 / 0.10)",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--shadow-subtle": {
     dark: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-    light: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-    provenance: "[SHIPPED]",
+    light: "0 1px 2px rgb(16 24 40 / 0.06)",
+    provenance: "[RETUNE:light/independent-scale]",
   },
   "--size-icon-button-lg": {
     dark: "1.75rem",

@@ -391,6 +391,18 @@ jobs:
       - name: Build shared packages
         run: pnpm shared:build
 
+      # Grades the BUILT stylesheet, so it must follow shared:build rather than
+      # sit with the python guards in repo-shape (that job installs no node and
+      # has no dist/theme.css to read). Both modes are checked in one pass.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Check theme contrast floors
+        run: |
+          python3 -m unittest scripts/test_check_theme_contrast.py
+          python3 scripts/check_theme_contrast.py --table
+
       - name: Test product domain
         run: pnpm --filter @proliferate/product-domain test
 
