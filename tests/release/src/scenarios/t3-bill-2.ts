@@ -20,7 +20,7 @@ import { runBillingProbe, type DrainGrantsResult, type MeterRecords } from "../f
  *
  * Then the bypass sweep — every alternate entry we know exists, each attempted
  * FOR REAL and required to be refused:
- *   1. resume the paused sandbox via a direct API call (POST /cloud-sandbox/wake), not the UI;
+ *   1. ensure the paused sandbox via a direct API call (POST /cloud-sandbox/ensure), not the UI;
  *   2. reconnect via a session opened BEFORE exhaustion (stale handle);
  *   3. E2B-webhook race: force a created/resumed provider event while the hold
  *      is active → inline re-pause fires (webhook path, not the 15-min reconciler);
@@ -31,8 +31,7 @@ import { runBillingProbe, type DrainGrantsResult, type MeterRecords } from "../f
  * Then refill → sandbox resumable, gateway serves again, new workspaces allowed.
  *
  * The live start gate is `assert_cloud_sandbox_resume_allowed_for_owner`, now
- * (post-#1036, merged) wired into the service layer so BOTH `/cloud-sandbox/wake`
- * and `/cloud-sandbox/ensure` inherit it before staging a row (`authorize_sandbox_start`
+ * (post-#1036, merged) wired into `/cloud-sandbox/ensure` before staging a row (`authorize_sandbox_start`
  * remains dead code — assert against the wired gate, never the dead function).
  * Its owner-subject resolution is #1047's (org member → org subject), so a hold
  * on the org grant pool blocks the member's resume. T3-BILL-3 asserts this gate
@@ -42,7 +41,7 @@ import { runBillingProbe, type DrainGrantsResult, type MeterRecords } from "../f
  * Reachable now (real): the exhaustion SETUP — `billing_probe.py drain-grants`
  * zeroes the durable user's grant seconds directly, and this scenario asserts
  * the drain landed. Blocked for the enforcement + sweep:
- * - every cloud route (wake, new workspace, other-member start, trigger start)
+ * - every cloud route (ensure, new workspace, other-member start, trigger start)
  *   is `github_link_required`-gated (PR #1023) and needs a real running sandbox;
  * - the LLM-side gateway rejection needs `RELEASE_E2E_GATEWAY_TEST_KEY` (unset)
  *   to have a key to reject and a materialized key to race against.
@@ -63,7 +62,7 @@ export const t3Bill2: ScenarioDefinition = {
     { description: "assert the drain landed (no grant retains positive remaining_seconds)" },
     { description: "compute gate: running sandbox paused + inaccessible; new workspace creation → enumerated credits-exhausted" },
     { description: "LLM gate: gateway rejects the test key's completion with the enumerated budget error" },
-    { description: "bypass 1: direct-API resume (POST /cloud-sandbox/wake) refused" },
+    { description: "bypass 1: direct-API ensure (POST /cloud-sandbox/ensure) refused" },
     { description: "bypass 2: reconnect via a pre-exhaustion (stale) session refused" },
     { description: "bypass 3: E2B created/resumed webhook race → inline re-pause fires" },
     { description: "bypass 4: pre-exhaustion on-disk materialized key refused (disabled-key propagation)" },
@@ -94,15 +93,15 @@ export const t3Bill2: ScenarioDefinition = {
     // billing plan with drainable grant seconds, so there is no *enforceable*
     // exhausted state — #1045's `assert_cloud_sandbox_resume_allowed` 402 gate
     // only fires for an org whose enrolled grants were driven to zero. Verified
-    // 2026-07-09: drain removed 0 grants and the direct-API wake returned
+    // 2026-07-09: drain removed 0 grants and the direct-API ensure returned
     // status=ready (200), not a 402. This is a billing-setup gap, not a missing
     // product gate — the gate cannot be exercised until the durable org has a
     // real (Stripe test-clock) subscription + grant to exhaust.
     if (drain.drained === 0 && after.grants.length === 0) {
       throw new ScenarioExpectedFailError(
         "T3-BILL-2: the durable org has no enrolled/drainable grants, so credits cannot be driven to an " +
-          "enforceable exhausted state — #1045's direct-API-resume 402 gate (and the whole bypass sweep) " +
-          "cannot be exercised. Verified 2026-07-09: drain removed 0 grants and POST /cloud-sandbox/wake " +
+          "enforceable exhausted state — #1045's direct-API-ensure 402 gate (and the whole bypass sweep) " +
+          "cannot be exercised. Verified 2026-07-09: drain removed 0 grants and POST /cloud-sandbox/ensure " +
           "returned status=ready. Needs a Stripe test-clock subscription + grant on the durable org to run " +
           "for real; the #1036 pin (bypass 1 must 402 post-#1045) stays flipped and will assert once billing " +
           "setup exists.",
@@ -124,7 +123,7 @@ export const t3Bill2: ScenarioDefinition = {
       let refused = false;
       let observed: unknown;
       try {
-        observed = await client.post("/v1/cloud/cloud-sandbox/wake", {});
+        observed = await client.post("/v1/cloud/cloud-sandbox/ensure", {});
       } catch (error) {
         // github_link_required rethrows out of here to withProductGate (blocked,
         // not red); a 402 credits-exhausted decision is the REAL refusal we want.

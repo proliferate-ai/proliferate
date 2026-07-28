@@ -33,6 +33,9 @@ from proliferate.server.billing.runtime_usage import (
     close_cloud_sandbox_provider_usage,
     open_cloud_sandbox_provider_usage,
 )
+from proliferate.server.cloud.gateway.service import (
+    invalidate_cloud_sandbox_gateway_access_for_user,
+)
 from proliferate.utils.time import utcnow
 
 _CONFIGURATION_ERROR = "Sandbox provider configuration prevents materialization. Contact support."
@@ -104,6 +107,10 @@ async def persist_materialization_failure(
                 observation_started_at=observation_started_at,
             )
             if detached is not None:
+                if detached.owner_user_id is not None:
+                    invalidate_cloud_sandbox_gateway_access_for_user(
+                        detached.owner_user_id,
+                    )
                 await cloud_workspace_store.mark_cloud_workspaces_lost_for_sandbox(
                     db,
                     detached,

@@ -139,7 +139,7 @@ export const t3Bill4: ScenarioDefinition = {
         `the org subject, not personal); got remainingHours=${personalOverview.remainingHours}`,
     );
 
-    // --- LIVE compute start gate (#1036): ensure/wake refused with the
+    // --- LIVE compute start gate (#1036): ensure refused with the
     //     enumerated 402, and NO sandbox created (gate fires before insert). ---
     const client = new ApiClient({ baseUrl: serverUrl }).withBearerToken(session.accessToken);
     let refusedCode: string | undefined;

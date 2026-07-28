@@ -101,13 +101,26 @@ describe("loadSessionsWithBoundedRecovery", () => {
   });
 
   it("stops after the bounded retry instead of looping", async () => {
-    const load = vi.fn().mockRejectedValue(new Error("runtime unavailable"));
+    const error = new Error("runtime unavailable");
+    const load = vi.fn().mockRejectedValue(error);
 
     await expect(loadSessionsWithBoundedRecovery({
       isCurrent: () => true,
       load,
-    })).resolves.toEqual({ kind: "failed" });
+    })).resolves.toEqual({ kind: "failed", error });
     expect(load.mock.calls).toEqual([[false], [true]]);
+  });
+
+  it("does not retry an error rejected by the caller's policy", async () => {
+    const error = new Error("billing blocked");
+    const load = vi.fn().mockRejectedValue(error);
+
+    await expect(loadSessionsWithBoundedRecovery({
+      isCurrent: () => true,
+      load,
+      shouldRetry: () => false,
+    })).resolves.toEqual({ kind: "failed", error });
+    expect(load).toHaveBeenCalledOnce();
   });
 
   it("does not recover a selection that became stale", async () => {

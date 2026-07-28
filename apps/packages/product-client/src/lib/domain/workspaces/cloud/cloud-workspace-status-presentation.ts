@@ -81,6 +81,10 @@ export interface CloudWorkspaceStatusScreenModel {
     | { kind: "status"; message: string };
 }
 
+export interface CloudWorkspaceStatusScreenBlockedInput {
+  startBlockReason: CloudStartBlockReason | null;
+}
+
 export type CloudWorkspaceCompactStatusTone = "info" | "warning" | "destructive";
 
 export interface CloudWorkspaceCompactStatusView {
@@ -130,6 +134,7 @@ export function descriptionForStartBlockReason(
 
 export function buildCloudWorkspaceStatusScreenModel(
   workspace: CloudWorkspaceSummary,
+  blocked: CloudWorkspaceStatusScreenBlockedInput | null = null,
 ): CloudWorkspaceStatusScreenModel {
   const repoLabel = workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "";
   const branchLabel = workspace.repo
@@ -188,6 +193,25 @@ export function buildCloudWorkspaceStatusScreenModel(
       footer: {
         kind: "status",
         message: GENERIC_ARCHIVED_DESCRIPTION,
+      },
+    };
+  }
+
+  if (blocked) {
+    const description = descriptionForStartBlockReason(blocked.startBlockReason);
+    return {
+      mode: "blocked",
+      pendingStage: null,
+      eyebrowTone: "pending",
+      title: titleForStartBlockReason(blocked.startBlockReason),
+      description,
+      repoLabel,
+      branchLabel,
+      footer: {
+        kind: "action",
+        action: "retry",
+        label: "Try again",
+        helperText: "Re-checks your billing state and reconnects.",
       },
     };
   }

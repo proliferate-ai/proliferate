@@ -17,6 +17,7 @@
 # check_max_lines.py's own caps, so listing them there would register as stale
 # max-lines entries.
 
+apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 425 workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 946 transcript row model pending row-kind module split
 apps/packages/product-ui/src/chat/transcript/VirtualizedTranscriptRowList.tsx 416 virtualized transcript list pending row-window split (recorded in debt repair)
 # Relocated from apps/desktop/src by the Desktop-product move into product-client

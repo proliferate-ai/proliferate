@@ -7,10 +7,10 @@ import { withProductGate } from "../fixtures/product-gate.js";
 import { ApiClient } from "../fixtures/http.js";
 import { assertDurableIdentityAvailableForLane, loginDurableUserForLane } from "../fixtures/lane-identity.js";
 import {
+  ensureCloudSandboxRow,
   getCloudSandbox,
   pollCloudSandboxStatus,
   probeAgentsThroughGateway,
-  wakeCloudSandbox,
   warmPersonalCloudSandbox,
   withCloudSandboxBillingGate,
 } from "../fixtures/cloud-sandbox.js";
@@ -29,7 +29,7 @@ import {
  * specs/developing/testing/scenarios.md#T3-PROV-2
  *
  * #1041: the `current_product_user` gate lifted 2026-07-09 (PR #1023); `GET
- * /cloud-sandbox` and `POST /cloud-sandbox/wake` succeed for real. What was
+ * /cloud-sandbox` and `POST /cloud-sandbox/ensure` succeed for real. What was
  * left unimplemented was the pause + reconnect-state-intact half, because
  * the product has NO pause endpoint at all -- a sandbox only pauses via
  * E2B's own idle-timeout lifecycle or the billing reconciler
@@ -38,7 +38,7 @@ import {
  * scenario drives pause directly via the E2B SDK (the sanctioned backdoor;
  * see `../fixtures/e2b-verify.ts`'s module docstring for the full rationale
  * and the metadata trick that avoids any DB access), while everything else
- * (login, wake, reconnect, and the "prior state intact" proof) goes through
+ * (login, ensure, reconnect, and the "prior state intact" proof) goes through
  * the real product surfaces: `GET/POST /v1/cloud/cloud-sandbox*` and the
  * real anyharness gateway proxy (`GET .../anyharness/v1/agents`, the same
  * workspace-free exec/connectivity proof T3-PROV-1 already established).
@@ -62,7 +62,7 @@ export const t3Prov2: ScenarioDefinition = {
     { description: "connect via the real anyharness gateway proxy (GET .../v1/agents) — pre-pause proof-of-life" },
     { description: "[E2B-direct, no product pause endpoint exists] write a filesystem marker, then pause the sandbox" },
     { description: "assert E2B ground truth shows paused; poll GET /cloud-sandbox for the webhook-driven status flip" },
-    { description: "POST /cloud-sandbox/wake, then reconnect via the anyharness proxy — real resume proof" },
+    { description: "POST /cloud-sandbox/ensure, then reconnect via the anyharness proxy — real resume proof" },
     { description: "assert E2B ground truth shows running again, and the filesystem marker survived the cycle" },
   ],
   run: async (ctx) => {
@@ -131,7 +131,7 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
   // Named product lever (thin: only ensures the DB row today, per
   // cloud_sandboxes/service.py — see warmPersonalCloudSandbox's docstring),
   // called for contract fidelity with scenarios.md's plan.
-  await wakeCloudSandbox(client);
+  await ensureCloudSandboxRow(client);
 
   const reconnectStartedAt = Date.now();
   const postAgents = await probeAgentsThroughGatewayWithRetries(client, { attempts: 5, delayMs: 5000 });
