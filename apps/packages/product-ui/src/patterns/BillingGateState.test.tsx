@@ -6,6 +6,7 @@ import {
   BillingBalanceNotice,
   BillingGateState,
   billingGateView,
+  toBillingGateReason,
   type BillingGateReason,
 } from "./BillingGateState";
 
@@ -121,6 +122,32 @@ describe("billingGateView", () => {
       expect(view.title.length).toBeGreaterThan(0);
       expect(view.description.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("toBillingGateReason", () => {
+  it("passes through every typed reason", () => {
+    const reasons: BillingGateReason[] = [
+      "credits_exhausted",
+      "overage_disabled",
+      "cap_exhausted",
+      "payment_failed",
+      "external_billing_hold",
+      "admin_hold",
+      "concurrency_limit",
+      "llm_credits_exhausted",
+      "llm_limit_reached",
+    ];
+    for (const reason of reasons) {
+      expect(toBillingGateReason(reason)).toBe(reason);
+    }
+  });
+
+  it("maps unrecognized, null, and empty codes to unknown", () => {
+    expect(toBillingGateReason("billing_quota")).toBe("unknown");
+    expect(toBillingGateReason(null)).toBe("unknown");
+    expect(toBillingGateReason(undefined)).toBe("unknown");
+    expect(toBillingGateReason("")).toBe("unknown");
   });
 });
 

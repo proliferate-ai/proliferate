@@ -6,6 +6,11 @@ import {
   useLlmBalance,
 } from "@proliferate/cloud-sdk-react";
 import { BillingSettingsPane } from "@proliferate/product-ui/billing/BillingSettingsPane";
+import {
+  BillingBalanceNotice,
+  billingGateView,
+  toBillingGateReason,
+} from "@proliferate/product-ui/patterns/BillingGateState";
 import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 import {
   BillingAutoTopUpCard,
@@ -79,12 +84,14 @@ export function BillingSettingsSurface({
     setPlanManagementOpen(true);
   }
 
-  async function openComparisonBillingAction(action: "checkout" | "portal") {
+  async function openComparisonBillingAction(action: "checkout" | "portal" | "refill") {
     setComparisonActionError(null);
     try {
       const response = action === "portal"
         ? await comparisonActions.createBillingPortal()
-        : await comparisonActions.createCloudCheckout();
+        : action === "refill"
+          ? await comparisonActions.createRefillCheckout()
+          : await comparisonActions.createCloudCheckout();
       await onOpenUrl(response.url);
     } catch (error) {
       setComparisonActionError(
@@ -152,6 +159,23 @@ export function BillingSettingsSurface({
   const coreActionLoading = billingPlan?.isPaidCloud
     ? comparisonActions.creatingBillingPortal
     : comparisonActions.creatingCloudCheckout;
+  // T2: a paused plan explains itself — reason + repair action, not just a
+  // "Paused" badge. Repairs stay on this page, so no "Billing settings" CTA.
+  const startBlockedGate = billingPlan?.startBlocked && billingPlan.billingMode === "enforce"
+    ? billingGateView(toBillingGateReason(billingPlan.startBlockReason), {
+        isPaidPlan: paidPlan,
+        canManageBilling: organization ? canManage : true,
+        onUpgrade: () => {
+          void openComparisonBillingAction("checkout");
+        },
+        onRefill: () => {
+          void openComparisonBillingAction("refill");
+        },
+        actionLoading: comparisonActions.creatingCloudCheckout
+          || comparisonActions.creatingRefillCheckout,
+        actionDisabled: comparisonActionDisabled,
+      })
+    : null;
 
   return (
     <section className="space-y-6">
@@ -159,6 +183,12 @@ export function BillingSettingsSurface({
         title="Billing"
         description="Manage usage and billing details."
       />
+      {startBlockedGate ? (
+        <BillingBalanceNotice
+          view={startBlockedGate}
+          errorMessage={comparisonActionError}
+        />
+      ) : null}
       <BillingSettingsPane
         checkoutReturnState={checkoutReturnState}
         currentPlanKey={currentPlanKey}

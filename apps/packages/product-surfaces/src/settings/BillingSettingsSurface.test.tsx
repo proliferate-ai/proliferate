@@ -291,6 +291,164 @@ describe("BillingSettingsSurface", () => {
     expect(screen.getByText("Billing for Team One.")).toBeTruthy();
   });
 
+  it("explains a start-blocked plan with a typed reason and repair action, not just a badge", async () => {
+    const onOpenUrl = vi.fn();
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        plan: "pro",
+        isPaidCloud: true,
+        startBlocked: true,
+        startBlockReason: "credits_exhausted",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: true,
+          loading: false,
+        }}
+        onOpenUrl={onOpenUrl}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Paused")).toBeTruthy();
+    expect(screen.getByText("Out of credits")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add credits" }));
+
+    await waitFor(() => {
+      expect(onOpenUrl).toHaveBeenCalledWith("https://billing.example/refill");
+    });
+    expect(cloudHooks.createRefillCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders repair failures inside the paused notice, next to the action", async () => {
+    cloudHooks.createRefillCheckout.mockRejectedValueOnce(new Error("refill offline"));
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        plan: "pro",
+        isPaidCloud: true,
+        startBlocked: true,
+        startBlockReason: "credits_exhausted",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: true,
+          loading: false,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add credits" }));
+
+    await waitFor(() => {
+      const notice = screen.getByText("Out of credits").closest('[role="status"]');
+      expect(notice).not.toBeNull();
+      expect(within(notice as HTMLElement).getByText("refill offline")).toBeTruthy();
+    });
+  });
+
+  it("disables the notice repair action while organization context is loading", () => {
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        plan: "pro",
+        isPaidCloud: true,
+        startBlocked: true,
+        startBlockReason: "credits_exhausted",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: true,
+          loading: true,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Add credits" }).disabled,
+    ).toBe(true);
+  });
+
+  it("shows members a reason without billing actions when start-blocked", () => {
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        startBlocked: true,
+        startBlockReason: "credits_exhausted",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: false,
+          loading: false,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Out of credits")).toBeTruthy();
+    expect(screen.getByText(/organization admin manages billing/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add credits" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Upgrade" })).toBeNull();
+  });
+
+  it("does not render the gate notice in observe mode even when start-blocked", () => {
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        billingMode: "observe",
+        startBlocked: true,
+        startBlockReason: "credits_exhausted",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={null}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Out of credits")).toBeNull();
+    expect(screen.queryByText("Out of free credits")).toBeNull();
+  });
+
   it("shows backend payment health instead of an unconditional active badge", () => {
     cloudHooks.useCloudBilling.mockReturnValue({
       data: billingPlan({
