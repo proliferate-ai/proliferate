@@ -208,7 +208,7 @@ function detailToneClass(
     case "success":
       return "text-success";
     case "warning":
-      return "text-warning";
+      return "text-warning-foreground";
     case "muted":
       return "text-sidebar-muted-foreground/50";
     case "neutral":

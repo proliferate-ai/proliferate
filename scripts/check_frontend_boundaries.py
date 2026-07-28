@@ -50,6 +50,13 @@ QUERY_CACHE_METHODS = {
     "setQueryData",
 }
 
+# `--color-warning` is a fill token; using it as ink (or alpha-modifying an
+# already-alpha fill) renders invisible. See find_warning_ink_violations.
+WARNING_INK_RE = re.compile(
+    r"\btext-warning(?![\w-])"
+    r"|\b(?:bg|border)-warning/\d+(?![\w-])"
+)
+
 OPENAPI_CLIENT_VERB_RE = re.compile(r"\bclient\.(GET|POST|PUT|PATCH|DELETE)\s*\(")
 QUERY_CACHE_CALL_RE = re.compile(
     r"\bqueryClient\.("
@@ -386,6 +393,61 @@ def find_radix_import_violations() -> list[Violation]:
     return violations
 
 
+def find_warning_ink_violations() -> list[Violation]:
+    """Rule: `--color-warning` is a FILL token, never ink.
+
+    In dark mode `--color-warning` is `rgba(255, 180, 50, 0.15)` and in light
+    mode it is `#fff8e6` — a near-transparent / near-white *fill*. Applied as
+    ink via `text-warning` it renders the label at 15% opacity against a dark
+    surface, i.e. effectively invisible. Every other tone (`success`, `info`,
+    `destructive`) is an opaque hex, which is why only `warning` has this trap
+    and why the DS ships a separate `--color-warning-foreground` (`#ffb432`).
+
+    The purpose-built tokens are:
+      ink    -> text-warning-foreground
+      fill   -> bg-warning-subtle
+      border -> border-warning-border
+
+    Alpha-modified fills (`bg-warning/10`) are also flagged: multiplying an
+    already-0.15-alpha token yields ~1.5% alpha, so the fill does not read
+    either. Solid `bg-warning` is intentionally NOT flagged — using the fill
+    token as a fill is correct (e.g. status dots, `OfflineIndicator`).
+
+    This defect shipped to users across ~20 call sites and was invisible to
+    every existing check, hence the gate.
+    """
+    violations: list[Violation] = []
+    for path in iter_files_in_roots(
+        [UI_SRC, PRODUCT_UI_SRC, PRODUCT_SURFACES_SRC, PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC]
+    ):
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            for match in WARNING_INK_RE.finditer(strip_line_comment(line)):
+                utility = match.group(0)
+                replacement = (
+                    "text-warning-foreground"
+                    if utility.startswith("text-")
+                    # A `bg-warning/N` is either a panel wash or a solid dot;
+                    # the wash wants the subtle fill, the dot wants the ink.
+                    else "bg-warning-subtle (panel fill) or bg-warning-foreground (solid dot)"
+                    if utility.startswith("bg-")
+                    else "border-warning-border"
+                )
+                violations.append(
+                    Violation(
+                        "WARNING_TOKEN_AS_INK",
+                        path,
+                        lineno,
+                        (
+                            f"`{utility}` uses the warning FILL token where the "
+                            f"purpose-built token belongs — use `{replacement}`. "
+                            "`--color-warning` is rgba(...,0.15) in dark mode, so "
+                            "this renders effectively invisible."
+                        ),
+                    )
+                )
+    return violations
+
+
 def find_ui_src_top_level_violations() -> list[Violation]:
     """Rule: apps/packages/ui/src may only contain the top-level entries named
     in the component-library taxonomy (specs/codebase/platforms/product/design-system.md):
@@ -459,6 +521,7 @@ def collect_violations() -> list[Violation]:
         violations.extend(check_file(path))
     violations.extend(find_radix_import_violations())
     violations.extend(find_ui_src_top_level_violations())
+    violations.extend(find_warning_ink_violations())
     return violations
 
 

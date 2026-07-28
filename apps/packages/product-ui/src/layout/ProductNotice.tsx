@@ -14,7 +14,7 @@ interface ProductNoticeProps {
 const toneClasses: Record<ProductNoticeTone, string> = {
   neutral: "border-border bg-card text-foreground",
   info: "border-info/40 bg-info/10 text-foreground",
-  warning: "border-warning/40 bg-warning/10 text-foreground",
+  warning: "border-warning-border bg-warning-subtle text-foreground",
   destructive: "border-destructive/40 bg-destructive/10 text-foreground",
 };
 

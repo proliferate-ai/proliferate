@@ -110,7 +110,7 @@ export function WorkflowDefinitionEditor({
             </div>
           ) : null}
           {catalogWarning ? (
-            <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-ui text-warning" role="status">
+            <div className="rounded-lg border border-warning-border bg-warning-subtle px-3 py-2 text-ui text-warning-foreground" role="status">
               {catalogWarning}
               {onReload && !serverError ? (
                 <Button

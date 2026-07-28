@@ -239,7 +239,7 @@ function ActivityFact({
   const toneClass = fact.tone === "destructive"
     ? "text-destructive"
     : fact.tone === "attention"
-      ? "text-warning"
+      ? "text-warning-foreground"
       : "text-current";
   if (index === 2 && narrowOverflowCount > 0) {
     return (

@@ -262,14 +262,14 @@ function RepositoryRow({
             {repo.fullName}
           </span>
           {repo.private ? <Lock className="icon-paired shrink-0 text-muted-foreground" aria-hidden /> : null}
-          {repo.archived ? <Archive className="icon-paired shrink-0 text-warning" aria-hidden /> : null}
+          {repo.archived ? <Archive className="icon-paired shrink-0 text-warning-foreground" aria-hidden /> : null}
           {repo.repoConfigState === "configured" ? (
             <Check className="icon-paired shrink-0 text-success" aria-hidden />
           ) : null}
         </span>
         <span className="block truncate text-ui-sm text-muted-foreground">
           {repo.disabledReason ? (
-            <span className="text-warning">{repo.disabledReason}</span>
+            <span className="text-warning-foreground">{repo.disabledReason}</span>
           ) : (
             meta
           )}

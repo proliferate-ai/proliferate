@@ -154,7 +154,7 @@ export function OrganizationSsoSettingsSurface({
           </div>
         </div>
         {connection?.lastError ? (
-          <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-ui-sm text-warning">
+          <div className="mt-2 rounded-lg border border-warning-border bg-warning-subtle px-4 py-3 text-ui-sm text-warning-foreground">
             {connection.lastError}
           </div>
         ) : null}
