@@ -1,0 +1,12 @@
+{
+  "cells": {
+    "Tones": {
+      "verdict": "good",
+      "note": "Six of seven tones render correctly. tone=\"warning\" is a REAL DS DEFECT, not a preview issue: Badge applies `text-warning` and in dark mode --color-warning is rgba(255,180,50,0.15) — a 15%-alpha fill value used as ink, so the label is near-invisible. The ink token is --color-warning-foreground (#ffb432). Fix belongs in Badge.tsx or theme.css; the cell is kept as-is so the defect stays visible rather than hidden behind a substituted tone."
+    },
+    "InContext": {
+      "verdict": "good",
+      "note": "Realistic deploy rows; success/destructive read at a glance."
+    }
+  }
+}

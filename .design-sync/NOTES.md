@@ -173,6 +173,62 @@ palette and type ramp. So:
 This is the single most important thing the conventions header must
 teach the design agent.
 
+### Safelist mechanics: two traps
+
+- **`@source inline(...)` cannot express fractional steps.** The `.` in
+  `0.5` breaks its parsing, so `gap-1.5`, `px-0.5`, `p-2.5` etc. silently
+  fail to emit while integer steps from the *same* brace list emit fine.
+  Fix: `.design-sync/css/safelist-extra.txt`, a plain-text file of class
+  names pulled in with `@source "./safelist-extra.txt"` — Tailwind
+  extracts class-like tokens from any scanned source. 127 fractional
+  rules now emit.
+- **Verifying a class in the compiled CSS needs the right escaping.** The
+  class `gap-0.5` is written `.gap-0\.5` in CSS. A naive
+  `grep -c "\.gap-0\.5"` matches nothing and reads as "missing" even when
+  the rule is present — this cost a wrong conclusion once. Use
+  `grep -c "\.gap-0\\\\\.5"`.
+- **Arbitrary values (`w-[520px]`, `ring-[0.5px]`) can never work** in a
+  static bundle: nothing scans the design agent's output, so they emit
+  nothing. Previews must compose from safelisted steps only. Largest
+  safelisted height is `h-96`.
+
+### DS defect found while grading: `Badge tone="warning"` is unreadable
+
+Not a preview problem — a real bug in the shipped system.
+[Badge.tsx](../apps/packages/ui/src/primitives/Badge.tsx) renders the
+warning tone as `border-warning/30 bg-warning/10 text-warning`, but in
+dark mode `--color-warning` is `rgba(255, 180, 50, 0.15)` — an alpha
+*fill* value. Used as ink via `text-warning` it renders the label at 15%
+opacity, i.e. an effectively empty pill. The ink token is
+`--color-warning-foreground` (`#ffb432`). Every other tone reads fine
+because those tokens are opaque hexes.
+
+Fix belongs in `Badge.tsx` (or the token) — **not** in a preview. The
+Badge `Tones` cell deliberately still shows it so the defect stays
+visible instead of being papered over with a substituted tone.
+
+### Reveal-on-hover traps (previews photograph blank without these)
+
+- `SidebarActionButton` defaults to `visibility="hover"` (`opacity-0` at
+  rest) — pass `alwaysVisible` or `variant="section"`.
+- `SidebarNavRow`'s `shortcutLabel` is `opacity-0` unless
+  `shortcutRevealVisible` is also passed.
+- `Tooltip`'s bubble is structurally uncapturable: its API is
+  `{content, children, className, singleLine}` with no `open`/`defaultOpen`,
+  the trigger is an internal `<span>`, and the capture harness performs no
+  hover step. Its cells verify trigger surfaces only; `TooltipPrimitive`
+  (Radix, accepts `defaultOpen`) is the export to preview if the bubble
+  itself needs coverage.
+
+### The generated `.d.ts` under-reports props
+
+Repeatedly observed: required handlers are missing from the emitted type
+(`onToggle` on ModelTable, `onSave`/`onRevert` on SettingsSaveFooter,
+`onChange` on SettingsScopeTabs), and row types like `ModelTableRow` are
+never emitted. **The playground registry's `render()` is the accurate
+contract; the `.d.ts` is a hint.** Read the component source for anything
+with a callback or a row/item type.
+
 ### Known render warns (triaged as legitimate — a warn NOT listed here is new)
 
 - `[FONT_MISSING] "Manrope"` — benign. Bare `Manrope` appears only as a
