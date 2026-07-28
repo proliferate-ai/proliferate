@@ -7,7 +7,7 @@ projection substrate is not deployed.
 
 Date: 2026-05-20.
 
-Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
+Depends on: [`sandbox-lifecycle.md`](../../../platforms/product/sandbox-lifecycle.md),
 the agent auth platform (document removed; rewrite planned),
 the claiming platform (document removed; the claim/exposure substrate this
 spec builds on was reverted from the codebase),

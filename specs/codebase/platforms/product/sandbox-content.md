@@ -460,6 +460,23 @@ apps/packages/product-client/src/
   classification tests; repository-environment delete reclaim; a live disk
   axis reading end to end.
 
+Corridor H — content reclaim and the disk story's tail. Named, binary
+assertions; the corridor is done when they are green. IDs are stable —
+tests reference them by name:
+
+- **H1** Repository-environment delete reclaims its clone through the
+  clone-delete primitive, which refuses paths outside the managed fence.
+  (Rust tests + pytest)
+- **H2** The inventory row carries last activity. (Rust test)
+- **H3** Crossing the disk threshold surfaces the worktrees copy
+  pointing into the delete dialog (surface owned by
+  [cloud-workspace.md](../../systems/product/workspaces/cloud-workspace.md)).
+  (frontend test)
+- **H4** The cloud clone flow rides `acquire_repo_root`; grep-gate: the
+  standalone clone-script path stays deleted. (Rust + pytest)
+- **H5** `workerDegraded` has a consumer: the runtime-status badge
+  renders it. (frontend test)
+
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
@@ -469,9 +486,10 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       Build the clone-delete primitive under the same fence discipline as
       retire, then pair repository-environment deletion with an after-commit
       reclaim.
-- [ ] The inventory row carries no last-activity timestamp for suggesting
-      stale worktrees. Add last activity after wiring the session store
-      into worktree inventory.
+- [ ] The inventory row carries no last-activity timestamp
+      ([inventory.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs)),
+      so the disk-pressure surface cannot suggest *stale* worktrees to
+      delete, only big ones. Add last activity to the inventory row.
 - [ ] The clone create/refresh script bypasses AnyHarness's own repo-root
       acquisition (`acquire_repo_root` /
       [clone.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/clone.rs)),

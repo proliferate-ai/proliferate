@@ -25,9 +25,13 @@ Fences, one owner per concern:
   only the lifecycle consequence: traffic wakes a paused sandbox.
 - Whether a caller may have a sandbox at all, and the choreography callers
   use to reach one, belong to [sandbox-access.md](sandbox-access.md).
-- Compute billing math (usage segments, holds, credit) belongs to
-  [billing.md](billing.md); this document only names the lifecycle events
-  that open and close usage segments.
+- This document owns billing's *primitives* — the fenced operations a
+  billing system interacts with: when usage segments open and close, and
+  the fencing that keeps every open/close exact under races (see
+  [Usage fencing](#usage-fencing-the-billing-primitives)). Billing *math* —
+  what those segments cost, credits, holds, invoices — belongs to
+  [billing.md](billing.md), which consumes the primitives and never
+  reimplements them.
 - Worker and Supervisor internals (binary swap mechanics, mailbox
   protocol, rollback) belong to
   [proliferate-worker](../../structures/proliferate-worker/README.md) and
@@ -101,10 +105,14 @@ passes against the exact immutable ref.
 **A rolling tag move affects only new sandboxes.** The pointer is read
 once, at sandbox creation; a sandbox is an instantiated snapshot, so
 existing running or paused sandboxes keep the image they booted from
-forever, and there is no atomic replacement flow. This is why every
-sandbox row records the exact immutable tag it was created from: after a
-bad promotion, "which live sandboxes still carry the bad image" must be
-enumerable. Operating procedure:
+forever, and there is no atomic replacement flow. After a bad promotion,
+"which live sandboxes still carry the bad image" is answered by the
+provider, not by us: E2B's sandbox listing is the authority for which
+sandbox runs which template, and the rollback runbook queries it (via the
+dashboard/CLI, or the adapter's listing if the check needs scripting).
+The row deliberately does not duplicate the template reference — a stored
+copy is one more write path whose honesty we would have to maintain, for
+an enumeration the provider already owns. Operating procedure:
 [e2b-template-operations.md](../../../developing/operating/e2b-template-operations.md).
 
 ### Instantiate
@@ -170,11 +178,15 @@ initialized. In order:
 
 ## Account model
 
-One sandbox per billing context. A user's personal work runs in their
-personal sandbox, billed to their personal subject; work inside an
-organization runs in a per-(user, organization) sandbox, billed to the org
-subject. Sandboxes are never shared between users; the VM boundary is the
-user boundary.
+One sandbox per (user, organization), and **orgs are the only billing
+subject** — the same law [model-gateway.md](model-gateway.md) settled for
+inference spend. There is no personal context and no personal subject: a
+solo user's work runs in their (user, default-org) sandbox, and the
+default org — the org created at signup that nobody else has joined —
+bills like any other org. A user working solo and inside two companies
+holds three sandboxes; each bills its own org. Sandboxes are never shared
+between users; the VM boundary is the user boundary, the org boundary is
+the payer boundary.
 
 The row shape this implies
 ([sandboxes.py](../../../../server/proliferate/db/models/cloud/sandboxes.py)):
@@ -182,22 +194,22 @@ The row shape this implies
 ```text
 cloud_sandbox
 ├── owner_user_id        the person; every sandbox has exactly one
-├── organization_id      null = personal context; set = that org's context
-├── billing_subject_id   resolved once, at row creation, from the context
+├── organization_id      never null; solo work lives in the default org
 ├── provider_sandbox_id  current E2B binding (nullable, detachable)
-├── template_ref         exact immutable sha- tag the VM booted from
 ├── status               creating | ready | paused | error | destroyed
 └── unique (owner_user_id, organization_id) where destroyed_at is null
 ```
 
-Which sandbox serves a request is decided by the workspace's context: a
-workspace under an org repo environment materializes into the (user, that
-org) sandbox, anything else into the personal one. Billing never resolves
-per request; the row's `billing_subject_id` is fixed at creation, so an org
-member's personal experiments cannot leak onto the org invoice and org
-work cannot land on a personal card. Compute usage segments (see
-[billing.md](billing.md)) open and close against that subject on the
-lifecycle events in the causes table below.
+There is deliberately no stored billing subject on the row: the org *is*
+the payer, so a second stored copy could only drift from it. Billing
+derives the subject from `organization_id`; compute usage segments (see
+[billing.md](billing.md)) open and close against that org on the
+lifecycle events in the causes table below. Which sandbox serves a
+request is decided by the workspace's context: a workspace under an org
+repo environment materializes into the (user, that org) sandbox,
+anything else into the (user, default-org) one. Solo experiments cannot
+leak onto a company invoice because they live in a different sandbox
+billed to a different org.
 
 ## States and causes
 
@@ -214,43 +226,66 @@ Row status is one of `creating`, `ready`, `paused`, `error`, `destroyed`
 - **Ensure never provisions.** `POST /ensure` creates or returns the row
   and applies the billing gate; it never touches E2B. Provider work
   happens only inside a materialization operation. This keeps row
-  bookkeeping cheap and makes provider spend attributable to a real need.
+  bookkeeping cheap and the ensure verb free to call from anywhere.
+- **A sandbox provisions when it first becomes able to do repo work —
+  not before, and not lazier.** The eager trigger is authority-chain
+  completion for the (user, org) pair: the user is a member of the org,
+  the org has the GitHub App installation, and the user has completed App
+  user-authorization ([sandbox-github-auth.md](sandbox-github-auth.md)).
+  Whichever event completes the chain — user-auth callback, installation
+  callback, or joining an org whose other two legs already hold —
+  schedules the one background bootstrap for that pair's sandbox. Before
+  the chain completes there is nothing a sandbox could clone, so nothing
+  provisions; after it completes, every later operation (workspace
+  create, catalog sync, repo add) finds a warm-or-paused sandbox instead
+  of paying a cold provision.
+- **The eager bootstrap ends paused.** When the chain-completion
+  bootstrap finishes — runtime launched, configured repos precloned,
+  secrets and agent-auth state written — the server explicitly pauses the
+  provider sandbox (the same pause verb the billing-hold path uses)
+  rather than letting it idle to E2B's 45-minute timeout. Wake stays
+  traffic-driven (~1 s), so the only cost of eager provisioning is the
+  bootstrap minutes themselves. The pause applies only to this bootstrap;
+  interactive materializations never pause behind the user.
 - **The gateway gates on policy, E2B wakes on traffic, materialization
   repairs.** The sandbox gateway forwards when the caller may reach the
   sandbox (access and billing checks pass) regardless of VM liveness;
   E2B's auto-resume brings a paused VM back under the forwarded traffic;
   a VM that resumes broken (dead runtime, stale token) is repaired by the
   next materialization operation, not by the gateway.
-- **A cold access resolution schedules its own repair.** When an access
-  path finds no stamped runtime access on the row — never materialized, or
-  cleared by provider loss — it still answers the typed 409
-  `cloud_sandbox_runtime_not_ready` (provisioning is far too slow to hold a
-  request open) *and* schedules one background materialization for that
-  sandbox
-  ([materialization/service.py](../../../../server/proliferate/server/cloud/materialization/service.py)).
-  The client's existing retry is therefore a wait, not a dead end. Two
-  things keep it from stampeding: a non-blocking cross-process Redis claim
-  keyed on the sandbox id, so N concurrent cold callers schedule at most
-  one run while it is in flight, and the per-sandbox materialization lock
-  below, which serializes any run that does start. The repair is still a
-  materialization operation and so inherits every gate above it — the
-  scheduler adds no gate of its own and bypasses none. Skipped for
-  destroyed rows (gone, not cold) and for deployments without managed-cloud
-  provisioning, where a background run could only fail. The claim is
-  in-process fire-and-forget, so a server restart during a provision strands
-  it: repair stays suppressed for that sandbox until the 900 s TTL lapses,
-  after which the next cold access schedules again — accepted, because the
-  TTL self-heals and the alternative (a durable queue) buys nothing at this
-  scale. This law is also the ruling on the previously-open cold-start
-  choreography question: cold access provisions on access, not by a separate
-  wake-and-poll handshake, and the client keeps polling the unchanged 409.
+- **Cold access is the loss backstop, and it schedules its own repair.**
+  Under the chain-completion law a healthy user's sandbox always exists —
+  at worst paused, which is warm ("paused" keeps its stamped access and
+  wakes under traffic). A row with *no* stamped runtime access is the
+  exceptional state: provider loss cleared it, or the caller is pre-chain
+  and was never provisioned. An access path that finds it answers the
+  typed 409 `cloud_sandbox_runtime_not_ready` (provisioning is far too
+  slow to hold a request open) *and* schedules one background
+  materialization for that sandbox
+  ([materialization/service.py](../../../../server/proliferate/server/cloud/materialization/service.py)),
+  so the caller's retry is a wait, not a dead end. Two things keep it
+  from stampeding: a non-blocking cross-process Redis claim keyed on the
+  sandbox id (N concurrent cold callers schedule at most one run), and
+  the per-sandbox materialization lock below (any run that starts is
+  serialized). The repair is an ordinary materialization operation and
+  inherits every gate above it — the scheduler adds no gate and bypasses
+  none. Skipped for destroyed rows (gone, not cold) and for deployments
+  without managed-cloud provisioning. The claim is in-process
+  fire-and-forget, so a server restart during a provision strands it:
+  repair stays suppressed for that sandbox until the 900 s TTL lapses —
+  accepted, because the TTL self-heals and a durable queue buys nothing
+  at this scale. This law is the single owner of the repair mechanism;
+  [sandbox-gateway.md](sandbox-gateway.md) and
+  [sandbox-access.md](sandbox-access.md) link here rather than restating
+  it, and access owns what the caller sees while it runs.
 
 Every transition has exactly one cause:
 
 | Cause | E2B touched | Transition | Why |
 | --- | --- | --- | --- |
-| First ensure (signup hook, GitHub App callback, explicit `POST /ensure`) | No | row created, `creating` | Row bookkeeping is free; provider spend waits for real work |
-| Materialization operation (workspace create, repo-environment materialize, workflow delivery, sandbox bootstrap) | Yes: resume or create, then launch | `creating` → `ready` | The one engine below; the only path that spends provider resources |
+| First ensure (GitHub App callbacks, materialization entry, explicit `POST /ensure`) | No | row created, `creating` | Row bookkeeping is free; the ensure verb never provisions |
+| Authority chain completes for the (user, org) pair (user-auth ∧ installation ∧ membership) | Yes: the eager background bootstrap | `creating` → `ready` → explicit pause → `paused` | A sandbox provisions when it first becomes able to do repo work; it ends paused so eagerness costs only the bootstrap minutes |
+| Materialization operation (workspace create, repo-environment materialize, workflow delivery, cold-access repair) | Yes: resume or create, then launch | `creating` → `ready` | The one engine below; the only path that spends provider resources |
 | Gateway traffic to a paused sandbox | Yes: E2B auto-resume | `paused` → `ready` (via `resumed` webhook) | Forwarding is the wake; no wake verb exists |
 | 45 minutes idle | Yes: E2B pauses itself | `ready` → `paused` (via `paused`/`timeout` webhook); usage segment closes | Idle compute costs money; state is preserved |
 | Billing hold observed on a `created`/`resumed` webhook | Yes: server pauses the provider sandbox | → `paused`; segment closes as quota enforcement | A held subject must not accrue compute spend |
@@ -263,22 +298,26 @@ Every transition has exactly one cause:
 
 The laws in sequence, for one user's first cloud workspace:
 
-1. The user connects the GitHub App. The callback ensures the sandbox row
-   (`creating`, no provider binding) and schedules a background bootstrap.
-   No E2B call has happened; if the user walks away now, nothing was
-   spent. This is the ensure-never-provisions law: rows are free,
-   provider VMs are not, so the row exists as soon as we know the user
-   and the VM waits for real work.
+1. The user authorizes the GitHub App and installs it on their repos.
+   The callbacks ensure the sandbox row, and whichever callback completes
+   the authority chain schedules the eager background bootstrap: the
+   engine creates the E2B sandbox from the rolling template tag
+   (metadata: sandbox id, owner), initializes the runtime, preclones the
+   configured repos, writes secrets and agent-auth state, then explicitly
+   pauses the VM. Total spend: the bootstrap minutes, billed to the org.
+   From this moment "no sandbox" is over — every later operation finds a
+   warm-or-paused machine.
 2. The user creates a workspace. This is a materialization operation, so
-   the engine runs: no binding exists, so it creates the E2B sandbox from
-   the rolling template tag (metadata: sandbox id, owner), connects,
-   initializes the runtime, marks the row `ready`, and opens a usage
-   segment. (Usage opens are idempotent and dual-sourced: the
-   materialization engine opens at resume acceptance for the resumes it
-   performs, and the provider webhooks open for transitions the engine
-   never sees, like traffic wakes; whichever observes liveness first
-   wins, the other is a no-op.) The HTTP response waits for all of it;
-   creation is the one deliberately slow, synchronous path.
+   the engine runs: the paused VM resumes (~1 s), the healthy runtime is
+   reused, the worktree is cut from the precloned repo, the row is
+   `ready`, and a usage segment opens. (Usage opens are idempotent and
+   dual-sourced: the materialization engine opens at resume acceptance
+   for the resumes it performs, and the provider webhooks open for
+   transitions the engine never sees, like traffic wakes; whichever
+   observes liveness first wins, the other is a no-op.) Without the eager
+   bootstrap this step would have paid the full cold provision — VM
+   create plus runtime initialize plus clone — inside the one synchronous
+   request the user is watching.
 3. The user works for an hour, then stops. 45 idle minutes later E2B
    pauses the VM mid-process; the `paused` webhook moves the row to
    `paused` and closes the usage segment. Nothing was torn down; the
@@ -292,7 +331,7 @@ The laws in sequence, for one user's first cloud workspace:
    row `ready` and reopens the usage segment (the webhook is the opener
    here because no materialization ran — the idempotent dual-source rule
    above). No Proliferate code issued a wake; forwarding was the wake.
-5. Had the user's credit been exhausted overnight, step 4 stops at the
+5. Had the org's credit been exhausted overnight, step 4 stops at the
    policy check: the gateway refuses, the traffic never leaves our
    server, and the VM stays paused. If a stray `resumed` webhook arrives
    anyway, the server re-pauses the provider sandbox and closes the
@@ -331,6 +370,78 @@ authenticated, whatever that takes." In order:
 
 Concurrent operations on the same sandbox serialize on the lock; lock
 timeout surfaces as a typed busy error rather than a second engine run.
+
+The sandbox bootstrap composes independently: global secrets and
+agent-auth state apply without any repository configuration (no GitHub
+authority needed for the non-repository state), and each configured
+repository preclone owns its own authority check and stays best-effort,
+so one repository's failure cannot prevent the non-repository state from
+converging.
+
+## Usage fencing: the billing primitives
+
+This platform owns the operations billing consumes — the fenced open and
+close of compute usage segments — and [billing.md](billing.md) owns what
+they cost. The fences exist so that every segment is attributed to one
+exact provider VM and no race can double-open, double-close, or reassign
+one. Absorbed from the retired sandbox-provisioning document at its
+implemented truth:
+
+- **Three fence inputs, all on the row.** `materialization_attempt` is
+  the attempt epoch: it advances for every engine run (including a
+  healthy `ready` retry), and attempt-owned completions compare it before
+  changing lifecycle or accounting state. The exact `provider_sandbox_id`
+  binding is the identity fence: usage opens and closes always name the
+  binding they fence against. `provider_observed_at` is the provider
+  freshness floor: retry start, conservative resume request-start
+  acceptance, and direct provider observations advance it — runtime-ready
+  persistence does not — and any delayed provider observation at or
+  before the floor is inert.
+- **Legacy repair before provider I/O.** The engine closes a legacy
+  null-attributed open segment under that unchanged unknown identity
+  (end clamped no earlier than start) before touching the provider; a
+  *non-null* conflicting provider is preserved open with a durable
+  support receipt instead, because it may still be live. Duration is
+  never reassigned between identities.
+- **Supersession is transactional and committed first.** Only
+  authoritative provider-target-not-found detaches a binding: the engine
+  compare-and-swaps the expected binding to absent and closes that exact
+  provider's open segment in one transaction, cloud-row-first lock order,
+  and commits the supersession before creating one replacement. Transient
+  and configuration failures never supersede; they fail closed and keep
+  the binding for retry.
+- **Create records identity and usage together.** A provider create
+  persists the exact new provider id and its provision usage in one
+  transaction. If that commit is ambiguous and the same attempt remains
+  unbound, the failure transaction adopts the known candidate and its
+  exact usage rather than losing custody of a spending VM.
+- **Resume acceptance is conservative.** After every successful resume
+  the engine revalidates the exact binding and attempt epoch at the
+  request-start boundary; if a pause overlaps the request, a post-resume
+  exact-ID state read decides between reopening usage as running and
+  retaining the paused closure. Cancellation, ambiguous commits, and
+  late transient observations all route through the same fenced usage
+  open in the failure transaction.
+- **Webhooks reinforce, never adopt.** The webhook path verifies the
+  signature, correlates to an already-persisted exact binding,
+  deduplicates, and idempotently reinforces or closes segments — always
+  in one cloud-row-first transaction fenced by binding, epoch, and the
+  freshness floor. Webhook metadata is never authority to adopt an
+  uncommitted provider; the engine owns the required usage open, so
+  delivery timing is advisory. Spend-hold processing runs under the same
+  materialization lock and commits its receipt, lifecycle update, and
+  usage close before releasing it.
+- **Terminal events close exactly one segment.** A `killed` event for
+  the current binding closes that provider's segment, detaches the
+  binding, and records a recoverable `error`; it never destroys the row.
+  Terminal events for an already-destroyed row close exact usage only.
+  Delete and the orphan reaper follow the same rule: whatever else they
+  tear down, the segment they close is the exact bound provider's.
+- **`last_error` is a receipt, not raw text.** It is durable, bounded,
+  and secret-safe — a classified operator-safe message describing the
+  latest terminal attempt or authoritative provider loss; a new attempt
+  clears it, and it is written only when the attempt's exact binding and
+  epoch are still current.
 
 ## Pause and resume, end to end
 
@@ -392,8 +503,12 @@ Pause is the steady state of an idle sandbox, not an exception:
 - `GET /cloud-sandbox`: the row (status, timestamps, last error receipt).
 - `POST /cloud-sandbox/ensure`: create or return the row, billing-gated.
   Never touches E2B. There is no wake verb; waking is traffic.
-- `DELETE /cloud-sandbox`: revoke worker tokens, mark destroyed, kill the
-  provider sandbox after commit (reaper as backstop).
+- `DELETE /cloud-sandbox`: revoke the active Worker's tokens and its
+  integration-gateway token, mark destroyed, kill the provider sandbox
+  after commit (reaper as backstop). Delete never touches
+  `cloud_workspace` rows; workspaces bound to the dead VM render as lost
+  ([sandbox-content.md](sandbox-content.md)) — deletion plus recreation
+  is not a lossless repair and is never presented as one.
 
 Workspace-scoped runtime status (`GET /workspaces/{id}/runtime-status`)
 projects the sandbox status plus Worker liveness for one workspace; its
@@ -461,6 +576,20 @@ server/proliferate/
   [test_cloud_sandbox_recovery_invariants.py](../../../../server/tests/integration/test_cloud_sandbox_recovery_invariants.py),
   [test_cloud_sandbox_reconnect_self_heal.py](../../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py),
   [test_cloud_sandbox_orphan_reaper_lock.py](../../../../server/tests/integration/test_cloud_sandbox_orphan_reaper_lock.py).
+- Usage fencing and connection state machine (absorbed with the fencing
+  section):
+  [test_sandbox_materialization.py](../../../../server/tests/unit/test_sandbox_materialization.py),
+  [test_cloud_connect_race.py](../../../../server/tests/unit/test_cloud_connect_race.py),
+  [test_cloud_materialization_failures.py](../../../../server/tests/unit/test_cloud_materialization_failures.py),
+  [test_cloud_webhook_service.py](../../../../server/tests/unit/test_cloud_webhook_service.py),
+  [test_cloud_webhook_recovery_races.py](../../../../server/tests/unit/test_cloud_webhook_recovery_races.py),
+  [test_cloud_orphan_reaper.py](../../../../server/tests/unit/test_cloud_orphan_reaper.py),
+  [test_cloud_sandbox_reaper_task.py](../../../../server/tests/unit/test_cloud_sandbox_reaper_task.py),
+  [test_cloud_sandbox_reconciler_recovery.py](../../../../server/tests/integration/test_cloud_sandbox_reconciler_recovery.py),
+  [test_cloud_sandbox_last_error_migration.py](../../../../server/tests/integration/test_cloud_sandbox_last_error_migration.py),
+  [test_cloud_sandbox_ensure_billing_gate.py](../../../../server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py).
+  Deterministic contracts only; live E2B qualification stays separate
+  operational evidence.
 - Cold-access repair scheduling and its stampede guard:
   [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py);
   the claim primitive itself in
@@ -485,6 +614,30 @@ server/proliferate/
   gate that same `desiredTopology` heartbeat signal for any already-running
   legacy worker still bridging — see its docstring for the asymmetry.
 
+Corridor E — provisioning triggers and the org account model. Named,
+binary assertions; the corridor is done when they are green. IDs are
+stable — tests reference them by name:
+
+- **E1** A user-auth callback with no installation schedules *no*
+  bootstrap; the event that completes the authority chain schedules
+  exactly one. (github_app service pytest)
+- **E2** The chain-completion bootstrap ends with the provider sandbox
+  explicitly paused; interactive materializations never force-pause.
+  (materialization pytest)
+- **E3** After the migration every active row carries a non-null
+  `organization_id`, uniqueness is (owner, org), solo flows land in the
+  default org, and re-running the migration is a no-op.
+  (migration pytest + intent test)
+- **E4** Billing derives the payer from the row's org; grep-gate:
+  `billing_subject_id` is gone from the sandbox model and store.
+  (pytest + grep gate)
+- **E5** Joining an org whose installation and user-auth legs already
+  hold bootstraps that (user, org) sandbox. (server pytest; lands with
+  E3)
+- **E6** [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py)
+  survives unchanged — cold repair stays the loss backstop. Grep-gates:
+  no `POST /wake` route, no legacy (non-Supervisor) launch path.
+
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
@@ -500,14 +653,36 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       alert path (issue tracker), and the warm-reuse path still never
       relaunches a dead Worker.
 - [ ] The account model is one sandbox per user globally (partial unique
-      index on `owner_user_id`; org variants are stubs that raise,
+      index on `owner_user_id`; org variants are stubs that raise, and
+      the store hardcodes `organization_id=None`,
       [cloud_sandboxes.py](../../../../server/proliferate/db/store/cloud_sandboxes.py)).
-      Ideal is one per (user, org context) so org-billed work is isolated
-      from personal work; today an org member's single sandbox mixes both
-      and bills to whichever subject resolution picks.
-- [ ] The row does not record the real template ref: `e2b_template_ref` is
-      hardcoded to the provider kind `"e2b"`
-      ([cloud_sandboxes/service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
-      so "which live sandboxes still run the bad template" is not
-      enumerable and rollback recovery of existing sandboxes stays manual.
-      Persist the exact immutable tag at create time.
+      Ruled shape: `organization_id` NOT NULL keyed (owner, org), solo
+      work in the default org, no stored billing subject. Migration:
+      backfill `organization_id` to each owner's default org, re-key the
+      uniqueness to (owner_user_id, organization_id), drop the
+      billing-subject column, and derive the payer from the org.
+      Ruling: orgs are the only billing subject
+      ([model-gateway.md](model-gateway.md)); a stored payer copy can
+      only drift.
+- [ ] Provisioning does not fire on authority-chain completion: the
+      user-auth callback alone schedules the bootstrap even when no
+      installation exists
+      ([github_app/service.py](../../../../server/proliferate/server/cloud/github_app/service.py)),
+      the installation callback never bootstraps the sandbox, and org
+      membership changes trigger nothing. Gate the bootstrap on the
+      complete chain (membership ∧ installation ∧ user-auth) in both
+      App callbacks; the org-join trigger lands with the per-(user, org)
+      account model above. Ruling: a sandbox provisions when it first
+      becomes able to do repo work.
+- [ ] The eager bootstrap does not force-pause on completion: a
+      chain-completion bootstrap leaves the VM idling to E2B's 45-minute
+      timeout, spending ~45 idle minutes per provision. Pause the
+      provider sandbox explicitly when the bootstrap finishes (the
+      billing-hold path's pause verb). Ruling: eagerness should cost the
+      bootstrap minutes, not the timeout window.
+- [ ] `runtime_generation` is a hardcoded constant stamped by the store
+      (`runtime_generation=0`,
+      [cloud_sandboxes.py](../../../../server/proliferate/db/store/cloud_sandboxes.py))
+      after its column was dropped; [sandbox-gateway.md](sandbox-gateway.md)
+      owns the deletion end to end (wire field, client cache keys) and
+      cross-lists it here for the store constant.

@@ -57,8 +57,8 @@ resume opens a new segment for the current provider. A non-null conflicting
 provider id is left open and the attempt fails with a durable support receipt,
 because that concrete provider may still be live. No old duration is
 reattributed across provider ids. The
-provider-event boundary is documented by
-[`sandbox-provisioning.md`](sandbox-provisioning.md#provider-webhooks).
+provider-event boundary is documented by the usage-fencing primitives in
+[`sandbox-lifecycle.md`](sandbox-lifecycle.md#usage-fencing-the-billing-primitives).
 For an already-destroyed product row, later exact-provider terminal evidence
 closes retained usage without reviving or rewriting deletion state.
 
