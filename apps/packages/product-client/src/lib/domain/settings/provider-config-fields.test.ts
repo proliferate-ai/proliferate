@@ -30,20 +30,43 @@ describe("getProviderConfigFieldSpec", () => {
     expect(bearerToken?.secret).toBe(true);
   });
 
-  it("azure_openai declares endpoint + deployment (plain) + api key (secret) per the vault contract", () => {
+  it("azure_openai declares endpoint (plain) + api key (secret) ONLY — deployment is dropped (R5)", () => {
+    // Founder ruling R5: the azure_openai vault entry collects endpoint +
+    // apiKey only. `deployment` is deliberately absent — the renderer never
+    // translated it into any harness env set, and the server's create
+    // validation rejects it as an unknown field.
     const spec = getProviderConfigFieldSpec("azure_openai");
     const keys = spec.fields.map((field) => field.key);
-    expect(keys).toEqual(["endpoint", "deployment", "apiKey"]);
+    expect(keys).toEqual(["endpoint", "apiKey"]);
 
     expect(spec.fields.find((field) => field.key === "endpoint")?.secret).toBe(false);
-    expect(spec.fields.find((field) => field.key === "deployment")?.secret).toBe(false);
     expect(spec.fields.find((field) => field.key === "apiKey")?.secret).toBe(true);
   });
 });
 
 describe("getSupportedProviderConfigKinds", () => {
-  it("is empty for every harness until D1 lands the registry declarations", () => {
-    for (const harnessKind of ["claude", "codex", "opencode", "cursor", "grok"]) {
+  it("mirrors the registry's non-pending providerConfig declarations per harness", () => {
+    // The same combos the server's selection write gate admits
+    // (supported_provider_config_kinds): registry declarations minus pending.
+    expect(getSupportedProviderConfigKinds("claude")).toEqual(["aws_bedrock"]);
+    expect(getSupportedProviderConfigKinds("codex")).toEqual(["aws_bedrock"]);
+    expect(getSupportedProviderConfigKinds("opencode")).toEqual([
+      "aws_bedrock",
+      "azure_openai",
+    ]);
+  });
+
+  it("keeps claude x azure_openai (Foundry) excluded while its declaration is pending", () => {
+    // R5/R11 pin: the Foundry cell is declared but `pending` its Gate 4 live
+    // verification, so the UI must not offer it until the registry flag
+    // clears — this test fails the moment someone un-pends the declaration,
+    // forcing a deliberate decision.
+    expect(getSupportedProviderConfigKinds("claude")).not.toContain("azure_openai");
+    expect(getSupportedProviderConfigKinds("codex")).not.toContain("azure_openai");
+  });
+
+  it("is empty for harnesses without providerConfig declarations", () => {
+    for (const harnessKind of ["cursor", "grok", "not-a-real-harness"]) {
       expect(getSupportedProviderConfigKinds(harnessKind)).toEqual([]);
     }
   });

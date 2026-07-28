@@ -287,13 +287,16 @@ async def test_put_rejects_bad_source_shape(db_session: AsyncSession) -> None:
                 DesiredAuthSource(source_kind="gateway", env_var_name="X_API_KEY"),
             ],
         )
+    # env_var_name is no longer a structural requirement (a typed vault entry
+    # legally carries none) — but an api_key source with NO vault reference at
+    # all is still an illegal shape.
     with pytest.raises(ValueError, match="api_key source requires"):
         await store.put_auth_selections(
             db_session,
             user_id=user_id,
             harness_kind="claude",
             surface="local",
-            sources=[DesiredAuthSource(source_kind="api_key", api_key_id=uuid.uuid4())],
+            sources=[DesiredAuthSource(source_kind="api_key", env_var_name="X_API_KEY")],
         )
 
 

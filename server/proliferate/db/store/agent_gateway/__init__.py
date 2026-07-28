@@ -84,6 +84,7 @@ from proliferate.db.store.agent_gateway.records import (
 )
 from proliferate.db.store.agent_gateway.selections import (
     AgentApiKeyNotUsableError,
+    AgentProviderConfigNotSupportedError,
     clear_auth_selections,
     get_scope_auth_selections,
     list_auth_selections,
@@ -103,6 +104,7 @@ from proliferate.db.store.agent_gateway.usage import (
 
 __all__ = [
     "AgentApiKeyNotUsableError",
+    "AgentProviderConfigNotSupportedError",
     "AgentApiKeyRecord",
     "AgentAuthDeliveryAckRecord",
     "AgentAuthSelectionRecord",

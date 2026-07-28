@@ -134,7 +134,9 @@
             "ANTHROPIC_FOUNDRY_BASE_URL",
             "ANTHROPIC_FOUNDRY_API_KEY",
             "ANTHROPIC_FOUNDRY_AUTH_TOKEN"
-          ]
+          ],
+          "pending": true,
+          "pendingReason": "Foundry translation built but live-unverified: the renderer's endpoint->ANTHROPIC_FOUNDRY_RESOURCE derivation and API_KEY/AUTH_TOKEN alternative are unverified judgment calls awaiting a Gate 4 live claude x azure_openai run (R5/R11: the cell stays excluded from supported kinds until then)."
         }
       ]
     },

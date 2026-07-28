@@ -44,6 +44,7 @@ from proliferate.server.billing.domain.plans import (
 )
 from proliferate.server.billing.snapshots import billing_plan_rule_config
 from proliferate.server.billing.subjects import ensure_organization_billing_subject_state
+from proliferate.server.catalogs.service import supported_provider_config_kinds
 from proliferate.server.cloud.agent_gateway.budget import get_gateway_enrollment_for_user
 from proliferate.server.cloud.agent_gateway.selection_rules import (
     SelectionRuleError,
@@ -136,13 +137,17 @@ async def create_api_key(
 _MAX_PROVIDER_CONFIG_FIELD_LENGTH = 4096
 _MAX_PROVIDER_CONFIG_FIELDS = 16
 
-# Required field keys per typed kind, matching D2's UI field spec exactly
+# Required field keys per typed kind, matching the UI field spec exactly
 # (apps/packages/product-client/src/lib/domain/settings/provider-config-fields.ts
 # PROVIDER_CONFIG_SPECS) so a value the UI can submit is never rejected here,
 # and a value shaped for the wrong kind (or carrying unknown keys) always is.
+# azure_openai is endpoint + apiKey ONLY (founder ruling R5): `deployment` is
+# dropped — the renderer deliberately never translated it
+# (materialize/agent_auth.py `_translate_provider_config_env`), so collecting
+# it stored a field nothing would ever read.
 _PROVIDER_CONFIG_REQUIRED_FIELDS: dict[str, frozenset[str]] = {
     AGENT_API_KEY_KIND_AWS_BEDROCK: frozenset({"region", "bearerToken"}),
-    AGENT_API_KEY_KIND_AZURE_OPENAI: frozenset({"endpoint", "deployment", "apiKey"}),
+    AGENT_API_KEY_KIND_AZURE_OPENAI: frozenset({"endpoint", "apiKey"}),
 }
 
 
@@ -316,6 +321,12 @@ async def put_auth_selections(
             harness_kind=harness_kind,
             surface=surface,
             sources=sources,
+            # The registry-driven typed-vault vocabulary (agent-auth.md "The
+            # vault"): the harness's declared, non-pending providerConfig
+            # kinds. The store cannot read the registry itself (store→server
+            # boundary), so the ONE source of truth — registry.json via the
+            # catalogs service — is threaded through here.
+            supported_provider_config_kinds=supported_provider_config_kinds(harness_kind),
         )
     except agent_gateway_store.AgentApiKeyNotUsableError as error:
         raise CloudApiError(

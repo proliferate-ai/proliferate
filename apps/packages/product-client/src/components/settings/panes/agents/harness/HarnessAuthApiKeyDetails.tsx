@@ -58,6 +58,11 @@ export function ApiKeyDetails({
     ? getApiKeyBindingLabel(envVarSuggestion.envVarName, envVarSuggestion.providerHint)
     : null;
 
+  // Typed provider-config kinds (Bedrock/Azure) this harness may offer:
+  // the registry's non-pending `providerConfig` declarations — the same set
+  // the server's selection write gate admits (see provider-config-fields.ts's
+  // module comment). Empty for a harness with no declarations (cursor, grok),
+  // so those panes render no third segment.
   const providerConfigKinds = getSupportedProviderConfigKinds(harnessKind);
   const [path, setPath] = useState<KeyPath>("paste");
   const [pastedKey, setPastedKey] = useState("");
@@ -266,11 +271,16 @@ function GetApiKeyLink() {
 }
 
 /**
- * Typed provider-config panel (Bedrock/Azure). Renders only for harnesses whose
- * registry declares providerConfig — none today (getSupportedProviderConfigKinds
- * is [] until D1 lands), so this path is unreachable in the shipped product.
- * There is no server endpoint yet for a typed vault entry, so Save is disabled;
- * D3 wires the real mutation once D1's request shape exists.
+ * Typed provider-config panel (Bedrock/Azure). Renders for harnesses whose
+ * registry declares a non-pending providerConfig kind (the segment above).
+ *
+ * FOLLOW-UP (typed-config UI wiring): the server side is fully open —
+ * POST /v1/cloud/agent-auth/keys/provider-config stores the entry and a
+ * selection referencing it (api_key source, NO envVarName) persists and
+ * renders — but Save here is still a placeholder: the editor's row model
+ * (EditableApiKeyRow / buildDesiredSources) is env-var-keyed and cannot yet
+ * represent a typed row, so the collected payload is not wired anywhere.
+ * The real mutation + typed-row editor support is the remaining UI half.
  */
 function ProviderConfigPanel({ kind, busy }: { kind: ProviderConfigKind; busy: boolean }) {
   const spec = getProviderConfigFieldSpec(kind);

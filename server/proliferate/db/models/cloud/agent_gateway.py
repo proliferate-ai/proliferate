@@ -112,8 +112,17 @@ class AgentAuthSelection(Base):
             "source_kind IN ('gateway', 'api_key')",
             name="ck_agent_auth_selection_source_kind",
         ),
+        # As tight as one table can express: an api_key row always references
+        # a vault entry, but env_var_name's presence depends on that entry's
+        # KIND (bare 'api_key' requires one; a typed kind forbids one — the
+        # kind carries its own env mapping), and a CHECK cannot join
+        # agent_api_key to see it. The bare-XOR-typed shape law is therefore
+        # enforced in the store's write gate
+        # (selections.py `_assert_keys_usable`), which the spec names as the
+        # owner of cross-table shape checks (agent-auth.md "Shape checks are
+        # structural").
         CheckConstraint(
-            "source_kind != 'api_key' OR (api_key_id IS NOT NULL AND env_var_name IS NOT NULL)",
+            "source_kind != 'api_key' OR api_key_id IS NOT NULL",
             name="ck_agent_auth_selection_api_key_shape",
         ),
         CheckConstraint(
