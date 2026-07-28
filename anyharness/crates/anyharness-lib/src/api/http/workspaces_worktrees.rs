@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use anyharness_contract::v1::{
     CreateWorktreeWorkspaceRequest, CreateWorktreeWorkspaceResponse,
+    WorktreeBaseFetch as ContractWorktreeBaseFetch,
     WorktreeCheckoutMode as ContractWorktreeCheckoutMode,
     WorktreeNameConflictPolicy as ContractWorktreeNameConflictPolicy,
 };
@@ -11,6 +12,7 @@ use super::access::map_access_error;
 use super::error::ApiError;
 use super::workspaces_contract::{request_origin_or_api_default, workspace_to_contract};
 use super::workspaces_setup::map_workspace_setup_error;
+use crate::adapters::git::WorktreeBaseFetch;
 use crate::app::AppState;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
@@ -99,13 +101,26 @@ pub async fn create_worktree(
             "[workspace-latency] workspace.http.worktree.completed"
         );
 
+        let base_fetch = result.worktree.base_fetch.map(base_fetch_to_contract);
+        let workspace = workspace_to_contract(&state, result.worktree.workspace).await?;
+
         Ok(Json(CreateWorktreeWorkspaceResponse {
-            workspace: workspace_to_contract(&state, result.worktree.workspace).await?,
+            workspace,
             setup_script: None,
+            base_fetch,
         }))
     }
     .instrument(span)
     .await
+}
+
+fn base_fetch_to_contract(value: WorktreeBaseFetch) -> ContractWorktreeBaseFetch {
+    match value {
+        WorktreeBaseFetch::Fetched => ContractWorktreeBaseFetch::Fetched,
+        WorktreeBaseFetch::NoRemote => ContractWorktreeBaseFetch::NoRemote,
+        WorktreeBaseFetch::Failed { message } => ContractWorktreeBaseFetch::Failed { message },
+        WorktreeBaseFetch::TimedOut => ContractWorktreeBaseFetch::TimedOut,
+    }
 }
 
 fn worktree_checkout_mode_from_contract(

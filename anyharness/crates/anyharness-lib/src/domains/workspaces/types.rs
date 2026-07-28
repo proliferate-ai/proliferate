@@ -1,4 +1,5 @@
 use super::model::WorkspaceRecord;
+use crate::adapters::git::WorktreeBaseFetch;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ResolveRepoRootError {
@@ -78,6 +79,7 @@ pub struct SetupScriptExecutionResult {
 pub struct CreateWorktreeResult {
     pub workspace: WorkspaceRecord,
     pub setup_script: Option<SetupScriptExecutionResult>,
+    pub base_fetch: Option<WorktreeBaseFetch>,
 }
 
 #[derive(Debug, Clone)]
