@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shlex
 from uuid import UUID
 
@@ -10,11 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import (
     RuntimeEndpoint,
     SandboxProvider,
     SandboxRuntimeContext,
 )
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.materialization.sandbox_io.worker_sidecar import (
     launch_worker_sidecar,
     mint_cloud_sandbox_worker_enrollment,
@@ -26,6 +29,7 @@ from proliferate.server.cloud.runtime.bootstrap import (
     build_supervised_runtime_stop_command,
     build_supervisor_config,
     build_worker_config,
+    supervisor_binary_path,
     supervisor_config_path,
     worker_config_path,
 )
@@ -194,6 +198,32 @@ async def _launch_supervisor_owned_runtime(
     )
 
     cloud_base_url = worker_cloud_base_url()
+    if not cloud_base_url:
+        # Matches the legacy sidecar's warning (worker_sidecar.py) -- but only
+        # the warning, not the behavior. The legacy sidecar warns and then
+        # SKIPS launching the worker entirely (see launch_worker_sidecar:
+        # `if not cloud_base_url: ... return`), so a misconfigured deploy just
+        # runs AnyHarness with no worker. There is no equivalent skip here:
+        # `SupervisorConfig.worker_binary`/`worker_config` in
+        # anyharness/crates/proliferate-supervisor/src/config.rs are plain
+        # (non-Option, no #[serde(default)]) fields, and `run()` in
+        # anyharness/crates/proliferate-supervisor/src/process/mod.rs
+        # unconditionally calls `spawn_worker` inside the AnyHarness
+        # generation loop -- there is no supervisor-config shape that omits
+        # the worker. So with an empty base URL the Supervisor still spawns a
+        # Worker child that bakes in that empty base URL, fails to enroll
+        # immediately, exits, and gets respawned by the Supervisor's restart
+        # loop (`restart_delay_seconds`, default 5s) FOREVER -- a permanent
+        # crash-loop, not a quiet no-worker runtime like the legacy path.
+        # Warn loudly instead of silently shipping a runtime that will
+        # crash-loop a child; do not fail the whole materialization over it.
+        log_cloud_event(
+            "cloud supervisor-owned launch proceeding with no cloud base URL "
+            "configured (set CLOUD_WORKER_BASE_URL or API_BASE_URL); the "
+            "Worker the Supervisor spawns will be unable to enroll",
+            level=logging.WARNING,
+            cloud_sandbox_id=str(sandbox_record.id),
+        )
     enrollment_token = await mint_cloud_sandbox_worker_enrollment(sandbox_record) or ""
     anyharness_env = build_runtime_env(
         runtime_token,
@@ -260,12 +290,30 @@ async def _launch_supervisor_owned_runtime(
         log_output_on_success=True,
     )
     assert_command_succeeded(start_result, "Supervisor launch failed")
-    await wait_for_runtime_health(
-        endpoint.runtime_url,
-        workspace_id=sandbox_record.id,
-        total_attempts=30,
-        delay_seconds=0.5,
-    )
+    try:
+        await wait_for_runtime_health(
+            endpoint.runtime_url,
+            workspace_id=sandbox_record.id,
+            total_attempts=30,
+            delay_seconds=0.5,
+        )
+    except CloudRuntimeReconnectError:
+        # The launch command above exits 0 even when its `test -x` guard
+        # found no supervisor binary (e.g. a paused VM resumed from a
+        # template baked before the supervisor binary existed) -- that
+        # failure mode surfaces here, as a health timeout, with no other
+        # signal. Log a distinct hint so triage doesn't default to "runtime
+        # was just slow to boot" on a target that was never going to boot.
+        log_cloud_event(
+            "cloud supervisor health probe timed out after launch; possible "
+            "causes include a missing/stale supervisor binary on this "
+            "sandbox's template (the launch command's `test -x` guard would "
+            "have silently no-op'd) in addition to ordinary slow boot",
+            level=logging.WARNING,
+            cloud_sandbox_id=str(sandbox_record.id),
+            supervisor_binary_path=supervisor_binary_path(runtime_context),
+        )
+        raise
     await verify_runtime_auth_enforced(
         endpoint.runtime_url,
         runtime_token,

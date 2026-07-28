@@ -458,10 +458,14 @@ class Settings(BaseSettings):
     # first (it spawns AnyHarness + Worker) instead of the legacy direct
     # nohup'd AnyHarness + separate worker sidecar. Also gates the D5
     # `desiredTopology` heartbeat signal (decision 6) so already-running
-    # legacy workers can bridge. Default OFF at merge; flipped only after the
-    # post-PR2 live E2B N-1->N proof passes (an ops action, out of scope here).
+    # legacy workers can bridge. The live E2B N-1->N proof passed 2026-07-26
+    # (real sandbox, supervisor-owned topology, pins 0.3.47->0.3.48, zero
+    # rollbacks; see the PR body that flipped this default for the full
+    # evidence), so the default is now ON. The env var still allows opting
+    # back out per-deploy if a regression surfaces. The legacy launch path
+    # (this flag off) remains for now; its deletion is the named follow-up.
     supervisor_owned_runtime: bool = Field(
-        default=False,
+        default=True,
         validation_alias=AliasChoices(
             "PROLIFERATE_SUPERVISOR_OWNED_RUNTIME", "SUPERVISOR_OWNED_RUNTIME"
         ),

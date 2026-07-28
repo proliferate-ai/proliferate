@@ -54,9 +54,13 @@ the activation state machine (`update/activate.rs`), `RollbackPlan::apply`
 (restore `.prev` over the active path), and the real `/health`-polling gate in
 `process/health.rs` are all in place. `process/mod.rs` drains the mailbox
 (`activate::run_pending` via the `LiveHost` adapter) once children are up, and
-`cargo build -p proliferate-supervisor` succeeds. The only deferred piece is the
-live E2B N-1→N proof, tracked with the rest of Tier 4. Everything below
-describes running code.
+`cargo build -p proliferate-supervisor` succeeds. Two distinct live proofs
+exist here: the UPDATE proof (a fresh supervisor-owned sandbox converging pins
+0.3.47→0.3.48 end to end, this mailbox consumer included) PASSED on a real E2B
+sandbox 2026-07-26. The D5 BRIDGE proof (in-place migration of an
+already-running legacy Worker's process tree onto Supervisor via
+`supervisor_bridge`, not a fresh provision) remains deferred, tracked with the
+rest of Tier 4. Everything below describes running code.
 
 ## Target Shape
 
