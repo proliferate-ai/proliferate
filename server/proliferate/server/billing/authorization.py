@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime
+from typing import NoReturn
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    BILLING_DECISION_AUTHORIZE_START,
     BILLING_DECISION_ENFORCE_ACTIVE_SPEND,
     BILLING_DECISION_ORG_LIMIT_PAUSE,
+    BILLING_DECISION_READ_UNAVAILABLE,
     BILLING_DECISION_USER_LIMIT_PAUSE,
     BILLING_MODE_ENFORCE,
     WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
@@ -24,19 +27,13 @@ from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.billing_runtime_usage import (
     record_billing_decision_event,
     resolve_billing_subject_id_for_user,
-    resolve_billing_subject_id_for_workspace,
 )
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.errors import ProliferateError
-from proliferate.server.billing import snapshot_state
+from proliferate.integrations.sentry import report_critical
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.billing.domain.plans import authorization_message
-from proliferate.server.billing.models import BillingSnapshot, SandboxStartAuthorization
-from proliferate.server.billing.snapshots import (
-    build_billing_snapshot,
-    get_billing_snapshot_for_subject_in_session,
-    state_with_overage_usage,
-)
+from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject_in_session
 from proliferate.utils.time import utcnow
 
 # Block reasons that mean "you are out of included/managed cloud hours" — the
@@ -55,6 +52,27 @@ _CREDITS_EXHAUSTED_REASONS = frozenset(
 # without updating consumers.
 BILLING_BLOCK_CODE_CREDITS_EXHAUSTED = "billing_credits_exhausted"
 BILLING_BLOCK_CODE_START_BLOCKED = "billing_start_blocked"
+# Distinct from both of the above: billing said nothing at all because the read
+# failed. Clients must not render top-up/upgrade copy for this — it is a
+# retryable platform fault, not a quota verdict.
+BILLING_BLOCK_CODE_UNAVAILABLE = "billing_unavailable"
+
+# The receipt row's ``billing_subject_id`` is NOT NULL, but a read failure can
+# strike while resolving the subject itself. Rather than lose the receipt (law
+# N6: the receipt is the point), record the all-zero sentinel so the row still
+# lands and reads as "subject never resolved". Greppable and impossible to
+# confuse with a real subject id.
+_UNRESOLVED_BILLING_SUBJECT_ID = UUID(int=0)
+
+# Hard bound on the best-effort receipt write inside
+# ``_deny_unreadable_billing_state``. That write opens a SECOND pool checkout
+# during exactly the outage that broke the first one, so without a bound a
+# saturated pool would hold the 503 denial hostage for the full
+# ``pool_timeout`` (30s). The denial is the obligation; the receipt is not
+# allowed to delay it by more than this.
+_BILLING_RECEIPT_WRITE_TIMEOUT_SECONDS = 5.0
+
+logger = logging.getLogger(__name__)
 
 
 def billing_block_error_code(reason: str | None) -> str:
@@ -69,9 +87,9 @@ class CloudSandboxResumeBlockedError(ProliferateError):
 
     Surfaced as a structured 402 so the UI can prompt a top-up / show the
     over-limit reason instead of silently failing the wake. This is the LIVE
-    start/resume gate that the orphaned ``authorize_sandbox_start`` never wired
-    up (spec §4.3): a sandbox the reconciler paused for an active spend hold or
-    an over-cap compute budget must not be woken by an incoming request.
+    start/resume gate (spec §4.3): a sandbox the reconciler paused for an active
+    spend hold or an over-cap compute budget must not be woken by an incoming
+    request.
 
     This is EXPECTED business logic (a quota denial), not a page-worthy failure:
     the ``code``/``reason``/``remaining_seconds`` on the 402 let the client show
@@ -112,83 +130,133 @@ class CloudSandboxResumeBlockedError(ProliferateError):
         self.extra_detail = extra_detail
 
 
-async def authorize_sandbox_start_for_billing_subject(
+class BillingStateUnavailableError(ProliferateError):
+    """Raised when the enforcement gate could not READ billing state (law N6).
+
+    This is the fail-closed arm of corridor E6: a DB error (or any unexpected
+    blowup) while resolving the paying subject or its snapshot must never
+    degrade into an implicit allow. It is deliberately NOT a 402 — a 402 asserts
+    a billing verdict we do not have, which would send the client to a top-up
+    screen for what is really a platform fault. 503 + a distinct
+    ``billing_unavailable`` code says "unreadable, retry", matching the other
+    retryable-dependency 503s in the cloud services (see
+    ``require_cloud_provisioning_configured``).
+
+    Unlike ``CloudSandboxResumeBlockedError`` this IS page-worthy: every raise is
+    accompanied by a ``report_critical`` alert and a durable
+    ``billing_decision_event`` receipt, so a silent enforcement outage is
+    impossible in either direction.
+    """
+
+    code = BILLING_BLOCK_CODE_UNAVAILABLE
+    status_code = 503
+
+    def __init__(
+        self,
+        message: str = "Billing state could not be read. Please retry.",
+        *,
+        decision_type: str = BILLING_DECISION_READ_UNAVAILABLE,
+        billing_subject_id: UUID | None = None,
+        owner_user_id: UUID | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.decision_type = decision_type
+        self.billing_subject_id = billing_subject_id
+        self.owner_user_id = owner_user_id
+        # Mirror the 402's machine-readable shape so a client can branch on
+        # ``detail.decision_type`` without special-casing the unavailable body.
+        self.extra_detail: dict[str, object] = {"decision_type": decision_type}
+
+
+async def _write_unreadable_billing_state_receipt(
     *,
-    actor_user_id: UUID | None,
-    billing_subject_id: UUID,
-    workspace_id: UUID | None = None,
-) -> SandboxStartAuthorization:
-    async with db_session.open_async_transaction() as db:
-        state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
-        state = await state_with_overage_usage(db, state)
-        snapshot = build_billing_snapshot(state)
-        return await record_sandbox_start_authorization(
-            db,
-            snapshot,
-            actor_user_id=actor_user_id,
-            workspace_id=workspace_id,
+    billing_subject_id: UUID | None,
+    owner_user_id: UUID | None,
+) -> None:
+    """Write the read-unavailable receipt on its own session (best effort)."""
+    async with db_session.open_async_transaction() as receipt_db:
+        await record_billing_decision_event(
+            receipt_db,
+            billing_subject_id=billing_subject_id or _UNRESOLVED_BILLING_SUBJECT_ID,
+            actor_user_id=owner_user_id,
+            workspace_id=None,
+            decision_type=BILLING_DECISION_READ_UNAVAILABLE,
+            mode=settings.cloud_billing_mode,
+            # The read failed, so the only truthful claim is that we blocked:
+            # would_block_start is the denial itself, not a snapshot verdict.
+            would_block_start=True,
+            would_pause_active=False,
+            reason=BILLING_BLOCK_CODE_UNAVAILABLE,
+            active_sandbox_count=0,
+            remaining_seconds=None,
         )
 
 
-async def authorize_sandbox_start(
+async def _deny_unreadable_billing_state(
+    error: Exception,
     *,
-    user_id: UUID,
-    workspace_id: UUID | None,
-) -> SandboxStartAuthorization:
-    async with db_session.open_async_transaction() as db:
-        if workspace_id is None:
-            state = await snapshot_state.load_snapshot_state_for_user(db, user_id)
-        else:
-            billing_subject_id = await resolve_billing_subject_id_for_workspace(
-                db,
-                workspace_id,
-            )
-            state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
-        state = await state_with_overage_usage(db, state)
-        snapshot = build_billing_snapshot(state)
-        return await record_sandbox_start_authorization(
-            db,
-            snapshot,
-            actor_user_id=user_id,
-            workspace_id=workspace_id,
+    billing_subject_id: UUID | None,
+    owner_user_id: UUID | None,
+) -> NoReturn:
+    """Fail closed on a failed billing read: receipt, alert, typed deny (law N6).
+
+    Law N6 splits into three obligations, and exactly one of them is
+    unconditional: the DENIAL always happens (this function ends in a ``raise``
+    on every path). The alert and the receipt are both attempted and both
+    swallow their own failures — an observability outage must never become an
+    enforcement outage.
+
+    The receipt runs on its OWN session, not the caller's. Two reasons, both
+    load-bearing: the caller's session is the one that just blew up (it may be
+    in a failed transaction that cannot execute anything), and the production
+    caller (materialization/runner._run_with_fresh_session) rolls back on
+    exception — the same hazard that makes the quota gate below ``commit()``
+    before raising. A separate session commits independently and survives that
+    rollback.
+
+    That second session is also a second pool checkout taken during the outage
+    that broke the first one, so the receipt write is hard-bounded by
+    ``_BILLING_RECEIPT_WRITE_TIMEOUT_SECONDS``: a saturated pool (or a hung DB)
+    must not hold the denial for ``pool_timeout``. A timeout is treated exactly
+    like any other receipt failure — logged, then the raise happens anyway.
+    """
+    context = {
+        "billing_subject_id": (
+            str(billing_subject_id) if billing_subject_id is not None else None
+        ),
+        "owner_user_id": str(owner_user_id) if owner_user_id is not None else None,
+    }
+    try:
+        report_critical(
+            error,
+            tags={"domain": "billing", "action": "authorization_read"},
+            extras=context,
         )
-
-
-async def record_sandbox_start_authorization(
-    db: AsyncSession,
-    snapshot: BillingSnapshot,
-    *,
-    actor_user_id: UUID | None,
-    workspace_id: UUID | None,
-) -> SandboxStartAuthorization:
-    enforced = settings.cloud_billing_mode == BILLING_MODE_ENFORCE
-    allowed = not enforced or not snapshot.start_blocked
-    reason = snapshot.start_block_reason if snapshot.start_blocked else None
-    await record_billing_decision_event(
-        db,
-        billing_subject_id=snapshot.billing_subject_id,
-        actor_user_id=actor_user_id,
-        workspace_id=workspace_id,
-        decision_type=BILLING_DECISION_AUTHORIZE_START,
-        mode=settings.cloud_billing_mode,
-        would_block_start=snapshot.start_blocked,
-        would_pause_active=snapshot.active_spend_hold,
-        reason=reason,
-        active_sandbox_count=snapshot.active_sandbox_count,
-        remaining_seconds=snapshot.remaining_seconds,
-    )
-    return SandboxStartAuthorization(
-        allowed=allowed,
-        billing_subject_id=snapshot.billing_subject_id,
-        start_blocked=snapshot.start_blocked,
-        start_block_reason=snapshot.start_block_reason,
-        active_spend_hold=snapshot.active_spend_hold,
-        hold_reason=snapshot.hold_reason,
-        message=authorization_message(reason),
-        active_sandbox_count=snapshot.active_sandbox_count,
-        remaining_seconds=snapshot.remaining_seconds,
-        active_environment_limit=snapshot.active_environment_limit,
-    )
+    except Exception:
+        logger.exception("billing_read_alert_failed", extra=context)
+    try:
+        await asyncio.wait_for(
+            _write_unreadable_billing_state_receipt(
+                billing_subject_id=billing_subject_id,
+                owner_user_id=owner_user_id,
+            ),
+            timeout=_BILLING_RECEIPT_WRITE_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        # The dominant hazard is the pool CHECKOUT: during the outage that broke
+        # the caller's session the pool is often saturated, and an unbounded wait
+        # would hold this denial for pool_timeout (30s). Cancelling before a
+        # connection is even held unwinds immediately. Give up on the receipt;
+        # the alert already fired and the raise below happens regardless.
+        logger.warning("billing_read_receipt_write_timed_out", extra=context)
+    except Exception:
+        # Never let receipt persistence swallow the denial: the raise below
+        # happens either way, and the alert already fired.
+        logger.exception("billing_read_receipt_write_failed", extra=context)
+    raise BillingStateUnavailableError(
+        billing_subject_id=billing_subject_id,
+        owner_user_id=owner_user_id,
+    ) from error
 
 
 async def _compute_budget_cap_breach(
@@ -250,7 +318,7 @@ async def assert_cloud_sandbox_resume_allowed(
 
     Delegates to ``assert_cloud_sandbox_resume_allowed_for_owner``; the gate only
     reads ``sandbox.owner_user_id``, so the owner-id variant can run at seams that
-    do not yet have a sandbox row (see the wake/ensure service layer).
+    do not yet have a sandbox row (see the ensure service layer).
     """
     await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=sandbox.owner_user_id)
 
@@ -271,65 +339,105 @@ async def assert_cloud_sandbox_resume_allowed_for_owner(
         return
     if owner_user_id is None:
         return
-    # Resolve the subject that pays the same way segment-open does: an org member
-    # bills the org subject, an org-less owner bills personal. This must match
-    # segment attribution — org compute now drains the org grant pool, so the
-    # active-spend-hold snapshot has to read the org subject or a hold on the org
-    # pool would never block an org member's resume.
-    billing_subject_id = await resolve_billing_subject_id_for_user(db, owner_user_id)
-    snapshot = await get_billing_snapshot_for_subject_in_session(db, billing_subject_id)
-    now = utcnow()
+    # Law N6 / corridor E6: every read below (subject resolution, snapshot,
+    # membership, budget-limit sums) is a billing-state read on an enforcement
+    # path. If any of them fails we must not fall through to "no decision =
+    # allowed", which is exactly what an uncaught exception here USED to leave to
+    # chance at the seams that swallow errors. Deny with a typed 503 plus a
+    # durable receipt and an alert instead.
+    billing_subject_id: UUID | None = None
+    try:
+        # Resolve the subject that pays the same way segment-open does: an org member
+        # bills the org subject, an org-less owner bills personal. This must match
+        # segment attribution — org compute now drains the org grant pool, so the
+        # active-spend-hold snapshot has to read the org subject or a hold on the org
+        # pool would never block an org member's resume.
+        billing_subject_id = await resolve_billing_subject_id_for_user(db, owner_user_id)
+        snapshot = await get_billing_snapshot_for_subject_in_session(db, billing_subject_id)
+        now = utcnow()
 
-    decision_type: str | None = None
-    reason: str | None = None
+        decision_type: str | None = None
+        reason: str | None = None
+        if snapshot.active_spend_hold:
+            decision_type = BILLING_DECISION_ENFORCE_ACTIVE_SPEND
+            reason = snapshot.hold_reason or "active_spend_hold"
+        else:
+            # The cloud_sandbox row has no org column, but the owner is one
+            # membership lookup away — the same resolution connect.py uses for
+            # identity tags and the segment open path uses to stamp
+            # ``usage_segment.organization_id``.
+            membership = await organizations_store.get_current_membership_for_user(
+                db,
+                owner_user_id,
+            )
+            if membership is not None:
+                organization_id = membership.organization.id
+                decision_type = await _compute_budget_cap_breach(
+                    db,
+                    organization_id=organization_id,
+                    user_id=owner_user_id,
+                    now=now,
+                )
+                if decision_type is not None:
+                    reason = "compute budget limit reached"
+    except ProliferateError:
+        # A typed billing/product error is already a decision; do not relabel it
+        # as an unreadable read.
+        raise
+    except Exception as error:
+        await _deny_unreadable_billing_state(
+            error,
+            billing_subject_id=billing_subject_id,
+            owner_user_id=owner_user_id,
+        )
+
     # The recorded decision event stays on the paying subject. Compute limits are
     # org-scoped, so the compute-cap check resolves the owner's org and sums usage
     # by ``organization_id`` (matching the reconciler's ``_resolve_compute_limit_pause``).
     decision_subject_id = billing_subject_id
-    if snapshot.active_spend_hold:
-        decision_type = BILLING_DECISION_ENFORCE_ACTIVE_SPEND
-        reason = snapshot.hold_reason or "active_spend_hold"
-    else:
-        # The cloud_sandbox row has no org column, but the owner is one
-        # membership lookup away — the same resolution connect.py uses for
-        # identity tags and the segment open path uses to stamp
-        # ``usage_segment.organization_id``.
-        membership = await organizations_store.get_current_membership_for_user(db, owner_user_id)
-        if membership is not None:
-            organization_id = membership.organization.id
-            decision_type = await _compute_budget_cap_breach(
-                db,
-                organization_id=organization_id,
-                user_id=owner_user_id,
-                now=now,
-            )
-            if decision_type is not None:
-                reason = "compute budget limit reached"
-
     if decision_type is None:
         return
 
-    await record_billing_decision_event(
-        db,
-        billing_subject_id=decision_subject_id,
-        actor_user_id=owner_user_id,
-        workspace_id=None,
-        decision_type=decision_type,
-        mode=settings.cloud_billing_mode,
-        would_block_start=True,
-        would_pause_active=snapshot.active_spend_hold,
-        reason=reason,
-        active_sandbox_count=snapshot.active_sandbox_count,
-        remaining_seconds=snapshot.remaining_seconds,
-    )
-    # Persist the decision before raising: the production caller
-    # (materialization/runner._run_with_fresh_session) rolls back its session in
-    # the exception handler, which would otherwise discard this un-committed
-    # audit row. Safe at every call site: this gate runs first at each seam
-    # (connect_ready_sandbox's opening statement, and the wake/ensure service
-    # layer before ensure_personal_cloud_sandbox_exists stages a row INSERT), so
-    # no other writes are staged on this session yet.
-    await db.commit()
+    # Persisting the verdict is billing I/O on the same session whose reads just
+    # succeeded, and the conditions that break billing reads (read-only replica,
+    # full disk, connection cap) break this write too. A failure here must land
+    # in the same fail-closed corridor as a failed read: a typed 503 with a
+    # receipt and an alert, never a bare RuntimeError. It must still DENY —
+    # ``_deny_unreadable_billing_state`` raises on every path, so there is no
+    # arm through this block that returns "allowed". Only the persistence I/O is
+    # wrapped; the 402 raise below stays outside so a legitimate quota denial is
+    # never relabelled as unreadable.
+    try:
+        await record_billing_decision_event(
+            db,
+            billing_subject_id=decision_subject_id,
+            actor_user_id=owner_user_id,
+            workspace_id=None,
+            decision_type=decision_type,
+            mode=settings.cloud_billing_mode,
+            would_block_start=True,
+            would_pause_active=snapshot.active_spend_hold,
+            reason=reason,
+            active_sandbox_count=snapshot.active_sandbox_count,
+            remaining_seconds=snapshot.remaining_seconds,
+        )
+        # Persist the decision before raising: the production caller
+        # (materialization/runner._run_with_fresh_session) rolls back its session
+        # in the exception handler, which would otherwise discard this
+        # un-committed audit row. Safe at every call site: this gate runs first at
+        # each seam (connect_ready_sandbox's opening statement, and the ensure
+        # service layer before ensure_personal_cloud_sandbox_exists stages a row
+        # INSERT), so no other writes are staged on this session yet.
+        await db.commit()
+    except ProliferateError:
+        raise
+    except Exception as error:
+        await _deny_unreadable_billing_state(
+            error,
+            billing_subject_id=decision_subject_id,
+            owner_user_id=owner_user_id,
+        )
+
     raise CloudSandboxResumeBlockedError(
         authorization_message(reason)
         or "This sandbox is paused because your billing limit was reached.",

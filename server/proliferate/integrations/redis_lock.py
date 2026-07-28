@@ -31,6 +31,64 @@ def _lease_holder_task() -> asyncio.Task[object] | None:
     return asyncio.current_task()
 
 
+async def try_acquire_redis_claim(
+    *,
+    redis_url: str,
+    key: str,
+    ttl_seconds: int,
+) -> str | None:
+    """Take a non-blocking, token-owned claim, or return None if one is held.
+
+    This is the fire-and-forget sibling of ``redis_lease``: there is no waiting,
+    no renewal, and no critical section — the caller only wants to know whether
+    it is the one that gets to start some work. Losing the race is an ordinary
+    outcome (someone else is already doing it), never an error, so a Redis
+    outage also returns None: no claim means no duplicate work is started.
+    """
+
+    try:
+        redis = Redis.from_url(redis_url, decode_responses=True)
+    except Exception:  # vendor failures are normalized at this boundary
+        return None
+    token = uuid4().hex
+    try:
+        acquired = bool(await redis.set(key, token, nx=True, ex=ttl_seconds))
+    except Exception:
+        return None
+    finally:
+        with suppress(Exception):
+            await redis.aclose()
+    return token if acquired else None
+
+
+async def release_redis_claim(*, redis_url: str, key: str, token: str) -> None:
+    """Release a claim this caller owns; a claim owned by anyone else is left alone.
+
+    The token compare-and-delete matters because the TTL can expire mid-work: a
+    later holder's claim must not be dropped by the previous holder finishing.
+    """
+
+    try:
+        redis = Redis.from_url(redis_url, decode_responses=True)
+    except Exception:
+        return
+    try:
+        await redis.eval(
+            (
+                "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                "return redis.call('del', KEYS[1]) else return 0 end"
+            ),
+            1,
+            key,
+            token,
+        )
+    except Exception:
+        return
+    finally:
+        with suppress(Exception):
+            await redis.aclose()
+
+
 async def _renew_lease(
     redis: Redis,
     *,

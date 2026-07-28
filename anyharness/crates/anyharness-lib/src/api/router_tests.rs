@@ -29,6 +29,7 @@ use crate::{
         workspaces::{
             access_model::{WorkspaceAccessMode, WorkspaceAccessRecord},
             access_store::WorkspaceAccessStore,
+            managed_root::canonical_managed_worktrees_root,
         },
     },
     integrations::agent_cli::executable::make_executable,
@@ -463,6 +464,99 @@ async fn repo_root_resolve_route_accepts_post_and_persists_repo_root() {
         .to_string();
     assert_eq!(payload["path"], canonical_path);
     assert_repo_root_persisted(&state, &canonical_path, &payload);
+}
+
+#[tokio::test]
+async fn worktree_create_without_target_path_uses_managed_slug_and_conflict_suffix() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let source = TempDirGuard::new("managed-worktree-source");
+    let runtime_root = TempDirGuard::new("managed-worktree-runtime");
+    init_repo(source.path());
+    let runtime_home = runtime_root.path().join("runtime");
+    let state = AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("expected in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("expected app state");
+    let source_workspace = state
+        .workspace_runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("create source workspace");
+    let repo_root_id = source_workspace.repo_root.id;
+    let managed_repo_root = canonical_managed_worktrees_root(&runtime_home)
+        .expect("resolve managed worktrees root")
+        .join(&repo_root_id);
+    let app = build_router(state);
+    let request_body = json!({
+        "repoRootId": repo_root_id,
+        "newBranchName": "feature/runtime-owned",
+        "baseBranch": "main",
+        "nameConflictPolicy": "suffix_path_and_branch",
+    })
+    .to_string();
+
+    let first_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/workspaces/worktrees")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.clone()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(first_response.status(), StatusCode::OK);
+    let first_body = to_bytes(first_response.into_body(), usize::MAX)
+        .await
+        .expect("read first response body");
+    let first_payload: Value =
+        serde_json::from_slice(&first_body).expect("parse first response json");
+
+    let second_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/workspaces/worktrees")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(second_response.status(), StatusCode::OK);
+    let second_body = to_bytes(second_response.into_body(), usize::MAX)
+        .await
+        .expect("read second response body");
+    let second_payload: Value =
+        serde_json::from_slice(&second_body).expect("parse second response json");
+
+    assert_eq!(
+        first_payload["workspace"]["path"],
+        managed_repo_root
+            .join("feature-runtime-owned")
+            .display()
+            .to_string()
+    );
+    assert_eq!(
+        second_payload["workspace"]["path"],
+        managed_repo_root
+            .join("feature-runtime-owned-2")
+            .display()
+            .to_string()
+    );
+    assert_eq!(
+        second_payload["workspace"]["currentBranch"],
+        "feature/runtime-owned-2"
+    );
 }
 
 #[tokio::test]

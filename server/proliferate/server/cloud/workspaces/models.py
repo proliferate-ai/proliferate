@@ -7,7 +7,14 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-CloudWorkspaceStatus = Literal["pending", "materializing", "ready", "archived", "error"]
+CloudWorkspaceStatus = Literal[
+    "pending",
+    "materializing",
+    "ready",
+    "lost",
+    "archived",
+    "error",
+]
 CloudRuntimeStatus = Literal["pending", "running", "paused", "error", "disabled"]
 
 # Placement-neutral backing kind. A repository worktree carries frozen real
@@ -133,8 +140,6 @@ class WorkspaceRuntimeSummary(BaseModel):
         default_factory=WorkspaceRuntimeAuthState,
         serialization_alias="runtimeAuth",
     )
-    action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
-    action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
 
 
 class WorkspaceExecutionTargetSummary(BaseModel):
@@ -199,8 +204,6 @@ class WorkspaceSummary(BaseModel):
     updated_at: str | None = Field(default=None, serialization_alias="updatedAt")
     created_at: str | None = Field(default=None, serialization_alias="createdAt")
     ready_at: str | None = Field(default=None, serialization_alias="readyAt")
-    action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
-    action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
     post_ready_phase: Literal["idle"] = Field(default="idle", serialization_alias="postReadyPhase")
     post_ready_files_total: int = Field(default=0, serialization_alias="postReadyFilesTotal")
     post_ready_files_applied: int = Field(default=0, serialization_alias="postReadyFilesApplied")
@@ -249,3 +252,9 @@ class CloudWorkspaceRuntimeStatusResponse(BaseModel):
         default=None,
         serialization_alias="anyharnessWorkspaceId",
     )
+    # Additive sibling to `runtime_status`, never overloaded onto it: a paused
+    # or non-ready sandbox's Worker is legitimately not heartbeating, so this
+    # is only meaningful (and only ever true) when `runtime_status == "running"`.
+    # A missing field on older clients defaults to "not degraded" false
+    # negative, which is the safe failure direction for an additive read.
+    worker_degraded: bool = Field(default=False, serialization_alias="workerDegraded")

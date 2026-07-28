@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { LocalAutomationRunClaimResponse } from "@proliferate/cloud-sdk/types";
 import { useLocalAutomationRunClaims } from "#product/hooks/access/cloud/automations/use-local-automation-run-claims";
 import { useLocalAutomationRuntimeClientFactory } from "#product/hooks/access/anyharness/automations/use-local-automation-runtime-client";
@@ -61,7 +60,6 @@ export function useLocalAutomationClaimPoller(args: {
   const runClaims = useLocalAutomationRunClaims();
   const createRuntimeClient = useLocalAutomationRuntimeClientFactory();
   const { invalidateAfterLocalAutomationRun } = useLocalAutomationExecutorCache();
-  const files = useProductHost().desktop?.files ?? null;
   const storage = useProductStorageContext();
   const workspacesQuery = useWorkspaces();
   const activeRef = useRef(false);
@@ -75,7 +73,7 @@ export function useLocalAutomationClaimPoller(args: {
   );
 
   useEffect(() => {
-    if (!args.enabled || !args.runtimeUrl.trim() || candidates.length === 0 || !files) {
+    if (!args.enabled || !args.runtimeUrl.trim() || candidates.length === 0) {
       return;
     }
     if (localExecutorMounted) {
@@ -103,7 +101,6 @@ export function useLocalAutomationClaimPoller(args: {
             claim,
             candidates,
             executorId,
-            getHomeDir: files.getHomeDirectory,
             runtimeUrl: args.runtimeUrl,
             runClaims,
             createRuntimeClient,
@@ -141,7 +138,6 @@ export function useLocalAutomationClaimPoller(args: {
     args.runtimeUrl,
     candidates,
     createRuntimeClient,
-    files,
     invalidateAfterLocalAutomationRun,
     runClaims,
     storage,
@@ -152,7 +148,6 @@ async function processClaim(args: {
   claim: LocalAutomationRunClaimResponse;
   candidates: readonly LocalAutomationRepoCandidate[];
   executorId: string;
-  getHomeDir: () => Promise<string>;
   runtimeUrl: string;
   runClaims: ReturnType<typeof useLocalAutomationRunClaims>;
   createRuntimeClient: ReturnType<typeof useLocalAutomationRuntimeClientFactory>;
@@ -166,12 +161,10 @@ async function processClaim(args: {
     return;
   }
 
-  const homeDir = await args.getHomeDir();
   const repoConfig = useRepoPreferencesStore.getState().repoConfigs[candidate.repoRoot.path];
   const plan = buildLocalAutomationWorktreePlan({
     claim: args.claim,
     candidate,
-    homeDir,
     defaultBranch: repoConfig?.defaultBranch,
     setupScript: repoConfig?.setupScript,
   });

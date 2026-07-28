@@ -251,7 +251,6 @@ function workspaceCompletenessScore(workspace: CloudWorkspaceSummary): number {
   if (workspace.lastSessionSummary) score += 4;
   if (workspace.runtime) score += 2;
   if (workspace.lastActivityAt) score += 1;
-  if (workspace.actionBlockKind || workspace.actionBlockReason) score += 1;
   if (workspace.lastError) score += 1;
   return score;
 }

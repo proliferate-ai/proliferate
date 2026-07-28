@@ -56,8 +56,6 @@ export function recentWorkStatusIndicatorForSession(
 
 export type CloudWorkspaceStatusIndicatorFacts = Pick<
   CloudWorkspaceSummary,
-  | "actionBlockKind"
-  | "actionBlockReason"
   | "billing"
   | "exposure"
   | "exposureState"
@@ -76,8 +74,6 @@ export type CloudWorkspaceStatusIndicatorFacts = Pick<
 export function cloudWorkStatusForWorkspace(
   workspace: Pick<
     CloudWorkspaceSummary,
-    | "actionBlockKind"
-    | "actionBlockReason"
     | "exposure"
     | "exposureState"
     | "lastError"
@@ -96,13 +92,15 @@ export function cloudWorkStatusForWorkspace(
   if (workspace.visibility === "archived" || workspace.workspaceStatus === "archived") {
     return "archived";
   }
-  if (workspace.lastError || workspace.workspaceStatus === "error" || workspace.runtime?.status === "error") {
+  if (
+    workspace.lastError
+    || workspace.workspaceStatus === "error"
+    || workspace.workspaceStatus === "lost"
+    || workspace.runtime?.status === "error"
+  ) {
     return "error";
   }
   if (workspaceHasPendingSessionInput(workspace)) {
-    return "blocked";
-  }
-  if (workspace.actionBlockKind || workspace.actionBlockReason) {
     return "blocked";
   }
   if (workspace.lastSessionSummary?.status === "running") {
@@ -175,6 +173,8 @@ function workspaceHasErrorStatus(
   return Boolean(workspace.lastError)
     || workspace.workspaceStatus === "error"
     || workspace.status === "error"
+    || workspace.workspaceStatus === "lost"
+    || workspace.status === "lost"
     || workspace.runtime?.status === "error"
     || workspace.runtime?.status === "disabled";
 }
@@ -182,8 +182,6 @@ function workspaceHasErrorStatus(
 function workspaceNeedsInput(
   workspace: Pick<
     CloudWorkspaceSummary,
-    | "actionBlockKind"
-    | "actionBlockReason"
     | "billing"
     | "lastSessionSummary"
     | "visibility"
@@ -192,7 +190,6 @@ function workspaceNeedsInput(
 ): boolean {
   return workspace.visibility === "shared_unclaimed"
     || sessionHasPendingInput(sessionInteraction)
-    || Boolean(workspace.actionBlockKind || workspace.actionBlockReason)
     || workspace.billing?.blockStatus === "blocked"
     || workspace.billing?.startBlocked === true
     || workspace.billing?.activeSpendHold === true;

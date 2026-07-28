@@ -39,10 +39,6 @@ export async function ensureCloudSandboxRow(client: ApiClient): Promise<CloudSan
   return client.post<CloudSandboxStatus>("/v1/cloud/cloud-sandbox/ensure", {});
 }
 
-export async function wakeCloudSandbox(client: ApiClient): Promise<CloudSandboxStatus> {
-  return client.post<CloudSandboxStatus>("/v1/cloud/cloud-sandbox/wake", {});
-}
-
 /** Real exec/connectivity proof-of-life via the server's anyharness proxy -- no sandbox workspace required. */
 export async function probeAgentsThroughGateway(client: ApiClient): Promise<AgentSummary[]> {
   return client.get<AgentSummary[]>("/v1/gateway/cloud-sandbox/anyharness/v1/agents");
@@ -69,9 +65,9 @@ export async function pollCloudSandboxStatus(
  * identities whose sandbox has never been touched before (e.g. a
  * freshly-provisioned staging durable user).
  *
- * `POST /cloud-sandbox/ensure` and `/wake`
- * (server/proliferate/server/cloud/cloud_sandboxes/service.py) only ensure
- * the DB row exists -- neither calls into `connect_ready_sandbox` (the
+ * `POST /cloud-sandbox/ensure`
+ * (server/proliferate/server/cloud/cloud_sandboxes/service.py) only ensures
+ * the DB row exists -- it does not call into `connect_ready_sandbox` (the
  * function that actually talks to E2B and launches AnyHarness; see
  * server/proliferate/server/cloud/materialization/sandbox_io/connect.py).
  * The real trigger for a full connect is `run_cloud_sandbox_operation`

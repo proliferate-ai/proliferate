@@ -262,7 +262,10 @@ async def _read_managed_cloud_source(
         runtime_url,
         runtime_token,
         _data_key,
-    ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(sandbox)
+    ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access_or_repair(
+        sandbox,
+        reason="managed_materialization_source",
+    )
     try:
         return await get_runtime_git_status(
             runtime_url,
@@ -285,6 +288,12 @@ async def create_local_materialization_intent(
     body: CreateMaterializationIntentRequest,
 ) -> MaterializationIntentResponse:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
+    if workspace.lost_at is not None:
+        raise CloudApiError(
+            "workspace_lost",
+            "This workspace was lost with its sandbox. Delete it instead of rematerializing it.",
+            status_code=409,
+        )
     desktop_install_id = body.desktop_install_id.strip()
     if not desktop_install_id:
         raise CloudApiError(

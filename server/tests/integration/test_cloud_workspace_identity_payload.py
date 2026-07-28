@@ -8,6 +8,7 @@ fabricated repository data.
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import datetime, UTC
 from types import SimpleNamespace
 from typing import Any
@@ -132,6 +133,28 @@ async def test_repository_payload_is_byte_stable_plus_workspace_kind(
     assert dumped["status"] == "ready"
     assert dumped["displayName"] == "feature-x"
     assert dumped["anyharnessWorkspaceId"] == "workspace-123"
+
+
+@pytest.mark.asyncio
+async def test_lost_workspace_payload_serializes_lost_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_environment_id = uuid.uuid4()
+    _patch_loaders(monkeypatch, repo_environment_id=repo_environment_id)
+    workspace = replace(
+        _repository_value(repo_environment_id),
+        lost_at=_CREATED,
+    )
+
+    payload = await workspaces_service._workspace_payload(
+        db=SimpleNamespace(),  # type: ignore[arg-type]
+        workspace=workspace,
+        detail=True,
+    )
+    dumped = payload.model_dump(by_alias=True)
+
+    assert dumped["status"] == "lost"
+    assert dumped["workspaceStatus"] == "lost"
 
 
 @pytest.mark.asyncio

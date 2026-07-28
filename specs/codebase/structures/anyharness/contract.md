@@ -178,7 +178,7 @@ AnyHarness HTTP contract:
 | Worker purpose | AnyHarness route | Notes |
 | --- | --- | --- |
 | read active catalog version | `GET /v1/catalogs/agents/version` | Read-only observability; the only catalogs route the runtime exposes. There is no apply/push route — the catalog is binary-only ([agent-distribution.md](../../platforms/product/agent-distribution.md) "Convergence"). |
-| verify a relaunched runtime | `GET /health` | Requires the desired AnyHarness version before accepting an in-place runtime update (legacy path; Proliferate Supervisor runs the same gate on supervisor-owned targets). |
+| verify a relaunched runtime | `GET /health` | Requires the desired AnyHarness version before accepting an in-place runtime update. Only a legacy (non-supervisor-owned, pre-bridge) target's Worker runs this gate itself; every other target is supervisor-owned, where Proliferate Supervisor runs the equivalent health-gate on its own activation. |
 
 The Worker's download, checksum, preflight, swap, and relaunch orchestration
 lives outside the AnyHarness API. Only the final health/version gate uses the

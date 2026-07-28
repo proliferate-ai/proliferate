@@ -6,7 +6,7 @@ Current gap: managed-Target materialization described here is not deployed.
 
 Date: 2026-05-20.
 
-Depends on: [`sandbox-provisioning.md`](sandbox-provisioning.md).
+Depends on: [`sandbox-lifecycle.md`](sandbox-lifecycle.md).
 
 This spec defines how MCPs, skills, and plugins become sandbox-scoped runtime
 config: how they are configured, compiled into a manifest, applied to a
@@ -111,7 +111,9 @@ current before launch.
 
 Hard:
 
-- [`sandbox-provisioning.md`](sandbox-provisioning.md) — `sandbox_profile`,
+- the cloud sandbox provisioning platform (document retired; absorbed by
+  [`sandbox-lifecycle.md`](sandbox-lifecycle.md); the profile schema below
+  currently has no owning platform document) — `sandbox_profile`,
   `cloud_targets` with `profile_target_role`, `sandbox_profile_target_state`
   with `applied_runtime_config_*` columns, worker contract carrying
   `cloud_workspace_id` and `sandbox_profile_id`.

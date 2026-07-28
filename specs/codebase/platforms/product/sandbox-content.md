@@ -454,84 +454,42 @@ apps/packages/product-client/src/
   [retention_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention_tests.rs),
   [retire_preflight_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight_tests.rs),
   [deletion_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion_tests.rs).
-- Pending, landing with the gap PRs: fetch-on-create classification tests;
-  paired-reclaim integration proof (workspace delete retires, repo-env
-  delete reclaims); a live disk axis reading end to end; workspaces marked
-  lost after provider loss.
+- Paired workspace-retire proof:
+  [test_cloud_workspace_retire_after_commit.py](../../../../server/tests/unit/test_cloud_workspace_retire_after_commit.py).
+- Pending, landing with the remaining gap PRs: fetch-on-create
+  classification tests; repository-environment delete reclaim; a live disk
+  axis reading end to end.
+
+Corridor H — content reclaim and the disk story's tail. Named, binary
+assertions; the corridor is done when they are green. IDs are stable —
+tests reference them by name:
+
+- **H1** Repository-environment delete reclaims its clone through the
+  clone-delete primitive, which refuses paths outside the managed fence.
+  (Rust tests + pytest)
+- **H2** The inventory row carries last activity. (Rust test)
+- **H3** Crossing the disk threshold surfaces the worktrees copy
+  pointing into the delete dialog (surface owned by
+  [cloud-workspace.md](../../systems/product/workspaces/cloud-workspace.md)).
+  (frontend test)
+- **H4** The cloud clone flow rides `acquire_repo_root`; grep-gate: the
+  standalone clone-script path stays deleted. (Rust + pytest)
+- **H5** `workerDegraded` has a consumer: the runtime-status badge
+  renders it. (frontend test)
 
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Worktree creation does not fetch: the plain create path
-      ([runtime/worktrees.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/worktrees.rs))
-      never fetches and bases on the clone's local state; cloud freshness
-      holds only because the server's clone-refresh script runs in the same
-      request, and local/Desktop creates get whatever the clone has. The
-      exact-ref path's fetch is unbounded and silently swallowed
-      (`fetch_branch_if_possible`, no timeout, no `GIT_TERMINAL_PROMPT=0`,
-      result discarded). Implement the bounded, classified, surfaced fetch
-      in both paths.
-- [ ] Callers supply `target_path`: it is a required contract field (an
-      omitted path is a 400), the cloud server invents
-      `/home/user/workspace/worktrees/<owner>/<repo>/<branch>-<id8>`
-      ([provisioning.py](../../../../server/proliferate/server/cloud/workspaces/provisioning.py)),
-      and one unit test pins the literal string. Make the field optional
-      with a runtime default-placement branch (the workflow-placement
-      pattern); nothing downstream depends on the path — the server keeps
-      only workspace and repo-root ids after creation.
-- [ ] The managed-root fence excludes every cloud worktree:
-      `ANYHARNESS_WORKTREES_ROOT` is never set in the cloud launch env
-      ([bootstrap.py](../../../../server/proliferate/server/cloud/runtime/bootstrap.py)),
-      so the root defaults to `/home/user/.proliferate/worktrees` while
-      worktrees live under `/home/user/workspace/worktrees` — retire
-      refuses them and retention skips them ("outside managed worktrees
-      root"). Set the env var; this alone makes reclaim operable in cloud.
-- [ ] Retention never runs in cloud: the enabling env
-      (`ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION`) is never set (only
-      the defer flag is), and the server-side trigger clients
-      ([worktrees.py](../../../../server/proliferate/integrations/anyharness/worktrees.py))
-      have zero callers. Enable the pass in the cloud launch env.
-- [ ] Workspace delete and archive reclaim nothing
-      ([cloud_workspaces.py](../../../../server/proliferate/db/store/cloud_workspaces.py)
-      writes rows only); repository-environment delete reclaims nothing and
-      no clone-delete primitive exists anywhere in AnyHarness (no route, no
-      store method). Add the paired after-commit reclaims and build the
-      clone-delete primitive under the same fence discipline as retire.
-- [ ] Git identity is not materialized at all: the only implementation was
-      deleted with its parked domain (#823), the calling stage survives as
-      unimportable dead code
-      ([git_identity.py](../../../../server/proliferate/server/automations/worker/cloud_execution/stages/git_identity.py)),
-      and every user commit today carries git's auto-derived fallback
-      (`user <user@<sandbox-hostname>>`). Reintroduce materialization with
-      the resolution rules above; delete the dead stage and the orphaned
-      `configure_git_identity`/`ensure_repo_checkout` command kinds
-      ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
-- [ ] No disk axis: the resource-pressure collector measures CPU and memory
-      only (no statvfs anywhere in the runtime), the composer card shows
-      CPU/memory rows without disk, no threshold notification exists
-      (surfaces are pull-only), and the inventory row carries no
-      last-activity timestamp for suggesting stale worktrees. Add the disk
-      axis to
-      [resource_pressure.rs](../../../../anyharness/crates/anyharness-lib/src/observability/resource_pressure.rs)
-      and the health contract, last activity to the inventory row, and the
-      client-side threshold surface.
-- [ ] Disk exhaustion is untyped: only checkout exit codes 42/43/44 are
-      classified; ENOSPC from any in-sandbox command flattens into the
-      generic runtime-not-ready receipt
-      ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
-      Detect and type it.
-- [ ] After provider loss, workspaces dangle instead of being marked lost:
-      `cloud_workspace` rows still reference dead AnyHarness workspace ids
-      on the replacement VM, surfacing as opaque runtime errors, and
-      today's recovery is manual delete-and-recreate
-      ([cloud-provisioning-failure.md](../../../developing/operating/cloud-provisioning-failure.md)).
-      On binding detach, mark the bound workspaces lost and surface that
-      state in the product; the replacement VM starts empty by design.
-- [ ] The `prune_workspace_worktree` cloud command kind is dead — an enum
-      member and DB-constraint slot with no producer, payload, or consumer
-      ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
-      Delete it; the paired retire is the real mechanism.
+- [ ] Repository-environment delete reclaims nothing and no clone-delete
+      primitive exists anywhere in AnyHarness (no route, no store method).
+      Build the clone-delete primitive under the same fence discipline as
+      retire, then pair repository-environment deletion with an after-commit
+      reclaim.
+- [ ] The inventory row carries no last-activity timestamp
+      ([inventory.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs)),
+      so the disk-pressure surface cannot suggest *stale* worktrees to
+      delete, only big ones. Add last activity to the inventory row.
 - [ ] The clone create/refresh script bypasses AnyHarness's own repo-root
       acquisition (`acquire_repo_root` /
       [clone.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/clone.rs)),

@@ -645,6 +645,7 @@ async def record_billing_decision_event(
     reason: str | None,
     active_sandbox_count: int,
     remaining_seconds: float | None,
+    refused_cents: int | None = None,
 ) -> None:
     db.add(
         BillingDecisionEvent(
@@ -658,6 +659,7 @@ async def record_billing_decision_event(
             reason=reason,
             active_sandbox_count=active_sandbox_count,
             remaining_seconds=remaining_seconds,
+            refused_cents=refused_cents,
             created_at=utcnow(),
         )
     )

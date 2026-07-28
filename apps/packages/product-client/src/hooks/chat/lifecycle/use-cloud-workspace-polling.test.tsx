@@ -319,8 +319,6 @@ function cloudWorkspace(
       : input.status === "ready"
         ? "2026-04-14T00:00:00Z"
         : null,
-    actionBlockKind: null,
-    actionBlockReason: null,
     postReadyPhase: "",
     postReadyFilesTotal: 0,
     postReadyFilesApplied: 0,

@@ -107,6 +107,13 @@ describe("RuntimePressureDetailsDialog", () => {
               usedBytes: 8 * 1024 ** 3,
               idealMaxPercent: 80,
             },
+            disk: {
+              percent: 73,
+              availableBytes: 27 * 1024 ** 3,
+              totalBytes: 100 * 1024 ** 3,
+              usedBytes: 73 * 1024 ** 3,
+              idealMaxPercent: 80,
+            },
           },
         })}
         actions={actions()}
@@ -115,12 +122,56 @@ describe("RuntimePressureDetailsDialog", () => {
     );
 
     expect(screen.getAllByRole("heading", { name: "Worktrees" }).length).toBeGreaterThan(0);
-    // Cloud pressure renders as CPU / Memory rows in the runtime section.
+    // Cloud pressure renders as CPU / Memory / Disk rows in the runtime section.
     expect(screen.getAllByText("Cloud sandbox").length).toBeGreaterThan(0);
     expect(screen.getByText("CPU")).toBeTruthy();
     expect(screen.getByText("42%")).toBeTruthy();
     expect(screen.getByText("Memory")).toBeTruthy();
     expect(screen.getByText("31%")).toBeTruthy();
+    expect(screen.getByText("Disk")).toBeTruthy();
+    expect(screen.getByText("73%")).toBeTruthy();
+  });
+
+  it("hides the Disk row for older cloud runtimes without the axis", () => {
+    render(
+      <RuntimePressureDetailsDialog
+        open
+        targetState={targetState({
+          target: {
+            key: "cloud:env-1",
+            label: "Cloud sandbox",
+            location: "cloud",
+            runtimeUrl: "https://cloud.example",
+            runtimeGeneration: null,
+            environmentId: "env-1",
+          },
+          resourcePressure: {
+            collectedAt: "2026-07-01T00:00:00Z",
+            level: "nominal",
+            pressurePercent: 42,
+            cpu: {
+              normalizedPercent: 42,
+              loadAverage1m: 3.4,
+              logicalCoreCount: 8,
+              idealMaxPercent: 80,
+            },
+            memory: {
+              percent: 31,
+              availableBytes: 8 * 1024 ** 3,
+              totalBytes: 16 * 1024 ** 3,
+              usedBytes: 8 * 1024 ** 3,
+              idealMaxPercent: 80,
+            },
+          },
+        })}
+        actions={actions()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("CPU")).toBeTruthy();
+    expect(screen.getByText("Memory")).toBeTruthy();
+    expect(screen.queryByText("Disk")).toBeNull();
   });
 
   it("renders one card row per checkout with a compact estimated size", () => {

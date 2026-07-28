@@ -14,6 +14,7 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_RESUME,
 )
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store.billing_runtime_usage import UsageProviderBindingMismatchError
 from proliferate.db.store.cloud_sandbox_recovery import (
     adopt_ambiguous_cloud_sandbox_provider_sandbox,
@@ -32,6 +33,9 @@ from proliferate.server.billing.runtime_usage import (
     close_cloud_sandbox_provider_usage,
     open_cloud_sandbox_provider_usage,
 )
+from proliferate.server.cloud.gateway.service import (
+    invalidate_cloud_sandbox_gateway_access_for_user,
+)
 from proliferate.utils.time import utcnow
 
 _CONFIGURATION_ERROR = "Sandbox provider configuration prevents materialization. Contact support."
@@ -40,6 +44,9 @@ PROVIDER_SANDBOX_MISSING_RECEIPT = (
 )
 _PROVIDER_UNAVAILABLE_ERROR = "The sandbox provider is temporarily unavailable. Retry later."
 _RUNTIME_ERROR = "The sandbox runtime did not become ready. Retry later."
+_DISK_EXHAUSTED_ERROR = (
+    "The sandbox disk is full. Delete workspaces or content to free disk, then retry."
+)
 _INTERRUPTED_ERROR = "Sandbox materialization was interrupted. Retry later."
 _USAGE_BINDING_ERROR = (
     "Sandbox usage attribution conflicts with its provider binding. Contact support."
@@ -63,6 +70,9 @@ def materialization_error_receipt(exc: BaseException) -> str:
     if isinstance(exc, SandboxProviderUnavailableError):
         return _PROVIDER_UNAVAILABLE_ERROR
     if isinstance(exc, CloudMaterializationCommandError):
+        command_failure = str(exc).casefold()
+        if "no space left on device" in command_failure or "enospc" in command_failure:
+            return _DISK_EXHAUSTED_ERROR
         return _RUNTIME_ERROR
     if isinstance(exc, asyncio.CancelledError):
         return _INTERRUPTED_ERROR
@@ -97,6 +107,14 @@ async def persist_materialization_failure(
                 observation_started_at=observation_started_at,
             )
             if detached is not None:
+                if detached.owner_user_id is not None:
+                    invalidate_cloud_sandbox_gateway_access_for_user(
+                        detached.owner_user_id,
+                    )
+                await cloud_workspace_store.mark_cloud_workspaces_lost_for_sandbox(
+                    db,
+                    detached,
+                )
                 await close_cloud_sandbox_provider_usage(
                     db,
                     sandbox_id=sandbox_id,

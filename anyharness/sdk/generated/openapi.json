@@ -9922,7 +9922,6 @@
         "type": "object",
         "required": [
           "repoRootId",
-          "targetPath",
           "newBranchName"
         ],
         "properties": {
@@ -9985,7 +9984,10 @@
             ]
           },
           "targetPath": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -9995,6 +9997,16 @@
           "workspace"
         ],
         "properties": {
+          "baseFetch": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorktreeBaseFetch"
+              }
+            ]
+          },
           "setupScript": {
             "oneOf": [
               {
@@ -16182,6 +16194,41 @@
           }
         }
       },
+      "RuntimeDiskPressure": {
+        "type": "object",
+        "required": [
+          "usedBytes",
+          "totalBytes",
+          "availableBytes",
+          "percent",
+          "idealMaxPercent"
+        ],
+        "properties": {
+          "availableBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "idealMaxPercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "percent": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "RuntimeMemoryPressure": {
         "type": "object",
         "required": [
@@ -16243,6 +16290,16 @@
               },
               {
                 "$ref": "#/components/schemas/RuntimeCpuPressure"
+              }
+            ]
+          },
+          "disk": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeDiskPressure"
               }
             ]
           },
@@ -20866,6 +20923,47 @@
         "enum": [
           "standard",
           "cowork"
+        ]
+      },
+      "WorktreeBaseFetch": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "fetched"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "noRemote"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "failed"
+            ],
+            "properties": {
+              "failed": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "enum": [
+              "timedOut"
+            ]
+          }
         ]
       },
       "WorktreeCheckoutMode": {

@@ -12,6 +12,7 @@ use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
     GitRevertPatchEntry, GitRevertPatchesError, GitRevertPatchesResult, GitStatusSnapshot,
     GitStatusSummarySnapshot, GitWorktreeRestoreError, GitWorktreeRestoreOutcome, PushError,
+    WorktreeBaseFetch,
 };
 
 pub struct GitService;
@@ -110,6 +111,10 @@ impl GitService {
         exact_ref: &str,
     ) -> anyhow::Result<()> {
         worktrees::create_worktree_at_ref(source_repo_root, target_path, branch_name, exact_ref)
+    }
+
+    pub fn fetch_worktree_base(repo_root: &Path, branch_name: &str) -> WorktreeBaseFetch {
+        worktrees::fetch_worktree_base(repo_root, branch_name)
     }
 
     pub fn restore_worktree(

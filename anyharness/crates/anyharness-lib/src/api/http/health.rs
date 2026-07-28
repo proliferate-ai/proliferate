@@ -1,11 +1,12 @@
 use anyharness_contract::v1::{
-    HealthResponse, RuntimeCapabilities, RuntimeCpuPressure, RuntimeMemoryPressure,
-    RuntimePressureLevel, RuntimeResourcePressure,
+    HealthResponse, RuntimeCapabilities, RuntimeCpuPressure, RuntimeDiskPressure,
+    RuntimeMemoryPressure, RuntimePressureLevel, RuntimeResourcePressure,
 };
 use axum::Json;
 
 use super::agents_contract::reconcile_summary_to_contract;
 use crate::app::AppState;
+use crate::domains::workspaces::managed_root::managed_worktrees_root;
 use crate::observability::resource_pressure::{
     collect_resource_pressure, RuntimePressureLevel as InternalRuntimePressureLevel,
     RuntimeResourcePressure as InternalRuntimeResourcePressure,
@@ -22,6 +23,7 @@ use crate::observability::resource_pressure::{
 pub async fn get_health(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> Json<HealthResponse> {
+    let worktrees_root = managed_worktrees_root(&state.runtime_home);
     Json(HealthResponse {
         status: "ok".into(),
         version: env!("PROLIFERATE_STAMPED_VERSION").into(),
@@ -30,7 +32,8 @@ pub async fn get_health(
         capabilities: RuntimeCapabilities {
             replay: crate::domains::sessions::replay::replay_enabled(),
         },
-        resource_pressure: collect_resource_pressure().map(resource_pressure_to_contract),
+        resource_pressure: collect_resource_pressure(&state.runtime_home, &worktrees_root)
+            .map(resource_pressure_to_contract),
         agent_seed: state.agent_seed_store.health(),
         agent_reconcile: reconcile_summary_to_contract(
             &state.agent_runtime.reconcile_status().await,
@@ -60,6 +63,13 @@ fn resource_pressure_to_contract(
             available_bytes: memory.available_bytes,
             percent: memory.percent,
             ideal_max_percent: memory.ideal_max_percent,
+        }),
+        disk: pressure.disk.map(|disk| RuntimeDiskPressure {
+            used_bytes: disk.used_bytes,
+            total_bytes: disk.total_bytes,
+            available_bytes: disk.available_bytes,
+            percent: disk.percent,
+            ideal_max_percent: disk.ideal_max_percent,
         }),
         pressure_percent: pressure.pressure_percent,
         collected_at: pressure.collected_at,

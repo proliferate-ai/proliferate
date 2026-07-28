@@ -54,13 +54,14 @@ One panel owns every not-usable-yet state:
 ([cloud-workspace-status-presentation.ts](../../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status-presentation.ts))
 over one gate
 ([cloud-workspace-status.ts](../../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts)).
-Four modes, exhaustive:
+Five modes, exhaustive:
 
 | Mode | When | Copy and affordance |
 | --- | --- | --- |
 | pending | `pending` / `materializing` | Steps: Queued → Preparing runtime → Ready; auto-refresh footer; spinner |
 | blocked | subject-layer billing block | Title by reason ("Sandbox limit reached" / "Cloud usage is paused"); reason-specific description; no retry button — the block clears server-side |
 | error | `error` | "Provisioning failed" + the receipt (`lastError`); "Retry provisioning" action; "The workspace record is kept and we will retry setup from there." |
+| lost | `lost` | "Workspace lost"; explains that the sandbox was killed and the workspace contents are gone; delete action |
 | archived | `archived` | "This cloud workspace has been archived."; status footer only |
 
 Post-ready transitions ("Applying tracked files N/M", "Starting cloud
@@ -130,7 +131,7 @@ apps/packages/product-client/src/
 │   └── use-cloud-workspace-actions.ts       archive/delete/unarchive + cache clears
 ├── lib/domain/workspaces/cloud/
 │   ├── cloud-workspace-status.ts            the status gate
-│   └── cloud-workspace-status-presentation.ts   the four modes, all copy
+│   └── cloud-workspace-status-presentation.ts   the five modes, all copy
 └── components/workspace/
     ├── chat/panels/WorkspaceArrivalCloudPanel.tsx   the status panel
     └── chat/input/
@@ -142,26 +143,11 @@ apps/packages/product-client/src/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] The blocked mode is unreachable dead UI: it triggers on
-      `actionBlockKind`, which the server serializes always-`null`
-      ([sandbox-access.md](../../../platforms/product/sandbox-access.md)
-      gap). When that field is deleted, rewire the blocked mode to the
-      subject layer's real representation (the 402 body) so billing blocks
-      actually render; the seven reasons and copy already exist.
-- [ ] No Disk row and no threshold notification: the card shows CPU/Memory
-      only for cloud targets, and no surface is proactive — pull-only.
-      Lands with the disk axis
-      ([sandbox-content.md](../../../platforms/product/sandbox-content.md)
-      gap).
-- [ ] Workspaces are not marked lost after VM death: rows dangle with dead
-      runtime ids and surface as opaque runtime errors
-      ([sandbox-content.md](../../../platforms/product/sandbox-content.md)
-      gap); no lost-state rendering exists in the status panel.
-- [ ] Reconnect-wakes-under-traffic assumes the gateway policy-gate ruling
-      ([sandbox-lifecycle.md](../../../platforms/product/sandbox-lifecycle.md)
-      gap); today a paused sandbox's first call 409s and the client shows
-      a connecting state until materialization repairs.
-- [ ] Archive and delete retire nothing on the sandbox today (row writes
-      only, [sandbox-content.md](../../../platforms/product/sandbox-content.md)
-      gap); the confirmation copy's promise is kept only because retention
-      does not run either.
+- [ ] The threshold notification is unbuilt: the status card shows the
+      cloud CPU/Memory/Disk rows, but nothing watches the disk axis for
+      the pressure threshold or surfaces "your cloud machine is running
+      low on space — here are your worktrees"
+      ([EnvironmentStatusCard.tsx](../../../../../apps/packages/product-client/src/components/workspace/chat/input/EnvironmentStatusCard.tsx)).
+      Build the client-side threshold trigger and copy, pointing into the
+      existing worktrees dialog and its delete actions (pull-plus-
+      threshold only — founder ruling, content spec).

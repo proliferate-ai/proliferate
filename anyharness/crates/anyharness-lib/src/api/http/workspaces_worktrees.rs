@@ -1,7 +1,9 @@
+use std::path::Path;
 use std::time::Instant;
 
 use anyharness_contract::v1::{
     CreateWorktreeWorkspaceRequest, CreateWorktreeWorkspaceResponse,
+    WorktreeBaseFetch as ContractWorktreeBaseFetch,
     WorktreeCheckoutMode as ContractWorktreeCheckoutMode,
     WorktreeNameConflictPolicy as ContractWorktreeNameConflictPolicy,
 };
@@ -11,6 +13,7 @@ use super::access::map_access_error;
 use super::error::ApiError;
 use super::workspaces_contract::{request_origin_or_api_default, workspace_to_contract};
 use super::workspaces_setup::map_workspace_setup_error;
+use crate::adapters::git::WorktreeBaseFetch;
 use crate::app::AppState;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
@@ -41,8 +44,21 @@ pub async fn create_worktree(
     async move {
         let started = Instant::now();
         let repo_root_id = req.repo_root_id;
-        let target_path = req.target_path;
         let new_branch_name = req.new_branch_name;
+        let uses_managed_default = req.target_path.is_none();
+        let target_path = match req.target_path {
+            Some(target_path) => target_path,
+            None => state
+                .workspace_runtime
+                .default_worktree_destination_path(&repo_root_id, &new_branch_name)
+                .map_err(|error| {
+                    ApiError::internal(format!(
+                        "failed to resolve managed worktree destination: {error}"
+                    ))
+                })?
+                .to_string_lossy()
+                .to_string(),
+        };
         let checkout_mode = req
             .checkout_mode
             .map(worktree_checkout_mode_from_contract)
@@ -73,6 +89,17 @@ pub async fn create_worktree(
             .assert_can_mutate_for_repo_root(&repo_root_id)
             .map_err(map_access_error)?;
 
+        if uses_managed_default {
+            let parent = Path::new(&target_path).parent().ok_or_else(|| {
+                ApiError::internal("managed worktree destination has no parent".to_string())
+            })?;
+            tokio::fs::create_dir_all(parent).await.map_err(|error| {
+                ApiError::internal(format!(
+                    "failed to create managed worktree destination parent: {error}"
+                ))
+            })?;
+        }
+
         let result = state
             .workspace_worktree_runtime
             .create_worktree(CreateWorktreeWorkflowInput {
@@ -99,13 +126,26 @@ pub async fn create_worktree(
             "[workspace-latency] workspace.http.worktree.completed"
         );
 
+        let base_fetch = result.worktree.base_fetch.map(base_fetch_to_contract);
+        let workspace = workspace_to_contract(&state, result.worktree.workspace).await?;
+
         Ok(Json(CreateWorktreeWorkspaceResponse {
-            workspace: workspace_to_contract(&state, result.worktree.workspace).await?,
+            workspace,
             setup_script: None,
+            base_fetch,
         }))
     }
     .instrument(span)
     .await
+}
+
+fn base_fetch_to_contract(value: WorktreeBaseFetch) -> ContractWorktreeBaseFetch {
+    match value {
+        WorktreeBaseFetch::Fetched => ContractWorktreeBaseFetch::Fetched,
+        WorktreeBaseFetch::NoRemote => ContractWorktreeBaseFetch::NoRemote,
+        WorktreeBaseFetch::Failed { message } => ContractWorktreeBaseFetch::Failed { message },
+        WorktreeBaseFetch::TimedOut => ContractWorktreeBaseFetch::TimedOut,
+    }
 }
 
 fn worktree_checkout_mode_from_contract(

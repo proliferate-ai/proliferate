@@ -7,6 +7,7 @@ stores the returned workspace id.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from typing import Literal, Protocol
 from uuid import UUID
@@ -30,14 +31,19 @@ from proliferate.integrations.anyharness.models import (
 )
 from proliferate.integrations.anyharness.workspaces import (
     materialize_workspace_at_ref,
+    retire_runtime_workspace,
 )
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
+from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import paths as materialization_paths
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.materialization.locks import CloudMaterializationLockTimeout
+from proliferate.server.cloud.materialization.materialize.git_identity import (
+    GitIdentityUnresolvedError,
+)
 from proliferate.server.cloud.materialization.materialize.repo_environment import (
     CloudRepoCheckoutError,
 )
@@ -70,6 +76,8 @@ from proliferate.server.cloud.workspaces.provisioning import (
     resolve_repo_root as _resolve_repo_root,
 )
 from proliferate.utils.time import utcnow
+
+logger = logging.getLogger("proliferate.cloud.workspaces")
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 
@@ -324,6 +332,12 @@ async def create_cloud_workspace_for_user(
             "The cloud sandbox runtime could not be reached. Please retry in a moment.",
             status_code=502,
         ) from exc
+    except GitIdentityUnresolvedError as exc:
+        raise CloudApiError(
+            "git_identity_required",
+            "Set an email address on your Proliferate account, then try again.",
+            status_code=409,
+        ) from exc
     except CloudRepoCheckoutError as exc:
         # The shared cloud checkout for this repo cannot be safely reset for a
         # new workspace — a prior checkout holds user work or is not a clean git
@@ -504,6 +518,12 @@ async def _create_cloud_workspace_at_exact_ref(
             "The cloud sandbox runtime could not be reached. Please retry in a moment.",
             status_code=502,
         ) from exc
+    except GitIdentityUnresolvedError as exc:
+        raise CloudApiError(
+            "git_identity_required",
+            "Set an email address on your Proliferate account, then try again.",
+            status_code=409,
+        ) from exc
     except CloudRepoCheckoutError as exc:
         raise CloudApiError(
             "cloud_repo_checkout_conflict",
@@ -654,6 +674,7 @@ async def archive_cloud_workspace_for_user(
 ) -> WorkspaceDetail:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
     workspace = await cloud_workspace_store.archive_cloud_workspace(db, workspace)
+    await _retire_workspace_worktree_after_commit(db, workspace)
     return await _workspace_payload(db, workspace, detail=True)
 
 
@@ -703,6 +724,53 @@ async def delete_cloud_workspace_for_user(
 ) -> None:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
     await cloud_workspace_store.delete_cloud_workspace(db, workspace)
+    await _retire_workspace_worktree_after_commit(db, workspace)
+
+
+async def _retire_workspace_worktree_after_commit(
+    db: AsyncSession,
+    workspace: CloudWorkspaceValue,
+) -> None:
+    if (
+        workspace.workspace_kind != "repository_worktree"
+        or workspace.anyharness_workspace_id is None
+    ):
+        return
+    sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(
+        db,
+        workspace.owner_user_id,
+    )
+    if sandbox is None:
+        return
+
+    anyharness_workspace_id = workspace.anyharness_workspace_id
+    cloud_workspace_id = str(workspace.id)
+
+    async def _retire_runtime_worktree() -> None:
+        try:
+            (
+                runtime_url,
+                runtime_token,
+                _data_key,
+            ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(
+                sandbox,
+            )
+            await retire_runtime_workspace(
+                runtime_url,
+                runtime_token,
+                anyharness_workspace_id=anyharness_workspace_id,
+            )
+        except Exception:
+            logger.exception(
+                "failed to retire runtime worktree after cloud workspace row lifecycle change",
+                extra={
+                    "cloud_workspace_id": cloud_workspace_id,
+                    "anyharness_workspace_id": anyharness_workspace_id,
+                    "cloud_sandbox_id": str(sandbox.id),
+                },
+            )
+
+    await run_after_commit(db, _retire_runtime_worktree)
 
 
 async def get_cloud_workspace_runtime_status(
@@ -712,12 +780,19 @@ async def get_cloud_workspace_runtime_status(
 ) -> CloudWorkspaceRuntimeStatusResponse:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
     sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user_id)
+    runtime_status = _runtime_status(sandbox)
+    worker_degraded = (
+        await _worker_degraded(db, sandbox=sandbox, runtime_status=runtime_status)
+        if sandbox is not None
+        else False
+    )
     return CloudWorkspaceRuntimeStatusResponse(
         workspace_id=workspace.id,
         status=_workspace_status(workspace),
-        runtime_status=_runtime_status(sandbox),
+        runtime_status=runtime_status,
         sandbox_status=sandbox.status if sandbox is not None else None,
         anyharness_workspace_id=workspace.anyharness_workspace_id,
+        worker_degraded=worker_degraded,
     )
 
 
@@ -733,7 +808,11 @@ async def _load_ready_runtime_access(
             "Cloud sandbox has not been created.",
             status_code=409,
         )
-    return await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(sandbox)
+    # Request-time path, so it takes the repairing variant: a cold row would
+    # otherwise 409 here forever with nothing scheduling the materialization.
+    return await cloud_sandboxes_service.load_cloud_sandbox_runtime_access_or_repair(
+        sandbox, reason="workspace_runtime_access"
+    )
 
 
 async def _create_workspace_row_with_branch_retry(
@@ -1008,7 +1087,11 @@ def _materialization_is_stalled(workspace: CloudWorkspaceValue) -> bool:
     insert and the worktree write are not atomic), so it can never become
     ``ready`` on its own.
     """
-    if workspace.anyharness_workspace_id or workspace.archived_at is not None:
+    if (
+        workspace.anyharness_workspace_id
+        or workspace.archived_at is not None
+        or workspace.lost_at is not None
+    ):
         return False
     created_at = workspace.created_at
     if created_at is None:
@@ -1019,6 +1102,8 @@ def _materialization_is_stalled(workspace: CloudWorkspaceValue) -> bool:
 def _workspace_status(workspace: CloudWorkspaceValue) -> CloudWorkspaceStatus:
     if workspace.archived_at is not None:
         return "archived"
+    if workspace.lost_at is not None:
+        return "lost"
     if workspace.anyharness_workspace_id:
         return "ready"
     if _materialization_is_stalled(workspace):
@@ -1031,10 +1116,58 @@ def _runtime_status(sandbox: CloudSandboxValue | None) -> CloudRuntimeStatus:
         return "disabled"
     if sandbox.status == "ready":
         return "running"
-    if sandbox.status in {"creating", "provisioning"}:
+    if sandbox.status == "creating":
         return "pending"
-    if sandbox.status in {"paused", "stopped"}:
+    if sandbox.status == "paused":
         return "paused"
     if sandbox.status in {"error", "destroyed"}:
         return "error"
     return "pending"
+
+
+async def _worker_degraded(
+    db: AsyncSession,
+    *,
+    sandbox: CloudSandboxValue,
+    runtime_status: CloudRuntimeStatus,
+) -> bool:
+    """Surface a dead Worker as degraded, only when liveness is meaningful.
+
+    A sandbox that is not `running` has a Worker that is legitimately not
+    heartbeating (paused VMs don't heartbeat; creating/error/destroyed
+    sandboxes never had a live one to begin with) — never report those as
+    degraded. For a `running` sandbox, the Worker should exist and be
+    heartbeating within the offline threshold; a missing row or a stale
+    `last_seen_at` both surface as degraded, and either one is logged once as
+    a structured warning (this is a per-read-time derivation, so a polled
+    endpoint logs on every read of a genuinely stale/missing worker — no
+    dedup infrastructure is built for that here).
+    """
+    if runtime_status != "running":
+        return False
+    worker = await runtime_workers_store.get_worker_for_cloud_sandbox(
+        db,
+        cloud_sandbox_id=sandbox.id,
+    )
+    if worker is None:
+        logger.warning(
+            "cloud sandbox ready with no runtime worker row",
+            extra={"cloud_sandbox_id": str(sandbox.id)},
+        )
+        return True
+    if worker.online:
+        return False
+    age_seconds: float | None = None
+    if worker.last_seen_at is not None:
+        age_seconds = (utcnow() - worker.last_seen_at).total_seconds()
+    logger.warning(
+        "cloud sandbox worker heartbeat stale",
+        extra={
+            "cloud_sandbox_id": str(sandbox.id),
+            "worker_id": str(worker.id),
+            "worker_status": worker.status,
+            "last_seen_at": worker.last_seen_at.isoformat() if worker.last_seen_at else None,
+            "last_seen_age_seconds": age_seconds,
+        },
+    )
+    return True
