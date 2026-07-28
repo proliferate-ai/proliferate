@@ -32,6 +32,18 @@ interface TooltipProps {
    * primitive's default dismissal.
    */
   keepOpenOnPress?: boolean;
+  /**
+   * Controlled open state. Without this the bubble is only reachable by a real
+   * hover, so it cannot be screenshotted, storybooked, or asserted in an
+   * integration test — pass `defaultOpen` for a static capture, or
+   * `open`/`onOpenChange` to drive it. Explicit control wins over
+   * `keepOpenOnPress`'s internal hover state.
+   */
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hover delay before the bubble appears. Defaults to 0 (instant). */
+  delayDuration?: number;
 }
 
 export function Tooltip({
@@ -40,6 +52,10 @@ export function Tooltip({
   className = "inline-flex shrink-0",
   singleLine = false,
   keepOpenOnPress = false,
+  open,
+  defaultOpen,
+  onOpenChange,
+  delayDuration = 0,
 }: TooltipProps) {
   const [hoverOpen, setHoverOpen] = useState(false);
   // Only the close request raised by pressing the trigger is suppressed.
@@ -83,12 +99,16 @@ export function Tooltip({
     setHoverOpen(false);
   }, []);
 
-  const controlled = keepOpenOnPress
-    ? { open: hoverOpen, onOpenChange: handleOpenChange }
-    : {};
+  const hasExplicitControl =
+    open !== undefined || defaultOpen !== undefined || onOpenChange !== undefined;
+  const controlled = hasExplicitControl
+    ? { open, defaultOpen, onOpenChange }
+    : keepOpenOnPress
+      ? { open: hoverOpen, onOpenChange: handleOpenChange }
+      : {};
 
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={delayDuration}>
       <KitTooltip {...controlled}>
         <TooltipTrigger asChild>
           <span
