@@ -30,6 +30,14 @@
   font-display: swap;
 }
 
+/* The `--icon-*` optical tiers below need a hand-authored utility because
+   `--icon-*` is not one of Tailwind's own token namespaces. The sibling
+   control-height tier (`--height-control`, 28px — see tokens.ts) deliberately
+   is: Tailwind emits `h-control` / `min-h-control` / `max-h-control` from the
+   `--height-*` namespace on its own, so re-declaring it here would be a second
+   authority for the same utility. Any control-height rule belongs in the token
+   table, never in this file. */
+
 @utility icon-status {
   width: var(--icon-status);
   height: var(--icon-status);
