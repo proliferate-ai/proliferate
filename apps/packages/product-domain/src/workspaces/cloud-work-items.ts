@@ -109,7 +109,6 @@ export function cloudWorkItemForWorkspace(
 export function cloudWorkActivityPreview(
   workspace: Pick<
     CloudWorkspaceSummary,
-    | "actionBlockReason"
     | "lastError"
     | "lastSessionSummary"
     | "statusDetail"
@@ -118,7 +117,6 @@ export function cloudWorkActivityPreview(
   return compactPreviewText(workspace.lastSessionSummary?.preview)
     ?? compactPreviewText(workspace.lastSessionSummary?.title)
     ?? compactPreviewText(workspace.lastError)
-    ?? compactPreviewText(workspace.actionBlockReason)
     ?? commandStatusDetailMessage(workspace.statusDetail);
 }
 

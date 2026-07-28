@@ -10,16 +10,15 @@ workspaces, repository configuration, or AnyHarness runtime state.
 one product user
   -> one active cloud_sandbox row
   -> just-in-time E2B create/resume during materialization
-  -> direct AnyHarness launch and authenticated access
-  -> optional Proliferate Worker sidecar
+  -> Supervisor-owned runtime launch and authenticated AnyHarness access
+     (Supervisor starts and supervises AnyHarness and the Worker)
 ```
 
-`POST /v1/cloud/cloud-sandbox/ensure` and `POST
-/v1/cloud/cloud-sandbox/wake` ensure the database row after configuration and
-billing checks. They do not contact E2B, resume a provider sandbox, launch
-AnyHarness, or reconcile repositories. Provider and runtime work happens when
-a materialization operation calls `connect_ready_sandbox` under the sandbox
-operation lock.
+`POST /v1/cloud/cloud-sandbox/ensure` ensures the database row after
+configuration and billing checks. It does not contact E2B, resume a provider
+sandbox, launch AnyHarness, or reconcile repositories. Provider and runtime
+work happens when a materialization operation calls `connect_ready_sandbox`
+under the sandbox operation lock.
 
 ## Persisted Owner
 
@@ -57,7 +56,6 @@ User-authenticated routes in
 ```text
 GET    /v1/cloud/cloud-sandbox
 POST   /v1/cloud/cloud-sandbox/ensure
-POST   /v1/cloud/cloud-sandbox/wake
 DELETE /v1/cloud/cloud-sandbox
 ```
 
@@ -78,7 +76,7 @@ sandbox locks.
 
 ## Lifecycle
 
-### Ensure and wake
+### Ensure
 
 [`cloud_sandboxes/service.py`](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)
 does three things:
@@ -89,8 +87,7 @@ does three things:
 3. lock the personal owner and ensure the `cloud_sandbox` and billing-subject
    rows.
 
-`wake` delegates to the same row-level operation as `ensure`. A returned
-`creating` row is not proof that E2B or AnyHarness is running.
+A returned `creating` row is not proof that E2B or AnyHarness is running.
 
 ### Just-in-time provider and runtime connection
 
@@ -124,10 +121,10 @@ snapshot is never provider authority.
    active observation after a transient response uses the same fenced usage
    open in the failure transaction;
 7. resolve the provider endpoint and runtime context, then reuse a healthy
-   authenticated AnyHarness or launch it directly with the
+   authenticated AnyHarness or launch the Supervisor-owned runtime with the
    recorded or newly minted runtime credentials;
-8. when AnyHarness is launched, start Proliferate Worker as a detached,
-   best-effort sidecar; and
+8. when a launch happens, the detached Supervisor starts and supervises both
+   AnyHarness and the Worker (there is no separate Worker sidecar launch); and
 9. after launch/relaunch, persist ready status and encrypted runtime access
    only when the expected provider binding and attempt epoch are still current.
 
@@ -152,16 +149,17 @@ repository attempt owns its GitHub authority check and credential
 materialization, and remains best-effort so one repository failure cannot
 prevent the non-repository state from converging.
 
-The E2B launch path launches Proliferate Supervisor as the process parent of
-AnyHarness and the Worker when `supervisor_owned_runtime` is on
-(`_launch_supervisor_owned_runtime` in
-[runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py));
-the direct non-supervisor launch is the legacy branch, deletion-pending with
-the rest of the legacy topology
-([agent-distribution.md](agent-distribution.md) Current gaps). A missing or
-unhealthy Worker does not make direct AnyHarness access unavailable. Reusing an
-already-healthy AnyHarness does not currently restart or self-heal a missing
-Worker sidecar.
+The E2B launch path unconditionally launches Proliferate Supervisor as the
+process parent of AnyHarness and the Worker
+(`launch_anyharness_runtime` in
+[runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py)).
+The legacy direct-nohup'd AnyHarness plus a separately launched Worker
+sidecar was deleted once the live E2B N-1→N update proof and the D5 BRIDGE
+proof both passed (2026-07-26); `supervisor_owned_runtime` no longer gates
+which topology a launch takes, only the D5 `desiredTopology` heartbeat signal
+for already-running legacy workers. A missing or unhealthy Worker does not
+make direct AnyHarness access unavailable. Reusing an already-healthy
+AnyHarness does not currently restart or self-heal a missing Worker.
 
 ### Delete
 
@@ -235,7 +233,7 @@ destroys that row.
 
 | Concern | Current owner |
 | --- | --- |
-| Sandbox row, ensure/wake/delete | [`server/.../cloud/cloud_sandboxes/`](../../../../server/proliferate/server/cloud/cloud_sandboxes/) |
+| Sandbox row, ensure/delete | [`server/.../cloud/cloud_sandboxes/`](../../../../server/proliferate/server/cloud/cloud_sandboxes/) |
 | Sandbox persistence | [`db/models/cloud/sandboxes.py`](../../../../server/proliferate/db/models/cloud/sandboxes.py), [`db/store/cloud_sandboxes.py`](../../../../server/proliferate/db/store/cloud_sandboxes.py) |
 | E2B and AnyHarness connection | [`server/.../cloud/materialization/sandbox_io/`](../../../../server/proliferate/server/cloud/materialization/sandbox_io/) |
 | Provider adapter | [`integrations/sandbox/`](../../../../server/proliferate/integrations/sandbox/) |
@@ -247,7 +245,7 @@ destroys that row.
 
 ## Failure Boundaries
 
-- An ensure/wake configuration or billing error occurs before provider work.
+- An ensure configuration or billing error occurs before provider work.
 - Provider create/resume, launch, health, and auth failures surface from
   materialization, not from the row ensure alone.
 - A persisted `error` and non-null `last_error` describe the latest completed
@@ -256,8 +254,9 @@ destroys that row.
   observation replaces it with a sanitized receipt.
 - Runtime access is usable only when URL, bearer ciphertext, and data-key
   ciphertext are all present.
-- Worker sidecar launch failures are logged and swallowed; diagnose Worker
-  liveness independently from AnyHarness health.
+- The Supervisor owns Worker startup and restarts; a missing or unhealthy
+  Worker does not make direct AnyHarness access unavailable, so diagnose
+  Worker liveness independently from AnyHarness health.
 - Automatic replacement is limited to authoritative absence of the exact
   persisted provider target. There is no general-purpose manual replacement
   operation, and existing AnyHarness workspace identities can still be
@@ -281,7 +280,7 @@ The narrow contract tests are:
 - `server/tests/integration/test_cloud_sandbox_reconciler_recovery.py`
 - `server/tests/integration/test_cloud_sandbox_last_error_migration.py`
 - `server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py`
-- `server/tests/integration/test_cloud_sandbox_wake_billing_gate.py`
+- `server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py`
 
 These deterministic tests establish the state-machine, concurrency, and error
 classification contracts. They are not a live E2B qualification receipt; any

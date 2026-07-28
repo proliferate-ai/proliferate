@@ -13,8 +13,10 @@ workspaces, upload session events, or maintain Cloud projections. Cloud
 reaches AnyHarness directly for the current workspace and session flows.
 
 On a **supervisor-owned target** (`supervisor_update_request_dir` set in
-config — server-controlled, gated behind `supervisor_owned_runtime`), the
-Worker never downloads, replaces, kills, or rolls back AnyHarness or itself.
+config — every managed-cloud target, unconditionally; no longer gated behind
+`supervisor_owned_runtime`, which only gates the D5 bridge heartbeat signal
+for already-running legacy workers), the Worker never downloads, replaces,
+kills, or rolls back AnyHarness or itself.
 It only observes heartbeat divergence and writes one durable request into
 `.proliferate/supervisor/updates` for Proliferate Supervisor to act on; see
 [Lifecycle](guides/lifecycle.md) and
@@ -36,9 +38,19 @@ already-provisioned legacy Worker migrates too), then branches on
 targets route to `converge_via_mailbox` (the mailbox write) instead
 of the legacy `converge_anyharness_runtime` + `self_update` swap, which stays
 byte-for-byte unchanged for non-supervisor targets. The "Current Process"
-outline below describes running behavior. The live E2B N-1→N proof is deferred
-with the rest of Tier 4. See
-[Lifecycle](guides/lifecycle.md#supervisor-owned-convergence-mailbox) for detail.
+outline below describes running behavior. Two distinct live proofs exist
+here, both PASSED on real E2B sandboxes 2026-07-26: the UPDATE proof (a fresh
+supervisor-owned sandbox converging pins 0.3.47→0.3.48 end to end, zero
+rollbacks) and the D5 BRIDGE proof (in-place migration of an already-running
+legacy Worker onto Proliferate Supervisor via `supervisor_bridge`, not a
+fresh provision — sandbox `iwwvadhffzxoora56f437`, ~2.5s, no
+destroy/recreate). Both proofs together cleared the gate for the server side
+to delete its legacy launch path (every new cloud-sandbox launch is now
+unconditionally supervisor-owned); the Rust-side legacy branches described
+below remain reachable only by an already-provisioned target that has not
+yet bridged. See
+[Lifecycle](guides/lifecycle.md#supervisor-owned-convergence-mailbox) for
+detail, including the expected bridge log signature.
 
 ## Current Process
 

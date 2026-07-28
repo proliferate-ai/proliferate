@@ -1,4 +1,4 @@
-import type { RuntimePressureTone } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
+import type { RuntimePressureTone } from "#product/hooks/workspaces/facade/runtime-pressure-threshold";
 
 /**
  * The pressure ring glyph. No longer a composer control — runtime resources

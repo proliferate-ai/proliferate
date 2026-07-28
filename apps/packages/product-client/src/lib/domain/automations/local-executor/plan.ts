@@ -21,7 +21,6 @@ export interface LocalAutomationWorktreePlan {
   branchName: string;
   workspaceName: string;
   displayName: string;
-  targetPath: string;
   baseRef: string;
   setupScript: string | null;
 }
@@ -154,17 +153,12 @@ export function shouldUpdateAutomationWorkspaceDisplayName(args: {
 export function buildLocalAutomationWorktreePlan(args: {
   claim: AutomationRunClaimRecord;
   candidate: LocalAutomationRepoCandidate;
-  homeDir: string;
   defaultBranch?: string | null;
   setupScript?: string | null;
 }): LocalAutomationWorktreePlan {
   const runSuffix = args.claim.id.replace(/-/g, "").slice(0, 16) || "run";
   const slug = safeAutomationSlug(args.claim.titleSnapshot, "run");
   const workspaceName = `automation-${slug}-${runSuffix}`;
-  const repoName =
-    args.candidate.repoRoot.remoteRepoName?.trim()
-    || args.candidate.repoRoot.path.split("/").filter(Boolean).pop()
-    || "repo";
   const baseRef =
     args.defaultBranch?.trim()
     || args.candidate.repoRoot.defaultBranch?.trim()
@@ -177,7 +171,6 @@ export function buildLocalAutomationWorktreePlan(args: {
     branchName: `automation/${slug}-${runSuffix}`,
     workspaceName,
     displayName: normalizeAutomationWorkspaceDisplayName(args.claim.titleSnapshot),
-    targetPath: `${args.homeDir}/.proliferate/worktrees/${repoName}/${workspaceName}`,
     baseRef,
     setupScript: args.setupScript?.trim() || null,
   };

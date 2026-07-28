@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import httpx
 
 from proliferate.integrations.anyharness.client import auth_headers
@@ -16,6 +18,7 @@ from proliferate.integrations.anyharness.models import (
 _CREATE_WORKTREE_TIMEOUT_SECONDS = 180.0
 _GIT_STATUS_TIMEOUT_SECONDS = 15.0
 _MATERIALIZE_AT_REF_TIMEOUT_SECONDS = 600.0
+_RETIRE_WORKSPACE_TIMEOUT_SECONDS = 30.0
 
 
 def _runtime_status_error_message(
@@ -107,25 +110,58 @@ async def resolve_runtime_workspace(
     )
 
 
+async def retire_runtime_workspace(
+    runtime_url: str,
+    access_token: str,
+    *,
+    anyharness_workspace_id: str,
+) -> None:
+    encoded_workspace_id = quote(anyharness_workspace_id, safe="")
+    try:
+        async with httpx.AsyncClient(timeout=_RETIRE_WORKSPACE_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{runtime_url}/v1/workspaces/{encoded_workspace_id}/retire",
+                headers=auth_headers(access_token),
+                json={},
+            )
+            response.raise_for_status()
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise CloudRuntimeReconnectError(
+                    "Cloud runtime returned invalid JSON when retiring a workspace."
+                ) from exc
+    except httpx.HTTPError as exc:
+        raise CloudRuntimeReconnectError("Failed to retire the cloud runtime workspace.") from exc
+
+    if (
+        not isinstance(payload, dict)
+        or payload.get("outcome") not in {"retired", "already_retired"}
+        or payload.get("cleanupSucceeded") is not True
+    ):
+        raise CloudRuntimeReconnectError("Cloud runtime did not confirm workspace retirement.")
+
+
 async def create_remote_worktree_workspace(
     runtime_url: str,
     access_token: str,
     *,
     repo_root_id: str,
-    target_path: str,
     new_branch_name: str,
     base_branch: str | None,
+    target_path: str | None = None,
     setup_script: str | None = None,
     origin: dict[str, object] | None = None,
     creator_context: dict[str, object] | None = None,
 ) -> ResolvedRemoteWorkspace:
     body: dict[str, object] = {
         "repoRootId": repo_root_id,
-        "targetPath": target_path,
         "newBranchName": new_branch_name,
         "checkoutMode": "new_branch",
         "nameConflictPolicy": "fail",
     }
+    if target_path is not None:
+        body["targetPath"] = target_path
     if base_branch:
         body["baseBranch"] = base_branch
     if setup_script:
@@ -142,7 +178,7 @@ async def create_remote_worktree_workspace(
                 headers=auth_headers(access_token),
                 json=body,
             )
-            if response.status_code == 409:
+            if response.status_code == 409 and target_path is not None:
                 try:
                     return await resolve_runtime_workspace(
                         runtime_url,

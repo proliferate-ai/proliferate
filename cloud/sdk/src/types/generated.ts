@@ -7,6 +7,7 @@ export type CloudWorkspaceStatus =
   | "materializing"
   | "needs_rematerialization"
   | "ready"
+  | "lost"
   | "archived"
   | "error";
 
@@ -112,8 +113,6 @@ export interface CloudWorkspaceRuntimeSummary {
   environmentId: string | null;
   status: CloudRuntimeStatus;
   generation: number;
-  actionBlockKind?: string | null;
-  actionBlockReason?: string | null;
 }
 
 export type CloudAgentKind = "claude" | "codex" | "opencode" | "grok";

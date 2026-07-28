@@ -17,6 +17,7 @@
 # check_max_lines.py's own caps, so listing them there would register as stale
 # max-lines entries.
 
+apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 425 workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 946 transcript row model pending row-kind module split
 apps/packages/product-ui/src/chat/transcript/VirtualizedTranscriptRowList.tsx 416 virtualized transcript list pending row-window split (recorded in debt repair)
 # Relocated from apps/desktop/src by the Desktop-product move into product-client
@@ -38,3 +39,4 @@ apps/packages/product-client/src/components/playground/WorkspaceStatusPlayground
 apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx 445 git review playground fixtures pending scenario-module split
 apps/packages/product-client/src/hooks/plans/workflows/use-proposed-plan-actions.ts 405 plan decision + carry-out workflow growth (#1250); split deferred
 apps/packages/design/src/tokens.ts 2143 single token authority: one entry per token with provenance by design; shape is a flat manifest, not logic
+apps/packages/product-client/src/hooks/agents/workflows/use-harness-auth-editor.ts 410 harness auth editor grew with v2 single-PUT replace semantics + provider-hint rows; split pending

@@ -29,6 +29,9 @@ import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/sel
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
+import {
+  useCloudWorkspaceBillingBlockStore,
+} from "#product/stores/workspaces/cloud-workspace-billing-block-store";
 
 export type WorkspaceStatusPanelState =
   | {
@@ -191,6 +194,11 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   const selectedCloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
     (workspace) => workspace.id === selectedCloudWorkspaceId,
   ) ?? null;
+  const selectedCloudBillingBlock = useCloudWorkspaceBillingBlockStore((state) => (
+    selectedWorkspaceId
+      ? state.blocksByWorkspaceId[selectedWorkspaceId] ?? null
+      : null
+  ));
 
   return useMemo(() => {
     const staleCloudReadyPendingEntry = Boolean(
@@ -246,12 +254,23 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     if (
       selectedWorkspaceId
       && selectedCloudWorkspace
-      && shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace)
+      && (
+        shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace)
+        || (
+          resolveCloudWorkspaceStatus(selectedCloudWorkspace) === "ready"
+          && selectedCloudBillingBlock !== null
+        )
+      )
     ) {
       return {
         kind: "cloud-status",
         workspaceId: selectedWorkspaceId,
-        model: buildCloudWorkspaceStatusScreenModel(selectedCloudWorkspace),
+        model: buildCloudWorkspaceStatusScreenModel(
+          selectedCloudWorkspace,
+          resolveCloudWorkspaceStatus(selectedCloudWorkspace) === "ready"
+            ? selectedCloudBillingBlock
+            : null,
+        ),
       };
     }
 
@@ -307,6 +326,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     pendingSourceRepoRootPath,
     pendingWorkspaceEntry,
     selectedCloudWorkspace,
+    selectedCloudBillingBlock,
     selectedLogicalWorkspaceId,
     selectedWorkspace,
     selectedWorkspaceId,

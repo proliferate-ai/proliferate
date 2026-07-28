@@ -126,7 +126,7 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
   // instead of a secret PUT succeeding as "pending" and then a materialize
   // poll timing out with a generic assertion failure below -- the secret PUT
   // endpoint itself does not hit this gate; only sandbox
-  // ensure/wake/materialize do (server/proliferate/server/billing/
+  // ensure/materialize do (server/proliferate/server/billing/
   // authorization.py), so this must be checked independently first.
   const existingSandbox = await getCloudSandbox(client);
   if (existingSandbox === null) {

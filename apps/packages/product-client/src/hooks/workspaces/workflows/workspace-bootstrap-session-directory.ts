@@ -14,13 +14,16 @@ import {
   loadSessionsWithBoundedRecovery,
 } from "#product/lib/workflows/workspaces/bounded-session-list-recovery";
 import {
+  getCloudWorkspaceBillingBlockFromError,
+} from "#product/lib/access/cloud/workspace-connection-retry";
+import {
   handleEmptyWorkspaceBootstrapWithRecovery,
 } from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
 import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
 
 export type WorkspaceSessionDirectoryResult =
   | { kind: "loaded"; sessions: WorkspaceSession[] }
-  | { kind: "failed" }
+  | { kind: "failed"; error: unknown }
   | { kind: "stale" };
 
 type EmptyWorkspaceBootstrapInput = Parameters<
@@ -80,6 +83,7 @@ export async function loadWorkspaceSessionDirectory(
       forceRefresh,
       timeoutMs: input.timeoutMs,
     }),
+    shouldRetry: (error) => getCloudWorkspaceBillingBlockFromError(error) === null,
   });
   if (result.kind === "stale") {
     return result;

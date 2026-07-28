@@ -87,7 +87,6 @@ function plan(): LocalAutomationWorktreePlan {
     branchName: "automation/daily-check-fd253849c4fe4ec9",
     workspaceName: "automation-daily-check-fd253849c4fe4ec9",
     displayName: "Daily Check",
-    targetPath: "/repo/.worktrees/automation",
     baseRef: "main",
     setupScript: null,
   };
@@ -197,6 +196,9 @@ describe("executeLocalAutomationRun", () => {
         },
       }),
     );
+    expect(client.workspaces.createWorktree).toHaveBeenCalledWith(
+      expect.not.objectContaining({ targetPath: expect.anything() }),
+    );
   });
 
   it("updates blank and old automation display names when reusing a workspace", async () => {
@@ -204,7 +206,7 @@ describe("executeLocalAutomationRun", () => {
       const updateDisplayName = vi.fn().mockResolvedValue(workspace({ displayName: "Daily Check" }));
       const client = {
         workspaces: {
-          resolveFromPath: vi.fn().mockResolvedValue({ workspace: workspace({ displayName }) }),
+          list: vi.fn().mockResolvedValue([workspace({ displayName })]),
           updateDisplayName,
           getSessionLaunchCatalog: vi.fn().mockResolvedValue({
             workspaceId: "workspace-1",
@@ -233,9 +235,7 @@ describe("executeLocalAutomationRun", () => {
     const updateDisplayName = vi.fn().mockResolvedValue(workspace({ displayName: "Daily Check" }));
     const client = {
       workspaces: {
-        resolveFromPath: vi.fn().mockResolvedValue({
-          workspace: workspace({ displayName: "My manual rename" }),
-        }),
+        list: vi.fn().mockResolvedValue([workspace({ displayName: "My manual rename" })]),
         updateDisplayName,
         getSessionLaunchCatalog: vi.fn().mockResolvedValue({
           workspaceId: "workspace-1",

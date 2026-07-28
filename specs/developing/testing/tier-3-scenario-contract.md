@@ -580,7 +580,7 @@ unchanged, and no overage is exported while included credit remains.
 Arrange only a few remaining compute seconds, then use real E2B running time to
 cross zero. Invoke the production accounting/reconciler synchronously if needed
 to avoid a polling delay. Assert the real sandbox is paused, an active typed
-compute hold exists, and create/ensure/wake/command/stale-session/second-member
+compute hold exists, and create/ensure/command/stale-session/second-member
 entry points are blocked. If the provider is resumed directly for the drill,
 the product immediately re-pauses it.
 

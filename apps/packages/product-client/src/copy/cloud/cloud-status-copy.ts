@@ -7,5 +7,6 @@ export const CLOUD_STATUS_COMPACT_COPY = {
 } as const;
 
 export const CLOUD_STATUS_ACTION_COPY = {
+  delete: "Delete",
   retry: "Retry",
 } as const;

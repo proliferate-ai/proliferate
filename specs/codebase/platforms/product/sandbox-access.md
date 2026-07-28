@@ -121,6 +121,20 @@ material stays valid across a pause); the 409 means the access material
 genuinely does not exist yet — never stamped, or cleared by provider loss
 — not "try again once it wakes".
 
+Because that 409 means "nothing has been stamped yet", every request-time
+access path resolves through
+`load_cloud_sandbox_runtime_access_or_repair`, which returns the identical
+409 *and* schedules one background materialization for the sandbox
+(lifecycle's cold-access law owns the mechanism and its stampede guard).
+The wire contract is unchanged — provisioning takes tens of seconds, far
+too long to hold a request — but the caller's retry is now waiting on work
+that is actually running. Materialization-internal callers keep using the
+bare loader: they are already inside the operation that does the repair.
+That law also settles what used to be lifecycle's open cold-start
+choreography question in favor of provision-on-access: there is no
+wake-and-poll handshake to add, because the poll the client already does
+against the unchanged 409 *is* the handshake.
+
 Adjacent `CloudApiError` codes (repository access, agent-gateway catalog,
 …) are their platforms' business and are not access-gating
 representations; a client must never treat an unrecognized code as one of
@@ -170,8 +184,9 @@ WebSocket upgrades carry the same token in the
 because WS clients cannot set headers. Server-side, gateway access
 resolution (row → upstream URL + bearer) is cached per user for 60 s with
 a per-user lock ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py))
-— the bound on how fast a destroy/recreate propagates to in-flight
-callers.
+and is invalidated immediately when runtime access is cleared or the row
+is destroyed. The billing permit is checked independently with a
+success-only 5 s cache; a 402 denial is never cached.
 
 ### Worked example: worktree inventory on a cloud sandbox
 
@@ -200,6 +215,10 @@ same one choreography.
   gating layers plus "not a gate". Feature code branches on the
   classification, never on raw `.code ===` string comparisons scattered at
   call sites.
+- **Gateway detail survives the transport.** `AnyHarnessError`
+  ([core.ts](../../../../anyharness/sdk/src/client/core.ts)) preserves a
+  FastAPI-style nested `detail` object as `details`, so the same subject-layer
+  402 representation reaches workspace presentation code unchanged.
 - **One capability parser.** The capability contract is parsed once, in
   product-client
   ([server-capability-contract.ts](../../../../apps/packages/product-client/src/lib/domain/capabilities/server-capability-contract.ts));
@@ -248,8 +267,9 @@ cloud/sdk/src/client/
 - Billing hold at spend time: typed 402; the client shows the block with
   the decision detail; no retry helps until the subject state changes.
 - Runtime access material missing: typed 409
-  `cloud_sandbox_runtime_not_ready`; materialization repairs it, the
-  gateway does not.
+  `cloud_sandbox_runtime_not_ready`; the same request schedules the
+  materialization that repairs it, so the retry resolves once provisioning
+  finishes. The repair is always a materialization, never a gateway retry.
 - Workspace not yet stamped with a runtime id: typed client-side
   `workspace_not_ready`, absorbed by the flat retry; visible only if
   8 × 750 ms elapses.
@@ -268,6 +288,8 @@ cloud/sdk/src/client/
 - Gateway auth and proxying:
   [test_cloud_sandbox_gateway_proxy.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_proxy.py),
   [test_cloud_sandbox_gateway_service.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_service.py).
+- Cold access still 409s and schedules one repair:
+  [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py).
 - Pending, landing with the gap PRs: shared-classifier unit tests; a
   contract test that the wire carries no unpopulated branchable fields.
 
@@ -275,20 +297,6 @@ cloud/sdk/src/client/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `actionBlockKind` is a live wire field with a dead producer: the
-      server serializes it always-`null` on two workspace models
-      ([workspaces/models.py](../../../../server/proliferate/server/cloud/workspaces/models.py))
-      while the client *branches on it* to decide whether to show the
-      status screen
-      ([cloud-workspace-status.ts](../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts));
-      the client also keeps a `CloudStartBlockReason` union mirroring
-      server constants that never reach the wire. Delete the field and the
-      dead client branch — the 402 body is the subject layer's one
-      representation — or wire it for real; the ruling is delete.
-- [ ] `authorize_sandbox_start` is dead code (no callers since #823,
-      documented as dead in three places); the live gate is the
-      resume-blocked path. Delete it and its sibling
-      ([billing/authorization.py](../../../../server/proliferate/server/billing/authorization.py)).
 - [ ] Two hand-written capability parsers: product-client and mobile
       ([mobile-server-capabilities.ts](../../../../apps/mobile/src/lib/access/cloud/capabilities/mobile-server-capabilities.ts))
       each reimplement the v1/v2+ derivation. Collapse mobile onto the
@@ -309,21 +317,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       vocabulary (`ready`/`materializing`/`error`) predates this enum.
       Fold the derivation rules (threshold included) into this document
       and align the enums when that doc slims.
-- [ ] `_runtime_status` maps sandbox statuses (`provisioning`, `stopped`)
-      the enum and check constraint do not allow; the runtime-status
-      shape is this document's, so the dead-branch deletion rides its fix
-      PR (cross-listed from
-      [sandbox-lifecycle.md](sandbox-lifecycle.md)).
-- [ ] Cold access has no repair trigger: a sandbox whose access material
-      was never stamped (or was cleared by provider loss) 409s forever at
-      the gateway; nothing on the access path starts the materialization
-      that would repair it. The choreography ruling (wake-and-poll vs
-      provision-on-access) is [sandbox-lifecycle.md](sandbox-lifecycle.md)'s
-      open question; this document's failure modes assume today's
-      repair-by-materializing-action behavior.
-- [ ] `POST /cloud-sandbox/wake` is byte-identical to `ensure`; collapse
-      to `ensure` as a hard rename. Owned by
-      [sandbox-lifecycle.md](sandbox-lifecycle.md)'s gap list; listed here
-      because the SDK bindings
-      ([cloud-sandboxes.ts](../../../../cloud/sdk/src/client/cloud-sandboxes.ts))
-      change with it.

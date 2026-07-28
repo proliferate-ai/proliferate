@@ -76,9 +76,7 @@ export function useMobilePendingPromptDispatcher({
       return;
     }
     if (!workspace.anyharnessWorkspaceId) {
-      setPendingPromptStatus(
-        workspace.actionBlockReason || "Cloud runtime is still materializing.",
-      );
+      setPendingPromptStatus("Cloud runtime is still materializing.");
       return;
     }
     if (pendingPrompt.dispatchedSessionId) {
@@ -233,7 +231,6 @@ export function useMobilePendingPromptDispatcher({
     pendingPromptDurable,
     pendingPromptFailed,
     invalidateWorkspaceLists,
-    workspace?.actionBlockReason,
     workspace?.anyharnessWorkspaceId,
     workspace?.id,
     workspaceStatus,

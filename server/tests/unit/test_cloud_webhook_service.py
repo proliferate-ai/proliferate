@@ -125,12 +125,14 @@ async def test_killed_e2b_webhook_closes_usage_and_preserves_recoverable_row(
     sandbox = _sandbox(status="ready", updated_at=event_time)
     closed_segments: list[dict[str, object]] = []
     sandbox_state_updates: list[dict[str, object]] = []
+    lost_workspace_sandboxes: list[object] = []
 
     _patch_webhook_state(
         monkeypatch,
         sandbox=sandbox,
         closed_segments=closed_segments,
         sandbox_state_updates=sandbox_state_updates,
+        lost_workspace_sandboxes=lost_workspace_sandboxes,
     )
 
     receipt = await webhook_service.handle_e2b_webhook(
@@ -149,6 +151,7 @@ async def test_killed_e2b_webhook_closes_usage_and_preserves_recoverable_row(
     assert closed_segments[-1]["expected_external_sandbox_id"] == sandbox.e2b_sandbox_id
     assert sandbox_state_updates[-1]["status"] == "error"
     assert sandbox_state_updates[-1]["expected_provider_sandbox_id"] == (sandbox.e2b_sandbox_id)
+    assert lost_workspace_sandboxes == [sandbox]
 
 
 @pytest.mark.asyncio
@@ -159,12 +162,14 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
     sandbox = _sandbox(status="ready", updated_at=event_time)
     closed_segments: list[dict[str, object]] = []
     sandbox_state_updates: list[dict[str, object]] = []
+    lost_workspace_sandboxes: list[object] = []
 
     _patch_webhook_state(
         monkeypatch,
         sandbox=sandbox,
         closed_segments=closed_segments,
         sandbox_state_updates=sandbox_state_updates,
+        lost_workspace_sandboxes=lost_workspace_sandboxes,
     )
 
     receipt = await webhook_service.handle_e2b_webhook(
@@ -186,6 +191,7 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
         "expected_materialization_attempt": sandbox.materialization_attempt,
         "observed_at": event_time + timedelta(seconds=1),
     }
+    assert lost_workspace_sandboxes == []
 
 
 @pytest.mark.asyncio
@@ -525,6 +531,7 @@ def _patch_webhook_state(
     sandbox: SimpleNamespace,
     closed_segments: list[dict[str, object]],
     sandbox_state_updates: list[dict[str, object]],
+    lost_workspace_sandboxes: list[object] | None = None,
 ) -> None:
     async def _remember_sandbox_event_receipt(*_args: object, **_kwargs: object) -> bool:
         return True
@@ -557,6 +564,14 @@ def _patch_webhook_state(
     async def _close_usage_segment_for_sandbox(*_args: object, **kwargs: object) -> None:
         closed_segments.append(kwargs)
 
+    async def _mark_cloud_workspaces_lost(
+        _db: object,
+        updated_sandbox: object,
+    ) -> int:
+        if lost_workspace_sandboxes is not None:
+            lost_workspace_sandboxes.append(updated_sandbox)
+        return 0
+
     monkeypatch.setattr(webhook_service, "_verify_e2b_signature", lambda *_args: None)
     monkeypatch.setattr(
         webhook_service,
@@ -587,4 +602,9 @@ def _patch_webhook_state(
         webhook_service,
         "close_usage_segment_for_sandbox",
         _close_usage_segment_for_sandbox,
+    )
+    monkeypatch.setattr(
+        webhook_service.cloud_workspace_store,
+        "mark_cloud_workspaces_lost_for_sandbox",
+        _mark_cloud_workspaces_lost,
     )

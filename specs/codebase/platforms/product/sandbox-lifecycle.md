@@ -221,6 +221,29 @@ Row status is one of `creating`, `ready`, `paused`, `error`, `destroyed`
   E2B's auto-resume brings a paused VM back under the forwarded traffic;
   a VM that resumes broken (dead runtime, stale token) is repaired by the
   next materialization operation, not by the gateway.
+- **A cold access resolution schedules its own repair.** When an access
+  path finds no stamped runtime access on the row — never materialized, or
+  cleared by provider loss — it still answers the typed 409
+  `cloud_sandbox_runtime_not_ready` (provisioning is far too slow to hold a
+  request open) *and* schedules one background materialization for that
+  sandbox
+  ([materialization/service.py](../../../../server/proliferate/server/cloud/materialization/service.py)).
+  The client's existing retry is therefore a wait, not a dead end. Two
+  things keep it from stampeding: a non-blocking cross-process Redis claim
+  keyed on the sandbox id, so N concurrent cold callers schedule at most
+  one run while it is in flight, and the per-sandbox materialization lock
+  below, which serializes any run that does start. The repair is still a
+  materialization operation and so inherits every gate above it — the
+  scheduler adds no gate of its own and bypasses none. Skipped for
+  destroyed rows (gone, not cold) and for deployments without managed-cloud
+  provisioning, where a background run could only fail. The claim is
+  in-process fire-and-forget, so a server restart during a provision strands
+  it: repair stays suppressed for that sandbox until the 900 s TTL lapses,
+  after which the next cold access schedules again — accepted, because the
+  TTL self-heals and the alternative (a durable queue) buys nothing at this
+  scale. This law is also the ruling on the previously-open cold-start
+  choreography question: cold access provisions on access, not by a separate
+  wake-and-poll handshake, and the client keeps polling the unchanged 409.
 
 Every transition has exactly one cause:
 
@@ -342,12 +365,17 @@ Pause is the steady state of an idle sandbox, not an exception:
   heartbeat response carries desired binary versions and the desired
   topology, which is how a long-lived sandbox converges to the current
   release without redeploying the template.
-- **A dead Worker is noticed, not silent.** The Supervisor restarts a
-  crashed Worker; a Worker that still misses its heartbeat window surfaces
-  as degraded in the workspace runtime-status payload and emits an alert
-  through the production alert path into the issue tracker, because a
-  silently dead Worker means stale binaries and expiring git credentials
-  with no user-visible symptom.
+- **A dead Worker on a running sandbox surfaces, but does not yet alert.**
+  A Worker that misses its heartbeat window (or never enrolled at all) on
+  a `running` sandbox surfaces as `workerDegraded: true` in the workspace
+  runtime-status payload and logs a structured warning on each read
+  (`_worker_degraded` in
+  [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)),
+  because a silently dead Worker means stale binaries and expiring git
+  credentials with no user-visible symptom. A paused/creating/error/destroyed
+  sandbox's Worker is not expected to be heartbeating and is never reported
+  degraded. Routing that condition into the production alert path (issue
+  tracker) is still open — see gap list.
 - Runtime pressure telemetry (CPU, memory, and disk) flows from AnyHarness
   health to the client pressure surfaces. Lifecycle transports the
   measurement; [sandbox-content.md](sandbox-content.md) owns what consumes
@@ -393,8 +421,9 @@ server/proliferate/
     │   └── sandbox_io/
     │       ├── connect.py                   the provisioning engine
     │       ├── resume_acceptance.py         post-resume pause reconciliation
-    │       ├── runtime_launch.py            Supervisor-owned runtime launch
-    │       └── worker_sidecar.py            Worker enrollment token mint + config
+    │       └── runtime_launch.py            Supervisor-owned runtime launch (only
+    │                                        topology; also mints the Worker
+    │                                        enrollment token)
     ├── runtime/bootstrap.py                 env, launcher, and Supervisor config builders
     ├── runtime/liveness_health.py           health + auth-enforcement probes
     ├── webhooks/                            E2B lifecycle event ingestion (HMAC, dedupe, correlate)
@@ -432,46 +461,44 @@ server/proliferate/
   [test_cloud_sandbox_recovery_invariants.py](../../../../server/tests/integration/test_cloud_sandbox_recovery_invariants.py),
   [test_cloud_sandbox_reconnect_self_heal.py](../../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py),
   [test_cloud_sandbox_orphan_reaper_lock.py](../../../../server/tests/integration/test_cloud_sandbox_orphan_reaper_lock.py).
+- Cold-access repair scheduling and its stampede guard:
+  [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py);
+  the claim primitive itself in
+  [test_redis_lock.py](../../../../server/tests/unit/test_redis_lock.py).
 - Template smoke:
   [smoke-cloud-template.mjs](../../../../scripts/smoke-cloud-template.mjs)
   (binaries present, Supervisor can start AnyHarness, sandbox killed on
   exit); run by the release and promote lanes and by the rollback runbook.
 - Managed runtime update proof: T4-RUNTIME-1 (heartbeat-driven update on a
   live sandbox) in the release suite.
-- Pending: the live E2B N-1 to N update proof that gates the
-  Supervisor-owned topology default (below).
+- Live E2B N-1 to N update proof (2026-07-26): real sandbox, supervisor-owned
+  topology, pins 0.3.47->0.3.48, zero rollbacks, sha256 of active binaries
+  matched published CDN artifacts, ~75s convergence. This gated the
+  Supervisor-owned topology default, which is now on.
+- D5 BRIDGE proof (2026-07-26, sandbox `iwwvadhffzxoora56f437`): a running
+  legacy (pre-Supervisor) sandbox migrated onto the Supervisor-owned topology
+  in place, in ~2.5s, via the `desiredTopology` heartbeat signal — no
+  destroy/recreate. This, together with the update proof above, gated
+  deleting the legacy launch path entirely: every (re)launch is now
+  unconditionally Supervisor-owned. `supervisor_owned_runtime`
+  ([config.py](../../../../server/proliferate/config.py)) survives only to
+  gate that same `desiredTopology` heartbeat signal for any already-running
+  legacy worker still bridging — see its docstring for the asymmetry.
 
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `POST /cloud-sandbox/wake` still exists and is byte-identical to
-      `ensure`
-      ([service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py));
-      collapse to `ensure` as a hard rename (pre-launch ruling, no alias
-      window) and update SDK/client callers.
-- [ ] Cold access is a dead end at the gateway: the 409
-      `cloud_sandbox_runtime_not_ready` fires whenever the row's runtime
-      access was never stamped or was cleared by provider loss
-      ([cloud_sandboxes/service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
-      and nothing on the access path starts the materialization that
-      would repair it — the client can only retry into the same 409.
-      Paused sandboxes are already fine (their stored address stays
-      valid, so forwarded traffic wakes them); the fix waits on the
-      cold-start choreography ruling (wake-and-poll vs
-      provision-on-access), still open.
-- [ ] `supervisor_owned_runtime` defaults off
-      ([config.py](../../../../server/proliferate/config.py)); today's
-      default launch is the legacy path (direct detached AnyHarness plus a
-      best-effort Worker sidecar,
-      [runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py)).
-      The flag flips after the live E2B N-1 to N proof passes; the legacy
-      launch path is then deleted.
-- [ ] Worker death is silent: sidecar launch failures are swallowed, the
-      warm-reuse path never relaunches a dead Worker, runtime-status
-      carries no worker liveness, and no alert fires. Surface degraded
-      worker state in the runtime-status payload and route the failure
-      into the production alert path.
+- [ ] Worker death still has no alert path: the Worker is now a
+      Supervisor-owned child with automatic restart-with-backoff
+      (`restart_delay_seconds`), so the old "sidecar launch failures are
+      swallowed" framing is gone along with the deleted sidecar launcher.
+      What remains open is alerting — a `running` sandbox's stale or
+      missing Worker surfaces as `workerDegraded: true` on the workspace
+      runtime-status payload and logs a structured warning on each read
+      (PR #1526), but nothing routes that condition into the production
+      alert path (issue tracker), and the warm-reuse path still never
+      relaunches a dead Worker.
 - [ ] The account model is one sandbox per user globally (partial unique
       index on `owner_user_id`; org variants are stubs that raise,
       [cloud_sandboxes.py](../../../../server/proliferate/db/store/cloud_sandboxes.py)).
@@ -484,16 +511,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       so "which live sandboxes still run the bad template" is not
       enumerable and rollback recovery of existing sandboxes stays manual.
       Persist the exact immutable tag at create time.
-- [ ] Pressure telemetry has no disk axis: AnyHarness collects CPU and
-      memory only, the template build declares no disk size, the E2B disk
-      metrics API is never called, and a disk-full failure flattens into
-      the generic provider-unavailable receipt
-      ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
-      Add disk to the health payload and type the disk-full failure
-      (consumer contract in [sandbox-content.md](sandbox-content.md)).
-- [ ] `_runtime_status` in
-      [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)
-      maps sandbox statuses `provisioning` and `stopped` that the enum and
-      check constraint do not allow; the runtime-status shape belongs to
-      [sandbox-access.md](sandbox-access.md), which cross-lists this
-      dead-branch deletion on its fix PR.

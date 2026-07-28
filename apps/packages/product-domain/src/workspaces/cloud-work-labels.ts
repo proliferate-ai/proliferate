@@ -104,8 +104,8 @@ export function workspaceState(workspace: CloudWorkspaceSummary): RecentWorkStat
   if (
     workspace.workspaceStatus === "error" ||
     workspace.status === "error" ||
-    workspace.actionBlockKind ||
-    workspace.actionBlockReason ||
+    workspace.workspaceStatus === "lost" ||
+    workspace.status === "lost" ||
     workspace.exposureState === "stale" ||
     workspaceHasPendingSessionInput(workspace)
   ) {
