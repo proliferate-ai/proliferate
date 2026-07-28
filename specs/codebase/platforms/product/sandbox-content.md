@@ -463,18 +463,6 @@ apps/packages/product-client/src/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] The managed-root fence excludes every cloud worktree:
-      `ANYHARNESS_WORKTREES_ROOT` is never set in the cloud launch env
-      ([bootstrap.py](../../../../server/proliferate/server/cloud/runtime/bootstrap.py)),
-      so the root defaults to `/home/user/.proliferate/worktrees` while
-      worktrees live under `/home/user/workspace/worktrees` — retire
-      refuses them and retention skips them ("outside managed worktrees
-      root"). Set the env var; this alone makes reclaim operable in cloud.
-- [ ] Retention never runs in cloud: the enabling env
-      (`ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION`) is never set (only
-      the defer flag is), and the server-side trigger clients
-      ([worktrees.py](../../../../server/proliferate/integrations/anyharness/worktrees.py))
-      have zero callers. Enable the pass in the cloud launch env.
 - [ ] Workspace delete and archive reclaim nothing
       ([cloud_workspaces.py](../../../../server/proliferate/db/store/cloud_workspaces.py)
       writes rows only); repository-environment delete reclaims nothing and
