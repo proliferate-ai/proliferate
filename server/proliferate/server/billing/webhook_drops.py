@@ -26,6 +26,15 @@ its level off the event type's family instead: ``invoice.*``, ``checkout.*``,
 and ``payment_intent.*`` are treated as potentially money-bearing and page;
 everything else warns.
 
+Precondition on that family-prefix policy: it is inert for ordinary traffic
+only because the live prod endpoint's ``enabled_events`` is scoped to exactly
+the six types this module dispatches (verified 2026-07-28 against the live
+Stripe endpoint config). If that scope is ever widened, a benign twin of a
+handled type in the same family (e.g. ``invoice.payment_succeeded``, which
+fires alongside essentially every ``invoice.paid``) would page every time.
+Anyone widening ``enabled_events`` must first exclude such benign twins from
+the money-bearing prefix match (or add per-type carve-outs) before doing so.
+
 Current gaps: reporting a drop does not change intake semantics. The webhook
 receipt is still marked ``processed``, so a dropped event stays unreplayable
 from our side and Stripe will not resend it. A distinct ``ignored`` receipt
@@ -81,8 +90,18 @@ UNHANDLED_MONEY_BEARING_EVENT_TYPE_PREFIXES = ("invoice.", "checkout.", "payment
 
 
 def checkout_session_is_paid(session: dict[str, Any]) -> bool:
-    """Whether Stripe already collected money for this checkout session."""
-    return session.get("payment_status") not in CHECKOUT_UNPAID_PAYMENT_STATUSES
+    """Whether Stripe already collected money for this checkout session.
+
+    A non-``str`` ``payment_status`` (a hostile or malformed payload) is
+    treated as not-paid rather than raising: the containment check below
+    would otherwise throw ``TypeError: unhashable type`` for a list/dict
+    value, which would escape to ``handle_stripe_webhook`` and mark the
+    receipt ``failed`` (a 500) instead of routing through the drop reporter.
+    """
+    status = session.get("payment_status")
+    if not isinstance(status, str):
+        return False
+    return status not in CHECKOUT_UNPAID_PAYMENT_STATUSES
 
 
 def invoice_is_paid(invoice: dict[str, Any]) -> bool:

@@ -147,12 +147,7 @@ async def test_paid_invoice_without_cloud_line_logs_and_pages(
                 "paid": True,
                 "metadata": {"billing_subject_id": str(subject_id)},
                 "lines": {
-                    "data": [
-                        {
-                            "id": "il_unclassified",
-                            "price": {"id": "price_something_else"},
-                        }
-                    ]
+                    "data": [{"id": "il_unclassified", "price": {"id": "price_something_else"}}]
                 },
             },
             event_id="evt_no_cloud_line",
@@ -213,10 +208,7 @@ async def test_paid_refill_session_without_price_line_logs_and_pages(
                 "mode": "payment",
                 "payment_status": "paid",
                 "customer": "cus_refill_drop",
-                "metadata": {
-                    "purpose": "refill_10h",
-                    "billing_subject_id": str(subject_id),
-                },
+                "metadata": {"purpose": "refill_10h", "billing_subject_id": str(subject_id)},
             },
             event_id="evt_refill_drop",
         )
@@ -302,14 +294,7 @@ async def test_paid_invoice_with_unresolved_subject_logs_and_pages(
                 "status": "paid",
                 "paid": True,
                 "subscription": None,
-                "lines": {
-                    "data": [
-                        {
-                            "id": "il_orphan",
-                            "price": {"id": "price_cloud"},
-                        }
-                    ]
-                },
+                "lines": {"data": [{"id": "il_orphan", "price": {"id": "price_cloud"}}]},
             },
             event_id="evt_orphan_subject",
         )
@@ -385,6 +370,18 @@ async def test_subscription_with_unresolved_subject_warns_without_paging(
             },
             logging.ERROR,
             True,
+        ),
+        # R2: a non-str payment_status (hostile shape) must not raise
+        # TypeError: unhashable in the `not in` check — treated as not-paid.
+        (
+            {
+                "id": "cs_hostile_payment_status",
+                "mode": "payment",
+                "payment_status": ["paid"],
+                "metadata": {"purpose": "some_future_purpose"},
+            },
+            logging.INFO,
+            False,
         ),
     ],
 )
