@@ -230,7 +230,7 @@ gate.
 | `_deploy-litellm.yml` | Reusable only | Build and roll the LiteLLM ECS service when its environment switch is enabled. |
 | `_deploy-mobile.yml` | Reusable only | Run the selected EAS build and optional submit lane when enabled. |
 | `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, preserves the support-feed secret, and explicitly authors the API's checked-in environment-bound Redis and E2B-key field references after account, region, secret-identity, DNS-safe Redis, and nonempty-key preflights. The conditional background re-image authors the same exact key projection plus the reviewed template, and asserts the full contract before and after registration. |
-| `_deploy-web.yml` | Reusable only | Deploy and verify the selected Vercel web surface. |
+| `_deploy-web.yml` | Reusable only | Deploy the selected Vercel Web surface with the environment's canonical `API_BASE_URL` forced into the Vite build, keep the candidate unaliased until its API health and baked bundle target pass, then move and verify the public alias. |
 | `_deploy-workers.yml` | Reusable only | Report the disabled Worker lane, or fail if enabled before a canonical deploy exists. |
 
 ### CI, security, compatibility, probes, and qualification

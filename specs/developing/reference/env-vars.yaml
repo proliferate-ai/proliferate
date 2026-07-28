@@ -1052,7 +1052,7 @@
 - name: VITE_PROLIFERATE_API_BASE_URL
   secret: false
   default: ""
-  description: Desktop/web control-plane base URL; when unset Desktop falls back to http://127.0.0.1:8000 and may use ~/.proliferate/config.json at runtime, while Web falls back to http://localhost:8000
+  description: Desktop/Web control-plane base URL; hosted Web derives this build input from the selected GitHub Environment's API_BASE_URL, production self-hosted Web falls back to its current origin when unset, and local Web falls back to http://localhost:8000; Desktop falls back to http://127.0.0.1:8000 and may use ~/.proliferate/config.json at runtime
   tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_ENVIRONMENT

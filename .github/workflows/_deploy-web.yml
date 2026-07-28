@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     env:
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
       WEB_URL: ${{ vars.WEB_URL }}
       VERCEL_ENVIRONMENT: ${{ vars.VERCEL_ENVIRONMENT || vars.VERCEL_TARGET || 'production' }}
       VERCEL_TARGET: ${{ vars.VERCEL_TARGET || vars.VERCEL_ENVIRONMENT || 'production' }}
@@ -49,6 +50,7 @@ jobs:
       - name: Validate Vercel config
         run: |
           set -euo pipefail
+          : "${API_BASE_URL:?Set API_BASE_URL on the GitHub environment.}"
           : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
           : "${VERCEL_TOKEN:?Set VERCEL_TOKEN on the GitHub environment.}"
           : "${VERCEL_ORG_ID:?Set VERCEL_ORG_ID on the GitHub environment.}"
@@ -74,6 +76,8 @@ jobs:
             args+=(--scope "$VERCEL_SCOPE")
           fi
           args+=(--target "$VERCEL_TARGET")
+          args+=(--skip-domain)
+          args+=(--build-env "VITE_PROLIFERATE_API_BASE_URL=$API_BASE_URL")
           deployment_output="$(pnpm dlx vercel@latest deploy "${args[@]}")"
           deployment_url="$(printf '%s\n' "$deployment_output" | awk '/^https:\/\// { url=$0 } END { print url }')"
           if [[ -z "$deployment_url" ]]; then
@@ -84,6 +88,12 @@ jobs:
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Verify candidate Web/API pair
+        run: |
+          node scripts/ci-cd/verify-web-deployment.mjs \
+            --web-url "${{ steps.deploy.outputs.deployment_url }}" \
+            --api-base-url "$API_BASE_URL"
 
       - name: Alias web domain
         run: |

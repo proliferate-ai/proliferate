@@ -133,6 +133,13 @@ or CI job. Consult the owning surface and its release procedure before changing
 an input; these build environments do not share one repository-wide precedence
 chain.
 
+Hosted Web is intentionally stricter than an ambient provider build: the
+reusable Vercel lane requires the selected GitHub Environment's
+`API_BASE_URL`, passes it as the build-time
+`VITE_PROLIFERATE_API_BASE_URL`, and verifies the same value in the candidate
+bundle before moving the public alias. That explicit workflow input wins over a
+stale Vercel project value.
+
 ## Workflow and Release Controls
 
 Workflow-only, publishing, signing, upload, and release-promotion controls are

@@ -108,6 +108,10 @@ see [Releases](releases.md).
   files on every exit before those actions' post-job hooks execute.
 - Worker deployment is a no-op while `WORKERS_DEPLOY_ENABLED=false`. Enabling
   it before a canonical service and command exist deliberately fails.
+- The Web lane takes `API_BASE_URL` from the selected GitHub Environment,
+  forces it into Vercel as `VITE_PROLIFERATE_API_BASE_URL`, and keeps the
+  candidate off the public alias until both `<API_BASE_URL>/health` and the
+  candidate bundle's baked API target match that value.
 - The nightly and hotfix coordinators have no LiteLLM job. Deploy an exact
   LiteLLM ref through `Promote Production` with that exact surface selected.
 - `Cloud Live Webhook` is manual-only and is not part of CI, staging, the
