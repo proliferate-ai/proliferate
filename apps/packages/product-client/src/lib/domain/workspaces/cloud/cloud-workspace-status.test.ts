@@ -1,3 +1,4 @@
+import { AnyHarnessClient } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import {
   buildCloudWorkspaceCompactStatusView,
@@ -7,6 +8,8 @@ import {
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
   isCloudWorkspaceFailedBeforeReady,
+  resolveCloudWorkspaceStatus,
+  shouldPollCloudWorkspaceForUpdates,
   shouldShowCloudWorkspaceStatusScreen,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { CLOUD_STATUS_COMPACT_COPY } from "#product/copy/cloud/cloud-status-copy";
@@ -14,6 +17,9 @@ import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import {
+  getCloudWorkspaceBillingBlockFromError,
+} from "#product/lib/access/cloud/workspace-connection-retry";
 
 function makeCloudWorkspace(
   overrides: Partial<CloudWorkspaceSummary> = {},
@@ -21,8 +27,6 @@ function makeCloudWorkspace(
   return {
     id: "cloud-1",
     displayName: null,
-    actionBlockKind: null,
-    actionBlockReason: null,
     postReadyPhase: "idle",
     postReadyFilesApplied: 0,
     postReadyFilesTotal: 0,
@@ -34,8 +38,6 @@ function makeCloudWorkspace(
       environmentId: null,
       status: "pending",
       generation: 0,
-      actionBlockKind: null,
-      actionBlockReason: null,
     },
     statusDetail: null,
     lastError: null,
@@ -64,6 +66,43 @@ function footerMessage(model: CloudWorkspaceStatusScreenModel): string | null {
 }
 
 describe("buildCloudWorkspaceStatusScreenModel", () => {
+  it("renders blocked mode from a caught gateway 402 detail", async () => {
+    const client = new AnyHarnessClient({
+      baseUrl: "https://gateway.example.test",
+      fetch: async () => new Response(JSON.stringify({
+        detail: {
+          code: "billing_start_blocked",
+          message: "Cloud usage is blocked.",
+          decision_type: "deny",
+          reason: "payment_failed",
+        },
+      }), {
+        status: 402,
+        statusText: "Payment Required",
+        headers: { "content-type": "application/json" },
+      }),
+    });
+    const error = await client.workspaces.list().catch((caught: unknown) => caught);
+    const blocked = getCloudWorkspaceBillingBlockFromError(error);
+
+    expect(blocked).not.toBeNull();
+    const model = buildCloudWorkspaceStatusScreenModel(
+      makeCloudWorkspace({ status: "ready" }),
+      blocked,
+    );
+
+    expect(model).toMatchObject({
+      mode: "blocked",
+      title: "Cloud usage is paused",
+      description: "Cloud usage is paused because billing needs attention.",
+      footer: {
+        kind: "action",
+        action: "retry",
+        label: "Try again",
+      },
+    });
+  });
+
   it("keeps provisioning progress to the current phase instead of row steps", () => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
       status: "materializing",
@@ -75,21 +114,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
     expect("steps" in model).toBe(false);
   });
 
-  it("returns a passive status footer for billing blocks", () => {
-    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
-      actionBlockKind: "credits_exhausted",
-      actionBlockReason: "Cloud usage is paused because your included sandbox hours are exhausted.",
-    }));
-
-    expect(model.footer).toEqual({
-      kind: "status",
-      message: "Cloud usage is paused because your included sandbox hours are exhausted.",
-    });
-    expect(model.description).toBe(
-      "Cloud usage is paused because your included sandbox hours are exhausted.",
-    );
-  });
-
   it.each<CloudWorkspaceStatus>(["pending", "materializing"])(
     "shows first-runtime setup copy for %s with generation zero",
     (status) => {
@@ -99,8 +123,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
           environmentId: "runtime-1",
           status: "provisioning",
           generation: 0,
-          actionBlockKind: null,
-          actionBlockReason: null,
         },
       }));
 
@@ -118,13 +140,29 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
         environmentId: "runtime-1",
         status: "running",
         generation: 2,
-        actionBlockKind: null,
-        actionBlockReason: null,
       },
     }));
 
     expect(model.footer.kind).toBe("auto-refresh");
     expect(footerMessage(model)).not.toBe(CLOUD_STATUS_COMPACT_COPY.firstRuntimeFooterMessage);
+  });
+
+  it("returns a terminal lost mode that offers delete instead of retry", () => {
+    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
+      status: "lost",
+    }));
+
+    expect(model).toMatchObject({
+      mode: "lost",
+      title: "Workspace lost",
+      description: expect.stringContaining("sandbox was killed"),
+      footer: {
+        kind: "action",
+        action: "delete",
+        label: "Delete workspace",
+      },
+    });
+    expect(model.description).toContain("contents are gone");
   });
 
   it("keeps generic provisioning copy when runtime summary is missing", () => {
@@ -150,8 +188,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
         environmentId: "runtime-1",
         status: "running",
         generation: 0,
-        actionBlockKind: null,
-        actionBlockReason: null,
       },
     }));
 
@@ -167,8 +203,8 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
 
   it.each<Partial<CloudWorkspaceSummary>>([
     { status: "error" },
+    { status: "lost" },
     { status: "archived" },
-    { actionBlockKind: "credits_exhausted" },
   ])("does not show first-runtime copy for non-provisioning states", (overrides) => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
       ...overrides,
@@ -176,8 +212,6 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
         environmentId: "runtime-1",
         status: "provisioning",
         generation: 0,
-        actionBlockKind: null,
-        actionBlockReason: null,
       },
     }));
 
@@ -188,11 +222,20 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
 });
 
 describe("shouldShowCloudWorkspaceStatusScreen", () => {
-  it("does not show the full status screen when optional block fields are omitted", () => {
-    const { actionBlockKind: _actionBlockKind, actionBlockReason: _actionBlockReason, ...workspace } =
-      makeCloudWorkspace({ status: "ready" });
+  it("does not show the full status screen for a ready workspace", () => {
+    expect(shouldShowCloudWorkspaceStatusScreen(
+      makeCloudWorkspace({ status: "ready" }),
+    )).toBe(false);
+  });
 
-    expect(shouldShowCloudWorkspaceStatusScreen(workspace)).toBe(false);
+  it("shows the full status screen for a lost workspace", () => {
+    const workspace = makeCloudWorkspace({
+      status: "lost",
+    });
+
+    expect(resolveCloudWorkspaceStatus(workspace)).toBe("lost");
+    expect(shouldShowCloudWorkspaceStatusScreen(workspace)).toBe(true);
+    expect(shouldPollCloudWorkspaceForUpdates(workspace)).toBe(false);
   });
 });
 
@@ -255,6 +298,12 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
       status: "error" as const,
       tone: "destructive" as const,
     },
+    {
+      expectedAction: { action: "delete", label: "Delete" },
+      expectedTitle: "Cloud workspace needs attention",
+      status: "lost" as const,
+      tone: "destructive" as const,
+    },
   ])("maps $status to a compact action view", ({ expectedAction, expectedTitle, status, tone }) => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({ status }));
     const compact = buildCloudWorkspaceCompactStatusView(model);
@@ -287,8 +336,8 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
       makeCloudWorkspace({ status: "materializing" }),
       makeCloudWorkspace({ status: "ready", postReadyPhase: "applying_files" }),
       makeCloudWorkspace({ status: "archived" }),
+      makeCloudWorkspace({ status: "lost" }),
       makeCloudWorkspace({ status: "error" }),
-      makeCloudWorkspace({ actionBlockKind: "billing_quota" }),
     ].map((workspace) => buildCloudWorkspaceStatusScreenModel(workspace));
 
     expect(models.map((model) => buildCloudWorkspaceCompactStatusView(model).tone))

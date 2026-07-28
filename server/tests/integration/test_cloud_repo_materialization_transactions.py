@@ -98,6 +98,16 @@ async def test_frozen_repo_materialization_releases_transaction_before_each_exte
         "materialize_github_credentials",
         credentials,
     )
+
+    async def git_identity(db: AsyncSession, **_kwargs):  # type: ignore[no-untyped-def]
+        assert not db.in_transaction()
+        calls.append("git-identity")
+
+    monkeypatch.setattr(
+        repo_materializer.git_identity,
+        "materialize_git_identity",
+        git_identity,
+    )
     monkeypatch.setattr(repo_materializer, "_materialize_git_checkout", checkout)
     monkeypatch.setattr(
         repo_materializer.secret_set,
@@ -127,6 +137,7 @@ async def test_frozen_repo_materialization_releases_transaction_before_each_exte
     assert calls == [
         "github-authority",
         "github-credentials",
+        "git-identity",
         "git-checkout",
         "workspace-secrets",
         "ready",
@@ -218,15 +229,24 @@ async def test_agent_auth_releases_transaction_before_sandbox_io(
 
     async def build(db: AsyncSession, _user_id):  # type: ignore[no-untyped-def]
         await db.execute(text("SELECT 1"))
-        return {"harnesses": {}}, "fingerprint"
+        return {"harnesses": {}, "revision": 0}, "fingerprint"
 
     async def remove(_target, **_kwargs):  # type: ignore[no-untyped-def]
         nonlocal external_calls
         assert not db_session.in_transaction()
         external_calls += 1
 
+    ack_calls = 0
+
+    async def record_ack(_db, **_kwargs):  # type: ignore[no-untyped-def]
+        # The real write needs a persisted user row; this test's user is a
+        # bare uuid, so stub the store call and keep the seam observable.
+        nonlocal ack_calls
+        ack_calls += 1
+
     monkeypatch.setattr(agent_auth, "build_agent_auth_state", build)
     monkeypatch.setattr(agent_auth.sandbox_io, "remove_owned_files", remove)
+    monkeypatch.setattr(agent_auth.agent_gateway_store, "record_delivery_ack", record_ack)
 
     await agent_auth.materialize_agent_auth(
         db_session,
@@ -238,6 +258,7 @@ async def test_agent_auth_releases_transaction_before_sandbox_io(
     )
 
     assert external_calls == 1
+    assert ack_calls == 1
 
 
 @pytest.mark.asyncio

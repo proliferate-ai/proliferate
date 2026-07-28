@@ -34,7 +34,7 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
  *   - Source control first (review / commit-push / compare / checks)
  *   - Subagents (ours): pixel sprite + name rows
  *   - Native agents & terminals as count rows with hover detail cards
- *   - Resources (worktrees summary → searchable modal, cloud CPU/RAM)
+ *   - Resources (worktrees summary → searchable modal, cloud CPU/RAM/disk)
  *   - Advanced session config (absorbed from the removed "..." overflow)
  * Conversation-flow state (queued prompts, goal, blocking approvals)
  * deliberately stays in the composer dock and is NOT rendered here.
@@ -98,7 +98,7 @@ export interface WorkspaceStatusActions {
 }
 
 export interface WorkspaceStatusEnvironmentProps {
-  /** Runtime resources (worktrees, cloud CPU/RAM) for the Resources section. */
+  /** Runtime resources (worktrees, cloud CPU/RAM/disk) for the Resources section. */
   environmentState?: RuntimePressureTargetState | null;
   /** Opens the searchable worktrees modal (owner renders the dialog). */
   onOpenWorktrees?: () => void;

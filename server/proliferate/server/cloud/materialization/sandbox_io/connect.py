@@ -29,6 +29,9 @@ from proliferate.server.billing.runtime_usage import (
     converge_cloud_sandbox_provider_usage,
     open_cloud_sandbox_provider_usage,
 )
+from proliferate.server.cloud.gateway.service import (
+    invalidate_cloud_sandbox_gateway_access_for_user,
+)
 from proliferate.server.cloud.materialization.failures import persist_materialization_failure
 from proliferate.server.cloud.materialization.sandbox_io.resume_acceptance import (
     ProviderInactiveAfterResume,
@@ -585,6 +588,11 @@ async def connect_ready_sandbox(
                 "Cloud sandbox provider binding changed while connecting."
             )
         await db.commit()
+        # The re-stamp is the transition that actually changes the upstream
+        # address (a replacement provider sandbox gets a new URL); a cached
+        # gateway entry from the in-flight window must not outlive it.
+        if ready.owner_user_id is not None:
+            invalidate_cloud_sandbox_gateway_access_for_user(ready.owner_user_id)
 
         return SandboxIOTarget(
             provider=provider,

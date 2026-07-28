@@ -53,12 +53,24 @@ pub struct RuntimeMemoryPressure {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct RuntimeDiskPressure {
+    pub used_bytes: u64,
+    pub total_bytes: u64,
+    pub available_bytes: u64,
+    pub percent: f64,
+    pub ideal_max_percent: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct RuntimeResourcePressure {
     pub level: RuntimePressureLevel,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cpu: Option<RuntimeCpuPressure>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory: Option<RuntimeMemoryPressure>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disk: Option<RuntimeDiskPressure>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pressure_percent: Option<f64>,
     pub collected_at: String,

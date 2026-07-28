@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-07-17.4",
+  "registryVersion": "2026-07-17.5",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -108,7 +108,7 @@
           }
         ]
       },
-      "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp",
+      "docsUrl": "https://code.claude.com/docs",
       "providerConfig": [
         {
           "kind": "aws_bedrock",
@@ -247,7 +247,7 @@
           }
         ]
       },
-      "docsUrl": "https://github.com/proliferate-ai/codex-acp",
+      "docsUrl": "https://developers.openai.com/codex/cli/",
       "providerConfig": [
         {
           "kind": "aws_bedrock",
@@ -334,7 +334,7 @@
           }
         ]
       },
-      "docsUrl": "https://docs.cursor.com/cli/acp"
+      "docsUrl": "https://cursor.com/docs/cli"
     },
     {
       "kind": "opencode",
@@ -471,7 +471,7 @@
           }
         ]
       },
-      "docsUrl": "https://opencode.ai",
+      "docsUrl": "https://opencode.ai/docs/",
       "providerConfig": [
         {
           "kind": "aws_bedrock",
@@ -568,7 +568,7 @@
           }
         ]
       },
-      "docsUrl": "https://x.ai/cli"
+      "docsUrl": "https://docs.x.ai/docs"
     }
   ]
 }

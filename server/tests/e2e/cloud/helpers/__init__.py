@@ -15,6 +15,7 @@ from tests.e2e.cloud.helpers.config import (
 )
 from tests.e2e.cloud.helpers.github import (
     link_github_account,
+    seed_github_app_authorization,
     seed_linked_github_account,
 )
 from tests.e2e.cloud.helpers.matrix import (
@@ -105,6 +106,7 @@ __all__ = [
     "is_port_open",
     "assert_workspace_sane",
     "link_github_account",
+    "seed_github_app_authorization",
     "list_e2b_sandbox_events",
     "list_e2b_webhooks",
     "list_ngrok_requests",

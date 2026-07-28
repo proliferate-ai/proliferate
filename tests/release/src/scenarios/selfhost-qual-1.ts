@@ -71,7 +71,7 @@ import {
   type CloudAddonConfig,
   type CloudAddonEnvSource,
 } from "../worlds/selfhost/cloud-addon.js";
-import { wakeCloudSandbox } from "../fixtures/cloud-sandbox.js";
+import { ensureCloudSandboxRow } from "../fixtures/cloud-sandbox.js";
 import {
   killProviderSandbox,
   pauseProviderSandbox,
@@ -1117,7 +1117,7 @@ export const defaultCloudAddonCellOps: CloudAddonCellOps = {
       const marker = `sh-cloud-addon-${world.run.run_id}`;
       await writeProviderSandboxFile(providerSandboxId, "/home/user/.sh-cloud-addon-marker", marker, e2bEnv);
       await pauseProviderSandbox(providerSandboxId, e2bEnv);
-      await wakeCloudSandbox(owner.api);
+      await ensureCloudSandboxRow(owner.api);
       const readBack = await readProviderSandboxFile(providerSandboxId, "/home/user/.sh-cloud-addon-marker", e2bEnv);
       return { intact: (readBack.content ?? "").trim() === marker };
     } catch (error) {

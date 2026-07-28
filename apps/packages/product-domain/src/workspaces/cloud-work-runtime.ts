@@ -87,6 +87,8 @@ export function recentWorkCommandability(
   if (
     workspace.workspaceStatus === "error" ||
     workspace.status === "error" ||
+    workspace.workspaceStatus === "lost" ||
+    workspace.status === "lost" ||
     workspace.runtime?.status === "error" ||
     workspace.runtime?.status === "disabled"
   ) {
@@ -137,6 +139,8 @@ export function cloudCommandReadiness(
   if (
     workspace.workspaceStatus === "error" ||
     workspace.status === "error" ||
+    workspace.workspaceStatus === "lost" ||
+    workspace.status === "lost" ||
     workspace.runtime?.status === "error" ||
     workspace.runtime?.status === "disabled"
   ) {

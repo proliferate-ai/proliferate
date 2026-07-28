@@ -10,10 +10,16 @@ blew up.
 
 These tests pin the fix at the ``connect_ready_sandbox`` orchestration layer:
 
-1. ``_launch_anyharness_runtime`` kills any stale runtime/worker/supervisor
-   (via the supervisor stop command) BEFORE relaunching.
+1. ``launch_anyharness_runtime`` kills any stale runtime/worker/supervisor
+   (via the supervisor stop command) BEFORE relaunching Supervisor.
 2. A freshly minted runtime token is persisted even when the runtime URL is
    unchanged, so the next connect does not repeat the dance.
+
+Originally pinned against the legacy direct-nohup'd AnyHarness launch path
+(flag off); ported onto the Supervisor-owned launch path (the only one left)
+once that legacy path was deleted following the live E2B N-1->N update proof
+and the D5 BRIDGE proof (both 2026-07-26) -- the self-heal semantics survive
+unchanged, only the launched process differs.
 
 Providers and runtime probes are stubbed per the repo testing standard — no
 real sandboxes.
@@ -37,8 +43,11 @@ from proliferate.server.cloud.materialization.sandbox_io import connect as conne
 from proliferate.server.cloud.materialization.sandbox_io import (
     runtime_launch as runtime_launch_module,
 )
-from proliferate.server.cloud.runtime.bootstrap import build_supervised_runtime_stop_command
-from proliferate.server.cloud.runtime.sandbox_exec import build_detached_runtime_launch_command
+from proliferate.server.cloud.runtime.bootstrap import (
+    build_supervised_runtime_stop_command,
+    supervisor_binary_path,
+    supervisor_config_path,
+)
 
 RUNTIME_URL = "https://runtime.example.invalid"
 HOME_DIR = "/home/user"
@@ -56,6 +65,8 @@ class _FakeProvider:
     """Records commands so tests can assert the self-heal ordering."""
 
     template_version = "e2b-template-test"
+    runtime_endpoint_handles_cors = False
+    runtime_port = 8080
 
     def __init__(self, db: AsyncSession | None = None) -> None:
         self.db = db
@@ -95,12 +106,21 @@ class _FakeProvider:
 
 def _install_stubs(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> None:
     monkeypatch.setattr(connect_module, "get_sandbox_provider", lambda _ref: provider)
+    monkeypatch.setattr(runtime_launch_module, "build_runtime_env", lambda *a, **k: {})
     monkeypatch.setattr(
         runtime_launch_module,
-        "build_runtime_launch_script",
-        lambda *a, **k: "#!/bin/bash\ntrue\n",
+        "worker_cloud_base_url",
+        lambda: "http://cloud.test",
     )
-    monkeypatch.setattr(runtime_launch_module, "build_runtime_env", lambda *a, **k: {})
+
+    async def _mint_enrollment(_sandbox_record: object) -> str:
+        return "enrollment-token-stub"
+
+    monkeypatch.setattr(
+        runtime_launch_module,
+        "mint_cloud_sandbox_worker_enrollment",
+        _mint_enrollment,
+    )
 
     async def _ok_health(*_a: Any, **_k: Any) -> None:
         return None
@@ -108,15 +128,11 @@ def _install_stubs(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> 
     async def _ok_auth(*_a: Any, **_k: Any) -> None:
         return None
 
-    async def _ok_sidecar(*_a: Any, **_k: Any) -> None:
-        return None
-
     async def _resume_allowed(*_a: Any, **_k: Any) -> None:
         return None
 
     monkeypatch.setattr(runtime_launch_module, "wait_for_runtime_health", _ok_health)
     monkeypatch.setattr(runtime_launch_module, "verify_runtime_auth_enforced", _ok_auth)
-    monkeypatch.setattr(runtime_launch_module, "launch_worker_sidecar", _ok_sidecar)
     # Billing resume gate is out of scope for reconnect self-heal.
     monkeypatch.setattr(connect_module, "assert_cloud_sandbox_resume_allowed", _resume_allowed)
 
@@ -173,11 +189,18 @@ async def test_stale_runtime_is_killed_before_relaunch(
         base_env={},
     )
     stop_command = build_supervised_runtime_stop_command(runtime_context)
-    launch_command = build_detached_runtime_launch_command(runtime_context)
+    supervisor_binary = supervisor_binary_path(runtime_context)
+    supervisor_commands = [
+        cmd
+        for cmd in provider.commands
+        if supervisor_binary in cmd and supervisor_config_path(runtime_context) in cmd
+    ]
     assert stop_command in provider.commands, provider.commands
-    assert launch_command in provider.commands, provider.commands
+    assert supervisor_commands, provider.commands
     # Self-heal invariant: kill the stale runtime BEFORE relaunching it.
-    assert provider.commands.index(stop_command) < provider.commands.index(launch_command)
+    stop_index = provider.commands.index(stop_command)
+    launch_index = min(provider.commands.index(cmd) for cmd in supervisor_commands)
+    assert stop_index < launch_index
     assert provider.runtime_io_transactions
     assert not any(provider.runtime_io_transactions)
 
@@ -217,7 +240,6 @@ async def test_failed_organization_lookup_rolls_back_before_runtime_io(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(runtime_launch_module.settings, "supervisor_owned_runtime", False)
     provider = _FakeProvider(db_session)
     _install_stubs(monkeypatch, provider)
     sandbox = await _seed_sandbox(

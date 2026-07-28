@@ -17,7 +17,15 @@
 //
 // Idempotent; safe to run repeatedly. Exits nonzero on a missing source.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -47,9 +55,14 @@ function syncGeneratedDocument(source, dest, label) {
     return;
   }
   mkdirSync(GENERATED_DIR, { recursive: true });
-  cpSync(source, dest);
+  // Minify: the copies are inlined `?raw` into the /login entry chunk, and the
+  // pretty-printed sources cost ~2.6KB extra gzip against the WDU-1247-D1 cap.
+  writeFileSync(
+    dest,
+    JSON.stringify(JSON.parse(readFileSync(source, "utf8"))),
+  );
   console.log(
-    `[copy-product-client-assets] synced ${label} -> ${relative(REPO_ROOT, dest)}`,
+    `[copy-product-client-assets] synced ${label} (minified) -> ${relative(REPO_ROOT, dest)}`,
   );
 }
 

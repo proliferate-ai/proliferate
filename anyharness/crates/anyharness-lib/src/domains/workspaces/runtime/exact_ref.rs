@@ -75,6 +75,18 @@ pub(crate) fn worktree_is_clean(repo_root: &Path) -> anyhow::Result<bool> {
 }
 
 impl WorkspaceRuntime {
+    /// Resolve the deterministic default destination for an ordinary worktree.
+    /// The create-worktree conflict policy owns any numeric suffixes applied
+    /// after this base candidate.
+    pub(crate) fn default_worktree_destination_path(
+        &self,
+        repo_root_id: &str,
+        branch_name: &str,
+    ) -> anyhow::Result<PathBuf> {
+        let base_dir = self.managed_destinations_base_dir(repo_root_id)?;
+        Ok(base_dir.join(destination_slug(branch_name)))
+    }
+
     /// Resolve a validated ordinary managed-worktree destination without
     /// mutating it. The materialization ledger persists this path before Git
     /// creation so a crash retry can inspect and adopt the same checkout.
@@ -140,10 +152,7 @@ impl WorkspaceRuntime {
             });
         }
 
-        let mut slug = sanitize_destination_name(preferred_workspace_name.unwrap_or(branch_name));
-        if slug.is_empty() {
-            slug = "workspace".to_string();
-        }
+        let slug = destination_slug(preferred_workspace_name.unwrap_or(branch_name));
         let short_sha = head_sha.chars().take(8).collect::<String>();
         let target_path = (0..100)
             .map(|attempt| {
@@ -387,6 +396,15 @@ fn sanitize_destination_name(value: &str) -> String {
         .collect::<String>()
         .trim_matches('-')
         .to_string()
+}
+
+fn destination_slug(value: &str) -> String {
+    let slug = sanitize_destination_name(value);
+    if slug.is_empty() {
+        "workspace".to_string()
+    } else {
+        slug
+    }
 }
 
 fn validate_destination_id(value: &str) -> anyhow::Result<()> {

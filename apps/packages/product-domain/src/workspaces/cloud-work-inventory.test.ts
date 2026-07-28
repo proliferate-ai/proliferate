@@ -39,9 +39,7 @@ describe("cloud work inventory", () => {
   });
 
   it("uses only API-backed status categories", () => {
-    expect(cloudWorkStatusForWorkspace(workspace({ actionBlockReason: "Missing auth" }))).toBe("blocked");
     expect(cloudWorkStatusForWorkspace(workspace({
-      actionBlockReason: "Missing auth",
       lastError: "Runtime failed",
     }))).toBe("error");
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "error" }))).toBe("error");
@@ -217,7 +215,6 @@ describe("cloud work inventory", () => {
       workspace({
         id: "blocked",
         displayName: "Blocked chat",
-        actionBlockReason: "Needs auth",
         lastActivityAt: "2026-05-23T11:00:00Z",
       }),
       workspace({
@@ -792,8 +789,6 @@ function runtime(status: RuntimeSummary["status"], overrides: Partial<RuntimeSum
     status,
     generation: 1,
     runtimeAuth: null,
-    actionBlockKind: null,
-    actionBlockReason: null,
     ...overrides,
   };
 }
@@ -838,8 +833,6 @@ function workspace(overrides: Partial<CloudWorkspaceSummary> = {}): CloudWorkspa
     templateVersion: null,
     updatedAt: "2026-05-23T11:30:00Z",
     createdAt: "2026-05-23T10:00:00Z",
-    actionBlockKind: null,
-    actionBlockReason: null,
     postReadyPhase: "complete",
     postReadyFilesTotal: 0,
     postReadyFilesApplied: 0,

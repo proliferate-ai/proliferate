@@ -168,19 +168,35 @@ async def get_cloud_connection(
     client: httpx.AsyncClient,
     auth: AuthSession,
     workspace_id: str,
+    *,
+    db_session: AsyncSession,
 ) -> dict[str, object]:
-    response = await client.get(
-        f"/v1/cloud/workspaces/{workspace_id}/connection",
-        headers=auth.headers,
+    """Resolve the runtime connection the way the gateway does server-side.
+
+    The public ``/connection`` route was deleted with the parked remote-access
+    domain (#823); product clients reach the runtime only through the gateway
+    proxy. Live tests still need the raw upstream (direct runtime probes,
+    SSE), so resolve it from the sandbox row via the product's own access
+    loader — the exact seam ``ensure_cloud_sandbox_gateway_access`` uses.
+    """
+    from proliferate.db.store import cloud_sandboxes as sandbox_store
+    from proliferate.server.cloud.cloud_sandboxes.service import (
+        load_cloud_sandbox_runtime_access,
     )
-    if response.status_code == 401:
-        auth = await refresh_auth_session(client, auth=auth)
-        response = await client.get(
-            f"/v1/cloud/workspaces/{workspace_id}/connection",
-            headers=auth.headers,
-        )
-    response.raise_for_status()
-    return response.json()
+
+    workspace = await get_cloud_workspace(client, auth, workspace_id)
+    sandbox = await sandbox_store.load_personal_cloud_sandbox(db_session, UUID(auth.user_id))
+    if sandbox is None:
+        raise CloudE2ETestError(f"No personal cloud sandbox row for user {auth.user_id}.")
+    runtime_url, access_token, _data_key = await load_cloud_sandbox_runtime_access(sandbox)
+    return {
+        "runtimeUrl": runtime_url,
+        "accessToken": access_token,
+        "anyharnessWorkspaceId": workspace.get("anyharnessWorkspaceId"),
+        "runtimeGeneration": sandbox.runtime_generation,
+        "allowedAgentKinds": workspace.get("allowedAgentKinds"),
+        "readyAgentKinds": workspace.get("readyAgentKinds"),
+    }
 
 
 async def delete_cloud_workspace_quietly(
@@ -280,7 +296,12 @@ async def provision_workspace_with_credentials(
         branch_prefix=branch_prefix,
     )
     auth = await refresh_auth_session(client, auth=auth)
-    connection = await get_cloud_connection(client, auth, str(workspace["id"]))
+    connection = await get_cloud_connection(
+        client,
+        auth,
+        str(workspace["id"]),
+        db_session=db_session,
+    )
     return WorkspaceHandle(
         auth=auth,
         workspace=workspace,

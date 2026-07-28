@@ -6,6 +6,7 @@ import { cloudWorkspaceConnectionKey } from "#product/hooks/access/cloud/query-k
 import {
   CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES,
   CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS,
+  cloudWorkspaceConnectionRetryBudget,
   getResolvedCloudWorkspaceConnection,
   isCloudWorkspaceNotReadyError,
   isRetryableCloudWorkspaceConnectionError,
@@ -30,9 +31,10 @@ export function cloudWorkspaceConnectionQueryOptions(
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     retry: (failureCount, error) =>
-      failureCount < CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES
+      failureCount < cloudWorkspaceConnectionRetryBudget(error).maxRetries
       && isRetryableCloudWorkspaceConnectionError(error),
-    retryDelay: CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS,
+    retryDelay: (_failureCount, error) =>
+      cloudWorkspaceConnectionRetryBudget(error).delayMs,
   });
 }
 

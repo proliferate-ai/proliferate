@@ -21,7 +21,7 @@ export interface WorktreeCreationParams {
   repoRootId: string;
   workspaceName: string;
   branchName: string;
-  targetPath: string;
+  targetPath?: string;
   baseRef: string;
   checkoutMode: WorktreeCheckoutMode;
   setupScript: string | null;
@@ -38,7 +38,6 @@ export function resolveWorktreeCreationParams(input: {
   repoRoot: RepoRoot;
   sourceWorkspace: Workspace | null;
   rawInput: CreateWorktreeWorkspaceInput;
-  homeDir: string;
   branchPrefixType: BranchPrefixType;
   authUser: AuthUser | null;
   repoConfig?: {
@@ -50,7 +49,6 @@ export function resolveWorktreeCreationParams(input: {
     repoRoot,
     sourceWorkspace,
     rawInput,
-    homeDir,
     branchPrefixType,
     authUser,
     repoConfig,
@@ -60,8 +58,7 @@ export function resolveWorktreeCreationParams(input: {
   const repoName = repoRoot.remoteRepoName?.trim()
     || repoRoot.path.split("/").pop()
     || "repo";
-  const targetPath = rawInput.targetPath?.trim()
-    || `${homeDir}/.proliferate/worktrees/${repoName}/${workspaceName}`;
+  const targetPath = rawInput.targetPath?.trim() || undefined;
   const hasExplicitBranch = Boolean(rawInput.branchName?.trim());
   const hasExplicitTargetPath = Boolean(rawInput.targetPath?.trim());
   const explicitBaseRef = rawInput.baseBranch?.trim();

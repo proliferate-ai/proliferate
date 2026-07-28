@@ -111,7 +111,7 @@ async function createOrReuseWorkspace(
     throw new LocalAutomationExecutorError("stale_claim");
   }
 
-  const resolved = await resolveExistingTargetPath(input);
+  const resolved = await resolveExistingWorkspace(input);
   if (resolved) {
     const attached = await input.transitions.attachWorkspace(resolved.id);
     if (!attached.accepted) {
@@ -126,7 +126,6 @@ async function createOrReuseWorkspace(
     const response = await input.client.workspaces.createWorktree({
       repoRootId: input.plan.repoRootId,
       newBranchName: input.plan.branchName,
-      targetPath: input.plan.targetPath,
       baseBranch: input.plan.baseRef,
       setupScript: input.plan.setupScript,
       origin: AUTOMATION_LOCAL_ORIGIN,
@@ -173,18 +172,20 @@ async function syncAutomationWorkspaceDisplayName(
   }
 }
 
-async function resolveExistingTargetPath(
+async function resolveExistingWorkspace(
   input: ExecuteLocalAutomationInput,
 ): Promise<Workspace | null> {
   try {
-    const response = await input.client.workspaces.resolveFromPath({ path: input.plan.targetPath });
-    const workspace = response.workspace;
-    assertWorkspaceMatches(input, workspace);
-    return workspace;
-  } catch (error) {
-    if (error instanceof LocalAutomationExecutorError) {
-      throw error;
-    }
+    const workspaces = await input.client.workspaces.list();
+    return workspaces.find((workspace) =>
+      workspaceMatchesAutomationPlan({
+        workspace,
+        repoRoot: input.candidate.repoRoot,
+        plan: input.plan,
+        claim: input.claim,
+      })
+    ) ?? null;
+  } catch {
     return null;
   }
 }
