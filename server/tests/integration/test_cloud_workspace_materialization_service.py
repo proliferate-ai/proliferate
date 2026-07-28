@@ -42,7 +42,13 @@ _HEAD = "abc123def456"
 _BRANCH = "feat/x"
 
 
-async def _seed(db: AsyncSession, *, with_sandbox: bool = True, with_worker: bool = True):
+async def _seed(
+    db: AsyncSession,
+    *,
+    with_sandbox: bool = True,
+    with_worker: bool = True,
+    lost: bool = False,
+):
     now = datetime.now(UTC)
     user = User(
         id=uuid.uuid4(),
@@ -103,6 +109,7 @@ async def _seed(db: AsyncSession, *, with_sandbox: bool = True, with_worker: boo
         anyharness_workspace_id="ah-managed",
         created_at=now,
         updated_at=now,
+        lost_at=now if lost else None,
     )
     db.add(ws)
     await db.flush()
@@ -205,6 +212,16 @@ async def test_intent_success_clean_published_source(
     assert result.source.head_sha == _HEAD
     mat = result.materialization
     assert result.operation_id == f"{mat.id}:{mat.generation}"
+
+
+@pytest.mark.asyncio
+async def test_intent_rejects_lost_workspace(db_session: AsyncSession) -> None:
+    seed = await _seed(db_session, lost=True)
+
+    with pytest.raises(CloudApiError) as excinfo:
+        await _intent(db_session, seed)
+
+    assert excinfo.value.code == "workspace_lost"
 
 
 @pytest.mark.asyncio

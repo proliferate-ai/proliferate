@@ -18,6 +18,7 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store.cloud_sandboxes import (
     accept_destroyed_cloud_sandbox_provider_observation,
     apply_cloud_sandbox_provider_observation,
@@ -41,6 +42,9 @@ from proliferate.server.billing.runtime_usage import (
     remember_cloud_sandbox_event_receipt,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.gateway.service import (
+    invalidate_cloud_sandbox_gateway_access_for_user,
+)
 from proliferate.server.cloud.materialization import locks
 from proliferate.server.cloud.materialization.failures import (
     PROVIDER_SANDBOX_MISSING_RECEIPT,
@@ -407,6 +411,10 @@ async def handle_e2b_webhook(
                 observed_at=event.timestamp,
                 last_error=PROVIDER_SANDBOX_MISSING_RECEIPT,
             )
+            if updated is not None and updated.owner_user_id is not None:
+                invalidate_cloud_sandbox_gateway_access_for_user(
+                    updated.owner_user_id,
+                )
         if updated is None:
             # Explicit deletion may have won after correlation. Preserve its
             # state while fencing this exact attempt's terminal observation.
@@ -419,6 +427,10 @@ async def handle_e2b_webhook(
             )
             if updated is None:
                 return E2BWebhookReceipt()
+        await cloud_workspace_store.mark_cloud_workspaces_lost_for_sandbox(
+            db,
+            updated,
+        )
         await close_usage_segment_for_sandbox(
             db,
             sandbox_id=sandbox.id,

@@ -1,6 +1,5 @@
 export type CloudCommandKind =
   | "start_session"
-  | "configure_git_identity"
   | "ensure_repo_checkout"
   | "materialize_workspace"
   | "materialize_environment"

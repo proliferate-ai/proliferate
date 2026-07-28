@@ -1,6 +1,12 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+use super::super::executor::{run_git_with_timeout, TimedGitOutput};
+use super::super::types::WorktreeBaseFetch;
+use crate::adapters::git::GitService;
+
+const WORKTREE_BASE_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct GitWorktreeRemoveOutput {
     pub success: bool,
@@ -23,7 +29,15 @@ pub fn create_worktree(
         "[workspace-latency] workspace.worktree.git_add.start"
     );
     let output = Command::new("git")
-        .args(["worktree", "add", "-b", new_branch, target_path, base])
+        .args([
+            "worktree",
+            "add",
+            "-b",
+            new_branch,
+            "--no-track",
+            target_path,
+            base,
+        ])
         .current_dir(source_repo_root)
         .output()
         .map_err(|e| {
@@ -183,7 +197,7 @@ pub fn create_worktree_at_ref(
     exact_ref: &str,
 ) -> anyhow::Result<()> {
     prune_stale_worktrees_if_possible(Path::new(source_repo_root));
-    fetch_branch_if_possible(Path::new(source_repo_root), branch_name);
+    let _ = fetch_worktree_base(Path::new(source_repo_root), branch_name);
     ensure_ref_exists(Path::new(source_repo_root), exact_ref)?;
 
     if git_local_branch_exists(Path::new(source_repo_root), branch_name)? {
@@ -287,11 +301,38 @@ fn run_switch(workspace_path: &Path, args: &[&str], branch_name: &str) -> anyhow
     Ok(())
 }
 
-fn fetch_branch_if_possible(cwd: &Path, branch_name: &str) {
-    let _ = Command::new("git")
-        .args(["fetch", "origin", branch_name])
-        .current_dir(cwd)
-        .output();
+pub fn fetch_worktree_base(cwd: &Path, branch_name: &str) -> WorktreeBaseFetch {
+    match GitService::has_no_remotes(cwd) {
+        Ok(true) => return WorktreeBaseFetch::NoRemote,
+        Ok(false) => {}
+        Err(error) => {
+            return WorktreeBaseFetch::Failed {
+                message: error.to_string(),
+            };
+        }
+    }
+
+    match run_git_with_timeout(
+        cwd,
+        &["fetch", "origin", branch_name],
+        WORKTREE_BASE_FETCH_TIMEOUT,
+    ) {
+        Ok(TimedGitOutput::Completed(output)) if output.success => WorktreeBaseFetch::Fetched,
+        Ok(TimedGitOutput::Completed(output)) => {
+            let message = output.stderr.trim();
+            WorktreeBaseFetch::Failed {
+                message: if message.is_empty() {
+                    format!("git fetch origin {branch_name} failed")
+                } else {
+                    message.to_string()
+                },
+            }
+        }
+        Ok(TimedGitOutput::TimedOut) => WorktreeBaseFetch::TimedOut,
+        Err(error) => WorktreeBaseFetch::Failed {
+            message: error.to_string(),
+        },
+    }
 }
 
 fn ensure_ref_exists(cwd: &Path, exact_ref: &str) -> anyhow::Result<()> {

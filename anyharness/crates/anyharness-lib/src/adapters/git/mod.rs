@@ -8,6 +8,7 @@ pub mod types;
 
 pub use file_search::WorkspaceFileSearchCache;
 pub use service::GitService;
+pub use types::WorktreeBaseFetch;
 
 #[cfg(test)]
 mod diff_tests;
