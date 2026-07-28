@@ -36,9 +36,9 @@ const CONNECTION = {
 // The surface is a full settings page — taller than the 900x700 capture
 // viewport at 1:1 — so each cell renders it at the width the settings pane
 // gives it and scales the whole page down to fit the frame intact.
-const Page = ({ children }: { children: ReactNode }) => (
+const Page = ({ children, scale = 0.82 }: { children: ReactNode; scale?: number }) => (
   <div className="w-full" style={{ height: 640, overflow: "hidden" }}>
-    <div style={{ width: 1000, transform: "scale(0.82)", transformOrigin: "top left" }}>
+    <div style={{ width: 1000, transform: `scale(${scale})`, transformOrigin: "top left" }}>
       {children}
     </div>
   </div>
@@ -80,7 +80,7 @@ export const NotConfigured = () => (
 );
 
 export const LoadFailed = () => (
-  <Page>
+  <Page scale={0.74}>
     <OrganizationSsoSettingsSurface
       connection={CONNECTION}
       form={FORM}

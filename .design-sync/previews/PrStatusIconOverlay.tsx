@@ -73,7 +73,7 @@ export const EveryStateOnAGlyph = () => (
     {STATES.map((state) => (
       <div key={state.kind} className="flex w-20 flex-col items-center gap-2">
         <PrStatusIconOverlay status={state}>
-          <GitBranch className="icon-status text-muted-foreground" />
+          <GitBranch className="size-5 text-muted-foreground" />
         </PrStatusIconOverlay>
         <span className="text-ui-sm text-muted-foreground">{state.caption}</span>
       </div>
@@ -85,13 +85,13 @@ export const PassthroughWithoutStatus = () => (
   <div className="flex w-full max-w-md items-center gap-6 rounded-xl border border-border bg-card p-5">
     <div className="flex flex-col items-center gap-2">
       <PrStatusIconOverlay status={null}>
-        <GitBranch className="icon-status text-muted-foreground" />
+        <GitBranch className="size-5 text-muted-foreground" />
       </PrStatusIconOverlay>
       <span className="text-ui-sm text-muted-foreground">status = null</span>
     </div>
     <div className="flex flex-col items-center gap-2">
       <PrStatusIconOverlay status={{ kind: "open", number: 805 }}>
-        <GitBranch className="icon-status text-muted-foreground" />
+        <GitBranch className="size-5 text-muted-foreground" />
       </PrStatusIconOverlay>
       <span className="text-ui-sm text-muted-foreground">status = open</span>
     </div>

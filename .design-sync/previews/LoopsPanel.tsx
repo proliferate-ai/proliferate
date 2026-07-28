@@ -52,7 +52,7 @@ const LOOPS = [
 // The panel is the ⟳ chip's click-in content, so it renders inside the same
 // composer popover surface the chip opens.
 const Surface = ({ children }: { children: ReactNode }) => (
-  <ComposerPopoverSurface className="w-80 p-1.5">{children}</ComposerPopoverSurface>
+  <ComposerPopoverSurface className="w-96 p-1.5">{children}</ComposerPopoverSurface>
 );
 
 export const ArmedLoops = () => (

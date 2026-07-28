@@ -44,7 +44,7 @@ const REPOSITORIES = [
   {
     id: "r4",
     fullName: "pablosfsanchez/shiki",
-    defaultBranch: null,
+    defaultBranch: "main",
     private: false,
     fork: true,
     archived: false,
@@ -52,7 +52,6 @@ const REPOSITORIES = [
     permission: "admin",
     configured: false,
     repoConfigState: "missing" as const,
-    disabledReason: "Fork has no default branch — push a commit first",
   },
 ];
 

@@ -81,8 +81,8 @@ export const InWorkspaceRows = () => (
 export const CustomLabel = () => (
   <div className="flex w-full max-w-md flex-col gap-3 rounded-xl border border-border bg-card p-4">
     <p className="text-ui-sm text-muted-foreground">
-      `label` overrides the default `PR #n · State` tooltip; `withNativeTitle`
-      is turned off when a Tooltip primitive already carries it.
+A custom label replaces the default “PR #n · State” tooltip, and the
+      native title is turned off when a Tooltip primitive already carries it.
     </p>
     <div className="flex items-center gap-2">
       <PrStatusDot
