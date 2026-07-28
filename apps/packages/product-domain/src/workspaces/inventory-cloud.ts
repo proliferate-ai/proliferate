@@ -144,8 +144,7 @@ function workspaceStatusKind(
   }
   if (
     workspace.status === "error" ||
-    workspace.exposureState === "stale" ||
-    workspace.actionBlockKind
+    workspace.exposureState === "stale"
   ) {
     return "blocked";
   }
@@ -164,9 +163,6 @@ function workspaceStatusLabel(workspace: CloudWorkspaceSummary): string {
   }
   if (workspace.status === "error") {
     return "Error";
-  }
-  if (workspace.actionBlockKind) {
-    return "Blocked";
   }
   if (workspace.exposureState === "stale") {
     return "Stale";
