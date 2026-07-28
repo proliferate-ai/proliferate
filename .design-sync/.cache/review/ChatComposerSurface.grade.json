@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Composer": {
+      "verdict": "good",
+      "note": "The full composer the surface hosts: textarea frame, control row, send. The surface's own paint (composer background, 0.5px stroke, 20px --radius-composer) is visible against the page."
+    },
+    "EmptyPlaceholder": {
+      "verdict": "good",
+      "note": "Resting composer with placeholder copy and a minimal control row."
+    },
+    "ScrollingDraft": {
+      "verdict": "good",
+      "note": "Default overflowMode='auto' bounded by an inline maxHeight: the draft is visibly clipped at the surface edge, which is the only still-frame evidence the scroll container works."
+    }
+  }
+}

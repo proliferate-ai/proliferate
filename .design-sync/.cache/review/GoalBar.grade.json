@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "PursuingWithChips": {
+      "verdict": "good",
+      "note": "Live goal row: target glyph, 'Pursuing goal', truncated objective, pause/edit/delete actions AND the loops/terminals/agents chips on the same row. Docked on a composer lip so the rounded-t/0.5px border reads correctly."
+    },
+    "PausedGoal": {
+      "verdict": "good",
+      "note": "phase=paused \u2014 objective drops to text-faint and the pause control becomes play. Correct derivation."
+    },
+    "EditingObjective": {
+      "verdict": "good",
+      "note": "defaultEditing swaps in the auto-growing GoalBarObjectiveEditor prefilled with the objective, with the \u2717/\u2713 actions pinned top-right."
+    },
+    "ComposingNewGoal": {
+      "verdict": "good",
+      "note": "goal=null + composing renders the same editor blank with the 'Describe the goal to pursue' placeholder \u2014 the empty-state affordance."
+    },
+    "StoppedResult": {
+      "verdict": "good",
+      "note": "status=failed / nativeStatus=budgetLimited renders the sticky result row: destructive CircleAlert, 'Goal stopped', em-dashed objective, expand chevron and dismiss. (I used failed rather than blocked on purpose \u2014 blocked's glyph is text-warning, which is a 15%-alpha token and invisible; see learnings/G.md.)"
+    }
+  }
+}

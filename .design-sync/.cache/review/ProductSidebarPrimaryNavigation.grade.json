@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "PrimaryNavigation": {
+      "verdict": "good",
+      "note": "The exact navItems array MainSidebar builds, including the Workflows beta chip, under the brand row. Was a blank floor card before."
+    },
+    "ShortcutRevealHeld": {
+      "verdict": "good",
+      "note": "shortcutRevealVisible on the whole nav \u2014 the Cmd-held state, with Workspaces active instead of New chat so the selection chip is visible on a different row."
+    },
+    "AboveTheRepositories": {
+      "verdict": "good",
+      "note": "Full context: nav on top, Repositories section and workspace rows scrolling beneath it, so the nav's px-2 gutter can be compared against the row grid."
+    }
+  }
+}

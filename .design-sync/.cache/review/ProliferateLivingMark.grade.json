@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "PendingAndSettled": {
+      "verdict": "good",
+      "note": "Both states side by side with labels. LIMITATION: pending vs complete differ only by which CSS animation is running (breathe vs settle) \u2014 the geometry is identical by design, so a still frame cannot show the difference; the captions say which is which."
+    },
+    "OnTheAuthGate": {
+      "verdict": "good",
+      "note": "The mark in its real host: leading a max-w-md auth-gate column above a text-hero title and body copy."
+    },
+    "InkOverrides": {
+      "verdict": "good",
+      "note": "className lands on the icon, not the 48px box: four tones (default, muted-foreground, primary, destructive) at identical geometry."
+    }
+  }
+}

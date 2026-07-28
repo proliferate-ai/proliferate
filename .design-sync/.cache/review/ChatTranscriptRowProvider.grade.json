@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "PaintedMatches": {
+      "verdict": "good",
+      "note": "Query context + row provider + AssistantMessage: every 'overlay' match is wrapped in <mark class=\"codex-thread-find-match\"> and paints yellow. This is what the provider exists to enable."
+    },
+    "WithoutRowIdentity": {
+      "verdict": "good",
+      "note": "Same query, provider removed \u2014 the paint hook resolves to null and the prose renders unmarked. The direct contrast that makes the provider's role legible."
+    },
+    "SearchClosed": {
+      "verdict": "good",
+      "note": "Provider mounted with no active query: inert, zero marks. The third leg of the contract."
+    },
+    "StackedRows": {
+      "verdict": "good",
+      "note": "Two consecutive rows, each with its own stable rowUnitId, both painted from one transcript-level query."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "NavRows": {
+      "verdict": "good",
+      "note": "The shipped four-item primary nav inside a rail with the brand row, New chat selected. Was a blank floor card before; now a real render."
+    },
+    "ShortcutReveal": {
+      "verdict": "good",
+      "note": "shortcutLabel + shortcutRevealVisible together \u2014 without the second prop the ShortcutBadge is opacity-0 and photographs blank. All four badges visible."
+    },
+    "StatusAndStates": {
+      "verdict": "good",
+      "note": "The status slot (a beta chip and a numeric count), a disabled row at 60% opacity, and a long label truncating \u2014 all on the 13px sidebar-nav tier."
+    }
+  }
+}

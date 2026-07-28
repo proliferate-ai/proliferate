@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "WithRows": {
+      "verdict": "good",
+      "note": "Mono uppercase eyebrow (AGENT DEFAULTS) over a flat stack of three SettingsRows with Select and Switch controls. No card box, structure comes from the eyebrow plus the rows' hairlines — exactly the component's documented anatomy."
+    },
+    "WithAction": {
+      "verdict": "good",
+      "note": "Header line with title, description and a right-aligned 'Add secret' Button in the action slot, baseline-aligned with the eyebrow. Secret rows below carry status badges."
+    },
+    "StackedSections": {
+      "verdict": "good",
+      "note": "Two sections in one gap-8 stack (Notifications, Danger zone) showing that section spacing is the parent's job. Destructive Button renders in DS red; both eyebrows and the second section's description read correctly."
+    },
+    "TitleOnly": {
+      "verdict": "good",
+      "note": "Title without description — the header collapses to just the eyebrow, which is the variant this cell is for. Shortcut badges give the rows realistic trailing content."
+    }
+  }
+}

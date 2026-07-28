@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Running": {
+      "verdict": "good",
+      "note": "Whole detail page inside a bounded frame: four status cards (delivery/desired/execution/freshness with their tones), run details grid, collapsed replay-masked Inputs, and the Steps list; the actions row shows Cancel run + Open session as the presentation allows."
+    },
+    "PreparedForDelivery": {
+      "verdict": "good",
+      "note": "Prepared branch \u2014 Start delivery enabled, 'Waiting for runtime acceptance.' in Steps. The `notice` prop is intentionally null: it renders as text-warning, which is unreadable on this theme's alpha warning token (see learnings/I.md)."
+    },
+    "FailedRun": {
+      "verdict": "good",
+      "note": "Danger tone on the execution card plus the destructive failure band; the action row correctly collapses to Back + Refresh."
+    },
+    "DeliveryUnavailable": {
+      "verdict": "good",
+      "note": "deliveryCapabilityEnabled={false} disables Start delivery and shows the capability band, with actionError beneath it in text-destructive."
+    }
+  }
+}

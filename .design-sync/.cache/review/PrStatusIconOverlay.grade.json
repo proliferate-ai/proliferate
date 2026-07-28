@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "SidebarWorkspaceRows": {
+      "verdict": "good",
+      "note": "The real web-sidebar usage: dot anchored on the bottom-right of each row's git glyph, active row on bg-selected, and a final row with no PR showing the untouched glyph."
+    },
+    "EveryStateOnAGlyph": {
+      "verdict": "good",
+      "note": "Six states over a 20px git glyph in a labelled grid \u2014 the anchor offset and per-state tone read clearly at this size (icon-status, 0.55em, is far too small for a row glyph and was replaced)."
+    },
+    "PassthroughWithoutStatus": {
+      "verdict": "good",
+      "note": "status=null next to status=open, side by side, proving the no-status branch renders children with no wrapper and no dot."
+    }
+  }
+}

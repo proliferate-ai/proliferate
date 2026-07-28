@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "PlanAndPayment": {
+      "verdict": "good",
+      "note": "The pane's real composition: an owner card plus a payment SettingsSection, spaced by the pane's own space-y-6."
+    },
+    "StackedOwnerCards": {
+      "verdict": "good",
+      "note": "Two owner cards stacked as the host supplies them (personal free, then org). Both cards render whole inside the capture viewport."
+    },
+    "CheckoutSuccess": {
+      "verdict": "good",
+      "note": "checkoutReturnState='success' renders the success-toned return notice above the children. Reads cleanly."
+    },
+    "PlanManagementDialogOpen": {
+      "verdict": "good",
+      "note": "planManagementDialog opens the portalled plan dialog centred on the viewport: header, Core plan column with its feature checklist, the units table, coupon row and the footer actions. Content below the fold scrolls inside the panel, which is the shipped behaviour."
+    }
+  }
+}

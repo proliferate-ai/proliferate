@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "EditSavedWorkflow": {
+      "verdict": "good",
+      "note": "Full editor in edit mode: page shell header with Cancel/Save, title + default-repository selects, description, the inputs editor with two typed rows, backed by a real agent catalog so the harness/model/effort selects populate."
+    },
+    "CreateWorkflow": {
+      "verdict": "good",
+      "note": "Create mode \u2014 'New workflow' title, Create action, placeholder copy, empty inputs list and the seeded Stage 1."
+    },
+    "ValidationIssues": {
+      "verdict": "good",
+      "note": "Issue summary banner plus the per-field 'Title is required.' message and the aria-invalid input treatment."
+    },
+    "ServerError": {
+      "verdict": "good",
+      "note": "Destructive server-error banner with its inline Reload action. NOTE: the catalogWarning branch is deliberately not previewed \u2014 the editor paints it as text-warning and this dark theme's --color-warning is a 15% alpha FILL, so that band photographs blank (a DS token bug, recorded in learnings/I.md)."
+    }
+  }
+}

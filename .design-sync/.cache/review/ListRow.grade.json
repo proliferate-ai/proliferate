@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "RepositoryList": {
+      "verdict": "good",
+      "note": "Three rows in a bordered card: folder glyph leading, text-heading title over a muted description, chevron trailing, border-border-light dividers with the last row's divider suppressed."
+    },
+    "WithTrailingStatus": {
+      "verdict": "good",
+      "note": "Four environment rows with success/info/destructive/neutral Badges in the trailing slot — all four badge tones read clearly on the card surface."
+    },
+    "WithAvatarLeading": {
+      "verdict": "good",
+      "note": "UserAvatar monograms in the leading slot sized by the row's size-8 box; role Badges trailing. Shows the leading slot taking a non-icon child."
+    },
+    "TitleOnlyAndDisabled": {
+      "verdict": "good",
+      "note": "Title-only, title+description+trailing, and a disabled row at reduced opacity — three distinct slot combinations in one card, including the disabled state."
+    }
+  }
+}

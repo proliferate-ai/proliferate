@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "OpenMenu": {
+      "verdict": "good",
+      "note": "externalOpen forces the real open state \u2014 the portalled POPOVER_SURFACE_CLASS panel with four menu items (one destructive) anchored bottom/start under the trigger."
+    },
+    "WithShortcuts": {
+      "verdict": "good",
+      "note": "side='right' with a PaneIconButton trigger shows the placement axis and the trailing ShortcutBadge treatment; the surface renders beside the trigger as configured."
+    },
+    "ClosedTrigger": {
+      "verdict": "good",
+      "note": "Resting trigger only, confirming the trigger element is passed through untouched (Button keeps its own styling)."
+    }
+  }
+}

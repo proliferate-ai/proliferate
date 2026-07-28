@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "WorkspaceBoot": {
+      "verdict": "good",
+      "note": "Bounded 320px pane so the h-full centring works. Breathing Proliferate mark + heading label + two-line muted description, all centred."
+    },
+    "FileViewer": {
+      "verdict": "good",
+      "note": "Short label/description pair \u2014 the file-viewer usage. Correct."
+    },
+    "LabelOnly": {
+      "verdict": "good",
+      "note": "description omitted; the mark + single label centre cleanly with no leftover gap."
+    }
+  }
+}

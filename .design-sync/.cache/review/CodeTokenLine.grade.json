@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "GutteredLines": {
+      "verdict": "good",
+      "note": "The leaf composed inside the gutter its real parent builds \u2014 8 lines of parseLoopWire with keyword/string/type/comment tones. Shows exactly what the component produces."
+    },
+    "SearchMarkedLine": {
+      "verdict": "good",
+      "note": "renderToken override wrapping matches in the transcript's find-match mark; the surrounding tokens keep their colours."
+    },
+    "SingleLine": {
+      "verdict": "good",
+      "note": "One line on the code surface with a trailing muted comment \u2014 the smallest honest render of this leaf."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "TypeScriptHighlighted": {
+      "verdict": "good",
+      "note": "Gutter + shiki-shaped tokens on the code-block surface, language label and copy button in the header. Colours are the real proliferate-dark code palette."
+    },
+    "PythonWithLineNumbers": {
+      "verdict": "good",
+      "note": "lineNumberStart=142 respected; file-path label truncates correctly; docstring/keyword/builtin tones all distinct."
+    },
+    "PlainTextFallback": {
+      "verdict": "good",
+      "note": "tokens omitted -> the plain <code> path. Multi-line shell output renders correctly with the mono ramp."
+    },
+    "SingleLineNoLabel": {
+      "verdict": "good",
+      "note": "No label -> empty header cell with only the copy button, as designed. Single-line token payload (the only shape the un-guttered token path renders correctly \u2014 see learnings/G.md)."
+    }
+  }
+}

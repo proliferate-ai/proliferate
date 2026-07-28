@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "ShellCommands": {
+      "verdict": "good",
+      "note": "Bordered code card with 'bash' label, always-visible copy button, and the plain-text fallback body. Correct code-block surface token."
+    },
+    "HighlightedChildren": {
+      "verdict": "good",
+      "note": "children override carrying CodeBlockTokenContent with real tokens and a gutter \u2014 the app-injected-highlighting path this shell exists for."
+    },
+    "NoLanguageLabel": {
+      "verdict": "good",
+      "note": "label omitted: the header keeps only the copy button, and the SQL body renders on the mono ramp."
+    }
+  }
+}

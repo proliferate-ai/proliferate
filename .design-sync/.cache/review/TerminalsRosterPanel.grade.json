@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "MixedProcesses": {
+      "verdict": "good",
+      "note": "Panel heading plus sortProcessesForDisplay ordering (running first, most recent first) across running / success / failure rows."
+    },
+    "SingleRunning": {
+      "verdict": "good",
+      "note": "Minimal panel \u2014 heading and one running process."
+    },
+    "Clickable": {
+      "verdict": "good",
+      "note": "onOpen wiring gives every row the interactive Button treatment."
+    },
+    "Empty": {
+      "verdict": "good",
+      "note": "Honest empty branch: heading plus 'No background terminals.'"
+    }
+  }
+}

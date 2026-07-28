@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "SettingsPage": {
+      "verdict": "good",
+      "note": "Frame renders its full max-width column with the header slot (PageHeader) and real SettingsSection/SettingsRow content plus Switches. Scroll container, padding rhythm and bg-background surface all applied."
+    },
+    "NarrowColumn": {
+      "verdict": "good",
+      "note": "maxWidthClassName=max-w-md visibly narrows and re-centres the column against the same frame \u2014 the variant axis actually varies."
+    },
+    "ScrollingList": {
+      "verdict": "good",
+      "note": "Scroll containment is the point of the component and shows correctly: five workspace rows with the last one clipped at the frame edge, header above, sticky-title props wired."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Running": {
+      "verdict": "good",
+      "note": "Read-only row in the \u2442 chip's popover: fork glyph, description title, and the Running \u00b7 model \u00b7 background meta line."
+    },
+    "CompletedWithSummary": {
+      "verdict": "good",
+      "note": "Positive tone on the status word, duration label derived from usage.durationSeconds, and the completion summary on its own line \u2014 fits without truncation at the panel width."
+    },
+    "Failed": {
+      "verdict": "good",
+      "note": "Danger tone applied to both the glyph and the status word."
+    },
+    "ClickableRoster": {
+      "verdict": "good",
+      "note": "onOpen turns each row into an unstyled Button with hover/active states; also covers the description-less fixture that falls back to agentType (cursor/task)."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "States": {
+      "verdict": "good",
+      "note": "All five states in one column: checked (bg-primary + Check indicator), unchecked, indeterminate, and both disabled variants at reduced opacity. The state axis genuinely varies; indeterminate shows the DS's actual (unstyled-background) treatment rather than an invented one."
+    },
+    "WithLabel": {
+      "verdict": "good",
+      "note": "Stateful useState wrapper paired with a real Label via htmlFor \u2014 the registry's CheckboxDemo composition with product copy."
+    },
+    "PermissionList": {
+      "verdict": "good",
+      "note": "Four-row tool-permission list in a surface-elevated card with per-row Label + text-ui-sm detail, two checked and two unchecked from real state. Plausible settings composition, nothing collapsed."
+    }
+  }
+}

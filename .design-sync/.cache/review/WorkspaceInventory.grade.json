@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "GroupedInventory": {
+      "verdict": "good",
+      "note": "Three groups with header glyph, label and count, and rows carrying the source glyph, source/target metadata cells, title + subtitle and the relative updated label."
+    },
+    "CollapsibleGroups": {
+      "verdict": "good",
+      "note": "onGroupToggle turns the headers into real buttons with rotating chevrons; the Unclaimed group is photographed collapsed."
+    },
+    "Loading": {
+      "verdict": "good",
+      "note": "Skeleton branch \u2014 five shimmer blocks in the two documented clusters."
+    },
+    "NoWorkspaces": {
+      "verdict": "good",
+      "note": "EmptyState branch with authored title and description."
+    },
+    "LoadFailed": {
+      "verdict": "good",
+      "note": "error={true} renders the 'Could not load workspaces' alert EmptyState."
+    }
+  }
+}

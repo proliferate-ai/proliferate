@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "NoWorkflows": {
+      "verdict": "good",
+      "note": "Dashed border-border frame, min-h-40, centred heading on text-heading, max-w-sm description on the muted role, and a secondary Button action with a Plus icon."
+    },
+    "LoadFailure": {
+      "verdict": "good",
+      "note": "Error-shaped copy with a Retry action — the same layout carrying a different intent, which is how the product uses it."
+    },
+    "TitleOnly": {
+      "verdict": "good",
+      "note": "Title-only render: description and action slots collapse cleanly, the dashed frame keeps its min height rather than shrinking to the text."
+    },
+    "InsidePanel": {
+      "verdict": "good",
+      "note": "Nested inside a bordered card with its own header — shows the dashed empty frame reading correctly against a bg-card surface, not just on the page background."
+    }
+  }
+}

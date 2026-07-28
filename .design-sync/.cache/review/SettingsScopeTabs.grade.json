@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Scopes": {
+      "verdict": "good",
+      "note": "Four scopes (User/Org/Repo/Agents) in a h-10 bar with a border-b rail. Active 'User' is foreground ink with the 2px foreground underline sitting on the rail; the other three are muted. Flat, no pills — matches the documented ScopeTabs contract."
+    },
+    "RepoSelected": {
+      "verdict": "good",
+      "note": "Same item set with value='repo', so the selected-tab axis visibly varies against the Scopes cell — the underline and foreground ink move to the third tab."
+    },
+    "TwoScopes": {
+      "verdict": "good",
+      "note": "Two-item, longer-label set (Workspace/Personal) showing the gap-6 rhythm and underline width tracking the label rather than a fixed pill."
+    },
+    "InPageHeader": {
+      "verdict": "good",
+      "note": "Composed under a real SettingsPageHeader with value='org' — the intended page anatomy (title, description, then the scope rail). Title/description type scales and the tab rail all render correctly."
+    }
+  }
+}

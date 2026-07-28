@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "DestructiveConfirm": {
+      "verdict": "good",
+      "note": "Open modal over the dimmed overlay: DS card panel, shadow-modal, close affordance, ghost cancel and red destructive confirm. Long real copy wraps correctly inside the max-w-[34rem] shell."
+    },
+    "PrimaryConfirm": {
+      "verdict": "good",
+      "note": "Same shell with confirmVariant=\"primary\" — white primary button reads clearly distinct from the destructive cell."
+    },
+    "LoadingConfirm": {
+      "verdict": "good",
+      "note": "loading renders the spinner inside the confirm button and dims both actions; the disabled cancel is visibly muted."
+    },
+    "CloseDisabled": {
+      "verdict": "good",
+      "note": "disableClose renders the close glyph in its disabled ink while the footer stays actionable — the variant axis is visible against the other three cells."
+    }
+  }
+}

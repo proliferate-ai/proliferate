@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "ThinkingBudget": {
+      "verdict": "good",
+      "note": "Ported from the product's own slider row: Label left, mono value readout right, full-width bg-input track with the accent-foreground thumb at 64%."
+    },
+    "Stepped": {
+      "verdict": "good",
+      "note": "Integer step scale with min/max tick labels; thumb lands on a discrete stop."
+    },
+    "Extremes": {
+      "verdict": "good",
+      "note": "Two rows put the thumb at min and at max, showing both ends of the track geometry in one cell."
+    },
+    "Disabled": {
+      "verdict": "good",
+      "note": "Disabled track and thumb render at reduced opacity with the not-allowed cursor class applied \u2014 visibly distinct from the enabled cells."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "States": {
+      "verdict": "good",
+      "note": "All five primitive states with labels. Note indeterminate correctly renders the Check glyph WITHOUT the bg-primary fill \u2014 the primitive has no data-[state=indeterminate] rule, which is the DS's real behaviour, not a preview defect."
+    },
+    "SizeOverrides": {
+      "verdict": "good",
+      "note": "size-3 / default size-4 / size-6 / size-6 rounded-full, showing that the root merges a consumer className for both box size and radius."
+    },
+    "RepoSelectionList": {
+      "verdict": "good",
+      "note": "A real selection list: header checkbox driven to indeterminate by partial selection, four repo rows with branch metadata, count badge. Stateful via useState and it re-renders correctly."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "ProviderKinds": {
+      "verdict": "good",
+      "note": "All five provider values with their labels and the prop that produced them. GitHub/Google/Apple are inline brand SVGs; sso and password fall back to the DS Shield and Mail glyphs."
+    },
+    "SsoBrandsFromLabel": {
+      "verdict": "good",
+      "note": "The label-driven SSO branch: Okta, Auth0, GitLab, Microsoft, Google Workspace each resolve to their brand mark, and an unmatched connection name keeps the generic shield."
+    },
+    "InSignInButtons": {
+      "verdict": "good",
+      "note": "The component in its real host \u2014 the leading glyph of five AuthProviderButtons, primary and secondary variants."
+    },
+    "SizeOverrides": {
+      "verdict": "good",
+      "note": "className replaces the default icon-control sizing: icon-paired, icon-control, size-8, size-12 at the same glyph."
+    }
+  }
+}

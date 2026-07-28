@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "FullSidebar": {
+      "verdict": "good",
+      "note": "The assembled product rail at w-72 in a 640px-tall frame: brand row, primary navigation, Repositories section with two expanded repo groups plus a collapsed one, a Show more toggle, a Chats section with three threads, and the account footer in the frame's footer slot. This is the hero cell for the whole sidebar system."
+    },
+    "NoRepositoriesYet": {
+      "verdict": "good",
+      "note": "Frame + body + nav with an empty Repositories section and its explanatory block; the footer stays pinned. Shows that the frame's flex column holds shape with almost no content."
+    },
+    "FooterSlot": {
+      "verdict": "good",
+      "note": "The `footer` prop carrying two stacked children (release notice card + account row) below the body, exactly how MainSidebar uses it."
+    }
+  }
+}

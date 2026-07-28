@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "ThreadActions": {
+      "verdict": "good",
+      "note": "Open menu anchored under its trigger: label, separators, grouped items with icons, DropdownMenuShortcut on the right, and a destructive item in the destructive ink. Popover frame and radius are the DS ones."
+    },
+    "CheckboxItems": {
+      "verdict": "good",
+      "note": "Checked/unchecked/disabled checkbox items all visible — the indicator check only paints on the two checked rows, so the state axis actually varies."
+    },
+    "RadioItems": {
+      "verdict": "good",
+      "note": "Radio group with the filled circle indicator on the selected model row; label + three real model names."
+    },
+    "WithSubmenu": {
+      "verdict": "good",
+      "note": "Sub-panel renders anchored to the right of the highlighted sub-trigger (needs the portal + a deferred open — see learnings). Chevron, highlight state, and a disabled item on the parent menu all render."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Default": {
+      "verdict": "good",
+      "note": "Four ghost icon buttons at size-6 in the sidebar-muted foreground role, evenly spaced. Icons render at icon-paired size, not browser defaults."
+    },
+    "States": {
+      "verdict": "good",
+      "note": "Rest / active / disabled shown side by side with labels; the active button carries the bg-active + sidebar-foreground promotion and the disabled one is visibly dimmed."
+    },
+    "PaneToolbar": {
+      "verdict": "good",
+      "note": "Real usage context \u2014 pane header bar with title, a trailing cluster of pane icon buttons (one active), and mono pane output below. A DS author would recognise this composition."
+    }
+  }
+}

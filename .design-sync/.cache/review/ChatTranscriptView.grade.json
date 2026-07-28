@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Conversation": {
+      "verdict": "good",
+      "note": "Two full turns rendered through the host's renderTurnRow inside a bounded, clipped chat surface: user bubbles right, assistant markdown left, correct row spacing."
+    },
+    "WithPendingPrompt": {
+      "verdict": "good",
+      "note": "optimisticPrompt renders through renderPendingPromptRow with the ThinkingText 'Queued' trailing status under it, below the settled turns."
+    },
+    "WithOlderHistory": {
+      "verdict": "good",
+      "note": "history.hasOlderHistory + isLoadingOlderHistory renders the history loading row (spinner) above the first turn."
+    },
+    "ContentSearchActive": {
+      "verdict": "good",
+      "note": "contentSearch={{query}} lights the transcript-level paint layer: every 'composer' match in both turns is highlighted, proving the view wires ChatContentSearchQueryContext for its rows."
+    }
+  }
+}

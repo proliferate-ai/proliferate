@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Sizes": {
+      "verdict": "good",
+      "note": "default (h-5 w-10) next to compact (h-5 w-8) with captions — the track-width difference and the matching thumb travel are both clearly visible."
+    },
+    "States": {
+      "verdict": "good",
+      "note": "on / off / on-disabled / off-disabled. Checked tracks paint bg-primary with the thumb at the right stop, unchecked paint bg-input; the disabled pair renders at 50% opacity. Full state axis in one cell."
+    },
+    "WithLabel": {
+      "verdict": "good",
+      "note": "Switch paired with a real Label via id/htmlFor — the standard labelled-control anatomy, with both an on and an off row."
+    },
+    "InSettingsRows": {
+      "verdict": "good",
+      "note": "The switch in its most common home: right-aligned control inside SettingsRows, including the compact size on the description-less row. Alignment and hairline dividers all correct."
+    }
+  }
+}

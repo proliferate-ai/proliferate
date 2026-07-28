@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Running": {
+      "verdict": "good",
+      "note": "Mono command, running tone, elapsed label and cwd \u2014 the structured header the roster is specified to show (no PTY bytes)."
+    },
+    "Finished": {
+      "verdict": "good",
+      "note": "exitCode 0 renders the success tone with 'Finished', total runtime and pid."
+    },
+    "ExitedWithError": {
+      "verdict": "good",
+      "note": "Non-zero exit renders 'Exited (1)' in the destructive tone with pid and cwd on one line."
+    },
+    "ClickableRoster": {
+      "verdict": "good",
+      "note": "Clickable variant covering all four status branches including exitCode null \u2192 muted 'Exited'."
+    }
+  }
+}

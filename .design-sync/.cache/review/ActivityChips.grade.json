@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "SummaryRow": {
+      "verdict": "good",
+      "note": "The three-kind chip row (loops / terminals / native subagents) with the '\u00b7' separators, on a composer-toned bar. Live counts brighten their glyphs as the source intends."
+    },
+    "SingleKind": {
+      "verdict": "good",
+      "note": "Single-chip case \u2014 the row still reads as a live-state summary, no orphan separator."
+    },
+    "ClickableChips": {
+      "verdict": "good",
+      "note": "Chips with panels wired become real PopoverButton triggers; at rest they are visually identical to the summary form, which is the intended affordance."
+    },
+    "AgentsPanelOpen": {
+      "verdict": "good",
+      "note": "Mount-time click on the agents chip opens the portalled ComposerPopoverSurface above the bar with AgentsRosterPanel inside. Popover, anchor and bar all photograph together."
+    }
+  }
+}

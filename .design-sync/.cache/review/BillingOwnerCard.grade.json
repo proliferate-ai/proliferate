@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "CorePlan": {
+      "verdict": "good",
+      "note": "Core org plan: icon tile, success status badge, manage + refill actions, the 3-up PCU metric row, the 2-up sandbox/repo row, the usage bar and the Credit top up block."
+    },
+    "FreePlan": {
+      "verdict": "good",
+      "note": "Free personal plan with the neutral badge and the Upgrade to Core primary action; overageSummary correctly returns null so no top-up block."
+    },
+    "WithGrantBreakdown": {
+      "verdict": "good",
+      "note": "grantAllocations populated, so proliferateCreditBalance sums the grants and CreditGrantBreakdown renders per-grant bars under the metrics."
+    },
+    "CreditsExhausted": {
+      "verdict": "good",
+      "note": "Exhausted balance: 0 PCUs available, saturated usage bar, Credit top up Off, plus the destructive actionError Notice. Deliberately uses billingMode 'observe' to keep the unreadable tone=\"warning\" start-block Notice out of the sheet (DS token defect, see learnings/F.md)."
+    },
+    "LoadFailed": {
+      "verdict": "good",
+      "note": "The error branch is intentionally a single SettingsRow + Retry \u2014 sparse by design, and it renders exactly that."
+    }
+  }
+}

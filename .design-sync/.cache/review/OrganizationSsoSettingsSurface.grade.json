@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "EnabledConnection": {
+      "verdict": "good",
+      "note": "Whole settings page renders intact: page header + Refresh, Connection card with status badge/Test/Disable, the two-column identity-provider form, redirect URI with copy, and the delete/save footer. Scaled to 0.82 so the full page fits the 700px capture viewport rather than being cropped."
+    },
+    "UnsavedChanges": {
+      "verdict": "good",
+      "note": "status=disabled + hasUnsavedChanges: Enable/Test correctly gated while the form differs, Disabled badge, edited scopes/domains visible."
+    },
+    "NotConfigured": {
+      "verdict": "good",
+      "note": "connection=null: 'Not configured' badge, no Test/Enable/Delete, empty form showing its placeholders, and the redirect-URI hint copy. Renders whole."
+    },
+    "LoadFailed": {
+      "verdict": "good",
+      "note": "error banner at the top in the destructive tint above the otherwise normal page; rendered at 0.74 so the extra banner still fits the frame."
+    }
+  }
+}

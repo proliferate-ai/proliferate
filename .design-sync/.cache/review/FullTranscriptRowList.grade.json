@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Thread": {
+      "verdict": "good",
+      "note": "Bounded 600px pane so the h-full scroll shell renders: four rows (user bubbles + AssistantMessage markdown incl. a fenced code block) inside the centred transcript column, copy/timestamp footers on each answer."
+    },
+    "LoadingOlderHistory": {
+      "verdict": "good",
+      "note": "hasOlderHistory + isLoadingOlderHistory renders TranscriptHistoryLoadingRow at the top of the column; the rest of the thread is intact below it."
+    },
+    "SingleTurn": {
+      "verdict": "good",
+      "note": "bottomInsetPx=72 with a 48px non-displacing share \u2014 the structural spacer at the bottom is visible and content is not pushed by the overlay half."
+    }
+  }
+}

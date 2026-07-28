@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "FileTreeSidebar": {
+      "verdict": "good",
+      "note": "Ported from PaneFileTree: h-64/w-72 bordered panel with a sticky header and a viewport of ten file rows. Content clips cleanly at the viewport edge, which is the visible evidence the scroll area is doing its job (the thumb is auto-hidden at rest by design)."
+    },
+    "TranscriptScroll": {
+      "verdict": "good",
+      "note": "Chat transcript with UserAvatar + text-chat-meta / text-chat message rows; the last message is cut at the fold, showing overflow is scrollable rather than clipped-away layout."
+    },
+    "HorizontalLogs": {
+      "verdict": "good",
+      "note": "allowHorizontal=true with a wide mono build log \u2014 lines run past the right edge, confirming the horizontal axis is enabled. Distinct from the two vertical cells."
+    }
+  }
+}

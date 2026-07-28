@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Catalog": {
+      "verdict": "good",
+      "note": "All six columns visible inside the card width \u2014 Model with description subtitle, provider, effort chips with the default chip filled, mode pills, Fast mode badges, and the compact Switch in Enabled. Disabled row shows the opacity-55 treatment."
+    },
+    "SparseRows": {
+      "verdict": "good",
+      "note": "Probe-only rows render the em-dash fallbacks in Thinking/Modes/Fast mode and the mono id subtitle when it differs from the display name. Exactly the sparse case the component documents."
+    },
+    "ModeOverflow": {
+      "verdict": "good",
+      "note": "MAX_VISIBLE_MODES overflow renders as +2 / +1 pills next to the first three modes; a real axis the other cells do not cover, and the Enabled column still fits."
+    },
+    "ReadOnlyToggles": {
+      "verdict": "good",
+      "note": "toggleDisabled rows render the Switch in its disabled state, and the second row combines disabled toggle with enabled=false so both the dimmed row and the read-only control read clearly."
+    }
+  }
+}

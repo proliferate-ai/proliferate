@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "AllStates": {
+      "verdict": "good",
+      "note": "All seven kinds in a labelled legend: green open, hollow amber pending ring, red failing/closed, filled amber changes-requested, grey draft, pr-merged purple. Every tone opaque and distinguishable."
+    },
+    "InWorkspaceRows": {
+      "verdict": "good",
+      "note": "The workspaces-page usage \u2014 dot after the branch name followed by the PR number, in real card rows."
+    },
+    "CustomLabel": {
+      "verdict": "good",
+      "note": "Custom-label and withNativeTitle=false variants. The tooltip text itself is not photographable (native title), so the cell shows the surface that carries it."
+    }
+  }
+}

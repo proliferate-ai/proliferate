@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "Repositories": {
+      "verdict": "good",
+      "note": "Four repos exercising all three action labels plus private/configured/fork metadata, the Load more row and the manual owner/repo form, inside the 440px dialog chrome its host supplies."
+    },
+    "AddingRepository": {
+      "verdict": "good",
+      "note": "addingRepoId puts one row's button into its loading state while the rest stay live."
+    },
+    "LoadingRepositories": {
+      "verdict": "good",
+      "note": "loading with no repositories renders the three SkeletonBlock rows with their staggered shimmer delay."
+    },
+    "NoMatches": {
+      "verdict": "good",
+      "note": "Empty search result copy plus the destructive error alert with its Retry action, and a manual value typed into the fallback form."
+    },
+    "PrerequisiteBlocker": {
+      "verdict": "good",
+      "note": "blocker replaces the whole picker with CloudRepoPickerBlocker: heading, description, the three-step complete/current/upcoming ladder and a single action."
+    }
+  }
+}

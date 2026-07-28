@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "States": {
+      "verdict": "good",
+      "note": "as='button' rows covering active (bg-selected chip), resting, disabled (dimmed muted ink) and a non-interactive row with no onPress. The active/resting separation the component's comment describes is visible."
+    },
+    "SessionRows": {
+      "verdict": "good",
+      "note": "The surface carrying real row content — icon, truncating session/branch/command label, trailing sidebar-tone Badge. Shows why the component is a surface rather than a row: children own the anatomy."
+    },
+    "AsDiv": {
+      "verdict": "good",
+      "note": "as='div' branch list: an active div row with a 'default' badge, an interactive div row, and a presentational row with no onPress. Rendered content rather than bare labels so the cell reads as a real composition."
+    },
+    "TwoLineRow": {
+      "verdict": "good",
+      "note": "Height override (h-auto flex-col) proving the surface stretches for a two-line repo row — title plus muted status line — with the active chip wrapping both lines."
+    }
+  }
+}

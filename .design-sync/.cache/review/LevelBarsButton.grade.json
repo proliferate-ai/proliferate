@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "ReasoningLadder": {
+      "verdict": "good",
+      "note": "The composer reasoning-effort control on its composer-background pill: bars plus the derived level label, inside a titled panel. Stateful — clicking steps and wraps."
+    },
+    "EveryLevel": {
+      "verdict": "good",
+      "note": "currentIndex 0/1/2 side by side: the lit-vs-dimmed bar count changes per row and the derived label follows (low/medium/high). The axis genuinely varies."
+    },
+    "Emphasis": {
+      "verdict": "good",
+      "note": "none / max / ultra at the top level. none stays neutral ink; max and ultra both take the tinted treatment (ultra additionally carries the continuous wave animation, which a still frame cannot show — captured mid-wave here)."
+    },
+    "LadderLengths": {
+      "verdict": "good",
+      "note": "2-, 3- and 5-bar ladders — bar width and gap are recomputed per ladder length, and that geometry change is visible across the three rows."
+    },
+    "IconOnly": {
+      "verdict": "good",
+      "note": "iconOnly drops the label to a 28px square; five ladders in one composer control row show the level and emphasis range at the real product density."
+    }
+  }
+}

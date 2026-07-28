@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "Default": {
+      "verdict": "good",
+      "note": "The zero-prop default ('Thinking') at text-chat/medium in muted ink, with the gleam band caught mid-sweep in the capture — the leading glyphs are visibly brighter, so the .thinking-text motion CSS is confirmed to have shipped in the bundle."
+    },
+    "Labels": {
+      "verdict": "good",
+      "note": "Four realistic agent labels of increasing length (Thinking, Planning the migration, a file path, a build command). Each is at a different point in the gleam cycle, which is exactly the un-synced behaviour."
+    },
+    "InChatTurn": {
+      "verdict": "good",
+      "note": "The component in its real chat position: avatar, thinking label, and a text-chat-meta line underneath. Shows the intended relationship between the thinking label and the turn metadata."
+    },
+    "WithSpinner": {
+      "verdict": "good",
+      "note": "Thinking label beside a Spinner inside a bordered activity strip — the 'agent is working' composition. Spinner and label share the same optical size and baseline."
+    },
+    "InPhaseSync": {
+      "verdict": "good",
+      "note": "Three copies with the same motionOriginMs — in the capture all three gleams sit at the identical phase, which is precisely what that prop is for, so this axis genuinely demonstrates itself in a still frame."
+    }
+  }
+}

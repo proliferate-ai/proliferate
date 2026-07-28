@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "BranchPicker": {
+      "verdict": "good",
+      "note": "Resting trigger: h-8 rounded-xl surface-control pill with the truncating label and the muted ChevronDown — the component's default state, correctly styled."
+    },
+    "WithLeadingIcon": {
+      "verdict": "good",
+      "note": "leading slot renders the cloud glyph ahead of the label; the trigger keeps its layout with three items in the row."
+    },
+    "Disabled": {
+      "verdict": "good",
+      "note": "disabled dims the whole trigger including the leading icon; visibly distinct from the two enabled cells."
+    },
+    "OpenMenu": {
+      "verdict": "good",
+      "note": "The open popover: search field with its Search glyph, four branch rows each with a muted detail line, and the Check trailing the selected row. This is the composition the component actually exists for."
+    }
+  }
+}

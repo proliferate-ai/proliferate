@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "RowActions": {
+      "verdict": "good",
+      "note": "visibility=always cluster of three 28px actions in realistic list rows; muted resting ink, 16px glyphs, consistent gap."
+    },
+    "RevealOnHover": {
+      "verdict": "good",
+      "note": "Shows both ends of the default reveal contract \u2014 the resting row (actions at opacity 0) above the same row with the reveal classes overridden to their hovered values. Without this pairing the hover variant would photograph as an empty row."
+    },
+    "ActiveAndDisabled": {
+      "verdict": "good",
+      "note": "active=true paints the bg-active pill under the first glyph, the middle action is at rest, and the disabled action is dimmed \u2014 three states legible in one row."
+    }
+  }
+}

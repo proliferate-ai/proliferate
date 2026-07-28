@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "InBranchPicker": {
+      "verdict": "good",
+      "note": "Borderless transparent input with the muted magnifier sits directly on the popover surface above the hairline divider \u2014 the codex recipe, not a boxed field. Branch rows and the Check on `main` render whole."
+    },
+    "WithQuery": {
+      "verdict": "good",
+      "note": "Typed value renders in foreground ink at text-ui and the row list is filtered to the single match; the variant axis (empty vs typed) is legible against InBranchPicker."
+    },
+    "NoMatches": {
+      "verdict": "good",
+      "note": "Query with no hits pairs the field with the real PickerEmptyRow leaf; muted empty copy reads correctly on the popover fill."
+    },
+    "Placeholders": {
+      "verdict": "good",
+      "note": "Two surfaces show the placeholder-only resting state at two different labels; muted placeholder ink and icon alignment are consistent."
+    }
+  }
+}

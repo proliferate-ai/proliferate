@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "WithAction": {
+      "verdict": "good",
+      "note": "text-title semibold with -0.012em tracking, muted 12px description, right-aligned secondary action \u2014 the flat header contract, no card."
+    },
+    "TitleAndDescription": {
+      "verdict": "good",
+      "note": "Title + description with no action; the action branch is correctly absent and nothing shifts."
+    },
+    "TitleOnly": {
+      "verdict": "good",
+      "note": "Title-only header renders at the same rung with no orphaned spacing."
+    },
+    "LongDescription": {
+      "verdict": "good",
+      "note": "Long description wraps within max-w-2xl and the action stays pinned top-right \u2014 the sm:items-start behaviour is visible."
+    }
+  }
+}

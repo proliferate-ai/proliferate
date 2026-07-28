@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Notification": {
+      "verdict": "good",
+      "note": "Toaster is a mount point that renders nothing until a toast is pushed; this cell fires a real toast on mount with duration Infinity, over a stand-in workspace pane. Popover fill, border, radius and the text-ui/text-ui-sm pair are all the DS's own classNames."
+    },
+    "WithAction": {
+      "verdict": "good",
+      "note": "Toast with an action button, which picks up the bg-primary/text-primary-foreground override from the Toaster's kitClassNames."
+    },
+    "Stacked": {
+      "verdict": "good",
+      "note": "Three toasts in the expanded stack, including the success and error variants with their leading icons."
+    },
+    "TopRight": {
+      "verdict": "good",
+      "note": "Same toast with position='top-right', showing that the region is positionable without colliding with page content."
+    }
+  }
+}

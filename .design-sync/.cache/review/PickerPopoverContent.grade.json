@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "BranchPicker": {
+      "verdict": "good",
+      "note": "Stateful picker composed the way it ships: PopoverSearchField row with the muted magnifier and borderless input, then PopoverMenuItem rows with a Check on the selected branch, all inside the popover surface."
+    },
+    "FilteredSearch": {
+      "verdict": "good",
+      "note": "Live search value narrowing the list to one match \u2014 shows the filtered state rather than only the resting one."
+    },
+    "EmptyResults": {
+      "verdict": "good",
+      "note": "emptyLabel branch renders (children passed as null), giving the muted 'No environments match' row under the search field. Exactly the documented fallback."
+    },
+    "WithoutSearch": {
+      "verdict": "good",
+      "note": "onSearchChange omitted so the search row is suppressed and the body renders alone \u2014 the other half of the component's conditional."
+    }
+  }
+}

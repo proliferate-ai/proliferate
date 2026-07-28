@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "HarnessChoice": {
+      "verdict": "good",
+      "note": "Horizontal orientation, three cards with icons and descriptions; selected card carries border-special plus the filled Check badge, unselected carry the empty ring. Icons promote to foreground only on the selected card, as the source specifies."
+    },
+    "Vertical": {
+      "verdict": "good",
+      "note": "orientation=vertical stacks full-width cards with the selection badge top-right; clearly distinct from the horizontal cells."
+    },
+    "LabelsOnly": {
+      "verdict": "good",
+      "note": "Label+icon cards with no description render at the compact height \u2014 the description-less branch of the card body."
+    },
+    "WithDisabled": {
+      "verdict": "good",
+      "note": "Third option renders at 50% with pointer events off while the selected card keeps border-special; disabled state is unambiguous."
+    }
+  }
+}

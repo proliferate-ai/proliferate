@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "SettingsPage": {
+      "verdict": "good",
+      "note": "Full shell renders in a sized frame: text-title heading, muted description, right-aligned action, and a real SettingsSection/SettingsRow/Switch body inside the max-w-3xl column."
+    },
+    "NarrowColumn": {
+      "verdict": "good",
+      "note": "maxWidthClassName=max-w-xl visibly narrows the content column against the other cells \u2014 the variant axis actually varies. Header and rows render whole."
+    },
+    "TitleOnlyWithEmptyBody": {
+      "verdict": "good",
+      "note": "max-w-5xl column with a title-only header over a real EmptyState body; matches the product's WorkflowDefinitionsAccessScreen composition."
+    }
+  }
+}

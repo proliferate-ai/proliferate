@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "AuthorizeGitHub": {
+      "verdict": "good",
+      "note": "Full prerequisite card: shield tile, title/description, 3-step stepper with the current step in the inverted bg-foreground pill, and a primary Authorize button. DS surfaces and type scales all applied."
+    },
+    "InstallAppStep": {
+      "verdict": "good",
+      "note": "Shows the complete step (success-subtle check) plus the current step, and the primary action in its loading state with the spinner. Renders whole."
+    },
+    "NoOrganizationAccess": {
+      "verdict": "good",
+      "note": "Steps/action omitted \u2014 the header-only branch. Compact and correctly styled; proves the optional props degrade cleanly."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "SignInStack": {
+      "verdict": "good",
+      "note": "Realistic sign-in stack at w-80: primary GitHub (bg-foreground / text-background) above two secondary bordered rows with Mail and Discord icons. h-11 full-width geometry and text-ui font-semibold all correct."
+    },
+    "Variants": {
+      "verdict": "good",
+      "note": "primary vs secondary side by side with labels \u2014 the variant axis genuinely varies (white filled vs bordered bg-card)."
+    },
+    "LoadingAndDisabled": {
+      "verdict": "good",
+      "note": "loading renders the Spinner in the icon slot with the button correctly at disabled opacity; disabled secondary is visibly dimmed but still legible. Both states distinct from the Variants cell."
+    }
+  }
+}

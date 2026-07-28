@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "FullControlRow": {
+      "verdict": "good",
+      "note": "Leading cluster (model, mode+detail, icon-only goal), trailing cluster (integrations) and the send action, all on the composer chrome the frame is designed for. The auto/1fr/auto grid and the 8px cluster gap are legible."
+    },
+    "ActionOnly": {
+      "verdict": "good",
+      "note": "Only the required `action` slot filled \u2014 the frame still holds the send button hard right, proving the empty middle column."
+    },
+    "SessionRunning": {
+      "verdict": "good",
+      "note": "Running session: one leading control and a Stop action, with a follow-up placeholder in the draft area so the composer is not an empty box."
+    }
+  }
+}

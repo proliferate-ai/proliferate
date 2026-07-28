@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "SectionsInRail": {
+      "verdict": "good",
+      "note": "Toggleable Repositories and Chats headers over their real bodies plus a static Cleanup header (no onToggleCollapsed). The quiet sidebar-row/muted-foreground treatment reads correctly against the rows below."
+    },
+    "CollapsedSections": {
+      "verdict": "good",
+      "note": "Collapsed state: the disclosure chevron is visible at rest on the two toggleable headers and absent on the static one, which is exactly the documented behaviour."
+    },
+    "HeaderActionsRevealed": {
+      "verdict": "good",
+      "note": "The opacity-0 `actions` slot photographed in its revealed state by focusing the first action on mount (group-focus-within is the same trigger as group-hover). Filter and Plus both visible, chevron rotated open."
+    }
+  }
+}

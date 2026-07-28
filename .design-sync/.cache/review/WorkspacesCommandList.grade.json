@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "RecencyGroups": {
+      "verdict": "good",
+      "note": "The Conductor-style list in full: filter row, three recency groups with counts, leading-well ladder (spinner / PR / branch glyph), branch after the chevron, PR dot + number, ahead/behind and right-aligned last-used. The cmdk-selected first row correctly swaps its date for 'Go to \u2192'."
+    },
+    "WithCreateRow": {
+      "verdict": "good",
+      "note": "Adds the dashed Create row with its \u2318N hint at the end of the list."
+    },
+    "WithFilterRowAction": {
+      "verdict": "good",
+      "note": "filterRowActions slot carrying the gh-auth note at the right edge of the filter row."
+    },
+    "NoWorkspaces": {
+      "verdict": "good",
+      "note": "Empty branch \u2014 CommandEmpty copy with the forceMount Create row still reachable below it."
+    }
+  }
+}

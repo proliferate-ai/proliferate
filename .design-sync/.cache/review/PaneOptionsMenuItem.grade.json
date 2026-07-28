@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "PaneMenu": {
+      "verdict": "good",
+      "note": "Five items composed inside a popover surface: icons in the reserved slot, left-aligned truncating labels, and a destructive-tinted Close pane row. Correct 8px min-height rows."
+    },
+    "WithTrailing": {
+      "verdict": "good",
+      "note": "trailing slot exercised with ShortcutBadge and a plain value ('On'); trailing content sits right-aligned in the muted role."
+    },
+    "IconSlotAlignment": {
+      "verdict": "good",
+      "note": "reserveIconSlot is the real axis here \u2014 the left menu keeps labels aligned past an empty icon slot, the right one has no slot at all. The difference is clearly legible."
+    },
+    "Disabled": {
+      "verdict": "good",
+      "note": "Disabled rows render at reduced opacity with the hover suppressed, next to an enabled row for contrast."
+    }
+  }
+}

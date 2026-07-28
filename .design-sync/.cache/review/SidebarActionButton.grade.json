@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Variants": {
+      "verdict": "good",
+      "note": "The four axes side by side with captions: default (alwaysVisible), section (opacity-75), active (bg-selected chip) and disabled. Glyphs are deliberately tiny — the adapter forces [&_svg]:icon-tight (~10.5px) against the 12px sidebar text — so this reads small but is faithful to the component."
+    },
+    "InSectionHeader": {
+      "verdict": "good",
+      "note": "variant='section' in its real home: three sidebar group headers (SESSIONS / BRANCHES / TERMINALS) each with a leading collapse chevron and a trailing plus, interleaved with real rows. Section buttons are visible at rest, which is the variant's whole point."
+    },
+    "InRowTrailing": {
+      "verdict": "good",
+      "note": "Trailing row actions on SidebarRowSurface rows — options and delete, with one row showing the active chip and a disabled delete. alwaysVisible is used deliberately: the default 'hover' visibility is opacity-0 at rest and would photograph as an empty row."
+    }
+  }
+}

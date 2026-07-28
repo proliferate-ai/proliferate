@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "InlineInATurn": {
+      "verdict": "good",
+      "note": "Mentions inline in two assistant paragraphs \u2014 the GitHub mark sits on the text baseline at one line-height and the link tone reads against chat body copy. Only GitHub hosts are used: see the file header, the favicon path needs network and the capture runs offline."
+    },
+    "MentionList": {
+      "verdict": "good",
+      "note": "Four stacked GitHub mentions (pull, releases, gist subdomain) showing the icon shell's fixed width and the shared link tone."
+    },
+    "NonUrlFallbacks": {
+      "verdict": "good",
+      "note": "The plain-link branch: a relative workspace path, an in-page anchor and a mailto: each render with the shared link treatment and no icon, next to a real external mention for contrast. LIMITATION: the non-GitHub favicon path is UNVERIFIED \u2014 it fetches https://<host>/favicon.ico, which the offline capture cannot resolve."
+    }
+  }
+}

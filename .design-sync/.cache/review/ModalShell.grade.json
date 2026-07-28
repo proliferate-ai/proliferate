@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "DeleteWorkspace": {
+      "verdict": "good",
+      "note": "Overlay + panel render whole: text-title heading, muted description, body copy, hairline-divided footer with ghost Cancel and destructive Delete. Dark scrim and shadow-modal both visible."
+    },
+    "AddRepository": {
+      "verdict": "good",
+      "note": "Form modal renders complete \u2014 Label + Input pairs on the DS input surface, helper copy, footer with ghost/primary pair. Close affordance shows the open-focus ring, which is the real Radix behaviour."
+    },
+    "WideWithHeaderContent": {
+      "verdict": "good",
+      "note": "sizeClassName=max-w-2xl plus headerContent exercises the sr-only-title branch: custom header row with inline action, file rows in readable-code mono with git-green/git-red counts, footer pair. No clipping."
+    },
+    "BlockingProgress": {
+      "verdict": "good",
+      "note": "disableClose + showCloseButton={false} render as intended \u2014 no X in the corner, spinner and progress line on the DS surface, footer action present. Variant axis is genuinely different from the other three."
+    }
+  }
+}

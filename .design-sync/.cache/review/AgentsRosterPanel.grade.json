@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "RunningSubagents": {
+      "verdict": "good",
+      "note": "Three running subagents on the ComposerPopoverSurface the chip actually opens: title, status/model/background/duration meta line, GitFork glyphs. Correct spacing."
+    },
+    "SingleAgent": {
+      "verdict": "good",
+      "note": "One-row roster with a truncating long description \u2014 the truncation is the component's own contract."
+    },
+    "NoActiveSubagents": {
+      "verdict": "good",
+      "note": "Roster fed only completed/failed subagents renders the 'No active native subagents.' empty copy, which is the locked design (finished agents leave the roster immediately)."
+    }
+  }
+}

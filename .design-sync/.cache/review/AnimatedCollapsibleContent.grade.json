@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Expanded": {
+      "verdict": "good",
+      "note": "expanded=true reveals the three-file diff summary at full height inside a bordered surface-elevated disclosure card; git-green/git-red deltas and text-ui-sm paths all on DS tokens."
+    },
+    "Collapsed": {
+      "verdict": "good",
+      "note": "expanded=false correctly renders 0fr / opacity-0 \u2014 the header row (ChevronRight + FileDiff + Badge) still renders, so the cell reads as an intentional collapsed disclosure, not a broken/empty render. Directly contrasts with Expanded."
+    },
+    "ToolCallDisclosure": {
+      "verdict": "good",
+      "note": "Stateful useState wrapper, expanded by default: chevron+Terminal header with 'exit 0' meta, and the build output in a code-block-background pre at text-readable-code (Geist Mono resolved). Complete."
+    }
+  }
+}

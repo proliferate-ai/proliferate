@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Sizes": {
+      "verdict": "good",
+      "note": "xs/sm/md shown twice — at rest and with the component's own bg-hover surface painted, which is the only way the size axis (hit area, not glyph) is legible. The three boxes visibly step up in size."
+    },
+    "Tones": {
+      "verdict": "good",
+      "note": "default tone on a bordered content pane vs sidebar tone on the sidebar rail, each with a hover-surface example. Icon ink differs between the two roles as the tone map specifies."
+    },
+    "States": {
+      "verdict": "good",
+      "note": "enabled / hover / disabled / sidebar-disabled in one row; the disabled pair is visibly at reduced opacity while staying legible."
+    },
+    "InRowContext": {
+      "verdict": "good",
+      "note": "Three branch rows with trailing copy and delete IconButtons — the real product context, showing the button sized to sit inside a 40px row without disturbing it."
+    }
+  }
+}

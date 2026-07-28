@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "IconKeys": {
+      "verdict": "good",
+      "note": "All 13 SessionControlIconKey values in a labelled swatch grid \u2014 every glyph is distinct and correctly sized by icon-paired."
+    },
+    "ComposerControlRow": {
+      "verdict": "good",
+      "note": "The glyphs back in their product home: model / mode / branch / auto-approve pills on a composer-background bar, with the success tone on the shield."
+    },
+    "HandoffModeOptions": {
+      "verdict": "good",
+      "note": "Popover-surface option list (the plan-handoff mode picker shape) with the icon in the leading slot and two-line labels."
+    },
+    "UnknownFallback": {
+      "verdict": "good",
+      "note": "null and undefined both fall back to the outlined question glyph instead of collapsing the leading slot."
+    }
+  }
+}

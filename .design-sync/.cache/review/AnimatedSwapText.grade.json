@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "ModeValue": {
+      "verdict": "good",
+      "note": "Ported from SessionModeControl \u2014 two AnimatedSwapText values (model name, mode label + detail) as ComposerControlButton labels on a composer-background bar. Swap text is the emphasized white label against the muted detail, exactly the two-tone hierarchy the component exists for."
+    },
+    "CyclingValue": {
+      "verdict": "good",
+      "note": "Stateful wrapper keyed on valueKey; renders the committed value ('Build \u00b7 auto-approve edits') with a secondary Button that drives the swap. Both the control and the trigger render whole."
+    },
+    "InlineMeta": {
+      "verdict": "good",
+      "note": "Non-composer usage: text-chat-meta row with the swapped model name in text-foreground against muted surrounding meta. Varies the axis (inline meta vs pill control) and stays legible."
+    }
+  }
+}

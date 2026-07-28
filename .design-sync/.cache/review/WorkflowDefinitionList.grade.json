@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Definitions": {
+      "verdict": "good",
+      "note": "Four realistic workflow rows inside the bounded ProductPageShell: workflow glyph tile, title, description or the derived stage/input summary, and the formatted updated-at."
+    },
+    "NoWorkflowsYet": {
+      "verdict": "good",
+      "note": "EmptyState branch with its 'New workflow' action."
+    },
+    "Loading": {
+      "verdict": "good",
+      "note": "Loading branch \u2014 the role=status line inside the same page chrome."
+    },
+    "LoadFailed": {
+      "verdict": "good",
+      "note": "Error EmptyState with the Retry action and its rotate glyph."
+    }
+  }
+}

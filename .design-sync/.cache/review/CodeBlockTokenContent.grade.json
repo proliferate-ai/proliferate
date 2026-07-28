@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "LineNumberedSource": {
+      "verdict": "good",
+      "note": "The table/gutter path: right-aligned faint tabular line numbers from 59, tokens aligned, horizontal overflow contained."
+    },
+    "SearchHighlightOverlay": {
+      "verdict": "good",
+      "note": "renderToken slot feeding the transcript's real mark.codex-thread-find-match paint \u2014 yellow ground, background-coloured ink, legible over every token colour."
+    },
+    "SingleLineNoGutter": {
+      "verdict": "good",
+      "note": "The ungutted path with a one-line payload, which is the only multi-line-safe shape (DS defect recorded in learnings/G.md). Renders correctly."
+    }
+  }
+}

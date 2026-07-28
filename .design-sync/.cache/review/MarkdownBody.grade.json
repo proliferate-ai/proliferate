@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "AssistantAnswer": {
+      "verdict": "good",
+      "note": "Full assistant answer: h3, prose with bold + inline code chips, an ordered list, a fenced tsx block routed through MarkdownCodeBlockShell, and a blockquote with the DS border rule. The whole markdown contract in one cell."
+    },
+    "TaskListGrid": {
+      "verdict": "good",
+      "note": "taskListItems=grid: GFM checkboxes in their own column with content aligned in the second, plus a github.com link rendered as an inline ProviderLinkMention with the brand glyph."
+    },
+    "ToolDetailBody": {
+      "verdict": "good",
+      "note": "Secondary-chrome usage at text-chat with a bulleted file list and inline code \u2014 visibly a tier below the message body."
+    },
+    "StreamingTail": {
+      "verdict": "good",
+      "note": "isStreaming with a truncated trailing local-file link; stabilizeStreamingMarkdown closes it so the tail paints as a finished link instead of raw source. Prose cuts mid-thought, as a live stream does."
+    }
+  }
+}

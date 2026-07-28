@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "StatusLegend": {
+      "verdict": "good",
+      "note": "All six indicator views the domain layer emits, showLabel on, in a card. The dot is 6px by design so the label is what makes it legible. NOTE: the `attention` row (Needs input) is near-invisible on surface=default because its tone resolves to text-warning, and --color-warning is an alpha FILL (rgba(255,180,50,.15)) rather than ink \u2014 the same token defect Batch E found in Badge. Component behaviour is correct; the token is the bug."
+    },
+    "InInventoryRows": {
+      "verdict": "good",
+      "note": "Label off: bare dots leading a five-row cloud-work inventory with title, repo and time. Same --color-warning caveat applies to the Needs input row's dot."
+    },
+    "SurfaceTones": {
+      "verdict": "good",
+      "note": "The surface axis side by side. This is the cell that makes the warning-token problem legible: attention and muted re-tone to sidebar ink on surface=sidebar and are perfectly readable, while attention on surface=default (text-warning) all but disappears."
+    }
+  }
+}

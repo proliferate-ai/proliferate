@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "WorkspaceList": {
+      "verdict": "good",
+      "note": "A repo group's five workspaces with PR dots anchored on the leading git glyph (open/checks_failing/pending/merged) and a plain branch row with no PR. Selected row and trailing times both read."
+    },
+    "ActivityAndUnread": {
+      "verdict": "good",
+      "note": "Trailing-cell precedence demonstrated in one column: spinner, waiting, error, unread dot, then a plain time on an archived (muted) row."
+    },
+    "SubtitleRows": {
+      "verdict": "good",
+      "note": "40px subtitle rows carrying the branch under the workspace name, including one branch long enough to truncate."
+    },
+    "ShortcutAndHoverAction": {
+      "verdict": "good",
+      "note": "shortcutLabel + shortcutRevealVisible on two rows, and the hover-revealed row menu on the third (focus-on-mount). The menu glyph is ~10.5px on purpose \u2014 SidebarActionButton overrides the base primitive's icon size."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Saved": {
+      "verdict": "good",
+      "note": "Saved state: GitHub-default branch select, run command Input, ScriptBlock with a real setup.sh, success badge, both footer buttons disabled."
+    },
+    "UnsavedChanges": {
+      "verdict": "good",
+      "note": "Dirty state with an explicit branch selected, an edited run command and an info badge with live Revert/Save."
+    },
+    "Saving": {
+      "verdict": "good",
+      "note": "saving=true puts the Save button in its loading state and holds Revert, with the neutral Saving badge."
+    },
+    "BranchLoadFailed": {
+      "verdict": "good",
+      "note": "branchError swaps the helper text, branches is empty, and the destructive error paragraph renders above the footer. Placeholders show through the empty run command and script fields."
+    }
+  }
+}

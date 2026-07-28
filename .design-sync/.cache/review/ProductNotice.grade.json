@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Tones": {
+      "verdict": "good",
+      "note": "All four tones render whole in a max-w-2xl column with real product copy. Neutral/info/destructive read distinctly; the warning card is nearly indistinguishable from neutral because `bg-warning/10` layers 10% on top of --color-warning, which is ITSELF an alpha fill (rgba(255,180,50,.15)). That is the DS token defect Batch E logged for Badge, not a preview fault \u2014 the notice's own ink (text-foreground) is correct and legible."
+    },
+    "DescriptionOnly": {
+      "verdict": "good",
+      "note": "Title omitted: the description collapses to a single tight block with no orphan margin, and the icon slot still aligns to the first line. Three tones shown."
+    },
+    "InSettingsSection": {
+      "verdict": "good",
+      "note": "The notice in its real host \u2014 an SSO settings card with heading, sub-copy and a Button pair. DS surface/border/type roles throughout; a designer would recognise the composition."
+    }
+  }
+}

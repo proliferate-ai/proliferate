@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "OnIconButtons": {
+      "verdict": "good",
+      "note": "HOVER-ONLY COMPONENT — READ THE CAVEAT. Tooltip is a Radix hover/focus tooltip and its public wrapper exposes only { content, children, className, singleLine }: no open/defaultOpen, and the focusable node is a <span> the component renders itself, so the bubble genuinely cannot be forced open from a preview and does not appear in this sheet. What the cell verifies is the trigger surface: two IconButtons and a secondary Button in a bordered toolbar, all correctly styled and laid out, with the wrapper's default inline-flex shrink-0 span not disturbing the row. The popover content itself is UNVERIFIED by this sheet."
+    },
+    "OnTruncatedText": {
+      "verdict": "good",
+      "note": "HOVER-ONLY COMPONENT — bubble not captured (see OnIconButtons). The cell verifies the most common real use: wrapping truncating text (a long source path, a branch summary) so the full string is available on hover. Truncation, width bound and DS type scales all render correctly; the bubble is UNVERIFIED."
+    },
+    "OnStatusBadge": {
+      "verdict": "good",
+      "note": "HOVER-ONLY COMPONENT — bubble not captured (see OnIconButtons). Verifies singleLine=true triggers wrapping status Badges (destructive/success/info), which render correctly and keep their pill geometry inside the tooltip span. The singleLine vs multi-line axis lives entirely in the bubble and is therefore UNVERIFIED by any static sheet."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Open": {
+      "verdict": "good",
+      "note": "defaultOpen renders the real portalled surface below the trigger: popover fill, hairline ring, shadow and w-72 p-3 padding, with a two-part settings summary and a success Badge inside."
+    },
+    "MenuContent": {
+      "verdict": "good",
+      "note": "Same primitive with p-1 content holding PopoverMenuItems, including a destructive row \u2014 shows the menu composition the DS actually uses."
+    },
+    "Closed": {
+      "verdict": "good",
+      "note": "Resting state: trigger button only, no surface. Correct and useful as the contrast cell."
+    }
+  }
+}

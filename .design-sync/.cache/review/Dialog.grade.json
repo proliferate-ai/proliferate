@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "RenameThread": {
+      "verdict": "good",
+      "note": "Open dialog with header/description, a real Label + Input pair and a ghost/primary footer. Panel uses the canonical bg-background surface, rounded-xl border and shadow-modal; close glyph top-right."
+    },
+    "AddRepository": {
+      "verdict": "good",
+      "note": "Richer body: two bordered repo rows with GitBranch icons and success/neutral Badges. Nothing collapses, footer sits below the body with the correct pt-4 gap."
+    },
+    "WithTriggerBehind": {
+      "verdict": "good",
+      "note": "DialogTrigger renders behind the open content, so the trigger→content composition is visible in one frame. Destructive footer action varies the axis."
+    },
+    "NoCloseButton": {
+      "verdict": "good",
+      "note": "showCloseButton={false} — the top-right glyph is gone and the single primary action carries the dialog. Reads clearly different from the other three cells."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "WithControls": {
+      "verdict": "good",
+      "note": "Three rows in a bordered settings list: Switch, Select, and a secondary Button control. Label 13/medium, description 12/muted, hairline border-t dividers with first:border-t-0 all visible; controls right-aligned and vertically centred. DS type and colour roles applied, no browser defaults."
+    },
+    "WithStatusControl": {
+      "verdict": "good",
+      "note": "Rows carrying Badge status plus a ghost action. Long description wraps inside max-w-2xl without pushing the control out of line; the success badge reads clearly. Uses tone=neutral rather than tone=warning — see the DS token defect noted in learnings/E.md."
+    },
+    "WithoutDescription": {
+      "verdict": "good",
+      "note": "The description-less variant: three single-line rows sit at the 2.875rem min height with the same dividers, so the axis (with vs without description) genuinely varies against the other two cells."
+    }
+  }
+}

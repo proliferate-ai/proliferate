@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "AnchoredGroupEditor": {
+      "verdict": "good",
+      "note": "Ported from the manual chat-group editor: a popover-frame panel pinned at a measured point over its host pane, with a real Input and ghost/primary footer. The position prop is doing visible work."
+    },
+    "AnchoredContextMenu": {
+      "verdict": "good",
+      "note": "Menu anchored over a branch list at top/left — shows the layer overlapping content the way a context menu does, with a highlighted row and a destructive row."
+    },
+    "CornerLayers": {
+      "verdict": "good",
+      "note": "Four layers at all four corners of one host — the clearest possible read of the position axis (top/right/bottom/left), each a legible DS chip."
+    },
+    "FixedOverlayBar": {
+      "verdict": "good",
+      "note": "position:fixed with bottom+left+right stretches the bar across its containing block and pins it to the bottom; content, Discard and Commit all render."
+    }
+  }
+}

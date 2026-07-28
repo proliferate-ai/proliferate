@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Unclaimed": {
+      "verdict": "good",
+      "note": "Info-toned banner with the Hand glyph, title, description and the secondary Claim session action."
+    },
+    "ClaimedByOther": {
+      "verdict": "good",
+      "note": "The read-only variant on the card surface with no action, as the source dictates."
+    },
+    "AboveTranscript": {
+      "verdict": "good",
+      "note": "Where the banner actually lands \u2014 at the head of the chat thread column, above an assistant turn."
+    }
+  }
+}

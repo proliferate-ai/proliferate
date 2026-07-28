@@ -1,0 +1,12 @@
+{
+  "cells": {
+    "ScrollsPastTheRail": {
+      "verdict": "good",
+      "note": "Content deliberately overflows: the last repo group header is cut mid-row at the rail's bottom edge, which is the only still-frame evidence the AutoHideScrollArea viewport is clipping (the thumb auto-hides at rest)."
+    },
+    "ContentThatFits": {
+      "verdict": "good",
+      "note": "Two sections that fit inside the rail \u2014 no clipping, and the gap-px row rhythm and px-2 viewport gutter are legible."
+    }
+  }
+}

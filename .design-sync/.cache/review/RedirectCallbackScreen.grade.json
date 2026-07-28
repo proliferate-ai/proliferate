@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "SignInComplete": {
+      "verdict": "good",
+      "note": "Success tone: green status chip, brand mark + wordmark, hero title, detail line and a primary/secondary action pair. The component's min-h-screen is overridden with h-full min-h-0 so it sits in a window-sized frame."
+    },
+    "CallbackFailed": {
+      "verdict": "good",
+      "note": "Error tone with a destructive chip, the failure explanation, an error/request-id detail line and Try again / Contact support."
+    },
+    "Exchanging": {
+      "verdict": "good",
+      "note": "Neutral in-flight state: muted chip, no actions, the living mark still breathing."
+    },
+    "DesktopHandoff": {
+      "verdict": "good",
+      "note": "variant=handoff: mark leads, no status chip, single full-width h-11 action \u2014 a visibly different layout from the default variant."
+    }
+  }
+}

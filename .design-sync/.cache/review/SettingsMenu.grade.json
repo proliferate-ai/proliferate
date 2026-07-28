@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Trigger": {
+      "verdict": "good",
+      "note": "Resting trigger: leading icon (sized icon-paired by the consumer, as GeneralPane does), truncating label, muted chevron, 32px outline button at the default 240px width."
+    },
+    "InSettingsRows": {
+      "verdict": "good",
+      "note": "Two menus in their real habitat \u2014 right-aligned controls in SettingsRows at the shared w-60 control width."
+    },
+    "Open": {
+      "verdict": "good",
+      "note": "Opened surface shows the whole menu contract: group labels, per-option icons and detail lines, the Check on the selected option, a disabled option, and the divider between groups on the popover fill."
+    }
+  }
+}

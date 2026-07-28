@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "DeleteWorkspace": {
+      "verdict": "good",
+      "note": "Open destructive alert renders centred over the bg-black/60 overlay: bg-background panel, border-border, shadow-modal, text-ui title over text-ui-sm muted description, bordered Cancel beside the white primary action. Fully styled with DS tokens, nothing clipped."
+    },
+    "ReconcileGitState": {
+      "verdict": "good",
+      "note": "Ported from WorkspaceReconciliationDialog. Same open surface but with a bordered body block (Monitor / CloudIcon rows, GitBranch meta) between header and footer \u2014 proves the content slot composes. Complete and legible."
+    },
+    "TriggerInDangerZone": {
+      "verdict": "good",
+      "note": "The closed/trigger state: AlertDialogTrigger asChild on a destructive Button inside a surface-elevated danger-zone card. Genuinely varies the axis (closed vs open) and reads as a real settings composition rather than a bare button."
+    }
+  }
+}

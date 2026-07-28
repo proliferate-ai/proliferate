@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "OpenBubble": {
+      "verdict": "good",
+      "note": "The actual tooltip bubble, photographed. TooltipPrimitive is the Radix root and accepts defaultOpen, which the styled Tooltip does not \u2014 popover/96 fill, hairline ring, popover shadow and text-ui medium ink are all visible."
+    },
+    "Sides": {
+      "verdict": "good",
+      "note": "side='top' / 'bottom' / 'right' each rendered open at once, so the placement axis is legible in a still frame."
+    },
+    "CompoundLabel": {
+      "verdict": "good",
+      "note": "Rich content inside the bubble: a label + ShortcutBadge row over a muted second line, with max-w-xs wrapping."
+    },
+    "TriggerRow": {
+      "verdict": "good",
+      "note": "Resting triggers under a 150 ms provider delay \u2014 the closed state of the same composition."
+    }
+  }
+}

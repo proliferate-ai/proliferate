@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "HeaderControls": {
+      "verdict": "good",
+      "note": "Trigger in its real home \u2014 the settings scope-tab right slot, beside the Cloud|Local SegmentedControl. Outline trigger, GitHub mark, truncating name and the chevrons affordance all read correctly."
+    },
+    "CloudRepoSelected": {
+      "verdict": "good",
+      "note": "Cloud-kind selection swaps the GitHub mark for the Cloud glyph; caption states the rule. Styled and plausible."
+    },
+    "OpenMenu": {
+      "verdict": "good",
+      "note": "The popover is photographed open (the trigger is clicked on mount \u2014 RepoPicker does not forward PopoverButton's private open state). Shows all four items with icon/label/detail, the check on the selected row, the hairline divider and the 'Add repository\u2026' footer."
+    },
+    "SingleRepository": {
+      "verdict": "good",
+      "note": "value={null} falling back to the first item, the documented default. Renders identically to a chosen repo, which is the correct behaviour."
+    }
+  }
+}

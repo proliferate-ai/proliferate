@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "SetupScript": {
+      "verdict": "good",
+      "note": "Full code-block chrome: mono file-label strip over the ghost textarea, real setup.sh content, DS input border and surface-editor fill."
+    },
+    "EmptyWithPlaceholder": {
+      "verdict": "good",
+      "note": "Empty value shows the two-line placeholder in muted ink; the frame keeps its min height rather than collapsing."
+    },
+    "WithHeaderAction": {
+      "verdict": "good",
+      "note": "headerAction slot carries a ghost Button plus an IconButton, correctly sized inside the 28px header strip."
+    },
+    "Disabled": {
+      "verdict": "good",
+      "note": "Disabled state visibly mutes the textarea while the header strip stays legible."
+    }
+  }
+}

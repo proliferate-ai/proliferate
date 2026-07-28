@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "ModelPicker": {
+      "verdict": "good",
+      "note": "Default variant: 12px radius, popover/90 ground, 0.5px ring, backdrop blur, 4px padding, with three PopoverMenuItem rows plus hints. Idiomatic composer click-in."
+    },
+    "HandoffModePicker": {
+      "verdict": "good",
+      "note": "Narrow default-variant menu with a selected check \u2014 the plan handoff picker shape from the product."
+    },
+    "SummaryVariant": {
+      "verdict": "good",
+      "note": "variant=summary: 16px radius, unpadded card with its own header block and switch rows. Clearly distinguishable from the default variant."
+    }
+  }
+}

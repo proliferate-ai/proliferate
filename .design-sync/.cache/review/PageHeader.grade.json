@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Default": {
+      "verdict": "good",
+      "note": "text-title semibold heading over a text-body muted description with the bottom hairline \u2014 the canonical page header, correctly styled."
+    },
+    "WithActions": {
+      "verdict": "good",
+      "note": "actions slot renders a secondary + primary Button pair right-aligned against the title block; spacing and alignment are correct at sm and up."
+    },
+    "TitleOnly": {
+      "verdict": "good",
+      "note": "Description and actions omitted; the header collapses to title + rule without leaving stray gaps."
+    },
+    "RichTitle": {
+      "verdict": "good",
+      "note": "ReactNode title/description exercised \u2014 inline Badge beside the title and an icon-led description line, plus the legacy `action` prop alias. Renders whole."
+    }
+  }
+}

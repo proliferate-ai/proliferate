@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "AddingRepository": {
+      "verdict": "good",
+      "note": "Modal renders with scrim, custom title/description, query in the search field, a manual owner/repo value in the footer input, and the per-row loading spinner on the Add button."
+    },
+    "BlockedOnGitHubApp": {
+      "verdict": "good",
+      "note": "Dialog chrome + the blocker branch of the picker body. Complete modal, correct 440px panel width."
+    },
+    "LoadingRepositories": {
+      "verdict": "good",
+      "note": "Skeleton rows with staggered shimmer inside the modal; search field and manual-add footer both present."
+    },
+    "RepositoryList": {
+      "verdict": "good",
+      "note": "Four repo rows covering configured/missing/disabled + a public fork, private locks, the success check, Load more, and the manual-add footer. Complete."
+    }
+  }
+}

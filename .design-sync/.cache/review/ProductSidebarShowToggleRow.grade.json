@@ -1,0 +1,12 @@
+{
+  "cells": {
+    "ShowMoreUnderAGroup": {
+      "verdict": "good",
+      "note": "The toggle in its real position: a truncated repo group's last row, on the pl-6 indent, with the next group starting underneath."
+    },
+    "ShowLessAfterExpanding": {
+      "verdict": "good",
+      "note": "The expanded counterpart closing a fully-listed group of five workspaces."
+    }
+  }
+}

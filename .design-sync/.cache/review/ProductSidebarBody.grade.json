@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "BodyFillsTheRail": {
+      "verdict": "good",
+      "note": "Body takes every pixel the footer leaves: nine workspace rows overflow and clip at the rail edge while the account footer stays anchored. Demonstrates min-h-0/flex-1 correctly."
+    },
+    "BodyWithShortContent": {
+      "verdict": "good",
+      "note": "Same rail with two threads \u2014 content stays top-aligned, the body still owns the column and the footer sits at the bottom."
+    },
+    "BodyWithoutFooter": {
+      "verdict": "good",
+      "note": "No footer at all; the body simply runs to the bottom of the rail. Confirms the frame's footer slot is optional."
+    }
+  }
+}

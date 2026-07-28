@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "WithEnvironments": {
+      "verdict": "good",
+      "note": "Three environments with their Cloud badge plus the Setting up / Setup failed status badges, and the dashed add row underneath. Page header + section header both present."
+    },
+    "EmptyState": {
+      "verdict": "good",
+      "note": "SettingsEmptyState full variant with the Folder icon and the secondary add action."
+    },
+    "LoadFailed": {
+      "verdict": "good",
+      "note": "cloudErrorMessage renders the error row with Retry beneath the surviving environment, and the add row is still offered."
+    },
+    "CloudUnavailable": {
+      "verdict": "good",
+      "note": "cloudUnavailableReason takes precedence: the unavailable row replaces the list and correctly suppresses the add affordance."
+    }
+  }
+}

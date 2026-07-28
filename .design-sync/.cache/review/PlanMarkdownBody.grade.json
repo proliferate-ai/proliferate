@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "ProposedPlan": {
+      "verdict": "good",
+      "note": "presentation=proposal: h2 title at text-ui/semibold, the uppercase h3 micro-label tier, and the automatic '(4)' step count appended to the section heading that precedes the ordered list. Exactly the proposal recipe."
+    },
+    "ProposalTaskList": {
+      "verdict": "good",
+      "note": "Proposal task list \u2014 checkbox grid items with 8px gaps, no bullet markers, uppercase CHECKLIST heading."
+    },
+    "DefaultPresentation": {
+      "verdict": "good",
+      "note": "presentation=default: normal markdown hierarchy at message size, no heading annotation, no grid task items. Clearly distinct from the proposal cells."
+    }
+  }
+}

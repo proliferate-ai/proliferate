@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "AwaitingApproval": {
+      "verdict": "good",
+      "note": "The decision state: warning chip in the header, full markdown plan body with ordered list and inline code, Reject/Approve in the footer. Required onApprove/onReject are absent from the generated .d.ts but real \u2014 without them canDecide is false and the footer disappears."
+    },
+    "Approved": {
+      "verdict": "good",
+      "note": "Approved chip plus the 'Run here' primary and the overflow menu trigger for the New session hand-off."
+    },
+    "Streaming": {
+      "verdict": "good",
+      "note": "decisionState=streaming: identical shell with no chip and no footer, which is the documented no-chrome-swap behaviour."
+    },
+    "NativeContinuationFailed": {
+      "verdict": "good",
+      "note": "Failed chip plus the destructive note line carrying errorMessage below the header, and the Run here fallback in the footer."
+    },
+    "RejectedAndSuperseded": {
+      "verdict": "good",
+      "note": "The two terminal, action-free states stacked \u2014 muted chips, no footer."
+    }
+  }
+}

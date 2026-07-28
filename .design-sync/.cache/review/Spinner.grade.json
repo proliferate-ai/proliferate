@@ -1,0 +1,1 @@
+{"cells":{"Sizes":{"verdict":"good","note":"Fixed after a first pass: icon-tight was NOT in the compiled CSS so the SVG rendered unconstrained and enormous. Re-authored with size-4/5/6; the safelist now also emits icon-tight."},"InlineWithLabel":{"verdict":"good","note":"Realistic provisioning affordance."}}}

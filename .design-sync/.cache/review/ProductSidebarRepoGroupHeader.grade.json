@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "RepoGroupsInRail": {
+      "verdict": "good",
+      "note": "Two expanded groups with their workspace rows, a Show more toggle between them, and a collapsed group \u2014 the real Repositories tree."
+    },
+    "EnvironmentGlyphs": {
+      "verdict": "good",
+      "note": "The environment axis: FolderClosedFilled/FolderFilled for local (collapsed vs expanded) against FolderRemote for Cloud-capable repos, plus a long label truncating."
+    },
+    "HeaderActionsRevealed": {
+      "verdict": "good",
+      "note": "The hover-revealed trailing actions (new workspace, repository options) shown via focus-on-mount. LIMITATION: the `hoverIcon` folder->chevron swap is keyed on pointer :hover only and cannot be photographed; the folder glyph is what the sheet shows."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Variants": {
+      "verdict": "good",
+      "note": "All four variants render distinctly on the DS dark surface: primary white-on-dark, secondary bordered, ghost subtle, destructive red. Variant axis genuinely varies."
+    },
+    "Sizes": {
+      "verdict": "good",
+      "note": "sm and default both render with correct token padding/type scale."
+    },
+    "States": {
+      "verdict": "good",
+      "note": "Enabled/disabled contrast is visible for both primary and secondary; disabled reads as disabled without disappearing."
+    }
+  }
+}

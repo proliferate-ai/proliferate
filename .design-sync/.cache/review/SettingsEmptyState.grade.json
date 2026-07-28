@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "NoSecrets": {
+      "verdict": "good",
+      "note": "size=full: 22px muted icon, 13px medium title, 12px muted description capped near 48ch, action below, all centred in the min-h-280 block. Flat \u2014 no card of its own, as the contract requires."
+    },
+    "HarnessInstallGate": {
+      "verdict": "good",
+      "note": "Full state with a two-button action group; both buttons render at their real variants and the block stays centred."
+    },
+    "AdminGate": {
+      "verdict": "good",
+      "note": "size=compact collapses to the py-8 block \u2014 visibly shorter than the full cells, so the size axis reads. Real AdminOnlyPlaceholder copy."
+    },
+    "TitleOnly": {
+      "verdict": "good",
+      "note": "Title-only compact state; description and action branches correctly absent, nothing collapses."
+    }
+  }
+}

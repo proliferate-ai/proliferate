@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "WrappedToolbar": {
+      "verdict": "good",
+      "note": "The provider has no markup of its own, so it is photographed around a real icon toolbar with one member defaultOpen. Caption and bubble are clear of each other."
+    },
+    "DelayDuration": {
+      "verdict": "good",
+      "note": "The provider's one meaningful prop shown on both settings: delayDuration 0 with the bubble already open, and 600 with the triggers at rest."
+    },
+    "StatusChipTooltip": {
+      "verdict": "good",
+      "note": "Provider scoped to a workspace status card; the ahead/behind chip's bubble opens below the card without covering its content."
+    }
+  }
+}

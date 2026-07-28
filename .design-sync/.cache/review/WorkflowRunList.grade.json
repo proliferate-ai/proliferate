@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "RecentRuns": {
+      "verdict": "good",
+      "note": "Five history rows exercising the domain presentation: Running, Completed (success), Failed (danger), Cancelled and Prepared, each with revision, placement kind and timestamp."
+    },
+    "WithLoadMore": {
+      "verdict": "good",
+      "note": "Truncated history with the 'Load more' secondary button."
+    },
+    "NoRunsYet": {
+      "verdict": "good",
+      "note": "Empty branch inside the same card chrome."
+    },
+    "LoadFailed": {
+      "verdict": "good",
+      "note": "Error copy in text-destructive with the header Retry button."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "SettledResponse": {
+      "verdict": "good",
+      "note": "Settled markdown: paragraph, bold heading line, bullet list with inline code. Prose sits at --text-message inside the thread column."
+    },
+    "WithCodeBlock": {
+      "verdict": "good",
+      "note": "Fenced ts block renders through the DS code-block shell with its language label and copy affordance; inline code keeps the prose size."
+    },
+    "WithTableAndQuote": {
+      "verdict": "good",
+      "note": "Heading, GFM table inside its bordered scroll shell, blockquote and ordered list all render in one message."
+    },
+    "StreamingTail": {
+      "verdict": "good",
+      "note": "isStreaming with animateReveal={false} pins the reveal frontier at the end of the source, so the still frame shows the whole painted prefix instead of a random mid-fade."
+    }
+  }
+}

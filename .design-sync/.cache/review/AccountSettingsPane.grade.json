@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "SignedIn": {
+      "verdict": "good",
+      "note": "Full pane: UserAvatar initials header, sign-in-methods section with GitHub (Primary) + Google + the password row, and the Sign out footer. Renders whole inside the capture viewport."
+    },
+    "GitHubNeedsReconnect": {
+      "verdict": "good",
+      "note": "needs_reauth status flows through to the Reconnect badge and a synthesized Google connect row; the destructive error line renders under the section."
+    },
+    "WithConnectedServices": {
+      "verdict": "good",
+      "note": "Third section present with two AccountConnectedServiceView rows (Authorized / Not connected) and their actions. All three sections read as one settings page."
+    }
+  }
+}

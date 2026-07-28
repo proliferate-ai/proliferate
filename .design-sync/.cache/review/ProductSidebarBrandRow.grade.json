@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "BrandRowInRail": {
+      "verdict": "good",
+      "note": "Brand row at the top of a real rail with nav and a repo group beneath it \u2014 the px-4 alignment against nav glyphs and section labels is the point and it reads."
+    },
+    "MarkVariants": {
+      "verdict": "good",
+      "note": "Four rows: Proliferate mark, a Building2 org mark, no icon at all, and a long wordmark that truncates. The 17px/24 semibold sidebar-brand ramp is visible in all four."
+    },
+    "AlignsWithNavigation": {
+      "verdict": "good",
+      "note": "Icon-less brand row above the primary nav: the wordmark still starts on the nav's 16px content edge, which is the whole reason for the row's px-4."
+    }
+  }
+}

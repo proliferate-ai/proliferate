@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "SurfaceScope": {
+      "verdict": "good",
+      "note": "Two-item control with icons; the selected segment takes bg-selected + foreground ink, the unselected stays muted. Hairline border-input divider between segments renders."
+    },
+    "ViewModes": {
+      "verdict": "good",
+      "note": "Three icon+label segments at even height; first-child border suppression is visible at the left edge."
+    },
+    "TextOnly": {
+      "verdict": "good",
+      "note": "Label-only variant keeps the same 30px height and rounded-md clip; useful contrast against the icon cells."
+    },
+    "WithDisabled": {
+      "verdict": "good",
+      "note": "Disabled third segment renders at 50% with pointer events off while the group border stays continuous."
+    },
+    "InAPageHeader": {
+      "verdict": "good",
+      "note": "Control in its real habitat \u2014 right-aligned in a header row over a border-border hairline, which is how the product's scope headers use it."
+    }
+  }
+}

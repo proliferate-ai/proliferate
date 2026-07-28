@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "DesktopEntry": {
+      "verdict": "good",
+      "note": "Entry step with all three host options, each with icon, label, description and its numeric kbd shortcut, inside the standard modal scrim + panel."
+    },
+    "WebEntry": {
+      "verdict": "good",
+      "note": "Web host: cloud option only, proving the options prop gates what the flow can offer."
+    },
+    "CloudStep": {
+      "verdict": "good",
+      "note": "Cloud step with the CloudRepoPicker body embedded \u2014 back button, title, search field, three repos showing all three action labels (Use / Add / Enable), manual owner/repo form."
+    },
+    "CloneStepWithError": {
+      "verdict": "good",
+      "note": "Clone step with a filtered query and the destructive error paragraph under the picker. Complete render, no clipping."
+    }
+  }
+}

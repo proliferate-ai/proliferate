@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "InSync": {
+      "verdict": "good",
+      "note": "Three-column This Mac / Cloud / GitHub comparison with clean chips, mono branch@sha lines, the staleness caveat, and the action + cancel-preserves lines."
+    },
+    "Diverged": {
+      "verdict": "good",
+      "note": "The interesting case \u2014 destructive '2 ahead, dirty' against an info 'l ahead' and a neutral last-known remote, each with its own caveat."
+    },
+    "MissingLocalWorktree": {
+      "verdict": "good",
+      "note": "Missing local column renders the em-dash placeholder and destructive chip while the other two columns stay populated."
+    }
+  }
+}

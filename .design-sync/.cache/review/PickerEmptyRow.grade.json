@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "NoBranchesFound": {
+      "verdict": "good",
+      "note": "Inside the popover surface + PickerPopoverContent it ships in: search field with a query and the muted one-line empty row beneath."
+    },
+    "LoadingBranches": {
+      "verdict": "good",
+      "note": "The 'Loading branches' placeholder \u2014 same row, transient copy. Correct muted-foreground/text-ui treatment."
+    },
+    "EmptySectionBelowRows": {
+      "verdict": "good",
+      "note": "Mixed body: two real PopoverMenuItem branch rows, then a second section whose empty row explains the gap. Shows the row in its actual role."
+    },
+    "EmptyTargetPicker": {
+      "verdict": "good",
+      "note": "One match plus the empty row for the rest, with the query quoted in the label \u2014 the target picker's real shape."
+    }
+  }
+}

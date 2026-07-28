@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "WorkspaceMenu": {
+      "verdict": "good",
+      "note": "Five rows in a popover surface with icons and a destructive-tinted delete row; rounded hover pills, truncating labels and correct 12px row type."
+    },
+    "WithTrailing": {
+      "verdict": "good",
+      "note": "trailing ShortcutBadge on each row, right-aligned in the muted role \u2014 reads exactly like the product's command menu."
+    },
+    "WithDescription": {
+      "verdict": "good",
+      "note": "children render as the second line under the label, indented past the icon slot in the muted 11px role. Renders whole for both rows."
+    },
+    "Densities": {
+      "verdict": "good",
+      "note": "default vs compact labelled side by side; the padding difference is visible and the axis is real."
+    },
+    "Disabled": {
+      "verdict": "good",
+      "note": "Disabled rows dim and drop the hover fill while an enabled row above keeps full contrast."
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "cells": {
+    "Default": {
+      "verdict": "good",
+      "note": "Bare footer: top hairline, right-aligned rail with ghost Revert and primary Save. Primary Save renders white-on-dark (the dark-surface fix is holding), ghost Revert reads muted."
+    },
+    "WithStatus": {
+      "verdict": "good",
+      "note": "Two footers stacked so the status axis varies: accent 'Unsaved changes' with both buttons live, and success 'Saved 2 minutes ago' with saveDisabled + revertDisabled — the disabled Save is visibly dimmed."
+    },
+    "Saving": {
+      "verdict": "good",
+      "note": "saving=true: Save shows its inline spinner and Revert is disabled by the component's own `revertDisabled || saving`. Info-tone status badge reads clearly."
+    },
+    "WithError": {
+      "verdict": "good",
+      "note": "Error line renders above the rail in destructive ink on its own bordered row, with a destructive 'Not saved' badge beside the buttons. Both optional slots (error + statusLabel) exercised at once."
+    },
+    "UnderSettingsRows": {
+      "verdict": "good",
+      "note": "The footer in its real position — beneath a short stack of SettingsRows — so the shared border-t reads as the divider between the editor body and the save rail rather than a floating line."
+    }
+  }
+}

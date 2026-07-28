@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "TopInsetStandard": {
+      "verdict": "good",
+      "note": "Real ChatComposerSurface + ComposerTextarea + control row; the 12px top inset is visible above the first typed line. DS composer radius, translucent surface, text-composer type scale and the circular send action all render."
+    },
+    "TopInsetNone": {
+      "verdict": "good",
+      "note": "Attachment chips occupy the top gap and the frame adds no inset — the exact product case for topInset=\"none\". Badge chips, textarea and control row all present."
+    },
+    "EmptyPlaceholder": {
+      "verdict": "good",
+      "note": "Placeholder ink renders on the foreground-tertiary role, clearly below typed text; frame padding and the composer surface are correct."
+    },
+    "InsetComparison": {
+      "verdict": "good",
+      "note": "Both inset values stacked with captions — the only prop axis this component has, and the difference in top padding is visible between the two surfaces."
+    }
+  }
+}

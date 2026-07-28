@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "ArmedLoops": {
+      "verdict": "good",
+      "note": "Three loops inside the composer popover the \u27f3 chip opens: prompts line-clamped to 2, humanised cadence ('every 15 minutes', 'every 2 hours'), deterministic 'next in 4m/2h' from the pinned nowMs, underlined fire-count links, NATIVE badges, and a cleared loop at 60% with its delete action withdrawn."
+    },
+    "ArmANewLoop": {
+      "verdict": "good",
+      "note": "Empty loops -> the panel opens straight into the composer: textarea, Interval/Cron segmented pair, cadence input, Cancel/Arm loop with Arm disabled until a prompt exists."
+    },
+    "PendingWrite": {
+      "verdict": "good",
+      "note": "pendingWrite disables the add and per-row delete controls; rows keep showing the last confirmed mirror state."
+    }
+  }
+}

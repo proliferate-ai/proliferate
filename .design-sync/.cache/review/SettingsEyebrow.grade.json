@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "SectionHeadings": {
+      "verdict": "good",
+      "note": "Mono uppercase 11px with the 0.06em tracking over muted body copy \u2014 the section-heading role, rendered three times so the rhythm is visible."
+    },
+    "TableColumnHeaders": {
+      "verdict": "good",
+      "note": "as=\"th\" inside a real thead with two body rows; the polymorphic prop renders actual table headers and the eyebrow style survives the className merge."
+    },
+    "SidebarGroupHeading": {
+      "verdict": "good",
+      "note": "Eyebrow as a sidebar group heading above real SidebarNavRows including an active row \u2014 the third sanctioned use from SettingsSidebar."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "ReadyToLaunch": {
+      "verdict": "good",
+      "note": "The launch card with a filled controlled draft: required inputs, the Include checkbox on optional ones, and the boolean input on its Select. Primary action enabled."
+    },
+    "ValidationIssues": {
+      "verdict": "good",
+      "note": "Two field-level issues rendered in text-destructive with aria-invalid borders, plus the 'Required for run' + explanation treatment on a prompt-referenced optional input."
+    },
+    "LaunchFailed": {
+      "verdict": "good",
+      "note": "serverError and attemptMessage together with the 'Check or retry this run' recovery button; primary action blocked."
+    },
+    "CapabilityDisabled": {
+      "verdict": "good",
+      "note": "capabilityEnabled={false} \u2014 disabled primary, capability copy, and the no-inputs branch. NOTE: the `blockers` branch is not previewed because it is painted entirely in text-warning, which is invisible on this theme (DS token bug, see learnings/I.md)."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Send": {
+      "verdict": "good",
+      "note": "The 28px composer-send-background circle with the ArrowUp glyph in composer-send-foreground \u2014 correct UX_SPEC \u00a75 geometry, legible against the dark surface."
+    },
+    "StopAndDisabled": {
+      "verdict": "good",
+      "note": "Running (StopSquare) and disabled (40% opacity) side by side with captions; both states distinct and correctly rendered."
+    },
+    "InComposerFooter": {
+      "verdict": "good",
+      "note": "Ported from ChatComposerActions/ChatInputControlRow: the button pinned right in a real composer (ComposerTextareaFrame + ComposerTextarea + three ComposerControlButtons) at max-w-2xl. Nothing truncated after widening the frame."
+    }
+  }
+}

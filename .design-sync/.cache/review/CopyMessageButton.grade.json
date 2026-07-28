@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "Revealed": {
+      "verdict": "good",
+      "note": "visibilityClassName=opacity-100 defeats the hover gate so the button photographs. Sits under real assistant prose in its action-row slot. Ink is intentionally text-foreground-tertiary (dim at rest) \u2014 that is the shipped tone, not a render fault."
+    },
+    "WithTimestampAfter": {
+      "verdict": "good",
+      "note": "Glyph + '2:14 PM' in the after position, tabular-nums, chat-meta scale. Correct."
+    },
+    "WithTimestampBefore": {
+      "verdict": "good",
+      "note": "Date leads the glyph \u2014 the before position. Correct."
+    },
+    "SplitVisibility": {
+      "verdict": "good",
+      "note": "The split the component exists for: button visible, timestamp opacity-0. The empty gap is the intended state and the caption next to it says so."
+    }
+  }
+}

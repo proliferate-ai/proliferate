@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "ThreadList": {
+      "verdict": "good",
+      "note": "A Chats section with five threads, one selected (bg-selected chip) and relative times in the trailing cell. Real thread titles."
+    },
+    "ActivityStates": {
+      "verdict": "good",
+      "note": "Trailing-cell activity: spinner, waiting clock and error badge each beating the relative time. The spinner is caught mid-rotation, which is the shipped animation, not a broken glyph."
+    },
+    "SubtitlesAndExpandControl": {
+      "verdict": "good",
+      "note": "Subtitle rows go to 40px and carry repo/branch; expandControl holds the coding-workspace disclosure IconButton in both open and closed rotation, with a nested workspace row under the expanded thread."
+    },
+    "HoverActionRevealed": {
+      "verdict": "good",
+      "note": "The opacity-0 hoverAction shown in its revealed state via focus-on-mount; note the trailing time correctly fades out on focus-within, which is the row's documented right-slot precedence."
+    }
+  }
+}

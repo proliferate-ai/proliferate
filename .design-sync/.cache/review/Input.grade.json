@@ -1,0 +1,1 @@
+{"cells":{"Default":{"verdict":"good","note":"Placeholder and filled states both render with token chrome."},"Variants":{"verdict":"good","note":"default vs unstyled genuinely differ — unstyled correctly has no border/background."},"Disabled":{"verdict":"good","note":"Disabled is visibly muted without disappearing."}}}

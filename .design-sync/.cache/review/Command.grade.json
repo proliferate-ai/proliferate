@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "FileSearch": {
+      "verdict": "good",
+      "note": "Full cmdk composition in a sized h-72/w-96 bordered root: CommandInput with its Search affordance, two CommandGroups with headings, a CommandSeparator, icons and right-aligned CommandShortcut diff counts. First item shows the data-[selected=true] bg-hover row."
+    },
+    "ActionMenu": {
+      "verdict": "good",
+      "note": "Command-palette variant \u2014 Session and Git groups with \u2318 shortcut badges and a disabled CommandItem at 50% opacity. Varies meaningfully from FileSearch."
+    },
+    "NoResults": {
+      "verdict": "good",
+      "note": "Controlled input value that matches nothing, so CommandEmpty renders its py-8 centred muted message while the list stays mounted. The empty branch is the point of this cell and it renders."
+    }
+  }
+}

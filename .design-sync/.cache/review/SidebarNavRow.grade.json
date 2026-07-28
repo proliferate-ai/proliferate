@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "NavList": {
+      "verdict": "good",
+      "note": "Five rows in a sidebar-background container: icon well, label, 30px row height, rounded-lg. The active 'Home' row carries the bg-selected chip and reads clearly stronger than the resting rows."
+    },
+    "WithStatus": {
+      "verdict": "good",
+      "note": "status slot exercised with counts (12, 3) and a relative time ('Yesterday'), right-aligned in sidebar-muted ink. The long branch label truncates against the status without pushing it off the row."
+    },
+    "WithShortcut": {
+      "verdict": "good",
+      "note": "shortcutLabel + shortcutRevealVisible so the ShortcutBadge is visible at rest (⌘K / ⌘N / ⌘,) — without the reveal flag this slot is opacity-0 until group hover and would have photographed blank."
+    },
+    "States": {
+      "verdict": "good",
+      "note": "The state axis in one column: active chip, resting, disabled (dimmed, muted ink), icon-less row (label still aligns to the icon well), and a long branch name truncating with an ellipsis."
+    }
+  }
+}

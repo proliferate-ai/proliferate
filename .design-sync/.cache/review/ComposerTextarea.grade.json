@@ -1,0 +1,16 @@
+{
+  "cells": {
+    "Placeholder": {
+      "verdict": "good",
+      "note": "Empty composer: placeholder ink on foreground-tertiary at text-composer inside ComposerTextareaFrame topInset='standard' on the composer-background surface. Matches the [CHAT-03] placeholder rule."
+    },
+    "WithMessage": {
+      "verdict": "good",
+      "note": "Typed multi-line message at text-composer/text-foreground \u2014 clearly a step up in contrast from the placeholder cell, which is the axis this pair exists to show."
+    },
+    "FullComposer": {
+      "verdict": "good",
+      "note": "Controlled useState textarea inside the frame with the full control row and send button beneath. This is the component's real habitat and it renders whole at w-96."
+    }
+  }
+}

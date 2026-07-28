@@ -1,0 +1,20 @@
+{
+  "cells": {
+    "ModelSelector": {
+      "verdict": "good",
+      "note": "Ported from ComposerModelSelectorControl: emphasizeLabel two-tone pill with ProviderIcon-slot icon, ChevronDown trailing, and a second row exercising the detail slot. Label reads in the active colour against muted icon/detail as designed."
+    },
+    "ActiveAndDetail": {
+      "verdict": "good",
+      "note": "active vs default vs disabled with label+detail. The active/default delta is subtle by design (composer-control-active-foreground vs composer-control-foreground) but present, and disabled is clearly dimmed."
+    },
+    "IconOnly": {
+      "verdict": "good",
+      "note": "iconOnly=true renders three 28px square controls with sr-only labels; placed on a composer-background bar so the affordance boundary is visible rather than three floating glyphs."
+    },
+    "ControlRow": {
+      "verdict": "good",
+      "note": "The real ChatInputControlRow cluster \u2014 model + stateful mode + two icon-only controls \u2014 on one line inside the composer surface at max-w-2xl. No wrapping or truncation."
+    }
+  }
+}
