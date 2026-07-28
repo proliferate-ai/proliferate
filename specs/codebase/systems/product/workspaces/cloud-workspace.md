@@ -31,19 +31,25 @@ dialogs ([MainSidebar.tsx](../../../../../apps/packages/product-client/src/compo
 All converge on one flow
 ([use-create-cloud-workspace.ts](../../../../../apps/packages/product-client/src/hooks/cloud/workflows/use-create-cloud-workspace.ts)):
 
-1. **The workspace appears before the network answers.** A pending entry
+1. **A fresh typed billing preflight runs before client state is staged.** A
+   billing-blocked or unreadable owner stays on the current screen with the
+   reason; no pending workspace, projected session, or prompt draft is created.
+   The create endpoint independently repeats the authoritative gate before
+   repository materialization.
+2. **For an allowed start, the workspace appears before the create request
+   answers.** A pending entry
    seeds the sidebar (stage `submitting`) before the create request is
    sent — this is the product face of the optimistic `cloud_workspace` row
    (content spec, "One workspace, two records"): the row commits first, so
    the product can show the workspace tied to its target immediately.
-2. Branch-name conflicts retry silently (3 attempts, server-generated
+3. Branch-name conflicts retry silently (3 attempts, server-generated
    names); the user never sees a naming collision.
-3. If the response is already `ready`, the user enters chat directly. If
+4. If the response is already `ready`, the user enters chat directly. If
    it is still `pending`/`materializing`, the workspace opens onto the
    status panel (below) at stage `awaiting-cloud-ready` and auto-advances
    when materialization completes. A prompt typed while waiting is queued:
    "Queued prompt will send when this cloud workspace is ready."
-4. Hard failure fails the pending entry with a specific message; the row
+5. Hard failure fails the pending entry with a specific message; the row
    survives and renders in the error state with a retry action.
 
 ## The status panel
@@ -127,6 +133,7 @@ is the one resource surface, for local and cloud targets alike:
 ```text
 apps/packages/product-client/src/
 ├── hooks/cloud/workflows/
+│   ├── use-cloud-workspace-start-preflight.ts billing gate before client staging
 │   ├── use-create-cloud-workspace.ts        create flow, optimistic pending entry
 │   └── use-cloud-workspace-actions.ts       archive/delete/unarchive + cache clears
 ├── lib/domain/workspaces/cloud/

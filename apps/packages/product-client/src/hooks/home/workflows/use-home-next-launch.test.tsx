@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
     createThreadFromSelection,
     createWorktreeAndEnterWithResult: vi.fn(),
     navigate: vi.fn(),
+    preflightCloudWorkspaceStart: vi.fn(),
     productHost: { desktop: {} as object | null },
     selectWorkspace: vi.fn(),
     showToast: vi.fn(),
@@ -61,6 +62,12 @@ vi.mock("#product/stores/toast/toast-store", () => ({
 vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
   useCreateCloudWorkspace: () => ({
     createCloudWorkspaceAndEnterWithResult: mocks.createCloudWorkspaceAndEnterWithResult,
+  }),
+}));
+
+vi.mock("#product/hooks/cloud/workflows/use-cloud-workspace-start-preflight", () => ({
+  useCloudWorkspaceStartPreflight: () => ({
+    preflightCloudWorkspaceStart: mocks.preflightCloudWorkspaceStart,
   }),
 }));
 
@@ -118,6 +125,7 @@ function renderHomeNextLaunch() {
 describe("useHomeNextLaunch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.preflightCloudWorkspaceStart.mockResolvedValue({ status: "allowed" });
     mocks.productHost.desktop = {};
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
@@ -312,8 +320,54 @@ describe("useHomeNextLaunch", () => {
     });
 
     expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
+    expect(mocks.preflightCloudWorkspaceStart).toHaveBeenCalledTimes(1);
     expect(mocks.createCloudWorkspaceAndEnterWithResult).toHaveBeenCalledTimes(1);
+    expect(mocks.createCloudWorkspaceAndEnterWithResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gitOwner: "proliferate-ai",
+        gitRepoName: "proliferate",
+      }),
+      expect.objectContaining({
+        startPreflight: { status: "allowed" },
+      }),
+    );
     expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
+  });
+
+  it("rejects an exhausted Cloud start before creating a visible draft or workspace", async () => {
+    mocks.productHost.desktop = null;
+    mocks.preflightCloudWorkspaceStart.mockResolvedValue({
+      status: "blocked",
+      startBlockReason: "cap_exhausted",
+      message: "Cloud usage is paused because the managed cloud overage cap is exhausted.",
+    });
+    const { result } = renderHomeNextLaunch();
+
+    let succeeded = true;
+    await act(async () => {
+      succeeded = await result.current.launch({
+        text: "do not create a dead chat",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: {
+          kind: "cloud",
+          gitOwner: "proliferate-ai",
+          gitRepoName: "proliferate",
+          baseBranch: "main",
+        },
+      });
+    });
+
+    expect(succeeded).toBe(false);
+    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+    expect(useSessionDirectoryStore.getState().entriesById).toEqual({});
+    expect(mocks.createCloudWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.showToast).toHaveBeenCalledWith(
+      "Failed to start work: Cloud usage is paused because the managed cloud overage cap is exhausted.",
+    );
   });
 });

@@ -34,6 +34,9 @@ from proliferate.integrations.anyharness.workspaces import (
     retire_runtime_workspace,
 )
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
+from proliferate.server.billing.authorization import (
+    assert_cloud_sandbox_resume_allowed_for_owner,
+)
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
 from proliferate.server.cloud.errors import CloudApiError
@@ -207,6 +210,15 @@ async def create_cloud_workspace_for_user(
             "Branch name is required.",
             status_code=400,
         )
+
+    # Workspace creation is itself a managed-compute start. Gate it before
+    # repository lookup, provider materialization, or optimistic product-row
+    # writes so an exhausted owner receives the existing typed 402 without
+    # entering provisioning.
+    await assert_cloud_sandbox_resume_allowed_for_owner(
+        db,
+        owner_user_id=user.id,
+    )
 
     repo_environment = await repositories_store.get_cloud_repo_environment(
         db,

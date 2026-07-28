@@ -5,6 +5,7 @@ import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
+import { useSelectedCloudOwner } from "#product/hooks/organizations/derived/use-selected-cloud-owner";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useHomeNextRepositorySelection } from "#product/hooks/home/derived/use-home-next-repository-selection";
 import { useHomeNextTargetSelectionSnapshot } from "#product/hooks/home/ui/use-home-next-target-selection-state";
@@ -53,7 +54,8 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
   });
   const activeNewWorkspaceScope = useNewWorkspaceCommandScopeStore((state) => state.activeScope);
   const { cloudActive } = useCloudAvailabilityState();
-  const { data: billingPlan } = useCloudBilling();
+  const selectedCloudOwner = useSelectedCloudOwner();
+  const { data: billingPlan } = useCloudBilling(selectedCloudOwner);
   const {
     data: repoConfigs,
     isPending: isRepoConfigsPending,

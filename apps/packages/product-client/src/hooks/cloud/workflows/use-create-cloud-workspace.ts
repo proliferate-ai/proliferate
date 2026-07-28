@@ -8,6 +8,7 @@ import {
   buildNextCloudWorkspaceAttempt,
   collectKnownCloudBranchNames,
   buildCloudWorkspaceAttemptFromRequest,
+  type CloudWorkspaceStartPreflight,
   type CloudWorkspaceRepoTarget,
   isCloudWorkspaceBranchConflictError,
   resolveCloudWorkspaceCreateFailureMessage,
@@ -36,6 +37,7 @@ import {
   logLatency,
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
+import { useCloudWorkspaceStartPreflight } from "#product/hooks/cloud/workflows/use-cloud-workspace-start-preflight";
 
 const MAX_CLOUD_CREATE_ATTEMPTS = 3;
 
@@ -43,6 +45,7 @@ interface CreateCloudWorkspaceAndEnterOptions {
   repoGroupKeyToExpand?: string | null;
   latencyFlowId?: string | null;
   initialSession?: PendingWorkspaceInitialSession | null;
+  startPreflight?: CloudWorkspaceStartPreflight;
 }
 
 export type CloudWorkspaceEntryResult =
@@ -84,6 +87,7 @@ function buildRepoTargetFromRequest(
 
 export function useCreateCloudWorkspace() {
   const telemetry = useProductTelemetry();
+  const { preflightCloudWorkspaceStart } = useCloudWorkspaceStartPreflight();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const branchPrefixType = useUserPreferencesStore((state) => state.branchPrefixType);
@@ -138,7 +142,17 @@ export function useCreateCloudWorkspace() {
     repoGroupKeyToExpand?: string | null;
     latencyFlowId?: string | null;
     initialSession?: PendingWorkspaceInitialSession | null;
+    startPreflight?: CloudWorkspaceStartPreflight;
   }): Promise<CloudWorkspaceEntryResult> => {
+    const startPreflight =
+      args.startPreflight ?? await preflightCloudWorkspaceStart();
+    if (startPreflight.status !== "allowed") {
+      return {
+        status: "interrupted",
+        failureMessage: startPreflight.message,
+      };
+    }
+
     const startedAt = startLatencyTimer();
     const repoLabel = `${args.target.gitOwner}/${args.target.gitRepoName}`;
     const attemptId = createPendingWorkspaceAttemptId();
@@ -321,6 +335,7 @@ export function useCreateCloudWorkspace() {
     failPendingEntry,
     finalizeSelection,
     getWorkspaceCollections,
+    preflightCloudWorkspaceStart,
     selectWorkspace,
     setPendingWorkspaceEntry,
     telemetry,
@@ -336,6 +351,7 @@ export function useCreateCloudWorkspace() {
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
       latencyFlowId: options?.latencyFlowId,
       initialSession: options?.initialSession,
+      startPreflight: options?.startPreflight,
     });
   }, [runCloudWorkspaceCreateFlow]);
 
@@ -349,6 +365,7 @@ export function useCreateCloudWorkspace() {
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
       latencyFlowId: options?.latencyFlowId,
       initialSession: options?.initialSession,
+      startPreflight: options?.startPreflight,
     });
   }, [runCloudWorkspaceCreateFlow]);
 

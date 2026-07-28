@@ -280,11 +280,11 @@ pass so per-seat grants land before that pass's usage is walked.
 provider I/O.** In enforce mode, `assert_cloud_sandbox_resume_allowed`/
 `_for_owner`
 ([`authorization.py`](../../../../server/proliferate/server/billing/authorization.py))
-runs at the top of `connect_ready_sandbox`
+runs at the top of Cloud workspace creation, `connect_ready_sandbox`
 ([`connect.py`](../../../../server/proliferate/server/cloud/materialization/sandbox_io/connect.py))
 and `ensure_cloud_sandbox_ready`
 ([`cloud_sandboxes/service.py`](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
-before either stages a provider call or a new-row INSERT, and raises
+before any repository materialization, provider call, or new-row INSERT, and raises
 `CloudSandboxResumeBlockedError` (HTTP 402) on an active spend hold or
 over-cap compute budget, committing its own audit `BillingDecisionEvent`
 first (the caller rolls back its session on exception).
@@ -449,6 +449,7 @@ Stripe integration unit tests
 - **E1** Exhausted subject → ensure/resume → 402 with decision detail; zero
   provider calls.
   [`test_credits_exhausted_uses_stable_402_code`](../../../../server/tests/integration/test_billing_start_block_paging.py),
+  [`test_workspace_create_denies_exhausted_owner_before_materialization`](../../../../server/tests/integration/test_billing_start_block_paging.py),
   [`test_ensure_denied_when_exhausted`](../../../../server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py).
 - **E2** Reconciler pauses an open over-limit segment, closes as quota
   enforcement.

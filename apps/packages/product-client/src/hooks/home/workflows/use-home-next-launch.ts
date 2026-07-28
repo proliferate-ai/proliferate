@@ -21,6 +21,8 @@ import {
   markHomeLaunchIntentMaterializedFromPendingWorkspace,
   newHomeNextLaunchId,
 } from "#product/hooks/home/workflows/home-next-launch-intent";
+import { useCloudWorkspaceStartPreflight } from "#product/hooks/cloud/workflows/use-cloud-workspace-start-preflight";
+import type { CloudWorkspaceStartPreflight } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
 interface HomeNextLaunchInput {
   text: string;
@@ -54,6 +56,7 @@ export function useHomeNextLaunch() {
     createWorktreeAndEnterWithResult,
   } = useWorkspaceEntryActions();
   const { createCloudWorkspaceAndEnterWithResult } = useCreateCloudWorkspace();
+  const { preflightCloudWorkspaceStart } = useCloudWorkspaceStartPreflight();
   const { selectWorkspace } = useWorkspaceSelection();
 
   const launch = useCallback(async ({
@@ -77,6 +80,16 @@ export function useHomeNextLaunch() {
 
     inFlightRef.current = true;
     setIsLaunching(true);
+    let cloudStartPreflight: CloudWorkspaceStartPreflight | null = null;
+    if (target.kind === "cloud") {
+      cloudStartPreflight = await preflightCloudWorkspaceStart();
+      if (cloudStartPreflight.status !== "allowed") {
+        showToast(`Failed to start work: ${cloudStartPreflight.message}`);
+        inFlightRef.current = false;
+        setIsLaunching(false);
+        return false;
+      }
+    }
     const launchIntentId = newHomeNextLaunchId();
     const promptId = newHomeNextLaunchId();
     const resolvedLaunchControlValues = buildResolvedHomeLaunchControlValues({
@@ -275,6 +288,7 @@ export function useHomeNextLaunch() {
           {
             latencyFlowId,
             initialSession,
+            startPreflight: cloudStartPreflight ?? undefined,
           },
         );
       const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
@@ -390,6 +404,7 @@ export function useHomeNextLaunch() {
     markLaunchIntentMaterialized,
     navigate,
     promptExistingSession,
+    preflightCloudWorkspaceStart,
     selectWorkspace,
     showToast,
   ]);

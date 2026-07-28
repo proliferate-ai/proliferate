@@ -18,6 +18,7 @@ save cloud repository environment
   -> schedule best-effort materialization after commit
 
 create cloud workspace
+  -> reject a billing-blocked start before provisioning
   -> validate GitHub repository and branch authority
   -> synchronously materialize the repository environment
   -> insert cloud_workspace
@@ -180,21 +181,23 @@ surfaces converge on server truth.
 performs the current synchronous flow:
 
 1. require cloud provisioning configuration;
-2. load the user's cloud `repo_environment`;
-3. verify GitHub App authority and fetch the repository's branches;
-4. validate or generate the new branch name;
-5. synchronously rematerialize the repository environment, which creates or
+2. apply the authoritative owner-scoped billing start gate before repository
+   materialization or any product-row write;
+3. load the user's cloud `repo_environment`;
+4. verify GitHub App authority and fetch the repository's branches;
+5. validate or generate the new branch name;
+6. synchronously rematerialize the repository environment, which creates or
    resumes E2B and launches or reconnects AnyHarness as needed;
-6. insert and flush `cloud_workspace` with no AnyHarness workspace id inside
+7. insert and flush `cloud_workspace` with no AnyHarness workspace id inside
    the request transaction;
-7. load ready runtime access from `cloud_sandbox`;
-8. resolve the repository root through AnyHarness;
-9. call AnyHarness directly to create the worktree; and
-10. write the returned `anyharness_workspace_id` and managed materialization;
-11. when this is an exact-ref Desktop source flow, require the local descriptor
+8. load ready runtime access from `cloud_sandbox`;
+9. resolve the repository root through AnyHarness;
+10. call AnyHarness directly to create the worktree; and
+11. write the returned `anyharness_workspace_id` and managed materialization;
+12. when this is an exact-ref Desktop source flow, require the local descriptor
     to match the independently verified HEAD and record the owned local
     association (a conflict fails the request rather than reporting success);
-12. commit the final request transaction after the handler returns successfully
+13. commit the final request transaction after the handler returns successfully
     and before the HTTP response starts.
 
 The create route uses a function-scoped request session for that last boundary.
@@ -297,6 +300,7 @@ Use these focused tests as the code-level proof:
 - `server/tests/unit/test_cloud_sandbox_gateway_access.py`
 - `server/tests/integration/test_cloud_workspace_backing_kind.py`
 - `server/tests/integration/test_cloud_workspace_backing_kind_migration.py`
+- `server/tests/integration/test_billing_start_block_paging.py`
 - `server/tests/integration/test_cloud_workspace_identity_payload.py`
 - `server/tests/integration/test_cloud_workspace_materialization_service.py`
 - `apps/packages/product-client/src/lib/domain/workspaces/cloud/open-on-mac-orchestration.test.ts`

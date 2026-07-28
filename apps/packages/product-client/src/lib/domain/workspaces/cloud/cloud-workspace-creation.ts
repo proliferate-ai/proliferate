@@ -19,6 +19,37 @@ export interface CloudWorkspaceRepoTarget {
   baseBranch?: string | null;
 }
 
+export type CloudWorkspaceStartPreflight =
+  | { status: "allowed" }
+  | {
+    status: "blocked";
+    startBlockReason: string | null;
+    message: string;
+  }
+  | {
+    status: "unavailable";
+    message: string;
+  };
+
+export function resolveCloudWorkspaceStartPreflight(
+  billingPlan: {
+    billingMode: string;
+    startBlocked: boolean;
+    startBlockReason?: string | null;
+  },
+  messageForReason: (reason: string | null | undefined) => string,
+): CloudWorkspaceStartPreflight {
+  if (billingPlan.billingMode !== "enforce" || !billingPlan.startBlocked) {
+    return { status: "allowed" };
+  }
+  const startBlockReason = billingPlan.startBlockReason ?? null;
+  return {
+    status: "blocked",
+    startBlockReason,
+    message: messageForReason(startBlockReason),
+  };
+}
+
 export type CloudWorkspaceCreateInput =
   | CloudWorkspaceRepoTarget
   | CreateCloudWorkspaceRequest;

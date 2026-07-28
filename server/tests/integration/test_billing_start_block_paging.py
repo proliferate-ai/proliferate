@@ -8,6 +8,8 @@ the quota denial. These tests pin:
 
 * the credits-exhausted denial surfaces the stable ``billing_credits_exhausted``
   code with a machine-readable reason + remaining_seconds on the 402 body, and
+* cloud workspace create denies an exhausted owner before provisioning or
+  repository materialization starts, and
 * the materialization runner logs (does not page) on a billing block, while
   still paging on genuinely unexpected failures.
 """
@@ -28,6 +30,7 @@ from proliferate.constants.billing import (
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
 )
 from proliferate.db.models.auth import User
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store.billing_subjects import (
     ensure_free_included_grant,
     ensure_personal_billing_subject,
@@ -38,6 +41,8 @@ from proliferate.server.billing.authorization import (
 )
 from proliferate.server.cloud.cloud_sandboxes.service import ensure_cloud_sandbox_ready
 from proliferate.server.cloud.materialization import runner as runner_module
+from proliferate.server.cloud.workspaces import service as workspaces_service
+from proliferate.server.cloud.workspaces.models import CreateCloudWorkspaceRequest
 from tests.integration.billing_accounting_helpers import seed_usage_segment
 
 
@@ -92,6 +97,61 @@ async def test_credits_exhausted_uses_stable_402_code(
     assert "remaining_seconds" in error.extra_detail
     assert error.billing_subject_id is not None
     assert error.owner_user_id == user_id
+
+
+@pytest.mark.asyncio
+async def test_workspace_create_denies_exhausted_owner_before_materialization(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A create request reuses the billing 402 before provisioning can start."""
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
+    monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 1.0)
+    monkeypatch.setattr(
+        workspaces_service.cloud_sandboxes_service,
+        "require_cloud_provisioning_configured",
+        lambda: None,
+    )
+    materialization_calls: list[object] = []
+    provisioning_calls: list[object] = []
+
+    async def _materialize(*args: object, **kwargs: object) -> None:
+        materialization_calls.append((args, kwargs))
+
+    @contextlib.asynccontextmanager
+    async def _provisioning_phase(**kwargs: object):
+        provisioning_calls.append(kwargs)
+        yield
+
+    monkeypatch.setattr(
+        workspaces_service.materialization_service,
+        "materialize_repo_environment",
+        _materialize,
+    )
+    monkeypatch.setattr(
+        workspaces_service,
+        "provisioning_phase",
+        _provisioning_phase,
+    )
+    user_id = await _seed_credits_exhausted_user(db_session)
+
+    with pytest.raises(CloudSandboxResumeBlockedError) as excinfo:
+        await workspaces_service.create_cloud_workspace_for_user(
+            db_session,
+            SimpleNamespace(id=user_id),
+            CreateCloudWorkspaceRequest(
+                gitOwner="owner",
+                gitRepoName="repo",
+                branchName="blocked-start",
+            ),
+        )
+
+    assert excinfo.value.status_code == 402
+    assert provisioning_calls == []
+    assert materialization_calls == []
+    await db_session.rollback()
+    assert await cloud_workspace_store.list_cloud_workspaces(db_session, user_id) == []
 
 
 @contextlib.asynccontextmanager

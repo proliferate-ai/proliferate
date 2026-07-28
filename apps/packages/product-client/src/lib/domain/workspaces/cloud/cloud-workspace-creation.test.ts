@@ -10,6 +10,7 @@ import {
   isCloudWorkspaceBranchConflictError,
   isCreateCloudWorkspaceRequest,
   resolveCloudRepoActionState,
+  resolveCloudWorkspaceStartPreflight,
   resolveCloudWorkspaceCreateFailureMessage,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
@@ -267,6 +268,29 @@ describe("cloud workspace creation helpers", () => {
       cloudError("nope", "github_branch_not_found"),
     )).toBe(false);
     expect(isCloudWorkspaceBillingBlockError(new Error("no code"))).toBe(false);
+  });
+
+  it("types an exhausted-cap preflight before optimistic workspace creation", () => {
+    expect(resolveCloudWorkspaceStartPreflight(
+      {
+        billingMode: "enforce",
+        startBlocked: true,
+        startBlockReason: "cap_exhausted",
+      },
+      (reason) => `blocked:${reason}`,
+    )).toEqual({
+      status: "blocked",
+      startBlockReason: "cap_exhausted",
+      message: "blocked:cap_exhausted",
+    });
+    expect(resolveCloudWorkspaceStartPreflight(
+      {
+        billingMode: "enforce",
+        startBlocked: false,
+        startBlockReason: null,
+      },
+      () => "unused",
+    )).toEqual({ status: "allowed" });
   });
 
   it("surfaces the server billing message with an upgrade pointer when exhausted", () => {

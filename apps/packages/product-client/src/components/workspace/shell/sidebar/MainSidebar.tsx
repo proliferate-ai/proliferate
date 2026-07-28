@@ -35,6 +35,7 @@ import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/works
 import { workspaceAvailabilityIntentForCommand } from "#product/lib/domain/workspaces/cloud/workspace-availability-intent-mapping";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
+import { useSelectedCloudOwner } from "#product/hooks/organizations/derived/use-selected-cloud-owner";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
@@ -78,7 +79,8 @@ export const MainSidebar = memo(function MainSidebar() {
     authStatus: cloudAuthStatus,
     cloudComputeEnabled,
   } = useCloudAvailabilityState();
-  const { data: billingPlan } = useCloudBilling();
+  const selectedCloudOwner = useSelectedCloudOwner();
+  const { data: billingPlan } = useCloudBilling(selectedCloudOwner);
   const {
     data: repoConfigs,
     isPending: isRepoConfigsPending,
