@@ -1,7 +1,7 @@
 import type { WorkspaceStatusModel } from "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl";
 
 /** Every section populated so the card's full anatomy is judgeable at once:
- * codex-ordered source control (review / commit-push / compare / checks with
+ * ordered source control (review / commit-push / compare / checks with
  * hover detail), pixel-sprite subagents, and native count rows whose hover
  * cards list the individual agents/terminals/loops. */
 export function createPlaygroundWorkspaceStatusModel(): WorkspaceStatusModel {

@@ -48,14 +48,14 @@ export function scrollActiveChatRowMatchIntoView(target: ChatRowMatchTarget): bo
   }
 
   for (const active of document.querySelectorAll<HTMLElement>(
-    "mark[data-content-search-row].codex-thread-find-active",
+    "mark[data-content-search-row].content-find-active",
   )) {
-    active.classList.remove("codex-thread-find-active");
+    active.classList.remove("content-find-active");
   }
 
   const index = Math.min(target.ordinal, marks.length - 1);
   const mark = marks[index];
-  mark.classList.add("codex-thread-find-active");
+  mark.classList.add("content-find-active");
   mark.scrollIntoView({ block: "center", inline: "nearest" });
   return true;
 }

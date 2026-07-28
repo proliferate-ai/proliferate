@@ -4,7 +4,7 @@ interface FileChangeStatsProps {
   className?: string;
   /** Keep activity-row counts neutral until their parent row is hovered/focused. */
   tone?: "semantic" | "activity";
-  /** Match Codex completion cards by rolling changed digits between values. */
+  /** Rolls changed digits between values, as the completion cards do. */
   rolling?: boolean;
 }
 

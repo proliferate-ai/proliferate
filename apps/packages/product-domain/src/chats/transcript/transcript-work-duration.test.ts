@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatWorkedForDuration } from "./transcript-work-duration";
 
 describe("formatWorkedForDuration", () => {
-  it("formats completed turn time like the Codex work disclosure", () => {
+  it("formats completed turn time for the work disclosure", () => {
     expect(formatWorkedForDuration(
       "2026-07-10T12:00:00.000Z",
       "2026-07-10T12:13:25.000Z",

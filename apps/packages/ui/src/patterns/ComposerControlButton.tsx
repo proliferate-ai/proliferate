@@ -37,11 +37,11 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
       ? "text-composer-control-active-foreground"
       : "text-composer-control-foreground";
     // [CHAT-02]: hover is 7.8% (--color-hover) and the press is 5.2%
-    // (--color-active). Codex's literal
-    // control press is bg-token-foreground/15, but D-V2-4 ruled the ledger
-    // vocabulary wins over that one value — see ui-foundation-chat-addendum.md
-    // [CHAT-02], flagged item 4. Press was previously absent entirely, so the
-    // control had no down-state at all.
+    // (--color-active). The escalation's reference target was a literal 15%
+    // foreground press, but D-V2-4 ruled the ledger vocabulary wins over that
+    // one value — see ui-foundation-chat-addendum.md [CHAT-02], flagged item 4.
+    // Press was previously absent entirely, so the control had no down-state
+    // at all.
     const baseClassName = `cursor-pointer disabled:cursor-default gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-hover hover:text-current active:bg-active focus:outline-none data-[state=open]:bg-hover ${classes}`;
     const buttonClassName = iconOnly
       ? `h-7 w-7 shrink-0 !justify-center px-0 ${baseClassName} ${className}`

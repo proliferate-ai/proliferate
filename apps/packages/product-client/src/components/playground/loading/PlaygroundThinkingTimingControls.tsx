@@ -15,7 +15,7 @@ import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
 // The controls below write those vars onto the preview labels, so what
 // animates here is byte-for-byte the shipping mechanism; copy the summary
 // line into product.css to change the product defaults. The steps() preset
-// exists to compare codex's cadenced feel (steps(48, end)) against the
+// exists to compare a cadenced feel (steps(48, end)) against the
 // smooth sweep we ship.
 
 type EasingKind = "linear" | "steps" | "ease-in-out";

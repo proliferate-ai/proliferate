@@ -306,7 +306,7 @@ export function humanizeGoalDurationSeconds(totalSeconds: number): string {
 
 /**
  * Inline "goal met" marker label for the final completed message's action
- * footer (codex-style "✓ Goal achieved in 40s"). Appends the elapsed time
+ * footer (e.g. "✓ Goal achieved in 40s"). Appends the elapsed time
  * when the met goal reported `timeUsedSeconds`; otherwise just the base
  * "Goal achieved" — never a bare "in" with no duration.
  */

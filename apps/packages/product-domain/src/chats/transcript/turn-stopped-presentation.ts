@@ -1,7 +1,7 @@
 import type { TurnRecord } from "@anyharness/sdk";
 
 /**
- * Codex-style stopped-turn notice: a muted "You stopped after Ns" line with a
+ * Stopped-turn notice: a muted "You stopped after Ns" line with a
  * hairline divider, shown when the user cancelled the turn. Not an error —
  * error items keep their own presentation.
  */

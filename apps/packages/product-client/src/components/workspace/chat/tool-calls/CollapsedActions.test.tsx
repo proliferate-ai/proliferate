@@ -218,7 +218,7 @@ describe("CollapsedActions", () => {
     expect(liveButton.querySelector("path")?.getAttribute("d")).toContain("7.33057 1.98535");
   });
 
-  it("uses Codex's dominant completed icon instead of last-command priority", () => {
+  it("uses the dominant completed icon instead of last-command priority", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       command: terminalItem("command", "turn-1", 1, "pnpm test", "completed"),
@@ -329,7 +329,7 @@ describe("CollapsedActions", () => {
     expect(html).toContain("flex flex-col gap-1");
   });
 
-  it("starts expanded non-edit ledgers at the top with Codex edge fading", () => {
+  it("starts expanded non-edit ledgers at the top with edge fading", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),
@@ -391,7 +391,7 @@ describe("CollapsedActions", () => {
     expect(ledger.scrollTop).toBe(24);
   });
 
-  it("uses the same Codex ink for command and plain ledger rows", () => {
+  it("uses the same ink for command and plain ledger rows", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),

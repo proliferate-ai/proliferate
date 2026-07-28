@@ -24,7 +24,7 @@ const VARIANT_LABELS: Record<PillVariant, string> = {
 };
 
 // Per-variant caps sized to each label; the .3s max-width transition is what
-// morphs the pill between states (codex recipe).
+// morphs the pill between states.
 const VARIANT_MAX_WIDTH: Record<PillVariant, string> = {
   available: "max-w-36",
   downloading: "max-w-32",

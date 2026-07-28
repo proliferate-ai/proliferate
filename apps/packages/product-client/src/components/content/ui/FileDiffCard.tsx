@@ -67,7 +67,7 @@ export function FileDiffCard({
     ? "text-sidebar-muted-foreground hover:bg-hover active:bg-active hover:text-sidebar-foreground focus-visible:ring-sidebar-ring"
     : "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-border";
   const cardClass = isSidebar
-    ? "codex-review-diff-card rounded-md"
+    ? "review-diff-card rounded-md"
     : embedded ? "" : "rounded-lg";
   const cardStyle = {
     "--diff-view-surface":

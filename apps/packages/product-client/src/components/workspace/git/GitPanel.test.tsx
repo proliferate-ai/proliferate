@@ -148,7 +148,7 @@ describe("GitPanel", () => {
     expect(html).toContain("Git review options");
     // Flat document sections replace the card grid; no section headers.
     expect(html).toContain("data-review-file-section");
-    expect(html).not.toContain("codex-review-diff-card");
+    expect(html).not.toContain("review-diff-card");
     expect(html).toContain("data-review-path=\"apps/desktop/src/components/workspace/git/GitPanel.tsx\"");
     expect(html).toContain("data-git-review-document=\"\"");
     expect(html).toContain("id=\"review-diffs-collapsed\"");

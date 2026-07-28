@@ -188,7 +188,7 @@ describe("PublishDialog", () => {
       />,
     );
 
-    // Codex anatomy has no Cancel button — Escape closes and clears drafts.
+    // The git-modal anatomy has no Cancel button — Escape closes and clears drafts.
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(mocks.workflow?.resetDrafts).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);

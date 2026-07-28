@@ -1,12 +1,12 @@
 /**
- * PR status rendered as a codex-style dot (UX spec §2/§3).
+ * PR status rendered as a small status dot (UX spec §2/§3).
  *
  * The dot is 6px, colored per PR state, and carries a tooltip with the PR
  * number + state. Two render modes:
  *  - `PrStatusDot` — standalone dot (workspaces page rows, after branch name)
  *  - `PrStatusIconOverlay` — wraps a row icon and anchors the dot on its
  *    bottom-right corner (web sidebar rows; the desktop sidebar renders
- *    PR state via SidebarWorkspaceGitGlyph instead), mirroring codex's
+ *    PR state via SidebarWorkspaceGitGlyph instead), using our
  *    `--pr-status-dot-color` circle-on-icon pattern.
  *
  * Tone rules (spec §3.3): every dot tone is an OPAQUE color — no alpha
@@ -97,7 +97,7 @@ export function PrStatusDot({
 }
 
 /**
- * Anchors the PR dot on the bottom-right of a row icon (codex dot-on-icon).
+ * Anchors the PR dot on the bottom-right of a row icon (dot-on-icon overlay).
  * Renders children unchanged when no status is present. The dot sits fully
  * off the 14px glyph's strokes as a bare opaque dot — no ring halo, which
  * reads wrong on hovered/active alpha-overlay rows.

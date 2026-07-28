@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe("TurnDocumentReferenceCard", () => {
-  it("renders a Codex-style document result and opens its preview", () => {
+  it("renders a document result and opens its preview", () => {
     render(
       <TurnDocumentReferenceCard
         resource={{
