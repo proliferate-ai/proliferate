@@ -113,11 +113,14 @@ export function HarnessProvidersSection({
   }
 
   function handleProviderRemove(providerId: string, envVarName: string | null) {
-    const target = rows.find(
-      (row) =>
-        row.providerHint === providerId
-        || (envVarName !== null && row.envVarName === envVarName),
-    );
+    // Two-pass: an exact provider_hint match always wins; the env-var fallback
+    // (hint-less legacy rows) only runs when no hinted row exists, so a shared
+    // env var can never unbind a sibling provider's hinted row.
+    const target =
+      rows.find((row) => row.providerHint === providerId)
+      ?? (envVarName === null
+        ? undefined
+        : rows.find((row) => row.envVarName === envVarName));
     if (!target) return;
     editor.handleRemoveRow(target.uid);
   }
@@ -150,6 +153,7 @@ export function HarnessProvidersSection({
                 return (
                   <span
                     key={row.uid}
+                    aria-hidden
                     title={provider?.displayName ?? row.envVarName}
                     className={[
                       "flex size-7 items-center justify-center rounded-md border border-border-light bg-surface-control font-mono text-ui-sm text-muted-foreground",

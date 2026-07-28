@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
-import { ArrowUpRight, KeyRound, Trash } from "@proliferate/ui/icons";
+import {
+  useCreateAgentApiKey,
+  useRevokeAgentApiKey,
+} from "@proliferate/cloud-sdk-react";
+import { KeyRound, Trash } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -41,6 +44,7 @@ export function ApiKeyDetails({
 }) {
   const apiKeys = editor.apiKeysQuery.data ?? [];
   const createKey = useCreateAgentApiKey();
+  const revokeKey = useRevokeAgentApiKey();
   const showToast = useToastStore((state) => state.show);
 
   // The env var a pasted key lands in is DERIVED, never user-facing:
@@ -74,6 +78,15 @@ export function ApiKeyDetails({
             envVarName,
             envVarSuggestion?.providerHint ?? null,
             created.id,
+            {
+              // A rejected selection PUT must not strand the just-created
+              // vault key (nothing references it) — same revoke-on-failure
+              // contract as HarnessProvidersSection.handleProviderSubmit.
+              onError: (message) => {
+                revokeKey.mutate(created.id);
+                showToast(message);
+              },
+            },
           );
         },
         onError: (error) => {
@@ -239,15 +252,15 @@ export function ApiKeyDetails({
 }
 
 /**
- * "Get an API key ↗" — underlined muted link under the paste field. The
- * prototype links `#`; the repo has no per-provider console URL registry, so
- * this renders as plain guidance text until one exists.
+ * "Get an API key" — the prototype links `#`, but the repo has no per-provider
+ * console URL registry yet, so this is plain guidance text. No arrow glyph and
+ * no link styling until a real href exists: an inert element dressed as a link
+ * misleads both sighted and assistive-tech users.
  */
 function GetApiKeyLink() {
   return (
-    <p className="flex items-center gap-1 text-ui text-muted-foreground">
+    <p className="text-ui text-muted-foreground">
       {HARNESS_PANE_COPY.getApiKey}
-      <ArrowUpRight className="icon-compact" aria-hidden />
     </p>
   );
 }

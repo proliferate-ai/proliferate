@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
-import { ArrowUpRight, ChevronRight, Search } from "@proliferate/ui/icons";
+import { ChevronRight, Search } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
@@ -134,6 +134,17 @@ export function ProviderPickerModal({
   const [expandedAll, setExpandedAll] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [secret, setSecret] = useState("");
+  // Collapse the expanded row only once its in-flight save has SUCCEEDED —
+  // submitting fell back to false with no error. Collapsing eagerly on submit
+  // would orphan the inline failure message (the error renders inside the
+  // expanded row) and make a rejected save look like a silent no-op.
+  const wasSubmittingRef = useRef(false);
+  useEffect(() => {
+    if (wasSubmittingRef.current && !submitting && error === null) {
+      setExpandedId(null);
+    }
+    wasSubmittingRef.current = submitting;
+  }, [submitting, error]);
 
   // Each opening of the modal starts from the collapsed, unsearched state.
   useEffect(() => {
@@ -195,15 +206,16 @@ export function ProviderPickerModal({
     if (value.length === 0 || submitting || envVarName === null) {
       return;
     }
-    // Replacing a configured provider's key: unbind the old row first, then
-    // write the fresh key + selection (the server keys a selection scope by
-    // (source_kind, env_var_name) and rejects a duplicate).
-    if (bound.has(envVarName)) {
-      onRemove(provider.id, envVarName);
-    }
+    // Replace is handled downstream in ONE selection PUT: addBoundApiKey swaps
+    // any existing row on the same env var for the new one (the server keys a
+    // selection scope by (source_kind, env_var_name) and rejects duplicates,
+    // so a separate remove-then-add pair would race and always collide).
     onSubmit(provider, value);
     setSecret("");
-    setExpandedId(null);
+    // The row stays expanded until the two-write flow reports back: on success
+    // the effect above collapses it (the row now shows its configured state);
+    // on failure the error renders inline — a collapsed row would have nowhere
+    // to show it.
   }
 
   return (
@@ -352,9 +364,10 @@ function ProviderRow({
               </Button>
             </div>
           ) : null}
-          <p className="flex items-center gap-1 text-ui-sm text-muted-foreground">
+          {/* Plain guidance until a per-provider console-URL registry exists —
+              no arrow/link styling on a non-interactive element. */}
+          <p className="text-ui-sm text-muted-foreground">
             {HARNESS_PANE_COPY.getApiKey}
-            <ArrowUpRight className="icon-compact" aria-hidden />
           </p>
           <form
             className="flex items-center gap-2"

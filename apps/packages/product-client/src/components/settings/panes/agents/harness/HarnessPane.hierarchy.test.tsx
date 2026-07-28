@@ -78,10 +78,6 @@ vi.mock("#product/components/settings/panes/agents/harness/HarnessAuthSection", 
   HarnessAuthSection: () => <h2>Authentication</h2>,
 }));
 
-vi.mock("#product/components/settings/panes/agents/harness/HarnessAuthDetailsSection", () => ({
-  HarnessAuthDetailsSection: () => null,
-}));
-
 vi.mock("#product/components/settings/panes/agents/harness/HarnessSettingsSection", () => ({
   HarnessSettingsSection: () => null,
 }));

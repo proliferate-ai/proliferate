@@ -42,35 +42,6 @@ export function deriveSelectedMethod(editor: HarnessAuthEditorApi): AuthMethod {
   return "cli";
 }
 
-/**
- * Multi-source selection (opencode only): gateway and api_key are independent
- * toggles that may both be active. CLI (native auth) is ALWAYS selected because
- * opencode's native providers coexist with injected sources.
- */
-export function deriveSelectedMethods(editor: HarnessAuthEditorApi): Set<AuthMethod> {
-  const methods = new Set<AuthMethod>(["cli"]);
-  if (editor.editorState.gatewayEnabled) methods.add("gateway");
-  if (isMultiSourceApiKeyActive(editor)) methods.add("api_key");
-  return methods;
-}
-
-/** api_key is "on or being configured" for a multi-source harness. */
-export function isMultiSourceApiKeyActive(editor: HarnessAuthEditorApi): boolean {
-  return (
-    editor.editorState.rows.some((row) => row.enabled)
-    || editor.pendingMethod === "api_key"
-  );
-}
-
-/**
- * Whether the api_key row editor should be surfaced for a multi-source harness.
- * Broader than the highlight: any row present (draft OR persisted-but-disabled)
- * or a pending click keeps the editor open so the user can wire/re-enable keys.
- */
-export function isMultiSourceApiKeyConfigVisible(editor: HarnessAuthEditorApi): boolean {
-  return editor.editorState.rows.length > 0 || editor.pendingMethod === "api_key";
-}
-
 const POLICY_TOOLTIP = "Disabled by your organization's policy";
 
 export function HarnessAuthSection({
@@ -265,16 +236,26 @@ export function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuth
       editor.setPendingMethod("gateway");
       break;
     case "api_key": {
-      // Disable gateway; enable first complete row if one exists. Mark api_key
-      // pending so the card highlights immediately even before a key is wired.
-      if (editor.editorState.gatewayEnabled) {
-        editor.handleGatewayToggle(false);
-      }
+      // Disable gateway and enable the first complete row in ONE commit (one
+      // PUT): two independent mutations for the same scope race, and the loser
+      // can persist the row disabled while the UI claims api_key is wired.
+      // Mark api_key pending so the card highlights even before a key exists.
       const firstComplete = editor.editorState.rows.find(
         (row) => row.apiKeyId !== null,
       );
-      if (firstComplete && !firstComplete.enabled) {
-        editor.handleRowEnabledToggle(firstComplete.uid, true);
+      const needsGatewayOff = editor.editorState.gatewayEnabled;
+      const needsRowOn = firstComplete !== undefined && !firstComplete.enabled;
+      if (needsGatewayOff || needsRowOn) {
+        editor.commit({
+          gatewayEnabled: false,
+          rows: needsRowOn
+            ? editor.editorState.rows.map((row) =>
+                row.uid === firstComplete.uid
+                  ? { ...row, enabled: true }
+                  : { ...row, enabled: false },
+              )
+            : editor.editorState.rows,
+        });
       }
       editor.setPendingMethod("api_key");
       break;

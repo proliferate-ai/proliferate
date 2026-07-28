@@ -66,6 +66,29 @@ function renderModal(props: Partial<Parameters<typeof ProviderPickerModal>[0]> =
   );
 }
 
+/**
+ * Render with a stable base-prop object plus a typed rerender, for tests that
+ * drive the submitting/error props across renders (the success-collapse
+ * effect keys on the submitting→idle transition).
+ */
+function renderModalControlled(
+  props: Partial<Parameters<typeof ProviderPickerModal>[0]> = {},
+) {
+  const baseProps = {
+    open: true,
+    onClose: vi.fn(),
+    onSubmit: vi.fn(),
+    onRemove: vi.fn(),
+    ...props,
+  };
+  const view = render(<ProviderPickerModal {...baseProps} />);
+  return {
+    baseProps,
+    rerender: (next: Parameters<typeof ProviderPickerModal>[0]) =>
+      view.rerender(<ProviderPickerModal {...next} />),
+  };
+}
+
 describe("ProviderPickerModal", () => {
   it("lists featured providers with a known env var and omits those without one", () => {
     renderModal();
@@ -217,7 +240,11 @@ describe("ProviderPickerModal", () => {
     expect(screen.queryByText("configured")).not.toBeNull();
   });
 
-  it("replaces a configured provider's key: remove then submit", () => {
+  it("replaces a configured provider's key via a single submit (no remove)", () => {
+    // Replace is a single selection PUT downstream: addBoundApiKey swaps the
+    // row on the same env var. A separate remove-then-submit pair would race
+    // (two PUTs from one render's closure) and always collide server-side on
+    // the duplicated env var.
     const onSubmit = vi.fn();
     const onRemove = vi.fn();
     renderModal({
@@ -232,10 +259,53 @@ describe("ProviderPickerModal", () => {
     });
     fireEvent.click(screen.getByText("Save"));
 
-    expect(onRemove).toHaveBeenCalledWith("openrouter", "OPENROUTER_API_KEY");
+    expect(onRemove).not.toHaveBeenCalled();
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ id: "openrouter" }),
       "sk-new",
+    );
+  });
+
+  it("keeps the row expanded while a submit is in flight and collapses on success", () => {
+    const onSubmit = vi.fn();
+    const { rerender, baseProps } = renderModalControlled({ onSubmit });
+
+    fireEvent.click(screen.getByText("OpenRouter"));
+    fireEvent.change(screen.getByLabelText("OpenRouter API key"), {
+      target: { value: "sk-new" },
+    });
+    fireEvent.click(screen.getByText("Save"));
+    // Still expanded: submitting has not started resolving yet.
+    expect(screen.queryByLabelText("OpenRouter API key")).not.toBeNull();
+
+    // In flight, then resolved without error → the row collapses.
+    rerender({ ...baseProps, onSubmit, submitting: true });
+    expect(screen.queryByLabelText("OpenRouter API key")).not.toBeNull();
+    rerender({ ...baseProps, onSubmit, submitting: false, error: null });
+    expect(screen.queryByLabelText("OpenRouter API key")).toBeNull();
+  });
+
+  it("keeps the row expanded and shows the error when a submit fails", () => {
+    const onSubmit = vi.fn();
+    const { rerender, baseProps } = renderModalControlled({ onSubmit });
+
+    fireEvent.click(screen.getByText("OpenRouter"));
+    fireEvent.change(screen.getByLabelText("OpenRouter API key"), {
+      target: { value: "sk-new" },
+    });
+    fireEvent.click(screen.getByText("Save"));
+
+    rerender({ ...baseProps, onSubmit, submitting: true });
+    rerender({
+      ...baseProps,
+      onSubmit,
+      submitting: false,
+      error: "Could not add the API key.",
+    });
+    // Failure keeps the row expanded and the message lands in role=alert.
+    expect(screen.queryByLabelText("OpenRouter API key")).not.toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Could not add the API key.",
     );
   });
 

@@ -352,10 +352,15 @@ export function useHarnessAuthEditor(
       providerHint,
       enabled: true,
     };
+    // Replacement semantics: at most one row per env var — the server keys a
+    // selection scope by (source_kind, env_var_name) and rejects duplicates,
+    // so binding a key to an already-bound var swaps the row in ONE commit
+    // (one PUT) rather than a remove-then-add pair racing each other.
+    const kept = rows.filter((row) => row.envVarName !== envVarName);
     // Single-source: enabling a new bound row disables everything else.
     const nextRows = multiSource
-      ? [...rows, newRow]
-      : [...rows.map((row) => ({ ...row, enabled: false })), newRow];
+      ? [...kept, newRow]
+      : [...kept.map((row) => ({ ...row, enabled: false })), newRow];
     const nextGateway = multiSource ? gatewayEnabled : false;
     commit({ gatewayEnabled: nextGateway, rows: nextRows }, callbacks);
   }
