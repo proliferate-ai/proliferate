@@ -1,31 +1,27 @@
 """Over-cap compute-overage accounting receipts (corridor B-F1, law A2).
 
-Law A2 of the billing launch plan: "no orphaned spend — every closed segment is
-grant-covered, exported, or receipted. No silent fourth bucket."
+Law A2: "no orphaned spend — every closed segment is grant-covered, exported, or
+receipted. No silent fourth bucket." The org-month overage cap clamps
+``billable_cents`` below metered ``meter_cents``. Ruled 2026-07-14, the refused
+remainder is *paused*, not auto-written-off (write-off is operator-only, pinned
+by ``t2-bill.ts`` / ``billing/overage.spec.ts`` /
+``test_zero_pro_overage_cap_pauses_without_auto_writeoff``), so no
+``written_off`` export row appears for it. A2 still requires the refused spend
+be *attributable*, and it was not: a pass whose whole uncovered slice was
+over-cap recorded no ``BillingDecisionEvent`` at all, since the receipt was
+gated on ``export_count > 0``. These tests pin the receipt.
 
-The org-month overage cap clamps ``billable_cents`` below the metered
-``meter_cents``. Ruled 2026-07-14, the refused remainder is *paused*, not
-auto-written-off: write-off stays operator-only, so no ``written_off`` export row
-is created for it (pinned by ``t2-bill.ts`` / ``billing/overage.spec.ts`` and by
-``test_zero_pro_overage_cap_pauses_without_auto_writeoff``). What A2 does require
-is that the refused spend be *attributable*, and it was not: a pass whose whole
-uncovered slice was over-cap recorded no ``BillingDecisionEvent`` at all, because
-the receipt was gated on ``export_count > 0``. These tests pin the receipt.
+Attribution means three things: the receipt exists (A2a, A2e); it says how much
+was refused via ``refused_cents``, unreconstructible from durable data once the
+usage cursor has advanced (A2a, A2b, A2d); and there is one receipt per refusal
+*run*, not per pass — an open segment refuses again every 15 minutes, and a
+refusal after recovery is a new fact (A2f).
 
-Attribution here means three things, each with its own case below:
-
-* the receipt exists (A2a, A2e),
-* it says how much was refused — ``refused_cents``, since the amount is not
-  reconstructible from durable data once the usage cursor has advanced (A2a, A2b,
-  A2d), and
-* there is one receipt per refusal *run*, not per pass: an open segment refuses
-  again every 15 minutes, and a refusal after recovery is a new fact (A2f).
-
-Known limit, unchanged by these tests: the receipt is written in a transaction
-*after* the accounting commit, so a crash between them loses it permanently — the
-cursor has advanced, and the next pass computes ``over_cap_cents == 0``. This is
-the same pre-existing window the ordinary export receipt has; closing it means
-moving the receipt into the accounting transaction, which is out of scope here.
+Known limit, unchanged here: the receipt is written in a transaction *after*
+the accounting commit, so a crash between them loses it permanently — the
+cursor has advanced and the next pass computes ``over_cap_cents == 0``. Same
+pre-existing window the ordinary export receipt has; closing it means moving
+the receipt into the accounting transaction, out of scope here.
 """
 
 from __future__ import annotations
@@ -56,7 +52,10 @@ from proliferate.db.models.billing import (
 )
 from proliferate.db.store.billing_accounting import over_cap_receipt_is_current
 from proliferate.db.store.billing_runtime_usage import record_billing_decision_event
-from proliferate.db.store.billing_subjects import ensure_billing_grant
+from proliferate.db.store.billing_subjects import (
+    ensure_billing_grant,
+    ensure_personal_billing_subject,
+)
 from proliferate.server.billing import accounting as billing_accounting_service
 from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
 from tests.integration.billing_accounting_helpers import (
@@ -77,11 +76,11 @@ async def _seed_capped_overage_subject(
 ) -> tuple[uuid.UUID, uuid.UUID, datetime | None]:
     """Paid pro subject with overage enabled, a flat org-month cap, and one segment.
 
-    ``prior_export_cents`` seeds an earlier in-period billable export so the
-    org-month cap is already (partly) spent before the pass runs, which is how a
-    real subject reaches the cap mid-period. ``ended=False`` leaves the segment
-    OPEN (``ended_at IS NULL``), which is what a still-running sandbox looks like
-    to the 15-minute reconcile pass: every pass finds a fresh accountable slice.
+    ``prior_export_cents`` seeds an earlier in-period billable export so the cap
+    is already (partly) spent before the pass runs — how a real subject reaches
+    the cap mid-period. ``ended=False`` leaves the segment OPEN
+    (``ended_at IS NULL``), what a still-running sandbox looks like to the
+    15-minute reconcile pass: every pass finds a fresh accountable slice.
     """
     user_id = uuid.uuid4()
     subject_id, segment = await seed_usage_segment(
@@ -199,11 +198,10 @@ async def test_fully_over_cap_pass_records_receipt_without_export_row(
 ) -> None:
     """B-F1 / A2a: a pass whose whole uncovered slice is over-cap still receipts.
 
-    Ruled 2026-07-14: past the org-month cap compute PAUSES and the remainder is
-    NOT auto-written-off (write-off is operator-only), so no export row appears.
-    Law A2 nonetheless forbids a silent fourth bucket, so the pass must leave a
-    durable ``BillingDecisionEvent``. Before this fix the receipt was gated on
-    ``export_count > 0`` and such a pass left no trace at all.
+    Ruled 2026-07-14: past the cap compute PAUSES and is NOT auto-written-off,
+    so no export row appears. A2 still forbids a silent fourth bucket, so the
+    pass must leave a durable ``BillingDecisionEvent`` — before this fix the
+    receipt was gated on ``export_count > 0`` and left no trace at all.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     # Cap (300c) already fully spent by an earlier in-period export, no grant
@@ -290,11 +288,10 @@ async def test_partially_clamped_overage_exports_billable_and_receipts_remainder
     refused. The billable row must be exactly the capped amount, and the refused
     half must be accounted for rather than vanishing.
 
-    The receipt *reason* here is the ordinary ``observed`` one (this pass did
-    export), so reason alone proves nothing about the fix — it holds with the fix
-    reverted. The two assertions that do not: the refused amount surfaced on
-    ``BillingAccountingResult.over_cap_cents``, and the same amount recorded
-    durably as ``refused_cents`` on the receipt.
+    The receipt *reason* here is the ordinary ``observed`` one, so reason alone
+    proves nothing about the fix — it holds with the fix reverted. What does
+    not: the refused amount on ``BillingAccountingResult.over_cap_cents``, and
+    the same amount durably as ``refused_cents`` on the receipt.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
@@ -333,10 +330,9 @@ async def test_partial_clamp_reports_refused_cents_on_the_accounting_result(
 ) -> None:
     """B-F1 / A2b: the refused amount is a return value, not only a log line.
 
-    Drives ``account_usage_for_billing_subject`` directly so the assertion is on
-    the service contract the pass consumes. Reverting the fix makes
-    ``over_cap_cents`` unavailable (or zero) and fails here rather than silently
-    downgrading the receipt.
+    Drives ``account_usage_for_billing_subject`` directly, on the service
+    contract the pass consumes. Reverting the fix makes ``over_cap_cents``
+    unavailable (or zero) and fails here.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
@@ -374,10 +370,8 @@ async def test_under_cap_overage_receipts_as_export_without_cap_reason(
     test_engine: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """B-F1 / A2c regression: under-cap behaviour is unchanged by the fix.
-
-    A generous cap must leave the ordinary export path and its ``observed``
-    receipt reason exactly as before — no cap receipt, no write-off row.
+    """B-F1 / A2c regression: a generous cap leaves the ordinary export path
+    and its ``observed`` receipt reason exactly as before — no cap receipt.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
@@ -408,12 +402,10 @@ async def test_over_cap_pass_rerun_is_idempotent(
 ) -> None:
     """B-F1 / A2d: re-running a genuinely over-cap pass adds nothing.
 
-    The old parameters (cap 300c, 1h granted of a 2h segment) left
-    ``over_cap_cents`` at zero, so this never entered the cap branch and merely
-    duplicated A2c. Pinned properly here: no grant and the cap already spent, so
-    the first pass IS a cap refusal (asserted by reason). The usage cursor then
-    advances past the closed segment, so the rerun finds nothing accountable —
-    no duplicate export row, and exactly one cap receipt across both passes.
+    No grant and the cap already spent, so the first pass IS a cap refusal
+    (asserted by reason). The usage cursor then advances past the closed
+    segment, so the rerun finds nothing accountable — no duplicate export row,
+    exactly one cap receipt across both passes.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
@@ -460,15 +452,15 @@ async def test_open_segment_over_cap_receipts_once_then_again_after_recovery(
     """B-F1 / A2f: an OPEN segment does not emit one cap receipt per pass.
 
     A still-running sandbox (``ended_at IS NULL``) accrues a fresh accountable
-    slice on every 15-minute reconcile pass, so a subject parked at the org-month
-    cap re-refuses spend on every pass. Receipting each refusal produced ~96
-    identical rows a day whenever compute did not actually stop (observe mode, or
-    a pause that failed) — noise, not attribution.
+    slice on every 15-minute reconcile pass, so a subject parked at the cap
+    re-refuses spend on every pass. Receipting each refusal produced ~96
+    identical rows/day whenever compute did not actually stop — noise, not
+    attribution.
 
     Pinned here: three consecutive over-cap passes leave exactly ONE receipt;
-    then a cap raise lets a pass export normally; then going over the raised cap
-    produces a SECOND receipt. The dedupe must never swallow the first refusal or
-    a refusal after recovery.
+    a cap raise lets the next pass export normally; going over the raised cap
+    produces a SECOND receipt. The dedupe must never swallow the first refusal
+    or a refusal after recovery.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     subject_id, _segment_id, ended_at = await _seed_capped_overage_subject(
@@ -540,9 +532,9 @@ async def test_over_cap_accounting_never_produces_claimable_rows(
 ) -> None:
     """B-F1 / A2e: the Stripe claimer never picks up over-cap spend.
 
-    Complements ``test_usage_export_claiming_skips_written_off_rows`` (which
-    builds its rows by hand) by driving the real production accounting path and
-    asserting the claimer only ever sees the capped billable row.
+    Complements ``test_usage_export_claiming_skips_written_off_rows`` (rows by
+    hand) by driving the real accounting path and asserting the claimer only
+    ever sees the capped billable row.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
@@ -576,26 +568,15 @@ async def test_over_cap_accounting_never_produces_claimable_rows(
 @pytest.mark.asyncio
 async def test_over_cap_receipt_is_current_fails_open_when_period_start_none(
     db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """B-F1 accuracy nit: no period boundary means the rollover re-arm check is
-    unverifiable, so the predicate must fail open to receipting (False) rather
-    than let an arbitrarily old receipt suppress refusals forever.
+    """Accuracy nit: no period start means the rollover re-arm is unverifiable,
+    so the predicate must fail open (``False``, i.e. receipt again) rather than
+    let an arbitrarily old receipt suppress refusals forever.
 
-    Drives ``over_cap_receipt_is_current`` directly against a seeded receipt
-    that would otherwise read as current (belongs to "the period" trivially,
-    since there is none to fall outside of, and no export has happened since).
+    Drives the predicate directly against a bare receipt row — no accounting
+    pass needed — that would otherwise read as current (no export since it).
     """
-    _configure_pro_observe(test_engine, monkeypatch)
-    subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
-        db_session,
-        hours=1.0,
-        cap_cents=300,
-        granted_hours=0.0,
-        label="period_start_none",
-        prior_export_cents=300,
-    )
+    subject_id = (await ensure_personal_billing_subject(db_session, uuid.uuid4())).id
     await record_billing_decision_event(
         db_session,
         billing_subject_id=subject_id,
@@ -612,11 +593,7 @@ async def test_over_cap_receipt_is_current_fails_open_when_period_start_none(
     )
     await db_session.commit()
 
-    assert (
-        await over_cap_receipt_is_current(
-            db_session,
-            billing_subject_id=subject_id,
-            period_start=None,
-        )
-        is False
+    is_current = await over_cap_receipt_is_current(
+        db_session, billing_subject_id=subject_id, period_start=None
     )
+    assert is_current is False
