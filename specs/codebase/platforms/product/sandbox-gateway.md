@@ -47,7 +47,8 @@ Fences, one owner per concern:
 product client                    Cloud server                     E2B VM
 ─────────────────────────────────────────────────────────────────────────
 AnyHarnessClient ── product JWT ──▶ /v1/gateway/cloud-sandbox/anyharness/{path}
-                                    │ resolve caller's personal sandbox
+                                    │ resolve the caller's sandbox for the
+                                    │   request's org context
                                     │ billing gate (402 if held)
                                     │ load runtime access (409 if absent)
                                     │ swap: strip product auth,
@@ -73,11 +74,9 @@ There is no sandbox id in the URL and no way to name one: the gateway
 always resolves *the caller's own sandbox*
 ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py)
 → [cloud_sandboxes/service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
-keyed by owner. Reaching someone else's sandbox is unrepresentable on this
-wire, not merely forbidden. When lifecycle's per-(user, org) account model
-lands, resolution grows an org-context input from the request (which
-workspace's traffic this is) while keeping the same law: only the caller's
-own sandboxes are representable (gap below).
+keyed by owner plus the request's org context (which workspace's traffic
+this is — lifecycle's per-(user, org) account model). Reaching someone
+else's sandbox is unrepresentable on this wire, not merely forbidden.
 
 ## The wire laws
 
@@ -125,16 +124,28 @@ own sandboxes are representable (gap below).
    (402, `billing_credits_exhausted` | `billing_start_blocked`, with
    `decision_type`/`reason` detail —
    [billing/authorization.py](../../../../server/proliferate/server/billing/authorization.py)).
-2. Ensure the personal sandbox row exists (rows are free; ensure never
-   provisions — lifecycle's law).
+   Successful decisions are cached for at most 5 seconds because the
+   authorizer builds the full billing snapshot and evaluates compute
+   budgets; denials are never cached.
+2. Ensure the sandbox row exists, committed before access resolves (rows
+   are free; ensure never provisions — lifecycle's law. The early commit
+   keeps the sandbox id stable across the 409 rollback below, so repair
+   claims dedupe).
 3. Load runtime access: `anyharness_base_url` plus the bearer and data-key
    ciphertexts. Any of the three missing is a typed 409
-   `cloud_sandbox_runtime_not_ready` — the row exists but no
-   materialization has stamped a live runtime onto it yet, or a provider
-   loss cleared it.
+   `cloud_sandbox_runtime_not_ready`, and that cold resolution also
+   schedules the one background materialization that repairs the row —
+   the mechanism, its stampede guards, and its tradeoffs are lifecycle's
+   cold-access law ([sandbox-lifecycle.md](sandbox-lifecycle.md)), not
+   restated here. The gateway never provisions and never waits: it
+   schedules and returns the 409; what the caller sees while the repair
+   runs is [sandbox-access.md](sandbox-access.md)'s contract.
 4. Cache the resolved access per user for 60 seconds behind a per-user
    asyncio lock, so a burst of parallel requests (a workspace opening
-   chat, files, and terminals at once) resolves once.
+   chat, files, and terminals at once) resolves once. Every transition
+   that clears or retires runtime access invalidates this entry
+   immediately. (Failures are never cached, so the repair trigger sits on
+   the cache-miss path by construction.)
 
 The swap itself is mechanical: HTTP gets `Authorization: Bearer <runtime>`;
 WebSocket gets the runtime token as the upstream `access_token` query
@@ -190,9 +201,12 @@ Resolution from a cloud workspace to a live connection is one chain
    and the retry policy (what retries, how often, how long) are
    [sandbox-access.md](sandbox-access.md)'s contract, not restated here.
 4. The connection object: gateway base URL, the token, workspace id,
-   runtime generation, `runtimeAccessKind: "proliferate-gateway"`,
+   `runtimeAccessKind: "proliferate-gateway"`,
    `webSocketAuthTransport: "protocol"`. Every consumer renames
    `accessToken` → `authToken` and hands it to the same generic client.
+   Nothing else rides it — in particular no generation counter: staleness
+   after a VM replacement is handled by re-resolution on failure, not by
+   a version field (gap below).
 
 Long-open transports re-resolve on failure — a terminal socket dropping
 invalidates the cached connection and refetches; chat SSE reconnects with
@@ -254,8 +268,9 @@ apps/mobile/src/lib/access/anyharness/cloud-sandbox-runtime.ts  mobile resolver
 ## Failure modes
 
 - Runtime access not materialized: typed 409
-  `cloud_sandbox_runtime_not_ready`; the repair is a materialization
-  operation, never a gateway retry.
+  `cloud_sandbox_runtime_not_ready`; the cold resolution schedules the
+  repair materialization (lifecycle's cold-access law), so retrying the
+  409 converges instead of looping.
 - Billing hold: typed 402 before any forward; the VM is never touched.
 - Upstream unreachable (VM killed, host stale): typed 502
   `cloud_sandbox_gateway_unreachable`; the client's connection refetch
@@ -280,6 +295,9 @@ apps/mobile/src/lib/access/anyharness/cloud-sandbox-runtime.ts  mobile resolver
 - Access resolution and cache:
   [test_cloud_sandbox_gateway_service.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_service.py),
   [test_cloud_sandbox_gateway_access.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_access.py).
+- Cold access schedules exactly one repair (sequential polling and
+  concurrent callers, destroyed rows excluded, ready rows untouched):
+  [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py).
 - Commit-before-stream ordering:
   [test_cloud_sandbox_gateway_transaction_lifetime.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_transaction_lifetime.py).
 - WS Sentry-context hygiene:
@@ -287,33 +305,49 @@ apps/mobile/src/lib/access/anyharness/cloud-sandbox-runtime.ts  mobile resolver
 - Client connection contract:
   [cloud-sandbox-gateway.test.ts](../../../../apps/packages/product-client/src/lib/access/cloud/cloud-sandbox-gateway.test.ts).
 
+Corridor F — wire deletions and budgets. Named, binary assertions; the
+corridor is done when they are green. IDs are stable — tests reference
+them by name:
+
+- **F1** `runtimeGeneration` is deleted end to end — wire payloads,
+  the access dataclass, client cache keys, the store constant; grep-gate
+  on both spellings outside migrations. The client tests keyed on it are
+  deleted, not kept green.
+- **F2** The two retry budgets hold: 2 s × 45 for
+  `cloud_sandbox_runtime_not_ready`, 750 ms × 8 for
+  `workspace_not_ready` —
+  [workspace-connection-retry.test.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.test.ts)
+  survives ([sandbox-access.md](sandbox-access.md)'s client contract).
+- **F3** A WebSocket offering only `?access_token=` closes 1008; the
+  subprotocol is the only accepted transport; the legacy-acceptance test
+  is deleted. (gateway pytest)
+- **F4** Mobile consumes the shared connection resolver and capability
+  parser; grep-gate: the duplicate mobile resolver stays deleted.
+  (frontend tests)
+- **F5** Resolution takes the request's org context; another user's —
+  or another org's — sandbox stays unrepresentable. (pytest; lands with
+  lifecycle's E3)
+
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Cold access has no repair trigger: a sandbox whose runtime access
-      was never materialized (or was cleared by provider loss) 409s
-      forever at the gateway; nothing on the access path starts a
-      materialization — the caller's repair today is a
-      materialization-triggering action
-      ([sandbox-access.md](sandbox-access.md) failure modes). The
-      choreography ruling (wake-and-poll vs provision-on-access) is
-      lifecycle's open question; this document inherits its outcome. Note
-      the precise boundary: *paused* sandboxes already wake under
-      forwarded traffic — the gap is only rows without stamped access.
 - [ ] Gateway resolution has no org-context input: it resolves the
-      caller's personal sandbox only, which is consistent with today's
-      one-sandbox-per-user account model but not with lifecycle's ruled
+      caller's single per-user sandbox only, which is consistent with
+      today's one-sandbox-per-user account model but not with the ruled
       per-(user, org) model; the resolution seam grows the context input
-      when that gap closes
+      with lifecycle's account-model migration
       ([sandbox-lifecycle.md](sandbox-lifecycle.md)).
-- [ ] The access cache outlives a runtime reset: the 60 s per-user cache
-      ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py))
-      is not invalidated when reset-for-rematerialization or
-      provider-missing clears the row's access columns, so up to a minute
-      of requests forward to a dead address (502) instead of the typed
-      409. Invalidate on the clearing transitions, or validate
-      `runtime_generation` on use.
+- [ ] `runtimeGeneration` still exists as a hardcoded-0 field: serialized
+      on sandbox payloads
+      ([cloud_sandboxes/models.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/models.py)),
+      carried on `CloudSandboxGatewayAccess`, stamped as a constant by the
+      store, and baked into client cache keys (worktree query keys, the
+      materialization cache, terminal stream controller) where it can
+      never vary. Delete it end to end — wire field, dataclass, client
+      keys, store constant — and grep-gate the name. Ruling: staleness
+      after VM replacement is already handled by re-resolution on
+      failure; a version field nobody bumps is dead weight.
 - [ ] WebSocket auth still accepts `?access_token=` inbound
       ([gateway/access.py](../../../../server/proliferate/server/cloud/gateway/access.py),
       kept as legacy); product tokens do not belong in URLs. Clients all

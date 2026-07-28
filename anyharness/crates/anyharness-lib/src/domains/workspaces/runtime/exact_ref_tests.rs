@@ -5,6 +5,7 @@ use std::path::Path;
 
 use super::exact_ref::{resolve_requested_commit, ExactRefOutcome};
 use super::test_support::{git_stdout, init_repo, make_runtime, run_git, TempDirGuard};
+use crate::adapters::git::{GitService, WorktreeBaseFetch};
 use crate::persistence::Db;
 
 /// A repo root registered from a real on-disk main checkout, with `home` chosen
@@ -83,6 +84,30 @@ fn creates_worktree_at_exact_branch_and_sha() {
         git_stdout(worktree, ["rev-parse", "HEAD"]).trim(),
         fx.head_sha
     );
+}
+
+#[test]
+fn exact_ref_create_skips_fetch_without_remote() {
+    let fx = setup("exact-ref-no-remote");
+    assert!(GitService::has_no_remotes(fx._source.path()).expect("inspect remotes"));
+    assert_eq!(
+        GitService::fetch_worktree_base(fx._source.path(), "feature/no-remote"),
+        WorktreeBaseFetch::NoRemote
+    );
+
+    let result = fx
+        .runtime
+        .create_or_reuse_standard_worktree_at_ref(
+            &fx.repo_root_id,
+            "feature/no-remote",
+            &fx.head_sha,
+            None,
+            None,
+        )
+        .expect("materialize without remote");
+
+    assert_eq!(result.outcome, ExactRefOutcome::Created);
+    assert_eq!(result.observed_head_sha, fx.head_sha);
 }
 
 #[test]

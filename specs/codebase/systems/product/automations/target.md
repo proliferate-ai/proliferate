@@ -7,7 +7,7 @@ exposure, and projection substrate is absent.
 
 Date: 2026-05-20.
 
-Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
+Depends on: [`sandbox-lifecycle.md`](../../../platforms/product/sandbox-lifecycle.md),
 [`mcp-skills.md`](../../../platforms/product/mcp-skills.md),
 the agent auth platform (document removed; rewrite planned),
 [`settings-admin-ia.md`](../settings/information-architecture.md),

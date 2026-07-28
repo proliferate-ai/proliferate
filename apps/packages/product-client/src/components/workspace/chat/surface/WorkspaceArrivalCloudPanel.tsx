@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "#product/components/workspace/chat/surface/CloudStatusCompactHeader";
 import {
@@ -27,7 +28,10 @@ function SectionRow({
 }
 
 function shouldExpandByDefault(mode: CloudWorkspaceStatusScreenMode): boolean {
-  return mode === "blocked" || mode === "error" || mode === "archived";
+  return mode === "blocked"
+    || mode === "error"
+    || mode === "lost"
+    || mode === "archived";
 }
 
 function cloudStatusIcon(model: CloudWorkspaceStatusScreenModel) {
@@ -52,6 +56,7 @@ export function WorkspaceArrivalCloudPanel({
 }: WorkspaceArrivalCloudPanelProps) {
   const compactView = buildCloudWorkspaceCompactStatusView(model);
   const [expanded, setExpanded] = useState(() => shouldExpandByDefault(model.mode));
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const previousModeRef = useRef(model.mode);
 
   useEffect(() => {
@@ -61,11 +66,17 @@ export function WorkspaceArrivalCloudPanel({
     previousModeRef.current = model.mode;
   }, [model.mode]);
 
-  const primaryAction = compactView.primaryAction && onPrimaryAction
+  const primaryActionHandler = (
+    model.footer.kind === "action"
+    && model.footer.action === "delete"
+  )
+    ? () => setDeleteConfirmationOpen(true)
+    : onPrimaryAction;
+  const primaryAction = compactView.primaryAction && primaryActionHandler
     ? {
       label: compactView.primaryAction.label,
       loading: isPrimaryActionPending,
-      onClick: onPrimaryAction,
+      onClick: primaryActionHandler,
     }
     : null;
 
@@ -99,7 +110,7 @@ export function WorkspaceArrivalCloudPanel({
               <Button
                 size="sm"
                 loading={isPrimaryActionPending}
-                onClick={onPrimaryAction ?? undefined}
+                onClick={primaryActionHandler ?? undefined}
               >
                 {model.footer.label}
               </Button>
@@ -120,6 +131,20 @@ export function WorkspaceArrivalCloudPanel({
           </SectionRow>
         ) : null}
       </div>
+      <ConfirmationDialog
+        open={deleteConfirmationOpen}
+        title="Delete lost workspace?"
+        description="Remove this workspace record. Anything pushed to GitHub, including commits, branches, and pull requests, remains available."
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        loading={isPrimaryActionPending}
+        disableClose={isPrimaryActionPending}
+        onClose={() => setDeleteConfirmationOpen(false)}
+        onConfirm={() => {
+          setDeleteConfirmationOpen(false);
+          onPrimaryAction?.();
+        }}
+      />
     </ComposerAttachedPanel>
   );
 }

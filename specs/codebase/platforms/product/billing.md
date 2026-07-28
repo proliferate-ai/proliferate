@@ -58,6 +58,22 @@ product layer. The personal `BillingSubject` kind still exists for
 attribution paths that predate the default-organization cutover — see
 [Current gaps](#current-gaps).
 
+**The org-only subject target (#1564) is a later target, not the launch
+contract.** [sandbox-lifecycle.md](sandbox-lifecycle.md#account-model) and
+[model-gateway.md](model-gateway.md#account-model) settle the further ruling
+that *orgs are the only billing subject*: no personal subject at all, one
+sandbox per `(user, organization)` with `organization_id` NOT NULL, and the
+payer derived from the org rather than stored. That is the accepted
+destination for the subject model and those two documents own its migration
+(backfill to each owner's default org, re-key uniqueness, drop the stored
+subject column). It is explicitly OUT of launch scope (Pablo, ruling 3,
+2026-07-28). Until it lands, the launch contract in this document is the
+two-kind subject above — personal and organization, mutually exclusive,
+payer resolved per attribution path by one membership lookup — and every law
+below is stated against that current shape. The org-only cutover subsumes,
+not contradicts, "the organization always pays": it removes the personal
+fallback rather than changing who the payer is when an org exists.
+
 ## Durable State And Ownership
 
 `billing_subject_id` is `personal` (`user_id` set, `organization_id` null)
@@ -94,7 +110,11 @@ identity (`binding_convergence`) before provider I/O; a non-null
 conflicting provider id is left open with a durable receipt instead, since
 that provider may still be live — duration is never reattributed across
 provider ids. An already-destroyed row's later exact-provider terminal
-evidence closes retained usage without reviving deletion state.
+evidence closes retained usage without reviving deletion state. The
+provider-event boundary itself is documented by the usage-fencing primitives
+in
+[`sandbox-lifecycle.md`](sandbox-lifecycle.md#usage-fencing-the-billing-primitives)
+(absorbed there from the retired `sandbox-provisioning.md` by #1564).
 
 **A2 — no orphaned spend.** Every closed segment is grant-covered,
 exported (pending or sent), or explicitly written off; there is no silent
@@ -429,7 +449,7 @@ Stripe integration unit tests
 - **E1** Exhausted subject → ensure/resume → 402 with decision detail; zero
   provider calls.
   [`test_credits_exhausted_uses_stable_402_code`](../../../../server/tests/integration/test_billing_start_block_paging.py),
-  [`test_wake_denied_when_exhausted`](../../../../server/tests/integration/test_cloud_sandbox_wake_billing_gate.py).
+  [`test_ensure_denied_when_exhausted`](../../../../server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py).
 - **E2** Reconciler pauses an open over-limit segment, closes as quota
   enforcement.
   [`test_enforce_segment_pauses_on_limit_breached`](../../../../server/tests/integration/test_billing_limit_enforcement_compute.py).
@@ -502,11 +522,15 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       hardcodes `organization_id=None`/`billing_subject_id=None` on every
       mapped row; the personal-context path never carries org attribution
       through this value object, even though segment-open and the resume
-      gate separately re-resolve the org via membership lookup. The #1564
-      org-only sandbox-subject migration (one sandbox row keyed by
-      `(user, org context)`) is the ruled direction that removes this
-      hardcode; it is OUT of launch scope (Pablo, 2026-07-28) and stays a
-      documented deferral, not a silent fix.
+      gate separately re-resolve the org via membership lookup. The org-only
+      sandbox-subject migration (one sandbox row keyed by
+      `(owner_user_id, organization_id)`, `organization_id` NOT NULL, no
+      stored subject) is the ruled direction that removes this hardcode; it
+      landed as spec in #1564 and is owned by
+      [sandbox-lifecycle.md](sandbox-lifecycle.md#current-gaps) — its gap
+      list carries the migration steps. It is OUT of launch scope (Pablo,
+      ruling 3, 2026-07-28) and stays a documented deferral here, not a
+      silent fix.
 - [ ] **N2 webhook gate.** The `created`/`resumed` webhook re-pause check
       ([`webhooks/service.py`](../../../../server/proliferate/server/cloud/webhooks/service.py))
       resolves `ensure_personal_billing_subject` (never the org payer the
@@ -517,8 +541,8 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       subject. Align it with the resume-path gate's subject resolution
       and checks.
 - [ ] **E5/E6.** No dedicated test asserts a 402 is never cached (E5), and
-      `assert_cloud_sandbox_resume_allowed_for_owner`/
-      `record_sandbox_start_authorization`
+      `assert_cloud_sandbox_resume_allowed`/
+      `assert_cloud_sandbox_resume_allowed_for_owner`
       ([`authorization.py`](../../../../server/proliferate/server/billing/authorization.py))
       have no explicit `except` around the billing-snapshot read: an
       unhandled exception propagates uncaught (the request fails; it is

@@ -16,7 +16,6 @@ from proliferate.server.cloud.cloud_sandboxes.service import (
     destroy_cloud_sandbox,
     ensure_cloud_sandbox_ready,
     get_cloud_sandbox_detail,
-    wake_cloud_sandbox,
 )
 
 router = APIRouter(tags=["cloud-cloud-sandbox"])
@@ -37,14 +36,6 @@ async def ensure_cloud_sandbox_endpoint(
     user: User = Depends(current_product_user),
 ) -> CloudSandboxResponse:
     return cloud_sandbox_payload(await ensure_cloud_sandbox_ready(db, user))
-
-
-@router.post("/cloud-sandbox/wake", response_model=CloudSandboxResponse)
-async def wake_cloud_sandbox_endpoint(
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> CloudSandboxResponse:
-    return cloud_sandbox_payload(await wake_cloud_sandbox(db, user))
 
 
 @router.delete("/cloud-sandbox", response_model=CloudSandboxResponse | None)

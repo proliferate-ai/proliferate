@@ -186,6 +186,7 @@ export function activeWorkspaceActivity(
     const sessionActivity =
       workspaceActivities[cloudWorkspaceSyntheticId(cloudWorkspace.id)] ?? "idle";
     const cloudActivity = cloudWorkspace.status === "error"
+      || cloudWorkspace.status === "lost"
       ? "error"
       : isCloudWorkspacePending(cloudWorkspace.status)
         ? "iterating"

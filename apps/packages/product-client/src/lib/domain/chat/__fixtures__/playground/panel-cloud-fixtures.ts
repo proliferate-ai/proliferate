@@ -1,6 +1,8 @@
 import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
 import {
   buildCloudWorkspaceStatusScreenModel,
+  descriptionForStartBlockReason,
+  titleForStartBlockReason,
   type CloudWorkspaceStatusScreenModel,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import type { SelectedCloudRuntimeViewModel } from "#product/lib/domain/workspaces/cloud/cloud-runtime-state";
@@ -39,8 +41,6 @@ function cloudWorkspaceFixture(
   return {
     id: "cloud-playground",
     displayName: "Cloud playground",
-    actionBlockKind: null,
-    actionBlockReason: null,
     postReadyPhase: "idle",
     postReadyFilesApplied: 0,
     postReadyFilesTotal: 0,
@@ -52,8 +52,6 @@ function cloudWorkspaceFixture(
       environmentId: null,
       status: "pending",
       generation: 1,
-      actionBlockKind: null,
-      actionBlockReason: null,
     },
     statusDetail: null,
     lastError: null,
@@ -93,8 +91,6 @@ export const CLOUD_STATUS_FIRST_RUNTIME = cloudStatusFixture({
     environmentId: "runtime-playground",
     status: "provisioning",
     generation: 0,
-    actionBlockKind: null,
-    actionBlockReason: null,
   },
 });
 
@@ -105,10 +101,22 @@ export const CLOUD_STATUS_APPLYING_FILES = cloudStatusFixture({
   status: "ready",
 });
 
-export const CLOUD_STATUS_BLOCKED = cloudStatusFixture({
-  actionBlockKind: "billing_quota",
-  actionBlockReason: "Cloud usage is paused for this account.",
-});
+const CLOUD_STATUS_BLOCKED_DESCRIPTION =
+  descriptionForStartBlockReason("credits_exhausted");
+
+export const CLOUD_STATUS_BLOCKED: CloudWorkspaceStatusScreenModel = {
+  mode: "blocked",
+  pendingStage: null,
+  eyebrowTone: "pending",
+  title: titleForStartBlockReason("credits_exhausted"),
+  description: CLOUD_STATUS_BLOCKED_DESCRIPTION,
+  repoLabel: "proliferate-ai/proliferate",
+  branchLabel: "main -> feature/cloud-status",
+  footer: {
+    kind: "status",
+    message: CLOUD_STATUS_BLOCKED_DESCRIPTION,
+  },
+};
 
 export const CLOUD_STATUS_ERROR = cloudStatusFixture({
   lastError: "Cloud setup could not finish. Check repo access, then retry.",

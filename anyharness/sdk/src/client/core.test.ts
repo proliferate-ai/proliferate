@@ -50,6 +50,36 @@ describe("AnyHarnessTransport problem details", () => {
       title: "Gateway request failed",
       status: 502,
     });
+    expect(error.details).toEqual({
+      provider: "upstream-provider",
+      payload: { secret: "must-not-leak" },
+    });
+  });
+
+  it("preserves a FastAPI nested detail body without changing problem fields", async () => {
+    const error = await requestError(problemResponse({
+      detail: {
+        code: "billing_credits_exhausted",
+        message: "Cloud credits are exhausted.",
+        decision_type: "deny",
+        reason: "credits_exhausted",
+        remaining_seconds: 0,
+      },
+    }, 402, "Payment Required"));
+
+    expect(error.message).toBe("Payment Required");
+    expect(error.problem).toEqual({
+      type: "about:blank",
+      title: "Payment Required",
+      status: 402,
+    });
+    expect(error.details).toEqual({
+      code: "billing_credits_exhausted",
+      message: "Cloud credits are exhausted.",
+      decision_type: "deny",
+      reason: "credits_exhausted",
+      remaining_seconds: 0,
+    });
   });
 
   it.each([

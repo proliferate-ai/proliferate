@@ -35,6 +35,16 @@ Fences, one owner per concern:
 
 ## Invariants
 
+- **One credential story: App authority is the only GitHub repository
+  credential.** Every repository fact the product shows for cloud flows —
+  the repo catalog, branch listings, coverage checks — is read with App
+  tokens. The user's product GitHub OAuth account is login identity only
+  and is never used as a repository credential; a user with no
+  installation sees a single "Install the GitHub App" action, and
+  GitHub's own installation screen is the repository picker. (Ruling:
+  the pre-App OAuth browsing path buys a marginally smoother first run
+  at the price of a second credential flow with different scope
+  semantics, forever.)
 - The sandbox never holds durable authority: no App private key, no OAuth
   client secret, no refresh token, no long-lived token. It holds one
   short-lived user-to-server token lease (`github_app_user_to_server`,
@@ -67,6 +77,13 @@ Routes live in
 start/status/callback for each flow, plus GitHub's Setup-URL callback (no
 signed state; it can only complete an installation the signed flows
 began), plus the accessible-repos and per-repo authority endpoints.
+
+These two relationships are also two of the three legs of the sandbox
+provisioning trigger: when user authorization, installation, and org
+membership all hold for a (user, org) pair, the completing callback
+schedules that pair's eager sandbox bootstrap —
+[sandbox-lifecycle.md](sandbox-lifecycle.md)'s chain-completion law; this
+document only owns the authority events themselves.
 
 Authority status for a repository
 ([github_app/models.py](../../../../server/proliferate/server/cloud/github_app/models.py))
@@ -153,20 +170,36 @@ action; the product surface must say so (gap below).
   case (repo removed from the installation → typed `not_covered` before
   any clone).
 
+Corridor G — one credential story. Named, binary assertions; the
+corridor is done when they are green. IDs are stable — tests reference
+them by name:
+
+- **G1** The repo catalog and branch listings serve on App tokens;
+  grep-gate: `repos/domain/github_credentials` stays deleted; the
+  zero-installation state renders the install CTA. (pytest + frontend
+  test)
+- **G2** An expired lease surfaces typed, naming the repair (any
+  materialization-triggering action); raw git auth noise never reaches
+  the user as the only signal. (pytest + frontend copy test)
+- **G3** One installation-completion function behind thin route
+  entrypoints. (pytest)
+
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] A parallel pre-App credential path survives: cloud repo *browsing*
-      builds credentials from the user's product OAuth account
+- [ ] A parallel pre-App credential path survives: the repo catalog and
+      branch-listing routes still build credentials from the user's
+      product OAuth account
       ([repos/domain/github_credentials.py](../../../../server/proliferate/server/cloud/repos/domain/github_credentials.py),
       consumed by
-      [repos/service.py](../../../../server/proliferate/server/cloud/repos/service.py)
-      for repository/branch listing) — a second GitHub credential flow
-      whose scope semantics differ from App authority. Ruling needed:
-      migrate listing onto App tokens and delete the OAuth path, or fence
-      it explicitly as product-identity browsing that never touches a
-      sandbox.
+      [repos/service.py](../../../../server/proliferate/server/cloud/repos/service.py))
+      even though the add-repo dialog already reads the App-token
+      accessible-repos catalog. Migrate the catalog and branch routes
+      onto App tokens, delete the OAuth credential builder (grep-gate:
+      `repos/domain/github_credentials` stays deleted), and render the
+      zero-installation state as the install CTA. Ruling: one credential
+      story — App authority is the only repository credential.
 - [ ] Lease staleness between materializations has no product surface: a
       sandbox older than its lease fails raw git auth with no typed signal
       and no named repair. Type it and point at the repair (any

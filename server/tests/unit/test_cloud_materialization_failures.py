@@ -37,6 +37,16 @@ from proliferate.server.cloud.materialization.sandbox_io.target import (
             CloudMaterializationCommandError("secret-command-output"),
             "The sandbox runtime did not become ready. Retry later.",
         ),
+        (
+            CloudMaterializationCommandError(
+                "materialization_repo_checkout failed: No space left on device"
+            ),
+            "The sandbox disk is full. Delete workspaces or content to free disk, then retry.",
+        ),
+        (
+            CloudMaterializationCommandError("runtime launch failed: ENOSPC"),
+            "The sandbox disk is full. Delete workspaces or content to free disk, then retry.",
+        ),
         (RuntimeError("secret-token"), "Sandbox materialization failed. Retry later."),
     ],
 )
@@ -80,7 +90,9 @@ async def test_commit_ambiguous_candidate_is_adopted_when_binding_remains_null(
         events.append(f"mark:{expected_provider_sandbox_id}")
         if state["provider_id"] != expected_provider_sandbox_id:
             return None
-        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id)
+        return SimpleNamespace(
+            provider_sandbox_id=expected_provider_sandbox_id, owner_user_id=None
+        )
 
     async def _adopt(
         _db: object,
@@ -183,7 +195,7 @@ async def test_missing_fallback_converges_paused_or_detached_commit_outcome(
             return None
         state["provider_id"] = None
         state["status"] = "creating"
-        return SimpleNamespace(provider_sandbox_id=None)
+        return SimpleNamespace(provider_sandbox_id=None, owner_user_id=None)
 
     async def _mark(
         _db: object,
@@ -203,7 +215,9 @@ async def test_missing_fallback_converges_paused_or_detached_commit_outcome(
             return None
         state["status"] = "error"
         state["receipt"] = last_error
-        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id)
+        return SimpleNamespace(
+            provider_sandbox_id=expected_provider_sandbox_id, owner_user_id=None
+        )
 
     async def _close(
         _db: object,
@@ -214,9 +228,17 @@ async def test_missing_fallback_converges_paused_or_detached_commit_outcome(
         assert provider_sandbox_id == old_provider_id
         events.append("close")
 
+    async def _mark_lost(*_args: object, **_kwargs: object) -> int:
+        return 0
+
     monkeypatch.setattr(failures, "supersede_missing_cloud_sandbox_provider", _detach)
     monkeypatch.setattr(failures, "mark_cloud_sandbox_materialization_error", _mark)
     monkeypatch.setattr(failures, "close_cloud_sandbox_provider_usage", _close)
+    monkeypatch.setattr(
+        failures.cloud_workspace_store,
+        "mark_cloud_workspaces_lost_for_sandbox",
+        _mark_lost,
+    )
     observed_at = datetime(2026, 7, 17, tzinfo=UTC)
 
     matched, provider_id = await failures.persist_materialization_failure(
@@ -276,7 +298,9 @@ async def test_missing_fallback_preserves_newer_bound_provider_observation(
             return None
         state["status"] = "error"
         state["receipt"] = last_error
-        return SimpleNamespace(provider_sandbox_id=expected_provider_sandbox_id)
+        return SimpleNamespace(
+            provider_sandbox_id=expected_provider_sandbox_id, owner_user_id=None
+        )
 
     async def _unexpected_close(*_args: object, **_kwargs: object) -> None:
         pytest.fail("newer provider usage must remain open")

@@ -33,13 +33,7 @@ export type CloudWorkspaceListSelection = {
 };
 
 type CloudWorkspaceTransport = Record<string, unknown> & {
-  actionBlockKind?: string | null;
-  actionBlockReason?: string | null;
   productLifecycle?: string;
-  runtime?: {
-    actionBlockKind?: string | null;
-    actionBlockReason?: string | null;
-  } | null;
   status?: string;
   workspaceStatus?: string;
 };
@@ -59,6 +53,8 @@ function normalizeCloudWorkspaceStatus(value: string | undefined): CloudWorkspac
       return "needs_rematerialization";
     case "ready":
       return "ready";
+    case "lost":
+      return "lost";
     case "archived":
     case "stopped":
       return "archived";
@@ -78,8 +74,6 @@ function normalizeCloudWorkspace<T extends CloudWorkspaceTransport>(
   const status = normalizeCloudWorkspaceStatus(workspace.workspaceStatus ?? workspace.status);
   return {
     ...workspace,
-    actionBlockKind: workspace.runtime?.actionBlockKind ?? workspace.actionBlockKind ?? null,
-    actionBlockReason: workspace.runtime?.actionBlockReason ?? workspace.actionBlockReason ?? null,
     status,
     workspaceStatus: status,
     productLifecycle: workspace.productLifecycle ?? (status === "archived" ? "archived" : "active"),

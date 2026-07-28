@@ -21,11 +21,16 @@ from proliferate.server.cloud.materialization.materialize import (
 
 logger = logging.getLogger("proliferate.cloud.materialization")
 
+# Raised when the user has no active personal sandbox row to materialize into.
+# Named so callers that treat a vanished row as benign (the cold-access repair)
+# can recognize it without string-matching a literal.
+SANDBOX_MISSING_ERROR_CODE = "cloud_sandbox_missing"
+
 
 async def materialize_sandbox(db: AsyncSession, *, user_id: UUID) -> None:
     sandbox = await cloud_sandboxes_store.load_personal_cloud_sandbox(db, user_id)
     if sandbox is None:
-        raise operation.CloudMaterializationError("cloud_sandbox_missing")
+        raise operation.CloudMaterializationError(SANDBOX_MISSING_ERROR_CODE)
     await operation.run_cloud_sandbox_operation(
         db,
         sandbox=sandbox,

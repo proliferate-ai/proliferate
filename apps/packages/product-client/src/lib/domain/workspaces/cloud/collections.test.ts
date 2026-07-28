@@ -60,13 +60,10 @@ function makeCloudWorkspace(overrides: Partial<CloudWorkspaceSummary> = {}): Clo
       environmentId: null,
       status: "running",
       generation: 0,
-      actionBlockKind: null,
-      actionBlockReason: null,
     },
     statusDetail: overrides.statusDetail ?? null,
     lastError: overrides.lastError ?? null,
     templateVersion: overrides.templateVersion ?? null,
-    actionBlockKind: overrides.actionBlockKind ?? null,
     createdAt: overrides.createdAt ?? "2026-04-06T09:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T09:00:00.000Z",
     readyAt: "readyAt" in overrides
