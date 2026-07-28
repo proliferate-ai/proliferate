@@ -15,7 +15,11 @@ Both pin law N6 and law N5 from the launch-hardening plan:
 
 from __future__ import annotations
 
+import asyncio
+import time
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -351,3 +355,228 @@ async def test_billing_read_failure_receipts_sentinel_subject_when_resolution_fa
     assert receipt is not None
     assert receipt.billing_subject_id == uuid.UUID(int=0)
     assert receipt.actor_user_id == user_id
+
+
+@pytest.mark.asyncio
+async def test_verdict_persist_failure_denies_with_unavailable_not_bare_error(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Corridor E6: the verdict-PERSIST arm fails closed too, with the typed 503.
+
+    The conditions that break billing reads (read-only replica, full disk,
+    connection cap) break the audit write in the same breath. Before this guard a
+    failure while persisting a genuine 402 escaped as a bare exception: right
+    direction (deny), but no typed body, no receipt, no alert. It must land in the
+    same fail-closed corridor as a failed read — and it must still DENY.
+    """
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
+    monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 1.0)
+    patch_global_session_factory(test_engine, monkeypatch)
+    user_id, subject_id = await _seed_credits_exhausted_user(db_session)
+
+    alerts: list[BaseException] = []
+    monkeypatch.setattr(
+        authorization_module,
+        "report_critical",
+        lambda error, **_kwargs: alerts.append(error),
+    )
+
+    async def _persist_boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("cannot execute INSERT in a read-only transaction")
+
+    # The reads all succeed and produce a real 402 verdict; only the audit write
+    # blows up. (The receipt inside the fail-closed handler goes through this same
+    # patched symbol, so it fails too — proving the denial survives both.)
+    monkeypatch.setattr(authorization_module, "record_billing_decision_event", _persist_boom)
+
+    with pytest.raises(BillingStateUnavailableError) as excinfo:
+        await assert_cloud_sandbox_resume_allowed_for_owner(db_session, owner_user_id=user_id)
+
+    error = excinfo.value
+    assert error.status_code == 503
+    assert error.code == "billing_unavailable"
+    assert error.extra_detail["decision_type"] == BILLING_DECISION_READ_UNAVAILABLE
+    # The subject resolved before the write failed, so it is on the typed error.
+    assert error.billing_subject_id == subject_id
+    assert error.owner_user_id == user_id
+    assert isinstance(error.__cause__, RuntimeError)
+    assert len(alerts) == 1
+
+
+@pytest.mark.asyncio
+async def test_verdict_persist_failure_receipts_on_its_own_session(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Corridor E6: a failed verdict persist still lands the read-unavailable receipt.
+
+    Only ``db.commit()`` fails here (the pattern of a connection dropped at commit
+    time), so the fail-closed handler's own-session receipt can still write — and
+    it must, or the enforcement failure would be unforensicable.
+    """
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
+    monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 1.0)
+    patch_global_session_factory(test_engine, monkeypatch)
+    user_id, subject_id = await _seed_credits_exhausted_user(db_session)
+
+    monkeypatch.setattr(
+        authorization_module,
+        "report_critical",
+        lambda *_args, **_kwargs: None,
+    )
+
+    async def _commit_boom() -> None:
+        raise RuntimeError("connection closed during commit")
+
+    monkeypatch.setattr(db_session, "commit", _commit_boom)
+
+    with pytest.raises(BillingStateUnavailableError):
+        await assert_cloud_sandbox_resume_allowed_for_owner(db_session, owner_user_id=user_id)
+
+    monkeypatch.undo()
+    await db_session.rollback()
+    receipt = await db_session.scalar(
+        select(BillingDecisionEvent).where(
+            BillingDecisionEvent.decision_type == BILLING_DECISION_READ_UNAVAILABLE
+        )
+    )
+    assert receipt is not None
+    assert receipt.billing_subject_id == subject_id
+    assert receipt.would_block_start is True
+
+
+@pytest.mark.asyncio
+async def test_quota_denial_passes_through_the_persist_guard_untouched(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The persist guard must not relabel a legitimate 402 as unreadable.
+
+    Regression guard on the guard: wrapping the audit write in a broad ``except``
+    is one keystroke away from also swallowing the ``CloudSandboxResumeBlockedError``
+    raise itself, which would turn every real quota denial into a 503 and send
+    clients to a retry instead of a top-up.
+    """
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
+    monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 1.0)
+    user_id, _subject_id = await _seed_credits_exhausted_user(db_session)
+
+    with pytest.raises(CloudSandboxResumeBlockedError) as excinfo:
+        await assert_cloud_sandbox_resume_allowed_for_owner(db_session, owner_user_id=user_id)
+    assert excinfo.value.status_code == 402
+    assert excinfo.value.reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED
+
+
+@pytest.mark.asyncio
+async def test_receipt_session_hang_does_not_hold_the_denial(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The receipt write is bounded: a hung session must not delay the 503.
+
+    The receipt takes a SECOND pool checkout during the very outage that broke the
+    first one. With a saturated pool an unbounded wait would hold the denial for
+    ``pool_timeout`` (30s) — or forever for a hung DB — turning a fast fail-closed
+    deny into a hanging request. The bound is what makes the denial the only
+    unconditional obligation in practice, not just on paper.
+    """
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(authorization_module, "report_critical", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        authorization_module,
+        "_BILLING_RECEIPT_WRITE_TIMEOUT_SECONDS",
+        0.05,
+    )
+    user_id = await _create_user(db_session)
+    await ensure_personal_billing_subject(db_session, user_id)
+    await db_session.commit()
+
+    async def _snapshot_boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("billing snapshot read failed")
+
+    monkeypatch.setattr(
+        authorization_module,
+        "get_billing_snapshot_for_subject_in_session",
+        _snapshot_boom,
+    )
+
+    checkout_attempted = asyncio.Event()
+
+    @asynccontextmanager
+    async def _hung_transaction() -> AsyncIterator[AsyncSession]:
+        # Stand in for a pool checkout that never completes (saturated pool or
+        # unresponsive DB). The bound must cancel this, not wait it out.
+        checkout_attempted.set()
+        await asyncio.sleep(30)
+        raise AssertionError("unreachable: the receipt bound should have cancelled us")
+        yield  # pragma: no cover - satisfies the generator contract
+
+    monkeypatch.setattr(
+        authorization_module.db_session,
+        "open_async_transaction",
+        _hung_transaction,
+    )
+
+    started = time.monotonic()
+    with pytest.raises(BillingStateUnavailableError) as excinfo:
+        await assert_cloud_sandbox_resume_allowed_for_owner(db_session, owner_user_id=user_id)
+    elapsed = time.monotonic() - started
+
+    assert checkout_attempted.is_set()
+    # Bounded by the (shortened) receipt timeout, nowhere near pool_timeout.
+    assert elapsed < 5.0
+    assert excinfo.value.status_code == 503
+    assert excinfo.value.code == "billing_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_unavailable_denial_is_not_sticky_next_healthy_read_allows(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Corridor E5 x E6: a 503 read-failure denial is never cached.
+
+    E5 says a denial is a verdict about right now. That has to hold for the
+    fail-closed arm too: once reads recover, the next attempt must be allowed with
+    no stale-unavailable window — otherwise a transient DB blip would strand every
+    healthy owner behind a sticky 503.
+    """
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
+    patch_global_session_factory(test_engine, monkeypatch)
+    monkeypatch.setattr(authorization_module, "report_critical", lambda *_a, **_k: None)
+    user_id = await _create_user(db_session)
+    await ensure_personal_billing_subject(db_session, user_id)
+    await ensure_free_included_grant(db_session, user_id)
+    await db_session.commit()
+
+    healthy_snapshot = authorization_module.get_billing_snapshot_for_subject_in_session
+
+    async def _snapshot_boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("billing snapshot read failed")
+
+    monkeypatch.setattr(
+        authorization_module,
+        "get_billing_snapshot_for_subject_in_session",
+        _snapshot_boom,
+    )
+    with pytest.raises(BillingStateUnavailableError):
+        await assert_cloud_sandbox_resume_allowed_for_owner(db_session, owner_user_id=user_id)
+
+    # The production caller rolls back on the raised denial.
+    await db_session.rollback()
+
+    # Reads recover; the immediately-following call is allowed, no sleep.
+    monkeypatch.setattr(
+        authorization_module,
+        "get_billing_snapshot_for_subject_in_session",
+        healthy_snapshot,
+    )
+    await assert_cloud_sandbox_resume_allowed_for_owner(db_session, owner_user_id=user_id)
