@@ -98,6 +98,16 @@ async def test_frozen_repo_materialization_releases_transaction_before_each_exte
         "materialize_github_credentials",
         credentials,
     )
+
+    async def git_identity(db: AsyncSession, **_kwargs):  # type: ignore[no-untyped-def]
+        assert not db.in_transaction()
+        calls.append("git-identity")
+
+    monkeypatch.setattr(
+        repo_materializer.git_identity,
+        "materialize_git_identity",
+        git_identity,
+    )
     monkeypatch.setattr(repo_materializer, "_materialize_git_checkout", checkout)
     monkeypatch.setattr(
         repo_materializer.secret_set,
@@ -127,6 +137,7 @@ async def test_frozen_repo_materialization_releases_transaction_before_each_exte
     assert calls == [
         "github-authority",
         "github-credentials",
+        "git-identity",
         "git-checkout",
         "workspace-secrets",
         "ready",

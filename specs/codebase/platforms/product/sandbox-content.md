@@ -498,13 +498,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       no clone-delete primitive exists anywhere in AnyHarness (no route, no
       store method). Add the paired after-commit reclaims and build the
       clone-delete primitive under the same fence discipline as retire.
-- [ ] Git identity is not materialized at all: the only implementation was
-      deleted with its parked domain (#823), and every user commit today
-      carries git's auto-derived fallback (`user <user@<sandbox-hostname>>`).
-      Reintroduce materialization with the resolution rules above. (The
-      unimportable calling stage and the orphaned `configure_git_identity`
-      command kind are already deleted; `ensure_repo_checkout` turned out
-      to be live — the automation pipeline enqueues it — and stays.)
 - [ ] No disk axis: the resource-pressure collector measures CPU and memory
       only (no statvfs anywhere in the runtime), the composer card shows
       CPU/memory rows without disk, no threshold notification exists

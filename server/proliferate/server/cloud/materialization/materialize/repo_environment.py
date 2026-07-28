@@ -15,7 +15,11 @@ from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import manifests, operation, paths, sandbox_io
-from proliferate.server.cloud.materialization.materialize import github_credentials, secret_set
+from proliferate.server.cloud.materialization.materialize import (
+    git_identity,
+    github_credentials,
+    secret_set,
+)
 from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
 )
@@ -134,6 +138,12 @@ async def materialize_repo_environment_in_context(
             git_repo_name=repo_environment.git_repo_name,
         )
         credential_result = await github_credentials.materialize_github_credentials(
+            db,
+            target=ctx.target,
+            operation_id=materialization_id,
+            user_id=repo_environment.user_id,
+        )
+        await git_identity.materialize_git_identity(
             db,
             target=ctx.target,
             operation_id=materialization_id,
