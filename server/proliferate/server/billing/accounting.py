@@ -122,6 +122,7 @@ async def account_usage_for_billing_subject(
         consumed_seconds = 0.0
         export_seconds = 0.0
         export_count = 0
+        over_cap_cents = 0
         export_status = (
             BILLING_USAGE_EXPORT_STATUS_OBSERVED
             if billing_mode == BILLING_MODE_OBSERVE
@@ -250,6 +251,14 @@ async def account_usage_for_billing_subject(
                             # are not exported (and not billed); the snapshot
                             # emits WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED so
                             # compute stops. Write-offs are operator-only.
+                            #
+                            # Law A2 ("no orphaned spend ... no silent fourth
+                            # bucket") still applies to the refused remainder:
+                            # report it so the pass records a durable
+                            # BillingDecisionEvent receipt even when this slice
+                            # produced no export row at all. A log line is not a
+                            # receipt.
+                            over_cap_cents += meter_cents - billable_cents
                             logger.info(
                                 "Compute overage reached org cap; pausing (no auto write-off)",
                                 extra={
@@ -272,6 +281,7 @@ async def account_usage_for_billing_subject(
             consumed_seconds=consumed_seconds,
             export_seconds=export_seconds,
             export_count=export_count,
+            over_cap_cents=over_cap_cents,
         )
 
 
