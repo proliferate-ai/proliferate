@@ -10,9 +10,16 @@ import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
-export type SecretEditorKind = "env" | "file";
-export type SecretFileContentSource = "text" | "upload";
-export type SecretFilePathMode = "absolute" | "relative";
+import {
+  FILE_CONTENT_SOURCE_LABELS,
+  FILE_CONTENT_SOURCE_OPTIONS,
+  SECRET_KIND_LABELS,
+  SECRET_KIND_OPTIONS,
+  type SecretEditorKind,
+  type SecretFileContentSource,
+  type SecretFilePathMode,
+} from "./secret-editor-vocabulary";
+
 
 export interface SecretEditorDialogState {
   mode: "create" | "edit";
@@ -40,18 +47,6 @@ export type SecretEditorSaveInput =
   | { kind: "env"; nameOrPath: string; secret: string }
   | { kind: "file"; nameOrPath: string; content: string }
   | { kind: "file"; nameOrPath: string; file: File };
-
-const SECRET_KIND_LABELS: Record<SecretEditorKind, string> = {
-  env: "Environment variable",
-  file: "File",
-};
-
-const SECRET_KIND_OPTIONS: readonly SecretEditorKind[] = ["env", "file"];
-const FILE_CONTENT_SOURCE_LABELS: Record<SecretFileContentSource, string> = {
-  text: "Paste text",
-  upload: "Upload file",
-};
-const FILE_CONTENT_SOURCE_OPTIONS: readonly SecretFileContentSource[] = ["text", "upload"];
 
 const fieldLabelClass = "text-body-emphasis font-medium text-foreground";
 const toggleClass =

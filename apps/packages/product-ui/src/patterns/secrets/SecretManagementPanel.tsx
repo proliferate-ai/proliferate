@@ -10,8 +10,8 @@ import {
   SecretEditorDialog,
   type SecretEditorSaveInput,
   type SecretEditorDialogState,
-  type SecretFilePathMode,
 } from "./SecretEditorDialog";
+import type { SecretFilePathMode } from "./secret-editor-vocabulary";
 import { SecretList, type SecretListItem } from "./SecretList";
 import { SecretScopeNotice } from "./SecretScopeNotice";
 
