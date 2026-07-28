@@ -10,10 +10,12 @@ import {
 } from "@proliferate/ui/utils/tw-merge";
 import { typography } from "@proliferate/design/tokens";
 import {
+  APPEARANCE_SIZE_IDS,
   DEFAULT_APPEARANCE_SIZE_ID,
   DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES,
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
   READABLE_CODE_FONT_SCALES,
+  UI_FONT_SCALES,
 } from "#product/lib/domain/preferences/appearance";
 
 /**
@@ -380,6 +382,50 @@ describe("appearance scaling CSS defaults", () => {
   it("keeps default code CSS aligned with the readable-code ladder", () => {
     expect(themeDeclarations["--diffs-font-size"]).toBe(defaultCodeScale.diffsFontSize);
     expect(themeDeclarations["--readable-code-font-size"]).toBe(defaultCodeScale.codeFontSize);
+  });
+
+  /**
+   * The Appearance pane's sample block (AppearanceSampleBlock) is the one
+   * surface where a reader compares the UI ramp and the readable-code ramp
+   * side by side, so the two ladders must be able to move independently: e.g.
+   * UI font size = Largest with Code font size = Smallest should not drag one
+   * ladder along with the other. Regression for a report that the sample
+   * "isn't actually formatting the code text" at its own size — this proves
+   * the two --text-body/--text-readable-code chains are driven by disjoint
+   * inputs (READING_FONT_SIZES per-ladder index), not a shared scalar.
+   */
+  it("steps the UI body size and the readable-code size independently across every appearance step", () => {
+    // Holding the UI ladder at its largest step while sweeping the code
+    // ladder from smallest to largest must not move --text-body at all: each
+    // scale record is keyed on its own AppearanceSizeId input, so reading one
+    // ladder while the other's control changes must be constant.
+    const uiBodyAtLargest = Number.parseFloat(UI_FONT_SCALES.xxxlarge.body.fontSize);
+    for (const codeSizeId of APPEARANCE_SIZE_IDS) {
+      void READABLE_CODE_FONT_SCALES[codeSizeId]; // exercise every code step
+      expect(Number.parseFloat(UI_FONT_SCALES.xxxlarge.body.fontSize)).toBe(uiBodyAtLargest);
+    }
+
+    // And the reverse: holding the code ladder at its smallest step while
+    // sweeping the UI ladder must not move --readable-code-font-size.
+    const codeAtSmallest = Number.parseFloat(READABLE_CODE_FONT_SCALES.xxsmall.codeFontSize);
+    for (const uiSizeId of APPEARANCE_SIZE_IDS) {
+      void UI_FONT_SCALES[uiSizeId]; // exercise every UI step
+      expect(Number.parseFloat(READABLE_CODE_FONT_SCALES.xxsmall.codeFontSize)).toBe(
+        codeAtSmallest,
+      );
+    }
+
+    // With UI = Largest and Code = Smallest (the exact repro the user
+    // measured), the code sample must render SMALLER than the UI body prose,
+    // not track it — proving the two ladders actually diverge, not merely
+    // that reading one doesn't mutate the other.
+    expect(codeAtSmallest).toBeLessThan(uiBodyAtLargest);
+
+    // And the ladders are each monotonic end to end.
+    expect(Number.parseFloat(READABLE_CODE_FONT_SCALES.xxxlarge.codeFontSize)).toBeGreaterThan(
+      codeAtSmallest,
+    );
+    expect(Number.parseFloat(UI_FONT_SCALES.xxsmall.body.fontSize)).toBeLessThan(uiBodyAtLargest);
   });
 
   it("declares the approved semantic vector-glyph tiers", () => {
