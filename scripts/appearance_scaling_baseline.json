@@ -43,8 +43,6 @@
     "apps/packages/product-client/src/components/settings/panes/OrganizationBudgetsPane.tsx|foreground-alpha-foundation": 2,
     "apps/packages/product-client/src/components/settings/panes/OrganizationModelPolicyPane.tsx|foreground-alpha-foundation": 3,
     "apps/packages/product-client/src/components/settings/panes/OrganizationPane.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthSection.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-client/src/components/settings/panes/environments/WorktreeStorageSection.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-client/src/components/settings/panes/organization/GitHubAppInstallationSection.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-client/src/components/settings/panes/organization/OrganizationBillingLinkSection.tsx|foreground-alpha-foundation": 1,
