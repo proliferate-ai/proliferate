@@ -168,7 +168,173 @@
     "WrapText": null,
     "X": null,
     "XLines": null,
-    "Zap": null
+    "Zap": null,
+    "AlertDialogAction": null,
+    "AlertDialogCancel": null,
+    "AlertDialogContent": null,
+    "AlertDialogDescription": null,
+    "AlertDialogFooter": null,
+    "AlertDialogHeader": null,
+    "AlertDialogOverlay": null,
+    "AlertDialogPortal": null,
+    "AlertDialogTitle": null,
+    "AlertDialogTrigger": null,
+    "CollapsiblePlanCard": null,
+    "CommandEmpty": null,
+    "CommandGroup": null,
+    "CommandInput": null,
+    "CommandItem": null,
+    "CommandList": null,
+    "CommandPaletteGroup": null,
+    "CommandPaletteInput": null,
+    "CommandPaletteItem": null,
+    "CommandPaletteList": null,
+    "CommandPaletteRoot": null,
+    "CommandSeparator": null,
+    "CommandShortcut": null,
+    "DialogClose": null,
+    "DialogContent": null,
+    "DialogDescription": null,
+    "DialogFooter": null,
+    "DialogHeader": null,
+    "DialogOverlay": null,
+    "DialogPortal": null,
+    "DialogTitle": null,
+    "DialogTrigger": null,
+    "DropdownMenuCheckboxItem": null,
+    "DropdownMenuContent": null,
+    "DropdownMenuGroup": null,
+    "DropdownMenuItem": null,
+    "DropdownMenuLabel": null,
+    "DropdownMenuPortal": null,
+    "DropdownMenuRadioGroup": null,
+    "DropdownMenuRadioItem": null,
+    "DropdownMenuSeparator": null,
+    "DropdownMenuShortcut": null,
+    "DropdownMenuSub": null,
+    "DropdownMenuSubContent": null,
+    "DropdownMenuSubTrigger": null,
+    "DropdownMenuTrigger": null,
+    "PopoverAnchor": null,
+    "PopoverContent": null,
+    "PopoverTrigger": null,
+    "TooltipContent": null,
+    "TooltipTrigger": null
   },
-  "readmeHeader": ".design-sync/conventions.md"
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "AlertDialog": {
+      "cardMode": "single",
+      "primaryStory": "DeleteWorkspace"
+    },
+    "Dialog": {
+      "cardMode": "single",
+      "primaryStory": "RenameThread"
+    },
+    "ConfirmationDialog": {
+      "cardMode": "single",
+      "primaryStory": "DestructiveConfirm"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "primaryStory": "ThreadActions"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "PopoverButton": {
+      "cardMode": "single",
+      "primaryStory": "OpenMenu"
+    },
+    "ModalShell": {
+      "cardMode": "single",
+      "primaryStory": "DeleteWorkspace"
+    },
+    "SettingsMenu": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "PickerPopoverContent": {
+      "cardMode": "single",
+      "primaryStory": "BranchPicker"
+    },
+    "EnvironmentSearchSelect": {
+      "cardMode": "single",
+      "primaryStory": "BranchPicker"
+    },
+    "FixedPositionLayer": {
+      "cardMode": "single",
+      "primaryStory": "AnchoredGroupEditor"
+    },
+    "ModelTable": {
+      "cardMode": "column"
+    },
+    "ProductPageShell": {
+      "cardMode": "column"
+    },
+    "SettingsPageHeader": {
+      "cardMode": "column"
+    },
+    "PageContentFrame": {
+      "cardMode": "column"
+    },
+    "SettingsEyebrow": {
+      "cardMode": "column"
+    },
+    "SettingsRow": {
+      "cardMode": "column"
+    },
+    "SettingsSaveFooter": {
+      "cardMode": "column"
+    },
+    "SettingsScopeTabs": {
+      "cardMode": "column"
+    },
+    "SettingsSection": {
+      "cardMode": "column"
+    },
+    "AutoHideScrollArea": {
+      "cardMode": "column"
+    },
+    "ComposerControlButton": {
+      "cardMode": "column"
+    },
+    "ComposerTextarea": {
+      "cardMode": "column"
+    },
+    "PageHeader": {
+      "cardMode": "column"
+    },
+    "PaneOptionsMenuItem": {
+      "cardMode": "column"
+    },
+    "ThinkingText": {
+      "cardMode": "column"
+    },
+    "AnimatedCollapsibleContent": {
+      "cardMode": "column"
+    },
+    "AnimatedSwapText": {
+      "cardMode": "column"
+    },
+    "Command": {
+      "cardMode": "column"
+    },
+    "PopoverMenuItem": {
+      "cardMode": "column"
+    },
+    "RangeSlider": {
+      "cardMode": "column"
+    },
+    "RowActionIconButton": {
+      "cardMode": "column"
+    },
+    "Switch": {
+      "cardMode": "column"
+    },
+    "Tooltip": {
+      "cardMode": "column"
+    }
+  }
 }
