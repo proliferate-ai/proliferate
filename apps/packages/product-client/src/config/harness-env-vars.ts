@@ -17,6 +17,57 @@ export interface ProviderRegistryEntry {
 // scripts/vendor-provider-registry.mjs.
 export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = providerRegistry;
 
+// Which of a provider's env vars actually holds the secret. Registry order is
+// arbitrary and multi-field providers lead with a NON-secret (azure ->
+// AZURE_RESOURCE_NAME, amazon-bedrock -> AWS_ACCESS_KEY_ID, google-vertex ->
+// GOOGLE_VERTEX_PROJECT), so blindly taking envVarNames[0] would write a pasted
+// API key into a resource-name/project variable. Key-shaped names are the ones
+// whose suffix names a credential: _API_KEY / _KEY / _TOKEN (covers
+// _AUTH_TOKEN, _BEARER_TOKEN) / _PAT.
+const KEY_SHAPED_ENV_VAR_RE = /(_API_KEY|_KEY|_TOKEN|_PAT)$/;
+
+/**
+ * The env var a single pasted secret belongs in for this provider, or null when
+ * the provider has none that is BOTH server-valid (ENV_VAR_NAME_RE — e.g.
+ * "302AI_API_KEY" starts with a digit and always 400s) and key-shaped. A null
+ * result means the provider cannot be expressed as one api_key selection at all
+ * (google-vertex is service-account JSON + project/location): it belongs to the
+ * typed provider-config path (agent-auth.md §4), not the single-secret picker.
+ */
+export function getProviderSecretEnvVar(provider: {
+  envVarNames: readonly string[];
+}): string | null {
+  return (
+    provider.envVarNames.find(
+      (envVarName) =>
+        isValidEnvVarName(envVarName) && KEY_SHAPED_ENV_VAR_RE.test(envVarName),
+    ) ?? null
+  );
+}
+
+/**
+ * Human label for a bound API key ("Anthropic API key"). Env-var names are
+ * internal wiring and never user-facing: rows and modals describe the key by
+ * the provider it belongs to, resolved from the provider hint or — for
+ * hand-typed/legacy rows — by matching the env var against the registry.
+ */
+export function getApiKeyBindingLabel(
+  envVarName: string,
+  providerHint: string | null | undefined,
+): string {
+  const byHint = providerHint
+    ? PROVIDER_REGISTRY.find((provider) => provider.id === providerHint)
+    : undefined;
+  const byEnvVar = byHint
+    ?? PROVIDER_REGISTRY.find((provider) => provider.envVarNames.includes(envVarName));
+  if (byEnvVar) return `${byEnvVar.displayName} API key`;
+  // Cursor's account key has no registry entry.
+  if (providerHint === "cursor" || envVarName === "CURSOR_API_KEY") {
+    return "Cursor API key";
+  }
+  return "API key";
+}
+
 export interface HarnessEnvVarSuggestion {
   envVarName: string;
   // Display-only; mirrors agent_auth_selection.provider_hint. Never sent to

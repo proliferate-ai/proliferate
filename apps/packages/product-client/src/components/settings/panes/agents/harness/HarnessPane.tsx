@@ -1,18 +1,26 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
 import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { ArrowUpRight } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CloudGuard } from "#product/components/cloud/CloudGuard";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { isMultiSourceHarness } from "#product/lib/domain/settings/harness-auth-sources";
 import { HarnessAllModelsSection } from "#product/components/settings/panes/agents/harness/HarnessAllModelsSection";
-import { HarnessAuthDetailsSection } from "#product/components/settings/panes/agents/harness/HarnessAuthDetailsSection";
-import { HarnessAuthSection, deriveSelectedMethod } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
+import { ApiKeyDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyDetails";
+import { CliDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthCliDetails";
+import {
+  HarnessAuthSection,
+  deriveSelectedMethod,
+} from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
+import { HarnessProvidersSection } from "#product/components/settings/panes/agents/harness/HarnessProvidersSection";
 import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
 import { HarnessSettingsSection } from "#product/components/settings/panes/agents/harness/HarnessSettingsSection";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
@@ -33,17 +41,68 @@ const SETTINGS_HARNESS_DISPLAY_NAMES: Record<string, string> = {
   opencode: "OpenCode",
 };
 
+/**
+ * §1 — Title and docs. Harness display name, one-line description, and an exit
+ * to the vendor's OWN documentation (`docsUrl`, declared per harness in the
+ * runtime registry and projected onto `AgentSummary`). The first thing a user
+ * needs from a vendor-tool pane is confirmation of which vendor tool it is.
+ *
+ * A harness whose registry entry declares no docsUrl simply renders no link —
+ * the affordance is never faked with a guessed URL.
+ */
+function HarnessDocsLink({ docsUrl }: { docsUrl: string | null | undefined }) {
+  const { links } = useProductHost();
+  if (!docsUrl) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="gap-1.5"
+      onClick={() => {
+        void links.openExternal(docsUrl);
+      }}
+    >
+      {HARNESS_PANE_COPY.docsLink}
+      <ArrowUpRight className="icon-compact" />
+    </Button>
+  );
+}
+
 export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const surface = useAgentSurfaceStore((state) => state.surface);
   const displayName = SETTINGS_HARNESS_DISPLAY_NAMES[harnessKind]
     ?? getProviderDisplayName(harnessKind);
+  const { agentsByKind } = useAgentCatalog();
 
   return (
     <section className="space-y-6">
-      <SettingsPageHeader
-        title={displayName}
-        description={HARNESS_PANE_COPY.surfaceDescription(surface, displayName)}
-      />
+      {/* §1 identity header (design-handoff v2): 42px provider glyph tile +
+          name/vendor line + Docs exit. Inline rather than SettingsPageHeader —
+          the shared pattern has no leading-tile slot. */}
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span
+            aria-hidden
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-surface-control text-foreground"
+          >
+            <ProviderIcon
+              kind={harnessKind}
+              className="icon-large [font-size:var(--text-ui)]"
+            />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-title font-semibold tracking-[-0.025em] text-foreground">
+              {displayName}
+            </h1>
+            <p className="text-ui text-muted-foreground/55">
+              {HARNESS_PANE_COPY.harnessIdentity[harnessKind]}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center">
+          <HarnessDocsLink docsUrl={agentsByKind.get(harnessKind)?.docsUrl} />
+        </div>
+      </header>
 
       {surface === "cloud" ? (
         <CloudGuard>
@@ -124,11 +183,11 @@ function HarnessRuntimeSurface({
         </SettingsSection>
       ) : null}
 
-      {surface === "cloud" ? (
-        <HarnessSurfaceCloud harnessKind={harnessKind} displayName={displayName} />
-      ) : (
-        <HarnessSurfaceLocal harnessKind={harnessKind} displayName={displayName} />
-      )}
+      <HarnessAuthSurface
+        harnessKind={harnessKind}
+        displayName={displayName}
+        surface={surface}
+      />
     </>
   );
 }
@@ -178,7 +237,7 @@ function HarnessRuntimeStatusRow({
       data-harness-runtime-state={loading ? "loading" : error ? "error" : agent?.readiness ?? "missing"}
       label={(
         <span className="flex min-w-0 items-center gap-2.5">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
+          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-control text-muted-foreground">
             <ProviderIcon kind={harnessKind} className="icon-control" />
           </span>
           <span className="truncate">{displayName}</span>
@@ -191,83 +250,57 @@ function HarnessRuntimeStatusRow({
   );
 }
 
-function HarnessSurfaceCloud({
+/**
+ * The v2 pane anatomy (reference/design-handoff): identity → Authentication
+ * (method cards with the ONE status badge merged into the header, detail area
+ * below the cards) → harness settings → Models. There is no separate Status
+ * section — the state is said exactly once, in the section header. OpenCode
+ * replaces Authentication with a providers-only section (no chooser, no
+ * gateway).
+ */
+function HarnessAuthSurface({
   harnessKind,
   displayName,
+  surface,
 }: {
   harnessKind: string;
   displayName: string;
+  surface: AgentAuthSurface;
 }) {
-  const editor = useHarnessAuthEditor(harnessKind, displayName, "cloud");
+  const editor = useHarnessAuthEditor(harnessKind, displayName, surface);
   const selectedMethod = deriveSelectedMethod(editor);
+  const multiSource = isMultiSourceHarness(harnessKind);
 
   return (
     <>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface-elevated-secondary">
+      {multiSource ? (
+        <HarnessProvidersSection editor={editor} />
+      ) : (
         <HarnessAuthSection
           harnessKind={harnessKind}
           displayName={displayName}
-          surface="cloud"
+          surface={surface}
           editor={editor}
-          variant="panel"
-        />
+        >
+          {/* Method detail area, below the cards. Gateway needs no detail —
+              failure shows on the disabled card + header badge. */}
+          {selectedMethod === "api_key" ? (
+            <ApiKeyDetails harnessKind={harnessKind} editor={editor} />
+          ) : selectedMethod === "cli" ? (
+            <CliDetails editor={editor} />
+          ) : null}
+        </HarnessAuthSection>
+      )}
 
-        <HarnessAuthDetailsSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          selectedMethod={selectedMethod}
-          editor={editor}
-          variant="panel"
-        />
-      </div>
+      {/* Harness-specific options, AFTER auth: these are options on top of
+          a working harness, so they sit below the thing that makes it work. */}
+      <HarnessSettingsSection harnessKind={harnessKind} surface={surface} />
 
-      <HarnessSettingsSection harnessKind={harnessKind} surface="cloud" variant="section" />
-
+      {/* Model list, auto-collapsed. */}
       <HarnessAllModelsSection
         harnessKind={harnessKind}
         displayName={displayName}
-        surface="cloud"
-      />
-    </>
-  );
-}
-
-function HarnessSurfaceLocal({
-  harnessKind,
-  displayName,
-}: {
-  harnessKind: string;
-  displayName: string;
-}) {
-  const editor = useHarnessAuthEditor(harnessKind, displayName, "local");
-  const selectedMethod = deriveSelectedMethod(editor);
-
-  return (
-    <>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface-elevated-secondary">
-        <HarnessAuthSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface="local"
-          editor={editor}
-          variant="panel"
-        />
-
-        <HarnessAuthDetailsSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          selectedMethod={selectedMethod}
-          editor={editor}
-          variant="panel"
-        />
-      </div>
-
-      <HarnessSettingsSection harnessKind={harnessKind} surface="local" variant="section" />
-
-      <HarnessAllModelsSection
-        harnessKind={harnessKind}
-        displayName={displayName}
-        surface="local"
+        surface={surface}
       />
     </>
   );
