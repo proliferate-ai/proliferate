@@ -337,9 +337,7 @@ class TestDesktopAckFlipsPendingToApplied:
                 db_session, user_id=uuid.UUID(user_id), surface="local"
             )
         ) is None
-        assert {record["applied"] for record in await _list_selections(client, headers)} == {
-            False
-        }
+        assert {record["applied"] for record in await _list_selections(client, headers)} == {False}
 
         # The normal flow — echoing the served identity — still acks.
         acked = await _ack_state(
@@ -350,9 +348,7 @@ class TestDesktopAckFlipsPendingToApplied:
             fingerprint=state["fingerprint"],
         )
         assert acked.status_code == 200, acked.text
-        assert {record["applied"] for record in await _list_selections(client, headers)} == {
-            True
-        }
+        assert {record["applied"] for record in await _list_selections(client, headers)} == {True}
 
     @pytest.mark.asyncio
     async def test_ack_validation_and_auth(self, client: AsyncClient) -> None:
