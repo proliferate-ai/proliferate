@@ -163,6 +163,23 @@ export type BillingGateReason =
   | "llm_limit_reached"
   | "unknown";
 
+const BILLING_GATE_REASONS: ReadonlySet<string> = new Set([
+  "credits_exhausted",
+  "overage_disabled",
+  "cap_exhausted",
+  "payment_failed",
+  "external_billing_hold",
+  "admin_hold",
+  "concurrency_limit",
+  "llm_credits_exhausted",
+  "llm_limit_reached",
+]);
+
+/** Server `startBlockReason` arrives untyped; unrecognized codes render the generic gate. */
+export function toBillingGateReason(value: string | null | undefined): BillingGateReason {
+  return value && BILLING_GATE_REASONS.has(value) ? (value as BillingGateReason) : "unknown";
+}
+
 export interface BillingGateViewOptions {
   /** Paid subjects refill; free subjects upgrade. */
   isPaidPlan: boolean;
