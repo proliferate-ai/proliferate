@@ -1,0 +1,22 @@
+{
+  "disabled": false,
+  "pathTemplate": "~/.humanlayer/workspaces/{{ TASKSLUG }}/{{ REPOBASENAME }}",
+  "branchTemplate": "{{ TASKSLUG }}",
+  "sourceRef": "HEAD",
+  "setupCommand": "make install",
+  "copyGlobs": [
+    ".env",
+    ".env.local",
+    ".env.development.local",
+    "apps/*/.env.local",
+    ".claude/settings.local.json",
+    ".humanlayer/workspace.local.json"
+  ],
+  "repos": [
+    {
+      "localPath": ".",
+      "description": "Proliferate monorepo",
+      "primary": true
+    }
+  ]
+}
