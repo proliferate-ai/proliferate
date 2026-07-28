@@ -214,6 +214,25 @@ function ToastHostDemo() {
       })}>
         Detail
       </Button>
+      <Button variant="secondary" size="sm" onClick={() => showToast({
+        weight: "announcement",
+        tone: "destructive",
+        isError: true,
+        title: "Could not reach the runtime",
+        description: "The session is still open. Nothing was lost.",
+        details: {
+          kind: "modal",
+          title: "Runtime unreachable",
+          subtitle: "workspace · proliferate",
+          payload: [
+            "connect ECONNREFUSED 127.0.0.1:8457",
+            "  at TCPConnectWrap.afterConnect",
+            "  at Socket.emit",
+          ].join("\n"),
+        },
+      })}>
+        Details modal
+      </Button>
     </div>
   );
 }

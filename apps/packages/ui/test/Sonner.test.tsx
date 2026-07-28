@@ -2,7 +2,7 @@
 
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { POPOVER_FRAME_CLASS } from "../src/primitives/popover-surface";
+import { POPOVER_FRAME_IMPORTANT_CLASS } from "../src/primitives/popover-surface";
 import { Toaster, toast } from "../src/primitives/Sonner";
 
 afterEach(() => {
@@ -10,6 +10,7 @@ afterEach(() => {
     toast.dismiss();
   });
   cleanup();
+  delete document.documentElement.dataset.mode;
 });
 
 async function showToast(...args: Parameters<typeof toast>) {
@@ -32,14 +33,42 @@ describe("Toaster", () => {
 
     // Toasts and popovers are the same kind of floating panel, so the frame is
     // shared by reference — a popover retune must reach the toast too.
-    for (const utility of POPOVER_FRAME_CLASS.split(" ")) {
-      expect(element.className).toContain(`!${utility}`);
+    //
+    // Asserted against the important constant rather than by prefixing the
+    // plain one here: the old form of this assertion passed while the classes
+    // it checked were absent from the stylesheet, because the test rebuilt the
+    // same runtime string the component did. `popover-surface.test.ts` pins the
+    // two constants together.
+    for (const utility of POPOVER_FRAME_IMPORTANT_CLASS.split(" ")) {
+      expect(element.className).toContain(utility);
     }
     // Sonner's own selectors outrank plain utilities; every owned property has
     // to be important or the default opaque card wins.
     expect(element.className).toContain("!p-3");
     expect(element.className).toContain("!text-ui-sm");
     expect(element.className).not.toContain("!border-border ");
+  });
+
+  it("takes its theme from the app's mode, not the OS", async () => {
+    document.documentElement.dataset.mode = "light";
+    await showToast("Workspace synced");
+
+    // Sonner's theme picks the `--normal-*` fallbacks sitting behind everything
+    // the kit overrides. Pinned to dark, those stayed black under a light
+    // surface — so the fallback has to track the same attribute the stylesheet
+    // does.
+    const readTheme = () =>
+      document
+        .querySelector<HTMLElement>("[data-sonner-toaster]")
+        ?.getAttribute("data-sonner-theme");
+    expect(readTheme()).toBe("light");
+
+    await act(async () => {
+      document.documentElement.dataset.mode = "dark";
+    });
+    await waitFor(() => {
+      expect(readTheme()).toBe("dark");
+    });
   });
 
   it("keeps title, description, and the action pair on the closed ramp", async () => {
