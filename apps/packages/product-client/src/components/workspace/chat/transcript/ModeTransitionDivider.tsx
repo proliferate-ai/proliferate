@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from "@proliferate/ui/icons";
 
 /**
- * Phase-divider row for a harness mode transition (codex turn-header recipe):
+ * Phase-divider row for a harness mode transition (turn-header recipe):
  * a leading mode label ("Plan mode → Default") followed by a full-width
  * hairline rule. Replaces the old cryptic "Mode change / switch_mode" tool
  * row for exact known mode tools; the chip-enter entrance is compositor-only

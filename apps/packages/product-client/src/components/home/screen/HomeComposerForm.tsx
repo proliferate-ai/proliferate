@@ -193,7 +193,7 @@ export function HomeComposerForm({
       </DebugProfiler>
 
       <DebugProfiler id="home-target-picker">
-        {/* Codex home footer: a tray tucked under the composer (rounded-b,
+        {/* Home footer: a tray tucked under the composer (rounded-b,
             sidebar bg) so the selectors read as attached, not floating. */}
         <div className="relative z-0 -mx-px -mt-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-b-2xl bg-sidebar px-2 pb-2 pt-[25px]">
           {targetPickerSlot}

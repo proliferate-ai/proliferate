@@ -157,7 +157,7 @@ describe("playground scenarios", () => {
     expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
 
-  it("includes Codex-style diff scenarios for visual iteration", () => {
+  it("includes diff scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(DIFF_PLAYGROUND_SCENARIOS));
   });
 

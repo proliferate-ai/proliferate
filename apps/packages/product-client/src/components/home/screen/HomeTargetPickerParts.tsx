@@ -102,7 +102,7 @@ interface HomeTargetRowItemProps
 }
 
 /**
- * Codex home footer item (UX spec §1.3, anchor `_externalFooterItem`):
+ * Home footer item (UX spec §1.3, anchor `_externalFooterItem`):
  * inline "value ▾" trigger — 13px text, value weight 400 truncated,
  * 12px `--faint` chevron, pill hover fill.
  */

@@ -23,7 +23,7 @@ export type ReasoningEffortTierTone =
 
 // Tint ladder for the tier-label chip (ultra-capable ladders show the tier
 // by name instead of bars): quiet grays through the working range, the app
-// special blue at max, and the codex-convention purple for ultra.
+// special blue at max, and the established purple for ultra.
 const TIER_TONES: Readonly<Record<string, ReasoningEffortTierTone>> = {
   minimal: "muted",
   low: "muted",

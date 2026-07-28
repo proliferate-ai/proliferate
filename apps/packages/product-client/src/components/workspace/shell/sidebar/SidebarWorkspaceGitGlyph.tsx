@@ -9,7 +9,7 @@ interface SidebarWorkspaceGitGlyphProps {
 }
 
 /**
- * Compact git/PR glyph for the sidebar detail cluster, codex-style: three
+ * Compact git/PR glyph for the sidebar detail cluster: three
  * visual states only. Merged gets its own purple merge glyph; a PR with a
  * problem (failing checks, closed, conflicts) is the muted branch glyph with
  * a red dot baked into the SVG; every other real PR is the plain muted

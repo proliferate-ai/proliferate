@@ -449,10 +449,10 @@ describe("FileEditorView", () => {
       target: { value: "ok" },
     });
 
-    expect(container.querySelector("mark.codex-thread-find-match")).toBeTruthy();
+    expect(container.querySelector("mark.content-find-match")).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText("Close find"));
-    expect(container.querySelector("mark.codex-thread-find-match")).toBeNull();
+    expect(container.querySelector("mark.content-find-match")).toBeNull();
   });
 
   it("switches rendered files back to source before opening file find", () => {

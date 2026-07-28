@@ -253,9 +253,8 @@ function ModelPickerGroup({
 
   return (
     <>
-      {/* Conductor-style group anatomy (reference/conductor/input/models.html):
-          hairline between groups, then a muted harness header (icon + name)
-          above the group's model rows. */}
+      {/* Group anatomy: hairline between groups, then a muted harness header
+          (icon + name) above the group's model rows. */}
       {showSeparator && (
         <div className="mt-1 w-full px-2 py-0.5">
           <div className="h-px w-full bg-border/60" />

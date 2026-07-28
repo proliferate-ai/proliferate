@@ -81,7 +81,7 @@ interface WorkspaceItemProps {
    * PR omit the glyph, so missing git data degrades gracefully.
    */
   gitStatus?: WorkspaceGitStatus | null;
-  /** Renders the trailing unseen-activity dot (§3.4, codex pattern). */
+  /** Renders the trailing unseen-activity dot (§3.4). */
   needsReview?: boolean;
   onSelect?: () => void;
   /** Opens the PR URL externally; enables the "Open pull request" menu item. */
@@ -238,7 +238,7 @@ export function WorkspaceItem({
   ) : null;
 
   // Git/PR state lives in the right-side detail cluster, matching the compact
-  // Codex row treatment and keeping the left edge free of stacked glyphs.
+  // sidebar row treatment and keeping the left edge free of stacked glyphs.
   // Activity indicators live in the row's RIGHT slot (trailingStatus).
   // Relative timestamp (trailingLabel) is also in the RIGHT slot, with lower
   // precedence than trailingStatus and unreadDot.

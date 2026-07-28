@@ -12,7 +12,7 @@ export interface SkeletonBlockProps {
 
 /**
  * Loading placeholder block. Motion comes from the shared `.skeleton-shimmer`
- * class (design css): a codex-style gradient band sweeping via transform —
+ * class (design css): a gradient band sweeping via transform —
  * compositor-only, same motion family as the thinking-text indicator. Under
  * `prefers-reduced-motion` the sweep is replaced by a calm opacity fade.
  */

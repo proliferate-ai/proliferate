@@ -25,7 +25,7 @@ import type { SidebarGroupState, SidebarWorkspaceItemState } from "#product/lib/
 const PR_STATUS_UNAVAILABLE_LABEL = "PR status unavailable — gh not signed in";
 
 /**
- * Conductor-style Workspaces page (UX spec §3): cmdk filter-list with
+ * Workspaces page (UX spec §3): cmdk filter-list with
  * recency-grouped rows. Reuses the sidebar's workspace selectors (same data
  * wiring as the main sidebar) — this surface is presentation only. Git/PR
  * state comes from `useWorkspaceGitStatuses`, keyed by the same logical

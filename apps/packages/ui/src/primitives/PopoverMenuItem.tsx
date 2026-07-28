@@ -32,8 +32,8 @@ export function PopoverMenuItem({
 }: PopoverMenuItemProps) {
   const hoverClassName = "hover:bg-hover focus:bg-hover";
   const hasDescription = children !== undefined && children !== null && children !== false;
-  // Codex menu-row recipe (reference/codex main_chat_view + popover dumps):
-  // 12px rows (text-ui-sm) in full row foreground, 11px muted hints
+  // Canonical menu-row recipe: 12px rows (text-ui-sm) in full row
+  // foreground, 11px muted hints
   // (text-ui-sm), 16px icons promoting muted → prominent on hover; spacing
   // stays fixed (px 10 / py 5 at default density).
   //

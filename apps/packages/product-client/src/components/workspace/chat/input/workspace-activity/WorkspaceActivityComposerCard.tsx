@@ -134,7 +134,7 @@ export function WorkspaceActivityComposerCard({
                 title="Source control"
                 flush
               >
-                {/* Changes is the codex-style summary row: the change count
+                {/* Changes is the canonical summary row: the change count
                     with +adds −dels trailing, and the row itself opens the
                     review panel (no separate "Review changes" entry). */}
                 <ActivityActionRow

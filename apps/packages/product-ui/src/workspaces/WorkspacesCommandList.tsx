@@ -1,5 +1,5 @@
 /**
- * Conductor-style workspaces list (UX spec §3): a cmdk filter-list, not a
+ * The workspaces filter-list (UX spec §3): a cmdk filter-list, not a
  * table. Filter input row on top (border-b, search icon, 13px input), then a
  * scrolling list of recency-grouped rows:
  *
