@@ -82,6 +82,16 @@ function composedStatus(
   };
 }
 
+/**
+ * §7's list is reference material, so the status row is also the disclosure and
+ * the pane opens with it collapsed (agent-auth.md pane anatomy §7). The
+ * collapsed subtree is aria-hidden, so role queries for the table's controls
+ * need the row clicked first.
+ */
+function expandModelList() {
+  fireEvent.click(screen.getByRole("button", { name: "Models" }));
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -130,14 +140,16 @@ describe("HarnessAllModelsSection local surface (the composed observation)", () 
     expect(modelSnapshotStatusQuery).toHaveBeenCalledWith("codex", { enabled: true });
     // Seed fallback is not fetched once an observation exists.
     expect(launchOptionsQuery).toHaveBeenCalledWith({ enabled: false });
-    // probedAt age + diagnostics-only provenance, no unverified marking.
-    expect(screen.queryByText("refreshed 1m ago")).not.toBeNull();
+    // probedAt age suffix on the collapsed content line, no badge pile.
+    expect(screen.queryByText(/refreshed 1m ago/)).not.toBeNull();
+    expect(screen.queryByText(/shipped catalog, not probed yet/)).toBeNull();
+    // Observation rows have no override endpoint: switches are on and disabled.
+    expandModelList();
+    // Diagnostics-only provenance + modes now render in the expanded body.
     expect(
       screen.queryByText("Observed by codex 0.3.112 · install 1.18.3 (pinned_archive)"),
     ).not.toBeNull();
     expect(screen.queryByText("Modes: Build")).not.toBeNull();
-    expect(screen.queryByText("unverified")).toBeNull();
-    // Observation rows have no override endpoint: switches are on and disabled.
     for (const element of screen.getAllByRole("switch")) {
       expect((element as HTMLButtonElement).disabled).toBe(true);
     }
@@ -158,11 +170,9 @@ describe("HarnessAllModelsSection local surface (the composed observation)", () 
     );
 
     expect(launchOptionsQuery).toHaveBeenCalledWith({ enabled: true });
+    expandModelList();
     expect(screen.queryByText("GPT 5.5")).not.toBeNull();
-    expect(screen.queryByText("unverified")).not.toBeNull();
-    expect(
-      screen.queryByText("Showing shipped catalog models — not yet verified by a probe."),
-    ).not.toBeNull();
+    expect(screen.queryByText(/shipped catalog, not probed yet/)).not.toBeNull();
   });
 
   it("calls the param-less refresh route from the Refresh button, signed in or out", () => {
@@ -205,7 +215,7 @@ describe("HarnessAllModelsSection local surface (the composed observation)", () 
       />,
     );
 
-    expect(screen.queryByText("refreshing…")).not.toBeNull();
+    expect(screen.queryByText(/Probing…/)).not.toBeNull();
   });
 
   it("keeps the last-good observation with a failed-refresh indicator", () => {
@@ -232,10 +242,12 @@ describe("HarnessAllModelsSection local surface (the composed observation)", () 
       />,
     );
 
-    // Never an empty picker: the last-good list keeps serving with its age.
+    // Never an empty picker: the last-good list keeps serving, with the
+    // failed-refresh suffix taking priority over the freshness line.
+    expandModelList();
     expect(screen.queryByText("GPT 5.5")).not.toBeNull();
-    expect(screen.queryByText("refreshed 1h ago")).not.toBeNull();
-    expect(screen.queryByText("last refresh failed")).not.toBeNull();
+    expect(screen.queryByText(/last refresh failed/)).not.toBeNull();
+    expect(screen.queryByText(/refreshed 1h ago/)).toBeNull();
   });
 });
 
@@ -286,8 +298,9 @@ describe("HarnessAllModelsSection cloud surface (the layered read)", () => {
     expect(cloudAgentModelsQuery).toHaveBeenCalledWith("codex", true);
     // Ingest is Worker-authenticated only — no product-side refresh exists.
     expect(screen.queryByRole("button", { name: /^Refresh$/ })).toBeNull();
-    expect(screen.queryByText("unverified")).toBeNull();
+    expect(screen.queryByText(/shipped catalog, not probed yet/)).toBeNull();
 
+    expandModelList();
     fireEvent.click(screen.getAllByRole("switch")[0]);
     expect(upsertOverride).toHaveBeenCalledTimes(1);
     expect(refreshModelSnapshot).not.toHaveBeenCalled();
@@ -313,6 +326,6 @@ describe("HarnessAllModelsSection cloud surface (the layered read)", () => {
       />,
     );
 
-    expect(screen.queryByText("unverified")).not.toBeNull();
+    expect(screen.queryByText(/shipped catalog, not probed yet/)).not.toBeNull();
   });
 });

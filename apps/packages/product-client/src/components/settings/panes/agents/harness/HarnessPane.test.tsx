@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
@@ -34,11 +34,15 @@ const state = vi.hoisted(() => ({
       publicBaseUrl: "https://gateway.example",
       enrollmentStatus: "synced",
     } as CapabilitiesData | undefined,
+    isPending: false,
+    isFetching: false,
   },
   enrollment: {
     data: undefined as
       | { syncStatus: string; lastErrorCode: string | null }
       | undefined,
+    isPending: false,
+    isFetching: false,
   },
   selections: {
     data: [] as Array<Record<string, unknown>> | undefined,
@@ -93,6 +97,7 @@ const state = vi.hoisted(() => ({
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
+const revokeKeyMutate = vi.hoisted(() => vi.fn());
 const overrideMutate = vi.hoisted(() => vi.fn());
 const refreshModelSnapshotMutate = vi.hoisted(() => vi.fn());
 const openAuthTerminal = vi.hoisted(() => vi.fn());
@@ -110,6 +115,7 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useOrgAgentPolicy: () => ({ data: undefined, isLoading: false }),
   usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
+  useRevokeAgentApiKey: () => ({ mutate: revokeKeyMutate, isPending: false }),
   useUpsertAgentModelOverride: () => ({ mutate: overrideMutate, isPending: false }),
 }));
 
@@ -137,31 +143,61 @@ vi.mock("#product/stores/toast/toast-store", () => ({
 }));
 
 // ModalShell (Radix Dialog) has no jsdom polyfills here — stub the picker to a
-// deterministic button that fires onSelect when the modal is open.
+// deterministic button that fires onSubmit (provider + pasted key) when open.
+// The stub also surfaces `error` and the bound env-var list so the pane's
+// failure/dup handling is assertable without Radix.
 vi.mock("./ProviderPickerModal", () => ({
   ProviderPickerModal: ({
     open,
-    onSelect,
-    onClose,
+    onSubmit,
+    error,
+    boundEnvVarNames,
   }: {
     open: boolean;
-    onSelect: (provider: { id: string; displayName: string; envVarNames: string[] }) => void;
-    onClose: () => void;
+    onSubmit: (
+      provider: { id: string; displayName: string; envVarNames: readonly string[] },
+      value: string,
+    ) => void;
+    error?: string | null;
+    boundEnvVarNames?: readonly string[];
   }) =>
     open ? (
-      <button
-        type="button"
-        onClick={() => {
-          onSelect({
-            id: "openrouter",
-            displayName: "OpenRouter",
-            envVarNames: ["OPENROUTER_API_KEY"],
-          });
-          onClose();
-        }}
-      >
-        pick-openrouter
-      </button>
+      <div>
+        <button
+          type="button"
+          onClick={() => {
+            onSubmit(
+              {
+                id: "openrouter",
+                displayName: "OpenRouter",
+                envVarNames: ["OPENROUTER_API_KEY"],
+              },
+              "sk-openrouter",
+            );
+          }}
+        >
+          pick-openrouter
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSubmit(
+              {
+                id: "azure",
+                displayName: "Azure",
+                envVarNames: ["AZURE_RESOURCE_NAME", "AZURE_API_KEY"],
+              },
+              "sk-azure",
+            );
+          }}
+        >
+          pick-azure
+        </button>
+        <div data-testid="picker-bound">{(boundEnvVarNames ?? []).join(",")}</div>
+        {error === null || error === undefined ? null : (
+          <div data-testid="picker-error">{error}</div>
+        )}
+      </div>
     ) : null,
 }));
 
@@ -270,6 +306,32 @@ function renderPane(harnessKind = "claude") {
   );
 }
 
+/**
+ * §7's model list opens collapsed behind its own status row (agent-auth.md pane
+ * anatomy §7), so the model toggles are aria-hidden until the row is clicked.
+ */
+function expandModelList() {
+  fireEvent.click(screen.getByRole("button", { name: "Models" }));
+}
+
+// One persisted opencode api_key selection — enough for the API-key detail
+// section (and its "Add provider" button) to render.
+function seededOpencodeApiKeySelection() {
+  return {
+    id: "sel-key",
+    harnessKind: "opencode",
+    surface: "local" as const,
+    sourceKind: "api_key" as const,
+    apiKeyId: "key-1",
+    keyTitle: null,
+    envVarName: "OPENAI_API_KEY",
+    providerHint: "openai",
+    enabled: true,
+    createdAt: "2026-07-01T00:00:00Z",
+    updatedAt: "2026-07-01T00:00:00Z",
+  };
+}
+
 function gatewayCard() {
   return screen.getByRole("button", { name: "Proliferate gateway" }) as HTMLButtonElement;
 }
@@ -285,7 +347,11 @@ afterEach(() => {
     publicBaseUrl: "https://gateway.example",
     enrollmentStatus: "synced",
   };
+  state.capabilities.isPending = false;
+  state.capabilities.isFetching = false;
   state.enrollment.data = undefined;
+  state.enrollment.isPending = false;
+  state.enrollment.isFetching = false;
   state.selections.data = [];
   state.selections.isLoading = false;
   state.apiKeys.data = [];
@@ -333,7 +399,31 @@ describe("HarnessPane authentication", () => {
     );
   });
 
-  it("shows empty state when API key card is clicked with no rows", () => {
+  it("shows an inline paste field (no modal) when API key is selected with no rows", () => {
+    renderPane("claude");
+
+    const apiKey = screen.getByRole("button", { name: "API key" });
+
+    // Clicking the API key row only selects it — no modal, ever.
+    fireEvent.click(apiKey);
+    expect(apiKey.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByTestId("add-key-modal")).toBeNull();
+
+    // The inline entry names the derived provider — env vars never surface.
+    const field = screen.getByLabelText("Anthropic API key");
+    expect(screen.queryByText("ANTHROPIC_API_KEY")).toBeNull();
+
+    fireEvent.change(field, { target: { value: "sk-test-value" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    // The vault key is created with the derived provider title.
+    expect(createKeyMutate).toHaveBeenCalledWith(
+      { title: "Anthropic API key", value: "sk-test-value" },
+      expect.anything(),
+    );
+  });
+
+  it("binds an already-saved vault key from the Saved keys segment", async () => {
     state.apiKeys.data = [{
       id: "key-1",
       title: "Work key",
@@ -343,28 +433,24 @@ describe("HarnessPane authentication", () => {
     }];
     renderPane("claude");
 
-    const apiKey = screen.getByRole("button", { name: "API key" });
+    fireEvent.click(screen.getByRole("button", { name: "API key" }));
+    // Saved keys are offered as a segment next to the paste field.
+    fireEvent.click(screen.getByRole("radio", { name: "Saved keys" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Work key/ }));
 
-    // Clicking the API key card only selects it, does NOT open the modal.
-    fireEvent.click(apiKey);
-    expect(apiKey.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.queryByTestId("add-key-modal")).toBeNull();
-
-    // The empty state is shown with an "Add API key" button.
-    expect(screen.getByText("No API key configured.")).toBeTruthy();
-
-    // Clicking the "Add API key" button in the empty state opens the modal.
-    fireEvent.click(screen.getByRole("button", { name: /Add API key/ }));
-    expect(screen.getByTestId("add-key-modal")).toBeTruthy();
-
-    // Submitting the modal creates and binds the key in one step.
-    fireEvent.click(screen.getByRole("button", { name: "submit-add-key" }));
-
-    // The mock for useCreateAgentApiKey fires createKeyMutate — the onSuccess
-    // callback (which calls addBoundApiKey + commit) is handled internally by
-    // the component, so we just verify the vault create was called.
-    expect(createKeyMutate).toHaveBeenCalledWith(
-      { title: "Test key", value: "sk-test-value" },
+    expect(putMutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: {
+          sources: expect.arrayContaining([
+            expect.objectContaining({
+              sourceKind: "api_key",
+              apiKeyId: "key-1",
+              envVarName: "ANTHROPIC_API_KEY",
+              enabled: true,
+            }),
+          ]),
+        },
+      }),
       expect.anything(),
     );
   });
@@ -409,9 +495,9 @@ describe("HarnessPane authentication", () => {
       },
       expect.anything(),
     );
-    // The modal is NOT open yet; the empty state is shown instead.
+    // No modal; the inline paste entry is shown instead.
     expect(screen.queryByTestId("add-key-modal")).toBeNull();
-    expect(screen.getByText("No API key configured.")).toBeTruthy();
+    expect(screen.getByLabelText("Anthropic API key")).toBeTruthy();
   });
 
   it("selects exactly one method for a single-source harness: API key then CLI ends on CLI", () => {
@@ -422,15 +508,15 @@ describe("HarnessPane authentication", () => {
     const apiKey = () => screen.getByRole("button", { name: "API key" });
     const cli = () => screen.getByRole("button", { name: "CLI login" });
 
-    // Clicking API key highlights ONLY the API key card and shows empty state —
+    // Clicking API key highlights ONLY the API key card —
     // gateway and api_key are never selected together on a single-source harness.
     fireEvent.click(apiKey());
     expect(apiKey().getAttribute("aria-pressed")).toBe("true");
     expect(gateway().getAttribute("aria-pressed")).toBe("false");
     expect(cli().getAttribute("aria-pressed")).toBe("false");
-    // The modal does NOT open; empty state is shown.
+    // The modal does NOT open; the inline paste entry is shown.
     expect(screen.queryByTestId("add-key-modal")).toBeNull();
-    expect(screen.getByText("No API key configured.")).toBeTruthy();
+    expect(screen.getByLabelText("Anthropic API key")).toBeTruthy();
 
     // Clicking CLI sticks on CLI.
     fireEvent.click(cli());
@@ -540,11 +626,16 @@ describe("HarnessPane authentication", () => {
     ).not.toBeNull();
   });
 
-  it("shows the native empty-state copy when nothing is enabled", () => {
-    renderPane("claude");
+  it("shows the minimal native status row when nothing is enabled", () => {
+    const { container } = renderPane("claude");
+    // Minimal status ruling (2026-07-27): one row, badge + refresh, no
+    // savedState/description noise.
+    expect(container.querySelector('[data-harness-status="native"]')).not.toBeNull();
     expect(
       screen.queryByText(/No auth configured — the CLI's own login is used/),
-    ).not.toBeNull();
+    ).toBeNull();
+    expect(screen.getByText("Not authenticated")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Refresh status" })).toBeTruthy();
   });
 
   it("offers cursor api_key and CLI methods but never the gateway card", () => {
@@ -557,31 +648,23 @@ describe("HarnessPane authentication", () => {
     expect(screen.getByRole("button", { name: "CLI login" })).toBeTruthy();
   });
 
-  it("persists a cursor api_key selection using its CURSOR_API_KEY suggestion", () => {
-    state.apiKeys.data = [{
-      id: "key-1",
-      title: "Cursor key",
-      redactedHint: "sk-...abcd",
-      status: "active",
-      createdAt: "2026-07-01T00:00:00Z",
-    }];
+  it("persists a cursor api_key selection using its CURSOR_API_KEY derivation", () => {
     renderPane("cursor");
 
     fireEvent.click(screen.getByRole("button", { name: "API key" }));
-    expect(screen.getByText("No API key configured.")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Add API key/ }));
-    expect(screen.getByTestId("add-key-modal")).toBeTruthy();
+    const field = screen.getByLabelText("Cursor API key");
+    fireEvent.change(field, { target: { value: "sk-cursor" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "submit-add-key" }));
     expect(createKeyMutate).toHaveBeenCalledWith(
-      { title: "Test key", value: "sk-test-value" },
+      { title: "Cursor API key", value: "sk-cursor" },
       expect.anything(),
     );
   });
 
-  it("offers Add provider only for opencode when API key method is active", () => {
-    // Seed an api_key selection so the API key detail section is visible.
+  it("offers Configure only for opencode's providers section", () => {
+    // Seed an api_key selection so the providers summary shows a configured tile.
     state.selections.data = [{
       id: "sel-key",
       harnessKind: "opencode",
@@ -596,7 +679,8 @@ describe("HarnessPane authentication", () => {
       updatedAt: "2026-07-01T00:00:00Z",
     }];
     renderPane("opencode");
-    expect(screen.queryByRole("button", { name: /Add provider/ })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Configure" })).not.toBeNull();
+    expect(screen.getByText("1 configured")).toBeTruthy();
   });
 
   it("does not offer Add provider for single-source harnesses", () => {
@@ -615,77 +699,23 @@ describe("HarnessPane authentication", () => {
       updatedAt: "2026-07-01T00:00:00Z",
     }];
     renderPane("claude");
-    expect(screen.queryByRole("button", { name: /Add provider/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Configure" })).toBeNull();
   });
 
-  it("always shows CLI as selected for multi-source (opencode) even with gateway on", () => {
-    state.selections.data = [{
-      id: "sel-gw",
-      harnessKind: "opencode",
-      surface: "local",
-      sourceKind: "gateway",
-      apiKeyId: null,
-      keyTitle: null,
-      envVarName: null,
-      providerHint: null,
-      enabled: true,
-      createdAt: "2026-07-01T00:00:00Z",
-      updatedAt: "2026-07-01T00:00:00Z",
-    }];
+  it("opencode never shows the auth-method chooser (providers-only pane)", () => {
     renderPane("opencode");
 
-    const cli = screen.getByRole("button", { name: "CLI login" });
-    const gateway = screen.getByRole("button", { name: "Proliferate gateway" });
+    // Point 4 (ruling 2026-07-27): no method rows at all for opencode.
+    expect(screen.queryByRole("button", { name: "Proliferate gateway" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "API key" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "CLI login" })).toBeNull();
 
-    // CLI is always selected for multi-source harnesses (native coexistence).
-    expect(cli.getAttribute("aria-pressed")).toBe("true");
-    expect(gateway.getAttribute("aria-pressed")).toBe("true");
-
-    // CLI card is disabled (not a toggle) and shows the coexistence hint.
-    expect((cli as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByText("Native logins always apply alongside other sources.")).not.toBeNull();
+    // The provider-key surface is the pane: Configure is always reachable.
+    expect(screen.getByRole("button", { name: "Configure" })).toBeTruthy();
+    expect(screen.getByText("No providers configured")).toBeTruthy();
   });
 
-  it("opencode: clicking API key shows empty state and reflects the in-progress state", () => {
-    renderPane("opencode");
-
-    const apiKey = () => screen.getByRole("button", { name: "API key" });
-    // Before the click there is no api_key detail block.
-    expect(apiKey().getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByRole("button", { name: /Add provider/ })).toBeNull();
-
-    fireEvent.click(apiKey());
-
-    // The card lights immediately (pending) and the empty state is shown.
-    expect(apiKey().getAttribute("aria-pressed")).toBe("true");
-    expect(screen.queryByTestId("add-key-modal")).toBeNull();
-    expect(screen.getByText("No API key configured.")).toBeTruthy();
-    // Nothing is PUT yet (no key wired).
-    expect(putMutate).not.toHaveBeenCalled();
-
-    // CLI stays always-selected and disabled (native coexistence) throughout.
-    const cli = screen.getByRole("button", { name: "CLI login" }) as HTMLButtonElement;
-    expect(cli.getAttribute("aria-pressed")).toBe("true");
-    expect(cli.disabled).toBe(true);
-  });
-
-  it("opencode: toggling API key off darkens the card and hides the empty state", () => {
-    renderPane("opencode");
-
-    const apiKey = () => screen.getByRole("button", { name: "API key" });
-
-    fireEvent.click(apiKey());
-    expect(apiKey().getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("No API key configured.")).toBeTruthy();
-
-    // Clicking again turns api_key off: the empty state is hidden and the highlight
-    // clears, so "off" visibly means off.
-    fireEvent.click(apiKey());
-    expect(apiKey().getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByText("No API key configured.")).toBeNull();
-  });
-
-  it("opencode: enabling a wired api key lights it alongside the gateway", () => {
+  it("opencode: a configured provider renders as a summary tile and can be removed via the modal", async () => {
     state.apiKeys.data = [{
       id: "key-1",
       title: "Work key",
@@ -693,8 +723,6 @@ describe("HarnessPane authentication", () => {
       status: "active",
       createdAt: "2026-07-01T00:00:00Z",
     }];
-    // Gateway on + a wired-but-disabled api_key row: the api_key editor is
-    // visible (rows present) but the card stays dark until a row is enabled.
     state.selections.data = [
       {
         id: "sel-gw",
@@ -725,43 +753,12 @@ describe("HarnessPane authentication", () => {
     ];
     renderPane("opencode");
 
-    const apiKey = () => screen.getByRole("button", { name: "API key" });
-    // Env var name is shown read-only (not in an input).
-    expect(screen.getByText("OPENROUTER_API_KEY")).toBeTruthy();
-    expect(apiKey().getAttribute("aria-pressed")).toBe("false");
-    expect(gatewayCard().getAttribute("aria-pressed")).toBe("true");
-
-    fireEvent.click(screen.getByRole("switch", { name: "Enable OPENROUTER_API_KEY" }));
-
-    // The api_key card lights and the gateway stays on — both coexist.
-    expect(apiKey().getAttribute("aria-pressed")).toBe("true");
-    expect(gatewayCard().getAttribute("aria-pressed")).toBe("true");
-    expect(
-      screen.getByRole("button", { name: "CLI login" }).getAttribute("aria-pressed"),
-    ).toBe("true");
-
-    expect(putMutate).toHaveBeenLastCalledWith(
-      {
-        harnessKind: "opencode",
-        surface: "local",
-        body: {
-          sources: [
-            { sourceKind: "gateway", enabled: true },
-            {
-              sourceKind: "api_key",
-              apiKeyId: "key-1",
-              envVarName: "OPENROUTER_API_KEY",
-              providerHint: "openrouter",
-              enabled: true,
-            },
-          ],
-        },
-      },
-      expect.anything(),
-    );
+    // The summary shows a count, not the env var name.
+    expect(screen.getByText("1 configured")).toBeTruthy();
+    expect(screen.queryByText("OPENROUTER_API_KEY")).toBeNull();
   });
 
-  it("prefills a new row from the opencode provider picker", () => {
+  it("prefills a new row from the opencode provider picker", async () => {
     // Seed an api_key selection so the API key detail section is visible.
     state.selections.data = [{
       id: "sel-key",
@@ -778,11 +775,141 @@ describe("HarnessPane authentication", () => {
     }];
     renderPane("opencode");
 
-    fireEvent.click(screen.getByRole("button", { name: /Add provider/ }));
-    fireEvent.click(screen.getByRole("button", { name: "pick-openrouter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+    // The picker is React.lazy (its logo map must stay out of the login chunk).
+    const pick = await screen.findByRole("button", { name: "pick-openrouter" });
+    fireEvent.click(pick);
 
-    // New row shows env var name (read-only display since it has a value).
-    expect(screen.getByText("OPENROUTER_API_KEY")).toBeTruthy();
+    // Write 1: the vault api_key entry, from the inline paste field.
+    expect(createKeyMutate).toHaveBeenCalledWith(
+      { title: "OpenRouter API key", value: "sk-openrouter" },
+      expect.anything(),
+    );
+
+    // Write 2: one selection row (env var = provider's key-shaped registry env
+    // var, provider_hint = provider id), once the vault create resolves.
+    const lastCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
+    const onSuccess = lastCall?.[1]?.onSuccess;
+    await act(async () => {
+      onSuccess?.({ id: "key-openrouter" });
+    });
+
+    expect(putMutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: {
+          sources: expect.arrayContaining([
+            {
+              sourceKind: "api_key",
+              apiKeyId: "key-openrouter",
+              envVarName: "OPENROUTER_API_KEY",
+              providerHint: "openrouter",
+              enabled: true,
+            },
+          ]),
+        },
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("revokes the just-created key and keeps the picker open when the selection PUT fails", async () => {
+    state.selections.data = [seededOpencodeApiKeySelection()];
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+    fireEvent.click(await screen.findByRole("button", { name: "pick-openrouter" }));
+
+    const createCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
+    await act(async () => {
+      createCall?.[1]?.onSuccess?.({ id: "key-openrouter" });
+    });
+
+    // The selection PUT is rejected: the vault key now has no referent.
+    const putCall = putMutate.mock.calls[putMutate.mock.calls.length - 1];
+    await act(async () => {
+      putCall?.[1]?.onError?.({ message: "Duplicate selection source" });
+    });
+
+    // No orphan: the unreferenced key is revoked.
+    expect(revokeKeyMutate).toHaveBeenCalledWith("key-openrouter");
+    // The modal stays open and reports the failure inline so the user can retry.
+    expect(screen.queryByRole("button", { name: "pick-openrouter" })).not.toBeNull();
+    expect(screen.getByTestId("picker-error").textContent).toBe(
+      "Duplicate selection source",
+    );
+    // The optimistic row is rolled back, so nothing renders as wired.
+    expect(screen.queryByText("OPENROUTER_API_KEY")).toBeNull();
+    // A pane-level error is the modal's job here, not a toast.
+    expect(showToast).not.toHaveBeenCalledWith("Duplicate selection source");
+  });
+
+  it("clears any inline picker error and never revokes the key once the selection PUT succeeds", async () => {
+    // The picker itself owns row-collapse on success (the stub here doesn't
+    // model that); the pane-level contract is: no error, no revoke, and the
+    // modal is not force-closed by the pane (that's the modal's job, and the
+    // instructions call out that success never yields a close-on-success
+    // assertion at this level).
+    state.selections.data = [seededOpencodeApiKeySelection()];
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+    fireEvent.click(await screen.findByRole("button", { name: "pick-openrouter" }));
+
+    const createCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
+    await act(async () => {
+      createCall?.[1]?.onSuccess?.({ id: "key-openrouter" });
+    });
+    // Still open: write 2 has not landed yet.
+    expect(screen.queryByRole("button", { name: "pick-openrouter" })).not.toBeNull();
+
+    const putCall = putMutate.mock.calls[putMutate.mock.calls.length - 1];
+    await act(async () => {
+      putCall?.[1]?.onSuccess?.([]);
+    });
+
+    expect(screen.queryByTestId("picker-error")).toBeNull();
+    expect(revokeKeyMutate).not.toHaveBeenCalled();
+  });
+
+  it("passes the harness's bound env vars to the picker so duplicates aren't offered", async () => {
+    state.selections.data = [seededOpencodeApiKeySelection()];
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+    await screen.findByRole("button", { name: "pick-openrouter" });
+
+    expect(screen.getByTestId("picker-bound").textContent).toBe("OPENAI_API_KEY");
+  });
+
+  it("writes a multi-field provider's secret under its key-shaped env var", async () => {
+    state.selections.data = [seededOpencodeApiKeySelection()];
+    renderPane("opencode");
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+    fireEvent.click(await screen.findByRole("button", { name: "pick-azure" }));
+
+    const createCall = createKeyMutate.mock.calls[createKeyMutate.mock.calls.length - 1];
+    await act(async () => {
+      createCall?.[1]?.onSuccess?.({ id: "key-azure" });
+    });
+
+    // AZURE_RESOURCE_NAME is envVarNames[0] but holds no secret.
+    expect(putMutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: {
+          sources: expect.arrayContaining([
+            {
+              sourceKind: "api_key",
+              apiKeyId: "key-azure",
+              envVarName: "AZURE_API_KEY",
+              providerHint: "azure",
+              enabled: true,
+            },
+          ]),
+        },
+      }),
+      expect.anything(),
+    );
   });
 
   it("disables the gateway toggle with a subtitle when the gateway is unavailable", () => {
@@ -798,6 +925,33 @@ describe("HarnessPane authentication", () => {
 
     fireEvent.click(gatewayCard());
     expect(putMutate).not.toHaveBeenCalled();
+  });
+
+  // P1-b regression: while the capabilities query is still in flight (first
+  // load, no data yet), the gateway status row must show a neutral/loading
+  // tone instead of falsely reporting "Not ready" before the observation
+  // exists.
+  it("shows a loading status, not a false Not ready warning, while gateway capabilities are pending", () => {
+    state.capabilities.data = undefined;
+    state.capabilities.isPending = true;
+    state.capabilities.isFetching = true;
+    state.selections.data = [{
+      id: "sel-gw",
+      harnessKind: "claude",
+      surface: "local",
+      sourceKind: "gateway",
+      apiKeyId: null,
+      keyTitle: null,
+      envVarName: null,
+      providerHint: null,
+      enabled: true,
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:00:00Z",
+    }];
+    renderPane("claude");
+
+    expect(screen.queryByText("Not ready")).toBeNull();
+    expect(screen.getAllByText("Checking").length).toBeGreaterThan(0);
   });
 
   it("disables the gateway toggle while enrollment is unsynced", () => {
@@ -826,6 +980,55 @@ describe("HarnessPane authentication", () => {
       expect.objectContaining({ kind: "claude" }),
       { restart: false },
     );
+  });
+
+  // The Authentication section is gated on the auth plane (editor.authReady),
+  // not on cloud compute (agent-auth.md, HarnessAuthSection): an anonymous
+  // local user gets the sign-in prompt instead of the method cards, so no
+  // "Authenticate" affordance (native's own) is reachable until they sign in.
+  it("shows the sign-in prompt (not Authenticate) for an anonymous local user with a login_required claude agent", () => {
+    state.authStatus = "anonymous";
+    state.cloudActive = false;
+    state.agentSurface = "local";
+    state.agentsByKind = new Map([[
+      "claude",
+      {
+        kind: "claude",
+        displayName: "Claude Code",
+        readiness: "login_required",
+        supportsLogin: true,
+      },
+    ]]);
+    renderPane("claude");
+
+    expect(screen.queryByRole("button", { name: "Authenticate" })).toBeNull();
+    expect(screen.queryAllByText(/Sign in to Proliferate Cloud/).length).toBeGreaterThan(0);
+  });
+
+  // P1-a regression: `localAgent?.supportsLogin ?? canRunLogin` let `??`
+  // (which binds tighter than the intended `&&`) short-circuit on
+  // `supportsLogin: true` alone, offering Authenticate even when the CLI
+  // itself says login can't run right now (canRunLogin false, e.g. already
+  // authenticated). The fix requires BOTH supportsLogin and canRunLogin.
+  it("does not offer Authenticate for a healthy authenticated agent even when supportsLogin is true", () => {
+    state.agentsByKind = new Map([[
+      "claude",
+      {
+        kind: "claude",
+        displayName: "Claude Code",
+        readiness: "ready",
+        supportsLogin: true,
+      },
+    ]]);
+    renderPane("claude");
+
+    // Select the CLI card (the default fallback already selects it, but be
+    // explicit) — its detail area renders nothing but the badge when
+    // authenticated (design-handoff v2: "the state must be said exactly once").
+    fireEvent.click(screen.getByRole("button", { name: "CLI login" }));
+
+    expect(screen.getByText("Authenticated")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Authenticate" })).toBeNull();
   });
 
   it("asks the user to sign in when signed out", () => {
@@ -880,6 +1083,7 @@ describe("HarnessPane all models", () => {
 
 
 
+    expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     // 2 model toggles + 1 settings switch (Pass model).
     expect(screen.getAllByRole("switch").length).toBeGreaterThanOrEqual(2);
@@ -922,6 +1126,7 @@ describe("HarnessPane all models", () => {
     renderPane("claude");
 
 
+    expandModelList();
     // First switch(es) are settings switches; model switches come later in DOM.
     const allSwitches = screen.getAllByRole("switch");
     const sonnetSwitch = allSwitches[allSwitches.length - 2]; // Second-to-last is first model
@@ -960,8 +1165,12 @@ describe("HarnessPane all models (local composed observation)", () => {
     };
     renderPane("claude");
 
+    // Freshness is now folded into the collapsed content-line suffix, not a
+    // standalone badge — the count is foreground, the age is the muted suffix.
+    expect(screen.queryByText("1 model")).not.toBeNull();
+    expect(screen.queryByText(/refreshed 1m ago/)).not.toBeNull();
+    expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
-    expect(screen.queryByText("refreshed 1m ago")).not.toBeNull();
     // No override capability for observation rows: the model switch is
     // present (all observed models are "on") but disabled.
     const allSwitches = screen.getAllByRole("switch") as HTMLButtonElement[];
@@ -982,8 +1191,11 @@ describe("HarnessPane all models (local composed observation)", () => {
     };
     renderPane("claude");
 
+    expect(screen.queryByText("1 model")).not.toBeNull();
+    // The unverified seed suffix replaces the standalone "unverified" badge.
+    expect(screen.queryByText(/shipped catalog, not probed yet/)).not.toBeNull();
+    expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
-    expect(screen.queryByText("unverified")).not.toBeNull();
   });
 
   it("hits the param-less runtime refresh endpoint for the local surface", () => {

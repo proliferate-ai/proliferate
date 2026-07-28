@@ -332,35 +332,47 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     const p = page.page;
     // The api_key route lives on the per-harness settings pane (fix round 3).
     await openHarnessSettings(p, harness);
-    // Select the api_key method card. On a single-source harness this only
-    // highlights the card + reveals the api-key details block ("Add API key");
-    // it does not itself open the create modal (product: HarnessAuthSection).
-    await p
-      .locator(`[data-harness-route-option="${cssAttr(`${harness}:api_key`)}"]`)
-      .first()
-      .click();
-    // Open the "Create and bind" modal from the api-key details block. The button
-    // text is stable product copy (HARNESS_PANE_COPY.addApiKey).
-    const addKey = p.getByRole("button", { name: "Add API key", exact: false }).first();
-    await addKey.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
-    await addKey.click();
-    // The modal prefills the env-var name from the harness suggestion and stamps
-    // the value input / save button with the provider hint. Target by attribute
-    // presence (one modal is open) rather than a hardcoded provider so opencode's
-    // derived provider hint is handled too.
-    const valueInput = p.locator("[data-api-key-input]").first();
-    await valueInput.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
-    await valueInput.fill(key);
-    // The vault key needs a human title (showTitleField=true).
-    await p.locator("#api-key-title").first().fill(`qual-${harness}-user-key`);
-    await p.locator("[data-api-key-save]").first().click();
-    // A wired+enabled row appears (create+bind autosaves the selection via
-    // PUT /agent-auth selections), and the harness's selected route flips to
-    // api_key. Both are the product's own readbacks.
-    await p
-      .locator("[data-api-key-saved]")
-      .first()
-      .waitFor({ state: "attached", timeout: SETTINGS_STEP_TIMEOUT_MS });
+    if (harness === "opencode") {
+      // Design-handoff v2: opencode has no method cards — its Providers section
+      // opens a management modal ("Configure") where a provider row expands into
+      // an inline paste field. The BYOK key for opencode is Anthropic (key B).
+      await p.getByRole("button", { name: "Configure", exact: true }).first().click();
+      const providerRow = p.getByRole("button", { name: "Anthropic", exact: false }).first();
+      await providerRow.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+      await providerRow.click();
+      const modalInput = p.getByLabel("Anthropic API key").first();
+      await modalInput.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+      await modalInput.fill(key);
+      await p.getByRole("button", { name: "Save", exact: true }).first().click();
+      // The two-write save (vault key + selection PUT) collapses the row and the
+      // section's summary marks the provider configured.
+      await p
+        .locator("[data-api-key-saved]")
+        .first()
+        .waitFor({ state: "attached", timeout: SETTINGS_STEP_TIMEOUT_MS });
+      // Close the modal so the selected-route readback below is the section's.
+      await p.keyboard.press("Escape");
+    } else {
+      // Select the api_key method card. On a single-source harness this
+      // highlights the card + reveals the inline paste UI (design-handoff v2:
+      // segmented "Paste key" path is the default — no modal, no title field;
+      // the env var and title are derived from the harness's provider).
+      await p
+        .locator(`[data-harness-route-option="${cssAttr(`${harness}:api_key`)}"]`)
+        .first()
+        .click();
+      const valueInput = p.locator("[data-api-key-input]").first();
+      await valueInput.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+      await valueInput.fill(key);
+      await p.locator("[data-api-key-save]").first().click();
+      // The bound-key field appears (paste autosaves the vault key + selection
+      // via PUT /agent-auth selections) — the product's own readback.
+      await p
+        .locator("[data-api-key-saved]")
+        .first()
+        .waitFor({ state: "attached", timeout: SETTINGS_STEP_TIMEOUT_MS });
+    }
+    // The harness's selected route flips to api_key (exact-token readback).
     await p
       .locator(`[data-harness-selected-route~="${cssAttr(`${harness}:api_key`)}"]`)
       .first()
@@ -1357,7 +1369,7 @@ async function goToHomeComposer(page: Page): Promise<void> {
  * harness like opencode can have several routes active at once), so the
  * readback is the exact-token `~=` attribute match — a strict equality on the
  * just-selected route, not a substring heuristic. */
-async function selectHarnessRoute(page: Page, harness: string, route: "gateway" | "api_key" | "native"): Promise<void> {
+async function selectHarnessRoute(page: Page, harness: string, route: "gateway" | "api_key" | "cli"): Promise<void> {
   await page
     .locator(`[data-harness-auth-section="${cssAttr(harness)}"]`)
     .first()
