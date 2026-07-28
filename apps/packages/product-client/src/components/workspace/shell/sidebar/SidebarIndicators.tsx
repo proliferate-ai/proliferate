@@ -119,6 +119,24 @@ export function SidebarDetailIndicatorsView({
   );
 }
 
+/**
+ * One tier for the whole trailing detail cluster: `icon-tight` (0.875em).
+ *
+ * These are metadata ABOUT the row — where the workspace is materialized
+ * (local / worktree / cloud / SSH target), who can reach it, whether an
+ * automation drives it. They sit one tier below the row's own text so the
+ * workspace name leads and the cluster is read second; at `icon-compact` (the
+ * row text's own size) they carried the same optical weight as the name and the
+ * cluster competed with it. `icon-tight` is also exactly what the row's
+ * trailing CONTROLS already draw at (SidebarActionButton and the workspace
+ * kebab both pin `[&_svg]:icon-tight`), so the trailing edge now reads as one
+ * coherent size instead of two.
+ *
+ * Every value stays em-relative against `--text-sidebar-row`, so the cluster
+ * shrinks and grows with the UI font-size preference rather than pinning px.
+ */
+const DETAIL_GLYPH_TIER_CLASS = "icon-tight";
+
 function SidebarDetailIndicatorView({
   indicator,
   className,
@@ -134,7 +152,7 @@ function SidebarDetailIndicatorView({
         <SidebarWorkspaceVariantIcon
           variant={indicator.variant}
           targetAppearance={indicator.targetAppearance ?? null}
-          className={`icon-compact [font-size:var(--text-sidebar-row)] ${className}`}
+          className={`${DETAIL_GLYPH_TIER_CLASS} [font-size:var(--text-sidebar-row)] ${className}`}
         />
       </Tooltip>
     );
@@ -142,8 +160,8 @@ function SidebarDetailIndicatorView({
 
   if (indicator.kind === "cloud_access" || indicator.kind === "cloud_exposure") {
     const glyph = indicator.kind === "cloud_access"
-      ? <CircleUser className="icon-compact" />
-      : <Globe className="icon-compact" />;
+      ? <CircleUser className={DETAIL_GLYPH_TIER_CLASS} />
+      : <Globe className={DETAIL_GLYPH_TIER_CLASS} />;
     return (
       <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
         <span className={detailToneClass(indicator.tone, className)}>
@@ -154,10 +172,10 @@ function SidebarDetailIndicatorView({
   }
 
   const glyph = indicator.kind === "automation"
-    ? <BotMessageSquare className="icon-compact" />
+    ? <BotMessageSquare className={DETAIL_GLYPH_TIER_CLASS} />
     : indicator.kind === "agent"
-      ? <MessageSquare className="icon-compact" />
-      : <ArrowRight className="icon-compact" />;
+      ? <MessageSquare className={DETAIL_GLYPH_TIER_CLASS} />
+      : <ArrowRight className={DETAIL_GLYPH_TIER_CLASS} />;
   const action = "action" in indicator ? indicator.action ?? null : null;
 
   return (
