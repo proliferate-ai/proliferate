@@ -115,9 +115,10 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
         if cap_only_refusal:
             # An open segment re-refuses spend on every 15-minute pass while the
             # subject sits at the cap, so only the leading edge of a refusal run
-            # is receipted (see ``over_cap_receipt_is_current``). Recovery —
-            # a refill or period rollover that lets an export through — reopens
-            # the next refusal for receipting.
+            # is receipted (see ``over_cap_receipt_is_current``). Re-arm is a new
+            # export row (a cap raise lets a slice through) or a period rollover
+            # — a grant refill alone writes no export row, so grant-covered
+            # recovery does NOT reopen the next refusal for receipting.
             async with db_session.open_async_transaction() as db:
                 if await over_cap_receipt_is_current(
                     db,
@@ -158,6 +159,12 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
                     # refused, including on a partial clamp where the receipt
                     # reads as an ordinary export. A pass that refused nothing
                     # leaves it NULL rather than claiming a measured zero.
+                    # Records the first refusal's amount for the standing
+                    # condition, not a running total: once the receipt is
+                    # current (see ``over_cap_receipt_is_current``), subsequent
+                    # passes in the same refusal run are deduped and never reach
+                    # this line, so their refused amounts are not accumulated
+                    # here.
                     refused_cents=(over_cap_cents if over_cap_cents > 0 else None),
                 )
 

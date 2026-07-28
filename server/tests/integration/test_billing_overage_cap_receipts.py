@@ -54,6 +54,8 @@ from proliferate.db.models.billing import (
     BillingUsageCursor,
     BillingUsageExport,
 )
+from proliferate.db.store.billing_accounting import over_cap_receipt_is_current
+from proliferate.db.store.billing_runtime_usage import record_billing_decision_event
 from proliferate.db.store.billing_subjects import ensure_billing_grant
 from proliferate.server.billing import accounting as billing_accounting_service
 from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
@@ -569,3 +571,52 @@ async def test_over_cap_accounting_never_produces_claimable_rows(
     # slice metered to.
     assert [export.id for export in claimed] == [billable_id]
     assert sum(export.meter_quantity_cents or 0 for export in claimed) == 300
+
+
+@pytest.mark.asyncio
+async def test_over_cap_receipt_is_current_fails_open_when_period_start_none(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B-F1 accuracy nit: no period boundary means the rollover re-arm check is
+    unverifiable, so the predicate must fail open to receipting (False) rather
+    than let an arbitrarily old receipt suppress refusals forever.
+
+    Drives ``over_cap_receipt_is_current`` directly against a seeded receipt
+    that would otherwise read as current (belongs to "the period" trivially,
+    since there is none to fall outside of, and no export has happened since).
+    """
+    _configure_pro_observe(test_engine, monkeypatch)
+    subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
+        db_session,
+        hours=1.0,
+        cap_cents=300,
+        granted_hours=0.0,
+        label="period_start_none",
+        prior_export_cents=300,
+    )
+    await record_billing_decision_event(
+        db_session,
+        billing_subject_id=subject_id,
+        actor_user_id=None,
+        workspace_id=None,
+        decision_type=BILLING_DECISION_OVERAGE_EXPORT,
+        mode=BILLING_MODE_OBSERVE,
+        would_block_start=True,
+        would_pause_active=True,
+        reason=BILLING_DECISION_REASON_OVERAGE_CAP_REACHED,
+        active_sandbox_count=0,
+        remaining_seconds=None,
+        refused_cents=300,
+    )
+    await db_session.commit()
+
+    assert (
+        await over_cap_receipt_is_current(
+            db_session,
+            billing_subject_id=subject_id,
+            period_start=None,
+        )
+        is False
+    )

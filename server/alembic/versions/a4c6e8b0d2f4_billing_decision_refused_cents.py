@@ -18,6 +18,11 @@ receipt; every other ``billing_decision_event`` reason (start gates, export
 delivery outcomes, reconciler holds) refuses no metered spend and leaves it NULL.
 Existing rows stay NULL: the amount they refused is genuinely unknown and
 backfilling a zero would assert otherwise.
+
+It records the first refusal's amount for the standing over-cap condition, not
+a running total: the receipt itself is deduped across passes (one receipt per
+refusal run, not per pass), so later passes in the same run never write a
+second row to accumulate into.
 """
 
 from __future__ import annotations

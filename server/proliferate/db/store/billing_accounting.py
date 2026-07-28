@@ -268,12 +268,24 @@ async def over_cap_receipt_is_current(
     * it belongs to the current billing period (a period rollover resets the cap,
       so the next refusal is a new fact), and
     * no ``billing_usage_export`` row has been written since it — an export means
-      the subject recovered (grant refill or cap headroom) and billed again, so a
-      later refusal is a new fact too.
+      a cap raise let a slice through (partial or full), and that new export row
+      is the re-arm signal, so a later refusal is a new fact too.
 
-    The first refusal is therefore always receipted, and so is the first refusal
-    after any recovery.
+    Re-arm is therefore exactly two things: a new export row, or a period
+    rollover. Grant-covered recovery is NOT one of them — a grant refill writes
+    no ``billing_usage_export`` row at all, so it never trips this predicate.
+    One receipt stands for the whole standing over-cap condition until money
+    flows again (an export) or the period rolls; the first refusal is always
+    receipted, and so is the first refusal after either re-arm condition.
+
+    ``period_start=None`` means the caller has no subscription period to check
+    the receipt against, so the rollover re-arm condition above is
+    unverifiable. Fail open to receipting rather than silently skipping that
+    check: without a period boundary an arbitrarily old receipt could
+    otherwise suppress refusals forever.
     """
+    if period_start is None:
+        return False
     latest_receipt_at = await db.scalar(
         select(func.max(BillingDecisionEvent.created_at)).where(
             BillingDecisionEvent.billing_subject_id == billing_subject_id,

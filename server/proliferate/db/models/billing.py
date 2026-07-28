@@ -149,7 +149,10 @@ class BillingDecisionEvent(Base):
     # outcome refuses no metered spend. The refused remainder never becomes a
     # billing_usage_export row (write-off is operator-only, ruled 2026-07-14), so
     # without this column law A2's "attributable" half is unreconstructible once
-    # the usage cursor has advanced.
+    # the usage cursor has advanced. Records the first refusal's amount for the
+    # standing condition (the receipt is deduped across passes, see
+    # ``over_cap_receipt_is_current``); it is not a running total of everything
+    # refused while the receipt stands.
     refused_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
