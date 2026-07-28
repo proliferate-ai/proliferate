@@ -51,10 +51,10 @@ async function runFailingQuery(
 function modelGatedError(instance?: string): AnyHarnessError {
   return new AnyHarnessError({
     type: "about:blank",
-    title: "Model gated",
+    title: "Model unsupported",
     status: 400,
-    detail: "caller-visible gating detail",
-    code: "SESSION_MODEL_GATED",
+    detail: "caller-visible refusal detail",
+    code: "SESSION_MODEL_UNSUPPORTED",
     ...(instance === undefined ? {} : { instance }),
   });
 }
@@ -253,9 +253,9 @@ describe("createAppQueryClient query telemetry", () => {
     const [capturedError] = captureException.mock.calls[0];
     expect(capturedError).toMatchObject({
       name: "AnyHarnessError",
-      message: "AnyHarness request failed (SESSION_MODEL_GATED)",
+      message: "AnyHarness request failed (SESSION_MODEL_UNSUPPORTED)",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
     });
     expect("problem" in capturedError).toBe(false);
     expect("cause" in capturedError).toBe(false);
@@ -347,9 +347,9 @@ describe("createAppQueryClient query telemetry", () => {
     const [capturedError] = captureException.mock.calls[0];
     expect(capturedError).toMatchObject({
       name: "AnyHarnessError",
-      message: "AnyHarness request failed (SESSION_MODEL_GATED)",
+      message: "AnyHarness request failed (SESSION_MODEL_UNSUPPORTED)",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
     });
     expect("problem" in capturedError).toBe(false);
     expect("cause" in capturedError).toBe(false);

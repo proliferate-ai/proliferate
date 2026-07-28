@@ -185,12 +185,25 @@ async def schedule_materialize_agent_auth(
     db: AsyncSession,
     *,
     user_id: UUID,
+    ensure_sandbox: bool = False,
 ) -> None:
-    """Refresh agent-auth state in the user's active cloud sandbox after commit."""
+    """Refresh agent-auth state in the user's active cloud sandbox after commit.
+
+    ``ensure_sandbox=True`` is the ensure-on-switch trigger (agent-auth.md "A
+    cloud switch ensures the sandbox"): the spawned task then provisions-or-
+    wakes the user's existing sandbox instead of no-opping when the provider
+    has not booted, so the switched document lands now rather than at the next
+    unrelated wake. This only schedules — no caller ever awaits sandbox boot
+    or readiness; the acknowledgement pipeline observes arrival.
+    """
     await runner.run_after_commit(
         db,
         label=f"materialize_agent_auth:{user_id}",
-        task=lambda: _spawn(materialize_agent_auth, user_id=user_id),
+        task=lambda: _spawn(
+            materialize_agent_auth,
+            user_id=user_id,
+            ensure_sandbox=ensure_sandbox,
+        ),
     )
 
 
@@ -230,8 +243,17 @@ async def materialize_secret_set(db: AsyncSession, *, secret_set_id: UUID) -> No
     await secret_set_materializer.materialize_secret_set(db, secret_set_id=secret_set_id)
 
 
-async def materialize_agent_auth(db: AsyncSession, *, user_id: UUID) -> None:
-    await agent_auth_materializer.materialize_agent_auth_for_user(db, user_id=user_id)
+async def materialize_agent_auth(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    ensure_sandbox: bool = False,
+) -> None:
+    await agent_auth_materializer.materialize_agent_auth_for_user(
+        db,
+        user_id=user_id,
+        ensure_sandbox=ensure_sandbox,
+    )
 
 
 async def _spawn(fn: Callable[..., Awaitable[None]], **kwargs: object) -> None:

@@ -245,22 +245,28 @@ async function runLegacyLocalLane(
   }
 }
 
-/** All candidate models rejected with SESSION_MODEL_GATED — T3-CHAT-1's orthogonal drift, not our failure. */
-class ModelGatedError extends Error {}
+/**
+ * All candidate models rejected with SESSION_MODEL_UNSUPPORTED — T3-CHAT-1's
+ * orthogonal drift, not our failure. The single typed launch refusal
+ * (model-catalog.md "Launch validation"): the requested model did not resolve
+ * against the harness's composed observation. The former gated taxonomy
+ * (the gated code + required contexts) is deleted.
+ */
+class ModelUnsupportedError extends Error {}
 
-function isSessionModelGated(error: unknown): boolean {
+function isSessionModelUnsupported(error: unknown): boolean {
   // Duck-typed: the local runtime throws LocalRuntimeError (not ApiRequestError),
   // but both carry a parsed `.body`. Also match the flattened message as a
   // fallback for either error class.
   const body = (error as { body?: { code?: unknown; detail?: unknown } } | null)?.body ?? null;
   if (
-    (typeof body?.code === "string" && body.code === "SESSION_MODEL_GATED") ||
-    (typeof body?.detail === "string" && /SESSION_MODEL_GATED|gated behind auth contexts/i.test(body.detail))
+    (typeof body?.code === "string" && body.code === "SESSION_MODEL_UNSUPPORTED") ||
+    (typeof body?.detail === "string" && /SESSION_MODEL_UNSUPPORTED/i.test(body.detail))
   ) {
     return true;
   }
   const message = error instanceof Error ? error.message : String(error);
-  return /SESSION_MODEL_GATED|gated behind auth contexts/i.test(message);
+  return /SESSION_MODEL_UNSUPPORTED/i.test(message);
 }
 
 async function connectIntegration(client: ApiClient, definitionId: string, apiKey: string): Promise<void> {
@@ -364,7 +370,7 @@ async function runAgentToolCallMatrix(
         await runOneHarnessToolCall(runtime, grant, workspace.id, harnessKind, choice, namespace, durableEmail);
         outcomes.push({ cellId: cell.cell_id, status: "green" });
       } catch (error) {
-        if (error instanceof ModelGatedError) {
+        if (error instanceof ModelUnsupportedError) {
           outcomes.push({
             cellId: cell.cell_id,
             status: "blocked",
@@ -409,11 +415,11 @@ async function runOneHarnessToolCall(
     `"Proliferate AI coding agents". You MUST call integrations.call_tool. Reply with one result URL.`;
 
   let lastError: unknown;
-  let allGated = candidates.length > 0;
+  let allUnsupported = candidates.length > 0;
   for (const modelId of candidates) {
     try {
       const session = await runtime.createSession({ workspaceId, agentKind: harnessKind, modelId });
-      allGated = false;
+      allUnsupported = false;
       await runtime.prompt(session.id, prompt);
       await runtime.waitForIdle(session.id, { timeoutMs: 120_000 });
       const events = await runtime.getEvents(session.id);
@@ -431,14 +437,14 @@ async function runOneHarnessToolCall(
       return;
     } catch (error) {
       lastError = error;
-      if (!isSessionModelGated(error)) {
-        allGated = false;
+      if (!isSessionModelUnsupported(error)) {
+        allUnsupported = false;
       }
     }
   }
-  if (allGated) {
-    throw new ModelGatedError(
-      `[${harnessKind}] every candidate model was SESSION_MODEL_GATED (inactive auth context) — the orthogonal ` +
+  if (allUnsupported) {
+    throw new ModelUnsupportedError(
+      `[${harnessKind}] every candidate model was SESSION_MODEL_UNSUPPORTED (absent from the composed observation) — the orthogonal ` +
         `model-availability/gateway-classification gap T3-CHAT-1 owns, not a gateway-integration failure. ` +
         `Candidates: ${candidates.join(", ")}`,
     );

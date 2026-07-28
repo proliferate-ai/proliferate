@@ -1,0 +1,68 @@
+{
+  "version": 2,
+  "revision": 42,
+  "user_id": "20000000-0000-4000-8000-000000000001",
+  "issuing_server_origin": "https://api.proliferate.example",
+  "harnesses": [
+    {
+      "harness_kind": "claude",
+      "sources": [
+        {
+          "kind": "gateway",
+          "base_url": "https://llm.proliferate.example",
+          "key": "sk-vk-claude-0001"
+        }
+      ]
+    },
+    {
+      "harness_kind": "codex",
+      "sources": [
+        {
+          "kind": "gateway",
+          "base_url": "https://llm.proliferate.example",
+          "key": "sk-vk-codex-0002"
+        }
+      ]
+    },
+    {
+      "harness_kind": "cursor",
+      "sources": [
+        {
+          "kind": "api_key",
+          "env_var_name": "CURSOR_API_KEY",
+          "value": "cur-raw-0004"
+        }
+      ]
+    },
+    {
+      "harness_kind": "grok",
+      "sources": []
+    },
+    {
+      "harness_kind": "opencode",
+      "sources": [
+        {
+          "kind": "api_key",
+          "env_var_name": "ANTHROPIC_API_KEY",
+          "value": "sk-ant-raw-0005"
+        },
+        {
+          "kind": "gateway",
+          "base_url": "https://llm.proliferate.example",
+          "key": "sk-vk-opencode-0003"
+        },
+        {
+          "kind": "provider_config",
+          "config_kind": "aws_bedrock",
+          "env": {
+            "AWS_BEARER_TOKEN_BEDROCK": "bedrock-raw-0006",
+            "AWS_REGION": "us-east-1"
+          }
+        }
+      ],
+      "settings": {
+        "reasoningEffort": "medium"
+      }
+    }
+  ]
+}

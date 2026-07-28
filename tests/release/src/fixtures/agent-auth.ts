@@ -5,7 +5,7 @@
  * harnesses can drive real chat through the LiteLLM gateway in an environment
  * with no native agent CLI login (the CI runner). This is the same document
  * the desktop dispatch worker pushes after fetching
- * `GET /agent-gateway/state?surface=local` — the runner composes it directly
+ * `GET /agent-auth/state?surface=local` — the runner composes it directly
  * from RELEASE_E2E_GATEWAY_TEST_KEY + RELEASE_E2E_GATEWAY_BASE_URL because the
  * ephemeral CI server has no gateway plane of its own (agent_gateway_enabled
  * defaults off; there is no local LiteLLM).

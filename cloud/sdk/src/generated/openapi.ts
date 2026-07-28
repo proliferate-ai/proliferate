@@ -1327,7 +1327,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/keys": {
+    "/v1/cloud/agent-auth/keys": {
         parameters: {
             query?: never;
             header?: never;
@@ -1335,17 +1335,42 @@ export interface paths {
             cookie?: never;
         };
         /** List Agent Api Keys Endpoint */
-        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_gateway_keys_get"];
+        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_auth_keys_get"];
         put?: never;
         /** Create Agent Api Key Endpoint */
-        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_gateway_keys_post"];
+        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_auth_keys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/keys/{key_id}": {
+    "/v1/cloud/agent-auth/keys/provider-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Agent Provider Config Endpoint
+         * @description Create a typed vault entry (Bedrock/Azure) — D2's modal's request shape.
+         *
+         *     A distinct route rather than overloading ``POST /keys``: the request body
+         *     shape genuinely differs (a field map, not one secret string) and a typed
+         *     entry is not bound to any harness until a selection references it, same
+         *     as a bare key.
+         */
+        post: operations["create_agent_provider_config_endpoint_v1_cloud_agent_auth_keys_provider_config_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-auth/keys/{key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1356,13 +1381,13 @@ export interface paths {
         put?: never;
         post?: never;
         /** Revoke Agent Api Key Endpoint */
-        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_keys__key_id__delete"];
+        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_auth_keys__key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/selections": {
+    "/v1/cloud/agent-auth/selections": {
         parameters: {
             query?: never;
             header?: never;
@@ -1370,7 +1395,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Agent Auth Selections Endpoint */
-        get: operations["list_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections_get"];
+        get: operations["list_agent_auth_selections_endpoint_v1_cloud_agent_auth_selections_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1379,7 +1404,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/selections/{harness_kind}": {
+    "/v1/cloud/agent-auth/selections/{harness_kind}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1388,7 +1413,7 @@ export interface paths {
         };
         get?: never;
         /** Put Agent Auth Selections Endpoint */
-        put: operations["put_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections__harness_kind__put"];
+        put: operations["put_agent_auth_selections_endpoint_v1_cloud_agent_auth_selections__harness_kind__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1396,7 +1421,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/state": {
+    "/v1/cloud/agent-auth/state": {
         parameters: {
             query?: never;
             header?: never;
@@ -1416,7 +1441,7 @@ export interface paths {
          *     materializer writes into the user's own sandbox. Nothing crosses a user
          *     boundary.
          */
-        get: operations["get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get"];
+        get: operations["get_agent_auth_state_endpoint_v1_cloud_agent_auth_state_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1425,41 +1450,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/catalog/{harness_kind}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Agent Catalog Endpoint */
-        get: operations["get_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/agent-gateway/catalog/{harness_kind}/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Refresh Agent Catalog Endpoint */
-        post: operations["refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/agent-gateway/catalog/{harness_kind}/mirror": {
+    "/v1/cloud/agent-auth/state/ack": {
         parameters: {
             query?: never;
             header?: never;
@@ -1469,34 +1460,53 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Mirror Agent Catalog Endpoint
-         * @description Store the caller's own runtime-probed catalog as a read-model snapshot.
+         * Ack Agent Auth State Endpoint
+         * @description Record a surface runtime's delivery acknowledgement (the desktop seam).
          *
-         *     Distinct from ``.../refresh``: the runtime already did the probing (a
-         *     harness/gateway reachability check, possibly server-side via LiteLLM) and
-         *     is pushing the result here fire-and-forget, so this endpoint never talks
-         *     to an upstream itself.
+         *     The desktop calls this after its local runtime's state PUT/DELETE
+         *     succeeded, echoing the pushed document's ``revision`` and the served
+         *     ``fingerprint`` from ``GET /state``. This stamp is what flips the
+         *     selections read from pending to applied (agent-auth.md "Applied means
+         *     acknowledged"). The cloud surface's twin is stamped server-side by the
+         *     materialization worker, not through this route.
          */
-        post: operations["mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post"];
+        post: operations["ack_agent_auth_state_endpoint_v1_cloud_agent_auth_state_ack_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/catalog/{harness_kind}/override": {
+    "/v1/cloud/organizations/{organization_id}/agent-auth/policy": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        /** Upsert Agent Catalog Override Endpoint */
-        put: operations["upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put"];
+        /** Get Org Agent Policy Endpoint */
+        get: operations["get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_get"];
+        /** Put Org Agent Policy Endpoint */
+        put: operations["put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_put"];
         post?: never;
-        /** Delete Agent Catalog Override Endpoint */
-        delete: operations["delete_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/agent-auth/policy/violations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Org Agent Policy Violations Endpoint */
+        get: operations["list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_violations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1536,17 +1546,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/organizations/{organization_id}/agent-gateway/policy": {
+    "/v1/cloud/agent-models/{harness_kind}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Org Agent Policy Endpoint */
-        get: operations["get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_get"];
-        /** Put Org Agent Policy Endpoint */
-        put: operations["put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_put"];
+        /**
+         * Get Agent Models Endpoint
+         * @description The layered read: own snapshot, else the shipped catalog's models as the
+         *     read-time seed, with the override patch applied.
+         *
+         *     No ``authContextId`` and no ``surface`` params (model-catalog.md §Cloud
+         *     routes): one composed observation per harness, cloud-sandbox observations
+         *     only.
+         */
+        get: operations["get_agent_models_endpoint_v1_cloud_agent_models__harness_kind__get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1554,18 +1571,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/organizations/{organization_id}/agent-gateway/policy/violations": {
+    "/v1/cloud/agent-models/{harness_kind}/refresh": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Org Agent Policy Violations Endpoint */
-        get: operations["list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_violations_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Ingest Agent Model Snapshot Endpoint
+         * @description The single ingest route: a Worker-uploaded machine document.
+         *
+         *     Absorbs the former ``refresh``-with-payload and ``mirror`` endpoints, which
+         *     were two names for the same write, and the server-side gateway discovery
+         *     that used to live inside ``refresh`` — the server never generates snapshots.
+         *
+         *     The body is the worker's wire shape verbatim — ``snapshotJson`` (the whole
+         *     schemaVersion-2 document) plus ``probedAt``, nothing else. The owner is
+         *     resolved from the Worker's sandbox row, so the body carries no user
+         *     identity to spoof.
+         */
+        post: operations["ingest_agent_model_snapshot_endpoint_v1_cloud_agent_models__harness_kind__refresh_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-models/{harness_kind}/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Agent Model Override Endpoint */
+        put: operations["upsert_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_put"];
+        post?: never;
+        /** Delete Agent Model Override Endpoint */
+        delete: operations["delete_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3161,12 +3208,29 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "api_key" | "aws_bedrock" | "azure_openai";
             /** Redactedhint */
             redactedHint: string;
             /** Status */
             status: string;
             /** Createdat */
             createdAt: string;
+        };
+        /** AgentAuthDeliveryAckResponse */
+        AgentAuthDeliveryAckResponse: {
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /** Ackedrevision */
+            ackedRevision: number;
+            /** Ackedat */
+            ackedAt: string;
         };
         /** AgentAuthSelectionResponse */
         AgentAuthSelectionResponse: {
@@ -3194,6 +3258,8 @@ export interface components {
             providerHint: string | null;
             /** Enabled */
             enabled: boolean;
+            /** Applied */
+            applied?: boolean | null;
             /** Createdat */
             createdAt: string;
             /** Updatedat */
@@ -3230,6 +3296,20 @@ export interface components {
              */
             enabled: boolean;
         };
+        /**
+         * AgentAuthStateAckRequest
+         * @description Desktop delivery ack: the pushed document's identity, echoed back.
+         *
+         *     ``revision`` is the revision the local runtime's state PUT/DELETE
+         *     confirmed; ``fingerprint`` is the served document's fingerprint from
+         *     ``GET /state`` (never client-computed).
+         */
+        AgentAuthStateAckRequest: {
+            /** Revision */
+            revision: number;
+            /** Fingerprint */
+            fingerprint: string;
+        };
         /** AgentAuthStateHarness */
         AgentAuthStateHarness: {
             /** Harness Kind */
@@ -3244,6 +3324,11 @@ export interface components {
         /**
          * AgentAuthStateResponse
          * @description The whole ``state.json`` v2 document (``route_auth/state.rs``).
+         *
+         *     ``fingerprint`` is a response-only rider (the renderer's sha256 of the
+         *     canonical document), NOT part of the state.json wire contract: the desktop
+         *     echoes it through ``POST /state/ack`` after a successful runtime push and
+         *     must strip it before pushing the document to the local runtime.
          */
         AgentAuthStateResponse: {
             /** Version */
@@ -3254,17 +3339,24 @@ export interface components {
             user_id?: string | null;
             /** Harnesses */
             harnesses: components["schemas"]["AgentAuthStateHarness"][];
+            /** Fingerprint */
+            fingerprint?: string | null;
         };
         /**
          * AgentAuthStateSource
          * @description A single credential source (contract §3). Key material for the caller.
+         *
+         *     ``kind`` is the WIRE kind, which is wider than the DB source_kind: a
+         *     selection referencing a typed vault entry renders as
+         *     ``provider_config`` (``config_kind`` + the harness's resolved ``env``
+         *     map), decided at render time by the referenced vault row's kind.
          */
         AgentAuthStateSource: {
             /**
              * Kind
              * @enum {string}
              */
-            kind: "gateway" | "api_key";
+            kind: "gateway" | "api_key" | "provider_config";
             /** Base Url */
             base_url?: string | null;
             /** Key */
@@ -3273,6 +3365,12 @@ export interface components {
             env_var_name?: string | null;
             /** Value */
             value?: string | null;
+            /** Config Kind */
+            config_kind?: ("aws_bedrock" | "azure_openai") | null;
+            /** Env */
+            env?: {
+                [key: string]: string;
+            } | null;
         };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
@@ -3561,93 +3659,6 @@ export interface components {
             /** Enrollmentstatus */
             enrollmentStatus: string;
         };
-        /**
-         * AgentGatewayCatalogMirrorRequest
-         * @description A runtime's push of its own resolved probe result (contract §4).
-         *
-         *     Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
-         *     AnyHarness today), not the product UI, and ``probed_at`` reflects when the
-         *     runtime actually probed rather than when this request landed.
-         */
-        AgentGatewayCatalogMirrorRequest: {
-            /**
-             * Surface
-             * @enum {string}
-             */
-            surface: "local" | "cloud";
-            /**
-             * Route
-             * @enum {string}
-             */
-            route: "native" | "api_key" | "gateway";
-            /** Modelsjson */
-            modelsJson: string;
-            /** Probedat */
-            probedAt: string;
-        };
-        /** AgentGatewayCatalogOverrideResponse */
-        AgentGatewayCatalogOverrideResponse: {
-            /** Id */
-            id: string;
-            /** Harnesskind */
-            harnessKind: string;
-            /** Patchjson */
-            patchJson: string;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-        };
-        /** AgentGatewayCatalogOverrideUpsertRequest */
-        AgentGatewayCatalogOverrideUpsertRequest: {
-            /** Patchjson */
-            patchJson: string;
-        };
-        /** AgentGatewayCatalogRefreshRequest */
-        AgentGatewayCatalogRefreshRequest: {
-            /**
-             * Surface
-             * @enum {string}
-             */
-            surface: "local" | "cloud";
-            /**
-             * Route
-             * @enum {string}
-             */
-            route: "native" | "api_key" | "gateway";
-            /** Modelsjson */
-            modelsJson?: string | null;
-        };
-        /**
-         * AgentGatewayCatalogResponse
-         * @description Layered catalog: latest snapshot (owner else seed) + caller override.
-         */
-        AgentGatewayCatalogResponse: {
-            /** Harnesskind */
-            harnessKind: string;
-            /**
-             * Surface
-             * @enum {string}
-             */
-            surface: "local" | "cloud";
-            /**
-             * Route
-             * @enum {string}
-             */
-            route: "native" | "api_key" | "gateway";
-            /** Models */
-            models: {
-                [key: string]: unknown;
-            }[];
-            /** Snapshotid */
-            snapshotId: string | null;
-            /** Probedat */
-            probedAt: string | null;
-            /** Source */
-            source: string | null;
-            /** Overrideapplied */
-            overrideApplied: boolean;
-        };
         /** AgentGatewayEnrollmentResponse */
         AgentGatewayEnrollmentResponse: {
             /** Id */
@@ -3664,6 +3675,86 @@ export interface components {
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
+        };
+        /** AgentModelOverrideResponse */
+        AgentModelOverrideResponse: {
+            /** Id */
+            id: string;
+            /** Harnesskind */
+            harnessKind: string;
+            /** Patchjson */
+            patchJson: string;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AgentModelOverrideUpsertRequest */
+        AgentModelOverrideUpsertRequest: {
+            /** Patchjson */
+            patchJson: string;
+        };
+        /**
+         * AgentModelSnapshotIngestRequest
+         * @description A Worker's upload of one changed machine document.
+         *
+         *     Deliberately carries no user identity: the server resolves the owner from
+         *     the Worker's sandbox row. And no ``authContextId``: one composed
+         *     observation per harness (the harness is in the path). ``snapshotJson`` is
+         *     the whole schemaVersion-2 document verbatim (camelCase
+         *     ``probedAt``/``models``/``modes``/``attestation``/``installIdentity``/
+         *     ``stateRevision``/``warnings``/``lastAttempt``), stored as-is so the cloud
+         *     tier serves exactly what the machine observed.
+         */
+        AgentModelSnapshotIngestRequest: {
+            /** Snapshotjson */
+            snapshotJson: string;
+            /** Probedat */
+            probedAt: string;
+        };
+        /**
+         * AgentModelsResponse
+         * @description The layered read: owner's snapshot else shipped seed, + caller override.
+         */
+        AgentModelsResponse: {
+            /** Harnesskind */
+            harnessKind: string;
+            /** Models */
+            models: {
+                [key: string]: unknown;
+            }[];
+            /** Modes */
+            modes: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "snapshot" | "catalog";
+            /** Snapshotid */
+            snapshotId: string | null;
+            /** Probedat */
+            probedAt: string | null;
+            /** Overrideapplied */
+            overrideApplied: boolean;
+        };
+        /**
+         * AgentProviderConfigCreateRequest
+         * @description Create a typed vault entry (D2's ``ProviderConfigCreatorSubmit`` shape).
+         */
+        AgentProviderConfigCreateRequest: {
+            /** Title */
+            title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "aws_bedrock" | "azure_openai";
+            /** Value */
+            value: {
+                [key: string]: string;
+            };
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -6867,8 +6958,6 @@ export interface components {
             worker?: string | null;
             /** Anyharness */
             anyharness?: string | null;
-            /** Catalogversion */
-            catalogVersion?: string | null;
         };
         /** WorkerEnrollRequest */
         WorkerEnrollRequest: {
@@ -10246,7 +10335,7 @@ export interface operations {
             };
         };
     };
-    list_agent_api_keys_endpoint_v1_cloud_agent_gateway_keys_get: {
+    list_agent_api_keys_endpoint_v1_cloud_agent_auth_keys_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10266,7 +10355,7 @@ export interface operations {
             };
         };
     };
-    create_agent_api_key_endpoint_v1_cloud_agent_gateway_keys_post: {
+    create_agent_api_key_endpoint_v1_cloud_agent_auth_keys_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -10299,7 +10388,40 @@ export interface operations {
             };
         };
     };
-    revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_keys__key_id__delete: {
+    create_agent_provider_config_endpoint_v1_cloud_agent_auth_keys_provider_config_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentProviderConfigCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApiKeyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_agent_api_key_endpoint_v1_cloud_agent_auth_keys__key_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -10330,7 +10452,7 @@ export interface operations {
             };
         };
     };
-    list_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections_get: {
+    list_agent_auth_selections_endpoint_v1_cloud_agent_auth_selections_get: {
         parameters: {
             query?: {
                 surface?: ("local" | "cloud") | null;
@@ -10361,7 +10483,7 @@ export interface operations {
             };
         };
     };
-    put_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections__harness_kind__put: {
+    put_agent_auth_selections_endpoint_v1_cloud_agent_auth_selections__harness_kind__put: {
         parameters: {
             query: {
                 surface: "local" | "cloud";
@@ -10398,7 +10520,7 @@ export interface operations {
             };
         };
     };
-    get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get: {
+    get_agent_auth_state_endpoint_v1_cloud_agent_auth_state_get: {
         parameters: {
             query: {
                 surface: "local" | "cloud";
@@ -10429,15 +10551,47 @@ export interface operations {
             };
         };
     };
-    get_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__get: {
+    ack_agent_auth_state_endpoint_v1_cloud_agent_auth_state_ack_post: {
         parameters: {
             query: {
                 surface: "local" | "cloud";
-                route?: "native" | "api_key" | "gateway";
             };
             header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentAuthStateAckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthDeliveryAckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
             path: {
-                harness_kind: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -10449,7 +10603,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10463,18 +10617,18 @@ export interface operations {
             };
         };
     };
-    refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post: {
+    put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                harness_kind: string;
+                organization_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AgentGatewayCatalogRefreshRequest"];
+                "application/json": components["schemas"]["OrgAgentPolicyUpdateRequest"];
             };
         };
         responses: {
@@ -10484,7 +10638,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10498,93 +10652,25 @@ export interface operations {
             };
         };
     };
-    mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post: {
+    list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_auth_policy_violations_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentGatewayCatalogMirrorRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentGatewayCatalogOverrideUpsertRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentGatewayCatalogOverrideResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
+                organization_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OrgAgentPolicyViolationListResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -10637,12 +10723,12 @@ export interface operations {
             };
         };
     };
-    get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_get: {
+    get_agent_models_endpoint_v1_cloud_agent_models__harness_kind__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
+                harness_kind: string;
             };
             cookie?: never;
         };
@@ -10654,7 +10740,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
+                    "application/json": components["schemas"]["AgentModelsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10668,18 +10754,18 @@ export interface operations {
             };
         };
     };
-    put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_put: {
+    ingest_agent_model_snapshot_endpoint_v1_cloud_agent_models__harness_kind__refresh_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
+                harness_kind: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OrgAgentPolicyUpdateRequest"];
+                "application/json": components["schemas"]["AgentModelSnapshotIngestRequest"];
             };
         };
         responses: {
@@ -10689,7 +10775,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
+                    "application/json": components["schemas"]["AgentModelsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10703,16 +10789,20 @@ export interface operations {
             };
         };
     };
-    list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_violations_get: {
+    upsert_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
+                harness_kind: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentModelOverrideUpsertRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -10720,8 +10810,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrgAgentPolicyViolationListResponse"];
+                    "application/json": components["schemas"]["AgentModelOverrideResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

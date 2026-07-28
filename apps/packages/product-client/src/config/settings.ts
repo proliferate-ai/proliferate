@@ -20,6 +20,7 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "agent-codex",
   "agent-opencode",
   "agent-grok",
+  "agent-cursor",
   "agent-api-keys",
   // SLACK BOT PARKED: keep the id nearby for revival, but do not register it.
   // "slack-bot",
@@ -55,6 +56,7 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "agent-codex",
   "agent-opencode",
   "agent-grok",
+  "agent-cursor",
   "agent-api-keys",
   // SLACK BOT PARKED: omit from Cmd-number settings shortcuts while disabled.
   // "slack-bot",

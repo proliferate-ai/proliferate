@@ -4,21 +4,25 @@ from __future__ import annotations
 
 from proliferate.db.models.cloud.agent_gateway import (
     AgentApiKey,
+    AgentAuthDeliveryAck,
     AgentAuthSelection,
     AgentCatalogOverride,
-    AgentCatalogSnapshot,
     AgentGatewayEnrollment,
+    AgentGatewayEnrollmentKey,
     AgentLlmUsageImportCursor,
+    AgentModelSnapshot,
     LlmCreditGrant,
     OrgAgentPolicy,
 )
 from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
+    AgentAuthDeliveryAckRecord,
     AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
-    AgentCatalogSnapshotRecord,
+    AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
+    AgentModelSnapshotRecord,
     LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
 )
@@ -33,6 +37,7 @@ def api_key_record(row: AgentApiKey) -> AgentApiKeyRecord:
         status=row.status,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        kind=row.kind,
     )
 
 
@@ -47,6 +52,19 @@ def selection_record(row: AgentAuthSelection) -> AgentAuthSelectionRecord:
         env_var_name=row.env_var_name,
         provider_hint=row.provider_hint,
         enabled=row.enabled,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def delivery_ack_record(row: AgentAuthDeliveryAck) -> AgentAuthDeliveryAckRecord:
+    return AgentAuthDeliveryAckRecord(
+        id=row.id,
+        user_id=row.user_id,
+        surface=row.surface,
+        acked_revision=row.acked_revision,
+        acked_fingerprint=row.acked_fingerprint,
+        acked_at=row.acked_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -73,16 +91,26 @@ def enrollment_record(row: AgentGatewayEnrollment) -> AgentGatewayEnrollmentReco
     )
 
 
-def catalog_snapshot_record(row: AgentCatalogSnapshot) -> AgentCatalogSnapshotRecord:
-    return AgentCatalogSnapshotRecord(
+def enrollment_key_record(row: AgentGatewayEnrollmentKey) -> AgentGatewayEnrollmentKeyRecord:
+    return AgentGatewayEnrollmentKeyRecord(
+        id=row.id,
+        enrollment_id=row.enrollment_id,
+        harness_kind=row.harness_kind,
+        virtual_key_id=row.virtual_key_id,
+        sync_fingerprint=row.sync_fingerprint,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        revoked_at=row.revoked_at,
+    )
+
+
+def model_snapshot_record(row: AgentModelSnapshot) -> AgentModelSnapshotRecord:
+    return AgentModelSnapshotRecord(
         id=row.id,
         harness_kind=row.harness_kind,
-        surface=row.surface,
-        route=row.route,
         owner_user_id=row.owner_user_id,
-        models_json=row.models_json,
+        snapshot_json=row.snapshot_json,
         probed_at=row.probed_at,
-        source=row.source,
         status=row.status,
     )
 

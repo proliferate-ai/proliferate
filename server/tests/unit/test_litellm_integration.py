@@ -109,6 +109,59 @@ async def test_mint_virtual_key_happy_path(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_mint_virtual_key_forwards_models_grant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``models`` grants an access group (B2, R2); omitted means unscoped."""
+    client = _FakeAsyncClient(
+        [
+            _response(
+                200,
+                {
+                    "key": "sk-virtual-scoped",
+                    "token_id": "hash-scoped",
+                    "key_alias": "vk-user-1-claude",
+                    "user_id": "user-1",
+                    "team_id": "team-1",
+                },
+            )
+        ]
+    )
+    _install(monkeypatch, client)
+
+    await litellm.mint_virtual_key(
+        user_id="user-1",
+        team_id="team-1",
+        alias="vk-user-1-claude",
+        metadata={"proliferate_harness_kind": "claude"},
+        models=["claude"],
+    )
+
+    body = _request_body(client.requests[0])
+    assert body["models"] == ["claude"]
+    # Per-harness keys never carry a budget (R2): the request body has no key.
+    assert "max_budget" not in body
+
+
+@pytest.mark.asyncio
+async def test_mint_virtual_key_omits_models_when_not_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient(
+        [
+            _response(
+                200,
+                {"key": "sk-virtual-unscoped", "token_id": "hash-unscoped", "user_id": "user-1"},
+            )
+        ]
+    )
+    _install(monkeypatch, client)
+
+    await litellm.mint_virtual_key(user_id="user-1")
+
+    body = _request_body(client.requests[0])
+    assert "models" not in body
+
+
+@pytest.mark.asyncio
 async def test_mint_virtual_key_400_surfaces_error(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _FakeAsyncClient(
         [
@@ -420,6 +473,7 @@ async def test_rotate_virtual_key_deletes_then_mints(
         key_or_token_id="hash-old",
         user_id="user-1",
         alias="user-1-personal",
+        models=["codex"],
     )
 
     assert key.key == "sk-virtual-new"
@@ -428,6 +482,9 @@ async def test_rotate_virtual_key_deletes_then_mints(
         "/key/generate",
     ]
     assert _request_body(client.requests[0]) == {"keys": ["hash-old"]}
+    # A rotation forwards the harness's access-group grant to the fresh mint
+    # so the replacement key keeps its original scope.
+    assert _request_body(client.requests[1])["models"] == ["codex"]
 
 
 @pytest.mark.asyncio
@@ -474,6 +531,26 @@ async def test_rotate_virtual_key_tolerates_missing_old_key(
         "/key/delete",
         "/key/generate",
     ]
+
+
+@pytest.mark.asyncio
+async def test_delete_virtual_key_tolerates_missing_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Mirrors rotate_virtual_key's tolerance: the key being gone IS the
+    # desired end state, so a delete retry against an already-deleted key
+    # (e.g. a prior delete that landed on the proxy but whose DB write then
+    # rolled back) must not raise, or the caller wedges forever.
+    client = _FakeAsyncClient(
+        [
+            _response(400, {"error": {"message": "key not found"}}),
+        ]
+    )
+    _install(monkeypatch, client)
+
+    await litellm.delete_virtual_key(key_or_token_id="hash-gone")
+
+    assert [request.url.path for request in client.requests] == ["/key/delete"]
 
 
 @pytest.mark.asyncio

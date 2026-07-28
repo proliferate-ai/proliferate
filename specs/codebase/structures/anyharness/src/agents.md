@@ -129,10 +129,9 @@ Both inputs ride the binary: `catalog.json` and `registry.json` are
 the binary is the only catalog transport
 ([agent-distribution.md](../../../platforms/product/agent-distribution.md)).
 In cloud sandboxes the binary is swapped by Proliferate Supervisor on a
-mailbox request; Desktop gets a new binary via the app bundle. (The legacy
-live catalog sync — cloud worker watching the heartbeat `catalogVersion`
-and `PUT`ing the newer document — is deletion-pending per
-agent-distribution.md's Current gaps.)
+mailbox request; Desktop gets a new binary via the app bundle. There is no
+live catalog sync: no served catalog version on the heartbeat and no push
+route on the runtime.
 
 The unattended mode is part of the active catalog rather than the trusted
 registry recipe. Catalog validation requires a non-blank value that exists in

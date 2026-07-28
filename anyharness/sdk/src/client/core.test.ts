@@ -10,24 +10,22 @@ import {
 describe("AnyHarnessTransport problem details", () => {
   it("preserves valid RFC 7807 fields", async () => {
     const error = await requestError(problemResponse({
-      type: "https://runtime.test/problems/model-gated",
-      title: "Model access required",
-      status: 403,
-      detail: "Connect a supported provider",
-      code: "SESSION_MODEL_GATED",
+      type: "https://runtime.test/problems/model-unsupported",
+      title: "Model not supported",
+      status: 400,
+      detail: "model 'opus' is not supported for agent 'claude'",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance: "/v1/sessions/session-1",
-      requiredContexts: ["anthropic"],
     }, 502));
 
-    expect(error.message).toBe("Connect a supported provider");
+    expect(error.message).toBe("model 'opus' is not supported for agent 'claude'");
     expect(error.problem).toEqual({
-      type: "https://runtime.test/problems/model-gated",
-      title: "Model access required",
-      status: 403,
-      detail: "Connect a supported provider",
-      code: "SESSION_MODEL_GATED",
+      type: "https://runtime.test/problems/model-unsupported",
+      title: "Model not supported",
+      status: 400,
+      detail: "model 'opus' is not supported for agent 'claude'",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance: "/v1/sessions/session-1",
-      requiredContexts: ["anthropic"],
     });
   });
 
@@ -108,7 +106,6 @@ describe("AnyHarnessTransport problem details", () => {
       detail: null,
       code: null,
       instance: null,
-      requiredContexts: null,
     }, 429));
 
     expect(error.message).toBe("Request failed");
@@ -120,7 +117,6 @@ describe("AnyHarnessTransport problem details", () => {
       detail: null,
       code: null,
       instance: null,
-      requiredContexts: null,
     });
   });
 
@@ -226,9 +222,9 @@ describe("AnyHarnessTransport problem details", () => {
   it("parses an exact runtime incident receipt through a wrapping cause chain", async () => {
     const cause = await requestError(problemResponse({
       type: "about:blank",
-      title: "Model gated",
+      title: "Model unsupported",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
     }, 400));
     const wrapper = new Error("Failed to open chat", { cause });
@@ -271,7 +267,7 @@ describe("AnyHarnessTransport problem details", () => {
       type: "about:blank",
       title: "Request failed",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
       ...(instance === undefined ? {} : { instance }),
     });
 
@@ -281,9 +277,9 @@ describe("AnyHarnessTransport problem details", () => {
   it("finds a valid receipt behind a nonmatching AnyHarness error", () => {
     const receipt = new AnyHarnessError({
       type: "about:blank",
-      title: "Model gated",
+      title: "Model unsupported",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
     });
     const outer = new AnyHarnessError({
@@ -299,9 +295,9 @@ describe("AnyHarnessTransport problem details", () => {
   it("fails closed when a receipt-bearing cause chain contains a cycle", () => {
     const error = new AnyHarnessError({
       type: "about:blank",
-      title: "Model gated",
+      title: "Model unsupported",
       status: 400,
-      code: "SESSION_MODEL_GATED",
+      code: "SESSION_MODEL_UNSUPPORTED",
       instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
     });
     (error as Error & { cause?: unknown }).cause = error;
@@ -382,9 +378,9 @@ function problemResponse(
 function runtimeIncidentError(): AnyHarnessError {
   return new AnyHarnessError({
     type: "about:blank",
-    title: "Model gated",
+    title: "Model unsupported",
     status: 400,
-    code: "SESSION_MODEL_GATED",
+    code: "SESSION_MODEL_UNSUPPORTED",
     instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
   });
 }

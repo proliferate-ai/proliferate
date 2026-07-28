@@ -21,51 +21,84 @@
 # This file is the one deployed config (dev and prod both run it as-is): any
 # dev-only shim/mock (LiteLLM `mock_response`, cross-provider test aliases)
 # belongs in a docker-compose dev overlay, never here.
+#
+# Access groups (model-gateway.md, R1): every entry carries
+# `model_info: {access_groups: [...]}` naming the harness group(s) it
+# belongs to. Group names are exactly the harness `harness_kind` identifiers
+# (`claude`, `codex`, `opencode`, `grok`) — no translation table. `cursor` is
+# intentionally absent from every access_groups list: it has no gateway
+# recipe (native-only) until it gets one, so no virtual key may ever be
+# scoped to a `cursor` group. This file is therefore also the harness-to-
+# model map; no client-side model filtering exists anywhere.
 
 model_list:
-  # Anthropic
+  # Anthropic. access_groups: claude is the direct-Anthropic harness; opencode
+  # composes the gateway additively alongside its own provider auth (its
+  # catalog gatewayPolicy carries no provider restriction — parity-preserving
+  # with the Rust client-side filter this replaces, see model-gateway.md §R1).
   - model_name: claude-sonnet-4-5
     litellm_params:
       model: anthropic/claude-sonnet-4-5-20250929
       api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: claude-sonnet-4-5-20250929
     litellm_params:
       model: anthropic/claude-sonnet-4-5-20250929
       api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: claude-haiku-4-5
     litellm_params:
       model: anthropic/claude-haiku-4-5-20251001
       api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: claude-haiku-4-5-20251001
     litellm_params:
       model: anthropic/claude-haiku-4-5-20251001
       api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: claude-opus-4-6
     litellm_params:
       model: anthropic/claude-opus-4-6
       api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: claude-opus-4-6-20260205
     litellm_params:
       model: anthropic/claude-opus-4-6
       api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
 
-  # OpenAI
+  # OpenAI. access_groups: codex is the direct-OpenAI harness; opencode again
+  # composes additively (see above).
   - model_name: gpt-5.2
     litellm_params:
       model: openai/gpt-5.2
       api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      access_groups: [codex, opencode]
   - model_name: gpt-5.2-2025-12-11
     litellm_params:
       model: openai/gpt-5.2
       api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      access_groups: [codex, opencode]
   - model_name: gpt-5-mini
     litellm_params:
       model: openai/gpt-5-mini
       api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      access_groups: [codex, opencode]
   - model_name: gpt-5-mini-2025-08-07
     litellm_params:
       model: openai/gpt-5-mini
       api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      access_groups: [codex, opencode]
 
   # xAI. The grok CLI discovers models via GET /v1/models and speaks plain
   # chat/completions, so it will send whatever model_name we advertise here —
@@ -76,24 +109,35 @@ model_list:
   #   - there is no plain "xai/grok-4-fast"; xai/grok-4-1-fast is the current
   #     (non-deprecated) fast-tier model, so grok-4-fast resolves there.
   #   - xai/grok-code-fast-1 exists as-is.
+  # access_groups: grok is the direct-xAI harness; opencode again composes
+  # additively (its catalog gatewayPolicy carries no provider restriction, so
+  # today's client-side filter already lets it see every family — see above).
   - model_name: grok-4
     litellm_params:
       model: xai/grok-4
       api_key: os.environ/XAI_API_KEY
+    model_info:
+      access_groups: [grok, opencode]
   - model_name: grok-4-fast
     litellm_params:
       model: xai/grok-4-1-fast
       api_key: os.environ/XAI_API_KEY
+    model_info:
+      access_groups: [grok, opencode]
   - model_name: grok-code-fast-1
     litellm_params:
       model: xai/grok-code-fast-1
       api_key: os.environ/XAI_API_KEY
+    model_info:
+      access_groups: [grok, opencode]
   # grok-build is the CLI's interactive/title-gen model — cheap to keep.
   # Same-provider alias only (never cross-provider): a small xAI model.
   - model_name: grok-build
     litellm_params:
       model: xai/grok-3-mini-latest
       api_key: os.environ/XAI_API_KEY
+    model_info:
+      access_groups: [grok, opencode]
 
   # AWS Bedrock. Credentials come from the AWS default credential chain:
   # deployed (prod/staging): the ECS task role with attached policy
@@ -104,48 +148,71 @@ model_list:
   # and Bedrock-pinned harness IDs resolve. LiteLLM's bedrock provider
   # accepts pass-through for cross-region inference profiles (us.*, eu.*,
   # global.*) — these IDs are verified to exist in the LiteLLM manifest.
+  # access_groups mirror the upstream family: Anthropic-on-Bedrock joins
+  # claude (+ opencode, same composition rule as direct Anthropic above);
+  # OpenAI-open-weight-on-Bedrock joins codex (+ opencode) — matching the
+  # provider-prefix matching the Rust gateway resolver already applies to
+  # these ids (PR #928/#955) so proxy-side grants preserve today's behavior.
   #
   # Anthropic on Bedrock (us. cross-region profiles):
   - model_name: us.anthropic.claude-sonnet-4-6
     litellm_params:
       model: bedrock/us.anthropic.claude-sonnet-4-6
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: us.anthropic.claude-sonnet-5
     litellm_params:
       model: bedrock/us.anthropic.claude-sonnet-5
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: us.anthropic.claude-opus-4-7
     litellm_params:
       model: bedrock/us.anthropic.claude-opus-4-7
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: us.anthropic.claude-opus-4-8
     litellm_params:
       model: bedrock/us.anthropic.claude-opus-4-8
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: us.anthropic.claude-fable-5
     litellm_params:
       model: bedrock/us.anthropic.claude-fable-5
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [claude, opencode]
   - model_name: us.anthropic.claude-haiku-4-5-20251001-v1:0
     litellm_params:
       model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [claude, opencode]
   #
   # Anthropic on Bedrock (global. cross-region profiles):
   - model_name: global.anthropic.claude-fable-5
     litellm_params:
       model: bedrock/global.anthropic.claude-fable-5
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [claude, opencode]
   #
   # OpenAI open-weight on Bedrock:
   - model_name: openai.gpt-oss-120b-1:0
     litellm_params:
       model: bedrock/openai.gpt-oss-120b-1:0
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [codex, opencode]
   - model_name: openai.gpt-oss-20b-1:0
     litellm_params:
       model: bedrock/openai.gpt-oss-20b-1:0
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+    model_info:
+      access_groups: [codex, opencode]
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
