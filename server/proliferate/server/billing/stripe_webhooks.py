@@ -1,4 +1,9 @@
-"""Stripe webhook verification and local billing event intake."""
+"""Stripe webhook verification and local billing event intake.
+
+Every early return that drops an event reports through ``webhook_drops``, which
+owns the drop vocabulary, the levels, and the ``Current gaps`` disclosure: a
+reported drop is still marked ``processed`` here, so it stays unreplayable.
+"""
 
 from __future__ import annotations
 
@@ -37,6 +42,7 @@ from proliferate.db.store.billing_subscriptions import (
     upsert_stripe_subscription_record,
 )
 from proliferate.integrations import stripe as stripe_billing
+from proliferate.server.billing import webhook_drops
 from proliferate.server.billing.domain.pricing import (
     monthly_subscription_price_ids,
     overage_subscription_price_ids,
@@ -196,12 +202,14 @@ async def handle_stripe_webhook(
 async def _dispatch_stripe_event(event: dict[str, Any]) -> tuple[BillingSlackNotification, ...]:
     event_type = event.get("type")
     stripe_object = _event_object(event)
+    event_id = event.get("id")
     if event_type == "checkout.session.completed":
-        await _handle_checkout_session_completed(stripe_object, event_id=event.get("id"))
+        await _handle_checkout_session_completed(stripe_object, event_id=event_id)
     elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
         result = await _sync_subscription_for_billing_notifications(
             stripe_object,
             event_type=event_type,
+            event_id=event_id,
         )
         return result.notifications
     elif event_type == "customer.subscription.deleted":
@@ -214,14 +222,17 @@ async def _dispatch_stripe_event(event: dict[str, Any]) -> tuple[BillingSlackNot
         result = await _sync_subscription_for_billing_notifications(
             stripe_object,
             event_type=event_type,
+            event_id=event_id,
         )
         if _subscription_deletion_is_payment_driven(stripe_object, previous):
-            await _apply_payment_hold_for_subscription(stripe_object)
+            await _apply_payment_hold_for_subscription(stripe_object, event_id=event_id)
         return result.notifications
     elif event_type == "invoice.paid":
-        return await _handle_invoice_paid(stripe_object)
+        return await _handle_invoice_paid(stripe_object, event_id=event_id)
     elif event_type == "invoice.payment_failed":
-        await _handle_invoice_payment_failed(stripe_object)
+        await _handle_invoice_payment_failed(stripe_object, event_id=event_id)
+    else:
+        webhook_drops.report_unhandled_event_type(event_id, event_type)
     return ()
 
 
@@ -266,16 +277,21 @@ async def _handle_checkout_session_completed(
             webhook_event_id=event_id if isinstance(event_id, str) else None,
         )
         return
-    if session.get("mode") != "payment" or _metadata(session).get("purpose") != "refill_10h":
+    purpose = _metadata(session).get("purpose")
+    if session.get("mode") != "payment" or purpose != "refill_10h":
+        webhook_drops.report_checkout_unhandled_purpose(event_id, session, purpose=purpose)
         return
     session_id = session.get("id")
     if not isinstance(session_id, str):
+        webhook_drops.report_checkout_id_not_string(event_id, session)
         return
     subject = await _subject_from_object(session)
     if subject is None or subject.user_id is None:
+        webhook_drops.report_checkout_subject_unresolved(event_id, session, session_id, subject)
         return
     lines = await stripe_billing.list_checkout_session_line_items(session_id)
     if not stripe_billing.line_items_include_price(lines, settings.stripe_refill_10h_price_id):
+        webhook_drops.report_checkout_price_missing(event_id, session, session_id, subject, lines)
         return
     await _run_billing_store_write(
         ensure_billing_grant_record,
@@ -289,7 +305,11 @@ async def _handle_checkout_session_completed(
     )
 
 
-async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscription | None:
+async def _sync_subscription(
+    subscription: dict[str, Any],
+    *,
+    event_id: object = None,
+) -> BillingSubscription | None:
     subscription_id = subscription.get("id")
     customer_id = _id_from_expandable(subscription.get("customer"))
     status = subscription.get("status")
@@ -298,9 +318,13 @@ async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscriptio
         or not isinstance(customer_id, str)
         or not isinstance(status, str)
     ):
+        webhook_drops.report_subscription_fields_not_strings(
+            event_id, subscription_id, customer_id, status
+        )
         return None
     subject = await _subject_from_object(subscription)
     if subject is None:
+        webhook_drops.report_subscription_subject_unresolved(event_id, subscription_id, status)
         return None
     (
         monthly_item_id,
@@ -346,6 +370,7 @@ async def _sync_subscription_for_billing_notifications(
     subscription: dict[str, Any],
     *,
     event_type: str,
+    event_id: object = None,
 ) -> SubscriptionSyncResult:
     subscription_id = subscription.get("id")
     previous = (
@@ -353,7 +378,7 @@ async def _sync_subscription_for_billing_notifications(
         if isinstance(subscription_id, str)
         else None
     )
-    record = await _sync_subscription(subscription)
+    record = await _sync_subscription(subscription, event_id=event_id)
     if record is None:
         return SubscriptionSyncResult(record=None)
     events = _billing_slack_events_for_subscription_transition(
@@ -460,9 +485,14 @@ def _subscription_item_details(
     )
 
 
-async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNotification, ...]:
+async def _handle_invoice_paid(
+    invoice: dict[str, Any],
+    *,
+    event_id: object = None,
+) -> tuple[BillingSlackNotification, ...]:
     invoice_id = invoice.get("id")
     if not isinstance(invoice_id, str):
+        webhook_drops.report_invoice_id_not_string(event_id, invoice)
         return ()
     lines = _line_items_from_object(invoice)
     if not lines:
@@ -472,6 +502,7 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNot
         None,
     )
     if cloud_line is None:
+        webhook_drops.report_invoice_no_cloud_line(event_id, invoice, invoice_id, lines)
         return ()
     subject = await _subject_from_object(invoice)
     subscription_id = _invoice_subscription_id(invoice, lines)
@@ -482,12 +513,16 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNot
         sync_result = await _sync_subscription_for_billing_notifications(
             subscription,
             event_type="invoice.paid",
+            event_id=event_id,
         )
         subscription_record = sync_result.record
         notifications = sync_result.notifications
         if subject is None:
             subject = await _subject_from_object(subscription)
     if subject is None:
+        webhook_drops.report_invoice_subject_unresolved(
+            event_id, invoice, invoice_id, subscription_id
+        )
         return notifications
     if (
         settings.pro_billing_enabled
@@ -531,11 +566,19 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNot
                     period_start_unix=period_start_unix,
                 ),
             )
+    else:
+        webhook_drops.report_invoice_grant_gate_closed(
+            event_id, invoice, invoice_id, subject, subscription_record
+        )
     await _run_billing_store_write(clear_payment_failed_holds, billing_subject_id=subject.id)
     return notifications
 
 
-async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
+async def _handle_invoice_payment_failed(
+    invoice: dict[str, Any],
+    *,
+    event_id: object = None,
+) -> None:
     subject = await _subject_from_object(invoice)
     if subject is None:
         lines = _line_items_from_object(invoice)
@@ -548,6 +591,7 @@ async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
             subscription = await stripe_billing.retrieve_subscription(subscription_id)
             subject = await _subject_from_object(subscription)
     if subject is None:
+        webhook_drops.report_payment_failed_subject_unresolved(event_id, invoice.get("id"))
         return
     await _run_billing_store_write(
         apply_payment_failed_hold,
@@ -557,9 +601,14 @@ async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
     )
 
 
-async def _apply_payment_hold_for_subscription(subscription: dict[str, Any]) -> None:
+async def _apply_payment_hold_for_subscription(
+    subscription: dict[str, Any],
+    *,
+    event_id: object = None,
+) -> None:
     subject = await _subject_from_object(subscription)
     if subject is None:
+        webhook_drops.report_payment_hold_subject_unresolved(event_id, subscription.get("id"))
         return
     await _run_billing_store_write(
         apply_payment_failed_hold,

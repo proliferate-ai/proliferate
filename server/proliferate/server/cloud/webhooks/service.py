@@ -247,6 +247,15 @@ async def handle_e2b_webhook(
         # returns ``None`` outside ``CLOUD_BILLING_MODE=enforce``. It reads in
         # this session (unlike the old private-session snapshot call), which the
         # ``commit_webhook_phase`` below releases along with correlation.
+        #
+        # Law N6 also applies here, and deliberately so: if the resolver cannot
+        # READ billing state it raises ``BillingStateUnavailableError`` (after its
+        # own alert + receipt) and we let it propagate. The global handler renders
+        # that as a 503, which E2B treats as a delivery failure and RETRIES — the
+        # event receipt has not been claimed yet, so the retry re-runs this gate
+        # with a healthy read. Swallowing it instead would mark the event
+        # processed and leave over-limit compute running until the next
+        # reconciler pass, which is exactly the fail-open this corridor forbids.
         billing_block = await resolve_cloud_sandbox_billing_block(
             db,
             owner_user_id=sandbox.owner_user_id,
