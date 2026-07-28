@@ -1,24 +1,31 @@
-import { DiffViewer } from "#product/components/content/ui/DiffViewer";
+import { HighlightedCodeBlock } from "#product/components/content/ui/HighlightedCodeBlock";
 
 /**
  * Sample block for the Appearance pane: one bordered panel that makes every
  * choice on the page legible without leaving Settings — the UI type steps and
  * the code surface, in that order.
  *
- * The code half is a real before/after diff shown side by side rather than a
- * plain snippet: the diff surface is where code styling is hardest to judge,
- * and the addition/deletion tints and gutter numbers only exist there.
+ * The code half is a plain highlighted snippet, NOT a diff. A diff answers
+ * "how do added and removed lines look", which is not the question this pane
+ * asks: the settings above it scale UI text and code text, and a reader
+ * checking whether their code size is comfortable should see ordinary code at
+ * that size. The diff's row tints and change gutter were the loudest thing in
+ * the panel and pulled the eye to a state that only occurs while reviewing a
+ * change. Code with syntax highlighting and line numbers exercises exactly what
+ * the settings control — the mono family, the readable-code step, and the token
+ * palette — with nothing else competing.
  */
-const SAMPLE_PATCH = [
-  "@@ -1,5 +1,5 @@",
-  " const themePreview: ThemeConfig = {",
-  '-  surface: "sidebar",',
-  '-  accent: "azure",',
-  "-  contrast: 42,",
-  '+  surface: "sidebar-elevated",',
-  '+  accent: "cyan",',
-  "+  contrast: 68,",
-  " };",
+const SAMPLE_CODE = [
+  "type ThemeConfig = {",
+  "  surface: string;",
+  "  accent: string;",
+  "  contrast: number;",
+  "};",
+  "",
+  "export function resolveTheme(config: ThemeConfig) {",
+  "  const contrast = Math.min(100, Math.max(0, config.contrast));",
+  "  return { ...config, contrast, resolvedAt: Date.now() };",
+  "}",
 ].join("\n");
 
 export function AppearanceSampleBlock() {
@@ -36,12 +43,16 @@ export function AppearanceSampleBlock() {
         </p>
       </div>
       <div className="border-t border-border">
-        <DiffViewer
-          patch={SAMPLE_PATCH}
-          filePath="theme-preview.ts"
-          layout="split"
-          wrapLongLines
-          chainVerticalWheel={false}
+        {/* No border/radius of its own: the block is flush inside the panel that
+            already frames it, so the sample reads as one surface split into a
+            type half and a code half rather than a card inside a card. */}
+        <HighlightedCodeBlock
+          code={SAMPLE_CODE}
+          language="typescript"
+          showLanguageLabel={false}
+          showCopyButton={false}
+          showLineNumbers
+          className="rounded-none border-0 bg-transparent"
         />
       </div>
     </div>
