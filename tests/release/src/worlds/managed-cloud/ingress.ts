@@ -448,9 +448,10 @@ function buildServerEnv(options: DeployCandidateApiOptions): string {
     `CLOUD_SECRET_KEY=${randomBytes(32).toString("hex")}`,
     `SETUP_TOKEN_FILE=${REMOTE_SETUP_TOKEN_PATH}`,
     // The candidate server's own public HTTPS origin. Without it,
-    // `launch_worker_sidecar` (worker_cloud_base_url → API_BASE_URL) short-
-    // circuits and NO proliferate-worker is ever launched in the sandbox — so
-    // the sandbox must be able to reach the server here to enroll + heartbeat.
+    // `launch_anyharness_runtime` (worker_cloud_base_url → API_BASE_URL)
+    // proceeds with an empty cloud base URL and the Supervisor-spawned
+    // proliferate-worker crash-loops trying to enroll — so the sandbox must
+    // be able to reach the server here to enroll + heartbeat.
     `API_BASE_URL=${options.publicOrigin}`,
     // asyncpg driver: the server image ships asyncpg, not psycopg2, and
     // alembic/env.py uses create_async_engine — a bare `postgresql://` URL
