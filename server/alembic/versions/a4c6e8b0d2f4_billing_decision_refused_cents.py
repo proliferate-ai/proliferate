@@ -1,7 +1,7 @@
 """record how much over-cap spend a decision receipt refused
 
 Revision ID: a4c6e8b0d2f4
-Revises: d6e8f0a2b4c6
+Revises: 7f3a9b2c4d5e
 Create Date: 2026-07-28 00:00:00.000000
 
 Law A2 ("no orphaned spend — every closed segment is grant-covered, exported, or
@@ -29,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a4c6e8b0d2f4"
-down_revision: str | Sequence[str] | None = "d6e8f0a2b4c6"
+down_revision: str | Sequence[str] | None = "7f3a9b2c4d5e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
