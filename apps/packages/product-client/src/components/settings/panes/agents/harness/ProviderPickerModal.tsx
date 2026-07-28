@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Search } from "@proliferate/ui/icons";
+import type { AgentApiKey } from "@proliferate/cloud-sdk";
+import { ArrowUpRight, ChevronRight, Search } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import {
   getProviderSecretEnvVar,
   PROVIDER_REGISTRY,
@@ -16,26 +18,31 @@ interface ProviderPickerModalProps {
   /**
    * Confirming a provider's inline paste field. Exactly two writes follow
    * (agent-auth.md §5): a vault `api_key` entry, and one opencode selection row
-   * whose env_var_name is the provider's first registry env var and whose
+   * whose env_var_name is the provider's key-shaped registry env var and whose
    * provider_hint is the provider id.
    */
   onSubmit: (provider: ProviderRegistryEntry, apiKeyValue: string) => void;
-  /** Provider hints already wired on this harness; always shown expanded. */
+  /** Unbinds a configured provider's selection row. */
+  onRemove: (providerId: string, envVarName: string | null) => void;
+  /** Provider hints already wired on this harness. */
   configuredProviderIds?: readonly string[];
   /**
-   * env_var_name values already bound on this harness. The server keys a
-   * selection scope by (source_kind, env_var_name) and rejects a duplicate, so a
-   * provider whose secret env var is already bound renders as configured rather
-   * than offering an add that would 400 after the vault key was written.
+   * env_var_name values already bound on this harness — a provider whose
+   * secret env var appears here renders as configured (green dot + Remove +
+   * Replace) rather than as a fresh add.
    */
   boundEnvVarNames?: readonly string[];
+  /** Vault keys by id, for the configured rows' redacted hints. */
+  keysById?: ReadonlyMap<string, AgentApiKey>;
+  /** Bound selection rows' key ids by env var, to resolve the hint. */
+  rowKeyIdsByEnvVar?: ReadonlyMap<string, string>;
   submitting?: boolean;
   /** Failure of the two-write flow, rendered inline so the user can retry. */
   error?: string | null;
 }
 
 /**
- * The popular tier, expanded by default. Ids are registry ids
+ * The popular tier, shown by default. Ids are registry ids
  * (provider-registry.generated.json); anything not present in the vendored
  * registry simply never renders, so this list is safe to keep static across
  * vendoring refreshes.
@@ -75,31 +82,38 @@ function matchesQuery(provider: ProviderRegistryEntry, query: string): boolean {
   );
 }
 
-/** Neutral fallback for a provider with no vendored (or no published) mark. */
+/** 24px icon tile: vendored mark, else a mono letter fallback. */
 function ProviderLogo({ provider }: { provider: ProviderRegistryEntry }) {
   const src = PROVIDER_LOGO_URLS[provider.id];
-  if (src === undefined) {
-    return (
-      <span
-        aria-hidden
-        className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-border text-ui-sm text-muted-foreground"
-      >
-        {provider.displayName.slice(0, 1).toUpperCase()}
-      </span>
-    );
-  }
-  return <img src={src} alt="" aria-hidden className="size-4 shrink-0" />;
+  return (
+    <span
+      aria-hidden
+      className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border-light bg-surface-control font-mono text-ui-sm text-muted-foreground"
+    >
+      {src === undefined
+        ? provider.displayName.slice(0, 1).toUpperCase()
+        : (
+          // The vendored marks paint with `currentColor`, which resolves to
+          // BLACK inside an <img> — invisible on the dark surface. Force the
+          // mono treatment: flatten to black, invert to white, ease to ~78%.
+          <img
+            src={src}
+            alt=""
+            className="size-4 brightness-0 invert-[0.78]"
+          />
+        )}
+    </span>
+  );
 }
 
 /**
- * Searchable list over the vendored provider registry (agent-auth.md §5),
- * styled like OpenCode/Conductor's own provider picker: a featured tier plus
- * every already-configured provider expanded by default, the remainder behind
- * "Show more providers", and per-row logos. Providers with no server-valid,
- * key-shaped env var are omitted (there is nowhere legal for a single pasted
- * secret to go — they belong to the typed provider-config path, §4). Selecting a
- * row expands it into an inline paste-first field; a provider whose secret env
- * var is already bound renders as configured, with no add path.
+ * OpenCode's provider MANAGEMENT surface (design-handoff v2 §3): one searchable
+ * accordion list over the vendored provider registry where every row —
+ * configured or not — expands to a key form. A configured row additionally
+ * shows its wired state (`ENV_VAR · redacted` mono hint, per the handoff — the
+ * one place an env var is shown, read-only) and a Remove action; its input
+ * placeholder reads Replace. One row expands at a time; expanding resets the
+ * key draft. Footer discloses the full registry count behind the featured tier.
  *
  * Lazily loaded by its caller: this module pulls in the vendored logo URL map,
  * which must not land in the login-path chunk.
@@ -108,19 +122,18 @@ export function ProviderPickerModal({
   open,
   onClose,
   onSubmit,
+  onRemove,
   configuredProviderIds = [],
   boundEnvVarNames = [],
+  keysById,
+  rowKeyIdsByEnvVar,
   submitting = false,
   error = null,
 }: ProviderPickerModalProps) {
   const [search, setSearch] = useState("");
   const [expandedAll, setExpandedAll] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [secret, setSecret] = useState("");
-  // Which provider the current draft secret was typed for. Collapsing a row (or
-  // a failed save) keeps the draft, so ownership has to be tracked separately
-  // from `selectedId` — one provider's key must never be prefilled into another.
-  const [secretOwnerId, setSecretOwnerId] = useState<string | null>(null);
 
   // Each opening of the modal starts from the collapsed, unsearched state.
   useEffect(() => {
@@ -129,23 +142,26 @@ export function ProviderPickerModal({
     }
     setSearch("");
     setExpandedAll(false);
-    setSelectedId(null);
+    setExpandedId(null);
     setSecret("");
-    setSecretOwnerId(null);
   }, [open]);
 
   const query = search.trim().toLowerCase();
   const searching = query.length > 0;
 
   const bound = useMemo(() => new Set(boundEnvVarNames), [boundEnvVarNames]);
+  const configured = useMemo(
+    () => new Set(configuredProviderIds),
+    [configuredProviderIds],
+  );
 
-  const { visible, hiddenCount } = useMemo(() => {
-    const configured = new Set(configuredProviderIds);
-    const eligible = PROVIDER_REGISTRY.filter(hasSecretEnvVar);
+  const eligible = useMemo(() => PROVIDER_REGISTRY.filter(hasSecretEnvVar), []);
+
+  const { visible, totalCount } = useMemo(() => {
     // Search always spans the full list, never just the featured tier.
     const matched = eligible.filter((provider) => matchesQuery(provider, query));
     if (searching || expandedAll) {
-      return { visible: matched, hiddenCount: 0 };
+      return { visible: matched, totalCount: eligible.length };
     }
     const featured = matched.filter(
       (provider) =>
@@ -155,34 +171,50 @@ export function ProviderPickerModal({
         // the row carries no provider_hint (hand-typed rows don't).
         || bound.has(getProviderSecretEnvVar(provider) ?? ""),
     );
-    return { visible: featured, hiddenCount: matched.length - featured.length };
-  }, [bound, configuredProviderIds, expandedAll, query, searching]);
+    return { visible: featured, totalCount: eligible.length };
+  }, [bound, configured, eligible, expandedAll, query, searching]);
+
+  function isConfigured(provider: ProviderRegistryEntry): boolean {
+    return (
+      configured.has(provider.id)
+      || bound.has(getProviderSecretEnvVar(provider) ?? "")
+    );
+  }
+
+  function redactedHintFor(provider: ProviderRegistryEntry): string | null {
+    const envVarName = getProviderSecretEnvVar(provider);
+    if (envVarName === null) return null;
+    const keyId = rowKeyIdsByEnvVar?.get(envVarName);
+    const hint = keyId ? keysById?.get(keyId)?.redactedHint : undefined;
+    return hint ?? null;
+  }
 
   function handleConfirm(provider: ProviderRegistryEntry) {
     const value = secret.trim();
     const envVarName = getProviderSecretEnvVar(provider);
-    // Guard the (source_kind, env_var_name) uniqueness the server enforces:
-    // submitting here would create a vault key and then 400 ("Duplicate
-    // selection source"), orphaning it. The row is already non-addable in the
-    // UI; this is the belt-and-braces check on the write path.
-    if (
-      value.length === 0
-      || submitting
-      || envVarName === null
-      || bound.has(envVarName)
-    ) {
+    if (value.length === 0 || submitting || envVarName === null) {
       return;
     }
+    // Replacing a configured provider's key: unbind the old row first, then
+    // write the fresh key + selection (the server keys a selection scope by
+    // (source_kind, env_var_name) and rejects a duplicate).
+    if (bound.has(envVarName)) {
+      onRemove(provider.id, envVarName);
+    }
     onSubmit(provider, value);
+    setSecret("");
+    setExpandedId(null);
   }
 
   return (
     <ModalShell
       open={open}
       onClose={onClose}
-      title="Add provider"
-      description="Pick a provider to wire one of your own keys into OpenCode."
-      bodyClassName="px-5 pb-5 pt-2"
+      title={HARNESS_PANE_COPY.providersModalTitle}
+      description={HARNESS_PANE_COPY.providersModalDescription}
+      bodyClassName="px-5 pb-4 pt-2"
+      panelClassName="border-border bg-card shadow-modal rounded-2xl"
+      sizeClassName="max-w-[440px]"
     >
       <div className="flex flex-col gap-2">
         <div className="relative">
@@ -192,11 +224,11 @@ export function ProviderPickerModal({
             placeholder="Search providers..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="pl-8"
+            className="h-[34px] pl-8"
             autoFocus
           />
         </div>
-        <div className="max-h-80 overflow-y-auto rounded-md border border-border">
+        <div className="max-h-[340px] overflow-y-auto rounded-lg border border-border">
           {visible.length === 0 ? (
             <p className="px-3 py-6 text-center text-ui-sm text-muted-foreground">
               No providers match your search.
@@ -207,46 +239,44 @@ export function ProviderPickerModal({
                 <ProviderRow
                   key={provider.id}
                   provider={provider}
-                  selected={selectedId === provider.id}
-                  secret={secret}
+                  expanded={expandedId === provider.id}
+                  configured={isConfigured(provider)}
+                  redactedHint={redactedHintFor(provider)}
+                  secret={expandedId === provider.id ? secret : ""}
                   submitting={submitting}
-                  alreadyBound={bound.has(getProviderSecretEnvVar(provider) ?? "")}
-                  error={selectedId === provider.id ? error : null}
-                  onSelect={() => {
-                    // Re-clicking the open row collapses it and KEEPS the typed
-                    // draft, so a mis-click never wipes a pasted secret.
-                    if (selectedId === provider.id) {
-                      setSelectedId(null);
+                  error={expandedId === provider.id ? error : null}
+                  onToggle={() => {
+                    // One accordion at a time; expanding a row resets the draft
+                    // so one provider's key is never prefilled into another.
+                    if (expandedId === provider.id) {
+                      setExpandedId(null);
                       return;
                     }
-                    setSelectedId(provider.id);
-                    // Only clear when the draft belongs to a DIFFERENT provider.
-                    if (secretOwnerId !== provider.id) {
-                      setSecret("");
-                      setSecretOwnerId(provider.id);
-                    }
+                    setExpandedId(provider.id);
+                    setSecret("");
                   }}
-                  onSecretChange={(value) => {
-                    setSecret(value);
-                    setSecretOwnerId(provider.id);
-                  }}
+                  onSecretChange={setSecret}
                   onConfirm={() => handleConfirm(provider)}
+                  onRemove={() => {
+                    onRemove(provider.id, getProviderSecretEnvVar(provider));
+                    setExpandedId(null);
+                  }}
                 />
               ))}
             </ul>
           )}
         </div>
-        {!searching && (hiddenCount > 0 || expandedAll) ? (
+        {!searching ? (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="self-start"
+            className="w-full justify-center border-t border-border"
             onClick={() => setExpandedAll((previous) => !previous)}
           >
             {expandedAll
-              ? "Show fewer providers"
-              : `Show more providers (${hiddenCount})`}
+              ? "Show featured providers"
+              : HARNESS_PANE_COPY.providersModalViewAll(totalCount)}
           </Button>
         ) : null}
       </div>
@@ -256,65 +286,78 @@ export function ProviderPickerModal({
 
 function ProviderRow({
   provider,
-  selected,
+  expanded,
+  configured,
+  redactedHint,
   secret,
   submitting,
-  alreadyBound,
   error,
-  onSelect,
+  onToggle,
   onSecretChange,
   onConfirm,
+  onRemove,
 }: {
   provider: ProviderRegistryEntry;
-  selected: boolean;
+  expanded: boolean;
+  configured: boolean;
+  redactedHint: string | null;
   secret: string;
   submitting: boolean;
-  alreadyBound: boolean;
   error: string | null;
-  onSelect: () => void;
+  onToggle: () => void;
   onSecretChange: (value: string) => void;
   onConfirm: () => void;
+  onRemove: () => void;
 }) {
-  // The var the secret lands in — never envVarNames[0], which is a resource
-  // name / project id on multi-field providers.
-  const envVarName = getProviderSecretEnvVar(provider) ?? "";
-  if (alreadyBound) {
-    // Configured already: show the wired state instead of an add path that the
-    // server would reject as a duplicate (source_kind, env_var_name) scope.
-    return (
-      <li>
-        <div className="flex min-h-7 w-full select-none items-center gap-1.5 px-2.5 py-[5px] text-ui-sm text-muted-foreground">
-          <ProviderLogo provider={provider} />
-          <span className="font-medium text-popover-foreground">
-            {provider.displayName}
-          </span>
-          <span className="ml-auto flex items-center gap-1.5">
-            <span className="font-mono">{envVarName}</span>
-            <span>Configured</span>
-          </span>
-        </div>
-      </li>
-    );
-  }
+  const envVarName = getProviderSecretEnvVar(provider);
   return (
-    <li>
+    <li className={expanded ? "bg-selected" : undefined}>
       <button
         type="button"
-        aria-expanded={selected}
-        onClick={onSelect}
-        className="flex min-h-7 w-full cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 py-[5px] text-ui-sm text-popover-foreground outline-none transition-colors hover:bg-hover focus:bg-hover"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className="flex w-full cursor-pointer select-none items-center gap-2.5 px-3 py-2.5 text-ui text-foreground outline-none transition-colors hover:bg-hover focus:bg-hover"
       >
         <ProviderLogo provider={provider} />
         <span className="font-medium">{provider.displayName}</span>
-        <span className="ml-auto flex items-center gap-1.5 text-muted-foreground">
-          <span className="font-mono">{envVarName}</span>
-          <ChevronRight className="icon-paired" />
+        {configured ? (
+          <span className="flex items-center gap-1.5 text-ui-sm text-success">
+            <span aria-hidden className="icon-status rounded-full bg-current" />
+            {HARNESS_PANE_COPY.providersModalConfigured}
+          </span>
+        ) : null}
+        <span className="ml-auto flex items-center text-muted-foreground">
+          <ChevronRight
+            className={`icon-paired transition-transform ${expanded ? "rotate-90" : ""}`}
+          />
         </span>
       </button>
-      {selected ? (
-        <>
+      {expanded ? (
+        <div className="space-y-2 px-3 pb-3">
+          {configured ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate font-mono text-ui-sm text-muted-foreground/65">
+                {envVarName}
+                {redactedHint ? ` · ${redactedHint}` : ""}
+              </span>
+              <Button
+                type="button"
+                variant="unstyled"
+                size="unstyled"
+                className="shrink-0 text-ui-sm font-medium text-destructive hover:underline"
+                disabled={submitting}
+                onClick={onRemove}
+              >
+                {HARNESS_PANE_COPY.providersModalRemove}
+              </Button>
+            </div>
+          ) : null}
+          <p className="flex items-center gap-1 text-ui-sm text-muted-foreground">
+            {HARNESS_PANE_COPY.getApiKey}
+            <ArrowUpRight className="icon-compact" aria-hidden />
+          </p>
           <form
-            className="flex items-center gap-1.5 px-2.5 pb-2"
+            className="flex items-center gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               onConfirm();
@@ -322,9 +365,13 @@ function ProviderRow({
           >
             <Input
               aria-label={`${provider.displayName} API key`}
-              placeholder={`Paste your ${provider.displayName} API key`}
+              placeholder={`${configured ? "Replace" : "Paste"} your ${provider.displayName} API key`}
               type="password"
               value={secret}
+              autoComplete="off"
+              spellCheck={false}
+              data-telemetry-mask
+              className="h-8"
               onChange={(event) => onSecretChange(event.target.value)}
               autoFocus
             />
@@ -338,11 +385,11 @@ function ProviderRow({
             </Button>
           </form>
           {error === null ? null : (
-            <p role="alert" className="px-2.5 pb-2 text-ui-sm text-destructive">
+            <p role="alert" className="text-ui-sm text-destructive">
               {error}
             </p>
           )}
-        </>
+        </div>
       ) : null}
     </li>
   );

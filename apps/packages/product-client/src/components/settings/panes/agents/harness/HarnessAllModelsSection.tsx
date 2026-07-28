@@ -9,14 +9,14 @@ import {
   useModelSnapshotStatusQuery,
   useRefreshModelSnapshotMutation,
 } from "@anyharness/sdk-react";
-import { ChevronDown, ChevronRight, RefreshCw, Search, X } from "@proliferate/ui/icons";
+import { ChevronRight, RefreshCw, Search, X } from "@proliferate/ui/icons";
 import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/patterns/ModelTable";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { HarnessSection } from "#product/components/settings/panes/agents/harness/HarnessSection";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
@@ -28,7 +28,6 @@ import {
   formatSnapshotAge,
   resolveComposedObservation,
 } from "#product/lib/domain/settings/model-snapshot-observation";
-import { HarnessStatusRow } from "#product/components/settings/panes/agents/harness/HarnessStatusRow";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;
@@ -134,11 +133,11 @@ export function HarnessAllModelsSection({
 
   if (!isLocal && !cloudActive) {
     return (
-      <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
-        <p className="py-3 text-ui-sm text-muted-foreground">
+      <HarnessSection title={HARNESS_PANE_COPY.tabAllModels}>
+        <p className="text-ui-sm text-muted-foreground">
           {HARNESS_PANE_COPY.signInDescription(displayName)}
         </p>
-      </SettingsSection>
+      </HarnessSection>
     );
   }
 
@@ -205,22 +204,6 @@ export function HarnessAllModelsSection({
         ? HARNESS_PANE_COPY.allModelsSeedDescription
         : "";
 
-  const seedBadge = isSeed && !isLoading
-    ? <Badge tone="neutral">{HARNESS_PANE_COPY.allModelsUnverifiedBadge}</Badge>
-    : null;
-  const refreshingBadge = isRefreshing
-    ? <Badge tone="neutral">{HARNESS_PANE_COPY.allModelsRefreshingBadge}</Badge>
-    : null;
-  // A failed refresh never destroys truth: the last-good lists keep serving,
-  // with this indicator next to the probedAt age.
-  const failedRefreshBadge = isLocal && observation?.lastAttemptFailed
-    ? (
-      <Badge tone="warning" title={observation.lastError ?? undefined}>
-        {HARNESS_PANE_COPY.allModelsRefreshFailedBadge}
-      </Badge>
-    )
-    : null;
-
   // Diagnostics only (model-catalog.md: "the provenance fields are not
   // gates") — what binary and install answered, and which modes it advertised.
   const diagnosticsLines: string[] = [];
@@ -230,27 +213,6 @@ export function HarnessAllModelsSection({
   if (isLocal && hasObservation && observation && observation.modes.length > 0) {
     diagnosticsLines.push(HARNESS_PANE_COPY.allModelsModes(observation.modes));
   }
-
-  // Probe status for the shared status row. Derived from the same observation
-  // fields the badges already read — no new query, no new poller, and age stays
-  // display-only (model-catalog.md: age never disqualifies anything).
-  const probeLabel = isLoading
-    ? HARNESS_PANE_COPY.allModelsLoading
-    : isRefreshing
-      ? HARNESS_PANE_COPY.allModelsProbing
-      : isSeed
-        ? HARNESS_PANE_COPY.probeNotYetRun
-        : HARNESS_PANE_COPY.probeObserved;
-  const probeTone: BadgeTone = isLoading || isRefreshing
-    ? "neutral"
-    : isLocal && observation?.lastAttemptFailed
-      ? "warning"
-      : isSeed
-        ? "neutral"
-        : "success";
-  const modelCountLabel = models.length > 0
-    ? HARNESS_PANE_COPY.probeModelCount(models.length)
-    : null;
 
   const [filterText, setFilterText] = useState("");
   const [listExpanded, setListExpanded] = useState(false);
@@ -266,42 +228,61 @@ export function HarnessAllModelsSection({
     );
   }, [rows, filterText]);
 
+  // The quiet v2 header (design-handoff "Models section"): title + refresh
+  // icon + rotating chevron on the right; ONE content line — the model count
+  // in foreground with the provenance/freshness suffix muted. No badge pile,
+  // no long seed description.
+  const contentSuffix = isLoading
+    ? HARNESS_PANE_COPY.allModelsLoading
+    : isRefreshing
+      ? HARNESS_PANE_COPY.allModelsProbing
+      : isLocal && observation?.lastAttemptFailed
+        ? HARNESS_PANE_COPY.allModelsRefreshFailedBadge
+        : isSeed
+          ? HARNESS_PANE_COPY.allModelsSeedSuffix
+          : freshnessLine;
+
   return (
-    <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
-      {/* §7: probe status on the left built from the SAME status-row component
-          as §3's auth status, refresh on the right — "when was this last
-          checked, and can I check again" is one question whether the subject is
-          a credential or a model list. The list itself is reference material,
-          so the row is also the disclosure and starts collapsed. */}
-      <HarnessStatusRow
-        data-harness-status="models"
-        label={probeLabel}
-        tone={probeTone}
-        savedState={modelCountLabel}
-        description={freshnessLine}
-        badges={(
-          <>
-            {seedBadge}
-            {refreshingBadge}
-            {failedRefreshBadge}
-          </>
-        )}
-        onClick={() => setListExpanded((open) => !open)}
-        clickLabel={HARNESS_PANE_COPY.tabAllModels}
-        expanded={listExpanded}
-        refreshing={isRefreshing}
-        refreshLabel={isRefreshing
-          ? HARNESS_PANE_COPY.allModelsRefreshing
-          : HARNESS_PANE_COPY.allModelsRefresh}
-        onRefresh={canManuallyRefresh ? handleRefresh : undefined}
-        action={(
-          <span aria-hidden="true" className="text-muted-foreground">
-            {listExpanded
-              ? <ChevronDown className="icon-paired" />
-              : <ChevronRight className="icon-paired" />}
+    <HarnessSection
+      title={HARNESS_PANE_COPY.tabAllModels}
+      action={(
+        <>
+          {canManuallyRefresh ? (
+            <IconButton
+              aria-label={isRefreshing
+                ? HARNESS_PANE_COPY.allModelsRefreshing
+                : HARNESS_PANE_COPY.allModelsRefresh}
+              title={HARNESS_PANE_COPY.allModelsRefresh}
+              disabled={isRefreshing}
+              onClick={handleRefresh}
+            >
+              <RefreshCw className={`icon-paired ${isRefreshing ? "animate-spin" : ""}`} />
+            </IconButton>
+          ) : null}
+          <IconButton
+            aria-label={HARNESS_PANE_COPY.tabAllModels}
+            aria-expanded={listExpanded}
+            onClick={() => setListExpanded((open) => !open)}
+          >
+            <ChevronRight
+              className={`icon-paired transition-transform ${listExpanded ? "rotate-90" : ""}`}
+            />
+          </IconButton>
+        </>
+      )}
+      data-harness-status="models"
+    >
+      <p className="text-body">
+        <span className="text-foreground">
+          {HARNESS_PANE_COPY.probeModelCount(models.length)}
+        </span>
+        {contentSuffix ? (
+          <span className="text-ui text-muted-foreground/65">
+            {" · "}
+            {contentSuffix}
           </span>
-        )}
-      />
+        ) : null}
+      </p>
 
       <AnimatedCollapsibleContent expanded={listExpanded}>
       <div className="space-y-3 py-3">
@@ -364,6 +345,6 @@ export function HarnessAllModelsSection({
         )}
       </div>
       </AnimatedCollapsibleContent>
-    </SettingsSection>
+    </HarnessSection>
   );
 }

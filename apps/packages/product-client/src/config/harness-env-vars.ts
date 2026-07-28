@@ -45,6 +45,29 @@ export function getProviderSecretEnvVar(provider: {
   );
 }
 
+/**
+ * Human label for a bound API key ("Anthropic API key"). Env-var names are
+ * internal wiring and never user-facing: rows and modals describe the key by
+ * the provider it belongs to, resolved from the provider hint or — for
+ * hand-typed/legacy rows — by matching the env var against the registry.
+ */
+export function getApiKeyBindingLabel(
+  envVarName: string,
+  providerHint: string | null | undefined,
+): string {
+  const byHint = providerHint
+    ? PROVIDER_REGISTRY.find((provider) => provider.id === providerHint)
+    : undefined;
+  const byEnvVar = byHint
+    ?? PROVIDER_REGISTRY.find((provider) => provider.envVarNames.includes(envVarName));
+  if (byEnvVar) return `${byEnvVar.displayName} API key`;
+  // Cursor's account key has no registry entry.
+  if (providerHint === "cursor" || envVarName === "CURSOR_API_KEY") {
+    return "Cursor API key";
+  }
+  return "API key";
+}
+
 export interface HarnessEnvVarSuggestion {
   envVarName: string;
   // Display-only; mirrors agent_auth_selection.provider_hint. Never sent to

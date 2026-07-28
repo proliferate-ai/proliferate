@@ -1,6 +1,5 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
 import { Badge } from "@proliferate/ui/primitives/Badge";
@@ -15,13 +14,13 @@ import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { isMultiSourceHarness } from "#product/lib/domain/settings/harness-auth-sources";
 import { HarnessAllModelsSection } from "#product/components/settings/panes/agents/harness/HarnessAllModelsSection";
-import { HarnessAuthDetailsSection } from "#product/components/settings/panes/agents/harness/HarnessAuthDetailsSection";
 import { ApiKeyDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyDetails";
+import { CliDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthCliDetails";
 import {
   HarnessAuthSection,
   deriveSelectedMethod,
-  isMultiSourceApiKeyConfigVisible,
 } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
+import { HarnessProvidersSection } from "#product/components/settings/panes/agents/harness/HarnessProvidersSection";
 import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
 import { HarnessSettingsSection } from "#product/components/settings/panes/agents/harness/HarnessSettingsSection";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
@@ -77,11 +76,33 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
 
   return (
     <section className="space-y-6">
-      <SettingsPageHeader
-        title={displayName}
-        description={HARNESS_PANE_COPY.surfaceDescription(surface, displayName)}
-        action={<HarnessDocsLink docsUrl={agentsByKind.get(harnessKind)?.docsUrl} />}
-      />
+      {/* §1 identity header (design-handoff v2): 42px provider glyph tile +
+          name/vendor line + Docs exit. Inline rather than SettingsPageHeader —
+          the shared pattern has no leading-tile slot. */}
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span
+            aria-hidden
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-surface-control text-foreground"
+          >
+            <ProviderIcon
+              kind={harnessKind}
+              className="icon-large [font-size:var(--text-ui)]"
+            />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-title font-semibold tracking-[-0.025em] text-foreground">
+              {displayName}
+            </h1>
+            <p className="text-ui text-muted-foreground/55">
+              {HARNESS_PANE_COPY.harnessIdentity[harnessKind]}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center">
+          <HarnessDocsLink docsUrl={agentsByKind.get(harnessKind)?.docsUrl} />
+        </div>
+      </header>
 
       {surface === "cloud" ? (
         <CloudGuard>
@@ -230,15 +251,12 @@ function HarnessRuntimeStatusRow({
 }
 
 /**
- * The seven-section anatomy (agent-auth.md "Pane anatomy"), one component for
- * both surfaces. The order is the ruling: identity → auth → whether that worked
- * → keys → provider add → options → models, so the pane reads top to bottom as
- * "which harness → how it authenticates → whether that worked → what else it
- * can do → what it can run".
- *
- * Everything here is a flat titled section separated by the rows' own hairlines.
- * There is no card, tile, or bordered box: a card implies a self-contained
- * object, and these sections are facets of one harness.
+ * The v2 pane anatomy (reference/design-handoff): identity → Authentication
+ * (method cards with the ONE status badge merged into the header, detail area
+ * below the cards) → harness settings → Models. There is no separate Status
+ * section — the state is said exactly once, in the section header. OpenCode
+ * replaces Authentication with a providers-only section (no chooser, no
+ * gateway).
  */
 function HarnessAuthSurface({
   harnessKind,
@@ -252,47 +270,33 @@ function HarnessAuthSurface({
   const editor = useHarnessAuthEditor(harnessKind, displayName, surface);
   const selectedMethod = deriveSelectedMethod(editor);
   const multiSource = isMultiSourceHarness(harnessKind);
-  // §4/§5 render whenever there is a key surface to show. For opencode this is
-  // NOT gated on a §2 choice (§2 "for opencode this section is not a gate"):
-  // its methods compose additively, so the key surface is reachable as soon as
-  // any row exists or the user starts configuring one.
-  const showKeys = multiSource
-    ? isMultiSourceApiKeyConfigVisible(editor)
-    : selectedMethod === "api_key";
 
   return (
     <>
-      {/* §2 — Auth method (radio semantics, uncarded). */}
-      <HarnessAuthSection
-        harnessKind={harnessKind}
-        displayName={displayName}
-        surface={surface}
-        editor={editor}
-      />
-
-      {/* §3 — Authenticated status, one row shape for every method. On the
-          cloud surface this stays gated on authReady (cloud has no native CLI
-          row to fall back to when auth isn't ready). On local it always
-          renders: the native CLI status row + Authenticate affordance must be
-          reachable for signed-out/local-only users too. */}
-      {(surface === "cloud" ? editor.authReady : true) ? (
-        <HarnessAuthDetailsSection
+      {multiSource ? (
+        <HarnessProvidersSection editor={editor} />
+      ) : (
+        <HarnessAuthSection
           harnessKind={harnessKind}
-          selectedMethod={selectedMethod}
+          displayName={displayName}
+          surface={surface}
           editor={editor}
-        />
-      ) : null}
+        >
+          {/* Method detail area, below the cards. Gateway needs no detail —
+              failure shows on the disabled card + header badge. */}
+          {selectedMethod === "api_key" ? (
+            <ApiKeyDetails harnessKind={harnessKind} editor={editor} />
+          ) : selectedMethod === "cli" ? (
+            <CliDetails editor={editor} />
+          ) : null}
+        </HarnessAuthSection>
+      )}
 
-      {/* §4 + §5 — API keys and (opencode only) Add provider. */}
-      {showKeys ? (
-        <ApiKeyDetails harnessKind={harnessKind} editor={editor} />
-      ) : null}
-
-      {/* §6 — Harness-specific options, AFTER auth: these are options on top of
+      {/* Harness-specific options, AFTER auth: these are options on top of
           a working harness, so they sit below the thing that makes it work. */}
       <HarnessSettingsSection harnessKind={harnessKind} surface={surface} />
 
-      {/* §7 — Model list, auto-collapsed, same status row as §3. */}
+      {/* Model list, auto-collapsed. */}
       <HarnessAllModelsSection
         harnessKind={harnessKind}
         displayName={displayName}

@@ -2,14 +2,12 @@ import { useCallback, useMemo } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
 import {
   usePutAuthSelections,
   useAgentAuthState,
   useAuthSelections,
 } from "@proliferate/cloud-sdk-react";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
-import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 
 // --------------------------------------------------------------------------- #
 // Catalog-declared settings (mirrors catalogs/agents/catalog.json)
@@ -48,10 +46,8 @@ interface HarnessSettingsSectionProps {
 }
 
 /**
- * §6 — Harness-specific options. A flat titled section of setting rows, the
- * same rhythm as every other section of the pane: the bordered panel this used
- * to render inside is gone, because these are facets of one harness rather than
- * a self-contained object.
+ * §6 — Harness-specific options. Untitled hairline-top group of setting rows
+ * (Pablo 2026-07-28: no "Harness settings" heading — the rows are self-labeled).
  */
 export function HarnessSettingsSection({
   harnessKind,
@@ -65,7 +61,7 @@ export function HarnessSettingsSection({
   }
 
   return (
-    <SettingsSection title={HARNESS_PANE_COPY.harnessSettingsTitle}>
+    <section className="border-t border-border pt-4">
       {settings.map((setting) => (
         <HarnessSettingRow
           key={setting.key}
@@ -74,7 +70,7 @@ export function HarnessSettingsSection({
           setting={setting}
         />
       ))}
-    </SettingsSection>
+    </section>
   );
 }
 

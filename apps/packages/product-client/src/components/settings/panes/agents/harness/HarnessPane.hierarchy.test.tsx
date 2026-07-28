@@ -107,7 +107,7 @@ describe("HarnessPane visual hierarchy", () => {
     expect(screen.queryByText("Runtime")).toBeNull();
     expect(screen.getAllByText("Authentication")).toHaveLength(1);
     expect(
-      screen.getByText("Configure how Claude Code runs and authenticates on this machine."),
+      screen.getByText("Anthropic's coding agent."),
     ).toBeTruthy();
   });
 
@@ -149,7 +149,7 @@ describe("HarnessPane visual hierarchy", () => {
     expect(screen.queryByText("Workspace")).toBeNull();
     expect(screen.queryByText("Installation and readiness on this machine.")).toBeNull();
     expect(
-      screen.getByText("Configure how Claude Code runs and authenticates on this machine."),
+      screen.getByText("Anthropic's coding agent."),
     ).toBeTruthy();
   });
 
