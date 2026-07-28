@@ -530,11 +530,13 @@ The agreed contract is not implemented today:
   fails closed on checksum/size mismatch regardless, but the route itself can
   still serve rolling `stable` upstream of that check;
 - managed cloud launches AnyHarness and Worker separately; Supervisor is not
-  the active product parent — **server-side branch implemented, gated off at
-  merge**: the `settings.supervisor_owned_runtime`-gated branch in `connect.py`
-  (default off) launches Supervisor detached instead of a separate Worker
-  sidecar, and the flag-off path is unchanged and regression-pinned. Exercised
-  deterministically in server tests; the live E2B proof is deferred;
+  the active product parent — **implemented and now the default**: the live
+  E2B N-1→N proof passed (2026-07-26: real sandbox, pins 0.3.47→0.3.48, zero
+  rollbacks), so the `settings.supervisor_owned_runtime`-gated branch in
+  `connect.py` (default on) launches Supervisor detached instead of a
+  separate Worker sidecar. The flag-off legacy path remains for opt-out
+  rollback and stays regression-pinned. Exercised deterministically in
+  server tests plus the live proof above;
 - Worker directly downloads/swaps/restarts itself and AnyHarness instead of
   writing a durable Supervisor request — **implemented and wired**:
   `supervisor_bridge.rs` (mailbox request write, D5 bridge, crash-safety

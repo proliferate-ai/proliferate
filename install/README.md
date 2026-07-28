@@ -39,16 +39,16 @@ SSH onboarding uses this command surfaced in the Desktop Compute settings page.
 Managed cloud does not run this shell installer; managed cloud bootstrap
 writes worker (and, on a supervisor-owned target, supervisor) config directly
 inside the sandbox. Whether managed cloud actually **starts** Supervisor
-depends on the server's `supervisor_owned_runtime` flag: off (the default at
-merge), it launches AnyHarness and the Worker sidecar directly and never
-starts Supervisor; on, it launches Supervisor detached and Supervisor starts
-AnyHarness and Worker itself. See
+depends on the server's `supervisor_owned_runtime` flag: on (the default
+since the live E2B N-1→N proof passed 2026-07-26), it launches Supervisor
+detached and Supervisor starts AnyHarness and Worker itself; off (legacy,
+opt-out only), it launches AnyHarness and the Worker sidecar directly and
+never starts Supervisor. See
 [`server/architecture.md`](../specs/codebase/structures/server/architecture.md#5-managed-runtime-and-worker-detailed)
 for the current default and
 [`proliferate-supervisor/README.md`](../specs/codebase/structures/proliferate-supervisor/README.md#implementation-status-this-pr)
-for what Supervisor owns once it is the parent. The mailbox consumer is
-implemented; the remaining gate is operational — do not flip
-`supervisor_owned_runtime` on before the live E2B proof passes.
+for what Supervisor owns once it is the parent. The legacy launch path
+remains only for rollback; its deletion is the named follow-up.
 
 ## Environment Variables
 

@@ -443,8 +443,10 @@ server/proliferate/
   exit); run by the release and promote lanes and by the rollback runbook.
 - Managed runtime update proof: T4-RUNTIME-1 (heartbeat-driven update on a
   live sandbox) in the release suite.
-- Pending: the live E2B N-1 to N update proof that gates the
-  Supervisor-owned topology default (below).
+- Live E2B N-1 to N update proof (2026-07-26): real sandbox, supervisor-owned
+  topology, pins 0.3.47->0.3.48, zero rollbacks, sha256 of active binaries
+  matched published CDN artifacts, ~75s convergence. This gates the
+  Supervisor-owned topology default (below), which is now on.
 
 ## Current gaps
 
@@ -460,13 +462,15 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       valid, so forwarded traffic wakes them); the fix waits on the
       cold-start choreography ruling (wake-and-poll vs
       provision-on-access), still open.
-- [ ] `supervisor_owned_runtime` defaults off
-      ([config.py](../../../../server/proliferate/config.py)); today's
-      default launch is the legacy path (direct detached AnyHarness plus a
-      best-effort Worker sidecar,
-      [runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py)).
-      The flag flips after the live E2B N-1 to N proof passes; the legacy
-      launch path is then deleted.
+- [ ] `supervisor_owned_runtime` now defaults on
+      ([config.py](../../../../server/proliferate/config.py)): the live E2B
+      N-1 to N proof passed (2026-07-26), so newly (re)launched cloud
+      sandboxes boot Proliferate Supervisor first by default. The legacy
+      launch path (direct detached AnyHarness plus a best-effort Worker
+      sidecar,
+      [runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py))
+      still exists behind the flag (env var opt-out) for rollback; its
+      deletion is the named follow-up.
 - [ ] Worker death still has no alert path: a `running` sandbox's stale or
       missing Worker now surfaces as `workerDegraded: true` on the
       workspace runtime-status payload
