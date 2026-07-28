@@ -159,6 +159,14 @@ function settingsItemStatus(
       statusItems.push(<span key="updates">Available</span>);
     } else if (updateActionState.phase === "ready") {
       statusItems.push(<span key="updates">Restart to update</span>);
+    } else if (updateActionState.phase === "stalled") {
+      statusItems.push(<span key="updates">Stalled</span>);
+    } else if (updateActionState.phase === "error") {
+      // The row is where the user came to check, so it must not read as
+      // "nothing happened" after a failure.
+      statusItems.push(<span key="updates">Couldn't check</span>);
+    } else if (updateActionState.phase === "current") {
+      statusItems.push(<span key="updates">Up to date</span>);
     }
   }
 

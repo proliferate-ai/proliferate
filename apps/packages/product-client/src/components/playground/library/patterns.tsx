@@ -21,6 +21,7 @@ import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButto
 import { SidebarNavRow } from "@proliferate/ui/patterns/SidebarNavRow";
 import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
 import { ThinkingText } from "@proliferate/ui/patterns/ThinkingText";
+import { showToast } from "@proliferate/ui/utils/show-toast";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Home, Trash } from "@proliferate/ui/icons";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
@@ -181,6 +182,42 @@ function PickerPopoverContentDemo() {
   );
 }
 
+/**
+ * The host itself is already mounted once at the app root, so the sheet demos
+ * it the only way it is ever used: by raising one of each weight through
+ * `showToast` and letting the real mount render them.
+ */
+function ToastHostDemo() {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button variant="secondary" size="sm" onClick={() => showToast({ message: "Workspace archived", tone: "success" })}>
+        Status
+      </Button>
+      <Button variant="secondary" size="sm" onClick={() => showToast({
+        weight: "announcement",
+        badge: "UPDATE",
+        tone: "success",
+        title: "Proliferate 0.4.1 is ready",
+        description: "Restart takes about 5 seconds and reopens where you left off.",
+        secondary: { label: "Later", onClick: noop },
+        commit: { label: "Restart", onClick: noop },
+      })}>
+        Announcement
+      </Button>
+      <Button variant="secondary" size="sm" onClick={() => showToast({
+        weight: "detail",
+        tone: "warning",
+        title: "3 files could not be staged",
+        description: "The commit was not created. Nothing was written.",
+        payload: ["src/page.tsx", "src/layout.tsx", "src/route.ts"].join("\n"),
+        jump: { label: "Open changes", onClick: noop },
+      })}>
+        Detail
+      </Button>
+    </div>
+  );
+}
+
 export const PATTERNS_ENTRIES: LibraryEntry[] = [
   { name: "AuthProviderButton", subpath: "@proliferate/ui/patterns/AuthProviderButton", render: () => (
     <AuthProviderButton onClick={noop}>Continue with GitHub</AuthProviderButton>
@@ -232,6 +269,7 @@ export const PATTERNS_ENTRIES: LibraryEntry[] = [
   { name: "SidebarNavRow", subpath: "@proliferate/ui/patterns/SidebarNavRow", render: SidebarNavRowDemo },
   { name: "SidebarRowSurface", subpath: "@proliferate/ui/patterns/SidebarRowSurface", render: SidebarRowSurfaceDemo },
   { name: "ThinkingText", subpath: "@proliferate/ui/patterns/ThinkingText", render: () => <ThinkingText /> },
+  { name: "ToastHost", subpath: "@proliferate/ui/patterns/ToastHost", render: ToastHostDemo },
 ];
 
 export const PATTERNS_TIER: LibraryTier = {

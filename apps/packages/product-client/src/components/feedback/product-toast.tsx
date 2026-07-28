@@ -1,25 +1,43 @@
-import { toast } from "@proliferate/ui/primitives/Sonner";
+import { showToast } from "@proliferate/ui/utils/show-toast";
+import { STATUS_MESSAGE_MAX_CHARS } from "@proliferate/ui/utils/toast-model";
 
 export type ProductToastKind = "error" | "info";
 
 /**
  * The single ad-hoc toast presentation. Every non-update toast in the product
  * funnels through here (via useToastStore for the ~190 legacy call sites, or
- * directly), rendering the message in the same kit Sonner container the update
- * lifecycle toasts use — so there is one toast look, not three.
+ * directly).
  *
- * `kind` is accepted for call-site/API compatibility but intentionally does
- * NOT drive a separate visual: almost every legacy call site omits the type
- * and inherits the store's default, so a type-styled badge would mislabel
- * neutral messages. Errors read as errors from their own copy.
+ * These call sites are the reason `status` is the default weight: almost all of
+ * them pass one short sentence about something that just happened, which is
+ * exactly a status line. So the legacy signature maps onto the kit's default
+ * rather than getting a compatibility shim — `kind` becomes the tone of the
+ * dot, and the dot is the only thing severity is allowed to change.
+ *
+ * A caller that passes a `description` has, by definition, more than one line
+ * to say, so it is promoted to an `announcement` instead of being crushed into
+ * a truncated status line. Same for a message too long to fit on one line: the
+ * weight follows the content, and neither case needs the call site to know
+ * about weights at all.
  */
 export function showProductToast(
   message: string,
-  _kind: ProductToastKind = "info",
+  kind: ProductToastKind = "info",
   options?: { description?: string; duration?: number },
 ) {
-  toast(message, {
-    description: options?.description,
-    duration: options?.duration ?? 5000,
-  });
+  const tone = kind === "error" ? "destructive" : "neutral";
+  const description = options?.description;
+
+  if (description || message.length > STATUS_MESSAGE_MAX_CHARS) {
+    showToast({
+      weight: "announcement",
+      tone,
+      title: message,
+      description,
+      duration: options?.duration,
+    });
+    return;
+  }
+
+  showToast({ message, tone, duration: options?.duration });
 }
