@@ -11,6 +11,21 @@ is created for it (pinned by ``t2-bill.ts`` / ``billing/overage.spec.ts`` and by
 is that the refused spend be *attributable*, and it was not: a pass whose whole
 uncovered slice was over-cap recorded no ``BillingDecisionEvent`` at all, because
 the receipt was gated on ``export_count > 0``. These tests pin the receipt.
+
+Attribution here means three things, each with its own case below:
+
+* the receipt exists (A2a, A2e),
+* it says how much was refused — ``refused_cents``, since the amount is not
+  reconstructible from durable data once the usage cursor has advanced (A2a, A2b,
+  A2d), and
+* there is one receipt per refusal *run*, not per pass: an open segment refuses
+  again every 15 minutes, and a refusal after recovery is a new fact (A2f).
+
+Known limit, unchanged by these tests: the receipt is written in a transaction
+*after* the accounting commit, so a crash between them loses it permanently — the
+cursor has advanced, and the next pass computes ``over_cap_cents == 0``. This is
+the same pre-existing window the ordinary export receipt has; closing it means
+moving the receipt into the accounting transaction, which is out of scope here.
 """
 
 from __future__ import annotations
@@ -56,15 +71,23 @@ async def _seed_capped_overage_subject(
     granted_hours: float,
     label: str,
     prior_export_cents: int = 0,
+    ended: bool = True,
 ) -> tuple[uuid.UUID, uuid.UUID, datetime | None]:
     """Paid pro subject with overage enabled, a flat org-month cap, and one segment.
 
     ``prior_export_cents`` seeds an earlier in-period billable export so the
     org-month cap is already (partly) spent before the pass runs, which is how a
-    real subject reaches the cap mid-period.
+    real subject reaches the cap mid-period. ``ended=False`` leaves the segment
+    OPEN (``ended_at IS NULL``), which is what a still-running sandbox looks like
+    to the 15-minute reconcile pass: every pass finds a fresh accountable slice.
     """
     user_id = uuid.uuid4()
-    subject_id, segment = await seed_usage_segment(db_session, user_id=user_id, hours=hours)
+    subject_id, segment = await seed_usage_segment(
+        db_session,
+        user_id=user_id,
+        hours=hours,
+        ended=ended,
+    )
     now = datetime.now(UTC)
     period_start = now - timedelta(days=1)
     subject = await db_session.get(BillingSubject, subject_id)
@@ -206,6 +229,13 @@ async def test_fully_over_cap_pass_records_receipt_without_export_row(
     ]
     assert decisions[0].decision_type == BILLING_DECISION_OVERAGE_EXPORT
     assert decisions[0].mode == BILLING_MODE_OBSERVE
+    # Attribution, not just existence: the receipt says HOW MUCH was refused.
+    # 1h at $3/hr, none of it billable.
+    assert decisions[0].refused_cents == 300
+    # A cap refusal is a gate decision, and the gate is shut: the cap is spent,
+    # so a start is blocked and an active sandbox is held.
+    assert decisions[0].would_block_start is True
+    assert decisions[0].would_pause_active is True
     cursor = (
         await db_session.execute(
             select(BillingUsageCursor).where(BillingUsageCursor.usage_segment_id == segment_id)
@@ -256,7 +286,13 @@ async def test_partially_clamped_overage_exports_billable_and_receipts_remainder
 
     Cap 300c against a 2h uncovered slice at $3/hr (600c): 300c exports, 300c is
     refused. The billable row must be exactly the capped amount, and the refused
-    half must be accounted for by the receipt rather than vanishing.
+    half must be accounted for rather than vanishing.
+
+    The receipt *reason* here is the ordinary ``observed`` one (this pass did
+    export), so reason alone proves nothing about the fix — it holds with the fix
+    reverted. The two assertions that do not: the refused amount surfaced on
+    ``BillingAccountingResult.over_cap_cents``, and the same amount recorded
+    durably as ``refused_cents`` on the receipt.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
@@ -279,6 +315,55 @@ async def test_partially_clamped_overage_exports_billable_and_receipts_remainder
     assert exports[0].quantity_seconds == pytest.approx(3600.0)
     decisions = await _decisions_for(db_session, subject_id)
     assert [decision.reason for decision in decisions] == [BILLING_USAGE_EXPORT_STATUS_OBSERVED]
+    # Fails on revert: the refused remainder is recorded on the receipt even
+    # though this pass's reason reads as an ordinary export.
+    assert decisions[0].refused_cents == 300
+    # An export happened, so the pre-existing export-receipt gate values stand.
+    assert decisions[0].would_block_start is False
+    assert decisions[0].would_pause_active is False
+
+
+@pytest.mark.asyncio
+async def test_partial_clamp_reports_refused_cents_on_the_accounting_result(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B-F1 / A2b: the refused amount is a return value, not only a log line.
+
+    Drives ``account_usage_for_billing_subject`` directly so the assertion is on
+    the service contract the pass consumes. Reverting the fix makes
+    ``over_cap_cents`` unavailable (or zero) and fails here rather than silently
+    downgrading the receipt.
+    """
+    _configure_pro_observe(test_engine, monkeypatch)
+    subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
+        db_session,
+        hours=2.0,
+        cap_cents=300,
+        granted_hours=0.0,
+        label="result_over_cap_cents",
+    )
+    subscription = (
+        await db_session.execute(
+            select(BillingSubscription).where(BillingSubscription.billing_subject_id == subject_id)
+        )
+    ).scalar_one()
+
+    result = await billing_accounting_service.account_usage_for_billing_subject(
+        billing_subject_id=subject_id,
+        is_paid_cloud=True,
+        billing_subscription_id=subscription.id,
+        period_start=subscription.current_period_start,
+        period_end=subscription.current_period_end,
+        overage_enabled=True,
+        billing_mode=BILLING_MODE_OBSERVE,
+        overage_cap_cents=300,
+    )
+
+    # 600c metered, 300c billable under the cap, 300c refused.
+    assert result.export_count == 1
+    assert result.over_cap_cents == 300
 
 
 @pytest.mark.asyncio
@@ -319,25 +404,36 @@ async def test_over_cap_pass_rerun_is_idempotent(
     test_engine: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """B-F1 / A2d: re-running the pass adds no export rows for over-cap usage.
+    """B-F1 / A2d: re-running a genuinely over-cap pass adds nothing.
 
-    The usage cursor advances past the accounted slice on the first pass, so the
-    second pass finds nothing accountable: no duplicate export row and (because
-    there is no new refused spend) no second cap receipt either.
+    The old parameters (cap 300c, 1h granted of a 2h segment) left
+    ``over_cap_cents`` at zero, so this never entered the cap branch and merely
+    duplicated A2c. Pinned properly here: no grant and the cap already spent, so
+    the first pass IS a cap refusal (asserted by reason). The usage cursor then
+    advances past the closed segment, so the rerun finds nothing accountable —
+    no duplicate export row, and exactly one cap receipt across both passes.
     """
     _configure_pro_observe(test_engine, monkeypatch)
     subject_id, _segment_id, _ended_at = await _seed_capped_overage_subject(
         db_session,
         hours=2.0,
         cap_cents=300,
-        granted_hours=1.0,
+        granted_hours=0.0,
         label="over_cap_rerun",
+        prior_export_cents=300,
     )
 
     await run_billing_accounting_pass(subject_limit=10)
     db_session.expire_all()
     exports_after_first = await _exports_for(db_session, subject_id)
     decisions_after_first = await _decisions_for(db_session, subject_id)
+    # The first pass really was over-cap: no new export row beyond the seeded
+    # prior one, and the receipt says so.
+    assert [export.meter_quantity_cents for export in exports_after_first] == [300]
+    assert [decision.reason for decision in decisions_after_first] == [
+        BILLING_DECISION_REASON_OVERAGE_CAP_REACHED
+    ]
+    assert decisions_after_first[0].refused_cents == 600
 
     await run_billing_accounting_pass(subject_limit=10)
     db_session.expire_all()
@@ -350,6 +446,88 @@ async def test_over_cap_pass_rerun_is_idempotent(
     assert [decision.id for decision in decisions_after_second] == [
         decision.id for decision in decisions_after_first
     ]
+    assert len(decisions_after_second) == 1
+
+
+@pytest.mark.asyncio
+async def test_open_segment_over_cap_receipts_once_then_again_after_recovery(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B-F1 / A2f: an OPEN segment does not emit one cap receipt per pass.
+
+    A still-running sandbox (``ended_at IS NULL``) accrues a fresh accountable
+    slice on every 15-minute reconcile pass, so a subject parked at the org-month
+    cap re-refuses spend on every pass. Receipting each refusal produced ~96
+    identical rows a day whenever compute did not actually stop (observe mode, or
+    a pause that failed) — noise, not attribution.
+
+    Pinned here: three consecutive over-cap passes leave exactly ONE receipt;
+    then a cap raise lets a pass export normally; then going over the raised cap
+    produces a SECOND receipt. The dedupe must never swallow the first refusal or
+    a refusal after recovery.
+    """
+    _configure_pro_observe(test_engine, monkeypatch)
+    subject_id, _segment_id, ended_at = await _seed_capped_overage_subject(
+        db_session,
+        hours=2.0,
+        cap_cents=300,
+        granted_hours=0.0,
+        label="open_segment_cap",
+        prior_export_cents=300,
+        ended=False,
+    )
+    assert ended_at is None
+
+    for _ in range(3):
+        await run_billing_accounting_pass(subject_limit=10)
+        db_session.expire_all()
+
+    # Empirically 3 receipts before the dedupe; the ruled shape is 1.
+    decisions = await _decisions_for(db_session, subject_id)
+    assert [decision.reason for decision in decisions] == [
+        BILLING_DECISION_REASON_OVERAGE_CAP_REACHED
+    ]
+    assert [
+        export.meter_quantity_cents for export in await _exports_for(db_session, subject_id)
+    ] == [300]
+
+    # Recovery: raise the cap so the next pass has headroom and exports again.
+    subject = await db_session.get(BillingSubject, subject_id)
+    assert subject is not None
+    subject.overage_cap_cents_per_seat = 100_000
+    await db_session.commit()
+    await run_billing_accounting_pass(subject_limit=10)
+    db_session.expire_all()
+    reasons_after_recovery = [
+        decision.reason for decision in await _decisions_for(db_session, subject_id)
+    ]
+    assert reasons_after_recovery == [
+        BILLING_DECISION_REASON_OVERAGE_CAP_REACHED,
+        BILLING_USAGE_EXPORT_STATUS_OBSERVED,
+    ]
+
+    # Back over the raised cap: this is a new fact, so it is receipted again.
+    exported_cents = sum(
+        export.meter_quantity_cents or 0 for export in await _exports_for(db_session, subject_id)
+    )
+    subject = await db_session.get(BillingSubject, subject_id)
+    assert subject is not None
+    subject.overage_cap_cents_per_seat = exported_cents
+    await db_session.commit()
+    await run_billing_accounting_pass(subject_limit=10)
+    db_session.expire_all()
+
+    decisions = await _decisions_for(db_session, subject_id)
+    cap_receipts = [
+        decision
+        for decision in decisions
+        if decision.reason == BILLING_DECISION_REASON_OVERAGE_CAP_REACHED
+    ]
+    assert len(cap_receipts) == 2
+    assert cap_receipts[1].refused_cents is not None
+    assert cap_receipts[1].refused_cents > 0
 
 
 @pytest.mark.asyncio

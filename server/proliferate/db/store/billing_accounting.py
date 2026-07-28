@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.billing import (
+    BILLING_DECISION_OVERAGE_EXPORT,
+    BILLING_DECISION_REASON_OVERAGE_CAP_REACHED,
     BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE,
     BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
     BILLING_USAGE_EXPORT_STATUS_PENDING,
@@ -18,6 +20,7 @@ from proliferate.constants.billing import (
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
 )
 from proliferate.db.models.billing import (
+    BillingDecisionEvent,
     BillingGrant,
     BillingGrantConsumption,
     BillingOverageRemainder,
@@ -241,6 +244,57 @@ async def list_billing_subject_ids_for_usage_accounting(
         )
     ).scalars()
     return list(rows.all())
+
+
+async def over_cap_receipt_is_current(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    period_start: datetime | None,
+) -> bool:
+    """True when this subject's standing over-cap receipt still covers a refusal.
+
+    An *open* usage segment (``ended_at IS NULL``) yields a fresh accountable
+    slice on every 15-minute reconcile pass, so a subject parked at the org-month
+    cap refuses spend again on every pass. Without this predicate that produced
+    one ``overage_cap_reached`` receipt per pass (~96/day) whenever compute did
+    not actually stop — observe mode, or a pause that failed — which is noise, not
+    attribution.
+
+    A standing receipt is "current" only while nothing has changed the subject's
+    cap story:
+
+    * a cap receipt exists, and
+    * it belongs to the current billing period (a period rollover resets the cap,
+      so the next refusal is a new fact), and
+    * no ``billing_usage_export`` row has been written since it — an export means
+      the subject recovered (grant refill or cap headroom) and billed again, so a
+      later refusal is a new fact too.
+
+    The first refusal is therefore always receipted, and so is the first refusal
+    after any recovery.
+    """
+    latest_receipt_at = await db.scalar(
+        select(func.max(BillingDecisionEvent.created_at)).where(
+            BillingDecisionEvent.billing_subject_id == billing_subject_id,
+            BillingDecisionEvent.decision_type == BILLING_DECISION_OVERAGE_EXPORT,
+            BillingDecisionEvent.reason == BILLING_DECISION_REASON_OVERAGE_CAP_REACHED,
+        )
+    )
+    receipt_at = coerce_utc(latest_receipt_at)
+    if receipt_at is None:
+        return False
+    period_start_utc = coerce_utc(period_start)
+    if period_start_utc is not None and receipt_at < period_start_utc:
+        return False
+    latest_export_at = coerce_utc(
+        await db.scalar(
+            select(func.max(BillingUsageExport.created_at)).where(
+                BillingUsageExport.billing_subject_id == billing_subject_id,
+            )
+        )
+    )
+    return latest_export_at is None or latest_export_at <= receipt_at
 
 
 async def acquire_billing_subject_accounting_lock(

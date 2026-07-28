@@ -143,6 +143,14 @@ class BillingDecisionEvent(Base):
     reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     active_sandbox_count: Mapped[int] = mapped_column(default=0)
     remaining_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Metered cents this decision refused to bill, for the reasons where that is
+    # a real quantity (today: ``overage_cap_reached``, the org-month cap
+    # refusal). NULL for every other reason — a start gate or an export-delivery
+    # outcome refuses no metered spend. The refused remainder never becomes a
+    # billing_usage_export row (write-off is operator-only, ruled 2026-07-14), so
+    # without this column law A2's "attributable" half is unreconstructible once
+    # the usage cursor has advanced.
+    refused_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

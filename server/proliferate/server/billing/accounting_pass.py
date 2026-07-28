@@ -13,6 +13,7 @@ from proliferate.constants.billing import (
 from proliferate.db import session_ops as db_session
 from proliferate.db.store.billing_accounting import (
     list_billing_subject_ids_for_usage_accounting,
+    over_cap_receipt_is_current,
 )
 from proliferate.db.store.billing_runtime_usage import record_billing_decision_event
 from proliferate.server.billing import accounting as billing_accounting_service
@@ -110,7 +111,31 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
         # receipt on export_count alone left that spend with no durable trace.
         # Receipt it too, and say which case it was.
         over_cap_cents = sum(result.over_cap_cents for result in results)
+        cap_only_refusal = over_cap_cents > 0 and not exported_any
+        if cap_only_refusal:
+            # An open segment re-refuses spend on every 15-minute pass while the
+            # subject sits at the cap, so only the leading edge of a refusal run
+            # is receipted (see ``over_cap_receipt_is_current``). Recovery —
+            # a refill or period rollover that lets an export through — reopens
+            # the next refusal for receipting.
+            async with db_session.open_async_transaction() as db:
+                if await over_cap_receipt_is_current(
+                    db,
+                    billing_subject_id=billing_subject_id,
+                    period_start=(
+                        pro_subscription.current_period_start
+                        if pro_subscription is not None
+                        else None
+                    ),
+                ):
+                    continue
         if exported_any or over_cap_cents > 0:
+            # Known limit (pre-existing, shared with the export receipt): this
+            # runs in a SEPARATE transaction from the accounting commit above, so
+            # a crash in between loses the receipt permanently — the usage cursor
+            # has already advanced and the next pass computes over_cap_cents == 0.
+            # Closing it means moving the receipt into the accounting
+            # transaction; not done here.
             snapshot = billing_snapshots.build_billing_snapshot(state)
             async with db_session.open_async_transaction() as db:
                 await record_billing_decision_event(
@@ -120,11 +145,20 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
                     workspace_id=None,
                     decision_type=BILLING_DECISION_OVERAGE_EXPORT,
                     mode=settings.cloud_billing_mode,
-                    would_block_start=False,
-                    would_pause_active=False,
+                    # The pre-existing export receipt keeps its False/False: an
+                    # export is not a gate decision. A cap refusal is, and the
+                    # snapshot is already built here, so report what the gate
+                    # actually says about this subject rather than a placeholder.
+                    would_block_start=(cap_only_refusal and snapshot.start_blocked),
+                    would_pause_active=(cap_only_refusal and snapshot.active_spend_hold),
                     reason=_accounting_receipt_reason(exported_any=exported_any),
                     active_sandbox_count=snapshot.active_sandbox_count,
                     remaining_seconds=snapshot.remaining_seconds,
+                    # Attribution (law A2): how much metered spend this pass
+                    # refused, including on a partial clamp where the receipt
+                    # reads as an ordinary export. A pass that refused nothing
+                    # leaves it NULL rather than claiming a measured zero.
+                    refused_cents=(over_cap_cents if over_cap_cents > 0 else None),
                 )
 
     if settings.cloud_billing_mode == BILLING_MODE_ENFORCE:
