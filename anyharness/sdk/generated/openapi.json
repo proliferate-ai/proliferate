@@ -9922,7 +9922,6 @@
         "type": "object",
         "required": [
           "repoRootId",
-          "targetPath",
           "newBranchName"
         ],
         "properties": {
@@ -9985,7 +9984,10 @@
             ]
           },
           "targetPath": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

@@ -331,7 +331,8 @@ pub enum WorktreeCheckoutMode {
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorktreeWorkspaceRequest {
     pub repo_root_id: String,
-    pub target_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_path: Option<String>,
     pub new_branch_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkout_mode: Option<WorktreeCheckoutMode>,
