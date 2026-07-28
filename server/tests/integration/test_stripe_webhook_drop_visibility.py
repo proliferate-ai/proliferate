@@ -1,16 +1,12 @@
 """W-F5: Stripe webhook drops are visible, and only visible.
 
-Before this coverage, ``stripe_webhooks`` returned early at ~7 points with no
+Before this coverage, ``stripe_webhooks`` returned early at 13 points with no
 log and no alert, while ``mark_webhook_event_processed_by_id`` still ran — so
-Stripe never retried and the drop left no trace. These tests pin both halves of
-the fix per the launch ruling "fail closed, loudly":
-
-* observability: each drop emits the structured log record with its stable
-  ``drop_reason`` plus the Stripe event id, and money-bearing drops (paid
-  invoice with no cloud line, paid refill session whose grant is lost, paid
-  invoice with an unresolvable subject) additionally page ``report_critical``,
-* zero behavior change: the same drops still issue no grant, still leave the
-  receipt ``processed``, and the non-money drops still do not page.
+Stripe never retried and the drop left no trace. These tests pin both halves
+per the launch ruling "fail closed, loudly": observability (each drop emits
+its ``drop_reason`` + Stripe event id, money-bearing drops additionally page
+``report_critical``) and zero behavior change (no grant, no notification,
+receipt still ``processed``, non-money drops still do not page).
 """
 
 from __future__ import annotations
@@ -40,15 +36,12 @@ APP_LOGGER = "proliferate"
 
 @pytest.fixture(autouse=True)
 def _observable_drop_logs():
-    """Let ``caplog`` observe drop records.
-
-    Two test-harness artifacts hide them otherwise, neither of which applies to
-    the running server: ``configure_server_logging`` sets ``propagate = False``
-    on the ``proliferate`` logger so production lines only reach its JSON
-    handler (caplog handles the root logger), and the migration fixture's
-    ``alembic`` ``fileConfig`` call disables loggers that already existed at
-    collection time.
-    """
+    """Let ``caplog`` observe drop records: two test-harness artifacts hide
+    them otherwise, neither applying to the running server —
+    ``configure_server_logging`` sets ``propagate = False`` on the
+    ``proliferate`` logger (caplog handles the root logger), and the
+    migration fixture's alembic ``fileConfig`` disables loggers that already
+    existed at collection time."""
     app_logger = logging.getLogger(APP_LOGGER)
     drop_logger = logging.getLogger(DROP_LOGGER)
     previous_propagate = app_logger.propagate
@@ -369,33 +362,184 @@ async def test_subscription_with_unresolved_subject_warns_without_paging(
 
 
 @pytest.mark.asyncio
-async def test_unhandled_checkout_purpose_logs_at_info_without_paging(
-    test_engine,  # type: ignore[no-untyped-def]
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    paged: list[dict[str, object]],
-) -> None:
-    """Other checkout purposes are entitled elsewhere: visible, not a page."""
-    _use_test_engine(monkeypatch, test_engine)
-
-    with caplog.at_level(logging.INFO, logger=DROP_LOGGER):
-        await stripe_webhooks._handle_checkout_session_completed(
+@pytest.mark.parametrize(
+    ("session", "level", "should_page"),
+    [
+        # Other purposes are entitled elsewhere: visible, not a page.
+        (
             {
                 "id": "cs_setup_only",
                 "mode": "setup",
                 "metadata": {"purpose": "payment_method_update"},
             },
-            event_id="evt_setup_only",
-        )
+            logging.INFO,
+            False,
+        ),
+        # Payment mode + already-collected money + unrecognized purpose: pages.
+        (
+            {
+                "id": "cs_paid_unknown_purpose",
+                "mode": "payment",
+                "payment_status": "paid",
+                "metadata": {"purpose": "some_future_purpose"},
+            },
+            logging.ERROR,
+            True,
+        ),
+    ],
+)
+async def test_checkout_unhandled_purpose_level_follows_paid_status(
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    paged: list[dict[str, object]],
+    session: dict[str, object],
+    level: int,
+    should_page: bool,
+) -> None:
+    _use_test_engine(monkeypatch, test_engine)
+    event_id = f"evt_{session['id']}"
+
+    with caplog.at_level(logging.INFO, logger=DROP_LOGGER):
+        await stripe_webhooks._handle_checkout_session_completed(session, event_id=event_id)
 
     record = _assert_drop_logged(
-        caplog,
-        drop_reason=DropReason.CHECKOUT_UNHANDLED_PURPOSE,
-        event_id="evt_setup_only",
-        level=logging.INFO,
+        caplog, drop_reason=DropReason.CHECKOUT_UNHANDLED_PURPOSE, event_id=event_id, level=level
     )
-    assert record.session_mode == "setup"  # type: ignore[attr-defined]
-    assert paged == []
+    assert record.session_mode == session["mode"]  # type: ignore[attr-defined]
+    assert len(paged) == (1 if should_page else 0)
+    if should_page:
+        assert paged[0]["extras"]["drop_reason"] == DropReason.CHECKOUT_UNHANDLED_PURPOSE  # type: ignore[index]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event_type", "level", "should_page"),
+    [
+        # invoice.* is money-moving: pages (13th silent drop, dispatch fall-through).
+        ("invoice.payment_succeeded", logging.ERROR, True),
+        # Not a money-moving family: warns, no page.
+        ("customer.updated", logging.WARNING, False),
+    ],
+)
+async def test_unhandled_event_type_level_follows_type_family(
+    caplog: pytest.LogCaptureFixture,
+    paged: list[dict[str, object]],
+    event_type: str,
+    level: int,
+    should_page: bool,
+) -> None:
+    with caplog.at_level(logging.INFO, logger=DROP_LOGGER):
+        notifications = await stripe_webhooks._dispatch_stripe_event(
+            {"id": f"evt_unhandled_{event_type}", "type": event_type}
+        )
+
+    assert notifications == ()
+    record = _assert_drop_logged(
+        caplog,
+        drop_reason=DropReason.UNHANDLED_EVENT_TYPE,
+        event_id=f"evt_unhandled_{event_type}",
+        level=level,
+    )
+    assert record.event_type == event_type  # type: ignore[attr-defined]
+    assert len(paged) == (1 if should_page else 0)
+
+
+@pytest.mark.asyncio
+async def test_handled_event_types_do_not_emit_unhandled_event_type(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A handled type must not also trip the fall-through's reporter, even
+    though it drops for its own (distinct) reason."""
+    with caplog.at_level(logging.INFO, logger=DROP_LOGGER):
+        await stripe_webhooks._dispatch_stripe_event(
+            {"id": "evt_handled_checkout", "type": "checkout.session.completed", "data": {}}
+        )
+    assert not any(
+        getattr(record, "drop_reason", None) == DropReason.UNHANDLED_EVENT_TYPE
+        for record in _drop_records(caplog)
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pro_billing_enabled", [True, False])
+async def test_invoice_grant_gate_closed_level_follows_pro_pricing(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    paged: list[dict[str, object]],
+    pro_billing_enabled: bool,
+) -> None:
+    """The ``else:`` arm of the period-grant gate: Pro-on + gate closed pages
+    (money collected, no projection -> error + page), Pro-off is the ruled
+    legacy shape (info, never a page). Exercises the detached-ORM read
+    (``subscription_record`` loaded under ``expire_on_commit=False``) without
+    raising."""
+    _use_test_engine(monkeypatch, test_engine)
+    monkeypatch.setattr(settings, "pro_billing_enabled", pro_billing_enabled)
+    monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+    monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "")
+    # Cloud-line classification keys off a different price id per flag value.
+    line_price_id = "price_pro" if pro_billing_enabled else "price_cloud"
+
+    user_id = uuid.uuid4()
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_gate_closed"
+    subject_id = subject.id
+    await db_session.commit()
+
+    async def _retrieve_subscription(subscription_id: str) -> dict[str, object]:
+        assert subscription_id == "sub_gate_closed"
+        return {
+            "id": "sub_gate_closed",
+            "customer": "cus_gate_closed",
+            # "incomplete" avoids also emitting a "subscribed" Slack notification.
+            "status": "incomplete",
+            "cancel_at_period_end": False,
+            "canceled_at": None,
+            "latest_invoice": "in_gate_closed",
+            "metadata": {"billing_subject_id": str(subject_id)},
+            # No current_period_start/end anywhere -> gate stays closed.
+            "items": {
+                "data": [{"id": "si_gate_closed", "quantity": 1, "price": {"id": "price_pro"}}]
+            },
+        }
+
+    monkeypatch.setattr(
+        stripe_webhooks.stripe_billing, "retrieve_subscription", _retrieve_subscription
+    )
+
+    with caplog.at_level(logging.INFO, logger=DROP_LOGGER):
+        notifications = await stripe_webhooks._handle_invoice_paid(
+            {
+                "id": "in_gate_closed",
+                "customer": "cus_gate_closed",
+                "status": "paid",
+                "paid": True,
+                "subscription": "sub_gate_closed" if pro_billing_enabled else None,
+                "metadata": {"billing_subject_id": str(subject_id)},
+                "lines": {"data": [{"id": "il_gate_closed", "price": {"id": line_price_id}}]},
+            },
+            event_id="evt_gate_closed",
+        )
+
+    assert notifications == ()  # Zero behavior change: still no grant.
+    assert await _grants(db_session, subject_id) == []
+
+    level = logging.ERROR if pro_billing_enabled else logging.INFO
+    record = _assert_drop_logged(
+        caplog,
+        drop_reason=DropReason.INVOICE_GRANT_GATE_CLOSED,
+        event_id="evt_gate_closed",
+        level=level,
+    )
+    assert record.pro_pricing_enabled is pro_billing_enabled  # type: ignore[attr-defined]
+    assert len(paged) == (1 if pro_billing_enabled else 0)
+    if pro_billing_enabled:
+        assert record.has_subscription_record is True  # type: ignore[attr-defined]
+        assert record.has_period_start is False  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -406,11 +550,8 @@ async def test_dropped_event_is_still_marked_processed(
     caplog: pytest.LogCaptureFixture,
     paged: list[dict[str, object]],
 ) -> None:
-    """The disclosed gap: a reported drop keeps the ``processed`` receipt.
-
-    Making the drop visible deliberately did not change intake semantics, so the
-    event stays unreplayable. A distinct ``ignored`` state is deferred.
-    """
+    """The disclosed gap: a reported drop keeps the ``processed`` receipt, so
+    the event stays unreplayable. A distinct ``ignored`` state is deferred."""
     _use_test_engine(monkeypatch, test_engine)
     secret = "whsec_test_secret"
     monkeypatch.setattr(settings, "stripe_webhook_secret", secret)

@@ -231,6 +231,8 @@ async def _dispatch_stripe_event(event: dict[str, Any]) -> tuple[BillingSlackNot
         return await _handle_invoice_paid(stripe_object, event_id=event_id)
     elif event_type == "invoice.payment_failed":
         await _handle_invoice_payment_failed(stripe_object, event_id=event_id)
+    else:
+        webhook_drops.report_unhandled_event_type(event_id, event_type)
     return ()
 
 
@@ -566,7 +568,7 @@ async def _handle_invoice_paid(
             )
     else:
         webhook_drops.report_invoice_grant_gate_closed(
-            event_id, invoice_id, subject, subscription_record
+            event_id, invoice, invoice_id, subject, subscription_record
         )
     await _run_billing_store_write(clear_payment_failed_holds, billing_subject_id=subject.id)
     return notifications
