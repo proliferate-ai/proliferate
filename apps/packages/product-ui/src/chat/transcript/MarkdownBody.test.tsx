@@ -167,7 +167,39 @@ describe("MarkdownBody presentation", () => {
   it("uses the shared stable-color, hover-underline treatment for web links", () => {
     const html = renderMarkdown("Open [docs](https://example.com/docs).");
 
-    expect(html).toContain("text-link-foreground no-underline hover:text-link-foreground hover:underline");
+    expect(html).toContain("text-link-foreground");
+    expect(html).toContain("hover:text-link-foreground");
+    expect(html).toContain("hover:underline");
     expect(html).not.toContain("hover:text-foreground");
+  });
+
+  it("never paints a fill behind a hovered, focused, or pressed link", () => {
+    const html = renderMarkdown("Open [docs](https://example.com/docs).");
+    const anchor = html.match(/<a\b[^>]*>/g)?.join(" ") ?? "";
+
+    expect(anchor).not.toBe("");
+    // No state of an inline link may add a surface. The specific fills a link
+    // could inherit (a ghost-button call site) are named so a reintroduction
+    // fails here rather than in someone's eyes.
+    expect(anchor).not.toContain("hover:bg-hover");
+    expect(anchor).not.toContain("active:bg-active");
+    expect(anchor).not.toMatch(/(?:hover|focus|focus-visible|active):bg-(?!transparent)/);
+    // Focus is still visible: the underline thickens instead of a box appearing.
+    expect(anchor).toContain("focus-visible:underline");
+    expect(anchor).toContain("focus-visible:decoration-1");
+  });
+
+  it("keeps hex swatches in conversation content and out of rendered file text", () => {
+    const source = `The brand green is \`${hexLiteral("00a240")}\`.`;
+
+    expect(renderMarkdown(source)).toContain('data-markdown-hex-swatch="true"');
+    expect(renderMarkdown(source, { surface: "message" }))
+      .toContain('data-markdown-hex-swatch="true"');
+
+    const fileHtml = renderMarkdown(source, { surface: "file-content" });
+    expect(fileHtml).not.toContain("data-markdown-hex-swatch");
+    expect(fileHtml).toContain('data-markdown-surface="file-content"');
+    // The inline-code chip itself is unaffected — only the swatch is scoped.
+    expect(fileHtml).toContain('data-markdown-inline-code="true"');
   });
 });

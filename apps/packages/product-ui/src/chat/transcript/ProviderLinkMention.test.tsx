@@ -67,7 +67,9 @@ describe("ProviderLinkMention", () => {
     );
     expect(html).toContain("data-provider-link-host=\"github.com\"");
     expect(html).toContain("PR #737");
-    expect(html).toContain("text-link-foreground no-underline hover:text-link-foreground hover:underline");
+    expect(html).toContain("text-link-foreground");
+    expect(html).toContain("hover:text-link-foreground");
+    expect(html).toContain("hover:underline");
     expect(html).not.toContain("hover:text-foreground");
     expect(html).not.toContain("favicon.ico");
   });
@@ -96,7 +98,21 @@ describe("ProviderLinkMention", () => {
       <ProviderLinkMention href="mailto:support@proliferate.com">email</ProviderLinkMention>,
     );
     expect(html).not.toContain("data-provider-link-host");
-    expect(html).toContain("text-link-foreground no-underline hover:text-link-foreground hover:underline");
+    expect(html).toContain("text-link-foreground");
+    expect(html).toContain("hover:text-link-foreground");
+    expect(html).toContain("hover:underline");
     expect(html).not.toContain("hover:text-foreground");
+  });
+
+  it("keeps every interaction state fill-free on the mention treatment", () => {
+    const html = renderToStaticMarkup(
+      <ProviderLinkMention href="https://example.com/docs">docs</ProviderLinkMention>,
+    );
+
+    // A mention is still a link, not a control: hover/focus/press change the
+    // underline only. Focus stays visible via the thicker underline.
+    expect(html).not.toMatch(/(?:hover|focus|focus-visible|active):bg-(?!transparent)/);
+    expect(html).toContain("focus-visible:underline");
+    expect(html).toContain("focus-visible:decoration-1");
   });
 });
