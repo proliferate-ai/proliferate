@@ -148,11 +148,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       gap). When that field is deleted, rewire the blocked mode to the
       subject layer's real representation (the 402 body) so billing blocks
       actually render; the seven reasons and copy already exist.
-- [ ] No Disk row and no threshold notification: the card shows CPU/Memory
-      only for cloud targets, and no surface is proactive — pull-only.
-      Lands with the disk axis
-      ([sandbox-content.md](../../../platforms/product/sandbox-content.md)
-      gap).
 - [ ] Workspaces are not marked lost after VM death: rows dangle with dead
       runtime ids and surface as opaque runtime errors
       ([sandbox-content.md](../../../platforms/product/sandbox-content.md)

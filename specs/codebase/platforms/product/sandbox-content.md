@@ -481,20 +481,9 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       no clone-delete primitive exists anywhere in AnyHarness (no route, no
       store method). Add the paired after-commit reclaims and build the
       clone-delete primitive under the same fence discipline as retire.
-- [ ] No disk axis: the resource-pressure collector measures CPU and memory
-      only (no statvfs anywhere in the runtime), the composer card shows
-      CPU/memory rows without disk, no threshold notification exists
-      (surfaces are pull-only), and the inventory row carries no
-      last-activity timestamp for suggesting stale worktrees. Add the disk
-      axis to
-      [resource_pressure.rs](../../../../anyharness/crates/anyharness-lib/src/observability/resource_pressure.rs)
-      and the health contract, last activity to the inventory row, and the
-      client-side threshold surface.
-- [ ] Disk exhaustion is untyped: only checkout exit codes 42/43/44 are
-      classified; ENOSPC from any in-sandbox command flattens into the
-      generic runtime-not-ready receipt
-      ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
-      Detect and type it.
+- [ ] The inventory row carries no last-activity timestamp for suggesting
+      stale worktrees. Add last activity after wiring the session store
+      into worktree inventory.
 - [ ] After provider loss, workspaces dangle instead of being marked lost:
       `cloud_workspace` rows still reference dead AnyHarness workspace ids
       on the replacement VM, surfacing as opaque runtime errors, and

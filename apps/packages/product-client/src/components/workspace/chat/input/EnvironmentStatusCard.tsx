@@ -38,7 +38,7 @@ const HOVER_ITEM_CAP = 12;
 /**
  * Resources: summary rows for the runtime the workspace-status card tracks —
  * "N worktrees" with total size (hover lists each checkout, click opens the
- * searchable worktrees modal) plus CPU/RAM on cloud targets. Replaces the
+ * searchable worktrees modal) plus CPU/RAM/disk on cloud targets. Replaces the
  * composer's old pressure-ring control.
  */
 export function ResourcesSection({
@@ -87,6 +87,12 @@ export function ResourcesSection({
             label="Memory"
             meta={formatPercent(targetState.resourcePressure?.memory?.percent)}
           />
+          {targetState.resourcePressure?.disk && (
+            <StatusRow
+              label="Disk"
+              meta={formatPercent(targetState.resourcePressure.disk.percent)}
+            />
+          )}
         </>
       )}
     </StatusSection>
@@ -177,6 +183,12 @@ export function EnvironmentCardSections({
               label="Memory"
               meta={formatPercent(targetState.resourcePressure?.memory?.percent)}
             />
+            {targetState.resourcePressure?.disk && (
+              <StatusRow
+                label="Disk"
+                meta={formatPercent(targetState.resourcePressure.disk.percent)}
+              />
+            )}
           </StatusSection>
         )}
 

@@ -37,6 +37,16 @@ from proliferate.server.cloud.materialization.sandbox_io.target import (
             CloudMaterializationCommandError("secret-command-output"),
             "The sandbox runtime did not become ready. Retry later.",
         ),
+        (
+            CloudMaterializationCommandError(
+                "materialization_repo_checkout failed: No space left on device"
+            ),
+            "The sandbox disk is full. Delete workspaces or content to free disk, then retry.",
+        ),
+        (
+            CloudMaterializationCommandError("runtime launch failed: ENOSPC"),
+            "The sandbox disk is full. Delete workspaces or content to free disk, then retry.",
+        ),
         (RuntimeError("secret-token"), "Sandbox materialization failed. Retry later."),
     ],
 )
