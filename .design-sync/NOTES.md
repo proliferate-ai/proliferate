@@ -207,6 +207,17 @@ Fix belongs in `Badge.tsx` (or the token) — **not** in a preview. The
 Badge `Tones` cell deliberately still shows it so the defect stays
 visible instead of being papered over with a substituted tone.
 
+**Confirmed independently three times** (my own Badge grade, batch E on
+SettingsRow/SettingsSaveFooter, batch F on three billing/repo surfaces),
+and it is not cosmetic-only: it reaches real product states. Batch F
+recorded that **`BillingOwnerCard`'s start-blocked plan state cannot be
+photographed legibly until the token is fixed** — the same is true of
+`BillingSettingsPane` with `checkoutReturnState="cancel"` and
+`CloudRepoPicker`'s `disabledReason`/archived rows. Those cells were
+reworked onto readable tones so the sheets show the component rather
+than the bug, with the limitation recorded in each grade note. Any
+warning-toned state in the product has this problem today.
+
 ### Reveal-on-hover traps (previews photograph blank without these)
 
 - `SidebarActionButton` defaults to `visibility="hover"` (`opacity-0` at
