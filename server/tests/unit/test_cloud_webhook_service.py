@@ -386,11 +386,8 @@ async def test_created_webhook_cas_loss_cannot_open_usage(
     async def _load(*_args: object, **_kwargs: object) -> object:
         return sandbox
 
-    async def _subject(*_args: object, **_kwargs: object) -> object:
-        return SimpleNamespace(id=uuid4())
-
-    async def _billing(*_args: object, **_kwargs: object) -> object:
-        return SimpleNamespace(billing_mode="observe", active_spend_hold=False)
+    async def _no_billing_block(*_args: object, **_kwargs: object) -> None:
+        return None
 
     async def _lost(*_args: object, **_kwargs: object) -> None:
         return None
@@ -401,8 +398,11 @@ async def test_created_webhook_cas_loss_cannot_open_usage(
     monkeypatch.setattr(webhook_service, "_verify_e2b_signature", lambda *_args: None)
     monkeypatch.setattr(webhook_service, "remember_sandbox_event_receipt", _remember)
     monkeypatch.setattr(webhook_service, "load_cloud_sandbox_by_provider_sandbox_id", _load)
-    monkeypatch.setattr(webhook_service, "ensure_personal_billing_subject", _subject)
-    monkeypatch.setattr(webhook_service, "get_billing_snapshot_for_subject", _billing)
+    monkeypatch.setattr(
+        webhook_service,
+        "resolve_cloud_sandbox_billing_block",
+        _no_billing_block,
+    )
     monkeypatch.setattr(webhook_service, "apply_cloud_sandbox_provider_observation", _lost)
     monkeypatch.setattr(webhook_service, "open_usage_segment_for_sandbox", _unexpected)
 

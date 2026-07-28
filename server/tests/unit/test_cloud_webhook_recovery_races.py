@@ -178,8 +178,7 @@ async def test_spend_hold_orders_commits_lock_provider_and_atomic_close(
 
     assert trace.events == [
         "correlate",
-        "subject",
-        "billing",
+        "gate",
         "commit",
         "lock-enter",
         "reload",
@@ -187,6 +186,7 @@ async def test_spend_hold_orders_commits_lock_provider_and_atomic_close(
         "provider",
         "pause",
         "receipt",
+        "decision",
         "state",
         "usage",
         "commit",
@@ -253,8 +253,7 @@ async def test_spend_hold_reloads_and_rejects_changed_retry_authority(
 
     assert trace.events == [
         "correlate",
-        "subject",
-        "billing",
+        "gate",
         "commit",
         "lock-enter",
         "reload",
@@ -295,8 +294,7 @@ async def test_spend_hold_provider_failure_does_not_process_receipt(
 
     assert trace.events == [
         "correlate",
-        "subject",
-        "billing",
+        "gate",
         "commit",
         "lock-enter",
         "reload",
@@ -340,8 +338,7 @@ async def test_spend_hold_post_pause_crash_does_not_commit_receipt(
 
     assert trace.events == [
         "correlate",
-        "subject",
-        "billing",
+        "gate",
         "commit",
         "lock-enter",
         "reload",
@@ -349,6 +346,7 @@ async def test_spend_hold_post_pause_crash_does_not_commit_receipt(
         "provider",
         "pause",
         "receipt",
+        "decision",
         "state",
         "lock-exit",
     ]
@@ -389,13 +387,20 @@ def _patch_spend_hold_path(
         trace.events.append("correlate")
         return initial
 
-    async def _subject(*_args: object, **_kwargs: object) -> object:
-        trace.events.append("subject")
-        return SimpleNamespace(id=uuid4())
+    async def _gate(*_args: object, **_kwargs: object) -> object:
+        trace.events.append("gate")
+        return SimpleNamespace(
+            billing_subject_id=uuid4(),
+            decision_type="enforce_active_spend",
+            reason="admin_hold",
+            active_spend_hold=True,
+            start_blocked=True,
+            active_sandbox_count=1,
+            remaining_seconds=0.0,
+        )
 
-    async def _billing(*_args: object, **_kwargs: object) -> object:
-        trace.events.append("billing")
-        return SimpleNamespace(billing_mode="enforce", active_spend_hold=True)
+    async def _record_decision(*_args: object, **_kwargs: object) -> None:
+        trace.events.append("decision")
 
     async def _commit(*_args: object, **_kwargs: object) -> None:
         trace.events.append("commit")
@@ -450,8 +455,12 @@ def _patch_spend_hold_path(
         "load_cloud_sandbox_by_provider_sandbox_id",
         _correlate,
     )
-    monkeypatch.setattr(webhook_service, "ensure_personal_billing_subject", _subject)
-    monkeypatch.setattr(webhook_service, "get_billing_snapshot_for_subject", _billing)
+    monkeypatch.setattr(webhook_service, "resolve_cloud_sandbox_billing_block", _gate)
+    monkeypatch.setattr(
+        webhook_service,
+        "record_cloud_sandbox_billing_block",
+        _record_decision,
+    )
     monkeypatch.setattr(webhook_service, "commit_webhook_phase", _commit)
     monkeypatch.setattr(webhook_service.locks, "redis_materialization_lock", _lock)
     monkeypatch.setattr(webhook_service, "load_cloud_sandbox_by_id", _reload)
