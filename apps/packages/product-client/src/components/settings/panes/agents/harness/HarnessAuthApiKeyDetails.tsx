@@ -7,6 +7,7 @@ import { KeyRound, Trash } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { Label } from "@proliferate/ui/primitives/Label";
 import {
   SegmentedControl,
   type SegmentedControlItem,
@@ -293,8 +294,8 @@ function ProviderConfigPanel({ kind, busy }: { kind: ProviderConfigKind; busy: b
     <div className="max-w-md space-y-3 rounded-lg border border-border bg-surface-elevated-secondary p-3.5">
       <div className="grid grid-cols-2 gap-2.5">
         {spec.fields.map((field) => (
-          <label key={field.key} className="space-y-1">
-            <span className="block text-ui-sm text-muted-foreground">{field.label}</span>
+          <Label key={field.key} className="mb-0 space-y-1 text-ui-sm text-muted-foreground">
+            <span className="block">{field.label}</span>
             <Input
               type={field.secret ? "password" : "text"}
               value={values[field.key] ?? ""}
@@ -306,7 +307,7 @@ function ProviderConfigPanel({ kind, busy }: { kind: ProviderConfigKind; busy: b
               onChange={(event) =>
                 setValues((prev) => ({ ...prev, [field.key]: event.currentTarget.value }))}
             />
-          </label>
+          </Label>
         ))}
       </div>
       <div className="flex items-center justify-between gap-3">
