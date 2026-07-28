@@ -112,20 +112,21 @@ async def create_remote_worktree_workspace(
     access_token: str,
     *,
     repo_root_id: str,
-    target_path: str,
     new_branch_name: str,
     base_branch: str | None,
+    target_path: str | None = None,
     setup_script: str | None = None,
     origin: dict[str, object] | None = None,
     creator_context: dict[str, object] | None = None,
 ) -> ResolvedRemoteWorkspace:
     body: dict[str, object] = {
         "repoRootId": repo_root_id,
-        "targetPath": target_path,
         "newBranchName": new_branch_name,
         "checkoutMode": "new_branch",
         "nameConflictPolicy": "fail",
     }
+    if target_path is not None:
+        body["targetPath"] = target_path
     if base_branch:
         body["baseBranch"] = base_branch
     if setup_script:
@@ -142,7 +143,7 @@ async def create_remote_worktree_workspace(
                 headers=auth_headers(access_token),
                 json=body,
             )
-            if response.status_code == 409:
+            if response.status_code == 409 and target_path is not None:
                 try:
                     return await resolve_runtime_workspace(
                         runtime_url,

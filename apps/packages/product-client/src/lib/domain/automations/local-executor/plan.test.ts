@@ -76,7 +76,6 @@ describe("local automation executor domain helpers", () => {
     const plan = buildLocalAutomationWorktreePlan({
       claim: claim(),
       candidate: candidates[0]!,
-      homeDir: "/Users/pablo",
       defaultBranch: "main",
       setupScript: "pnpm install",
     });
@@ -103,7 +102,6 @@ describe("local automation executor domain helpers", () => {
         repoRoots: [repoRoot()],
         workspaces: [workspace()],
       })[0]!,
-      homeDir: "/Users/pablo",
     }).branchName).toBe("automation/foo.bar-fd253849c4fe4ec9");
   });
 
@@ -116,7 +114,6 @@ describe("local automation executor domain helpers", () => {
     const plan = buildLocalAutomationWorktreePlan({
       claim: currentClaim,
       candidate: candidates[0]!,
-      homeDir: "/Users/pablo",
     });
 
     expect(findCandidateForClaim(candidates, currentClaim)).toBe(candidates[0]);
