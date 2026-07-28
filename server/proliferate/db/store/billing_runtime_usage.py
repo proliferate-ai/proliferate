@@ -12,10 +12,12 @@ from sqlalchemy import and_, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.billing import BILLING_RECONCILER_LOCK_KEY
 from proliferate.db.models.billing import BillingDecisionEvent, UsageSegment, WebhookEventReceipt
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import (
+    ensure_free_included_grant,
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )
@@ -95,8 +97,21 @@ async def resolve_billing_subject_id_for_user(
     organization_id = await resolve_organization_id_for_user(db, user_id)
     if organization_id is not None:
         subject = await ensure_organization_billing_subject(db, organization_id)
-        return subject.id
-    subject = await ensure_personal_billing_subject(db, user_id)
+    else:
+        subject = await ensure_personal_billing_subject(db, user_id)
+    # Law W1 governs money IN too: the user's one free allowance follows the payer
+    # (W-F1). Re-homing here rather than in each snapshot loader is what makes the
+    # enforce gate, segment-open, and the reconciler all agree — they resolve the
+    # payer through this function, so none of them can observe a pool that is
+    # empty only because the allowance is stranded on a subject that never pays.
+    # Idempotent and lock-free once the grant is already on the payer.
+    #
+    # PRO billing replaces ``free_included`` with ``free_trial_v2``, whose
+    # issuance is personal-only and lives in the snapshot loader; minting a
+    # ``free_included`` grant here would fight it. PRO is off at launch and
+    # W-F2/W-F3 are the PRO-path follow-ups.
+    if not settings.pro_billing_enabled:
+        await ensure_free_included_grant(db, user_id, billing_subject_id=subject.id)
     return subject.id
 
 

@@ -25,6 +25,7 @@ from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZ
 from proliferate.db.engine import apply_rls_context_to_session, get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.billing_runtime_usage import resolve_organization_id_for_user
 from proliferate.errors import InvalidRequest, NotFoundError, PermissionDenied
 from proliferate.middleware.request_context import set_resource_tenant_context
 from proliferate.rls_context import set_rls_owner_context
@@ -84,7 +85,45 @@ async def current_owner_context(
         header_org_id=header_org_id,
         cookie_org_id=cookie_org_id,
     )
+    selection = await _default_unscoped_selection_to_payer(
+        db,
+        user,
+        selection,
+        # Only a caller that *named* personal scope keeps it; an absent selection
+        # is not a request for the personal subject.
+        explicitly_scoped=(owner_scope is not None or header_owner_scope is not None),
+    )
     return await _resolve_owner_context_for_selection(db, user, selection)
+
+
+async def _default_unscoped_selection_to_payer(
+    db: AsyncSession,
+    user: User,
+    selection: OwnerSelection,
+    *,
+    explicitly_scoped: bool,
+) -> OwnerSelection:
+    """Point an *unscoped* request at the subject that PAYS for the caller.
+
+    Law W1 ("the org always pays") has to hold for the read model too, not just
+    for spend and money IN. A request that names no scope used to fall back to
+    personal, so a hosted org member reading ``/billing/overview`` before the org
+    header was attached saw their personal subject: no grant, ``remainingHours:
+    0``, and ``startBlocked: credits_exhausted`` — an "out of credits" gate for a
+    user whose org pool is full (W-F1). Spend, the start gate, and the free
+    allowance all resolve the payer through
+    ``resolve_billing_subject_id_for_user``; this makes the unscoped read agree.
+
+    An *explicit* ``ownerScope=personal`` is left alone. That is a deliberate
+    request for the personal subject (self-hosted and org-less deployments bill
+    it, and it stays inspectable), not an absent selection.
+    """
+    if explicitly_scoped or selection.owner_scope == "organization":
+        return selection
+    organization_id = await resolve_organization_id_for_user(db, user.id)
+    if organization_id is None:
+        return selection
+    return OwnerSelection(owner_scope="organization", organization_id=organization_id)
 
 
 def require_owner_role(*roles: str) -> Callable[[OwnerContext], Awaitable[OwnerContext]]:

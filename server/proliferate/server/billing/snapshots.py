@@ -200,8 +200,24 @@ async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingS
 async def get_billing_snapshot_for_subject_in_session(
     db: AsyncSession,
     billing_subject_id: UUID,
+    *,
+    grant_user_id: UUID | None = None,
 ) -> BillingSnapshot:
-    state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
+    """Snapshot for one subject, optionally on behalf of a known actor.
+
+    ``grant_user_id`` names the human this read is for. It matters because the
+    free allowance is per-user: on an ORG subject there is no ``subject.user_id``
+    to fall back on, so without it the allowance is never minted and the org pool
+    reads empty — ``includedHours: 0``, ``overQuota: true``,
+    ``credits_exhausted`` for a user whose hours are simply unissued (W-F1). The
+    mint still only happens when this subject is the one that *pays* for that
+    user, so passing an actor cannot move hours onto a subject they merely read.
+    """
+    state = await snapshot_state.load_snapshot_state_for_subject(
+        db,
+        billing_subject_id,
+        grant_user_id=grant_user_id,
+    )
     state = await state_with_overage_usage(db, state)
     return build_billing_snapshot(state)
 

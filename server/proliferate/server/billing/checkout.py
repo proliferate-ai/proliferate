@@ -21,6 +21,7 @@ from proliferate.constants.billing import (
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.store import billing_seats
+from proliferate.db.store.billing_runtime_usage import resolve_organization_id_for_user
 from proliferate.db.store.billing_subjects import (
     bind_stripe_customer_to_billing_subject,
     get_or_create_organization_stripe_customer_state,
@@ -271,7 +272,11 @@ async def create_cloud_checkout_session(
         owner_context=org_context,
     )
     async with db.begin():
-        snapshot = await get_billing_snapshot_for_subject_in_session(db, subject_id)
+        snapshot = await get_billing_snapshot_for_subject_in_session(
+            db,
+            subject_id,
+            grant_user_id=user.id,
+        )
         seat_quantity = (
             await billing_seats.count_active_seats_for_billing_subject_id(db, subject_id)
             if org_context is not None and not snapshot.is_paid_cloud
@@ -332,25 +337,49 @@ async def create_cloud_checkout_session(
     return BillingUrlResponse(url=checkout.url)
 
 
+async def _resolve_refill_owner_selection(
+    db: AsyncSession,
+    user: AuthenticatedUser,
+    owner_selection: OwnerSelection | None,
+) -> OwnerSelection:
+    """Point a refill purchase at the subject that PAYS for the buyer's compute.
+
+    Law W1 ("the org always pays") applies to money IN. Refill checkout used to
+    refuse org scope outright and bill the personal subject, while spend drained
+    the org pool — hours bought, hours unspendable (W-F1). So:
+
+    - An explicit organization selection is honored (owner/admin only, enforced
+      downstream by ``_ensure_stripe_customer_for_owner``) instead of 409ing.
+    - An unscoped or personal request is REDIRECTED to the buyer's paying org
+      when they have a current membership, matching
+      ``resolve_billing_subject_id_for_user``. Personal scope is not a way to
+      buy hours into a pool nothing spends from.
+    - A personal request from an org-less user stays personal: that user's
+      compute really does drain their personal subject (self-hosted and
+      org-less deployments do not run billing at all).
+    """
+    selection = owner_selection or OwnerSelection()
+    if selection.owner_scope == "organization":
+        return selection
+    organization_id = await resolve_organization_id_for_user(db, user.id)
+    if organization_id is None:
+        return selection
+    return OwnerSelection(owner_scope="organization", organization_id=organization_id)
+
+
 async def create_refill_checkout_session(
     db: AsyncSession,
     user: AuthenticatedUser,
     owner_selection: OwnerSelection | None = None,
     return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
-    selection = owner_selection or OwnerSelection()
-    if selection.owner_scope == "organization":
-        raise BillingServiceError(
-            "refill_checkout_not_supported_for_org",
-            "Refill checkout is not supported for organizations.",
-            status_code=409,
-        )
     if settings.pro_billing_enabled:
         raise BillingServiceError(
             "refill_checkout_disabled",
             "Refill checkout is not available for Pro billing.",
             status_code=409,
         )
+    selection = await _resolve_refill_owner_selection(db, user, owner_selection)
     success_url, cancel_url, _portal_return_url = _require_redirect_urls(return_surface)
     await validate_refill_price_configuration()
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(

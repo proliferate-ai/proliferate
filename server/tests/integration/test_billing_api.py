@@ -43,11 +43,13 @@ from proliferate.db.models.organizations import (
     OrganizationInvitation,
     OrganizationMembership,
 )
+from proliferate.db.store.billing_runtime_usage import resolve_billing_subject_id_for_user
 from proliferate.db.store.billing_subjects import (
     ensure_billing_grant,
     ensure_free_included_grant,
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
+    get_billing_subject_by_id,
 )
 from proliferate.db.store import repositories as repositories_store
 from proliferate.integrations import resend
@@ -103,6 +105,23 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
         "user_id": user_id,
         "access_token": str(token_data["access_token"]),
     }
+
+
+async def _payer_subject(db_session: AsyncSession, user_id: uuid.UUID):
+    """The billing subject that PAYS for this user — where seeded state belongs.
+
+    Signup places a hosted identity into a default organization, so the payer is
+    normally that org's subject, and an unscoped billing read resolves the payer
+    too (law W1, "the org always pays"). Seeding the personal subject instead
+    attributes fixture subscriptions, grants, and usage to a pool the endpoint
+    never reads.
+    """
+    subject = await get_billing_subject_by_id(
+        db_session,
+        await resolve_billing_subject_id_for_user(db_session, user_id),
+    )
+    assert subject is not None
+    return subject
 
 
 async def _create_cloud_repo_environment(
@@ -288,7 +307,7 @@ class TestBillingApi:
         session = await _register_and_login(client, "billing-paid-carry@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
-        subject = await ensure_personal_billing_subject(db_session, user_id)
+        subject = await _payer_subject(db_session, user_id)
         await ensure_free_included_grant(db_session, user_id)
         now = datetime.now(UTC)
         await ensure_billing_grant(
@@ -717,7 +736,7 @@ class TestBillingApi:
         session = await _register_and_login(client, "billing-pro-period@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
-        subject = await ensure_personal_billing_subject(db_session, user_id)
+        subject = await _payer_subject(db_session, user_id)
         subject.overage_enabled = True
         subject.overage_cap_cents_per_seat = 2000
         now = datetime.now(UTC)
@@ -958,47 +977,6 @@ class TestBillingApi:
         )
         assert member_response.status_code == 403
         assert member_response.json()["detail"]["code"] == "organization_permission_denied"
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("pro_billing_enabled", [False, True])
-    async def test_org_refill_checkout_is_not_supported(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-        pro_billing_enabled: bool,
-    ) -> None:
-        monkeypatch.setattr(settings, "pro_billing_enabled", pro_billing_enabled)
-        owner_session = await _register_and_login(
-            client,
-            f"billing-org-refill-{pro_billing_enabled}@example.com",
-        )
-        owner_id = uuid.UUID(owner_session["user_id"])
-        organization = Organization(name=f"Org Refill {pro_billing_enabled}")
-        db_session.add(organization)
-        await db_session.flush()
-        db_session.add(
-            OrganizationMembership(
-                organization_id=organization.id,
-                user_id=owner_id,
-                role=ORGANIZATION_ROLE_OWNER,
-                status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-                joined_at=datetime.now(UTC),
-            )
-        )
-        await db_session.commit()
-
-        response = await client.post(
-            "/v1/billing/refill-checkout",
-            headers={"Authorization": f"Bearer {owner_session['access_token']}"},
-            json={
-                "ownerScope": "organization",
-                "organizationId": str(organization.id),
-            },
-        )
-
-        assert response.status_code == 409
-        assert response.json()["detail"]["code"] == "refill_checkout_not_supported_for_org"
 
     @pytest.mark.asyncio
     async def test_org_cloud_plan_reports_active_member_seats(
@@ -1759,7 +1737,7 @@ class TestBillingApi:
         session = await _register_and_login(client, "billing-unlimited@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
-        billing_subject = await ensure_personal_billing_subject(db_session, user_id)
+        billing_subject = await _payer_subject(db_session, user_id)
         repo_environment = await _create_cloud_repo_environment(db_session, user_id=user_id)
 
         workspace = CloudWorkspace(
@@ -1840,7 +1818,13 @@ class TestBillingApi:
         session = await _register_and_login(client, "billing-history@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
-        billing_subject = await ensure_personal_billing_subject(db_session, user_id)
+        # Seed usage on the subject that PAYS. Signup places a hosted identity in
+        # a default org, so that is the org subject — and an unscoped read
+        # resolves the payer too (law W1). Seeding personal here would attribute
+        # the usage to a pool nothing reads or spends from.
+        payer_subject_id = await resolve_billing_subject_id_for_user(db_session, user_id)
+        billing_subject = await get_billing_subject_by_id(db_session, payer_subject_id)
+        assert billing_subject is not None
         repo_environment = await _create_cloud_repo_environment(db_session, user_id=user_id)
 
         workspace = CloudWorkspace(

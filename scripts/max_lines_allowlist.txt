@@ -55,7 +55,7 @@ server/tests/integration/test_agent_gateway_store.py 714 store-level agent_gatew
 server/tests/integration/test_cloud_workspace_materialization_service.py 1190 durable materialization ledger service suite (intent/report/unlink transitions, redaction, primary selection, recorded-sandbox reconciliation, repo-less workspace, install-id redaction, generation replay/crash-retry/terminal-reintent) + PR 5 exact-ref create coverage; new fail-closed source cases split to test_cloud_workspace_exact_ref_source.py; + lost-workspace rematerialization rejection (C7)
 server/tests/integration/test_auth_flow.py 2214 existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
-server/tests/integration/test_billing_api.py 1918 existing server oversized integration test
+server/tests/integration/test_billing_api.py 1902 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
 apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx 492 existing markdown transcript renderer pending split
 apps/packages/ui/src/icons/core.tsx 413 existing consolidated icon barrel pending split
