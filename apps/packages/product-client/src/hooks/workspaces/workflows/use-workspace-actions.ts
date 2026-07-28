@@ -54,7 +54,6 @@ export function useWorkspaceActions() {
   const desktop = useProductHost().desktop;
   const telemetry = useProductTelemetry();
   const localRuntime = desktop?.runtime ?? null;
-  const files = desktop?.files ?? null;
   // Worktree resolution runs outside render; read the latest signed-in identity
   // through a ref so the returned action object stays stable. Only the branch
   // prefix (github login) is consumed downstream, so the normalized host user
@@ -236,10 +235,6 @@ export function useWorkspaceActions() {
           workspace.repoRootId === input.repoRootId && workspace.kind === "worktree"
         ) ?? null;
 
-      if (!files) {
-        throw new Error("Local file access is not available.");
-      }
-      const homeDir = await files.getHomeDirectory();
       const userPreferences = useUserPreferencesStore.getState();
       const hostUser = authUserRef.current;
       const authUser: AuthUser | null = hostUser
@@ -276,7 +271,6 @@ export function useWorkspaceActions() {
           workspaceName: explicitWorkspaceName || generateWorkspaceSlug(existingWorktreeBasenames),
           generatedName: Boolean(input.generatedName || !explicitWorkspaceName),
         },
-        homeDir,
         branchPrefixType: userPreferences.branchPrefixType,
         authUser,
         repoConfig: repoPreferences.repoConfigs[repoRoot.path] ?? null,

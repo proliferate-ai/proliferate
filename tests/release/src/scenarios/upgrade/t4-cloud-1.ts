@@ -196,7 +196,7 @@ async function ensureSandboxReady(client: ApiClient): Promise<void> {
       );
     }
     await sleep(POLL_INTERVAL_MS);
-    sandbox = await client.post<{ status: string }>("/v1/cloud/cloud-sandbox/wake", {});
+    sandbox = await client.post<{ status: string }>("/v1/cloud/cloud-sandbox/ensure", {});
   }
 }
 

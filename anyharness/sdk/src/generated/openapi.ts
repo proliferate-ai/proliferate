@@ -2665,9 +2665,10 @@ export interface components {
             origin?: null | components["schemas"]["OriginContext"];
             repoRootId: string;
             setupScript?: string | null;
-            targetPath: string;
+            targetPath?: string | null;
         };
         CreateWorktreeWorkspaceResponse: {
+            baseFetch?: null | components["schemas"]["WorktreeBaseFetch"];
             setupScript?: null | components["schemas"]["SetupScriptExecution"];
             workspace: components["schemas"]["Workspace"];
         };
@@ -4289,6 +4290,18 @@ export interface components {
             /** Format: double */
             normalizedPercent: number;
         };
+        RuntimeDiskPressure: {
+            /** Format: int64 */
+            availableBytes: number;
+            /** Format: double */
+            idealMaxPercent: number;
+            /** Format: double */
+            percent: number;
+            /** Format: int64 */
+            totalBytes: number;
+            /** Format: int64 */
+            usedBytes: number;
+        };
         RuntimeMemoryPressure: {
             /** Format: int64 */
             availableBytes: number;
@@ -4306,6 +4319,7 @@ export interface components {
         RuntimeResourcePressure: {
             collectedAt: string;
             cpu?: null | components["schemas"]["RuntimeCpuPressure"];
+            disk?: null | components["schemas"]["RuntimeDiskPressure"];
             level: components["schemas"]["RuntimePressureLevel"];
             memory?: null | components["schemas"]["RuntimeMemoryPressure"];
             /** Format: double */
@@ -5393,6 +5407,11 @@ export interface components {
         };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
+        WorktreeBaseFetch: "fetched" | "noRemote" | {
+            failed: {
+                message: string;
+            };
+        } | "timedOut";
         /** @enum {string} */
         WorktreeCheckoutMode: "new_branch" | "detached_ref";
         /** @enum {string} */

@@ -530,11 +530,17 @@ The agreed contract is not implemented today:
   fails closed on checksum/size mismatch regardless, but the route itself can
   still serve rolling `stable` upstream of that check;
 - managed cloud launches AnyHarness and Worker separately; Supervisor is not
-  the active product parent — **server-side branch implemented, gated off at
-  merge**: the `settings.supervisor_owned_runtime`-gated branch in `connect.py`
-  (default off) launches Supervisor detached instead of a separate Worker
-  sidecar, and the flag-off path is unchanged and regression-pinned. Exercised
-  deterministically in server tests; the live E2B proof is deferred;
+  the active product parent — **implemented, now the default, and the legacy
+  path is deleted**: the live E2B N-1→N proof (2026-07-26: real sandbox, pins
+  0.3.47→0.3.48, zero rollbacks) and the D5 BRIDGE proof (2026-07-26: a
+  running legacy sandbox migrated onto the Supervisor-owned topology in
+  place, ~2.5s, sandbox `iwwvadhffzxoora56f437`) both passed, so the
+  server-side legacy direct-nohup'd-AnyHarness-plus-Worker-sidecar launch
+  path was deleted (S5-B); `connect.py`'s `runtime_launch.py` now
+  unconditionally launches Supervisor detached — there is no launch-time
+  flag branch left. `settings.supervisor_owned_runtime` survives only to gate
+  the `desiredTopology` heartbeat signal for already-running legacy workers.
+  Exercised deterministically in server tests plus both live proofs above;
 - Worker directly downloads/swaps/restarts itself and AnyHarness instead of
   writing a durable Supervisor request — **implemented and wired**:
   `supervisor_bridge.rs` (mailbox request write, D5 bridge, crash-safety
@@ -553,8 +559,8 @@ The agreed contract is not implemented today:
   (`update/activate.rs`), the bounded fetch (`update/download.rs`), and the real
   `/health`-polling gate in `process/health.rs` are all in place;
   `process/mod.rs` drains the mailbox via `activate::run_pending`, and
-  `proliferate-supervisor` builds and passes its inline test matrix. Only the
-  live E2B proof is deferred;
+  `proliferate-supervisor` builds and passes its inline test matrix. The live
+  E2B UPDATE proof passed 2026-07-26;
 - current cloud automation mutates shared staging, chooses hard-coded published
   versions, checks only runtime health, and allows expected failure;
 - the release workflows do not invoke the required Tier 4 target cells as a
@@ -572,8 +578,10 @@ The agreed contract is not implemented today:
   no-double-Supervisor liveness gate) is implemented with deterministic tests
   for idempotency, marker-file crash recovery, and the no-double-Supervisor
   invariant, and is called from `runtime.rs::maybe_run_bridge` (reachable from
-  both the supervisor-owned and the legacy branch). The live bridge run against a
-  real production N-1 target remains deferred with the rest of Tier 4.
+  both the supervisor-owned and the legacy branch). The live D5 BRIDGE run
+  against a real target PASSED 2026-07-26 (sandbox `iwwvadhffzxoora56f437`: a
+  running legacy sandbox migrated onto the Supervisor-owned topology in
+  place, ~2.5s, no destroy/recreate).
 
 None of the above closes a manifest row or this document's own scenario
 contract: `T4-RUNTIME-1`'s baseline/upgrade/assertions and the Cloud evidence

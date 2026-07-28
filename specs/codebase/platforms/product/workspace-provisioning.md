@@ -145,7 +145,7 @@ DELETE /v1/cloud/workspaces/{id}/materializations/{materialization_id}
 
 There is no mounted workspace `connection` endpoint. Clients reach AnyHarness
 through the authenticated cloud-sandbox gateway documented in
-[Cloud sandbox provisioning](sandbox-provisioning.md).
+[sandbox-gateway.md](sandbox-gateway.md).
 
 ## Save A Cloud Repository Environment
 
@@ -261,7 +261,7 @@ was removed and a rewrite is planned as part of the sandbox spec program.
 | Durable target association ledger | [`server/.../cloud/workspaces/materializations/`](../../../../server/proliferate/server/cloud/workspaces/materializations/) and [`db/store/cloud_workspace_materializations.py`](../../../../server/proliferate/db/store/cloud_workspace_materializations.py) |
 | Desktop clone/link/open orchestration | [`apps/packages/product-client/src/hooks/workspaces/workflows/`](../../../../apps/packages/product-client/src/hooks/workspaces/workflows/) and [`components/workspace/repo-setup/`](../../../../apps/packages/product-client/src/components/workspace/repo-setup/) |
 | Direct AnyHarness adapter | [`server/proliferate/integrations/anyharness/`](../../../../server/proliferate/integrations/anyharness/) |
-| Sandbox lifecycle and runtime access | [Cloud sandbox provisioning](sandbox-provisioning.md) |
+| Sandbox lifecycle and runtime access | [sandbox-lifecycle.md](sandbox-lifecycle.md), [sandbox-access.md](sandbox-access.md) |
 | GitHub sandbox credentials | [Sandbox GitHub auth](sandbox-github-auth.md) |
 | Billing authorization | [Billing](billing.md) |
 | Runtime workspace and session truth | [AnyHarness structure](../../structures/anyharness/README.md) |

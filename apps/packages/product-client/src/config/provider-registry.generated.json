@@ -24,12 +24,36 @@
     "npm": "@ai-sdk/openai-compatible"
   },
   {
+    "id": "ai-router",
+    "displayName": "AI-ROUTER",
+    "envVarNames": [
+      "AI_ROUTER_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "aiand",
+    "displayName": "ai&",
+    "envVarNames": [
+      "AIAND_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
     "id": "aihubmix",
     "displayName": "AIHubMix",
     "envVarNames": [
       "AIHUBMIX_API_KEY"
     ],
     "npm": "@aihubmix/ai-sdk-provider"
+  },
+  {
+    "id": "aki-io",
+    "displayName": "AKI.IO",
+    "envVarNames": [
+      "AKI_IO_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
   },
   {
     "id": "alibaba",
@@ -173,6 +197,14 @@
     "npm": "@ai-sdk/openai-compatible"
   },
   {
+    "id": "blueclaw",
+    "displayName": "Blue Claw",
+    "envVarNames": [
+      "BLUECLAW_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
     "id": "cerebras",
     "displayName": "Cerebras",
     "envVarNames": [
@@ -201,6 +233,14 @@
     "displayName": "Claudinio",
     "envVarNames": [
       "CLAUDINIO_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "cline-pass",
+    "displayName": "ClinePass",
+    "envVarNames": [
+      "CLINE_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible"
   },
@@ -256,6 +296,22 @@
     "npm": "@ai-sdk/openai-compatible"
   },
   {
+    "id": "crossmodel",
+    "displayName": "CrossModel",
+    "envVarNames": [
+      "CROSSMODEL_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "daoxe",
+    "displayName": "DaoXE",
+    "envVarNames": [
+      "DAOXE_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
     "id": "databricks",
     "displayName": "Databricks",
     "envVarNames": [
@@ -301,6 +357,22 @@
     "displayName": "D.Run (China)",
     "envVarNames": [
       "DRUN_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "ebcloud",
+    "displayName": "EBCloud",
+    "envVarNames": [
+      "EBCLOUD_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "empiriolabs",
+    "displayName": "EmpirioLabs AI",
+    "envVarNames": [
+      "EMPIRIOLABS_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible"
   },
@@ -431,6 +503,14 @@
     "npm": "@ai-sdk/openai-compatible"
   },
   {
+    "id": "hetzner",
+    "displayName": "Hetzner",
+    "envVarNames": [
+      "HETZNER_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
     "id": "hpc-ai",
     "displayName": "HPC-AI",
     "envVarNames": [
@@ -475,6 +555,14 @@
     "displayName": "Inference",
     "envVarNames": [
       "INFERENCE_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "inferx",
+    "displayName": "InferX",
+    "envVarNames": [
+      "INFERX_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible"
   },
@@ -567,10 +655,26 @@
     "npm": "@ai-sdk/openai-compatible"
   },
   {
+    "id": "longcat",
+    "displayName": "LongCat",
+    "envVarNames": [
+      "LONGCAT_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
     "id": "lucidquery",
     "displayName": "LucidQuery",
     "envVarNames": [
       "LUCIDQUERY_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "lynkr",
+    "displayName": "Lynkr",
+    "envVarNames": [
+      "LYNKR_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible"
   },
@@ -589,6 +693,14 @@
       "MERGE_GATEWAY_API_KEY"
     ],
     "npm": "merge-gateway-ai-sdk-provider"
+  },
+  {
+    "id": "meta",
+    "displayName": "Meta",
+    "envVarNames": [
+      "META_MODEL_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai"
   },
   {
     "id": "minimax",
@@ -643,6 +755,14 @@
     "displayName": "Moark",
     "envVarNames": [
       "MOARK_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "model-oracle-ai",
+    "displayName": "Model Oracle AI",
+    "envVarNames": [
+      "MODEL_ORACLE_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible"
   },
@@ -744,6 +864,14 @@
     "npm": "@ai-sdk/openai-compatible"
   },
   {
+    "id": "ofox",
+    "displayName": "Ofox",
+    "envVarNames": [
+      "OFOX_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
     "id": "ollama-cloud",
     "displayName": "Ollama Cloud",
     "envVarNames": [
@@ -814,6 +942,14 @@
       "PERPLEXITY_API_KEY"
     ],
     "npm": "@ai-sdk/openai"
+  },
+  {
+    "id": "pioneer",
+    "displayName": "Pioneer",
+    "envVarNames": [
+      "PIONEER_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
   },
   {
     "id": "poe",
@@ -947,7 +1083,7 @@
   },
   {
     "id": "stepfun",
-    "displayName": "StepFun",
+    "displayName": "StepFun (China)",
     "envVarNames": [
       "STEPFUN_API_KEY"
     ],
@@ -955,7 +1091,23 @@
   },
   {
     "id": "stepfun-ai",
-    "displayName": "StepFun AI",
+    "displayName": "StepFun (Global)",
+    "envVarNames": [
+      "STEPFUN_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "stepfun-ai-step-plan",
+    "displayName": "StepFun Step Plan (Global)",
+    "envVarNames": [
+      "STEPFUN_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "stepfun-step-plan",
+    "displayName": "StepFun Step Plan (China)",
     "envVarNames": [
       "STEPFUN_API_KEY"
     ],
@@ -967,7 +1119,7 @@
     "envVarNames": [
       "SUBCONSCIOUS_API_KEY"
     ],
-    "npm": "@ai-sdk/openai-compatible"
+    "npm": "@ai-sdk/anthropic"
   },
   {
     "id": "submodel",
@@ -994,6 +1146,14 @@
     "npm": "@ai-sdk/openai-compatible"
   },
   {
+    "id": "tencent-token-plan",
+    "displayName": "Tencent Token Plan",
+    "envVarNames": [
+      "TENCENT_TOKEN_PLAN_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
     "id": "tencent-tokenhub",
     "displayName": "Tencent TokenHub",
     "envVarNames": [
@@ -1008,6 +1168,14 @@
       "THEGRIDAI_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "thinkingmachines",
+    "displayName": "Thinking Machines",
+    "envVarNames": [
+      "TINKER_API_KEY"
+    ],
+    "npm": "@ai-sdk/anthropic"
   },
   {
     "id": "tinfoil",
@@ -1046,6 +1214,14 @@
     "displayName": "Umans AI Coding Plan",
     "envVarNames": [
       "UMANS_AI_CODING_PLAN_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "unorouter",
+    "displayName": "UnoRouter",
+    "envVarNames": [
+      "UNOROUTER_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible"
   },
@@ -1182,6 +1358,14 @@
     "displayName": "Zeldoc",
     "envVarNames": [
       "ZELDOC_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  {
+    "id": "zenifra",
+    "displayName": "Zenifra",
+    "envVarNames": [
+      "ZENIFRA_AI_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible"
   },

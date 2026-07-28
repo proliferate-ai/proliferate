@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use super::records::build_workspace_record;
 use super::WorkspaceRuntime;
-use crate::adapters::git::GitService;
+use crate::adapters::git::{GitService, WorktreeBaseFetch};
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceSurface};
 use crate::domains::workspaces::types::CreateWorktreeResult;
@@ -147,7 +147,7 @@ impl WorkspaceRuntime {
                 &candidate.branch_name,
                 base_branch,
             ) {
-                Ok(()) => {
+                Ok(base_fetch) => {
                     // The pre-create canonical target is only for checking the
                     // requested target before it exists. Persist the canonical
                     // path of the worktree that git actually materialized.
@@ -171,6 +171,7 @@ impl WorkspaceRuntime {
                         surface,
                         origin,
                         creator_context,
+                        base_fetch,
                         started,
                     );
                 }
@@ -233,6 +234,7 @@ impl WorkspaceRuntime {
         surface: &str,
         origin: OriginContext,
         creator_context: Option<WorkspaceCreatorContext>,
+        base_fetch: Option<WorktreeBaseFetch>,
         started: Instant,
     ) -> anyhow::Result<CreateWorktreeResult> {
         let record = build_workspace_record(
@@ -266,6 +268,7 @@ impl WorkspaceRuntime {
         Ok(CreateWorktreeResult {
             workspace: record,
             setup_script,
+            base_fetch,
         })
     }
 }
@@ -296,15 +299,31 @@ fn create_git_worktree_for_checkout_mode(
     target_path: &str,
     branch_name: &str,
     base_branch: Option<&str>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<WorktreeBaseFetch>> {
+    let base_fetch = base_branch.map(|branch_name| {
+        GitService::fetch_worktree_base(Path::new(source_repo_root), branch_name)
+    });
+    let remote_base = base_branch
+        .filter(|_| matches!(base_fetch.as_ref(), Some(WorktreeBaseFetch::Fetched)))
+        .map(|base_branch| format!("origin/{base_branch}"))
+        .filter(|remote_base| {
+            GitService::ref_exists(
+                Path::new(source_repo_root),
+                &format!("refs/remotes/{remote_base}"),
+            )
+        });
+    let effective_base = remote_base.as_deref().or(base_branch);
+
     match checkout_mode {
         WorktreeCheckoutMode::NewBranch => {
-            GitService::create_worktree(source_repo_root, target_path, branch_name, base_branch)
+            GitService::create_worktree(source_repo_root, target_path, branch_name, effective_base)?
         }
         WorktreeCheckoutMode::DetachedRef => {
-            GitService::create_detached_worktree(source_repo_root, target_path, base_branch)
+            GitService::create_detached_worktree(source_repo_root, target_path, effective_base)?
         }
-    }
+    };
+
+    Ok(base_fetch)
 }
 
 fn current_branch_for_checkout_mode(

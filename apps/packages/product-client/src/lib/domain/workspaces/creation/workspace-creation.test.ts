@@ -26,7 +26,7 @@ const sourceWorkspace: Workspace = {
 };
 
 describe("worktree creation params", () => {
-  it("suffixes generated local worktree path and branch conflicts", () => {
+  it("delegates generated local worktree placement and suffixes conflicts", () => {
     const resolved = resolveWorktreeCreationParams({
       repoRoot,
       sourceWorkspace,
@@ -35,7 +35,6 @@ describe("worktree creation params", () => {
         workspaceName: "otter",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "github_username",
       authUser: {
         id: "user-1",
@@ -48,10 +47,10 @@ describe("worktree creation params", () => {
 
     expect(resolved.params).toMatchObject({
       branchName: "ada/otter",
-      targetPath: "/Users/ada/.proliferate/worktrees/proliferate/otter",
       checkoutMode: "new_branch",
       nameConflictPolicy: "suffix_path_and_branch",
     });
+    expect(resolved.params.targetPath).toBeUndefined();
   });
 
   it("detaches generated worktrees when an explicit non-default base ref is selected", () => {
@@ -64,7 +63,6 @@ describe("worktree creation params", () => {
         baseBranch: "feature/existing",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "github_username",
       authUser: {
         id: "user-1",
@@ -94,7 +92,6 @@ describe("worktree creation params", () => {
         branchName: "codex/custom",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "none",
       authUser: null,
       repoConfig: null,
@@ -121,7 +118,6 @@ describe("worktree creation params", () => {
         baseBranch: "main",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "github_username",
       authUser: {
         id: "user-1",
@@ -154,7 +150,6 @@ describe("worktree creation params", () => {
         defaultBranch: "main",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "github_username",
       authUser: {
         id: "user-1",
@@ -187,7 +182,6 @@ describe("worktree creation params", () => {
         defaultBranch: "main",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "github_username",
       authUser: {
         id: "user-1",
@@ -219,7 +213,6 @@ describe("worktree creation params", () => {
         defaultBranch: "main",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "github_username",
       authUser: {
         id: "user-1",
@@ -246,7 +239,6 @@ describe("worktree creation params", () => {
         branchName: "codex/custom",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "none",
       authUser: null,
       repoConfig: null,
@@ -260,7 +252,6 @@ describe("worktree creation params", () => {
         targetPath: "/tmp/custom",
         generatedName: true,
       },
-      homeDir: "/Users/ada",
       branchPrefixType: "none",
       authUser: null,
       repoConfig: null,
@@ -268,5 +259,6 @@ describe("worktree creation params", () => {
 
     expect(withExplicitBranch.params.nameConflictPolicy).toBe("fail");
     expect(withExplicitPath.params.nameConflictPolicy).toBe("fail");
+    expect(withExplicitPath.params.targetPath).toBe("/tmp/custom");
   });
 });

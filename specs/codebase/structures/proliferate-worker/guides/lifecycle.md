@@ -83,10 +83,25 @@ write Supervisor config, start Supervisor detached, confirm it took ownership
 (adopted/started AnyHarness, spawned its own Worker child), then exit cleanly.
 This is idempotent and crash-safe: a `bridge.started`/`bridge.done` marker
 pair plus a Supervisor-liveness check prevent starting a second Supervisor
-after a crash mid-bridge. The live bridge proof against a real target is
-deferred with the rest of Tier 4; this crate's tests cover idempotency,
+after a crash mid-bridge. The live D5 BRIDGE proof against a real target
+PASSED 2026-07-26 (sandbox `iwwvadhffzxoora56f437`: a running legacy sandbox
+migrated onto the Supervisor-owned topology in place, ~2.5s, no
+destroy/recreate); this crate's tests separately cover idempotency,
 marker-file crash recovery, and the no-double-Supervisor invariant
 deterministically.
+
+**Expected log signature of a real bridge.** The Supervisor's first spawned
+Worker child cannot immediately acquire the exclusive, non-blocking `flock`
+on `worker.sqlite3` (`WorkerProcessLock::acquire` in `process_lock.rs`)
+because the bridging legacy Worker still holds it while it confirms
+Supervisor ownership and exits. That first child therefore exits once with a
+lock-contention error (`WorkerError::AlreadyRunning`); the Supervisor's
+restart loop (`restart_delay_seconds`, default 5s) relaunches it, and the
+second attempt acquires the now-released lock cleanly. One early exit
+followed by a clean restart ~5s later, exactly once per bridge, is the
+expected successful signature — not a crash loop. A signature that repeats
+past that single generation indicates the bridge itself failed to hand off
+ownership (the bridging Worker never exited).
 
 ## Worker Binary Convergence (legacy, non-supervisor-owned targets)
 
@@ -139,14 +154,23 @@ window and logs a deprecation warning when it runs.
 
 Both legacy update gates (`self_update_enabled`, `anyharness_update_enabled`)
 default to disabled. Desktop owns its bundled binaries and leaves them
-disabled. On a supervisor-owned cloud-sandbox target the server writer stops
-emitting `anyharness_update_enabled=true` and instead emits
-`supervisor_update_request_dir`, so the mailbox path in the previous section
-runs and the legacy gates stay off. A non-supervisor-owned (legacy) target
-still gets the same `anyharness_update_enabled=true` sidecar configuration as
-before. `supervisor_owned_runtime` is a server-side flag, default off at
-merge; it does not change local Worker behavior directly, only which config
-the server writes.
+disabled. Every managed-cloud (E2B) target is now always supervisor-owned:
+the server's `build_worker_config` (`server/proliferate/server/cloud/runtime/bootstrap.py`)
+only ever emits `supervisor_update_request_dir`, never
+`anyharness_update_enabled=true` — calling it with `supervisor_owned=False`
+raises `ValueError` because the legacy independent-launch config shape was
+deleted. So the mailbox path in the previous section is the only convergence
+path a cloud-sandbox target's Worker config can express.
+
+SSH-installed targets are a separate story: `install/proliferate-target-install.sh`
+does not set `self_update_enabled`, `anyharness_update_enabled`, or
+`supervisor_update_request_dir` in the Worker config it writes, so all three
+stay at their Rust-side defaults (both update gates false, mailbox dir
+absent). An SSH target therefore gets neither the legacy in-place binary
+swap nor the mailbox path — Worker binary convergence is off there today.
+Proliferate Supervisor still owns process supervision for SSH targets (the
+installer's systemd unit runs `proliferate-supervisor`, not the Worker
+directly); only the Worker's own binary-convergence gates are unset.
 
 ## Hard Rules
 
