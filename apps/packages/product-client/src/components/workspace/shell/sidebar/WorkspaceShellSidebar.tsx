@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "@proliferate/design/motion";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 import { WorkspaceSidebarHeaderControls } from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
@@ -20,16 +21,46 @@ export function WorkspaceShellSidebar({
   // state, not preference state: nothing about it is persisted, and toggling the
   // sidebar open discards it.
   const [peekActive, setPeekActive] = useState(false);
-  const activatePeek = useCallback(() => setPeekActive(true), []);
-  const deactivatePeek = useCallback(() => setPeekActive(false), []);
+  const peekCloseTimerRef = useRef<number | null>(null);
+
+  const cancelPeekClose = useCallback(() => {
+    if (peekCloseTimerRef.current !== null) {
+      window.clearTimeout(peekCloseTimerRef.current);
+      peekCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const activatePeek = useCallback(() => {
+    cancelPeekClose();
+    setPeekActive(true);
+  }, [cancelPeekClose]);
+
+  // Closing is deferred, opening is not. The pointer leaves the panel for a
+  // beat during ordinary use -- crossing the gap to the collapsed header's own
+  // toggle, or clipping a corner on the way to it -- and an immediate close
+  // turned every one of those into a full fade-out that a click then had to
+  // fade back in. One grace period, sized to the hover-card's, absorbs the
+  // crossing; a re-entry inside it cancels the close outright, so the panel
+  // never animates at all.
+  const deactivatePeek = useCallback(() => {
+    cancelPeekClose();
+    peekCloseTimerRef.current = window.setTimeout(() => {
+      peekCloseTimerRef.current = null;
+      setPeekActive(false);
+    }, motion.delay.hoverCardHideMs);
+  }, [cancelPeekClose]);
+
+  useEffect(() => cancelPeekClose, [cancelPeekClose]);
+
   useEffect(() => {
     // Opening the sidebar disarms any peek, so re-collapsing later starts from
     // hidden instead of inheriting a hover that ended while the sidebar was open
     // (the collapsed panel gets no `mouseleave` in that case).
     if (open) {
+      cancelPeekClose();
       setPeekActive(false);
     }
-  }, [open]);
+  }, [cancelPeekClose, open]);
 
   const body = (
     <DebugProfiler id="workspace-sidebar-frame">
@@ -84,12 +115,29 @@ export function WorkspaceShellSidebar({
         // tab order and the accessibility tree. Reduced motion needs no branch
         // here — the generated stylesheet zeroes the interaction durations
         // under `prefers-reduced-motion`, so the peek snaps instead of fading.
-        className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-sidebar transition-opacity ${
+        //
+        // The peek animates opacity AND a short slide from behind its own left
+        // edge, because opacity alone reads as a pop however long it runs: the
+        // panel is a full-height slab, so with nothing moving there is no
+        // direction to the reveal and the eye only registers the arrival. The
+        // slide is deliberately a fraction of the panel width (not the full
+        // travel a toggle makes) — it says "this came from the edge" without
+        // pretending the layout moved.
+        //
+        // Durations and curves are chosen against what each transition is:
+        // arriving is `panel` geometry with `out-cubic`, which spends the budget
+        // on a quick departure that decelerates into place; `out-quint` covers
+        // ~86% of the distance in the first third and is what made this snap.
+        // Leaving keeps the faster `exit` role and slides back the way it came.
+        // `translate`, not `transform`: Tailwind's translate utilities compile to
+        // the standalone `translate` property, so a transition on `transform`
+        // animates nothing and the slide silently snaps.
+        className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-sidebar transition-[opacity,translate] will-change-[opacity,translate] ${
           open
-            ? `pointer-events-auto opacity-100 duration-enter ${edgeClassName}`
+            ? `pointer-events-auto translate-x-0 opacity-100 duration-enter ease-out-cubic ${edgeClassName}`
             : peekActive
-              ? "pointer-events-auto opacity-100 shadow-popover border-r border-border duration-enter ease-out-quint"
-              : "pointer-events-none opacity-0 duration-exit ease-standard"
+              ? "pointer-events-auto translate-x-0 opacity-100 shadow-popover border-r border-border duration-panel ease-out-cubic"
+              : "pointer-events-none -translate-x-2 opacity-0 duration-exit ease-out-cubic"
         }`}
         style={{ width }}
         inert={!open && !peekActive}
