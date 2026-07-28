@@ -340,6 +340,9 @@ async def test_missing_provider_detach_commit_ambiguity_closes_exact_usage(
         events.append(f"terminal_receipt:{expected_provider_sandbox_id}")
         return _copy_sandbox(sandbox, e2b_sandbox_id=expected_provider_sandbox_id)
 
+    async def _mark_lost(*_args: Any, **_kwargs: Any) -> int:
+        return 0
+
     monkeypatch.setattr(provider, "resume_sandbox", _missing)
 
     async def _detach_and_close(*args: Any, **kwargs: Any) -> object | None:
@@ -356,6 +359,11 @@ async def test_missing_provider_detach_commit_ambiguity_closes_exact_usage(
     monkeypatch.setattr(failures, "supersede_missing_cloud_sandbox_provider", _detach)
     monkeypatch.setattr(failures, "close_cloud_sandbox_provider_usage", _close_usage)
     monkeypatch.setattr(failures, "mark_cloud_sandbox_materialization_error", _mark_failure)
+    monkeypatch.setattr(
+        failures.cloud_workspace_store,
+        "mark_cloud_workspaces_lost_for_sandbox",
+        _mark_lost,
+    )
 
     with pytest.raises(RuntimeError, match="ambiguous commit"):
         await connect.connect_ready_sandbox(db, sandbox=sandbox)

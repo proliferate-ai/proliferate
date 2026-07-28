@@ -4577,7 +4577,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            status: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Runtimestatus
              * @enum {string}
@@ -7315,12 +7315,12 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            status: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Workspacestatus
              * @enum {string}
              */
-            workspaceStatus: "pending" | "materializing" | "ready" | "archived" | "error";
+            workspaceStatus: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Productlifecycle
              * @enum {string}
@@ -7501,12 +7501,12 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            status: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Workspacestatus
              * @enum {string}
              */
-            workspaceStatus: "pending" | "materializing" | "ready" | "archived" | "error";
+            workspaceStatus: "pending" | "materializing" | "ready" | "lost" | "archived" | "error";
             /**
              * Productlifecycle
              * @enum {string}

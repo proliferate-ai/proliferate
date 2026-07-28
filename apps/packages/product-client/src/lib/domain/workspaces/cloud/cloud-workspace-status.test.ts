@@ -7,6 +7,8 @@ import {
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
   isCloudWorkspaceFailedBeforeReady,
+  resolveCloudWorkspaceStatus,
+  shouldPollCloudWorkspaceForUpdates,
   shouldShowCloudWorkspaceStatusScreen,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { CLOUD_STATUS_COMPACT_COPY } from "#product/copy/cloud/cloud-status-copy";
@@ -104,6 +106,24 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
     expect(footerMessage(model)).not.toBe(CLOUD_STATUS_COMPACT_COPY.firstRuntimeFooterMessage);
   });
 
+  it("returns a terminal lost mode that offers delete instead of retry", () => {
+    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
+      status: "lost",
+    }));
+
+    expect(model).toMatchObject({
+      mode: "lost",
+      title: "Workspace lost",
+      description: expect.stringContaining("sandbox was killed"),
+      footer: {
+        kind: "action",
+        action: "delete",
+        label: "Delete workspace",
+      },
+    });
+    expect(model.description).toContain("contents are gone");
+  });
+
   it("keeps generic provisioning copy when runtime summary is missing", () => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
       runtime: undefined,
@@ -142,6 +162,7 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
 
   it.each<Partial<CloudWorkspaceSummary>>([
     { status: "error" },
+    { status: "lost" },
     { status: "archived" },
   ])("does not show first-runtime copy for non-provisioning states", (overrides) => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
@@ -164,6 +185,16 @@ describe("shouldShowCloudWorkspaceStatusScreen", () => {
     expect(shouldShowCloudWorkspaceStatusScreen(
       makeCloudWorkspace({ status: "ready" }),
     )).toBe(false);
+  });
+
+  it("shows the full status screen for a lost workspace", () => {
+    const workspace = makeCloudWorkspace({
+      status: "lost",
+    });
+
+    expect(resolveCloudWorkspaceStatus(workspace)).toBe("lost");
+    expect(shouldShowCloudWorkspaceStatusScreen(workspace)).toBe(true);
+    expect(shouldPollCloudWorkspaceForUpdates(workspace)).toBe(false);
   });
 });
 
@@ -226,6 +257,12 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
       status: "error" as const,
       tone: "destructive" as const,
     },
+    {
+      expectedAction: { action: "delete", label: "Delete" },
+      expectedTitle: "Cloud workspace needs attention",
+      status: "lost" as const,
+      tone: "destructive" as const,
+    },
   ])("maps $status to a compact action view", ({ expectedAction, expectedTitle, status, tone }) => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({ status }));
     const compact = buildCloudWorkspaceCompactStatusView(model);
@@ -258,6 +295,7 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
       makeCloudWorkspace({ status: "materializing" }),
       makeCloudWorkspace({ status: "ready", postReadyPhase: "applying_files" }),
       makeCloudWorkspace({ status: "archived" }),
+      makeCloudWorkspace({ status: "lost" }),
       makeCloudWorkspace({ status: "error" }),
     ].map((workspace) => buildCloudWorkspaceStatusScreenModel(workspace));
 

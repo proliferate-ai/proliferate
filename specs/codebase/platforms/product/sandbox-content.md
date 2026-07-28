@@ -454,31 +454,24 @@ apps/packages/product-client/src/
   [retention_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention_tests.rs),
   [retire_preflight_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight_tests.rs),
   [deletion_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion_tests.rs).
-- Pending, landing with the gap PRs: fetch-on-create classification tests;
-  paired-reclaim integration proof (workspace delete retires, repo-env
-  delete reclaims); a live disk axis reading end to end; workspaces marked
-  lost after provider loss.
+- Paired workspace-retire proof:
+  [test_cloud_workspace_retire_after_commit.py](../../../../server/tests/unit/test_cloud_workspace_retire_after_commit.py).
+- Pending, landing with the remaining gap PRs: fetch-on-create
+  classification tests; repository-environment delete reclaim; a live disk
+  axis reading end to end.
 
 ## Current gaps
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Workspace delete and archive reclaim nothing
-      ([cloud_workspaces.py](../../../../server/proliferate/db/store/cloud_workspaces.py)
-      writes rows only); repository-environment delete reclaims nothing and
-      no clone-delete primitive exists anywhere in AnyHarness (no route, no
-      store method). Add the paired after-commit reclaims and build the
-      clone-delete primitive under the same fence discipline as retire.
+- [ ] Repository-environment delete reclaims nothing and no clone-delete
+      primitive exists anywhere in AnyHarness (no route, no store method).
+      Build the clone-delete primitive under the same fence discipline as
+      retire, then pair repository-environment deletion with an after-commit
+      reclaim.
 - [ ] The inventory row carries no last-activity timestamp for suggesting
       stale worktrees. Add last activity after wiring the session store
       into worktree inventory.
-- [ ] After provider loss, workspaces dangle instead of being marked lost:
-      `cloud_workspace` rows still reference dead AnyHarness workspace ids
-      on the replacement VM, surfacing as opaque runtime errors, and
-      today's recovery is manual delete-and-recreate
-      ([cloud-provisioning-failure.md](../../../developing/operating/cloud-provisioning-failure.md)).
-      On binding detach, mark the bound workspaces lost and surface that
-      state in the product; the replacement VM starts empty by design.
 - [ ] The clone create/refresh script bypasses AnyHarness's own repo-root
       acquisition (`acquire_repo_root` /
       [clone.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/clone.rs)),
