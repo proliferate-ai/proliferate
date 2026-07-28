@@ -10,8 +10,8 @@ workspaces, repository configuration, or AnyHarness runtime state.
 one product user
   -> one active cloud_sandbox row
   -> just-in-time E2B create/resume during materialization
-  -> direct AnyHarness launch and authenticated access
-  -> optional Proliferate Worker sidecar
+  -> Supervisor-owned runtime launch and authenticated AnyHarness access
+     (Supervisor starts and supervises AnyHarness and the Worker)
 ```
 
 `POST /v1/cloud/cloud-sandbox/ensure` ensures the database row after
@@ -121,10 +121,10 @@ snapshot is never provider authority.
    active observation after a transient response uses the same fenced usage
    open in the failure transaction;
 7. resolve the provider endpoint and runtime context, then reuse a healthy
-   authenticated AnyHarness or launch it directly with the
+   authenticated AnyHarness or launch the Supervisor-owned runtime with the
    recorded or newly minted runtime credentials;
-8. when AnyHarness is launched, start Proliferate Worker as a detached,
-   best-effort sidecar; and
+8. when a launch happens, the detached Supervisor starts and supervises both
+   AnyHarness and the Worker (there is no separate Worker sidecar launch); and
 9. after launch/relaunch, persist ready status and encrypted runtime access
    only when the expected provider binding and attempt epoch are still current.
 
@@ -149,16 +149,17 @@ repository attempt owns its GitHub authority check and credential
 materialization, and remains best-effort so one repository failure cannot
 prevent the non-repository state from converging.
 
-The E2B launch path launches Proliferate Supervisor as the process parent of
-AnyHarness and the Worker when `supervisor_owned_runtime` is on
-(`_launch_supervisor_owned_runtime` in
-[runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py));
-the direct non-supervisor launch is the legacy branch, deletion-pending with
-the rest of the legacy topology
-([agent-distribution.md](agent-distribution.md) Current gaps). A missing or
-unhealthy Worker does not make direct AnyHarness access unavailable. Reusing an
-already-healthy AnyHarness does not currently restart or self-heal a missing
-Worker sidecar.
+The E2B launch path unconditionally launches Proliferate Supervisor as the
+process parent of AnyHarness and the Worker
+(`launch_anyharness_runtime` in
+[runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py)).
+The legacy direct-nohup'd AnyHarness plus a separately launched Worker
+sidecar was deleted once the live E2B N-1→N update proof and the D5 BRIDGE
+proof both passed (2026-07-26); `supervisor_owned_runtime` no longer gates
+which topology a launch takes, only the D5 `desiredTopology` heartbeat signal
+for already-running legacy workers. A missing or unhealthy Worker does not
+make direct AnyHarness access unavailable. Reusing an already-healthy
+AnyHarness does not currently restart or self-heal a missing Worker.
 
 ### Delete
 
@@ -253,8 +254,9 @@ destroys that row.
   observation replaces it with a sanitized receipt.
 - Runtime access is usable only when URL, bearer ciphertext, and data-key
   ciphertext are all present.
-- Worker sidecar launch failures are logged and swallowed; diagnose Worker
-  liveness independently from AnyHarness health.
+- The Supervisor owns Worker startup and restarts; a missing or unhealthy
+  Worker does not make direct AnyHarness access unavailable, so diagnose
+  Worker liveness independently from AnyHarness health.
 - Automatic replacement is limited to authoritative absence of the exact
   persisted provider target. There is no general-purpose manual replacement
   operation, and existing AnyHarness workspace identities can still be

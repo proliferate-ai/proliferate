@@ -159,8 +159,9 @@ const MODEL_PICKER_TIMEOUT_MS = 240_000;
 /**
  * The AnyHarness runtime's in-sandbox loopback port. NOT 8542 — that value is
  * only the local-dev (`local-workspace` world) default; the managed-cloud
- * runtime is launched with `--require-bearer-auth` on 8457
- * (`build_runtime_launch_script`), so every in-sandbox call must also carry
+ * runtime is launched with `--require-bearer-auth` on 8457 (Supervisor's
+ * `build_detached_supervisor_launch_command` spawns AnyHarness with that
+ * flag; see `runtime_launch.py`), so every in-sandbox call must also carry
  * the sandbox's own bearer token (see `resolveRuntimeBearerToken`).
  */
 export const SANDBOX_RUNTIME_PORT = 8457;
@@ -590,9 +591,10 @@ asyncio.run(main())
  * exactly one non-revoked row is `online`, its heartbeat is within the
  * server's own offline threshold, and it has reported both component
  * versions — or throws once `WORKER_ENROLLMENT_POLL_TIMEOUT_MS` elapses. A
- * bounded poll rather than a single read: `launch_worker_sidecar` enrolls the
- * Worker asynchronously, so the row can take a few seconds to appear after
- * the sandbox is otherwise `running`.
+ * bounded poll rather than a single read: `launch_anyharness_runtime` mints
+ * the Worker's enrollment token and the Supervisor-spawned Worker enrolls
+ * asynchronously, so the row can take a few seconds to appear after the
+ * sandbox is otherwise `running`.
  */
 async function verifyWorkerEnrollmentOnServer(
   box: BoxExec,
@@ -1251,8 +1253,8 @@ export function createCloudProvision1Driver(
     // `cloud_runtime_worker` table (spec step 5) — there is no product API
     // exposing enrollment/heartbeat, and grepping in-sandbox `ps` cannot tell
     // an enrolled-and-heartbeating Worker from a process that merely started.
-    // Bounded poll: `launch_worker_sidecar` enrolls asynchronously, so the row
-    // can lag the sandbox otherwise being `running` by a few seconds.
+    // Bounded poll: the Supervisor-spawned Worker enrolls asynchronously, so
+    // the row can lag the sandbox otherwise being `running` by a few seconds.
     if (!world.box) {
       throw new Error(
         "verifyWorkerSupervisor: the managed-cloud world exposes no box-exec seam; the worker-enrollment " +
@@ -1266,13 +1268,15 @@ export function createCloudProvision1Driver(
       workerEnrollmentPollIntervalMs,
     );
 
-    // Whether the SUPERVISOR is that Worker's parent is DEFERRED to PR 9
-    // (ruled 2026-07-15): on current main the fresh-provision path execs the
-    // runtime directly and never launches the Supervisor
-    // (build_detached_supervisor_launch_command has zero callers — see
-    // Qualification Product Findings). PR 9 makes newly provisioned targets
-    // Supervisor-parented and owns that assertion. PR 2 asserts only what the
-    // current product provides: exactly one enrolled Worker + version identities.
+    // Every fresh-provision launch is now unconditionally Supervisor-owned:
+    // `build_detached_supervisor_launch_command` is the only launch-command
+    // builder left (the legacy direct-nohup'd AnyHarness path it replaced was
+    // deleted once the live E2B N-1->N proof and the D5 BRIDGE proof both
+    // passed, 2026-07-26). This scenario still only asserts what it directly
+    // observes here — exactly one enrolled Worker + version identities for
+    // all three binaries — not that Supervisor is the literal process parent
+    // (that would need an in-sandbox `ps`/PPID check, which this scenario
+    // does not perform).
     //
     // Binary locations come from the template's canonical bake destinations —
     // worker/supervisor live under /home/user/.proliferate/bin, not /home/user.
