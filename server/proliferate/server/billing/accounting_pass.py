@@ -5,6 +5,7 @@ from __future__ import annotations
 from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_DECISION_OVERAGE_EXPORT,
+    BILLING_DECISION_REASON_OVERAGE_CAP_REACHED,
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
@@ -18,6 +19,20 @@ from proliferate.server.billing import accounting as billing_accounting_service
 from proliferate.server.billing import snapshot_state
 from proliferate.server.billing import snapshots as billing_snapshots
 from proliferate.server.billing.models import utcnow
+
+
+def _accounting_receipt_reason(*, exported_any: bool) -> str:
+    """Reason for the pass's ``overage_export`` receipt.
+
+    A pass that exported nothing and only hit the org-month cap is receipted as
+    ``overage_cap_reached`` so the refused spend is attributable (law A2) without
+    claiming a pending/observed export that does not exist.
+    """
+    if not exported_any:
+        return BILLING_DECISION_REASON_OVERAGE_CAP_REACHED
+    if settings.cloud_billing_mode == BILLING_MODE_OBSERVE:
+        return BILLING_USAGE_EXPORT_STATUS_OBSERVED
+    return "pending"
 
 
 async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
@@ -90,7 +105,12 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
                 )
             )
 
-        if any(result.export_count > 0 for result in results):
+        exported_any = any(result.export_count > 0 for result in results)
+        # Law A2: an entirely over-cap pass exports nothing, so gating the
+        # receipt on export_count alone left that spend with no durable trace.
+        # Receipt it too, and say which case it was.
+        over_cap_cents = sum(result.over_cap_cents for result in results)
+        if exported_any or over_cap_cents > 0:
             snapshot = billing_snapshots.build_billing_snapshot(state)
             async with db_session.open_async_transaction() as db:
                 await record_billing_decision_event(
@@ -102,11 +122,7 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
                     mode=settings.cloud_billing_mode,
                     would_block_start=False,
                     would_pause_active=False,
-                    reason=(
-                        BILLING_USAGE_EXPORT_STATUS_OBSERVED
-                        if settings.cloud_billing_mode == BILLING_MODE_OBSERVE
-                        else "pending"
-                    ),
+                    reason=_accounting_receipt_reason(exported_any=exported_any),
                     active_sandbox_count=snapshot.active_sandbox_count,
                     remaining_seconds=snapshot.remaining_seconds,
                 )

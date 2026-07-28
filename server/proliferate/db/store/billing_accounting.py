@@ -43,6 +43,12 @@ class BillingAccountingResult:
     consumed_seconds: float
     export_seconds: float
     export_count: int
+    # Uncovered cents the org-month cap refused to bill. Ruled 2026-07-14: this
+    # slice is PAUSED, not auto-written-off (write-off stays operator-only), so
+    # it never becomes an export row. Law A2 still requires it to be receipted
+    # rather than silently dropped, so the pass reports it here and records a
+    # durable BillingDecisionEvent even when nothing was exported.
+    over_cap_cents: int = 0
 
 
 @dataclass(frozen=True)

@@ -138,6 +138,12 @@ BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE = "failed_retryable"
 BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL = "failed_terminal"
 BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF = "written_off"
 
+# Receipt reason for an accounting pass whose uncovered slice was refused by the
+# org-month overage cap. The slice is paused, not billed and not auto-written-off
+# (write-off is operator-only, ruled 2026-07-14), but law A2 forbids dropping it
+# silently: the pass records this durable decision receipt instead.
+BILLING_DECISION_REASON_OVERAGE_CAP_REACHED = "overage_cap_reached"
+
 BILLING_RECONCILE_INTERVAL_SECONDS = 900
 BILLING_SEAT_ADJUSTMENT_MAX_ATTEMPTS = 3
 
