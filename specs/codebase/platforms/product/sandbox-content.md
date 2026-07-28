@@ -472,10 +472,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] The inventory row carries no last-activity timestamp for suggesting
       stale worktrees. Add last activity after wiring the session store
       into worktree inventory.
-- [ ] The `prune_workspace_worktree` cloud command kind is dead — an enum
-      member and DB-constraint slot with no producer, payload, or consumer
-      ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
-      Delete it; the paired retire is the real mechanism.
 - [ ] The clone create/refresh script bypasses AnyHarness's own repo-root
       acquisition (`acquire_repo_root` /
       [clone.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/clone.rs)),
