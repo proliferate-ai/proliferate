@@ -12,7 +12,6 @@ import { useWorkspaceArrivalActions } from "#product/hooks/workspaces/workflows/
 import { useWorkspaceStatusPanelState } from "#product/hooks/workspaces/derived/use-workspace-status-panel-state";
 import { usePendingWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-pending-workspace-entry-actions";
 import { useCloudWorkspaceStatusScreenActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-status-screen-actions";
-import { useBillingGateView } from "#product/hooks/cloud/derived/use-billing-gate-view";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
@@ -135,11 +134,6 @@ export function WorkspaceArrivalAttachedPanel() {
     workspaceId: panelState?.kind === "cloud-status" ? panelState.workspaceId : "",
     mode: panelState?.kind === "cloud-status" ? panelState.model.mode : "pending",
   });
-  const billingGate = useBillingGateView(
-    panelState?.kind === "cloud-status" && panelState.model.mode === "blocked"
-      ? panelState.model.blockReason
-      : null,
-  );
   const rerunSetup = useRerunSetupMutation();
   const shellActions = useWorkspaceShellActions();
 
@@ -329,7 +323,6 @@ export function WorkspaceArrivalAttachedPanel() {
       isPrimaryActionPending={cloudActions.isPrimaryActionPending}
       onPrimaryAction={cloudActions.handlePrimaryAction}
       pendingPromptCount={deferredPromptCount}
-      billingGate={billingGate}
     />
   );
 }

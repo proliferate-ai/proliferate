@@ -61,8 +61,6 @@ export interface CloudWorkspaceStatusScreenModel {
   eyebrowTone: "pending" | "error";
   title: string;
   description: string;
-  /** Typed start-block reason; set only in blocked mode so surfaces can render a repair action. */
-  blockReason?: CloudStartBlockReason | null;
   repoLabel: string;
   branchLabel: string;
   footer:
@@ -136,7 +134,6 @@ export function buildCloudWorkspaceStatusScreenModel(
       eyebrowTone: "pending",
       title: titleForStartBlockReason(workspace.actionBlockKind),
       description,
-      blockReason: normalizeStartBlockReason(workspace.actionBlockKind),
       repoLabel,
       branchLabel,
       footer: {

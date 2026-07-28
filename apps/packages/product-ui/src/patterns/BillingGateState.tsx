@@ -104,10 +104,13 @@ export function BillingGateState({
 export function BillingBalanceNotice({
   view,
   tone = "warning",
+  errorMessage,
   className,
 }: {
   view: BillingGateStateView;
   tone?: "warning" | "destructive";
+  /** Failure of the notice's own repair action; renders next to the action that caused it. */
+  errorMessage?: string | null;
   className?: string;
 }) {
   return (
@@ -125,6 +128,9 @@ export function BillingBalanceNotice({
       <div className="min-w-0 flex-1">
         <div className="font-medium">{view.title}</div>
         <div className="mt-0.5 leading-5 opacity-90">{view.description}</div>
+        {errorMessage ? (
+          <div className="mt-1 leading-5 text-destructive">{errorMessage}</div>
+        ) : null}
       </div>
       {view.primaryAction ? (
         <Button
@@ -189,6 +195,8 @@ export interface BillingGateViewOptions {
   onRefill?: () => void;
   onOpenBilling?: () => void;
   actionLoading?: boolean;
+  /** Disable repair actions while the surface's billing context is still settling. */
+  actionDisabled?: boolean;
 }
 
 const ADMIN_MANAGED_DESCRIPTION =
@@ -202,10 +210,20 @@ export function billingGateView(
     ? { label: "Billing settings", onClick: opts.onOpenBilling }
     : null;
   const upgrade: BillingGateAction | null = opts.onUpgrade
-    ? { label: "Upgrade", onClick: opts.onUpgrade, loading: opts.actionLoading }
+    ? {
+        label: "Upgrade",
+        onClick: opts.onUpgrade,
+        loading: opts.actionLoading,
+        disabled: opts.actionDisabled,
+      }
     : null;
   const refill: BillingGateAction | null = opts.onRefill
-    ? { label: "Add credits", onClick: opts.onRefill, loading: opts.actionLoading }
+    ? {
+        label: "Add credits",
+        onClick: opts.onRefill,
+        loading: opts.actionLoading,
+        disabled: opts.actionDisabled,
+      }
     : null;
   const memberView = (title: string, description: string): BillingGateStateView => ({
     kind: "admin",

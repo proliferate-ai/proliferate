@@ -173,6 +173,7 @@ export function BillingSettingsSurface({
         },
         actionLoading: comparisonActions.creatingCloudCheckout
           || comparisonActions.creatingRefillCheckout,
+        actionDisabled: comparisonActionDisabled,
       })
     : null;
 
@@ -183,7 +184,10 @@ export function BillingSettingsSurface({
         description="Manage usage and billing details."
       />
       {startBlockedGate ? (
-        <BillingBalanceNotice view={startBlockedGate} />
+        <BillingBalanceNotice
+          view={startBlockedGate}
+          errorMessage={comparisonActionError}
+        />
       ) : null}
       <BillingSettingsPane
         checkoutReturnState={checkoutReturnState}

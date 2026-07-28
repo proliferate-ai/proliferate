@@ -281,24 +281,6 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
     });
   });
 
-  it("carries the typed block reason on blocked models so surfaces can offer a repair", () => {
-    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
-      actionBlockKind: "credits_exhausted",
-    }));
-
-    expect(model.mode).toBe("blocked");
-    expect(model.blockReason).toBe("credits_exhausted");
-  });
-
-  it("normalizes unknown block kinds to a null reason instead of leaking raw codes", () => {
-    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
-      actionBlockKind: "billing_quota",
-    }));
-
-    expect(model.mode).toBe("blocked");
-    expect(model.blockReason).toBeNull();
-  });
-
   it("keeps compact tones constrained to non-green semantic states", () => {
     const models = [
       makeCloudWorkspace({ status: "pending" }),

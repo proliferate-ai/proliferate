@@ -328,6 +328,73 @@ describe("BillingSettingsSurface", () => {
     expect(cloudHooks.createRefillCheckout).toHaveBeenCalledTimes(1);
   });
 
+  it("renders repair failures inside the paused notice, next to the action", async () => {
+    cloudHooks.createRefillCheckout.mockRejectedValueOnce(new Error("refill offline"));
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        plan: "pro",
+        isPaidCloud: true,
+        startBlocked: true,
+        startBlockReason: "credits_exhausted",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: true,
+          loading: false,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add credits" }));
+
+    await waitFor(() => {
+      const notice = screen.getByText("Out of credits").closest('[role="status"]');
+      expect(notice).not.toBeNull();
+      expect(within(notice as HTMLElement).getByText("refill offline")).toBeTruthy();
+    });
+  });
+
+  it("disables the notice repair action while organization context is loading", () => {
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        plan: "pro",
+        isPaidCloud: true,
+        startBlocked: true,
+        startBlockReason: "credits_exhausted",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: true,
+          loading: true,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Add credits" }).disabled,
+    ).toBe(true);
+  });
+
   it("shows members a reason without billing actions when start-blocked", () => {
     cloudHooks.useCloudBilling.mockReturnValue({
       data: billingPlan({

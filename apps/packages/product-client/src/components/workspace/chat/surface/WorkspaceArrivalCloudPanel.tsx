@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import type { BillingGateActions } from "#product/hooks/cloud/derived/use-billing-gate-view";
 import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "#product/components/workspace/chat/surface/CloudStatusCompactHeader";
 import {
@@ -43,8 +42,6 @@ interface WorkspaceArrivalCloudPanelProps {
   isPrimaryActionPending: boolean;
   onPrimaryAction: (() => void) | null;
   pendingPromptCount?: number;
-  /** Repair actions when blocked for a billing reason (billing.md T2). */
-  billingGate?: BillingGateActions | null;
 }
 
 export function WorkspaceArrivalCloudPanel({
@@ -52,7 +49,6 @@ export function WorkspaceArrivalCloudPanel({
   isPrimaryActionPending,
   onPrimaryAction,
   pendingPromptCount = 0,
-  billingGate = null,
 }: WorkspaceArrivalCloudPanelProps) {
   const compactView = buildCloudWorkspaceCompactStatusView(model);
   const [expanded, setExpanded] = useState(() => shouldExpandByDefault(model.mode));
@@ -115,37 +111,6 @@ export function WorkspaceArrivalCloudPanel({
             <span className="text-chat text-muted-foreground">{model.footer.message}</span>
           </SectionRow>
         )}
-
-        {billingGate && (billingGate.view.primaryAction || billingGate.view.secondaryAction) ? (
-          <SectionRow label="Actions">
-            <div className="flex flex-wrap items-center gap-2">
-              {billingGate.view.primaryAction ? (
-                <Button
-                  size="sm"
-                  loading={billingGate.view.primaryAction.loading}
-                  disabled={billingGate.view.primaryAction.disabled}
-                  onClick={billingGate.view.primaryAction.onClick}
-                >
-                  {billingGate.view.primaryAction.label}
-                </Button>
-              ) : null}
-              {billingGate.view.secondaryAction ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  loading={billingGate.view.secondaryAction.loading}
-                  disabled={billingGate.view.secondaryAction.disabled}
-                  onClick={billingGate.view.secondaryAction.onClick}
-                >
-                  {billingGate.view.secondaryAction.label}
-                </Button>
-              ) : null}
-              {billingGate.actionError ? (
-                <span className="text-chat text-destructive">{billingGate.actionError}</span>
-              ) : null}
-            </div>
-          </SectionRow>
-        ) : null}
 
         {pendingPromptCount > 0 ? (
           <SectionRow label="Prompt">
