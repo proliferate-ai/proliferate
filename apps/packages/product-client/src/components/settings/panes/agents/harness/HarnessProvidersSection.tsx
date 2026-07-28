@@ -125,6 +125,15 @@ export function HarnessProvidersSection({
     editor.handleRemoveRow(target.uid);
   }
 
+  // Modal props precomputed outside the JSX: these are wiring maps over the
+  // handful of bound selection rows, not a rendered list surface.
+  const boundEnvVarNames = rows.map((row) => row.envVarName);
+  const rowKeyIdsByEnvVar = new Map(
+    rows
+      .filter((row) => row.apiKeyId !== null)
+      .map((row) => [row.envVarName, row.apiKeyId as string]),
+  );
+
   return (
     <HarnessSection
       title={HARNESS_PANE_COPY.providersTitle}
@@ -212,15 +221,11 @@ export function HarnessProvidersSection({
             configuredProviderIds={configured
               .map(({ row }) => row.providerHint)
               .filter((hint): hint is string => typeof hint === "string" && hint.length > 0)}
-            boundEnvVarNames={rows.map((row) => row.envVarName)}
+            boundEnvVarNames={boundEnvVarNames}
             keysById={new Map(
               (editor.apiKeysQuery.data ?? []).map((key) => [key.id, key]),
             )}
-            rowKeyIdsByEnvVar={new Map(
-              rows
-                .filter((row) => row.apiKeyId !== null)
-                .map((row) => [row.envVarName, row.apiKeyId as string]),
-            )}
+            rowKeyIdsByEnvVar={rowKeyIdsByEnvVar}
             submitting={createKey.isPending || editor.busy}
             error={providerError}
             onSubmit={handleProviderSubmit}
