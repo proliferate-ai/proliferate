@@ -205,7 +205,10 @@ export function SecretEditorDialog({
             <div className={fieldLabelClass}>Type</div>
             <SettingsMenu
               label={SECRET_KIND_LABELS[kind]}
-              className="w-60"
+              /* Form field, not a settings row: this select stacks with the
+                 `Input`s below it, so it takes `Input`'s 36px height rather
+                 than the 28px settings control tier. */
+              className="h-9 w-60"
               menuClassName="w-60"
               groups={[{
                 id: "kind",
