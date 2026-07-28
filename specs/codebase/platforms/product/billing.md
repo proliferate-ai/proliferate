@@ -276,9 +276,15 @@ within one pass, and a stray `resumed` webhook re-pauses and closes.** The
 lists every open segment, resolves its subject's live snapshot and any
 breached limit, and pauses the provider sandbox
 (`USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT`) under the same per-sandbox
-lock the live path uses. A `resumed` webhook landing on an already-enforced
-hold is rejected at the same resume gate, which re-pauses and closes rather
-than letting the wake stand.
+lock the live path uses. A `created`/`resumed` provider webhook landing on
+an enforced spend hold is re-paused and closed by the webhook handler's own
+billing check
+([`webhooks/service.py`](../../../../server/proliferate/server/cloud/webhooks/service.py))
+— a separate, narrower gate than the resume-path one. In the target state
+it resolves the payer the same way segment attribution does and evaluates
+budget caps as well as the hold, so an over-limit wake cannot stand until
+the next reconciler pass; today it checks only `active_spend_hold` on the
+personal subject — see [Current gaps](#current-gaps).
 
 **N3 — `limit_reached` and `exhausted` are distinct; purchasing credit
 never bypasses an active budget limit.**
@@ -390,8 +396,9 @@ the matching client contracts.
 ## Corridor
 
 Named, binary assertions from the 2026-07-28 launch-hardening plan (laws
-A1-A3/N1-N6/M1-M4/T1-T2 above); IDs are stable, tests reference them by
-name. A corridor with a linked test is proven; one without is an open work
+A2-A3/N1-N6/M1-M4/T1-T2 above; A1 — one billing subject plus acting user
+on every ledger row — is stated in the Mental Model); IDs are stable,
+tests reference them by name. A corridor with a linked test is proven; one without is an open work
 item even where the underlying code already behaves correctly. Coverage
 outside any single corridor ID: compute attribution end-to-end
 ([test_billing_compute_attribution.py](../../../../server/tests/integration/test_billing_compute_attribution.py)),
@@ -500,6 +507,15 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `(user, org context)`) is the ruled direction that removes this
       hardcode; it is OUT of launch scope (Pablo, 2026-07-28) and stays a
       documented deferral, not a silent fix.
+- [ ] **N2 webhook gate.** The `created`/`resumed` webhook re-pause check
+      ([`webhooks/service.py`](../../../../server/proliferate/server/cloud/webhooks/service.py))
+      resolves `ensure_personal_billing_subject` (never the org payer the
+      way `resolve_billing_subject_id_for_user` does) and tests only
+      `active_spend_hold` — it does not evaluate compute budget caps, so
+      an over-limit (cap-breach) wake stands until the next reconciler
+      pass, and an org-held member's wake is checked against the wrong
+      subject. Align it with the resume-path gate's subject resolution
+      and checks.
 - [ ] **E5/E6.** No dedicated test asserts a 402 is never cached (E5), and
       `assert_cloud_sandbox_resume_allowed_for_owner`/
       `record_sandbox_start_authorization`
@@ -507,8 +523,10 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       have no explicit `except` around the billing-snapshot read: an
       unhandled exception propagates uncaught (the request fails; it is
       not an implicit allow) but with no durable receipt and no alert
-      wired specifically to this path (N6/E6). Land a receipted, alerted
-      failure path and a pinning test.
+      wired specifically to this path (N6/E6). Lands via PR #1572
+      (typed `billing_unavailable` 503, receipt on
+      `billing_decision_event`, `report_critical` alert, six pinning
+      tests incl. the E5 no-denial-cache pair).
 - [ ] **U3.** The standalone upgrade/refill startup-state components (out
       of credit → upgrade; low/exhausted → refill) are not on `main` yet.
       Net-new deliverable per the 2026-07-28 ruling; lands via PR #1570
