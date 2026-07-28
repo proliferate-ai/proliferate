@@ -129,6 +129,11 @@ BILLING_DECISION_OVERAGE_EXPORT = "overage_export"
 # grant/overage ``enforce_active_spend`` hold.
 BILLING_DECISION_USER_LIMIT_PAUSE = "user_limit_pause"
 BILLING_DECISION_ORG_LIMIT_PAUSE = "org_limit_pause"
+# Law N6 (corridor E6): the enforcement gate could not READ billing state (DB
+# error, resolver blowup). The denial is recorded under its own decision type so
+# an operator can tell "billing said no" apart from "billing was unreadable" in
+# billing_decision_event without joining logs.
+BILLING_DECISION_READ_UNAVAILABLE = "billing_read_unavailable"
 
 BILLING_USAGE_EXPORT_STATUS_PENDING = "pending"
 BILLING_USAGE_EXPORT_STATUS_OBSERVED = "observed"
