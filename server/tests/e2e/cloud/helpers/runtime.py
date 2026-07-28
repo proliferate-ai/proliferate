@@ -55,7 +55,11 @@ async def runtime_single_query_smoke(
             headers=headers,
             json={"workspaceId": workspace_id, "agentKind": agent_kind},
         )
-        create.raise_for_status()
+        if create.status_code >= 400:
+            raise CloudE2ETestError(
+                f"Runtime session create failed ({create.status_code}): "
+                f"{create.text.strip() or '<empty body>'}"
+            )
         session = create.json()
         session_id = require_string(session, "id")
         prompt = await client.post(
