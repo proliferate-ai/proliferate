@@ -168,25 +168,15 @@ describe("FullTranscriptRowList", () => {
     expect(structuralInset?.className).toContain("shrink-0");
   });
 
-  it("renders the turn navigator pair inert until jump behavior lands", () => {
+  it("floats no control the user cannot press", () => {
+    // The turn-stepper pair used to render here with both halves permanently
+    // disabled, waiting on behavior that never landed. Guarding its absence
+    // keeps the visuals from being re-added ahead of the wiring.
     const { container } = render(<FullTranscriptRowList {...makeProps(vi.fn(), 50)} />);
 
-    const navigator = container.querySelector<HTMLElement>(
-      "[data-transcript-turn-navigator]",
-    );
-    expect(navigator).toBeTruthy();
-    expect(navigator?.className).toContain("border border-border bg-background");
-
-    const buttons = navigator!.querySelectorAll<HTMLButtonElement>(
-      "[data-transcript-turn-navigator-button]",
-    );
-    expect(buttons).toHaveLength(2);
-    expect([...buttons].map((button) => button.getAttribute("aria-label")))
-      .toEqual(["Previous turn", "Next turn"]);
-    for (const button of buttons) {
-      expect(button.disabled).toBe(true);
-      expect(button.hasAttribute("data-chat-transcript-ignore")).toBe(true);
-    }
+    expect(container.querySelector("[data-transcript-turn-navigator]")).toBeNull();
+    const disabled = container.querySelectorAll("button[disabled]");
+    expect(disabled).toHaveLength(0);
   });
 });
 

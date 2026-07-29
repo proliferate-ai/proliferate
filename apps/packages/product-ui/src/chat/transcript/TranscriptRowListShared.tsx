@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, Spinner } from "@proliferate/ui/icons";
+import { ChevronDown, Spinner } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { ChatTranscriptScrollHandle } from "./ChatTranscriptViewTypes";
@@ -226,68 +226,15 @@ export function TranscriptScrollToBottomButton({
 }
 
 /**
- * Turn-stepping control: a stacked previous/next pair pinned to the transcript's
- * top-right gutter, above the rows and clear of the scroll-to-bottom pill.
- *
- * VISUALS ONLY. Jump-to-previous-turn / jump-to-next-turn behavior is a
- * deliberate follow-up: both halves render permanently `disabled`, so they are
- * inert and removed from the tab order, and nothing here pretends to navigate.
- * When the behavior lands, the follow-up wires `onPrevious`/`onNext` plus the
- * real per-edge disabled state (at the first/last turn) and drops the
- * `aria-disabled` hard-coding — the geometry and treatment below stay as-is.
- *
- * The treatment matches the existing floating transcript control
- * (TranscriptScrollToBottomButton): 1px --border on a --background fill, muted
- * glyph that resolves to --foreground on hover, no elevation. The pair shares
- * one rounded shell with a hairline divider between the halves so it reads as a
- * single two-state control rather than two loose circles.
- */
-export function TranscriptTurnNavigator({
-  className = "",
-}: {
-  className?: string;
-}) {
-  return (
-    <div
-      className={`pointer-events-none absolute right-3 top-3 z-raised flex flex-col overflow-hidden rounded-md border border-border bg-background ${className}`}
-      data-transcript-turn-navigator="true"
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="unstyled"
-        aria-label="Previous turn"
-        disabled
-        data-chat-transcript-ignore
-        data-transcript-turn-navigator-button="previous"
-        className="h-6 w-6 rounded-none text-muted-foreground transition-colors duration-hover ease-in-out hover:text-foreground"
-      >
-        <ArrowUp className="icon-tight" />
-      </Button>
-      <span aria-hidden="true" className="h-px w-full bg-border" />
-      <Button
-        type="button"
-        variant="ghost"
-        size="unstyled"
-        aria-label="Next turn"
-        disabled
-        data-chat-transcript-ignore
-        data-transcript-turn-navigator-button="next"
-        className="h-6 w-6 rounded-none text-muted-foreground transition-colors duration-hover ease-in-out hover:text-foreground"
-      >
-        <ArrowDown className="icon-tight" />
-      </Button>
-    </div>
-  );
-}
-
-/**
  * The transcript's floating overlay controls, as one call site.
  *
  * Both row lists (full and virtualized) mount the identical set above their
- * rows, so the glue lives here instead of being duplicated per list: the
- * turn navigator in the top-right gutter and the scroll-to-bottom pill above
- * the composer. A new floating control is added here once, not twice.
+ * rows, so the glue lives here instead of being duplicated per list. A new
+ * floating control is added here once, not twice.
+ *
+ * Every control floated here must be pressable. A permanently-`disabled`
+ * affordance still reads as a promise the transcript does not keep, so
+ * behavior lands with the visuals or the visuals wait.
  */
 export function TranscriptFloatingControls({
   bottomInsetPx,
@@ -300,7 +247,6 @@ export function TranscriptFloatingControls({
 }) {
   return (
     <>
-      <TranscriptTurnNavigator />
       <TranscriptScrollToBottomButton
         visible={!isPinnedToBottom}
         bottomInsetPx={bottomInsetPx}
