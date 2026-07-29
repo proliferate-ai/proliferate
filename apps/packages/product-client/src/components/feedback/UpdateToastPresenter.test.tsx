@@ -331,6 +331,20 @@ describe("UpdateToastPresenter — deferred restart countdown", () => {
     expect(updaterMocks.cancelRestartCountdown).toHaveBeenCalledTimes(1);
   });
 
+  it("supersedes the ready announcement instead of stacking on it", () => {
+    // Both toasts are about the same update and both offer Restart, so showing
+    // them together asks the same question twice — and lets "Later" contradict a
+    // relaunch that is seconds away.
+    updaterMocks.phase = "ready";
+    updaterMocks.restartCountdownStartedAt = Date.now();
+
+    render(<UpdateToastPresenter />);
+
+    expect(raisedWithId(RESTART_COUNTDOWN_TOAST_ID)).toBeDefined();
+    expect(raisedWithId(UPDATE_TOAST_ID)).toBeUndefined();
+    expect(toastMocks.dismissToast).toHaveBeenCalledWith(UPDATE_TOAST_ID);
+  });
+
   it("drops the countdown toast once the countdown is not running", () => {
     updaterMocks.phase = "ready";
 

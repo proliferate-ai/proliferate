@@ -90,13 +90,20 @@ export function useUpdater() {
     ? devMock.manualCheckCompletedAt
     : storeManualCheckCompletedAt;
   const updatesSupported = isPackaged || devMock !== null;
-  // The dev mock forces a phase directly, so its stall/retry/origin figures are
-  // whatever the phase implies rather than a live clock.
-  const lastProgressAt = devMock ? null : storeLastProgressAt;
+  // The dev mock forces a phase directly, so its stall/retry/countdown figures
+  // are supplied by the mock rather than measured from a live download. They
+  // still have to reach the surfaces: the stall copy and the restart countdown
+  // are authored *from* these numbers, so nulling them would make two states
+  // unreachable in dev and therefore unreviewable.
+  const lastProgressAt = devMock ? devMock.lastProgressAt : storeLastProgressAt;
   const downloadStartedAt = devMock ? null : storeDownloadStartedAt;
-  const downloadRetryCount = devMock ? 0 : storeDownloadRetryCount;
+  const downloadRetryCount = devMock
+    ? devMock.downloadRetryCount
+    : storeDownloadRetryCount;
   const checkOrigin = devMock ? "manual" : storeCheckOrigin;
-  const restartCountdownStartedAt = devMock ? null : storeRestartCountdownStartedAt;
+  const restartCountdownStartedAt = devMock
+    ? devMock.restartCountdownStartedAt
+    : storeRestartCountdownStartedAt;
 
   useEffect(() => {
     if (!isDevUpdaterMockSupported()) {
@@ -218,6 +225,13 @@ export function useUpdater() {
 
   const cancelRestartCountdown = useCallback(() => {
     if (devMock) {
+      // "Not now" has to actually stop the countdown under the mock too, or the
+      // one cancellable state in the flow can't be exercised.
+      updateDevUpdaterMock((current) =>
+        current
+          ? { ...current, restartCountdownStartedAt: null, restartWhenIdle: false }
+          : current,
+      );
       return;
     }
     useUpdaterStore.getState().cancelRestartCountdown();
