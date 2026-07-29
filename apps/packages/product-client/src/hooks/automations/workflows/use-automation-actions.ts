@@ -16,31 +16,58 @@ export function useAutomationActions() {
     resumeMutation,
     runNowMutation,
   } = useAutomationMutations();
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
 
   const pause = useCallback(async (automationId: string) => {
-    try {
-      await pauseMutation.mutateAsync(automationId);
-    } catch (error) {
-      showToast(`Failed to pause workflow: ${errorMessage(error)}`);
+    // A named inner attempt, so the toast's Retry re-runs this exact call
+    // rather than only reporting that it failed. Every action here is a
+    // schedule flip, which is safe to repeat.
+    async function attempt(): Promise<void> {
+      try {
+        await pauseMutation.mutateAsync(automationId);
+      } catch (error) {
+        showErrorToast({
+          headline: "Workflow not paused",
+          consequence: "It is still running on its schedule.",
+          cause: errorMessage(error),
+          retry: () => void attempt(),
+        });
+      }
     }
-  }, [pauseMutation, showToast]);
+    await attempt();
+  }, [pauseMutation, showErrorToast]);
 
   const resume = useCallback(async (automationId: string) => {
-    try {
-      await resumeMutation.mutateAsync(automationId);
-    } catch (error) {
-      showToast(`Failed to resume workflow: ${errorMessage(error)}`);
+    async function attempt(): Promise<void> {
+      try {
+        await resumeMutation.mutateAsync(automationId);
+      } catch (error) {
+        showErrorToast({
+          headline: "Workflow not resumed",
+          consequence: "It is still paused.",
+          cause: errorMessage(error),
+          retry: () => void attempt(),
+        });
+      }
     }
-  }, [resumeMutation, showToast]);
+    await attempt();
+  }, [resumeMutation, showErrorToast]);
 
   const runNow = useCallback(async (automationId: string) => {
-    try {
-      await runNowMutation.mutateAsync(automationId);
-    } catch (error) {
-      showToast(`Failed to queue workflow run: ${errorMessage(error)}`);
+    async function attempt(): Promise<void> {
+      try {
+        await runNowMutation.mutateAsync(automationId);
+      } catch (error) {
+        showErrorToast({
+          headline: "Workflow run not queued",
+          consequence: "Nothing was started.",
+          cause: errorMessage(error),
+          retry: () => void attempt(),
+        });
+      }
     }
-  }, [runNowMutation, showToast]);
+    await attempt();
+  }, [runNowMutation, showErrorToast]);
 
   return {
     createAutomation: createMutation.mutateAsync,

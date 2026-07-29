@@ -23,6 +23,17 @@ interface SelectorModel {
   liveSwitchable: boolean;
 }
 
+const EMPTY_UNSUPPORTED_KEYS: ReadonlySet<string> = new Set<string>();
+
+/**
+ * The key a refusal is looked up by. Matches on the id the row renders with,
+ * which is the id that would be sent — an alias the user never sees must not
+ * silently miss its own refusal.
+ */
+export function unsupportedModelKey(agentKind: string, modelId: string): string {
+  return `${agentKind} ${modelId}`;
+}
+
 export function resolveModelSelectionActionKind(
   activeSelection: ModelSelectorSelection | null | undefined,
   agentKind: string,
@@ -46,6 +57,12 @@ export function buildModelSelectorGroups(
   activeSelection: ModelSelectorSelection | null | undefined,
   activeModelControl?: ActiveModelSelectorControl | null,
   visibilityOverrides: ChatModelVisibilityOverridesByAgentKind = {},
+  /**
+   * `kind modelId` pairs the current target has refused. Empty in every case
+   * but the one where a refusal has actually been observed, so the marked row
+   * only ever appears after the product has proof.
+   */
+  unsupportedModelKeys: ReadonlySet<string> = EMPTY_UNSUPPORTED_KEYS,
 ): ModelSelectorGroup[] {
   const sourceAgentsByKind = new Map(agents.map((agent) => [agent.kind, agent]));
   return agentsWithVisibleModels(agents, { selected, visibilityOverrides })
@@ -66,11 +83,12 @@ export function buildModelSelectorGroups(
           model.id,
         );
         const isSelected = selectionMatchKind !== "none";
+        const modelId = selectionMatchKind === "equivalent"
+          ? selected?.modelId ?? model.id
+          : model.id;
         return {
           kind: agent.kind,
-          modelId: selectionMatchKind === "equivalent"
-            ? selected?.modelId ?? model.id
-            : model.id,
+          modelId,
           displayName: model.displayName,
           actionKind: resolveModelSelectionActionKindForModel(
             activeSelection,
@@ -79,6 +97,10 @@ export function buildModelSelectorGroups(
             model,
           ),
           isSelected,
+          // Also check the underlying catalog id: a refusal is recorded against
+          // whatever id was sent, and the row may render an equivalent alias.
+          isUnsupported: unsupportedModelKeys.has(unsupportedModelKey(agent.kind, modelId))
+            || unsupportedModelKeys.has(unsupportedModelKey(agent.kind, model.id)),
         };
       }),
     }));

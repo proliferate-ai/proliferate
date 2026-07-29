@@ -1,40 +1,46 @@
 import { AnyHarnessError } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import {
+  formatSessionCreateCause,
   formatSessionCreateFailureMessage,
-  formatSessionCreateToastMessage,
   isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
   workspaceDirectoryMissingBlockError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
 
-describe("session create failure presentation", () => {
-  it("maps unsupported model errors to target update guidance", () => {
-    const error = anyHarnessError("SESSION_MODEL_UNSUPPORTED", "Unsupported model");
+const UNSUPPORTED_MODEL_DETAIL =
+  "model 'opus-9' is not supported for agent 'claude': not served by this target";
 
-    expect(formatSessionCreateFailureMessage(error)).toBe(
-      "This target does not support the selected model yet. Update AnyHarness on the target or choose another model.",
-    );
+describe("session create failure presentation", () => {
+  it("keeps the runtime's own words for an unsupported model", () => {
+    // The rewrite this replaced named neither the model nor the target; the
+    // detail names both, and the surfaces that show it say so themselves.
+    const error = anyHarnessError("SESSION_MODEL_UNSUPPORTED", UNSUPPORTED_MODEL_DETAIL);
+
+    expect(formatSessionCreateFailureMessage(error)).toBe(UNSUPPORTED_MODEL_DETAIL);
   });
 
-  it("maps unsupported mode errors to target update guidance", () => {
-    const error = anyHarnessError("SESSION_MODE_UNSUPPORTED", "Unsupported mode");
+  it("keeps the runtime's own words for an unsupported mode", () => {
+    const error = anyHarnessError(
+      "SESSION_MODE_UNSUPPORTED",
+      "mode 'plan' is not supported for agent 'claude'",
+    );
 
     expect(formatSessionCreateFailureMessage(error)).toBe(
-      "This target does not support the selected session mode yet. Update AnyHarness on the target or choose another mode.",
+      "mode 'plan' is not supported for agent 'claude'",
     );
   });
 
   it("wraps unsupported selection errors for caller-facing failure flows", () => {
-    const error = anyHarnessError("SESSION_MODEL_UNSUPPORTED", "Unsupported model");
+    const error = anyHarnessError("SESSION_MODEL_UNSUPPORTED", UNSUPPORTED_MODEL_DETAIL);
     const displayError = toSessionCreateFailureDisplayError(error);
 
     expect(displayError).toBeInstanceOf(Error);
-    expect((displayError as Error).message).toContain("choose another model");
+    expect((displayError as Error).message).toBe(UNSUPPORTED_MODEL_DETAIL);
     expect((displayError as Error & { cause?: unknown }).cause).toBe(error);
-    expect(formatSessionCreateToastMessage(displayError, "Failed to open chat")).toBe(
-      "This target does not support the selected model yet. Update AnyHarness on the target or choose another model.",
-    );
+    // Reached through the wrap: the cause a toast shows is the runtime's text,
+    // not the wrapper's.
+    expect(formatSessionCreateCause(displayError)).toBe(UNSUPPORTED_MODEL_DETAIL);
   });
 
   it("identifies missing-worktree errors from the runtime code, the client gate, and causes", () => {
@@ -61,9 +67,9 @@ describe("session create failure presentation", () => {
     const error = new Error("network down");
 
     expect(formatSessionCreateFailureMessage(error)).toBe("network down");
-    expect(formatSessionCreateToastMessage(error, "Failed to open chat")).toBe(
-      "Failed to open chat: network down",
-    );
+    // No prefix: the headline is the caller's to write, so the cause is only
+    // ever the failure itself.
+    expect(formatSessionCreateCause(error)).toBe("network down");
     expect(toSessionCreateFailureDisplayError(error)).toBe(error);
   });
 });

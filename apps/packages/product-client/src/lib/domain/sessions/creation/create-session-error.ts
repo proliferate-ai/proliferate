@@ -54,16 +54,18 @@ export function formatSessionCreateFailureMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function formatSessionCreateToastMessage(
-  error: unknown,
-  fallbackPrefix: string,
-): string {
-  const unsupportedMessage = unsupportedSessionSelectionMessage(error)
-    ?? unsupportedSessionSelectionMessage(errorCause(error));
-  if (unsupportedMessage) {
-    return unsupportedMessage;
-  }
-  return `${fallbackPrefix}: ${formatSessionCreateFailureMessage(error)}`;
+/**
+ * The failure as a cause string, following one wrap.
+ *
+ * Replaces `formatSessionCreateToastMessage`, which took a `fallbackPrefix` and
+ * returned `${prefix}: ${message}` — a written headline concatenated with an
+ * exception, which is the shape the toast API and its guard now forbid. Callers
+ * write their own headline and pass this as `cause`.
+ */
+export function formatSessionCreateCause(error: unknown): string {
+  return unsupportedSessionSelectionMessage(error)
+    ?? unsupportedSessionSelectionMessage(errorCause(error))
+    ?? formatSessionCreateFailureMessage(error);
 }
 
 export function toSessionCreateFailureDisplayError(error: unknown): unknown {
@@ -75,15 +77,25 @@ export function toSessionCreateFailureDisplayError(error: unknown): unknown {
   return displayError;
 }
 
+/**
+ * The refusal in the runtime's own words.
+ *
+ * It used to be rewritten into "This target does not support the selected model
+ * yet" — a sentence that names neither side of a fact the runtime states
+ * precisely ("model 'x' is not supported for agent 'y': not served by …"). The
+ * rewrite was strictly less informative than what it replaced, and the surfaces
+ * that show this now say which model and which target themselves, so the raw
+ * detail is kept as the cause a user can report.
+ */
 function unsupportedSessionSelectionMessage(error: unknown): string | null {
   if (!(error instanceof AnyHarnessError)) {
     return null;
   }
-  if (error.problem.code === UNSUPPORTED_SESSION_MODEL_CODE) {
-    return "This target does not support the selected model yet. Update AnyHarness on the target or choose another model.";
-  }
-  if (error.problem.code === UNSUPPORTED_SESSION_MODE_CODE) {
-    return "This target does not support the selected session mode yet. Update AnyHarness on the target or choose another mode.";
+  if (
+    error.problem.code === UNSUPPORTED_SESSION_MODEL_CODE
+    || error.problem.code === UNSUPPORTED_SESSION_MODE_CODE
+  ) {
+    return error.problem.detail ?? error.problem.title;
   }
   return null;
 }

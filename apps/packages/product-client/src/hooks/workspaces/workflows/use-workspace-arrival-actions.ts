@@ -23,6 +23,7 @@ export function useWorkspaceArrivalActions({
   const host = useProductHost();
   const files = host.desktop?.files ?? null;
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const [targets, setTargets] = useState<OpenTarget[]>([]);
   const [isLoadingTargets, setIsLoadingTargets] = useState(false);
@@ -56,14 +57,21 @@ export function useWorkspaceArrivalActions({
     };
   }, [files, workspacePath]);
 
-  const handleTargetClick = useCallback((target: OpenTarget) => {
+  const handleTargetClick = useCallback(function handleTargetClick(target: OpenTarget) {
     if (!workspacePath) {
       return;
     }
+    // Two headlines, because copying a path and opening an editor are two
+    // different outcomes, and the consequence names the app the user clicked
+    // rather than saying "the workspace" when the row already said which.
     if (target.kind === "copy") {
       void host.clipboard.writeText(workspacePath).catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        showToast(`Failed to open workspace: ${message}`);
+        showErrorToast({
+          headline: "Path not copied",
+          consequence: "Your clipboard is unchanged.",
+          cause: errorMessage(error),
+          retry: () => handleTargetClick(target),
+        });
       });
       return;
     }
@@ -73,10 +81,14 @@ export function useWorkspaceArrivalActions({
     }
 
     void files.openTarget(target.id, workspacePath).catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to open workspace: ${message}`);
+      showErrorToast({
+        headline: "Workspace not opened",
+        consequence: `${target.label} did not open this workspace. Nothing was changed on disk.`,
+        cause: errorMessage(error),
+        retry: () => handleTargetClick(target),
+      });
     });
-  }, [files, host.clipboard, showToast, workspacePath]);
+  }, [files, host.clipboard, showErrorToast, showToast, workspacePath]);
 
   const handleOpenRepositorySettings = useCallback(() => {
     navigate(buildSettingsHref({ section: "repo", repo: sourceRepoRootPath }));
@@ -93,4 +105,8 @@ export function useWorkspaceArrivalActions({
     handleOpenRepositorySettings,
     handleDismiss,
   };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

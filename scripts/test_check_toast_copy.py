@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+
+"""The accept cases carry the weight here. Interpolation into a toast is normal
+and good — `show(`Joined ${org.name}.`)` names the thing it is about, which is
+the rule the rest of this system is built on. What is banned is narrower: the
+exception in the line a person reads. A guard that flagged every template
+literal would ban the good shape along with the bad one."""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from scripts.check_toast_copy import scan_file
+
+
+def findings_for(source: str, suffix: str = ".ts") -> list[str]:
+    with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False) as handle:
+        handle.write(source)
+        path = Path(handle.name)
+    try:
+        return [rule for _lineno, rule, _snippet, _hint in scan_file(path)]
+    finally:
+        path.unlink()
+
+
+class HeadlineRejected(unittest.TestCase):
+    def test_interpolated_template(self) -> None:
+        self.assertIn(
+            "interpolated-headline",
+            findings_for("headline: `Failed to open ${name}`,"),
+        )
+
+    def test_concatenated_literal(self) -> None:
+        self.assertIn(
+            "interpolated-headline",
+            findings_for('headline: "Failed to open " + name,'),
+        )
+
+    def test_concatenated_binding_first(self) -> None:
+        self.assertIn(
+            "interpolated-headline",
+            findings_for("headline: prefix + reason,"),
+        )
+
+
+class ErrorInMessageRejected(unittest.TestCase):
+    def test_the_original_failure(self) -> None:
+        """The exact line the sweep was written to delete."""
+        self.assertIn(
+            "error-in-toast-message",
+            findings_for(
+                "showToast(`Failed to send queued message next: ${errorMessage(error)}`);",
+            ),
+        )
+
+    def test_bare_error_binding(self) -> None:
+        self.assertIn(
+            "error-in-toast-message",
+            findings_for("showToast(`Failed to start work: ${error}`);"),
+        )
+
+    def test_concatenated_form(self) -> None:
+        self.assertIn(
+            "error-in-toast-message",
+            findings_for('showToast("Failed to start work: " + err);'),
+        )
+
+    def test_every_toast_entry_point(self) -> None:
+        for call in (
+            "showToast",
+            "toastError",
+            "showProductToast",
+            "showProductErrorToast",
+            "showError",
+        ):
+            with self.subTest(call=call):
+                self.assertIn(
+                    "error-in-toast-message",
+                    findings_for(f"{call}(`Could not save: ${{message}}`);"),
+                )
+
+
+class Accepted(unittest.TestCase):
+    def test_written_headline(self) -> None:
+        self.assertEqual([], findings_for('headline: "Message not sent",'))
+
+    def test_interpolated_consequence(self) -> None:
+        """`consequence` is where the specific model/target/repo belongs, so
+        interpolation there is the rule being followed, not broken."""
+        self.assertEqual(
+            [],
+            findings_for("consequence: `${target.label} did not open this workspace.`,"),
+        )
+
+    def test_exception_in_cause(self) -> None:
+        self.assertEqual(
+            [],
+            findings_for("cause: error instanceof Error ? error.message : String(error),"),
+        )
+
+    def test_ordinary_interpolated_status_line(self) -> None:
+        self.assertEqual([], findings_for("showToast(`Joined ${org.name}.`);"))
+
+    def test_status_line_naming_a_command(self) -> None:
+        self.assertEqual([], findings_for("showToast(`Running ${runCommand}.`);"))
+
+    def test_non_toast_error_interpolation(self) -> None:
+        """Logs and thrown errors are allowed to interpolate exceptions; only the
+        toast surface is constrained."""
+        self.assertEqual(
+            [],
+            findings_for("logLatency(`send failed: ${errorMessage(error)}`);"),
+        )
+
+    def test_structured_error_call(self) -> None:
+        self.assertEqual(
+            [],
+            findings_for(
+                'showErrorToast({ headline: "Message not sent", cause: errorMessage(error) });',
+            ),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -42,7 +42,7 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
   const reorderPendingPrompts = useReorderPendingPrompts();
   const steerPendingPrompt = useSteerPendingPrompt();
   const { cancelBeforeDispatch, dismissPrompt } = usePromptOutboxActions();
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const mutationsBySessionIdRef = useRef(new Map<string, PendingQueueMutation>());
   const [, setMutationRevision] = useState(0);
   const activeMutation = activeSessionId
@@ -106,26 +106,38 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
         return;
       }
       const sessionId = activeSessionId;
-      const token = Symbol("steer-pending-prompt");
-      mutationsBySessionIdRef.current.set(sessionId, {
-        token,
-        kind: "steer",
-        steeringSeq: entry.seq,
-        optimisticOrder: null,
-      });
-      setMutationRevision((revision) => revision + 1);
-      void steerPendingPrompt(sessionId, entry.seq)
-        .catch((error: unknown) => {
-          showToast(`Failed to send queued message next: ${errorMessage(error)}`);
-        })
-        .finally(() => {
-          if (mutationsBySessionIdRef.current.get(sessionId)?.token === token) {
-            mutationsBySessionIdRef.current.delete(sessionId);
-            setMutationRevision((revision) => revision + 1);
-          }
+      // Named and self-referential so the error toast's Retry re-runs the same
+      // attempt. Without it the toast would report the failure and leave the
+      // message queued where it was, which is the state the user was trying to
+      // change — a report with no way back to the action.
+      const attemptSteer = () => {
+        const token = Symbol("steer-pending-prompt");
+        mutationsBySessionIdRef.current.set(sessionId, {
+          token,
+          kind: "steer",
+          steeringSeq: entry.seq,
+          optimisticOrder: null,
         });
+        setMutationRevision((revision) => revision + 1);
+        void steerPendingPrompt(sessionId, entry.seq)
+          .catch((error: unknown) => {
+            showErrorToast({
+              headline: "Message not sent next",
+              consequence: "It is still queued in its original position.",
+              cause: errorMessage(error),
+              retry: attemptSteer,
+            });
+          })
+          .finally(() => {
+            if (mutationsBySessionIdRef.current.get(sessionId)?.token === token) {
+              mutationsBySessionIdRef.current.delete(sessionId);
+              setMutationRevision((revision) => revision + 1);
+            }
+          });
+      };
+      attemptSteer();
     },
-    [activeSessionId, sessionMaterialized, showToast, steerPendingPrompt],
+    [activeSessionId, sessionMaterialized, showErrorToast, steerPendingPrompt],
   );
 
   const handleReorder = useCallback(
@@ -157,26 +169,34 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
       }
 
       const sessionId = activeSessionId;
-      const token = Symbol("reorder-pending-prompts");
-      mutationsBySessionIdRef.current.set(sessionId, {
-        token,
-        kind: "reorder",
-        steeringSeq: null,
-        optimisticOrder: reorderedRows.map((row) => row.key),
-      });
-      setMutationRevision((revision) => revision + 1);
-      void reorderPendingPrompts(sessionId, expectedSeqs, desiredSeqs)
-        .catch((error: unknown) => {
-          showToast(`Failed to reorder queued messages: ${errorMessage(error)}`);
-        })
-        .finally(() => {
-          if (mutationsBySessionIdRef.current.get(sessionId)?.token === token) {
-            mutationsBySessionIdRef.current.delete(sessionId);
-            setMutationRevision((revision) => revision + 1);
-          }
+      const attemptReorder = () => {
+        const token = Symbol("reorder-pending-prompts");
+        mutationsBySessionIdRef.current.set(sessionId, {
+          token,
+          kind: "reorder",
+          steeringSeq: null,
+          optimisticOrder: reorderedRows.map((row) => row.key),
         });
+        setMutationRevision((revision) => revision + 1);
+        void reorderPendingPrompts(sessionId, expectedSeqs, desiredSeqs)
+          .catch((error: unknown) => {
+            showErrorToast({
+              headline: "Queue order not changed",
+              consequence: "The queue is still in its previous order.",
+              cause: errorMessage(error),
+              retry: attemptReorder,
+            });
+          })
+          .finally(() => {
+            if (mutationsBySessionIdRef.current.get(sessionId)?.token === token) {
+              mutationsBySessionIdRef.current.delete(sessionId);
+              setMutationRevision((revision) => revision + 1);
+            }
+          });
+      };
+      attemptReorder();
     },
-    [activeSessionId, reorderPendingPrompts, rows, sessionMaterialized, showToast],
+    [activeSessionId, reorderPendingPrompts, rows, sessionMaterialized, showErrorToast],
   );
 
   const queueMutationInFlight = activeMutation !== null;

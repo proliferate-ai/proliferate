@@ -21,7 +21,7 @@ export function usePlanPicker(options: {
   onAttached?: () => void;
 }) {
   const { workspaceUiKey, sdkWorkspaceId, open, onAttached } = options;
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const [search, setSearch] = useState("");
   const [attachingPlanId, setAttachingPlanId] = useState<string | null>(null);
   const { addPlan } = useAddPlanDraftAttachment(workspaceUiKey);
@@ -66,12 +66,22 @@ export function usePlanPicker(options: {
     if (!attachingPlanId || !detailQuery.isError) {
       return;
     }
+    const failedPlanId = attachingPlanId;
+    // Names the plan the user clicked, from the row they clicked it on: the
+    // picker closes on attach, so the toast may be all that is left on screen.
+    const failedPlanTitle = plans.find((plan) => plan.id === failedPlanId)?.title;
     setAttachingPlanId(null);
-    const message = detailQuery.error instanceof Error
-      ? detailQuery.error.message
-      : "Plan is not available.";
-    showToast(`Failed to attach plan: ${message}`);
-  }, [attachingPlanId, detailQuery.error, detailQuery.isError, showToast]);
+    showErrorToast({
+      headline: "Plan not attached",
+      consequence: failedPlanTitle
+        ? `"${failedPlanTitle}" is not on your message. Your draft is unchanged.`
+        : "It is not on your message. Your draft is unchanged.",
+      cause: detailQuery.error instanceof Error
+        ? detailQuery.error.message
+        : "Plan is not available.",
+      retry: () => setAttachingPlanId(failedPlanId),
+    });
+  }, [attachingPlanId, detailQuery.error, detailQuery.isError, plans, showErrorToast]);
 
   const attachPlan = useCallback((planId: string) => {
     setAttachingPlanId(planId);

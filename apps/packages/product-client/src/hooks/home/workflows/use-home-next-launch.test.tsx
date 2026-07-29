@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => {
     productHost: { desktop: {} as object | null },
     selectWorkspace: vi.fn(),
     showToast: vi.fn(),
+    showErrorToast: vi.fn(),
     useCoworkThreadWorkflow: vi.fn(() => ({ createThreadFromSelection })),
   };
 });
@@ -54,8 +55,8 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
-  useToastStore: (selector: (state: { show: typeof mocks.showToast }) => unknown) =>
-    selector({ show: mocks.showToast }),
+  useToastStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ show: mocks.showToast, showError: mocks.showErrorToast }),
 }));
 
 vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({

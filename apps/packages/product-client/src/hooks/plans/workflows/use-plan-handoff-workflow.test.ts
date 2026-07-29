@@ -30,7 +30,8 @@ describe("executePlanHandoff", () => {
       onCompleted: () => {
         calls.push("completed");
       },
-      showToast: vi.fn(),
+      showErrorToast: vi.fn(),
+      retry: vi.fn(),
     });
 
     expect(calls).toEqual(["create", "apply-config", "prompt", "completed"]);
@@ -48,8 +49,11 @@ describe("executePlanHandoff", () => {
     const selectSession = vi.fn(async (sessionId: string) => {
       calls.push(`select:${sessionId}`);
     });
-    const showToast = vi.fn((message: string) => {
-      calls.push(`toast:${message}`);
+    // Recorded into the same ordered list as the rollback steps: the
+    // consequence promises the user is back where they were, which is only true
+    // if the toast is raised after the dismiss and the reselect, not before.
+    const showErrorToast = vi.fn((input: { headline: string }) => {
+      calls.push(`toast:${input.headline}`);
     });
 
     await executePlanHandoff({
@@ -75,7 +79,8 @@ describe("executePlanHandoff", () => {
       selectSession,
       hasSession: (sessionId) => sessionId === "session-old",
       onCompleted: vi.fn(),
-      showToast,
+      showErrorToast,
+      retry: vi.fn(),
     });
 
     expect(calls).toEqual([
@@ -83,8 +88,12 @@ describe("executePlanHandoff", () => {
       "apply-config",
       "dismiss:session-new",
       "select:session-old",
-      "toast:Failed to hand off plan: The session could not leave plan mode before the first prompt.",
+      "toast:Plan not handed off",
     ]);
+    expect(showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
+      consequence: "No new chat was started and you are back in the session you were in.",
+      cause: "The session could not leave plan mode before the first prompt.",
+    }));
     expect(dismissSession).toHaveBeenCalledWith("session-new");
     expect(selectSession).toHaveBeenCalledWith("session-old");
   });

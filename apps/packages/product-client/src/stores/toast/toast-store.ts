@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import { showProductToast } from "#product/components/feedback/product-toast";
+import type { ToastErrorInput } from "@proliferate/ui/utils/toast-model";
+import {
+  showProductErrorToast,
+  showProductToast,
+} from "#product/components/feedback/product-toast";
 
 export interface Toast {
   id: string;
@@ -10,6 +14,14 @@ export interface Toast {
 interface ToastStore {
   toasts: Toast[];
   show: (message: string, type?: "error" | "info") => void;
+  /**
+   * Report a failed action. Lives alongside `show` rather than replacing it
+   * because the two carry genuinely different arguments: `show` takes a
+   * sentence about something that happened, `showError` takes an outcome and,
+   * separately, the exception behind it. The separation is what keeps the
+   * exception out of the headline.
+   */
+  showError: (input: ToastErrorInput) => void;
   dismiss: (id: string) => void;
 }
 
@@ -23,6 +35,9 @@ export const useToastStore = create<ToastStore>(() => ({
   toasts: [],
   show: (message, type = "error") => {
     showProductToast(message, type);
+  },
+  showError: (input) => {
+    showProductErrorToast(input);
   },
   dismiss: () => {},
 }));

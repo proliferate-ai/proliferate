@@ -34,6 +34,7 @@ export function useWorkspaceSidebarActions() {
   } = useCreateCloudWorkspace();
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const { markDone, retryCleanup } = useWorkspaceRetireActions();
   const { openExternal } = useProductHost().links;
 
@@ -63,7 +64,9 @@ export function useWorkspaceSidebarActions() {
     });
   }, [openExternal, showToast]);
 
-  const handleSidebarIndicatorAction = useCallback((action: SidebarIndicatorAction) => {
+  const handleSidebarIndicatorAction = useCallback(function handleSidebarIndicatorAction(
+    action: SidebarIndicatorAction,
+  ) {
     switch (action.kind) {
       case "open_workspace":
         handleSelectWorkspace(action.workspaceId);
@@ -80,8 +83,12 @@ export function useWorkspaceSidebarActions() {
           sessionId: action.sessionId,
           forceWorkspaceSelection: true,
         }).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          showToast(`Failed to open source session: ${message}`);
+          showErrorToast({
+            headline: "Session not opened",
+            consequence: "You are still where you were; nothing was closed.",
+            cause: errorMessage(error),
+            retry: () => handleSidebarIndicatorAction(action),
+          });
         });
         return;
       }
@@ -91,10 +98,13 @@ export function useWorkspaceSidebarActions() {
     handleSelectWorkspace,
     navigateToWorkspaceShell,
     openWorkspaceSession,
-    showToast,
+    showErrorToast,
   ]);
 
-  const handleMarkWorkspaceDone = useCallback((workspaceId: string, logicalWorkspaceId: string) => {
+  const handleMarkWorkspaceDone = useCallback(function handleMarkWorkspaceDone(
+    workspaceId: string,
+    logicalWorkspaceId: string,
+  ) {
     void markDone(workspaceId, { logicalWorkspaceId }).then((result) => {
       if (result.outcome === "blocked") {
         showToast(workspaceRetireBlockedMessage(result));
@@ -102,12 +112,18 @@ export function useWorkspaceSidebarActions() {
         showToast("Workspace delete started, but cleanup needs attention.");
       }
     }).catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to delete workspace: ${message}`);
+      showErrorToast({
+        headline: "Workspace not deleted",
+        consequence: "It is still in your sidebar with its files intact.",
+        cause: errorMessage(error),
+        retry: () => handleMarkWorkspaceDone(workspaceId, logicalWorkspaceId),
+      });
     });
-  }, [markDone, showToast]);
+  }, [markDone, showErrorToast, showToast]);
 
-  const handleRetryWorkspaceCleanup = useCallback((workspaceId: string) => {
+  const handleRetryWorkspaceCleanup = useCallback(function handleRetryWorkspaceCleanup(
+    workspaceId: string,
+  ) {
     void retryCleanup(workspaceId).then((result) => {
       if (result.outcome === "blocked") {
         showToast(workspaceRetireBlockedMessage(result));
@@ -115,10 +131,14 @@ export function useWorkspaceSidebarActions() {
         showToast("Cleanup still needs attention.");
       }
     }).catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to retry cleanup: ${message}`);
+      showErrorToast({
+        headline: "Cleanup not retried",
+        consequence: "The workspace still needs attention.",
+        cause: errorMessage(error),
+        retry: () => handleRetryWorkspaceCleanup(workspaceId),
+      });
     });
-  }, [retryCleanup, showToast]);
+  }, [retryCleanup, showErrorToast, showToast]);
 
   const handleCreateLocalWorkspace = useCallback((
     sourceRoot: string | null,
@@ -200,6 +220,10 @@ export function useWorkspaceSidebarActions() {
     handleCreateWorktreeWorkspace,
     handleCreateCloudWorkspace,
   };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function workspaceRetireBlockedMessage(result: WorkspaceRetireResponse | WorkspacePurgeResponse): string {

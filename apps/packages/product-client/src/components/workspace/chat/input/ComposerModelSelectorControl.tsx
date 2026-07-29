@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
@@ -18,6 +18,9 @@ import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
+import { ComposerFieldInlineError } from "#product/components/workspace/chat/input/ComposerFieldInlineError";
+import { MODEL_UNSUPPORTED_ROW_HINT } from "#product/lib/domain/chat/models/model-support-refusals";
+import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import {
   modelRowKey,
   useModelPickerKeyboardNav,
@@ -38,8 +41,20 @@ export function ComposerModelSelectorControl({
     hasAgents,
     isLoading,
     onSelect,
+    unsupportedSelectionMessage = null,
   } = modelSelectorProps;
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
+  // The picker opens itself after a refusal so the marked rows are in front of
+  // the user rather than one click away. Nonce-driven: two refusals in a row
+  // each reopen it, and nothing has to reset a flag.
+  const pickerRequestNonce = useModelSupportStore((state) => state.pickerRequestNonce);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  useEffect(() => {
+    if (pickerRequestNonce === 0) {
+      return;
+    }
+    setPickerOpen(true);
+  }, [pickerRequestNonce]);
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
   // Stable qualification hook (attributes only): prefer the model whose
   // rendered identity matches the current chip. During live-config restore,
@@ -87,47 +102,65 @@ export function ComposerModelSelectorControl({
   }
 
   return (
-    <PopoverButton
-      trigger={(
-        <ComposerControlButton
-          emphasizeLabel
-          data-composer-model-trigger
-          data-composer-selected-model={selectedModelId}
-          icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
-          label={triggerLabel}
-          trailing={currentModel?.pendingState
-            ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
-            : null}
-          aria-label={`Model: ${triggerLabel}`}
-          className="max-w-[15rem]"
-        />
+    <span className="flex min-w-0 flex-col items-start gap-1">
+      <PopoverButton
+        trigger={(
+          <ComposerControlButton
+            emphasizeLabel
+            data-composer-model-trigger
+            data-composer-selected-model={selectedModelId}
+            icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
+            label={triggerLabel}
+            trailing={currentModel?.pendingState
+              ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
+              : null}
+            aria-label={`Model: ${triggerLabel}`}
+            aria-invalid={unsupportedSelectionMessage ? true : undefined}
+            aria-describedby={unsupportedSelectionMessage
+              ? MODEL_UNSUPPORTED_MESSAGE_ID
+              : undefined}
+            className="max-w-[15rem]"
+          />
+        )}
+        side="top"
+        align="start"
+        offset={2}
+        className="w-auto border-0 bg-transparent p-0 shadow-none"
+        externalOpen={pickerOpen}
+        onOpenChange={setPickerOpen}
+      >
+        {(close) => (
+          <ComposerModelPickerPopover
+            groups={groups}
+            currentModel={currentModel}
+            onSelect={(selection) => {
+              onSelect(selection);
+              close();
+            }}
+            onAddProvider={() => {
+              handleAddProvider();
+              close();
+            }}
+            onSettings={() => {
+              handleSettings();
+              close();
+            }}
+          />
+        )}
+      </PopoverButton>
+
+      {/* Field-scoped, so it lives with the field: the model the composer is on
+          is one this target refuses, and the control above is what fixes it. */}
+      {unsupportedSelectionMessage && (
+        <ComposerFieldInlineError id={MODEL_UNSUPPORTED_MESSAGE_ID}>
+          {unsupportedSelectionMessage}
+        </ComposerFieldInlineError>
       )}
-      side="top"
-      align="start"
-      offset={2}
-      className="w-auto border-0 bg-transparent p-0 shadow-none"
-    >
-      {(close) => (
-        <ComposerModelPickerPopover
-          groups={groups}
-          currentModel={currentModel}
-          onSelect={(selection) => {
-            onSelect(selection);
-            close();
-          }}
-          onAddProvider={() => {
-            handleAddProvider();
-            close();
-          }}
-          onSettings={() => {
-            handleSettings();
-            close();
-          }}
-        />
-      )}
-    </PopoverButton>
+    </span>
   );
 }
+
+const MODEL_UNSUPPORTED_MESSAGE_ID = "composer-model-unsupported";
 
 function ComposerModelPickerPopover({
   groups,
@@ -283,6 +316,11 @@ function ModelPickerGroup({
             data-model-option={model.modelId}
             data-model-kind={group.kind}
             data-model-selected={model.isSelected ? "true" : "false"}
+            data-model-unsupported={model.isUnsupported ? "true" : "false"}
+            // Disabled, not hidden: the row is the answer to "where did my model
+            // go", and the hint below it is what turns a dead row into an
+            // explanation. The primitive already carries the disabled styling.
+            disabled={model.isUnsupported}
             aria-selected={isHighlighted}
             onMouseEnter={() => onHighlight(rowKey)}
             icon={<ProviderIcon kind={group.kind} className="icon-compact shrink-0 text-muted-foreground [font-size:var(--text-composer)]" />}
@@ -305,10 +343,12 @@ function ModelPickerGroup({
             )}
             labelClassName="text-composer"
             className={`px-2.5 py-2 ${
-              model.isSelected || isHighlighted ? "bg-hover" : ""
+              !model.isUnsupported && (model.isSelected || isHighlighted) ? "bg-hover" : ""
             }`}
             onClick={() => onSelect({ kind: group.kind, modelId: model.modelId })}
-          />
+          >
+            {model.isUnsupported ? MODEL_UNSUPPORTED_ROW_HINT : null}
+          </PopoverMenuItem>
         );
       })}
     </>

@@ -11,8 +11,16 @@ const mocks = vi.hoisted(() => ({
   persistPreferences: vi.fn(),
   setActiveSessionConfigOption: vi.fn(),
   setWorkspaceArrivalEvent: vi.fn(),
+  showErrorToast: vi.fn(),
   showToast: vi.fn(),
   startLatencyFlow: vi.fn(() => "flow-1"),
+}));
+
+// The hook reads the host only for `links.openExternal`, which the refusal
+// toast's "How to update" action needs. Mocking the module keeps these tests
+// on `renderHook` with no provider tree, like every other mock here.
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ links: { openExternal: vi.fn(async () => undefined) } }),
 }));
 
 vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => ({
@@ -84,6 +92,7 @@ vi.mock("#product/stores/preferences/user-preferences-store", () => ({
 vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: unknown) => unknown) => selector({
     show: mocks.showToast,
+    showError: mocks.showErrorToast,
   }),
 }));
 

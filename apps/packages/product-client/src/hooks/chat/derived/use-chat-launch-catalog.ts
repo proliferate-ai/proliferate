@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { compareChatLaunchKinds } from "#product/config/chat-launch";
 import {
   buildModelSelectorGroups,
+  unsupportedModelKey,
 } from "#product/lib/domain/chat/models/model-selector-options";
+import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import type {
   ActiveModelSelectorControl,
   ModelSelectorGroup,
@@ -123,6 +125,42 @@ export function useChatLaunchCatalog({
     [activeSelection, defaultLaunchSelection, launchAgents],
   );
 
+  // Content fingerprint, not object identity: the launch-options query refetches
+  // on a poll and hands back a fresh array every time, so keying the reset on
+  // identity would forget every refusal within seconds and the marks would never
+  // be seen. What matters is the option set actually changing — which is what a
+  // target update looks like from here.
+  const launchOptionsFingerprint = useMemo(
+    () => (runtimeLaunchOptions.data?.agents ?? [])
+      .map((agent) => `${agent.kind}:${agent.models.map((model) => model.id).sort().join(",")}`)
+      .sort()
+      .join("|"),
+    [runtimeLaunchOptions.data?.agents],
+  );
+  const clearWorkspaceModelSupport = useModelSupportStore((state) => state.clearWorkspace);
+  useEffect(() => {
+    if (!selectedWorkspaceId || !launchOptionsFingerprint) {
+      return;
+    }
+    clearWorkspaceModelSupport(selectedWorkspaceId);
+  }, [clearWorkspaceModelSupport, launchOptionsFingerprint, selectedWorkspaceId]);
+
+  const modelSupportRefusals = useModelSupportStore((state) => state.refusalsByKey);
+  const unsupportedModelKeys = useMemo(() => {
+    // Scoped to the selected workspace: a refusal from another target says
+    // nothing about this one, and marking rows from it would be a lie.
+    const keys = new Set<string>();
+    if (!selectedWorkspaceId) {
+      return keys;
+    }
+    for (const refusal of Object.values(modelSupportRefusals)) {
+      if (refusal.workspaceId === selectedWorkspaceId) {
+        keys.add(unsupportedModelKey(refusal.agentKind, refusal.modelId));
+      }
+    }
+    return keys;
+  }, [modelSupportRefusals, selectedWorkspaceId]);
+
   const groups = useMemo<ModelSelectorGroup[]>(
     () => buildModelSelectorGroups(
       launchAgents,
@@ -130,6 +168,7 @@ export function useChatLaunchCatalog({
       activeSelection,
       activeModelControl,
       preferences.chatModelVisibilityOverridesByAgentKind,
+      unsupportedModelKeys,
     ),
     [
       activeModelControl,
@@ -137,6 +176,7 @@ export function useChatLaunchCatalog({
       launchAgents,
       preferences.chatModelVisibilityOverridesByAgentKind,
       selectedLaunchSelection,
+      unsupportedModelKeys,
     ],
   );
 

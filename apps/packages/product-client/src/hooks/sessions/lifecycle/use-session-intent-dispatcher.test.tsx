@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   dispatchConfigIntent: vi.fn(),
   dispatchPromptIntent: vi.fn(),
   showToast: vi.fn(),
+  showErrorToast: vi.fn(),
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
@@ -61,8 +62,8 @@ vi.mock("#product/hooks/sessions/lifecycle/session-intent-config-dispatch", () =
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
-  useToastStore: (selector: (state: { show: typeof mocks.showToast }) => unknown) =>
-    selector({ show: mocks.showToast }),
+  useToastStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ show: mocks.showToast, showError: mocks.showErrorToast }),
 }));
 
 vi.mock("#product/hooks/sessions/lifecycle/session-intent-interaction-dispatch", () => ({
@@ -145,7 +146,7 @@ describe("useSessionIntentDispatcher", () => {
     });
   });
 
-  it("surfaces an asynchronous config rejection through existing error language", async () => {
+  it("names the setting and the value that did not take, keeping the cause out of the copy", async () => {
     mocks.dispatchConfigIntent.mockImplementation(async (intent, deps) => {
       deps.onFailure?.("request timed out");
       useSessionIntentStore.getState().patchIntent(intent.intentId, {
@@ -167,10 +168,17 @@ describe("useSessionIntentDispatcher", () => {
     });
 
     await waitFor(() => {
-      expect(mocks.showToast).toHaveBeenCalledWith(
-        "Failed to update session config: request timed out",
-      );
+      expect(mocks.showErrorToast).toHaveBeenCalledTimes(1);
     });
+    // The control's menu has closed by now, so the toast is the only thing that
+    // can say which setting and which value: the headline stays a written line
+    // and the exception is reachable only through Details.
+    expect(mocks.showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
+      headline: "Setting not changed",
+      consequence: "collaboration_mode is still on its previous value, not plan.",
+      cause: "request timed out",
+    }));
+    expect(mocks.showToast).not.toHaveBeenCalled();
   });
 });
 

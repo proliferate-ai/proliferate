@@ -8,10 +8,12 @@ import { readToastPayload } from "./toast-payload";
 import {
   isStatusToast,
   resolveToastDuration,
+  toErrorAnnouncement,
   type AnnouncementToastInput,
   type DetailToastInput,
   type ToastAction,
   type ToastDetails,
+  type ToastErrorInput,
   type ToastInput,
 } from "./toast-model";
 
@@ -59,6 +61,18 @@ export function showToast(input: ToastInput): string {
       common,
     ),
   );
+}
+
+/**
+ * The way to report a failed action.
+ *
+ * A thin projection onto `showToast`, and deliberately thin: the value is in
+ * the *shape* of the argument, not in anything this function does. A caller
+ * with `{ headline, cause }` cannot accidentally print the cause, and a caller
+ * with a `retry` cannot accidentally auto-dismiss the offer to use it.
+ */
+export function toastError(input: ToastErrorInput): string {
+  return showToast(toErrorAnnouncement(input));
 }
 
 /**

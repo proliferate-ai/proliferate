@@ -20,6 +20,7 @@ export function SessionErrorItem({
   const presentation = presentSessionError(item);
   const setFallbackModel = useSessionModelFallbackAction();
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const [isApplyingFallback, setIsApplyingFallback] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
@@ -81,7 +82,16 @@ export function SessionErrorItem({
         );
       })
       .catch((error) => {
-        showToast(`Failed to change model: ${errorMessage(error)}`);
+        showErrorToast({
+          headline: "Model not switched",
+          // Names the model the button offered rather than saying "the model":
+          // the system knows which one the user pressed, so the copy says which.
+          consequence: presentation.fallbackModelLabel
+            ? `This session is still on the model that was rate limited, not ${presentation.fallbackModelLabel}.`
+            : "This session is still on the model that was rate limited.",
+          cause: errorMessage(error),
+          retry: handleFallback,
+        });
       })
       .finally(() => {
         setIsApplyingFallback(false);

@@ -4,6 +4,7 @@ import {
   isStatusToast,
   resolveToastDuration,
   STATUS_TOAST_DURATION_MS,
+  toErrorAnnouncement,
 } from "../src/utils/toast-model";
 
 const noop = () => {};
@@ -111,5 +112,72 @@ describe("resolveToastDuration", () => {
         isError: true,
       }),
     ).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+/**
+ * An error toast is the one weight decided by classification rather than by the
+ * caller: an error from something the user just did always needs a decision, so
+ * it is always an announcement that persists. These cases pin that, and pin the
+ * separation that the shape exists for — the cause never becomes copy.
+ */
+describe("toErrorAnnouncement", () => {
+  it("classifies every error as a persisting announcement", () => {
+    const announcement = toErrorAnnouncement({ headline: "Message not sent" });
+
+    expect(announcement.weight).toBe("announcement");
+    expect(announcement.tone).toBe("destructive");
+    expect(announcement.isError).toBe(true);
+    expect(resolveToastDuration(announcement)).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("keeps the cause out of every rendered field", () => {
+    const cause = "TypeError: undefined is not a function\n  at step (run.ts:10:1)";
+    const announcement = toErrorAnnouncement({
+      headline: "Run did not start",
+      consequence: "No files were changed.",
+      cause,
+    });
+
+    expect(announcement.title).toBe("Run did not start");
+    expect(announcement.description).toBe("No files were changed.");
+    // The only field the cause reaches is the details payload, which renders in
+    // a scrolling `pre` behind a button — never in the toast body.
+    expect(announcement.details).toEqual({
+      kind: "modal",
+      title: "Run did not start",
+      payload: cause,
+    });
+  });
+
+  it("offers no Details when there is nothing behind it", () => {
+    expect(toErrorAnnouncement({ headline: "Link did not open" }).details)
+      .toEqual({ kind: "none" });
+    // Whitespace is not a cause: it would open an empty modal.
+    expect(toErrorAnnouncement({ headline: "Link did not open", cause: "  \n" }).details)
+      .toEqual({ kind: "none" });
+  });
+
+  it("makes retry the one committing action, and nothing else commit", () => {
+    const retry = () => {};
+    const withRetry = toErrorAnnouncement({ headline: "Message not sent", retry });
+    expect(withRetry.commit).toEqual({ label: "Retry", onClick: retry });
+
+    expect(toErrorAnnouncement({ headline: "Message not sent" }).commit).toBeUndefined();
+  });
+
+  it("lets an error with a home point at it instead of at a modal", () => {
+    const onNavigate = () => {};
+    const announcement = toErrorAnnouncement({
+      headline: "A run failed",
+      cause: "boom",
+      details: { kind: "navigate", label: "Open run", onNavigate },
+    });
+
+    expect(announcement.details).toEqual({
+      kind: "navigate",
+      label: "Open run",
+      onNavigate,
+    });
   });
 });
