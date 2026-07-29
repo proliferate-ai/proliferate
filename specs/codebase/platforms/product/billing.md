@@ -264,7 +264,9 @@ keyed on `period_start` is idempotent per period, but `invoice.paid` fires
 for more than renewals: a mid-period seat change raises its own paid invoice
 carrying a cloud subscription line with the period *unchanged*
 (`billing_reason: subscription_update`, confirmed against live Stripe
-2026-07-28). That collided with the renewal's own `source_ref`, and because
+2026-07-28; the wire shape is pinned in
+`server/tests/integration/test_billing_invoice_period_boundary.py`). That
+collided with the renewal's own `source_ref`, and because
 the handler tops the existing row up, the larger seat count re-granted a
 full seat-month for seats the seat-adjustment pass already covers pro rata.
 So `_handle_invoice_paid` now grants only for

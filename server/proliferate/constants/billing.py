@@ -36,6 +36,16 @@ BILLING_PERIOD_GRANT_INVOICE_REASONS = frozenset(
 # loud instead of silently sharing the expected path. Stripe adding a reason, or
 # an API version that stops sending the field, would otherwise zero out every
 # renewal for every paying org with only an info log to show for it.
+#
+# Checked against the full ``invoice.billing_reason`` enum in Stripe's OpenAPI
+# spec (2026-06-24.dahlia), which has nine values. The two above plus these six
+# account for eight. The ninth, ``subscription``, is deliberately in NEITHER
+# set: Stripe retired it for subscriptions created before May 2018, when no
+# distinction was drawn between cycles, updates and thresholds. Because it could
+# stand in for a *cycle*, classifying it benign would silently skip a real
+# period grant — the one failure direction this split exists to prevent — so it
+# stays unrecognized and pages. It cannot occur here in any case: every
+# subscription we have was created in 2026.
 BILLING_NON_PERIOD_INVOICE_REASONS = frozenset(
     {
         "subscription_update",

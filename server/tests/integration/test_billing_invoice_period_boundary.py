@@ -120,13 +120,13 @@ async def _seed_org_subject(
     return organization_id, subject_id
 
 
-def _invoice(*, subject_id: uuid.UUID, billing_reason: str) -> dict[str, Any]:
+def _invoice(*, subject_id: uuid.UUID, invoice_reason: str) -> dict[str, Any]:
     return {
-        "id": f"in_boundary_{billing_reason}",
+        "id": f"in_boundary_{invoice_reason}",
         "customer": "cus_boundary",
         "status": "paid",
         "paid": True,
-        "billing_reason": billing_reason,
+        "billing_reason": invoice_reason,
         "subscription": "sub_boundary",
         "metadata": {"billing_subject_id": str(subject_id)},
         "lines": {"data": [{"id": "il_boundary", "price": {"id": "price_pro"}}]},
@@ -211,7 +211,7 @@ async def test_mid_period_seat_proration_does_not_re_grant_the_period(
     _patch_stripe(monkeypatch, subject_id=subject_id, seats=2)
 
     await stripe_webhooks._handle_invoice_paid(
-        _invoice(subject_id=subject_id, billing_reason="subscription_cycle")
+        _invoice(subject_id=subject_id, invoice_reason="subscription_cycle")
     )
     grants = await _period_grants(db_session, subject_id)
     assert len(grants) == 1
@@ -224,7 +224,7 @@ async def test_mid_period_seat_proration_does_not_re_grant_the_period(
     # what made the proration invoice top the existing period grant up.
     await _add_member(db_session, organization_id)
     await stripe_webhooks._handle_invoice_paid(
-        _invoice(subject_id=subject_id, billing_reason="subscription_update")
+        _invoice(subject_id=subject_id, invoice_reason="subscription_update")
     )
 
     grants = await _period_grants(db_session, subject_id)
@@ -236,12 +236,12 @@ async def test_mid_period_seat_proration_does_not_re_grant_the_period(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("billing_reason", ["subscription_create", "subscription_cycle"])
+@pytest.mark.parametrize("invoice_reason", ["subscription_create", "subscription_cycle"])
 async def test_period_boundaries_still_mint_the_allowance(
     db_session: AsyncSession,
     test_engine: Any,
     monkeypatch: pytest.MonkeyPatch,
-    billing_reason: str,
+    invoice_reason: str,
 ) -> None:
     """The two boundary reasons still grant, so the gate cannot starve customers.
 
@@ -258,7 +258,7 @@ async def test_period_boundaries_still_mint_the_allowance(
     _patch_stripe(monkeypatch, subject_id=subject_id, seats=2)
 
     await stripe_webhooks._handle_invoice_paid(
-        _invoice(subject_id=subject_id, billing_reason=billing_reason)
+        _invoice(subject_id=subject_id, invoice_reason=invoice_reason)
     )
 
     grants = await _period_grants(db_session, subject_id)
@@ -298,7 +298,7 @@ async def test_non_boundary_invoice_still_clears_a_payment_failed_hold(
     await db_session.commit()
 
     await stripe_webhooks._handle_invoice_paid(
-        _invoice(subject_id=subject_id, billing_reason="subscription_update")
+        _invoice(subject_id=subject_id, invoice_reason="subscription_update")
     )
 
     db_session.expire_all()
