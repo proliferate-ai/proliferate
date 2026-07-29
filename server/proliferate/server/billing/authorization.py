@@ -367,7 +367,15 @@ async def resolve_cloud_sandbox_billing_block(
         # active-spend-hold snapshot has to read the org subject or a hold on the org
         # pool would never block an org member's resume.
         billing_subject_id = await resolve_billing_subject_id_for_user(db, owner_user_id)
-        snapshot = await get_billing_snapshot_for_subject_in_session(db, billing_subject_id)
+        # Pass the owner so the free allowance is minted on an ORG subject too
+        # (an org subject has no ``user_id`` of its own to fall back on). Without
+        # it the gate would read an org pool that is empty only because the
+        # allowance was never issued, and deny a new member's first start (W-F1).
+        snapshot = await get_billing_snapshot_for_subject_in_session(
+            db,
+            billing_subject_id,
+            grant_user_id=owner_user_id,
+        )
 
         decision_type: str | None = None
         reason: str | None = None

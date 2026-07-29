@@ -459,3 +459,28 @@ async def mark_usage_export_failed(
         export.error = error[:4000]
         export.updated_at = utcnow()
     await db.flush()
+
+
+async def count_grants_for_subject(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+    *,
+    grant_type: str,
+) -> int:
+    """How many grants of one type this subject already holds.
+
+    Used to give refill checkout an idempotency key that advances after each
+    completed purchase, so a double-click still dedupes while a genuine second
+    purchase gets a fresh Stripe session instead of the spent one.
+    """
+    return int(
+        await db.scalar(
+            select(func.count())
+            .select_from(BillingGrant)
+            .where(
+                BillingGrant.billing_subject_id == billing_subject_id,
+                BillingGrant.grant_type == grant_type,
+            )
+        )
+        or 0
+    )

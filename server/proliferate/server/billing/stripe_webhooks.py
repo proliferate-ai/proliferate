@@ -286,7 +286,7 @@ async def _handle_checkout_session_completed(
         webhook_drops.report_checkout_id_not_string(event_id, session)
         return
     subject = await _subject_from_object(session)
-    if subject is None or subject.user_id is None:
+    if subject is None:
         webhook_drops.report_checkout_subject_unresolved(event_id, session, session_id, subject)
         return
     lines = await stripe_billing.list_checkout_session_line_items(session_id)
