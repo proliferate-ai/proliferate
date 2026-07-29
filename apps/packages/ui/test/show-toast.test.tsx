@@ -4,7 +4,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAX_VISIBLE_TOASTS, toast } from "../src/primitives/Sonner";
 import { ToastHost } from "../src/patterns/ToastHost";
-import { dismissToast, showToast } from "../src/utils/show-toast";
+import { dismissToast, showToast, toastError } from "../src/utils/show-toast";
 import type { ToastInput } from "../src/utils/toast-model";
 
 afterEach(() => {
@@ -239,5 +239,71 @@ describe("showToast — hard limits", () => {
     await waitFor(() => {
       expect(onDismiss).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe("toastError", () => {
+  async function raiseError(input: Parameters<typeof toastError>[0]) {
+    render(<ToastHost />);
+    act(() => {
+      toastError(input);
+    });
+    return await waitFor(() => {
+      const nodes = document.querySelectorAll<HTMLElement>("[data-sonner-toast]");
+      if (nodes.length === 0) {
+        throw new Error("no toast rendered");
+      }
+      return nodes;
+    });
+  }
+
+  it("renders the outcome and consequence, and the cause nowhere", async () => {
+    await raiseError({
+      headline: "Message not sent",
+      consequence: "Your message is still in the composer, unsent.",
+      cause: "Pending prompt not found",
+    });
+
+    expect(screen.getByText("Message not sent")).toBeTruthy();
+    expect(screen.getByText("Your message is still in the composer, unsent.")).toBeTruthy();
+    // The whole point of the shape: the exception is present in the toast's
+    // data and absent from its pixels until someone asks for it.
+    expect(screen.queryByText(/Pending prompt not found/)).toBeNull();
+  });
+
+  it("puts the cause behind Details, in the modal that can hold it", async () => {
+    await raiseError({
+      headline: "Run did not start",
+      cause: "TypeError: undefined is not a function\n  at step (run.ts:10:1)",
+    });
+
+    act(() => {
+      screen.getByRole("button", { name: "Details" }).click();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/at step \(run\.ts:10:1\)/)).toBeTruthy();
+    });
+  });
+
+  it("offers Retry as the one filled action and calls it", async () => {
+    const retry = vi.fn();
+    await raiseError({ headline: "Message not sent", cause: "boom", retry });
+
+    const retryButton = screen.getByRole("button", { name: "Retry" });
+    const details = screen.getByRole("button", { name: "Details" });
+    expect(details.className).toContain("bg-surface-elevated-secondary");
+    expect(retryButton.className).not.toContain("bg-surface-elevated-secondary");
+
+    act(() => {
+      retryButton.click();
+    });
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no Retry when the caller cannot re-run the action", async () => {
+    await raiseError({ headline: "Link did not open" });
+
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Details" })).toBeNull();
   });
 });

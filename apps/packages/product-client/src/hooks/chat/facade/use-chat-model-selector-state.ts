@@ -18,6 +18,9 @@ import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launc
 import { useChatLaunchControlActions } from "#product/hooks/chat/workflows/use-chat-launch-control-actions";
 import { buildLaunchControlDescriptors } from "#product/lib/domain/chat/models/launch-control-descriptors";
 import { resolveCurrentModelDisplayName } from "#product/lib/domain/chat/models/model-selector-current";
+import { modelUnsupportedControlMessage } from "#product/lib/domain/chat/models/model-support-refusals";
+import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
@@ -44,6 +47,13 @@ export function useChatModelSelectorState(options?: {
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const { data: workspaceCollections } = useWorkspaces();
+  const selectedWorkspace = workspaceCollections?.workspaces
+    ?.find((workspace) => workspace.id === selectedWorkspaceId);
+  const selectedWorkspaceLabel = selectedWorkspace
+    ? workspaceDisplayName(selectedWorkspace)
+    : null;
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const launchIntentIdentity = useMemo(() => (
     !suppressActiveSessionState
@@ -131,6 +141,32 @@ export function useChatModelSelectorState(options?: {
     : selectedCloudRuntime.state
       ? "connecting"
       : connectionState;
+  // The refused-model condition is field-scoped, so it renders as an inline
+  // error under the control the user would fix it with, not as a toast. Read
+  // off the rows the picker already built: the same fact that greys a row is
+  // what pins the message, so the two can never disagree.
+  const unsupportedSelectionMessage = useMemo(() => {
+    if (!currentSelection) {
+      return null;
+    }
+    const selectedRow = launchCatalog.groups
+      .filter((group) => group.kind === currentSelection.kind)
+      .flatMap((group) => group.models)
+      .find((model) => model.isSelected);
+    if (!selectedRow?.isUnsupported) {
+      return null;
+    }
+    return modelUnsupportedControlMessage({
+      modelDisplayName: currentModelDisplayName ?? selectedRow.displayName,
+      targetLabel: selectedWorkspaceLabel,
+    });
+  }, [
+    currentModelDisplayName,
+    currentSelection,
+    launchCatalog.groups,
+    selectedWorkspaceLabel,
+  ]);
+
   const activeLaunchAgentKind = scopedActiveSessionId ? currentSelection?.kind ?? null : null;
   const selectLaunchControl = useChatLaunchControlActions({ activeLaunchAgentKind });
 
@@ -219,6 +255,7 @@ export function useChatModelSelectorState(options?: {
     hasAgents: selectorHasAgents,
     isLoading: selectorIsLoading,
     onSelect: handleLaunchSelect,
+    unsupportedSelectionMessage,
     launchControls,
     launchAgentKind: currentSelection?.kind ?? null,
   };

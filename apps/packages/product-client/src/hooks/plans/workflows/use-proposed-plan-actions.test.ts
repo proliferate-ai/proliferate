@@ -3,7 +3,7 @@ import type { NormalizedSessionControl } from "@anyharness/sdk";
 import {
   claimPlanImplementationRun,
   executePlanImplementation,
-} from "#product/hooks/plans/workflows/use-proposed-plan-actions";
+} from "#product/lib/workflows/plans/execute-plan-implementation";
 import { PLAN_IMPLEMENT_HERE_PROMPT } from "#product/copy/plans/plan-prompts";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import type { StartLatencyFlowInput } from "#product/lib/infra/measurement/measurement-port";
@@ -145,7 +145,15 @@ describe("executePlanImplementation", () => {
       "plan_implementation_config_failed",
     );
     expect(deps.promptActiveSession).not.toHaveBeenCalled();
-    expect(deps.showToast).toHaveBeenCalledWith("Failed to carry out plan: config failed");
+    // The mode switch is what failed, so nothing was sent: the consequence has
+    // to promise the session and the files are untouched, and the exception
+    // stays in `cause` where only Details reaches it.
+    expect(deps.showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
+      headline: "Plan not started",
+      consequence: "Nothing was sent to the session and no files were touched.",
+      cause: "config failed",
+      retry: deps.retry,
+    }));
   });
 
   it("fails the latency flow when the active target changes after config", async () => {
@@ -179,7 +187,11 @@ describe("executePlanImplementation", () => {
       "flow-1",
       "plan_implementation_prompt_failed",
     );
-    expect(deps.showToast).toHaveBeenCalledWith("Failed to carry out plan: prompt failed");
+    expect(deps.showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
+      headline: "Plan not started",
+      cause: "prompt failed",
+      retry: deps.retry,
+    }));
   });
 
   it("passes the prompt id, latency flow, blocks, and optimistic content to submit", async () => {
@@ -257,6 +269,8 @@ function depsForStates(
     chatDisabledReason: overrides.chatDisabledReason ?? null,
     onPromptSubmitted: vi.fn(),
     showToast: vi.fn(),
+    showErrorToast: vi.fn(),
+    retry: vi.fn(),
   };
 }
 

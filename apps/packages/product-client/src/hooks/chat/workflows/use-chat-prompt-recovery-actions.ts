@@ -8,7 +8,7 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useChatPromptRecoveryActions(workspaceUiKey: string | null) {
   const { createSessionWithResolvedConfig } = useSessionCreationActions();
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
 
   const dismissRecovery = useCallback((recoveryId: string) => {
     if (workspaceUiKey) {
@@ -16,7 +16,9 @@ export function useChatPromptRecoveryActions(workspaceUiKey: string | null) {
     }
   }, [workspaceUiKey]);
 
-  const retryRecovery = useCallback(async (recovery: ChatPromptRecovery) => {
+  const retryRecovery = useCallback(async function retryRecovery(
+    recovery: ChatPromptRecovery,
+  ) {
     if (!workspaceUiKey) {
       return false;
     }
@@ -37,10 +39,15 @@ export function useChatPromptRecoveryActions(workspaceUiKey: string | null) {
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to retry message: ${message}`);
+      showErrorToast({
+        headline: "Message not sent",
+        consequence: "It is still held for recovery; nothing was lost.",
+        cause: message,
+        retry: () => void retryRecovery(recovery),
+      });
       return false;
     }
-  }, [createSessionWithResolvedConfig, showToast, workspaceUiKey]);
+  }, [createSessionWithResolvedConfig, showErrorToast, workspaceUiKey]);
 
   return { dismissRecovery, retryRecovery };
 }

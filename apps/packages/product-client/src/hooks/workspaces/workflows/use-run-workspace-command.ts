@@ -36,6 +36,7 @@ export function useRunWorkspaceCommand({
   // record creation remains delegated to terminal workflow hooks.
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const { createRunTab } = useTerminalActions();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const [isLaunching, setIsLaunching] = useState(false);
@@ -97,7 +98,7 @@ export function useRunWorkspaceCommand({
     });
   }, [gitOwner, gitRepoName, isCloudWorkspace, localSourceRoot]);
 
-  const handleRun = useCallback(async () => {
+  const handleRun = useCallback(async function handleRun() {
     if (isLaunchingRef.current) {
       return;
     }
@@ -144,8 +145,15 @@ export function useRunWorkspaceCommand({
       const terminalId = await createRunTab(workspaceId, runCommand);
       openTerminalPanel(terminalId);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to start Run command: ${message}`);
+      // Names the command that did not run: it comes from repo settings, so the
+      // user may not have it memorized, and knowing which one failed is what
+      // tells them whether to fix the config or just try again.
+      showErrorToast({
+        headline: "Run command not started",
+        consequence: `Nothing ran. \`${runCommand.trim()}\` did not start and no terminal was opened.`,
+        cause: error instanceof Error ? error.message : String(error),
+        retry: () => void handleRun(),
+      });
     } finally {
       isLaunchingRef.current = false;
       setIsLaunching(false);
@@ -162,6 +170,7 @@ export function useRunWorkspaceCommand({
     repoConfigsQuery.isLoading,
     runCommand,
     selectedCloudWorkspace,
+    showErrorToast,
     showToast,
     workspaceId,
   ]);

@@ -23,6 +23,13 @@ export interface ModelSelectorItem {
   displayName: string;
   actionKind: ModelSelectionActionKind;
   isSelected: boolean;
+  /**
+   * The current target refused this model. The row stays visible and marked
+   * rather than disappearing: a model that vanishes from the menu reads as an
+   * account or catalog problem, and the user would go looking in Settings for
+   * something that is actually a runtime version on one machine.
+   */
+  isUnsupported: boolean;
 }
 
 export interface ModelSelectorGroup {
@@ -53,4 +60,10 @@ export interface ModelSelectorProps {
   hasAgents: boolean;
   isLoading: boolean;
   onSelect: (selection: ModelSelectorSelection) => void;
+  /**
+   * Set when the model the composer is currently on is one the target refused.
+   * Pinned under the control as an inline error — the condition belongs to this
+   * field, and the picker is right there to fix it, so it is not a toast.
+   */
+  unsupportedSelectionMessage?: string | null;
 }

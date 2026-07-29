@@ -51,6 +51,11 @@ jobs:
           python3 -m unittest scripts/test_check_design_attribution.py
           python3 scripts/check_design_attribution.py
 
+      - name: Check toast copy
+        run: |
+          python3 -m unittest scripts/test_check_toast_copy.py
+          python3 scripts/check_toast_copy.py
+
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
 

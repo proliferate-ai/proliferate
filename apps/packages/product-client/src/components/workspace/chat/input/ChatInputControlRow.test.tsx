@@ -34,15 +34,15 @@ function createModelSelectorProps(overrides?: Partial<ModelSelectorProps>): Mode
         kind: "claude",
         providerDisplayName: "Claude Code",
         models: [
-          { kind: "claude", modelId: "opus-4.1", displayName: "Opus 4.1", actionKind: "select", isSelected: true },
-          { kind: "claude", modelId: "sonnet-4", displayName: "Sonnet 4", actionKind: "select", isSelected: false },
+          { kind: "claude", modelId: "opus-4.1", displayName: "Opus 4.1", actionKind: "select", isSelected: true, isUnsupported: false },
+          { kind: "claude", modelId: "sonnet-4", displayName: "Sonnet 4", actionKind: "select", isSelected: false, isUnsupported: false },
         ],
       },
       {
         kind: "codex",
         providerDisplayName: "Proliferate",
         models: [
-          { kind: "codex", modelId: "gpt-5.5", displayName: "GPT 5.5", actionKind: "open_new_chat", isSelected: false },
+          { kind: "codex", modelId: "gpt-5.5", displayName: "GPT 5.5", actionKind: "open_new_chat", isSelected: false, isUnsupported: false },
         ],
       },
     ],

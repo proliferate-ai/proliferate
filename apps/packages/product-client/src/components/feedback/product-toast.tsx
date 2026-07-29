@@ -1,5 +1,8 @@
-import { showToast } from "@proliferate/ui/utils/show-toast";
-import { STATUS_MESSAGE_MAX_CHARS } from "@proliferate/ui/utils/toast-model";
+import { showToast, toastError } from "@proliferate/ui/utils/show-toast";
+import {
+  STATUS_MESSAGE_MAX_CHARS,
+  type ToastErrorInput,
+} from "@proliferate/ui/utils/toast-model";
 
 export type ProductToastKind = "error" | "info";
 
@@ -40,4 +43,17 @@ export function showProductToast(
   }
 
   showToast({ message, tone, duration: options?.duration });
+}
+
+/**
+ * The product's entry point for a failed action.
+ *
+ * Separate from `showProductToast` rather than another `kind` on it, because
+ * the argument is a different shape and that is the whole point: the string
+ * form is what let `Failed to X: ${error}` exist. Anything that wants to report
+ * an exception has to come through here and hand the exception over as `cause`,
+ * where the kit keeps it out of the body.
+ */
+export function showProductErrorToast(input: ToastErrorInput) {
+  toastError(input);
 }

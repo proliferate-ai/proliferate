@@ -21,15 +21,23 @@ export function useChatSessionControls(): {
 } {
   const activeSessionConfig = useActiveSessionConfigState();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const { setActiveSessionConfigOption } = useSessionConfigActions();
 
-  const onSelect = useCallback((rawConfigId: string, value: string) => {
+  const onSelect = useCallback(function onSelect(rawConfigId: string, value: string) {
     void setActiveSessionConfigOption(rawConfigId, value).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to update session config: ${message}`);
+      showErrorToast({
+        headline: "Setting not changed",
+        // Names the value the user picked: this fires from a composer control
+        // whose menu is already closed, so the toast is the only place left
+        // that can say which choice did not take.
+        consequence: `The session is still on its previous value, not ${value}.`,
+        cause: message,
+        retry: () => onSelect(rawConfigId, value),
+      });
     });
-  }, [setActiveSessionConfigOption, showToast]);
+  }, [setActiveSessionConfigOption, showErrorToast]);
 
   const controls = useMemo(() => {
     if (!activeSessionConfig.normalizedControls) {

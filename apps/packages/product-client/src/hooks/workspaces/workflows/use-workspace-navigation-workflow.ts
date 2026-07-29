@@ -31,6 +31,7 @@ export function useWorkspaceNavigationWorkflow() {
   const { openExternal } = useProductHost().links;
   const webApp = useWebAppTarget();
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
 
   const navigateToWorkspaceShell = useCallback(() => {
     if (location.pathname !== "/") {
@@ -52,7 +53,10 @@ export function useWorkspaceNavigationWorkflow() {
     selectedWorkspaceId,
   ]);
 
-  const selectWorkspaceFromSurface = useCallback((workspaceId: string, source: string) => {
+  const selectWorkspaceFromSurface = useCallback(function selectWorkspaceFromSurface(
+    workspaceId: string,
+    source: string,
+  ) {
     const unclaimedCloudWorkspace = logicalWorkspaces.find((workspace) =>
       logicalWorkspaceMatchesId(workspace, workspaceId) &&
       workspace.cloudWorkspace?.visibility === "shared_unclaimed"
@@ -82,8 +86,12 @@ export function useWorkspaceNavigationWorkflow() {
     });
     void selectWorkspace(workspaceId, { latencyFlowId }).catch((error) => {
       failLatencyFlow(latencyFlowId, "workspace_switch_failed");
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to select workspace: ${message}`);
+      showErrorToast({
+        headline: "Workspace not opened",
+        consequence: "You are still in the workspace you were in.",
+        cause: error instanceof Error ? error.message : String(error),
+        retry: () => selectWorkspaceFromSurface(workspaceId, source),
+      });
     });
   }, [
     logicalWorkspaces,
@@ -91,6 +99,7 @@ export function useWorkspaceNavigationWorkflow() {
     openExternal,
     selectedLogicalWorkspaceId,
     selectWorkspace,
+    showErrorToast,
     showToast,
     webApp.available,
     webApp.baseUrl,

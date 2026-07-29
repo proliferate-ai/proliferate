@@ -38,6 +38,7 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import type { ToastErrorInput } from "@proliferate/ui/utils/toast-model";
 
 // Owns the plan handoff dialog form and submit workflow wiring. Does not own session runtime.
 export function usePlanHandoffWorkflow({
@@ -54,6 +55,7 @@ export function usePlanHandoffWorkflow({
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const { currentLaunchIdentity } = useActiveSessionLaunchState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const [promptText, setPromptText] = useState(PLAN_HANDOFF_DEFAULT_PROMPT);
@@ -140,7 +142,7 @@ export function usePlanHandoffWorkflow({
     onChange: setModeOverrideId,
   }), [modeOptions, selectedModeId]);
 
-  const submit = useCallback(async () => {
+  const submit = useCallback(async function submit() {
     if (!selectedWorkspaceId) {
       return;
     }
@@ -181,7 +183,8 @@ export function usePlanHandoffWorkflow({
         hasSession: (sessionId) =>
           !!getSessionRecord(sessionId),
         onCompleted,
-        showToast,
+        showErrorToast,
+        retry: () => void submit(),
       });
     } finally {
       setIsSubmitting(false);
@@ -197,6 +200,7 @@ export function usePlanHandoffWorkflow({
     selectedModeId,
     selectedWorkspaceId,
     setSessionConfigOptionMutation,
+    showErrorToast,
     showToast,
   ]);
 
@@ -236,7 +240,9 @@ interface ExecutePlanHandoffInput {
   selectSession: (sessionId: string) => Promise<SessionActivationOutcome | void>;
   hasSession: (sessionId: string) => boolean;
   onCompleted: () => void;
-  showToast: (message: string) => void;
+  showErrorToast: (input: ToastErrorInput) => void;
+  /** Re-run the handoff, for the error toast's Retry. */
+  retry: () => void;
 }
 
 export async function executePlanHandoff({
@@ -254,7 +260,8 @@ export async function executePlanHandoff({
   selectSession,
   hasSession,
   onCompleted,
-  showToast,
+  showErrorToast,
+  retry,
 }: ExecutePlanHandoffInput): Promise<void> {
   let createdSessionId: string | null = null;
   try {
@@ -280,8 +287,14 @@ export async function executePlanHandoff({
         await selectSession(previousActiveSessionId).catch(() => undefined);
       }
     }
-    const message = error instanceof Error ? error.message : String(error);
-    showToast(`Failed to hand off plan: ${message}`);
+    // The rollback above already dismissed the half-created session and put the
+    // user back where they were, so the consequence can promise that plainly.
+    showErrorToast({
+      headline: "Plan not handed off",
+      consequence: "No new chat was started and you are back in the session you were in.",
+      cause: error instanceof Error ? error.message : String(error),
+      retry,
+    });
   }
 }
 

@@ -48,7 +48,7 @@ export function useSessionIntentDispatcher(): void {
   const { maybeGenerateWorkspaceName } = useWorkspaceNameActions();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const promptSessionMutation = usePromptSessionMutation();
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
   const resolveInteractionMutation = useResolveSessionInteractionMutation();
@@ -76,7 +76,7 @@ export function useSessionIntentDispatcher(): void {
     };
   }, []);
 
-  const dispatchIntent = useCallback(async (intent: SessionIntent) => {
+  const dispatchIntent = useCallback(async function dispatchIntent(intent: SessionIntent) {
     switch (intent.kind) {
       case "send_prompt":
         await dispatchPromptIntent(intent, {
@@ -98,7 +98,15 @@ export function useSessionIntentDispatcher(): void {
           cloudClient,
           upsertWorkspaceSessionRecord,
           onFailure: (message) => {
-            showToast(`Failed to update session config: ${message}`);
+            // Names the setting and the value the user chose: this fires from a
+            // control whose menu has already closed, so the toast is the only
+            // thing left that can say which change did not take.
+            showErrorToast({
+              headline: "Setting not changed",
+              consequence: `${intent.configId} is still on its previous value, not ${intent.value}.`,
+              cause: message,
+              retry: () => void dispatchIntent(intent),
+            });
           },
         });
         break;
@@ -123,7 +131,7 @@ export function useSessionIntentDispatcher(): void {
     rehydrateSessionSlotFromHistory,
     resolveInteractionMutation,
     setSessionConfigOptionMutation,
-    showToast,
+    showErrorToast,
     ssh,
     cloudClient,
     upsertWorkspaceSessionRecord,

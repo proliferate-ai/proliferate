@@ -13,7 +13,7 @@ export function TerminalCommandFloatingAction({
   terminal: TerminalRecord;
   workspaceId: string;
 }) {
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const rerunSetup = useRerunSetupMutation();
   const { rerunCommand } = useTerminalActions();
   const [isRerunning, setIsRerunning] = useState(false);
@@ -35,7 +35,7 @@ export function TerminalCommandFloatingAction({
         variant="ghost"
         className="pointer-events-auto border border-border/60 bg-background/95 shadow-popover backdrop-blur hover:bg-hover active:bg-active"
         disabled={isRerunning || rerunSetup.isPending}
-        onClick={() => {
+        onClick={function rerun() {
           setIsRerunning(true);
           const operation = isSetup
             ? rerunSetup.mutateAsync(workspaceId)
@@ -43,7 +43,14 @@ export function TerminalCommandFloatingAction({
           void operation
             .catch((error) => {
               const message = error instanceof Error ? error.message : String(error);
-              showToast(`Failed to rerun command: ${message}`);
+              showErrorToast({
+                // Two literal headlines, because the two commands are different
+                // things to a person and the label above already says which.
+                headline: isSetup ? "Setup command not rerun" : "Run command not rerun",
+                consequence: "The terminal is unchanged; nothing was started.",
+                cause: message,
+                retry: rerun,
+              });
             })
             .finally(() => setIsRerunning(false));
         }}

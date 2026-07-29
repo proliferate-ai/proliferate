@@ -4,7 +4,7 @@ import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product
 import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
-  formatSessionCreateFailureMessage,
+  formatSessionCreateCause,
   isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
@@ -29,10 +29,8 @@ import {
 } from "#product/lib/workflows/sessions/session-runtime";
 import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import {
-  annotateLatencyFlow,
-  cancelLatencyFlow,
-} from "#product/lib/infra/measurement/measurement-port";
+import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
+import { reuseInFlightSessionCreate } from "#product/hooks/sessions/workflows/reuse-in-flight-session-create";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import type { WorkspaceShellIntentKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
@@ -81,6 +79,7 @@ export function useSessionCreationActions() {
   const { getWorkspaceSessionCacheSnapshot, removeWorkspaceSessionRecord, upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const dismissSessionMutation = useDismissSessionMutation();
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const telemetry = useProductTelemetry();
   const createSessionWithResolvedConfig = useCallback(async function createWithResolvedConfig(
     options: CreateSessionWithResolvedConfigOptions,
@@ -105,54 +104,15 @@ export function useSessionCreationActions() {
     const previousActiveSessionId = current.activeSessionId;
     const shouldReuseInFlightEmptySession = options.reuseInFlightEmptySession === true;
     if (!hasPrompt && shouldReuseInFlightEmptySession) {
-      const inFlightCreate = inFlightSessionCreatesByWorkspace.get(workspaceId) ?? null;
-      if (
-        inFlightCreate
-        && inFlightCreate.agentKind === options.agentKind
-        && inFlightCreate.modelId === options.modelId
-      ) {
-        annotateLatencyFlow(options.latencyFlowId, {
-          targetWorkspaceId: workspaceId,
-          targetSessionId: inFlightCreate.sessionId,
-        });
-        const pendingShellWrite = writeChatShellIntentForSession({
-          workspaceId,
-          sessionId: inFlightCreate.sessionId,
-        });
-        if (getSessionRecord(inFlightCreate.sessionId)) {
-          activateSession(inFlightCreate.sessionId);
-        }
-        cancelLatencyFlow(options.latencyFlowId, "session_create_reused_inflight", {
-          reusedSessionId: inFlightCreate.sessionId,
-          });
-        try {
-          const resolvedClientSessionId = await inFlightCreate.promise;
-          if (pendingShellWrite && getSessionRecord(resolvedClientSessionId)) {
-            activateSession(resolvedClientSessionId);
-          }
-          return resolvedClientSessionId;
-        } catch (error) {
-          let rolledBackShellIntent = false;
-          if (pendingShellWrite) {
-            rolledBackShellIntent = useWorkspaceUiStore.getState().rollbackShellIntent({
-              workspaceId: pendingShellWrite.shellWorkspaceId,
-              expectedIntent: pendingShellWrite.currentIntent,
-              expectedEpoch: pendingShellWrite.epoch,
-              rollbackIntent: pendingShellWrite.previousIntent,
-            }).rolledBack;
-          }
-          if (
-            rolledBackShellIntent
-            && useSessionSelectionStore.getState().activeSessionId === inFlightCreate.sessionId
-          ) {
-            if (previousActiveSessionId) {
-              activateSession(previousActiveSessionId);
-            } else {
-              useSessionSelectionStore.getState().setActiveSessionId(null);
-            }
-          }
-          throw error;
-        }
+      const reuse = await reuseInFlightSessionCreate({
+        workspaceId,
+        agentKind: options.agentKind,
+        modelId: options.modelId,
+        latencyFlowId: options.latencyFlowId,
+        previousActiveSessionId,
+      }, { activateSession });
+      if (reuse.reused) {
+        return reuse.clientSessionId;
       }
     }
 
@@ -428,7 +388,15 @@ export function useSessionCreationActions() {
         cleanupCreateFailure(error);
         // The missing-worktree composer panel owns that condition — no toast.
         if (!isWorkspaceDirectoryMissingError(error)) {
-          showToast(formatSessionCreateFailureMessage(error), "error");
+          // This path had a prompt, so the thing the user lost is the message,
+          // not just the chat — say which, and where the draft went. No retry:
+          // the composer still holds the text, and re-sending from a toast
+          // would race the user typing into it.
+          showErrorToast({
+            headline: "Message not sent",
+            consequence: "No chat was opened. Your message is still in the composer.",
+            cause: formatSessionCreateCause(error),
+          });
         }
       }).finally(cleanupInFlight);
       return pendingSessionId;
@@ -466,6 +434,7 @@ export function useSessionCreationActions() {
     cloudClient,
     promptSession,
     removeWorkspaceSessionRecord,
+    showErrorToast,
     showToast,
     telemetry,
     upsertWorkspaceSessionRecord,

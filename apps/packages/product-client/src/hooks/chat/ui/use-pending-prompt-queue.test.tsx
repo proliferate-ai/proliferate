@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   deletePendingPrompt: vi.fn(),
   dismissPrompt: vi.fn(),
   reorderPendingPrompts: vi.fn(),
-  showToast: vi.fn(),
+  showErrorToast: vi.fn(),
   steerPendingPrompt: vi.fn(),
 }));
 
@@ -59,8 +59,9 @@ vi.mock("#product/stores/sessions/session-directory-store", () => ({
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
-  useToastStore: (selector: (state: { show: (message: string) => void }) => unknown) =>
-    selector({ show: mocks.showToast }),
+  useToastStore: (
+    selector: (state: { showError: (input: unknown) => void }) => unknown,
+  ) => selector({ showError: mocks.showErrorToast }),
 }));
 
 function prompt(
@@ -101,7 +102,7 @@ describe("usePendingPromptQueue", () => {
     mocks.deletePendingPrompt.mockReset();
     mocks.dismissPrompt.mockReset();
     mocks.reorderPendingPrompts.mockReset().mockResolvedValue(undefined);
-    mocks.showToast.mockReset();
+    mocks.showErrorToast.mockReset();
     mocks.steerPendingPrompt.mockReset().mockResolvedValue(undefined);
   });
 
@@ -194,23 +195,52 @@ describe("usePendingPromptQueue", () => {
     expect(rendered.result.current.queueMutationInFlight).toBe(false);
   });
 
-  it("shows failures and releases the shared mutation lock", async () => {
+  it("reports failures as an outcome plus a cause, never one concatenated line", async () => {
     mocks.steerPendingPrompt.mockRejectedValueOnce(new Error("steer conflict"));
     const rendered = renderHook(() => usePendingPromptQueue());
 
     act(() => rendered.result.current.onSteer(rendered.result.current.rows[0]!));
     await waitFor(() => expect(rendered.result.current.queueMutationInFlight).toBe(false));
-    expect(mocks.showToast).toHaveBeenCalledWith(
-      "Failed to send queued message next: steer conflict",
-    );
+    // The headline stays a written line and the exception stays in `cause`, so
+    // no width of toast can clip "steer conflict" into the sentence a person
+    // reads. That is the bug this shape exists to make unwritable.
+    const steerCall = mocks.showErrorToast.mock.calls[0]![0] as {
+      headline: string;
+      consequence: string;
+      cause: string;
+    };
+    expect(steerCall.headline).toBe("Message not sent next");
+    expect(steerCall.headline).not.toContain("steer conflict");
+    expect(steerCall.consequence).toBe("It is still queued in its original position.");
+    expect(steerCall.cause).toBe("steer conflict");
 
     mocks.reorderPendingPrompts.mockRejectedValueOnce(new Error("queue changed"));
     act(() => rendered.result.current.onReorder(0, 1));
     await waitFor(() => expect(rendered.result.current.queueMutationInFlight).toBe(false));
-    expect(mocks.showToast).toHaveBeenCalledWith(
-      "Failed to reorder queued messages: queue changed",
-    );
+    const reorderCall = mocks.showErrorToast.mock.calls[1]![0] as {
+      headline: string;
+      cause: string;
+    };
+    expect(reorderCall.headline).toBe("Queue order not changed");
+    expect(reorderCall.cause).toBe("queue changed");
     expect(rendered.result.current.rows.map((row) => row.seq)).toEqual([1, 2]);
+  });
+
+  it("offers a retry that re-runs the attempt that failed", async () => {
+    mocks.steerPendingPrompt.mockRejectedValueOnce(new Error("steer conflict"));
+    const rendered = renderHook(() => usePendingPromptQueue());
+
+    act(() => rendered.result.current.onSteer(rendered.result.current.rows[0]!));
+    await waitFor(() => expect(rendered.result.current.queueMutationInFlight).toBe(false));
+    expect(mocks.steerPendingPrompt).toHaveBeenCalledTimes(1);
+
+    const { retry } = mocks.showErrorToast.mock.calls[0]![0] as { retry: () => void };
+    await act(async () => {
+      retry();
+    });
+
+    expect(mocks.steerPendingPrompt).toHaveBeenCalledTimes(2);
+    expect(mocks.steerPendingPrompt).toHaveBeenLastCalledWith("session-1", 1);
   });
 
   it("edits a runtime prompt without requiring promptId", () => {
