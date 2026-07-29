@@ -2,11 +2,9 @@ import { Suspense, lazy } from "react"
 import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
-import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog"
-import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter"
 import { ToastHost } from "@proliferate/ui/patterns/ToastHost"
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import { useSupportModalStore } from "#product/stores/support/support-modal-store"
-import { useAutoUpdateDownload } from "#product/hooks/updates/lifecycle/use-auto-update-download"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
@@ -22,6 +20,15 @@ import type { ProductRoutesComponent } from "#product/ProductClient"
 // eagerly pulls the authenticated-only chunks (editor/terminal/etc.).
 const AuthenticatedProductClient = lazy(
   () => import("#product/app/AuthenticatedProductClient"),
+)
+
+// Desktop-only: the app-update flow (restart dialog, phase toasts, automatic
+// download). Lazy so the public shell — and /login, which has a fail-closed
+// first-load JS budget — never pulls the updater state machine.
+const DesktopUpdateSurface = lazy(() =>
+  import("#product/components/feedback/DesktopUpdateSurface").then((m) => ({
+    default: m.DesktopUpdateSurface,
+  })),
 )
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
@@ -126,7 +133,6 @@ export function App({ RoutesComponent }: AppProps) {
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
-        <UpdateRestartDialog />
         <WorktreeCleanupPolicySyncGate />
         <RoutesComponent>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
@@ -259,20 +265,30 @@ export function App({ RoutesComponent }: AppProps) {
             goes through it, so the three weights, the visible cap and the
             details destination are configured in exactly one place. */}
         <ToastHost onReportBug={openSupportFeedback} />
-        <UpdateToastPresenter />
-        <AutoUpdateDownloadMount />
+        <AppUpdateSurface />
       </ShortcutRevealProvider>
   )
 }
 
 /**
- * Starts the download for an available update when automatic updates are on
- * (the default). Mounted as a component so the hook lives inside the tree
- * without giving `App` another effect to read past.
+ * The whole app-update surface — the restart dialog, the phase toasts, and the
+ * automatic download — behind the one condition that makes any of it reachable:
+ * a host that actually has an updater. On Web there is none, so the browser
+ * never loads a state machine it cannot enter, and /login (which has a
+ * fail-closed first-load JS budget) never pays for the desktop updater at all.
  */
-function AutoUpdateDownloadMount() {
-  useAutoUpdateDownload()
-  return null
+function AppUpdateSurface() {
+  const hasUpdater = Boolean(useProductHost().desktop?.updater)
+
+  if (!hasUpdater) {
+    return null
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <DesktopUpdateSurface />
+    </Suspense>
+  )
 }
 
 function WorktreeCleanupPolicySyncGate() {
