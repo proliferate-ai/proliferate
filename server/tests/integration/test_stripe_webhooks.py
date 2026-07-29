@@ -1125,6 +1125,8 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
         "id": "in_org_sync",
         "customer": "cus_org_sync",
         "subscription": None,
+        # Renewals are what mint the period allowance (W-F2).
+        "billing_reason": "subscription_cycle",
         "parent": {
             "subscription_details": {
                 "subscription": "sub_org_sync",

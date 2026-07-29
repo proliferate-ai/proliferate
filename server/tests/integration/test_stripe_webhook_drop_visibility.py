@@ -515,6 +515,9 @@ async def test_invoice_grant_gate_closed_level_follows_pro_pricing(
                 "customer": "cus_gate_closed",
                 "status": "paid",
                 "paid": True,
+                # A renewal, so the period-boundary check passes and this test
+                # keeps exercising the grant gate rather than the boundary drop.
+                "billing_reason": "subscription_cycle",
                 "subscription": "sub_gate_closed" if pro_billing_enabled else None,
                 "metadata": {"billing_subject_id": str(subject_id)},
                 "lines": {"data": [{"id": "il_gate_closed", "price": {"id": line_price_id}}]},

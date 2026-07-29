@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_SEAT_POOL
 from proliferate.constants.billing import (
+    BILLING_PERIOD_GRANT_INVOICE_REASONS,
     BILLING_PRICE_CLASS_PRO,
     PRO_PERIOD_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
@@ -524,6 +525,20 @@ async def _handle_invoice_paid(
         webhook_drops.report_invoice_subject_unresolved(
             event_id, invoice, invoice_id, subscription_id
         )
+        return notifications
+    # Only a period boundary mints the period's allowance. A mid-period seat change
+    # also produces a paid invoice with a cloud line, but those seats are granted
+    # pro rata by the seat-adjustment pass, so granting here too hands out a second
+    # full seat-month (W-F2). Before the grant gate, so "gate closed" keeps meaning
+    # a boundary invoice that paid and produced no hours.
+    billing_reason = invoice.get("billing_reason")
+    if billing_reason not in BILLING_PERIOD_GRANT_INVOICE_REASONS:
+        webhook_drops.report_invoice_not_period_boundary(
+            event_id, invoice, invoice_id, subject, billing_reason
+        )
+        # Dunning recovery still runs: a past-due customer whose retry finally
+        # settles clears their hold on whatever invoice settled it.
+        await _run_billing_store_write(clear_payment_failed_holds, billing_subject_id=subject.id)
         return notifications
     if (
         settings.pro_billing_enabled

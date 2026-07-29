@@ -20,6 +20,16 @@ BILLING_PRICE_CLASS_PRO = "pro"
 BILLING_PRICE_CLASS_LEGACY_CLOUD = "legacy_cloud"
 BILLING_PRICE_CLASS_UNKNOWN = "unknown"
 
+# Stripe ``invoice.billing_reason`` values that mean "a new subscription period
+# began", and so are the only ones that may mint the period's seat allowance.
+# A mid-period seat change also produces a PAID invoice carrying a cloud
+# subscription line, but its allowance is prorated and issued separately by the
+# seat-adjustment pass (``PRO_SEAT_PRORATION_GRANT_TYPE``) — granting a second,
+# full-period allowance for it is a double allocation. See W-F2.
+BILLING_PERIOD_GRANT_INVOICE_REASONS = frozenset(
+    {"subscription_create", "subscription_cycle"},
+)
+
 PRO_SEAT_MONTHLY_AMOUNT_CENTS = 2000
 # Each active billed seat ($20/mo) allocates a $5 managed-LLM contribution and a
 # $15-equivalent compute contribution into two *separate* shared org pools. The
