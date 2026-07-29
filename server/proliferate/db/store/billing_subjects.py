@@ -129,14 +129,18 @@ async def ensure_free_included_grant(
     db: AsyncSession,
     user_id: UUID,
     *,
-    billing_subject_id: UUID | None = None,
+    billing_subject_id: UUID,
 ) -> bool:
     """Mint (or re-home) a user's one free-included grant on the subject that PAYS.
 
-    ``billing_subject_id`` is the paying subject resolved by the caller — the
-    org subject for a user acting under a membership, the personal subject for an
-    org-less user. Passing ``None`` keeps the historical personal-subject
-    behaviour for callers that have no owner context.
+    ``billing_subject_id`` is REQUIRED and must be the paying subject as resolved
+    by ``resolve_billing_subject_id_for_user`` — the org subject for a user acting
+    under a membership, personal only for a user who genuinely pays personally.
+    It has no default on purpose: this function re-homes an existing grant onto
+    whatever subject it is handed, so a personal-subject default would let a
+    caller with no owner context silently move an org-paying user's allowance
+    back onto a subject that never pays — reintroducing W-F1 through the door it
+    was closed at.
 
     Law W1 ("the org always pays") applies to money IN, not just money out: a
     grant minted on the personal subject while spend drains the org subject is
@@ -148,9 +152,6 @@ async def ensure_free_included_grant(
     must never re-grant hours a user already spent, and must never strand hours
     they have not.
     """
-    if billing_subject_id is None:
-        subject = await ensure_personal_billing_subject(db, user_id)
-        billing_subject_id = subject.id
     now = utcnow()
     source_ref = f"{FREE_INCLUDED_GRANT_TYPE}:{user_id}"
     result = await db.execute(

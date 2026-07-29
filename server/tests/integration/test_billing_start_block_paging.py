@@ -57,8 +57,8 @@ async def _create_user(db_session: AsyncSession) -> uuid.UUID:
 async def _seed_credits_exhausted_user(db_session: AsyncSession) -> uuid.UUID:
     """A free-plan owner whose included sandbox hours are fully consumed."""
     user_id = await _create_user(db_session)
-    await ensure_personal_billing_subject(db_session, user_id)
-    await ensure_free_included_grant(db_session, user_id)
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    await ensure_free_included_grant(db_session, user_id, billing_subject_id=subject.id)
     # Burn more than the (small) included grant so the subject is over quota
     # with no paid overage -> credit_reason == credits_exhausted.
     await seed_usage_segment(db_session, user_id=user_id, hours=5.0)

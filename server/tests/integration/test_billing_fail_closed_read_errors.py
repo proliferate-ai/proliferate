@@ -71,7 +71,7 @@ async def _seed_credits_exhausted_user(db_session: AsyncSession) -> tuple[uuid.U
     """A free-plan owner whose included sandbox hours are fully consumed."""
     user_id = await _create_user(db_session)
     subject = await ensure_personal_billing_subject(db_session, user_id)
-    await ensure_free_included_grant(db_session, user_id)
+    await ensure_free_included_grant(db_session, user_id, billing_subject_id=subject.id)
     # Burn well past the (1h) included grant so the subject is over quota with no
     # paid overage -> credit_reason == credits_exhausted.
     await seed_usage_segment(db_session, user_id=user_id, hours=5.0)
@@ -130,7 +130,7 @@ async def test_hold_release_allows_next_call_without_denial_window(
     monkeypatch.setattr(settings, "pro_billing_enabled", False)
     user_id = await _create_user(db_session)
     subject = await ensure_personal_billing_subject(db_session, user_id)
-    await ensure_free_included_grant(db_session, user_id)
+    await ensure_free_included_grant(db_session, user_id, billing_subject_id=subject.id)
     hold = BillingHold(
         billing_subject_id=subject.id,
         kind=BILLING_HOLD_KIND_ADMIN_HOLD,
@@ -553,8 +553,8 @@ async def test_unavailable_denial_is_not_sticky_next_healthy_read_allows(
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(authorization_module, "report_critical", lambda *_a, **_k: None)
     user_id = await _create_user(db_session)
-    await ensure_personal_billing_subject(db_session, user_id)
-    await ensure_free_included_grant(db_session, user_id)
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    await ensure_free_included_grant(db_session, user_id, billing_subject_id=subject.id)
     await db_session.commit()
 
     healthy_snapshot = authorization_module.get_billing_snapshot_for_subject_in_session

@@ -88,11 +88,11 @@ async def resolve_payer_organization_id_for_user(
 
     Law W1 says the org always pays, with one exception: a user already holding a
     healthy subscription on their PERSONAL subject. Subscriptions are still sold
-    personally (org subscriptions need PRO, off at launch — W-F2/W-F3), so for
-    them personal genuinely is the payer. That exception belongs HERE, in the one
-    resolver both reads and spend call; applying it to reads alone split-brained
-    exactly the paying customers (UI said ``plan: cloud`` while the start gate
-    resolved the org and refused every start).
+    personally (org subscriptions need PRO, off at launch — W-F2/W-F3), so for them
+    personal genuinely is the payer. That exception belongs HERE, in the one resolver
+    both reads and spend call; applying it to reads alone split-brained exactly the
+    paying customers (UI said ``plan: cloud`` while the gate resolved the org and
+    refused every start). Answers who pays, NOT which org usage is attributed to.
     """
     organization_id = await resolve_organization_id_for_user(db, user_id)
     if organization_id is None:
@@ -109,9 +109,9 @@ async def resolve_billing_subject_id_for_user(
     """The subject that pays for a user's compute.
 
     An org payer bills the org's subject (org Stripe customer + org grant pool);
-    anyone ``resolve_payer_organization_id_for_user`` leaves personal bills their
-    own. The LLM track has no personal branch anymore (every gateway enrollment is
-    minted against an org subject), so this only governs compute attribution.
+    anyone ``resolve_payer_organization_id_for_user`` leaves personal bills their own.
+    The LLM track has no personal branch anymore (every gateway enrollment is minted
+    against an org subject), so this only governs compute.
     """
     organization_id = await resolve_payer_organization_id_for_user(db, user_id)
     if organization_id is not None:
@@ -502,16 +502,16 @@ async def ensure_sandbox_usage_started(
         owner_user_id = actor_user_id
     else:
         raise RuntimeError("Usage segment requires a runtime environment, workspace, or user.")
-    # One lookup fixes both the enforcement/attribution scope and who pays, so
-    # ``organization_id`` and ``billing_subject_id`` can never disagree: an owner
-    # under an org bills the org subject (org Stripe customer + org grants),
-    # matching the LLM track, and anyone the payer resolver leaves personal keeps
-    # the subject resolved above. It has to be the payer resolver and not the plain
-    # membership lookup — the segment must bill whoever the start gate and the read
-    # model call the payer, or the reconciler chases a pool that was never charged.
-    organization_id = await resolve_payer_organization_id_for_user(db, owner_user_id)
-    if organization_id is not None:
-        org_subject = await ensure_organization_billing_subject(db, organization_id)
+    # Two questions, two lookups. ``organization_id`` is the enforcement SCOPE, from
+    # plain membership: the org-scoped sums (``compute_usage_seconds_in_window_for_org``,
+    # the usage-by-user view) filter on it so an org sees every member's compute
+    # whatever subject the segment is invoiced to — stamping the payer would hide a
+    # personally-subscribed member's usage from their org's caps. Who PAYS is separate
+    # and must match the gate and read model, else the reconciler chases a dry pool.
+    organization_id = await resolve_organization_id_for_user(db, owner_user_id)
+    payer_organization_id = await resolve_payer_organization_id_for_user(db, owner_user_id)
+    if payer_organization_id is not None:
+        org_subject = await ensure_organization_billing_subject(db, payer_organization_id)
         billing_subject_id = org_subject.id
     return await create_usage_segment(
         db,

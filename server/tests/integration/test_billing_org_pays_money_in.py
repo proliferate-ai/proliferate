@@ -170,7 +170,7 @@ async def test_joining_first_org_moves_the_existing_grant_and_preserves_balance(
     """Re-homing MOVES the grant: partially-spent hours are neither re-granted nor lost."""
     user = await _create_user(db_session)
     personal = await ensure_personal_billing_subject(db_session, user.id)
-    await ensure_free_included_grant(db_session, user.id)
+    await ensure_free_included_grant(db_session, user.id, billing_subject_id=personal.id)
     grant = await _free_grant(db_session, user.id)
     assert grant is not None
     assert grant.billing_subject_id == personal.id
@@ -451,8 +451,8 @@ async def test_grant_expiry_and_effective_window_survive_rehoming(
 ) -> None:
     """Re-homing changes the pool and nothing else about the allowance."""
     user = await _create_user(db_session)
-    await ensure_personal_billing_subject(db_session, user.id)
-    await ensure_free_included_grant(db_session, user.id)
+    personal = await ensure_personal_billing_subject(db_session, user.id)
+    await ensure_free_included_grant(db_session, user.id, billing_subject_id=personal.id)
     before = await _free_grant(db_session, user.id)
     assert before is not None
     effective_at = before.effective_at

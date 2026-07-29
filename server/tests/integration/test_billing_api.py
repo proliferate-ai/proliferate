@@ -164,9 +164,18 @@ async def test_ensure_free_included_grant_is_concurrent_safe(
     user_id = uuid.uuid4()
     session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
 
+    # The payer is resolved once up front, as production does: the grant helper
+    # takes the paying subject as a required argument so it can never re-home an
+    # allowance onto a subject that does not pay.
+    async with session_factory() as session:
+        subject_id = (await ensure_personal_billing_subject(session, user_id)).id
+        await session.commit()
+
     async def _create_grant() -> bool:
         async with session_factory() as session:
-            created = await ensure_free_included_grant(session, user_id)
+            created = await ensure_free_included_grant(
+                session, user_id, billing_subject_id=subject_id
+            )
             await session.commit()
             return created
 
@@ -308,7 +317,7 @@ class TestBillingApi:
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
         subject = await _payer_subject(db_session, user_id)
-        await ensure_free_included_grant(db_session, user_id)
+        await ensure_free_included_grant(db_session, user_id, billing_subject_id=subject.id)
         now = datetime.now(UTC)
         await ensure_billing_grant(
             db_session,
