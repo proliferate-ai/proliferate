@@ -28,7 +28,9 @@ const DOT_TONE_CLASS: Record<ToastTone, string> = {
   neutral: "bg-muted-foreground",
   success: "bg-success",
   info: "bg-info",
-  warning: "bg-warning",
+  // Not `bg-warning`: that role is a pale surface tint, invisible as a 6px dot
+  // on a light card. The tone's ink role is what the other four dots use.
+  warning: "bg-warning-foreground",
   destructive: "bg-destructive",
 };
 

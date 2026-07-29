@@ -123,6 +123,11 @@ export function UpdateToastPresenter() {
       dismissToast(RESTART_COUNTDOWN_TOAST_ID);
       return;
     }
+    // The countdown supersedes the ready announcement. Both are about the same
+    // update and both offer Restart, but once the clock is running the ready
+    // toast's choice is already made — leaving it up asks the same question
+    // twice and lets "Later" contradict a restart that is seconds away.
+    dismissToast(UPDATE_TOAST_ID);
     const seconds = Math.round(RESTART_COUNTDOWN_MS / 1000);
     showToast({
       id: RESTART_COUNTDOWN_TOAST_ID,
@@ -175,12 +180,19 @@ export function UpdateToastPresenter() {
       return;
     }
 
+    // Two things outrank the ready announcement, and for the same reason: the
+    // dialog and the countdown have each already taken the decision it asks
+    // for. Suppressed here as well as dismissed above, or the next store update
+    // re-raises it underneath whichever one is showing.
+    const readyIsSuperseded =
+      phase === "ready" && (restartPromptOpen || restartCountdownStartedAt !== null);
+
     if (
       !UPDATE_TOAST_PHASES.has(phase)
       || dismissedKeyRef.current === dismissalKey
-      || (phase === "ready" && restartPromptOpen)
+      || readyIsSuperseded
     ) {
-      if (phase === "ready" && restartPromptOpen) {
+      if (readyIsSuperseded) {
         dismissToast(UPDATE_TOAST_ID);
       }
       if (!UPDATE_TOAST_PHASES.has(phase) && phase !== "error") {
@@ -285,6 +297,7 @@ export function UpdateToastPresenter() {
     openExternal,
     openRestartPrompt,
     phase,
+    restartCountdownStartedAt,
     restartNow,
     restartPromptOpen,
     retryDownload,
