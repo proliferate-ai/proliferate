@@ -194,6 +194,33 @@ describe("showToast — details destinations", () => {
 
     expect(screen.queryByRole("button", { name: "Details" })).toBeNull();
   });
+
+  it("does not load the modal until Details is pressed", async () => {
+    // /login mounts this host and can never open the modal, and the /login
+    // first-load JS budget is a fail-closed gate. So the modal — and the
+    // ModalShell and Button it pulls in — must stay out of the initial chunk.
+    const importSpy = vi.fn();
+    vi.doMock("../src/patterns/ToastDetailsModal", async () => {
+      importSpy();
+      return await vi.importActual("../src/patterns/ToastDetailsModal");
+    });
+    vi.resetModules();
+    const { ToastHost: FreshToastHost } = await import("../src/patterns/ToastHost");
+
+    render(<FreshToastHost />);
+    expect(importSpy).not.toHaveBeenCalled();
+
+    const { openToastDetails } = await import("../src/utils/toast-details-store");
+    act(() => {
+      openToastDetails({ title: "Provisioning failed", payload: "boom" });
+    });
+    await waitFor(() => {
+      expect(importSpy).toHaveBeenCalled();
+    });
+
+    vi.doUnmock("../src/patterns/ToastDetailsModal");
+    vi.resetModules();
+  });
 });
 
 describe("showToast — hard limits", () => {

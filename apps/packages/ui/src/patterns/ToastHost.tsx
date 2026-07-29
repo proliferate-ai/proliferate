@@ -1,11 +1,21 @@
-import { useSyncExternalStore } from "react";
+import { lazy, Suspense, useSyncExternalStore } from "react";
 import { Toaster } from "../primitives/Sonner";
-import { ToastDetailsModal } from "./ToastDetailsModal";
 import {
   closeToastDetails,
   readToastDetails,
   subscribeToastDetails,
 } from "../utils/toast-details-store";
+
+/**
+ * Loaded on the click, not on the load. The modal cannot appear until someone
+ * presses Details, so the shell it drags in — `ModalShell` and `Button` — has
+ * no business in the first paint; /login in particular renders this host and
+ * can never open it. `Suspense fallback={null}` is honest here: there is
+ * nothing to show while the chunk arrives, because nothing was open yet.
+ */
+const ToastDetailsModal = lazy(() =>
+  import("./ToastDetailsModal").then((module) => ({ default: module.ToastDetailsModal })),
+);
 
 /**
  * The single toast mount: the kit `Toaster` plus the one details modal a
@@ -31,11 +41,15 @@ export function ToastHost({
   return (
     <>
       <Toaster />
-      <ToastDetailsModal
-        content={details}
-        onClose={closeToastDetails}
-        onReportBug={onReportBug}
-      />
+      {details === null ? null : (
+        <Suspense fallback={null}>
+          <ToastDetailsModal
+            content={details}
+            onClose={closeToastDetails}
+            onReportBug={onReportBug}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
