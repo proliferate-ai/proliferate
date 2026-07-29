@@ -36,13 +36,14 @@ from typing import Any
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.auth.authorization import OwnerSelection
 from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     FREE_INCLUDED_GRANT_TYPE,
+    REFILL_10H_GRANT_TYPE,
 )
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
@@ -58,8 +59,10 @@ from proliferate.db.store.billing_subjects import (
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )
+from proliferate.db import engine as engine_module
 from proliferate.permissions import _default_unscoped_selection_to_payer
 from proliferate.server.billing import checkout as checkout_module
+from proliferate.server.billing import stripe_webhooks, webhook_drops
 from proliferate.server.billing.authorization import assert_cloud_sandbox_resume_allowed
 from proliferate.server.billing.snapshots import (
     get_billing_snapshot_for_request,
@@ -354,7 +357,7 @@ async def test_refill_checkout_targets_the_paying_org(
     org_id = await _add_org_membership(db_session, user.id)
     await db_session.commit()
 
-    selection = await checkout_module._resolve_refill_owner_selection(db_session, user, None)
+    selection = await checkout_module._resolve_payer_owner_selection(db_session, user, None)
     assert selection.owner_scope == "organization"
     assert selection.organization_id == org_id
 
@@ -368,7 +371,7 @@ async def test_refill_checkout_stays_personal_for_org_less_user(
     user = await _create_user(db_session)
     await db_session.commit()
 
-    selection = await checkout_module._resolve_refill_owner_selection(db_session, user, None)
+    selection = await checkout_module._resolve_payer_owner_selection(db_session, user, None)
     assert selection.owner_scope == "personal"
     assert selection.organization_id is None
 
@@ -396,20 +399,23 @@ async def test_unscoped_read_resolves_the_paying_org_not_personal(
         db_session,
         user,
         OwnerSelection(),
-        explicitly_scoped=False,
     )
     assert unscoped.owner_scope == "organization"
     assert unscoped.organization_id == org_id
 
-    # An explicit personal request is honored: it is a deliberate choice, not an
-    # absent selection, and org-less/self-hosted deployments really do bill it.
+    # An EXPLICIT personal request redirects to the payer too. That is not an
+    # overreach: the shipped SDK hardcodes ``ownerScope: "personal"`` on every
+    # owner-less billing call (``cloud/sdk/src/client/billing.ts``), so honoring
+    # it literally means the sidebar and mobile settings read an empty pool on
+    # builds already in users' hands. An org member has no personal pool to
+    # inspect under org-everywhere, so naming it can only return zeros.
     explicit_personal = await _default_unscoped_selection_to_payer(
         db_session,
         user,
         OwnerSelection(owner_scope="personal"),
-        explicitly_scoped=True,
     )
-    assert explicit_personal.owner_scope == "personal"
+    assert explicit_personal.owner_scope == "organization"
+    assert explicit_personal.organization_id == org_id
 
     snapshot = await get_billing_snapshot_for_subject_in_session(
         db_session,
@@ -424,18 +430,18 @@ async def test_unscoped_read_stays_personal_for_an_org_less_user(
     db_session: AsyncSession,
     test_engine: Any,
 ) -> None:
-    """An org-less user has no org to redirect to, so personal stands."""
+    """An org-less user has no org to redirect to, so personal stands.
+
+    Their personal subject really is the payer, so the redirect must be a no-op
+    rather than an error — this is the self-hosted and single-user shape.
+    """
     user = await _create_user(db_session)
     await db_session.commit()
 
-    selection = await _default_unscoped_selection_to_payer(
-        db_session,
-        user,
-        OwnerSelection(),
-        explicitly_scoped=False,
-    )
-    assert selection.owner_scope == "personal"
-    assert selection.organization_id is None
+    for selection_in in (OwnerSelection(), OwnerSelection(owner_scope="personal")):
+        selection = await _default_unscoped_selection_to_payer(db_session, user, selection_in)
+        assert selection.owner_scope == "personal"
+        assert selection.organization_id is None
 
 
 @pytest.mark.asyncio
@@ -463,6 +469,81 @@ async def test_grant_expiry_and_effective_window_survive_rehoming(
     assert after.effective_at == effective_at
     assert after.hours_granted == hours_granted
     assert after.expires_at == expires_at
+
+
+@pytest.mark.asyncio
+async def test_paid_org_refill_webhook_credits_the_org_pool(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The far end of money IN: a paid org refill must actually land as a grant.
+
+    Pointing refill checkout at the org (the fix above) is only half the flow.
+    ``_handle_checkout_session_completed`` dropped any session whose subject had
+    no ``user_id`` — which is EVERY org subject — so with checkout redirected the
+    org could be charged and receive nothing, the worst failure shape available.
+    ``user_id`` on a grant is a provenance stamp; consumption keys off
+    ``billing_subject_id``, so the subject alone is enough to credit.
+    """
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    monkeypatch.setattr(settings, "stripe_refill_10h_price_id", "price_refill_10h")
+
+    user = await _create_user(db_session)
+    org_id = await _add_org_membership(db_session, user.id)
+    org_subject = await ensure_organization_billing_subject(db_session, org_id)
+    org_subject.stripe_customer_id = "cus_org_paid_refill"
+    org_subject_id = org_subject.id
+    await db_session.commit()
+
+    async def fake_line_items(session_id: str) -> list[dict[str, object]]:
+        return [{"id": "li_refill", "price": {"id": "price_refill_10h"}}]
+
+    monkeypatch.setattr(
+        stripe_webhooks.stripe_billing,
+        "list_checkout_session_line_items",
+        fake_line_items,
+    )
+    # A dropped payment pages on-call, so assert nothing was reported rather than
+    # only that a grant exists.
+    paged: list[object] = []
+    monkeypatch.setattr(
+        webhook_drops,
+        "report_critical",
+        lambda error, **kwargs: paged.append(error),
+    )
+
+    await stripe_webhooks._handle_checkout_session_completed(
+        {
+            "id": "cs_org_paid_refill",
+            "mode": "payment",
+            "payment_status": "paid",
+            "customer": "cus_org_paid_refill",
+            "metadata": {"purpose": "refill_10h", "billing_subject_id": str(org_subject_id)},
+        },
+        event_id="evt_org_paid_refill",
+    )
+
+    grants = list(
+        (
+            await db_session.execute(
+                select(BillingGrant).where(
+                    BillingGrant.billing_subject_id == org_subject_id,
+                    BillingGrant.grant_type == REFILL_10H_GRANT_TYPE,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert paged == []
+    assert len(grants) == 1
+    assert grants[0].hours_granted == 10.0
+    assert grants[0].source_ref == "stripe:checkout:cs_org_paid_refill:refill_10h"
 
 
 @pytest.mark.asyncio

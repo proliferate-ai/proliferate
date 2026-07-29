@@ -190,7 +190,12 @@ def report_checkout_subject_unresolved(
     subject: BillingSubject | None,
 ) -> None:
     """``subject`` is the resolved billing subject, or ``None`` when the customer
-    could not be attributed at all; a subject without a user is also unusable."""
+    could not be attributed at all.
+
+    A subject with no ``user_id`` is NOT a drop: that is every ORG subject, and
+    the org is the subject that buys hours (W-F1). ``user_id`` on the resulting
+    grant is a provenance stamp; consumption keys off ``billing_subject_id``.
+    """
     subject_id = subject.id if subject is not None else None
     report_drop(
         DropReason.CHECKOUT_SUBJECT_UNRESOLVED,
