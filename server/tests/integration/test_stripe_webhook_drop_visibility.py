@@ -543,6 +543,91 @@ async def test_invoice_grant_gate_closed_level_follows_pro_pricing(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("billing_reason", "recognized"),
+    [
+        # The one money-bearing drop that is *correct*: a mid-period seat change
+        # pays, carries a cloud line, and is granted pro rata elsewhere (W-F2).
+        ("subscription_update", True),
+        # A reason Stripe adds later. Skipping the grant is now a guess, so it
+        # has to be loud rather than share the expected path.
+        ("subscription_extended", False),
+        # The highest-risk shape: an API version that stops sending the field at
+        # all would otherwise zero the allowance for every renewal of every
+        # paying org. Prod's account version already omits other invoice
+        # top-level fields (``paid``, ``current_period_start``), so this is not
+        # hypothetical.
+        (None, False),
+    ],
+    ids=["recognized", "unrecognized", "missing"],
+)
+async def test_invoice_not_period_boundary_level_follows_reason_recognition(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    paged: list[dict[str, object]],
+    billing_reason: str | None,
+    recognized: bool,
+) -> None:
+    """A paid cloud invoice that is not a period boundary mints nothing, and the
+    level says whether that silence is understood. Recognized non-period reason
+    -> info, no page. Unrecognized or absent -> error + page, because the
+    failure direction of this gate is a renewal that collects money and grants
+    zero hours."""
+    _use_test_engine(monkeypatch, test_engine)
+    monkeypatch.setattr(settings, "pro_billing_enabled", True)
+    monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+    monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "")
+
+    user_id = uuid.uuid4()
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_not_boundary"
+    subject_id = subject.id
+    await db_session.commit()
+
+    invoice: dict[str, object] = {
+        "id": "in_not_boundary",
+        "customer": "cus_not_boundary",
+        "status": "paid",
+        "paid": True,
+        # No subscription id anywhere: the drop is decided before the grant gate,
+        # so the handler never needs to retrieve one from Stripe.
+        "subscription": None,
+        "metadata": {"billing_subject_id": str(subject_id)},
+        "lines": {"data": [{"id": "il_not_boundary", "price": {"id": "price_pro"}}]},
+    }
+    if billing_reason is not None:
+        invoice["billing_reason"] = billing_reason
+
+    with caplog.at_level(logging.INFO, logger=DROP_LOGGER):
+        notifications = await stripe_webhooks._handle_invoice_paid(
+            invoice, event_id="evt_not_boundary"
+        )
+
+    assert notifications == ()
+    assert await _grants(db_session, subject_id) == []
+
+    record = _assert_drop_logged(
+        caplog,
+        drop_reason=DropReason.INVOICE_NOT_PERIOD_BOUNDARY,
+        event_id="evt_not_boundary",
+        level=logging.INFO if recognized else logging.ERROR,
+    )
+    assert record.invoice_reason == billing_reason  # type: ignore[attr-defined]
+    assert record.reason_recognized is recognized  # type: ignore[attr-defined]
+    assert record.paid is True  # type: ignore[attr-defined]
+    assert len(paged) == (0 if recognized else 1)
+    # The gate must never be confused with a boundary invoice that paid and
+    # produced no hours -- that is a different drop with a different remedy.
+    assert not any(
+        getattr(other, "drop_reason", None) == DropReason.INVOICE_GRANT_GATE_CLOSED
+        for other in _drop_records(caplog)
+    )
+
+
+@pytest.mark.asyncio
 async def test_dropped_event_is_still_marked_processed(
     db_session: AsyncSession,
     test_engine,  # type: ignore[no-untyped-def]

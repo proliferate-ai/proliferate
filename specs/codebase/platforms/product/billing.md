@@ -202,9 +202,14 @@ The $5/seat managed-LLM pool allocation (`PRO_LLM_ALLOCATION_USD_PER_SEAT`,
 and the $15/seat compute allocation
 ([`pricing.py`](../../../../server/proliferate/server/billing/pricing.py)'s
 `compute_hours_per_seat`) grant once per paid period on `invoice.paid`,
-keyed by `(subscription_id, period_start)` — already reflecting the seat
-count Stripe billed that period; seat-adjustment grants cover only the
-prorated remainder of seats added mid-period.
+keyed by `(subscription_id, period_start)` — reflecting the seat count
+reconciled for that period. Only the *compute* allocation is topped up by
+seat-adjustment grants for seats added mid-period; the LLM pool allocation
+inserts `on_conflict_do_nothing` on its period key and the seat-adjustment
+pass issues no LLM grant, so a seat added mid-period receives prorated
+compute hours and no LLM allocation until the next renewal. That gap
+predates the M2a boundary gate (the period grant never topped up either) and
+is tracked, not fixed, here.
 
 ## Team checkout
 
@@ -253,6 +258,33 @@ through `free_cloud_allocation` on the linked GitHub identity, not the
 account — a second account on the same GitHub identity gets no grant (see
 [Current gaps](#current-gaps) for live-proof status). `ensure_billing_grant_record`
 upserts idempotently on `source_ref`.
+
+**M2a — only a period boundary mints the period allowance.** A `source_ref`
+keyed on `period_start` is idempotent per period, but `invoice.paid` fires
+for more than renewals: a mid-period seat change raises its own paid invoice
+carrying a cloud subscription line with the period *unchanged*
+(`billing_reason: subscription_update`, confirmed against live Stripe
+2026-07-28). That collided with the renewal's own `source_ref`, and because
+the handler tops the existing row up, the larger seat count re-granted a
+full seat-month for seats the seat-adjustment pass already covers pro rata.
+So `_handle_invoice_paid` now grants only for
+`BILLING_PERIOD_GRANT_INVOICE_REASONS` (`subscription_create`,
+`subscription_cycle`) and drops anything else *before* the grant gate, so
+"gate closed" keeps meaning a boundary invoice that paid and produced no
+hours. A non-boundary invoice still clears a payment-failed hold: dunning
+recovery settles on whatever invoice finally pays. A reason that is neither
+a boundary reason nor a known non-period one — including the field being
+absent — pages rather than logging at info, because this gate's failure
+direction is a renewal that collects money and grants zero hours.
+
+**Invariant this creates:** the full-period grant is gated on
+`pro_billing_enabled` alone, but the prorated seat grant additionally
+requires `run_background_workers` AND `cloud_billing_mode != off` (it runs
+inside the reconciler's accounting pass). Before M2a the invoice top-up
+accidentally masked that asymmetry; now a deployment with Pro pricing on,
+the reconciler off, and seats added mid-period grants those seats *nothing*
+until renewal. Any deployment running `PRO_BILLING_ENABLED=true` must also
+run the billing reconciler.
 
 **M4 — overage exports only in-period, only with `overage_enabled`;
 pre-period usage drains grants but never bills.**

@@ -833,6 +833,10 @@ async def test_invoice_paid_uses_current_stripe_line_and_item_period_shapes(
             "id": "in_cloud",
             "customer": "cus_cloud",
             "subscription": None,
+            # A renewal: this test asserts the *pro-pricing* gate withholds the
+            # grant, so it must reach that gate rather than stopping at the
+            # period-boundary one, or it would stay green if pro pricing broke.
+            "billing_reason": "subscription_cycle",
             "parent": {
                 "subscription_details": {
                     "subscription": "sub_cloud",
@@ -1218,7 +1222,20 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
     assert updates == [2, 3]
     assert subscription.seat_quantity == 3
     assert len(grants) == 1
-    assert grants[0].hours_granted == 15.0  # 3 seats * 5 h/seat
+    # 3 seats * 5 h/seat. This is a *re-delivery of the same renewal invoice*
+    # after the seat count grew, which is why the top-up to a full 3-seat month
+    # is right here and is NOT the W-F2 double grant: re-processing a boundary
+    # invoice must converge on the allowance that boundary now owes, and
+    # ``top_up_existing=True`` is what repairs a grant first written from a
+    # stale seat count (a retry after a failed receipt re-enters this path).
+    #
+    # The W-F2 case is different in kind: a *mid-period seat change* raises its
+    # own invoice with ``billing_reason=subscription_update`` and an unchanged
+    # period, so it collided with this same period-keyed grant and topped it up
+    # to a full seat-month for seats the seat-adjustment pass already covers
+    # pro rata. That invoice no longer reaches here — see
+    # ``test_billing_invoice_period_boundary.py``.
+    assert grants[0].hours_granted == 15.0
 
 
 @pytest.mark.asyncio
@@ -1305,6 +1322,11 @@ async def test_invoice_failed_hold_blocks_until_invoice_paid_clears_it(
             "id": "in_paid_after_hold",
             "customer": "cus_payment_hold",
             "subscription": "sub_payment_hold",
+            # A renewal, so this keeps covering hold-clearing on the *boundary*
+            # path. Without it the invoice takes the non-boundary early return
+            # and the assertions below pass through that branch instead, leaving
+            # the boundary path's clear_payment_failed_holds call untested.
+            "billing_reason": "subscription_cycle",
             "metadata": {"billing_subject_id": str(subject_id)},
             "lines": {
                 "data": [

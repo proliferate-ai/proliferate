@@ -29,6 +29,23 @@ BILLING_PRICE_CLASS_UNKNOWN = "unknown"
 BILLING_PERIOD_GRANT_INVOICE_REASONS = frozenset(
     {"subscription_create", "subscription_cycle"},
 )
+# Reasons we affirmatively know do NOT open a period, so skipping the grant for
+# them is ordinary expected traffic. Kept as its own set rather than inferred as
+# "everything else": the failure direction of this gate is a paid invoice that
+# mints NOTHING, so an unrecognized reason — including a missing one — has to be
+# loud instead of silently sharing the expected path. Stripe adding a reason, or
+# an API version that stops sending the field, would otherwise zero out every
+# renewal for every paying org with only an info log to show for it.
+BILLING_NON_PERIOD_INVOICE_REASONS = frozenset(
+    {
+        "subscription_update",
+        "subscription_threshold",
+        "manual",
+        "upcoming",
+        "quote_accept",
+        "automatic_pending_invoice_item_invoice",
+    },
+)
 
 PRO_SEAT_MONTHLY_AMOUNT_CENTS = 2000
 # Each active billed seat ($20/mo) allocates a $5 managed-LLM contribution and a

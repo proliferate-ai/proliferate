@@ -48,6 +48,7 @@ import logging
 from typing import Any
 
 from proliferate.config import settings
+from proliferate.constants.billing import BILLING_NON_PERIOD_INVOICE_REASONS
 from proliferate.db.models.billing import BillingSubject, BillingSubscription
 from proliferate.integrations.sentry import report_critical
 from proliferate.server.billing.pricing import classify_monthly_price_id
@@ -304,32 +305,37 @@ def report_invoice_not_period_boundary(
     invoice: dict[str, Any],
     invoice_id: str,
     subject: BillingSubject,
-    billing_reason: object,
+    invoice_reason: object,
 ) -> None:
     """A paid cloud invoice that is not a period boundary, so it mints no allowance.
 
-    Info, not a page, and deliberately so — this is the one money-bearing drop
-    that is *correct*. A mid-period seat change produces a paid invoice carrying
-    a cloud subscription line, but the allowance for those seats is prorated and
-    issued by the seat-adjustment pass under its own grant type. Minting the
-    period grant here as well would hand out a second, full-period allowance for
-    hours already granted pro rata (W-F2).
+    For a *recognized* non-period reason this is the one money-bearing drop that
+    is **correct**, so it reports at info. A mid-period seat change produces a
+    paid invoice carrying a cloud subscription line, but the allowance for those
+    seats is prorated and issued by the seat-adjustment pass under its own grant
+    type; minting the period grant here as well would hand out a second,
+    full-period allowance for hours already granted pro rata (W-F2).
 
-    ``money_received`` stays False for that reason: money did arrive, but it is
-    not unaccounted-for money, and the level policy in this module's docstring
-    reserves paging for "money collected + no projection followed". It is still
-    reported rather than returned silently so that an unexpected
-    ``billing_reason`` shows up in the drop stream instead of vanishing.
+    An **unrecognized** reason — a value Stripe added, or the field missing
+    entirely because an API version stopped sending it — is a different animal.
+    It would silently zero the allowance for every renewal of every paying org,
+    which is exactly the "money collected + no projection followed" case this
+    module's level policy reserves paging for. So it pages when the invoice
+    actually paid, rather than sharing the expected path.
     """
+    reason = invoice_reason if isinstance(invoice_reason, str) else None
+    recognized = reason in BILLING_NON_PERIOD_INVOICE_REASONS
+    paid = invoice_is_paid(invoice)
     report_drop(
         DropReason.INVOICE_NOT_PERIOD_BOUNDARY,
         event_id,
         invoice_id,
-        money_received=False,
-        expected=True,
+        money_received=not recognized and paid,
+        expected=recognized,
         subject_id=str(subject.id),
-        billing_reason=billing_reason if isinstance(billing_reason, str) else None,
-        paid=invoice_is_paid(invoice),
+        invoice_reason=reason,
+        reason_recognized=recognized,
+        paid=paid,
     )
 
 

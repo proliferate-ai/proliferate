@@ -531,10 +531,15 @@ async def _handle_invoice_paid(
     # pro rata by the seat-adjustment pass, so granting here too hands out a second
     # full seat-month (W-F2). Before the grant gate, so "gate closed" keeps meaning
     # a boundary invoice that paid and produced no hours.
-    billing_reason = invoice.get("billing_reason")
-    if billing_reason not in BILLING_PERIOD_GRANT_INVOICE_REASONS:
+    # ``isinstance`` first: a non-str value would make the set test raise
+    # TypeError, which handle_stripe_webhook turns into a failed receipt + 500.
+    invoice_reason = invoice.get("billing_reason")
+    if (
+        not isinstance(invoice_reason, str)
+        or invoice_reason not in BILLING_PERIOD_GRANT_INVOICE_REASONS
+    ):
         webhook_drops.report_invoice_not_period_boundary(
-            event_id, invoice, invoice_id, subject, billing_reason
+            event_id, invoice, invoice_id, subject, invoice_reason
         )
         # Dunning recovery still runs: a past-due customer whose retry finally
         # settles clears their hold on whatever invoice settled it.
