@@ -153,6 +153,12 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
                     would_block_start=(cap_only_refusal and snapshot.start_blocked),
                     would_pause_active=(cap_only_refusal and snapshot.active_spend_hold),
                     reason=_accounting_receipt_reason(exported_any=exported_any),
+                    # Known limit: this pass iterates SUBJECTS, not actors, so an
+                    # org subject's snapshot has no user to resolve the per-user
+                    # counts through and this reads 0 (W-F1). Cosmetic here — the
+                    # receipt's decision fields come from grants and the cap, which
+                    # are per-subject — but it is not a measured zero. The
+                    # reconciler's enforce receipts pass the segment's actor.
                     active_sandbox_count=snapshot.active_sandbox_count,
                     remaining_seconds=snapshot.remaining_seconds,
                     # Attribution (law A2): how much metered spend this pass

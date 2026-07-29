@@ -190,9 +190,25 @@ async def get_billing_snapshot_for_request(
     return build_billing_snapshot(state)
 
 
-async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingSnapshot:
+async def get_billing_snapshot_for_subject(
+    billing_subject_id: UUID,
+    *,
+    grant_user_id: UUID | None = None,
+) -> BillingSnapshot:
+    """Snapshot for one subject in its own transaction.
+
+    Pass ``grant_user_id`` whenever the caller knows which human the read is for:
+    an ORG subject has no ``user_id`` of its own, so the per-user parts of the
+    snapshot — the free allowance, ``active_sandbox_count``,
+    ``active_cloud_repo_count`` — have nothing to resolve through without it
+    (W-F1). See ``get_billing_snapshot_for_subject_in_session``.
+    """
     async with db_session.open_async_transaction() as db:
-        state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
+        state = await snapshot_state.load_snapshot_state_for_subject(
+            db,
+            billing_subject_id,
+            grant_user_id=grant_user_id,
+        )
         state = await state_with_overage_usage(db, state)
     return build_billing_snapshot(state)
 
