@@ -81,7 +81,14 @@ export function UserMessage({
         )}
         {shouldRenderTextBubble && (
           <div
-            className="max-w-[77%] break-words rounded-2xl border border-border bg-card px-3 py-2 text-foreground shadow-subtle"
+            /*
+             * The border color and the elevation come from
+             * `.chat-user-message-bubble` in the design CSS, not from utilities:
+             * a generated `shadow-*` utility inlines one mode's token value at
+             * build time, which would bake in dark's `none` and leave light with
+             * no lift. The design CSS emits the var and lets the cascade pick.
+             */
+            className="chat-user-message-bubble max-w-[77%] break-words rounded-2xl border bg-card px-3 py-2 text-foreground"
             data-telemetry-mask
           >
             <div

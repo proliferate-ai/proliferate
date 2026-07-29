@@ -728,6 +728,21 @@ export const themeTokens = {
     light: "var(--color-highlight, var(--color-input))",
     provenance: "[SHIPPED]",
   },
+  /**
+   * The user-message bubble's edge, which only one mode needs.
+   *
+   * `--color-card` is #212121 on the #181818 pane in dark, so the fill alone
+   * already separates the bubble and a border would be surplus chrome. In light
+   * the card is #ffffff on a #ffffff pane, so the fill separates nothing and the
+   * edge is the only thing carrying the shape. Same component, opposite needs —
+   * so the difference lives in a token rather than a `dark:` variant, matching
+   * `--color-composer-shadow` right above.
+   */
+  "--color-user-message-border": {
+    dark: "transparent",
+    light: "var(--color-border)",
+    provenance: "[RETUNE:light/independent-scale]",
+  },
   "--color-warning": {
     dark: "rgba(255, 180, 50, 0.15)",
     light: "#fdf3dc",
@@ -1137,6 +1152,17 @@ export const themeTokens = {
   "--shadow-subtle": {
     dark: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
     light: "0 1px 2px rgb(16 24 40 / 0.06)",
+    provenance: "[RETUNE:light/independent-scale]",
+  },
+  /**
+   * Lift for the user-message bubble, which only light mode needs — see
+   * `--color-user-message-border` for why the two modes differ here. Lives in
+   * the `--shadow-*` namespace because that is what generates the `shadow-*`
+   * utility; a `--color-*` name would emit no rule and fail silently.
+   */
+  "--shadow-user-message": {
+    dark: "none",
+    light: "var(--shadow-subtle)",
     provenance: "[RETUNE:light/independent-scale]",
   },
   "--size-icon-button-lg": {
