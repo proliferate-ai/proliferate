@@ -17,9 +17,9 @@
     "@proliferate/design": "workspace:*",
     "@proliferate/product-client": "workspace:*",
     "@proliferate/product-domain": "workspace:*",
-    "@sentry/react": "^10.67.0",
+    "@sentry/react": "^10.69.0",
     "@tanstack/react-query": "^5.101.4",
-    "posthog-js": "^1.386.8",
+    "posthog-js": "^1.408.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-router-dom": "^7"

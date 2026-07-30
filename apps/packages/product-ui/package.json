@@ -313,7 +313,7 @@
     "@proliferate/design": "workspace:*",
     "@proliferate/product-domain": "workspace:*",
     "@proliferate/ui": "workspace:*",
-    "@tanstack/react-virtual": "3.14.8",
+    "@tanstack/react-virtual": "3.14.9",
     "lucide-react": "^0.577.0",
     "react-markdown": "^9",
     "remark-gfm": "^4",
