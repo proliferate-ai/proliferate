@@ -25,6 +25,7 @@ from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZ
 from proliferate.db.engine import apply_rls_context_to_session, get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.billing_runtime_usage import resolve_payer_organization_id_for_user
 from proliferate.errors import InvalidRequest, NotFoundError, PermissionDenied
 from proliferate.middleware.request_context import set_resource_tenant_context
 from proliferate.rls_context import set_rls_owner_context
@@ -84,7 +85,47 @@ async def current_owner_context(
         header_org_id=header_org_id,
         cookie_org_id=cookie_org_id,
     )
+    selection = await _default_unscoped_selection_to_payer(db, user, selection)
     return await _resolve_owner_context_for_selection(db, user, selection)
+
+
+async def _default_unscoped_selection_to_payer(
+    db: AsyncSession,
+    user: User,
+    selection: OwnerSelection,
+) -> OwnerSelection:
+    """Point a billing read at the subject that PAYS for the caller.
+
+    Law W1 ("the org always pays") has to hold for the read model too, not just
+    for spend and money IN. This dependency used to fall back to personal, so a
+    hosted org member reading ``/billing/overview`` saw their personal subject:
+    no grant, ``remainingHours: 0``, and ``startBlocked: credits_exhausted`` — an
+    "out of credits" gate for a user whose org pool is full (W-F1). Spend, the
+    start gate, and the free allowance all resolve the payer through
+    ``resolve_billing_subject_id_for_user``; this makes the read agree.
+
+    An explicit ``ownerScope=personal`` is redirected too, which is the whole
+    point rather than an overreach: the shipped SDK hardcodes
+    ``ownerScope: "personal"`` on every owner-less billing call
+    (``cloud/sdk/src/client/billing.ts`` ``ownerQuery``/``ownerBody``), so
+    honoring it literally means the sidebar, the new-workspace command, and
+    mobile settings all read an empty personal pool on an already-shipped
+    desktop build. Under org-everywhere an org-membered user has no personal
+    pool to inspect — nothing grants to it and nothing spends from it — so
+    naming it can only ever return zeros. An org-LESS user is untouched: their
+    personal subject really is the payer.
+    """
+    if selection.owner_scope == "organization":
+        return selection
+    # The SAME resolver spend uses, deliberately: it also encodes the one case
+    # where personal is still the payer (a user holding their own healthy
+    # subscription). Duplicating that rule here instead produced a split-brain for
+    # exactly the paying customers — the UI reported an active ``cloud`` plan from
+    # personal while the start gate resolved the org and refused every start.
+    organization_id = await resolve_payer_organization_id_for_user(db, user.id)
+    if organization_id is None:
+        return OwnerSelection(owner_scope="personal", organization_id=None)
+    return OwnerSelection(owner_scope="organization", organization_id=organization_id)
 
 
 def require_owner_role(*roles: str) -> Callable[[OwnerContext], Awaitable[OwnerContext]]:

@@ -8,7 +8,7 @@ export function ChevronRight({ className, ...props }: IconProps) {
   );
 }
 
-/** Filled disclosure chevron matching Codex transcript activities. */
+/** Filled disclosure chevron for transcript activity rows. */
 export function ChevronRightActivity({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -104,7 +104,7 @@ export function Search({ className, ...props }: IconProps) {
   );
 }
 
-/** Compact filled search glyph matching Codex transcript activities. */
+/** Compact filled search glyph for transcript activity rows. */
 export function SearchActivity({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 16 16" fill="currentColor" {...props}>

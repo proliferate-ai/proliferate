@@ -40,18 +40,44 @@ def coerce_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC)
 
 
+async def _subject_scope_user_id(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+    actor_user_id: UUID | None,
+) -> UUID | None:
+    """The user whose sandboxes/repos this subject's counts cover.
+
+    ``cloud_sandbox`` and ``repo_config`` are owned by a user, not by a billing
+    subject, so a subject's counts are only reachable through a user id. A
+    PERSONAL subject carries its own; an ORG subject has ``user_id = None`` and
+    used to count zero — which, once law W1 pointed reads at the paying org,
+    turned every org member's active-sandbox and repo count into 0 (W-F1).
+
+    ``actor_user_id`` names the human the read is for. Counting that one member
+    keeps the semantics an unscoped read always had (it resolved the caller's
+    personal subject, so it counted the caller) instead of pooling every member's
+    environments and letting one member's repos exhaust another's plan limit.
+    """
+    subject = await db.get(BillingSubject, billing_subject_id)
+    if subject is None:
+        return None
+    return subject.user_id or actor_user_id
+
+
 async def list_cloud_sandboxes_for_subject(
     db: AsyncSession,
     billing_subject_id: UUID,
+    *,
+    actor_user_id: UUID | None = None,
 ) -> list[CloudSandbox]:
-    subject = await db.get(BillingSubject, billing_subject_id)
-    if subject is None or subject.user_id is None:
+    scope_user_id = await _subject_scope_user_id(db, billing_subject_id, actor_user_id)
+    if scope_user_id is None:
         return []
     return list(
         (
             await db.execute(
                 select(CloudSandbox).where(
-                    CloudSandbox.owner_user_id == subject.user_id,
+                    CloudSandbox.owner_user_id == scope_user_id,
                     CloudSandbox.destroyed_at.is_(None),
                 )
             )
@@ -64,9 +90,11 @@ async def list_cloud_sandboxes_for_subject(
 async def count_active_cloud_repo_environments(
     db: AsyncSession,
     billing_subject_id: UUID,
+    *,
+    actor_user_id: UUID | None = None,
 ) -> int:
-    subject = await db.get(BillingSubject, billing_subject_id)
-    if subject is None or subject.user_id is None:
+    scope_user_id = await _subject_scope_user_id(db, billing_subject_id, actor_user_id)
+    if scope_user_id is None:
         return 0
 
     repo_keys = {
@@ -79,7 +107,7 @@ async def count_active_cloud_repo_environments(
                 )
                 .join(RepoEnvironment, RepoEnvironment.repo_config_id == RepoConfig.id)
                 .where(
-                    RepoConfig.user_id == subject.user_id,
+                    RepoConfig.user_id == scope_user_id,
                     RepoConfig.deleted_at.is_(None),
                     RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
                     RepoEnvironment.deleted_at.is_(None),

@@ -5,7 +5,7 @@ export const PLAYGROUND_PATCH_README = [
   "@@ -1,4 +1,5 @@",
   " Proliferate",
   "-Old transcript rows",
-  "+Codex-style transcript rows",
+  "+Shared transcript rows",
   "+Shared diff cards",
   " Runtime orchestration",
 ].join("\n");
@@ -197,7 +197,7 @@ export const PLAYGROUND_END_TURN_DIFF_TRANSCRIPT: TranscriptState = {
       lastUpdatedSeq: 1,
       completedSeq: 1,
       completedAt: "2026-04-29T12:00:00Z",
-      text: "I updated the chat and git diff surfaces to share the Codex-style contract. The implementation notes are in [tool-call-blocks.md](docs/tool-call-blocks.md).",
+      text: "I updated the chat and git diff surfaces to share the same transcript contract. The implementation notes are in [tool-call-blocks.md](docs/tool-call-blocks.md).",
       isStreaming: false,
     },
     ...Object.fromEntries(PLAYGROUND_END_TURN_FILE_CHANGES.map((file) => [

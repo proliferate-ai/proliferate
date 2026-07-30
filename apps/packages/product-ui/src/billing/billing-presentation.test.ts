@@ -46,4 +46,33 @@ describe("proliferateCreditBalance", () => {
       })).used,
     ).toBe("0 PCUs");
   });
+
+  it("does not present an expired grant's stored remainder as available", () => {
+    expect(
+      proliferateCreditBalance(billingPlan({
+        proBillingEnabled: true,
+        isPaidCloud: true,
+        grantAllocations: [
+          {
+            grantType: "pro_period",
+            totalSeconds: 20 * 3600,
+            consumedSeconds: 0,
+            remainingSeconds: 20 * 3600,
+            active: false,
+          },
+          {
+            grantType: "pro_period",
+            totalSeconds: 20 * 3600,
+            consumedSeconds: 20 * 3600,
+            remainingSeconds: 0,
+            active: true,
+          },
+        ],
+      })),
+    ).toEqual({
+      purchased: "20 PCUs",
+      available: "0 PCUs",
+      used: "20 PCUs",
+    });
+  });
 });

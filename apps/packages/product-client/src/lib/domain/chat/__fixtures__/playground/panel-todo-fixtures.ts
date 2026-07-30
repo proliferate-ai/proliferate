@@ -16,7 +16,7 @@ export const TODOS_MID: PlanEntry[] = [
 
 export const TODOS_LONG: PlanEntry[] = [
   { content: "Audit the existing plan panel implementation for dead branches", status: "completed" },
-  { content: "Read the Codex HTML reference for todo tracker + plan approval", status: "completed" },
+  { content: "Read the HTML reference for todo tracker + plan approval", status: "completed" },
   { content: "Confirm toolKind is preserved on pending approval interactions", status: "completed" },
   { content: "Delete PlanBlock, InlinePermissionPrompt embeddedInComposer, merge booleans", status: "completed" },
   { content: "Create TodoTrackerPanel with fade mask and line-through", status: "completed" },

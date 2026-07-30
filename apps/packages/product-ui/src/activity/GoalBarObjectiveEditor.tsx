@@ -10,9 +10,9 @@ interface GoalBarObjectiveEditorProps {
   onCancel: () => void;
 }
 
-// Conductor reference: a tall auto-growing textarea (≈3 rows minimum, grows
-// with content up to a cap before it scrolls internally) with ✓/✗ icon
-// buttons pinned to the top-right corner.
+// A tall auto-growing textarea (≈3 rows minimum, grows with content up to a
+// cap before it scrolls internally) with ✓/✗ icon buttons pinned to the
+// top-right corner.
 const MIN_ROWS = 3;
 const MAX_HEIGHT_PX = 240;
 
