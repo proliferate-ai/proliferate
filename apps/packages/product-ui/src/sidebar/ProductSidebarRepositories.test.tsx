@@ -46,5 +46,7 @@ describe("ProductSidebarWorkspaceRow trailing slot", () => {
 
     const date = screen.getByText("4h");
     expect(date.closest(".grid")?.className).toContain("min-w-[26px]");
+    // The timestamp is meta text, a step below the row's own type role.
+    expect(date.className).toContain("text-ui-sm");
   });
 });

@@ -2,6 +2,7 @@ import type { ComponentProps, MouseEventHandler } from "react";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { RightPanel } from "#product/components/workspace/shell/right-panel/RightPanel";
 import { WorkspaceResizeSeparator } from "#product/components/workspace/shell/screen/WorkspaceResizeSeparator";
+import { RIGHT_PANEL_MIN_WIDTH } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 interface WorkspaceShellRightRailProps
   extends Omit<ComponentProps<typeof RightPanel>, "isOpen"> {
@@ -39,11 +40,19 @@ export function WorkspaceShellRightRail({
         // the page context). Without a local stacking context, panel internals
         // with z-index ≥ 10 (viewer toolbar, sticky tab edges) paint over the
         // dragger.
-        className="isolate shrink-0 overflow-hidden transition-[width] duration-panel ease-in-out"
+        // The width transition is what makes drag-to-collapse read as a close
+        // rather than a disappearance: the same panel duration that animates an
+        // explicit toggle animates the collapse the drag triggered, and
+        // `prefers-reduced-motion` zeroes `--duration-panel` so the panel snaps
+        // shut instead.
+        className="isolate shrink-0 overflow-hidden transition-[width] duration-panel ease-standard"
         style={{ width: open ? width : 0 }}
       >
         <DebugProfiler id="workspace-right-panel">
-          <div className="h-full" style={{ minWidth: 260 }}>
+          {/* Pinning the panel body at the domain minimum keeps its content laid
+              out at a legible width while the container width animates to 0, so
+              a collapse slides the panel out instead of crushing its chrome. */}
+          <div className="h-full" style={{ minWidth: RIGHT_PANEL_MIN_WIDTH }}>
             <RightPanel isOpen={open} {...rightPanelProps} />
           </div>
         </DebugProfiler>

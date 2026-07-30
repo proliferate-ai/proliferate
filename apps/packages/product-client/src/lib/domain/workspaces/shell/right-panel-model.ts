@@ -30,8 +30,36 @@ export interface RightPanelTerminalRecord {
 }
 
 export const RIGHT_PANEL_DEFAULT_WIDTH = 420;
-export const RIGHT_PANEL_MIN_WIDTH = 260;
+/**
+ * Narrowest width at which the panel is still itself. The floor is the header
+ * chrome, not the body: the tab row must be able to show three real tabs before
+ * it starts scrolling, and a right panel with a scrolling one-tab header is not
+ * a panel the user can navigate. Measured against the tab metrics in
+ * `product.css` (`.right-panel-tab-system`) plus the per-tab minimum observed in
+ * comparable panel systems (90px before a tab truncates past recognition):
+ * 3 × 90 tabs + 2 × 3px `--tab-gap` + 2 × 8px bar padding + 32px sticky
+ * new-tab trigger (28px square + 4px pad) + 50px trailing action cluster
+ * (6px pad + two 20px icon buttons + 4px gap) = 374px. 380 is the next clean
+ * step above that floor, and still well under the ~470px a comparable right
+ * panel habitually occupies, so it constrains nothing a real user wants.
+ */
+export const RIGHT_PANEL_MIN_WIDTH = 380;
 export const RIGHT_PANEL_MAX_WIDTH = 700;
+/**
+ * Raw drag width below which a resize gesture stops resizing and collapses the
+ * panel instead. This cannot live in `clampRightPanelWidth`: clamping's whole
+ * job is to refuse widths under the minimum, so a clamped value can never
+ * report the gesture that should close the panel. The 80px of travel between
+ * this threshold and `RIGHT_PANEL_MIN_WIDTH` is deliberate resistance — the
+ * panel sticks at its minimum first, and only a clearly intentional shove past
+ * that closes it, so a user trimming the panel narrow never loses it by
+ * accident.
+ */
+export const RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD = 300;
+
+export type RightPanelDragOutcome =
+  | { kind: "resize"; width: number }
+  | { kind: "collapse" };
 
 export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
   "scratch",
@@ -104,6 +132,21 @@ export function clampRightPanelWidth(width: number): number {
     return RIGHT_PANEL_DEFAULT_WIDTH;
   }
   return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, width));
+}
+
+/**
+ * Decides what a raw (unclamped) drag width means for the right panel.
+ *
+ * Resize and collapse are two different gestures expressed through one drag, so
+ * the decision has to see the width the pointer actually asked for. Above the
+ * collapse threshold the width is clamped as usual — including sticking at
+ * `RIGHT_PANEL_MIN_WIDTH` — and below it the panel closes.
+ */
+export function resolveRightPanelDragOutcome(rawWidth: number): RightPanelDragOutcome {
+  if (Number.isFinite(rawWidth) && rawWidth < RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD) {
+    return { kind: "collapse" };
+  }
+  return { kind: "resize", width: clampRightPanelWidth(rawWidth) };
 }
 
 export function normalizeRightPanelDurableState(
