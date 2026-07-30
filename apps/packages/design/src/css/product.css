@@ -179,6 +179,18 @@ body {
   );
 }
 
+/* The user-message bubble's edge, which one mode needs and the other does not.
+   --color-card is #212121 on the #181818 pane in dark, so the fill alone
+   separates the bubble; in light the card is #ffffff on a #ffffff pane, so the
+   fill separates nothing and the edge is the only thing carrying the shape.
+   Authored here rather than as utilities because a generated shadow-* utility
+   inlines one mode's value at build time — the same reason the composer's
+   elevation lives in this file. */
+.chat-user-message-bubble {
+  border-color: var(--color-user-message-border);
+  box-shadow: var(--shadow-user-message);
+}
+
 /* Composer chrome: no border — a 0.5px stroke painted in
    the shadow stack plus the elevation shadow. */
 .chat-composer-surface {
@@ -578,9 +590,12 @@ body {
 .file-source-view {
   --diff-view-surface: var(--color-background);
   --diffs-bg: var(--diff-view-surface);
-  --file-source-row-hover: color-mix(in srgb, var(--color-foreground) 4.5%, transparent);
-  --file-source-line-number: color-mix(in srgb, var(--color-foreground) 36%, transparent);
-  --file-source-line-number-hover: color-mix(in srgb, var(--color-foreground) 60%, transparent);
+  /* Authored roles, not ink percentages: 4.5% foreground is a legible step on a
+     near-black plane and nothing at all on white, so a single mix cannot serve
+     both modes. The roles already carry a per-mode value. */
+  --file-source-row-hover: var(--color-hover);
+  --file-source-line-number: var(--color-faint);
+  --file-source-line-number-hover: var(--color-foreground-secondary);
   --file-source-content-gap: 0.625rem;
   --file-source-content-padding-inline: 0.125rem;
   background: var(--diff-view-surface);
@@ -1655,11 +1670,15 @@ body {
   font-weight: var(--font-weight-control);
 }
 
+/* Light is not dark with the ink flipped: an ink-alpha percentage that reads as
+   a step on a near-black plane vanishes on white (5% ink on #ffffff is #f7f7f7,
+   which is no fill at all). So the light half of this component takes the
+   authored neutral roles directly instead of re-deriving them from foreground. */
 :root[data-mode="light"] .right-panel-tab-system {
   --right-panel-tab-surface: var(--color-surface);
   --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-surface) 88%, transparent);
-  --right-panel-tab-active-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --right-panel-tab-text-secondary: color-mix(in oklab, var(--color-foreground) 65%, transparent);
+  --right-panel-tab-active-bg: var(--color-selected);
+  --right-panel-tab-text-secondary: var(--color-foreground-secondary);
 }
 
 .right-panel-tab-system .ui-tab-system-bar {
@@ -2069,7 +2088,7 @@ body {
 
 .right-panel-tab-system .ui-tab-system-tab__close:hover:not(:disabled),
 .right-panel-tab-system .right-panel-terminal-edit-action:hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+  background-color: var(--color-hover);
   color: var(--right-panel-tab-text-primary);
 }
 
