@@ -170,6 +170,7 @@ function PlaygroundSlashCommandComposerSurface({
           setRowRef={(index, element) => {
             rowRefs.current[index] = element;
           }}
+          getRowId={(index) => `playground-slash-row-${index}`}
           className="mx-0"
         />
       </div>
@@ -213,6 +214,7 @@ function PlaygroundFileMentionComposerSurface({
           setRowRef={(index, element) => {
             rowRefs.current[index] = element;
           }}
+          getRowId={(index) => `playground-mention-row-${index}`}
           className="mx-0"
         />
       </div>

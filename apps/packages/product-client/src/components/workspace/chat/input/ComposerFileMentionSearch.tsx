@@ -19,6 +19,7 @@ interface ComposerFileMentionSearchProps {
   onSelect: (result: FileMentionResult) => void;
   onRowMouseEnter: (index: number) => void;
   setRowRef: (index: number, element: HTMLButtonElement | null) => void;
+  getRowId: (index: number) => string;
   className?: string;
 }
 
@@ -34,14 +35,16 @@ export function ComposerFileMentionSearch({
   onSelect,
   onRowMouseEnter,
   setRowRef,
+  getRowId,
   className,
 }: ComposerFileMentionSearchProps) {
   return (
-    <ComposerInlineMenuPanel listRef={listRef} className={className}>
+    <ComposerInlineMenuPanel listRef={listRef} label="File mentions" className={className}>
       {results.length > 0 ? (
         results.map((result, index) => (
           <ComposerInlineMenuRow
             key={result.path}
+            id={getRowId(index)}
             index={index}
             selected={index === highlightedIndex}
             title={result.path}
