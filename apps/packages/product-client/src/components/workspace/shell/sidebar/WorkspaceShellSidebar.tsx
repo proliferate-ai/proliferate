@@ -3,6 +3,7 @@ import { motion } from "@proliferate/design/motion";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 import { WorkspaceSidebarHeaderControls } from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
+import { useCoarsePointer } from "#product/hooks/ui/layout/use-coarse-pointer";
 
 interface WorkspaceShellSidebarProps {
   open: boolean;
@@ -22,6 +23,12 @@ export function WorkspaceShellSidebar({
   // sidebar open discards it.
   const [peekActive, setPeekActive] = useState(false);
   const peekCloseTimerRef = useRef<number | null>(null);
+  // A touch tap fires a synthetic `mouseenter` with no matching `mouseleave`
+  // once the finger lifts, so arming the peek from a coarse pointer leaves it
+  // stuck open with no gesture left to close it. The whole interaction model
+  // is hover, which coarse pointers don't have, so it is disabled outright
+  // rather than patched with a second, touch-specific close path.
+  const coarsePointer = useCoarsePointer();
 
   const cancelPeekClose = useCallback(() => {
     if (peekCloseTimerRef.current !== null) {
@@ -31,9 +38,12 @@ export function WorkspaceShellSidebar({
   }, []);
 
   const activatePeek = useCallback(() => {
+    if (coarsePointer) {
+      return;
+    }
     cancelPeekClose();
     setPeekActive(true);
-  }, [cancelPeekClose]);
+  }, [cancelPeekClose, coarsePointer]);
 
   // Closing is deferred, opening is not. The pointer leaves the panel for a
   // beat during ordinary use -- crossing the gap to the collapsed header's own
@@ -67,7 +77,6 @@ export function WorkspaceShellSidebar({
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
           <WorkspaceSidebarHeaderControls
-            className="pl-[82px]"
             toggleTitle="Hide sidebar"
             iconTone="sidebar"
             onToggleSidebar={onToggleSidebar}
