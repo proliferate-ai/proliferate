@@ -18,10 +18,17 @@ landed at 3.28:1 at 11px, and the persistent `selected` state read weaker than
 the transient `hover`. Those are all mechanically detectable, so they are
 detected here rather than re-discovered by eye.
 
+Text is measured against EVERY opaque plane the product paints it on, not just
+the page: in light mode six of those planes are near-white and three are not, so
+measuring only `surface` and `background` left the sidebar, the under-surface,
+and the one-step-off-white fills unchecked. That blind spot is exactly where the
+faint tier was failing while this check reported green, so the plane list is the
+contract too — a new elevation role belongs in `TEXT_PLANES`.
+
 Floors (both modes, no per-mode exemptions):
-  * body text        >= 7.0:1   against surface and background
-  * secondary text   >= 4.5:1   against surface and background
-  * faint text       >= 4.5:1   against surface and background
+  * body text        >= 7.0:1   against every opaque plane
+  * secondary text   >= 4.5:1   against every opaque plane
+  * faint text       >= 4.5:1   against every opaque plane
   * borders          >= 1.25:1  against the surface they divide
   * hover/selected/active mutually distinguishable, AND selected carries more
     ink than hover — a persistent state may never read fainter than a
@@ -29,9 +36,9 @@ Floors (both modes, no per-mode exemptions):
 
 Four measured pairs do not meet those floors and are NOT silently exempted: they
 are pinned in `DECLARED_DEVIATIONS` with their exact measured ratio, so each one
-is visible in review and can only ever improve. Three are pre-existing dark-mode
-facts outside the light retune's scope; one is an approved light value that
-misses by 0.01. See that table for the per-entry reasoning.
+is visible in review and can only ever improve. Two are pre-existing dark-mode
+facts outside the light retune's scope; two are approved light values that miss
+by a hundredth. See that table for the per-entry reasoning.
 
 Exit codes: 0 = all floors met (or met as pinned), 1 = at least one violation.
 
@@ -75,7 +82,27 @@ TEXT_ROLES: tuple[tuple[str, float], ...] = (
     ("--color-foreground-tertiary", FAINT_FLOOR),
     ("--color-faint", FAINT_FLOOR),
 )
-TEXT_PLANES: tuple[str, ...] = ("--color-surface", "--color-background")
+# Every opaque plane the product actually paints text on, not just the two the
+# page starts from. In light mode `surface`, `background`, `card`, `popover`,
+# `surface-elevated` and `surface-control` are all near-white, so measuring only
+# the first two left the three darkest light planes — the sidebar, the
+# under-surface, and the one-step-off-white fills — entirely unmeasured. That is
+# where the faint tier was failing while this check reported green. Transient
+# state fills (hover/selected/active) are deliberately NOT here: they are
+# overlays with their own step floors below, and holding the faint tier to 4.5:1
+# on top of `active` would collapse faint into secondary and flatten the ramp.
+TEXT_PLANES: tuple[str, ...] = (
+    "--color-surface",
+    "--color-background",
+    "--color-card",
+    "--color-popover",
+    "--color-surface-elevated",
+    "--color-surface-elevated-secondary",
+    "--color-surface-control",
+    "--color-surface-under",
+    "--color-muted",
+    "--color-sidebar",
+)
 
 # Each border role is measured against the plane it actually divides.
 BORDER_PAIRS: tuple[tuple[str, str], ...] = (
@@ -121,9 +148,12 @@ DECLARED_DEVIATIONS: dict[tuple[str, str], tuple[float, str]] = {
         "active are adjacent, and both are separately distinguishable from hover",
     ),
     ("dark", "--color-selected carries at least as much ink as --color-hover"): (
-        0.0,
-        "pre-existing dark inversion (selected #1f1f1f reads fainter than hover "
-        "#2a2a2a); the light half is fixed here, dark needs its own retune",
+        1.08,
+        "pre-existing dark inversion (selected #1f1f1f reads 1.08:1 off the "
+        "surface where hover #2a2a2a reads 1.24:1); the light half is fixed "
+        "here, dark needs its own retune. Pinned at the measured 1.08 rather "
+        "than 0.0 so the inversion cannot deepen — a 0.0 pin would have "
+        "accepted any regression at all",
     ),
 }
 
@@ -457,9 +487,15 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
             errors.append(f"{mode}: {failure}")
             return None
 
+    # An elevation plane can itself be translucent (dark still holds a couple of
+    # alpha fills), and what a person sees is that fill composited over the page.
+    # `--color-background` is the bottom of every stack, so it is resolved first
+    # and used as the backdrop for the planes above it.
+    page = resolved("--color-background")
+
     planes: dict[str, Rgb] = {}
     for plane in (*TEXT_PLANES, "--color-sidebar"):
-        color = resolved(plane)
+        color = resolved(plane, page)
         if color is None:
             continue
         planes[plane] = color

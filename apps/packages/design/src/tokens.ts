@@ -154,7 +154,7 @@ export const themeTokens = {
   },
   "--color-composer-control-muted-foreground": {
     dark: "var(--color-faint)",
-    light: "#686e76",
+    light: "#646a72",
     provenance: "[RETUNE:light/independent-scale]",
   },
   "--color-composer-send-background": {
@@ -355,9 +355,16 @@ export const themeTokens = {
     themeFallback: "#262626",
     provenance: "[RETUNE:light/independent-scale]",
   },
+  /**
+   * The faintest legible ink. Light is authored against the DARKEST plane it
+   * lands on (the sidebar / under-surface `#edf0f2`), not against white: at
+   * `#686e76` it measured 5.15:1 on white but only 4.50:1 on the sidebar, so
+   * every sidebar timestamp and byte count sat a hair under the floor while the
+   * guard — which only measured the two white planes — read green.
+   */
   "--color-faint": {
     dark: "color-mix(in oklab, #ffffff 50%, transparent)",
-    light: "#686e76",
+    light: "#646a72",
     themeFallback: "rgba(255, 255, 255, 0.5)",
     provenance: "[RETUNE:light/independent-scale]",
   },
@@ -397,9 +404,10 @@ export const themeTokens = {
     themeFallback: "rgba(255, 255, 255, 0.7)",
     provenance: "[RETUNE:light/independent-scale]",
   },
+  // Same tier as `--color-faint`, so it carries the same sidebar-plane value.
   "--color-foreground-tertiary": {
     dark: "color-mix(in oklab, #ffffff 50%, transparent)",
-    light: "#686e76",
+    light: "#646a72",
     themeFallback: "rgba(255, 255, 255, 0.5)",
     provenance: "[RETUNE:light/independent-scale]",
   },
@@ -611,9 +619,18 @@ export const themeTokens = {
     light: "#ffffff",
     provenance: "[RETUNE:light/independent-scale]",
   },
+  /**
+   * Control fill. Unlike `--color-surface` / `--color-card`, this role does NOT
+   * collapse to white in light mode: 41 of its 62 call sites paint no border or
+   * ring — the queued-message banner, the permission-request block, the todo
+   * progress track whose entire affordance is its fill — so the fill is the only
+   * thing that separates the control from the pane behind it. One step off white
+   * (the same value the `muted` / `elevated-secondary` fills carry) keeps that
+   * step visible without asking every call site to grow an edge.
+   */
   "--color-surface-control": {
     dark: "color-mix(in oklab, #2b2b2b 96%, transparent)",
-    light: "#ffffff",
+    light: "#f2f4f6",
     themeFallback: "rgba(43, 43, 43, 0.96)",
     provenance: "[RETUNE:light/independent-scale]",
   },
