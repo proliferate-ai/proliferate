@@ -2,10 +2,10 @@
  * Goal lifecycle transcript rows — client-side composition only.
  *
  * The runtime deliberately keeps goal_updated/goal_met/goal_cleared chunks
- * out of stored transcript content (see `codex/session-activity-architecture
- * .md` §Locked decisions #5): they're session-level mirror events, not
- * transcript items. This module derives the quiet, compact system-style rows
- * the transcript interleaves *client-side* from the raw session event
+ * out of stored transcript content (session-activity locked decision #5):
+ * they're session-level mirror events, not transcript items. This module
+ * derives the quiet, compact system-style rows the transcript interleaves
+ * *client-side* from the raw session event
  * stream — the same envelopes the goal bar's mirror reads, replayed here to
  * recover the lifecycle history (set → edited → paused/resumed → met/
  * cleared) instead of just the latest value.

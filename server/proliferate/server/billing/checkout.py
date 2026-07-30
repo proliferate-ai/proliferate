@@ -18,9 +18,12 @@ from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_SUBJECT_KIND_PERSONAL,
     PRO_OVERAGE_CAP_CENTS_PER_SEAT_MAX,
+    REFILL_10H_GRANT_TYPE,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.store import billing_seats
+from proliferate.db.store.billing_accounting import count_grants_for_subject
+from proliferate.db.store.billing_runtime_usage import resolve_payer_organization_id_for_user
 from proliferate.db.store.billing_subjects import (
     bind_stripe_customer_to_billing_subject,
     get_or_create_organization_stripe_customer_state,
@@ -240,6 +243,28 @@ async def create_cloud_checkout_session(
     return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
     selection = owner_selection or OwnerSelection()
+    # Law W1 reaches subscriptions too, but the fix here is to REFUSE, not to
+    # redirect. An org member who upgrades — which the shipped SDK sends as
+    # ``ownerScope: "personal"`` — used to buy a Cloud subscription on their
+    # PERSONAL subject: the money left their card, the ``BillingSubscription``
+    # row landed on a subject nothing spends from, and their sandboxes kept
+    # draining the org pool. They would pay and stay effectively unpaid (W-F1).
+    #
+    # Redirecting such a request to the org makes the org branch below answer,
+    # and with PRO off that is a loud ``org_pro_billing_disabled`` 409 instead of
+    # a silent mis-charge. Selling org subscriptions properly is W-F2/W-F3.
+    #
+    # The redirect is skipped for a caller who ALREADY holds a healthy personal
+    # subscription: this endpoint doubles as an existing paid customer's route to
+    # the Stripe portal, and they must keep reaching it.
+    # ``resolve_payer_organization_id_for_user`` returns ``None`` for a caller who
+    # already holds a healthy personal subscription, which is what keeps an
+    # existing paid customer's route to the Stripe portal (also served here) open.
+    if selection.owner_scope != "organization":
+        async with db.begin():
+            payer_org_id = await resolve_payer_organization_id_for_user(db, user.id)
+        if payer_org_id is not None:
+            selection = OwnerSelection(owner_scope="organization", organization_id=payer_org_id)
     org_context: OwnerContext | None = None
     if selection.owner_scope == "organization":
         async with db.begin():
@@ -271,7 +296,11 @@ async def create_cloud_checkout_session(
         owner_context=org_context,
     )
     async with db.begin():
-        snapshot = await get_billing_snapshot_for_subject_in_session(db, subject_id)
+        snapshot = await get_billing_snapshot_for_subject_in_session(
+            db,
+            subject_id,
+            grant_user_id=user.id,
+        )
         seat_quantity = (
             await billing_seats.count_active_seats_for_billing_subject_id(db, subject_id)
             if org_context is not None and not snapshot.is_paid_cloud
@@ -332,25 +361,63 @@ async def create_cloud_checkout_session(
     return BillingUrlResponse(url=checkout.url)
 
 
+async def _resolve_payer_owner_selection(
+    db: AsyncSession,
+    user: AuthenticatedUser,
+    owner_selection: OwnerSelection | None,
+) -> OwnerSelection:
+    """Point a purchase at the subject that PAYS for the buyer's compute.
+
+    Law W1 ("the org always pays") applies to money IN. Refill checkout used to
+    refuse org scope outright and bill the personal subject, while spend drained
+    the org pool — hours bought, hours unspendable (W-F1). So:
+
+    - An explicit organization selection is honored (owner/admin only, enforced
+      downstream by ``_ensure_stripe_customer_for_owner``) instead of 409ing.
+    - An unscoped or personal request is REDIRECTED to the buyer's paying org
+      when they have a current membership, matching
+      ``resolve_billing_subject_id_for_user``. Personal scope is not a way to
+      buy hours into a pool nothing spends from. The shipped SDK hardcodes
+      ``ownerScope: "personal"`` on every owner-less call
+      (``cloud/sdk/src/client/billing.ts``), so covering only the unscoped case
+      would leave every already-installed desktop and mobile build paying the
+      wrong subject.
+    - A personal request from an org-less user stays personal: that user's
+      compute really does drain their personal subject (self-hosted and
+      org-less deployments do not run billing at all).
+
+    Refill checkout uses this directly. Subscription checkout applies the same
+    law inline with one extra condition (an existing personal subscriber is left
+    alone so they can still reach the Stripe portal) — see
+    ``create_cloud_checkout_session``.
+    """
+    selection = owner_selection or OwnerSelection()
+    if selection.owner_scope == "organization":
+        return selection
+    # Every DB touch in this module owns its transaction explicitly, because
+    # ``_ensure_stripe_customer_for_owner`` opens one of its own right after. A
+    # bare read here would autobegin on the session and make that ``db.begin()``
+    # raise "A transaction is already begun on this Session."
+    async with db.begin():
+        organization_id = await resolve_payer_organization_id_for_user(db, user.id)
+    if organization_id is None:
+        return selection
+    return OwnerSelection(owner_scope="organization", organization_id=organization_id)
+
+
 async def create_refill_checkout_session(
     db: AsyncSession,
     user: AuthenticatedUser,
     owner_selection: OwnerSelection | None = None,
     return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
-    selection = owner_selection or OwnerSelection()
-    if selection.owner_scope == "organization":
-        raise BillingServiceError(
-            "refill_checkout_not_supported_for_org",
-            "Refill checkout is not supported for organizations.",
-            status_code=409,
-        )
     if settings.pro_billing_enabled:
         raise BillingServiceError(
             "refill_checkout_disabled",
             "Refill checkout is not available for Pro billing.",
             status_code=409,
         )
+    selection = await _resolve_payer_owner_selection(db, user, owner_selection)
     success_url, cancel_url, _portal_return_url = _require_redirect_urls(return_surface)
     await validate_refill_price_configuration()
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
@@ -358,10 +425,22 @@ async def create_refill_checkout_session(
         user,
         selection,
     )
+    # Stripe replays a key for 24h, so a key made only of (subject, price, urls)
+    # hands a customer who already bought a refill their SPENT session — a dead
+    # "You're all done here" page — and an exhausted org cannot top up at all.
+    # Including the refill count advances the key after each completed purchase
+    # while still deduping a double-click, which is what idempotency is for.
+    async with db.begin():
+        purchased_refills = await count_grants_for_subject(
+            db,
+            subject_id,
+            grant_type=REFILL_10H_GRANT_TYPE,
+        )
     refill_shape = _idempotency_shape_suffix(
         settings.stripe_refill_10h_price_id,
         success_url,
         cancel_url,
+        purchased_refills,
     )
     try:
         checkout = await stripe_billing.create_refill_checkout_session(

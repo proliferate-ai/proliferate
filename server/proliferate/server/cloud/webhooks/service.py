@@ -6,7 +6,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.billing import (
-    BILLING_MODE_ENFORCE,
     PROVIDER_EVENT_KIND_CREATED,
     PROVIDER_EVENT_KIND_KILLED,
     PROVIDER_EVENT_KIND_PAUSED,
@@ -20,7 +19,6 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sandboxes import (
     accept_destroyed_cloud_sandbox_provider_observation,
     apply_cloud_sandbox_provider_observation,
@@ -33,13 +31,16 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
     verify_e2b_webhook_signature,
 )
+from proliferate.server.billing.authorization import (
+    record_cloud_sandbox_billing_block,
+    resolve_cloud_sandbox_billing_block,
+)
 from proliferate.server.billing.runtime_usage import (
     close_cloud_sandbox_provider_usage,
     converge_cloud_sandbox_provider_usage,
     open_cloud_sandbox_provider_usage,
     remember_cloud_sandbox_event_receipt,
 )
-from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.gateway.service import (
     invalidate_cloud_sandbox_gateway_access_for_user,
@@ -238,9 +239,28 @@ async def handle_e2b_webhook(
         return E2BWebhookReceipt()
 
     if event_kind in {PROVIDER_EVENT_KIND_CREATED, PROVIDER_EVENT_KIND_RESUMED}:
-        billing_subject = await ensure_personal_billing_subject(db, sandbox.owner_user_id)
-        billing = await get_billing_snapshot_for_subject(billing_subject.id)
-        if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
+        # Corridor N2: a held/over-limit subject cannot CONTINUE. Reuse the
+        # resume gate's decision so this stray wake is judged exactly like an
+        # inbound resume request — the subject that PAYS (an org member bills the
+        # org subject, matching segment attribution) on an active spend hold OR
+        # over an enabled compute budget cap. Enforce-mode only; the helper
+        # returns ``None`` outside ``CLOUD_BILLING_MODE=enforce``. It reads in
+        # this session (unlike the old private-session snapshot call), which the
+        # ``commit_webhook_phase`` below releases along with correlation.
+        #
+        # Law N6 also applies here, and deliberately so: if the resolver cannot
+        # READ billing state it raises ``BillingStateUnavailableError`` (after its
+        # own alert + receipt) and we let it propagate. The global handler renders
+        # that as a 503, which E2B treats as a delivery failure and RETRIES — the
+        # event receipt has not been claimed yet, so the retry re-runs this gate
+        # with a healthy read. Swallowing it instead would mark the event
+        # processed and leave over-limit compute running until the next
+        # reconciler pass, which is exactly the fail-open this corridor forbids.
+        billing_block = await resolve_cloud_sandbox_billing_block(
+            db,
+            owner_user_id=sandbox.owner_user_id,
+        )
+        if billing_block is not None:
             # Do not commit a processed receipt before the provider side effect.
             # Release the correlation/billing transaction before waiting on the
             # materialization lease, then release the fresh read transaction
@@ -278,6 +298,18 @@ async def handle_e2b_webhook(
                 ):
                     await commit_webhook_phase(db)
                     return E2BWebhookReceipt()
+                # Audit the enforcement once the event receipt is claimed, so a
+                # redelivery cannot double-record. Same decision_type vocabulary
+                # the reconciler uses for quota enforcement
+                # (``enforce_active_spend``/``user_limit_pause``/``org_limit_pause``),
+                # and this is a pause of running compute, not a refused start.
+                await record_cloud_sandbox_billing_block(
+                    db,
+                    billing_block,
+                    actor_user_id=sandbox.owner_user_id,
+                    would_block_start=billing_block.start_blocked,
+                    would_pause_active=True,
+                )
                 updated = await apply_cloud_sandbox_provider_observation(
                     db,
                     current.id,

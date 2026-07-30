@@ -60,6 +60,7 @@ async def get_usage_summary(
     snapshot = await billing_snapshots.get_billing_snapshot_for_subject_in_session(
         db,
         context.billing_subject_id,
+        grant_user_id=user_id,
     )
     llm_balance = await agent_gateway_store.get_remaining_credit_usd(
         db,

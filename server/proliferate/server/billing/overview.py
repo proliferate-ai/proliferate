@@ -40,6 +40,7 @@ async def get_billing_overview_for_context(
     snapshot = await billing_snapshots.get_billing_snapshot_for_subject_in_session(
         db,
         context.billing_subject_id,
+        grant_user_id=context.actor_user_id,
     )
     return _billing_overview_from_snapshot(snapshot)
 
@@ -74,6 +75,7 @@ async def get_cloud_plan_for_context(
     snapshot = await billing_snapshots.get_billing_snapshot_for_subject_in_session(
         db,
         context.billing_subject_id,
+        grant_user_id=context.actor_user_id,
     )
     return _cloud_plan_from_snapshot(snapshot)
 

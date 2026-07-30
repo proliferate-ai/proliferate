@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -168,10 +167,14 @@ async def test_webhook_converges_legacy_null_usage_before_exact_lifecycle_accoun
     event_time = sandbox.provider_observed_at + timedelta(seconds=1)
     monkeypatch.setattr(webhook_service, "_verify_e2b_signature", lambda *_args: None)
 
-    async def _billing_snapshot(_billing_subject_id: object) -> SimpleNamespace:
-        return SimpleNamespace(billing_mode="observe", active_spend_hold=False)
+    async def _no_billing_block(*_args: object, **_kwargs: object) -> None:
+        return None
 
-    monkeypatch.setattr(webhook_service, "get_billing_snapshot_for_subject", _billing_snapshot)
+    monkeypatch.setattr(
+        webhook_service,
+        "resolve_cloud_sandbox_billing_block",
+        _no_billing_block,
+    )
     payload = json.dumps(
         {
             "id": f"legacy-null-{event_type}",

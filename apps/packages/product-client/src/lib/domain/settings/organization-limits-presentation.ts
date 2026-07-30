@@ -61,9 +61,7 @@ export interface BudgetBalanceView {
 
 /** Org-wide compute balance, derived from the org billing subject's grant allocations. */
 export function computeGrantBalance(plan: BillingPlanInfo | null | undefined): BudgetBalanceView {
-  const grants = (plan?.grantAllocations ?? []).filter((grant) =>
-    grant.active || grant.consumedSeconds > 0 || grant.remainingSeconds > 0
-  );
+  const grants = (plan?.grantAllocations ?? []).filter((grant) => grant.active);
   const purchased = grants.reduce((total, grant) => total + secondsToPcus(grant.totalSeconds), 0);
   const available = grants.reduce((total, grant) => total + secondsToPcus(grant.remainingSeconds), 0);
   const used = grants.reduce((total, grant) => total + secondsToPcus(grant.consumedSeconds), 0);
