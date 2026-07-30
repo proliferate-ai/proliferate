@@ -12,9 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.billing import (
     BILLING_HOLD_KIND_PAYMENT_FAILED,
     BILLING_HOLD_STATUS_ACTIVE,
+    BILLING_SUBJECT_KIND_PERSONAL,
 )
 from proliferate.db.models.billing import BillingHold, BillingSubject, BillingSubscription
 from proliferate.utils.time import utcnow
+
+# Mirrors ``HEALTHY_STRIPE_SUBSCRIPTION_STATUSES`` in
+# ``proliferate.server.billing.domain.plans``, inlined because no other store
+# module imports from the server layer and this one should not be the first.
+_HEALTHY_SUBSCRIPTION_STATUSES: frozenset[str] = frozenset({"active", "trialing"})
 
 
 def coerce_utc(value: datetime | None) -> datetime | None:
@@ -193,6 +199,42 @@ async def get_billing_subscription_by_stripe_subscription_id(
             )
         )
     ).scalar_one_or_none()
+
+
+async def user_has_healthy_personal_subscription(db: AsyncSession, user_id: UUID) -> bool:
+    """Does this user's PERSONAL subject carry a live subscription?
+
+    Read-only, and deliberately does not create the subject: this answers "is
+    personal still the payer here?" for the owner-context redirect (W-F1), and
+    minting a subject to answer it would defeat the point.
+
+    Org-everywhere routes billing reads to the paying org, but subscriptions are
+    still sold personally (org subscriptions need PRO, which is off at launch).
+    Without this check a customer who is genuinely paying reads back
+    ``plan: free`` / ``isPaidCloud: false`` from their org subject, losing the
+    unlimited hours and raised concurrency they bought — a worse failure than the
+    stranded balance the redirect exists to fix.
+    """
+    subject_id = (
+        await db.execute(
+            select(BillingSubject.id).where(
+                BillingSubject.kind == BILLING_SUBJECT_KIND_PERSONAL,
+                BillingSubject.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if subject_id is None:
+        return False
+    return bool(
+        await db.scalar(
+            select(BillingSubscription.id)
+            .where(
+                BillingSubscription.billing_subject_id == subject_id,
+                BillingSubscription.status.in_(_HEALTHY_SUBSCRIPTION_STATUSES),
+            )
+            .limit(1)
+        )
+    )
 
 
 async def apply_payment_failed_hold(

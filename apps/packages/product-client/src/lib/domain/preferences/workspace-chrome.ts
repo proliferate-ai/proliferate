@@ -2,7 +2,7 @@
 // card is a step lighter, which rendered the header as a visibly lighter haze
 // band against the opaque chat surface on every theme.
 //
-// Both chrome modes use 46px (codex --height-toolbar, UX_SPEC §7) so the
+// Both chrome modes use 46px (UX_SPEC §7's --height-toolbar) so the
 // header always lines up with the right panel's --tab-system-height in
 // apps/packages/design/src/css/product.css — the main header aligns down to
 // the right pane, not the other way around (owner ruling 2026-07-10).

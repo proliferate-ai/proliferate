@@ -51,7 +51,7 @@ export function SquareTerminal({ className, ...props }: IconProps) {
   );
 }
 
-/** Filled command-window glyph matching Codex transcript activities. */
+/** Filled command-window glyph for transcript command activities. */
 export function CommandWindow({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -62,7 +62,7 @@ export function CommandWindow({ className, ...props }: IconProps) {
   );
 }
 
-/** Filled open-book glyph matching Codex file-reading activities. */
+/** Filled open-book glyph for file-reading activities. */
 export function ReadBook({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -133,7 +133,7 @@ export function FilePen({ className, ...props }: IconProps) {
   );
 }
 
-/** Filled plus/minus file glyph used by Codex's completed diff summary. */
+/** Filled plus/minus file glyph for completed diff summaries. */
 export function FileDiff({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -147,7 +147,7 @@ export function FileDiff({ className, ...props }: IconProps) {
   );
 }
 
-/** Filled pen glyph matching Codex transcript edit activities. */
+/** Filled pen glyph for transcript edit activities. */
 export function FilePenActivity({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 20 21" fill="currentColor" {...props}>
@@ -240,7 +240,7 @@ export function FolderOpen({ className, ...props }: IconProps) {
   );
 }
 
-/** Filled closed folder matching Codex's sidebar project folders */
+/** Filled closed folder for sidebar project folders */
 export function FolderClosedFilled({ className, ...props }: IconProps) {
   return (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" width="var(--icon-paired)" height="var(--icon-paired)" fill="currentColor" viewBox="0 0 20 20" {...props}>
@@ -249,7 +249,7 @@ export function FolderClosedFilled({ className, ...props }: IconProps) {
   );
 }
 
-/** Filled folder-plus icon matching Codex's "Add new project" button */
+/** Filled folder-plus icon for the "Add new project" button */
 export function FolderPlusFilled({ className, ...props }: IconProps) {
   return (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" width="var(--icon-control)" height="var(--icon-control)" fill="currentColor" viewBox="0 0 20 20" {...props}>
@@ -258,7 +258,7 @@ export function FolderPlusFilled({ className, ...props }: IconProps) {
   );
 }
 
-/** Filled folder icon matching Codex's sidebar project folders */
+/** Filled folder icon for sidebar project folders */
 export function FolderFilled({ className, ...props }: IconProps) {
   return (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" width="var(--icon-paired)" height="var(--icon-paired)" fill="currentColor" viewBox="0 0 20 20" {...props}>
@@ -276,7 +276,7 @@ export function Filter({ className, ...props }: IconProps) {
   );
 }
 
-/** Collapse-all icon matching Codex's sidebar collapse button */
+/** Collapse-all icon for the sidebar collapse button */
 export function CollapseAll({ className, ...props }: IconProps) {
   return (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" width="var(--icon-control)" height="var(--icon-control)" fill="currentColor" viewBox="0 0 20 20" {...props}>
@@ -352,7 +352,7 @@ export function ProjectNotebook({ className, ...props }: IconProps) {
   );
 }
 
-/** Codex's remote-project folder: the globe is fused into the folder's
+/** Remote-project folder: the globe is fused into the folder's
  * corner as one glyph — never a separate badge overlay. */
 export function FolderRemote({ className, ...props }: IconProps) {
   return (
@@ -380,7 +380,7 @@ export function PrBranchGlyph({ className, dot = false, ...props }: IconProps & 
   );
 }
 
-/** Codex's merged-PR glyph: merge topology, tinted at the callsite. */
+/** Merged-PR glyph: merge topology, tinted at the callsite. */
 export function PrMergedGlyph({ className, ...props }: IconProps) {
   return (
     <svg className={className} width="var(--icon-paired)" height="var(--icon-paired)" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>

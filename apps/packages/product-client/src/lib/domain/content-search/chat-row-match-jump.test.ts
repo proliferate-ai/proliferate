@@ -38,7 +38,7 @@ describe("scrollActiveChatRowMatchIntoView", () => {
     const container = document.createElement("div");
     for (let index = 0; index < count; index += 1) {
       const mark = document.createElement("mark");
-      mark.className = "transcript-find-match";
+      mark.className = "content-find-match";
       mark.setAttribute("data-content-search-row", rowUnitId);
       mark.scrollIntoView = () => {};
       container.append(mark);
@@ -51,12 +51,12 @@ describe("scrollActiveChatRowMatchIntoView", () => {
     const rowUnitId = "chatrow:turn:abc:block:content";
     const container = seedMarks(rowUnitId, 3);
     const marks = container.querySelectorAll("mark");
-    marks[0].classList.add("transcript-find-active");
+    marks[0].classList.add("content-find-active");
 
     expect(scrollActiveChatRowMatchIntoView({ rowUnitId, ordinal: 2 })).toBe(true);
 
-    expect(marks[0].classList.contains("transcript-find-active")).toBe(false);
-    expect(marks[2].classList.contains("transcript-find-active")).toBe(true);
+    expect(marks[0].classList.contains("content-find-active")).toBe(false);
+    expect(marks[2].classList.contains("content-find-active")).toBe(true);
   });
 
   it("clamps to the last painted mark when fewer are painted than counted", () => {
@@ -65,7 +65,7 @@ describe("scrollActiveChatRowMatchIntoView", () => {
     const marks = container.querySelectorAll("mark");
 
     expect(scrollActiveChatRowMatchIntoView({ rowUnitId, ordinal: 5 })).toBe(true);
-    expect(marks[1].classList.contains("transcript-find-active")).toBe(true);
+    expect(marks[1].classList.contains("content-find-active")).toBe(true);
   });
 
   it("returns false when the row has no painted marks yet", () => {

@@ -129,6 +129,11 @@ BILLING_DECISION_OVERAGE_EXPORT = "overage_export"
 # grant/overage ``enforce_active_spend`` hold.
 BILLING_DECISION_USER_LIMIT_PAUSE = "user_limit_pause"
 BILLING_DECISION_ORG_LIMIT_PAUSE = "org_limit_pause"
+# Law N6 (corridor E6): the enforcement gate could not READ billing state (DB
+# error, resolver blowup). The denial is recorded under its own decision type so
+# an operator can tell "billing said no" apart from "billing was unreadable" in
+# billing_decision_event without joining logs.
+BILLING_DECISION_READ_UNAVAILABLE = "billing_read_unavailable"
 
 BILLING_USAGE_EXPORT_STATUS_PENDING = "pending"
 BILLING_USAGE_EXPORT_STATUS_OBSERVED = "observed"
@@ -137,6 +142,12 @@ BILLING_USAGE_EXPORT_STATUS_SUCCEEDED = "succeeded"
 BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE = "failed_retryable"
 BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL = "failed_terminal"
 BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF = "written_off"
+
+# Receipt reason for an accounting pass whose uncovered slice was refused by the
+# org-month overage cap. The slice is paused, not billed and not auto-written-off
+# (write-off is operator-only, ruled 2026-07-14), but law A2 forbids dropping it
+# silently: the pass records this durable decision receipt instead.
+BILLING_DECISION_REASON_OVERAGE_CAP_REACHED = "overage_cap_reached"
 
 BILLING_RECONCILE_INTERVAL_SECONDS = 900
 BILLING_SEAT_ADJUSTMENT_MAX_ATTEMPTS = 3

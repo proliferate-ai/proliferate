@@ -1,6 +1,6 @@
 """Agent LLM gateway ORM models (LiteLLM-era agent auth).
 
-The auth model (P1 rebuild, see codex/p1-auth-contract.md §1): a titled
+The auth model (P1 rebuild, see the agent-auth selection model): a titled
 personal API key vault (``agent_api_key``) plus per-(user, harness, surface)
 wiring rows (``agent_auth_selection``). Each selection row is either the
 gateway or a single direct api_key; there is no native source (native == the
