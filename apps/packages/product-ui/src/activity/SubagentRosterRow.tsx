@@ -25,8 +25,7 @@ export interface SubagentRosterRowProps {
 
 /**
  * A read-only roster row for a harness-native subagent (Claude Task agent,
- * Codex collab child thread, Cursor `cursor/task`). Per
- * `codex/session-activity-architecture.md` this roster feeds a new
+ * Codex collab child thread, Cursor `cursor/task`). This roster feeds a new
  * delegated-work *source* (see `activitySubagentToDelegatedWorkFields` in
  * product-domain) — this row is the interim standalone rendering until a
  * follow-up pass merges it into the existing delegated-work surfaces

@@ -56,18 +56,18 @@ export function proliferateCreditBalance(plan: BillingPlanView): {
   available: string;
   used: string;
 } {
-  const visible = visibleGrantAllocations(plan.grantAllocations);
-  if (visible.length > 0) {
+  const current = (plan.grantAllocations ?? []).filter((grant) => grant.active);
+  if (current.length > 0) {
     return {
-      purchased: formatCredits(visible.reduce(
+      purchased: formatCredits(current.reduce(
         (total, grant) => total + secondsToHours(grant.totalSeconds),
         0,
       )),
-      available: formatCredits(visible.reduce(
+      available: formatCredits(current.reduce(
         (total, grant) => total + secondsToHours(grant.remainingSeconds),
         0,
       )),
-      used: formatCredits(visible.reduce(
+      used: formatCredits(current.reduce(
         (total, grant) => total + secondsToHours(grant.consumedSeconds),
         0,
       )),
@@ -92,12 +92,12 @@ export function proliferateCreditBalance(plan: BillingPlanView): {
 export function grantUsageSummary(
   grants: readonly BillingGrantAllocationView[] | null | undefined,
 ): { consumedHours: number } | null {
-  const visible = visibleGrantAllocations(grants);
-  if (visible.length === 0) {
+  const current = (grants ?? []).filter((grant) => grant.active);
+  if (current.length === 0) {
     return null;
   }
   return {
-    consumedHours: visible.reduce(
+    consumedHours: current.reduce(
       (total, grant) => total + secondsToHours(grant.consumedSeconds),
       0,
     ),

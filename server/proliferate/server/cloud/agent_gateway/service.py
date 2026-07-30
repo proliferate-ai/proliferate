@@ -1,6 +1,6 @@
 """Agent gateway auth services: key vault, auth selections, capabilities.
 
-The P1 auth model (contract ``codex/p1-auth-contract.md`` §5): a titled,
+The P1 auth model (the agent-auth API surface): a titled,
 provider-less key vault plus per-(user, harness, surface) selection sources
 written as full desired state. Store legality errors surface as typed
 :class:`CloudApiError` values so the API layer maps them uniformly. Key and

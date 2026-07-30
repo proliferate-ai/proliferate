@@ -36,8 +36,8 @@ export function renderContentSearchMarkedText({
     nodes.push(
       <mark
         key={matchId}
-        className={`transcript-find-match ${
-          matchId === activeMatchId ? "transcript-find-active" : ""
+        className={`content-find-match ${
+          matchId === activeMatchId ? "content-find-active" : ""
         }`}
         data-content-search-match-id={matchId}
       >
@@ -89,8 +89,8 @@ export function renderContentSearchMarkedToken({
     nodes.push(
       <mark
         key={`${matchId}:${segment.start}:${segment.end}`}
-        className={`transcript-find-match ${
-          matchId === activeMatchId ? "transcript-find-active" : ""
+        className={`content-find-match ${
+          matchId === activeMatchId ? "content-find-active" : ""
         }`}
         data-content-search-match-id={matchId}
       >

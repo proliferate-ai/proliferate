@@ -23,11 +23,11 @@ from proliferate.db.store.billing import (
     list_usage_segments,
     sum_billable_usage_seconds_before,
 )
+from proliferate.db.store.billing_runtime_usage import resolve_billing_subject_id_for_user
 from proliferate.db.store.billing_seats import count_active_seats_for_billing_subject
 from proliferate.db.store.billing_subjects import (
     ensure_free_included_grant,
     ensure_free_trial_v2_grant,
-    ensure_personal_billing_subject,
     get_billing_subject_by_id,
 )
 from proliferate.db.store.billing_subscriptions import list_active_holds, list_subscriptions
@@ -57,19 +57,59 @@ class BillingSubjectRecord(Protocol):
     user_id: UUID | None
 
 
-async def _ensure_snapshot_free_grant(db: AsyncSession, subject: BillingSubjectRecord) -> None:
-    if subject.kind != BILLING_SUBJECT_KIND_PERSONAL or subject.user_id is None:
+async def _ensure_snapshot_free_grant(
+    db: AsyncSession,
+    subject: BillingSubjectRecord,
+    *,
+    grant_user_id: UUID | None = None,
+    payer_billing_subject_id: UUID | None = None,
+) -> None:
+    """Mint the free allowance on the subject this snapshot is FOR — if it pays.
+
+    Law W1 ("the org always pays") governs money IN as well as money out. The
+    free allowance has to land on the *paying* subject or it is unspendable: an
+    org-membered user's compute drains the org pool, so a grant sitting on their
+    personal subject is a balance they can see and never spend (W-F1). Before
+    this, an org subject was skipped outright, which left the org pool empty by
+    construction — under ``CLOUD_BILLING_MODE=enforce`` that blocks a brand-new
+    org member's very first start.
+
+    ``grant_user_id`` names the user the allowance belongs to. The free grant is
+    per-user, not per-org, so an org subject reached without owner context is
+    left alone rather than granted a pooled allowance nobody owns.
+
+    The mint is guarded by the payer check rather than by subject kind: we only
+    ever place a user's allowance on the one subject that pays for that user's
+    compute. Loading some *other* org's snapshot (a second membership, viewed
+    from settings) must not re-home the grant there — that would strand it just
+    as surely as leaving it on personal did. ``payer_billing_subject_id`` lets a
+    caller that already resolved the payer skip the second lookup.
+    """
+    user_id = grant_user_id or subject.user_id
+    if user_id is None:
+        return
+    payer_subject_id = payer_billing_subject_id
+    if payer_subject_id is None:
+        payer_subject_id = await resolve_billing_subject_id_for_user(db, user_id)
+    if payer_subject_id != subject.id:
         return
     if settings.pro_billing_enabled:
-        await ensure_free_trial_v2_grant(db, subject)
-    else:
-        await ensure_free_included_grant(db, subject.user_id)
+        # ``free_trial_v2`` stays personal-only: it reads and rewrites personal
+        # ``free_included`` grants, and it is gated behind ``pro_billing_enabled``,
+        # which is off at launch (W-F2/W-F3 are the PRO-path follow-ups).
+        if subject.kind == BILLING_SUBJECT_KIND_PERSONAL and subject.user_id is not None:
+            await ensure_free_trial_v2_grant(db, subject)
+            await db.flush()
+        return
+    await ensure_free_included_grant(db, user_id, billing_subject_id=subject.id)
     await db.flush()
 
 
 async def _build_snapshot_state_for_subject(
     db: AsyncSession,
     billing_subject_id: UUID,
+    *,
+    actor_user_id: UUID | None = None,
 ) -> BillingSnapshotState:
     now = utcnow()
     subject = await get_billing_subject_by_id(db, billing_subject_id)
@@ -82,7 +122,14 @@ async def _build_snapshot_state_for_subject(
     return BillingSnapshotState(
         subject=subject,
         billing_subject_id=billing_subject_id,
-        sandboxes=await list_cloud_sandboxes_for_subject(db, billing_subject_id),
+        # Sandbox and repo counts hang off a user, not a subject: an org subject
+        # has no ``user_id``, so without the actor an org member's active-sandbox
+        # and repo counts both read 0 (W-F1).
+        sandboxes=await list_cloud_sandboxes_for_subject(
+            db,
+            billing_subject_id,
+            actor_user_id=actor_user_id,
+        ),
         grants=grants,
         entitlements=entitlements,
         holds=await list_active_holds(db, billing_subject_id),
@@ -95,6 +142,7 @@ async def _build_snapshot_state_for_subject(
         active_cloud_repo_count=await count_active_cloud_repo_environments(
             db,
             billing_subject_id,
+            actor_user_id=actor_user_id,
         ),
         unaccounted_billable_seconds=await estimate_unaccounted_billable_seconds(
             db,
@@ -115,17 +163,43 @@ async def load_snapshot_state_for_user(
     db: AsyncSession,
     user_id: UUID,
 ) -> BillingSnapshotState:
-    subject = await ensure_personal_billing_subject(db, user_id)
-    await _ensure_snapshot_free_grant(db, subject)
-    return await _build_snapshot_state_for_subject(db, subject.id)
+    """Snapshot for a user, on the subject that PAYS for them (law W1).
+
+    Resolves the payer the same way segment-open and the start gate do
+    (``resolve_billing_subject_id_for_user``): org subject under a membership,
+    personal subject when org-less. Reading the personal subject here while spend
+    drains the org subject is what made a purchased or free balance look present
+    but spend as empty (W-F1).
+    """
+    billing_subject_id = await resolve_billing_subject_id_for_user(db, user_id)
+    subject = await get_billing_subject_by_id(db, billing_subject_id)
+    if subject is None:
+        raise RuntimeError("Billing subject not found.")
+    await _ensure_snapshot_free_grant(
+        db,
+        subject,
+        grant_user_id=user_id,
+        payer_billing_subject_id=billing_subject_id,
+    )
+    return await _build_snapshot_state_for_subject(
+        db,
+        billing_subject_id,
+        actor_user_id=user_id,
+    )
 
 
 async def load_snapshot_state_for_subject(
     db: AsyncSession,
     billing_subject_id: UUID,
+    *,
+    grant_user_id: UUID | None = None,
 ) -> BillingSnapshotState:
     subject = await get_billing_subject_by_id(db, billing_subject_id)
     if subject is None:
         raise RuntimeError("Billing subject not found.")
-    await _ensure_snapshot_free_grant(db, subject)
-    return await _build_snapshot_state_for_subject(db, billing_subject_id)
+    await _ensure_snapshot_free_grant(db, subject, grant_user_id=grant_user_id)
+    return await _build_snapshot_state_for_subject(
+        db,
+        billing_subject_id,
+        actor_user_id=grant_user_id,
+    )
