@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ToastHost } from "@proliferate/ui/patterns/ToastHost";
 import { dismissToast } from "@proliferate/ui/utils/show-toast";
 import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter";
@@ -62,6 +62,25 @@ vi.mock("#product/hooks/app/lifecycle/use-running-agent-count", () => ({
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ links: { openExternal } }),
 }));
+
+/**
+ * jsdom implements no Pointer Capture API, and sonner's swipe-to-dismiss calls
+ * `setPointerCapture` on every pointerdown. React swallows the resulting
+ * TypeError, so the clicks below still land and the assertions still hold — but
+ * it printed a stack trace per click, which is exactly the kind of noise that
+ * trains people to stop reading test output. Stubbed rather than silenced: a
+ * no-op capture is what a real element does for a gesture nobody performs.
+ */
+beforeAll(() => {
+  for (const method of ["setPointerCapture", "releasePointerCapture", "hasPointerCapture"] as const) {
+    if (!(method in Element.prototype)) {
+      Object.defineProperty(Element.prototype, method, {
+        configurable: true,
+        value: () => (method === "hasPointerCapture" ? false : undefined),
+      });
+    }
+  }
+});
 
 /**
  * `ToastHost` first, deliberately: sonner's `Toaster` subscribes to the toast
