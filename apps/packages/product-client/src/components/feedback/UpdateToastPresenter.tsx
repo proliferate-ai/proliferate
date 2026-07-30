@@ -25,9 +25,10 @@ export const RESTART_COUNTDOWN_TOAST_ID = "app-update-restart-countdown";
 
 /**
  * The phases that speak. `checking` and `downloading` are deliberately absent:
- * the sidebar pill owns continuous state, and a toast that narrates progress is
- * a progress bar that steals focus. A toast fires only at a resolution — ready,
- * stalled, failed, or the receipt for a check the user asked for.
+ * the sidebar update button owns continuous state, and a toast that narrates
+ * progress is a progress bar that steals focus. A toast fires only at a
+ * resolution — ready, stalled, failed, or the receipt for a check the user
+ * asked for.
  */
 const UPDATE_TOAST_PHASES = new Set<UpdaterPhase>([
   "available",
@@ -133,7 +134,24 @@ export function UpdateToastPresenter() {
       badge: UPDATE_BADGE,
       tone: "info",
       title: "Restarting to update",
-      description: `Your sessions finished, so Proliferate restarts in ${seconds} second${seconds === 1 ? "" : "s"}.`,
+      // Split for the same reason the number exists at all. Sonner's toast list
+      // is a `polite` live region with `aria-relevant="additions text"`, so a
+      // description that changes every second is re-announced every second —
+      // the ticking numeral that makes the warning honest to a sighted user
+      // would make it unusable to a screen-reader user. So the numeral is
+      // hidden from assistive tech and a stable sentence carries the same
+      // meaning without the count, which announces once and stays quiet.
+      description: (
+        <>
+          <span aria-hidden="true">
+            {`Your sessions finished, so Proliferate restarts in ${seconds} second${seconds === 1 ? "" : "s"}.`}
+          </span>
+          <span className="sr-only">
+            Your sessions finished, so Proliferate restarts in a few seconds.
+            Choose Restart now, or Not now to cancel.
+          </span>
+        </>
+      ),
       secondary: { label: "Not now", onClick: cancelRestartCountdown },
       commit: { label: "Restart now", onClick: () => void restartNow() },
     });

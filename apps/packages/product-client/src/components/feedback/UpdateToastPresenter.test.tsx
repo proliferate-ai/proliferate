@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ReactNode } from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ToastInput } from "@proliferate/ui/utils/toast-model";
@@ -77,6 +78,24 @@ function raisedWithId(id: string): ToastInput | undefined {
   return raised().find((input) => input.id === id);
 }
 
+/**
+ * A description is a `ReactNode`, not a string: the countdown's is two spans,
+ * one visible and one for assistive tech. So the text is read off a render
+ * rather than off the value, which also means these assertions keep working
+ * whichever of the two shapes a given toast uses.
+ */
+function descriptionText(input: ToastInput | undefined): string {
+  const description =
+    input && "description" in input ? input.description : undefined;
+  if (description == null) {
+    return "";
+  }
+  const { container, unmount } = render(<>{description}</>);
+  const text = container.textContent ?? "";
+  unmount();
+  return text;
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -97,7 +116,7 @@ afterEach(() => {
 
 describe("UpdateToastPresenter — which phases speak", () => {
   it.each(["checking", "downloading", "idle"] as const)(
-    "stays silent during %s, because the sidebar pill owns continuous state",
+    "stays silent during %s, because the sidebar update button owns continuous state",
     (phase) => {
       updaterMocks.phase = phase;
 
@@ -356,14 +375,14 @@ describe("UpdateToastPresenter — deferred restart countdown", () => {
 
     render(<UpdateToastPresenter />);
 
-    const countdown = raisedWithId(RESTART_COUNTDOWN_TOAST_ID) as {
+    const raisedCountdown = raisedWithId(RESTART_COUNTDOWN_TOAST_ID);
+    const countdown = raisedCountdown as {
       tone: string;
-      description: string;
       secondary: { label: string; onClick: () => void };
       commit: { onClick: () => void };
     };
     expect(countdown.tone).toBe("info");
-    expect(countdown.description).toContain("restarts in 10 seconds");
+    expect(descriptionText(raisedCountdown)).toContain("restarts in 10 seconds");
 
     countdown.secondary.onClick();
     expect(updaterMocks.cancelRestartCountdown).toHaveBeenCalledTimes(1);
@@ -379,10 +398,8 @@ describe("UpdateToastPresenter — deferred restart countdown", () => {
 
     render(<UpdateToastPresenter />);
 
-    const countdown = raisedWithId(RESTART_COUNTDOWN_TOAST_ID) as {
-      description: string;
-    };
-    expect(countdown.description).toContain("restarts in 4 seconds");
+    expect(descriptionText(raisedWithId(RESTART_COUNTDOWN_TOAST_ID)))
+      .toContain("restarts in 4 seconds");
   });
 
   it("says one second, not one seconds, on the last tick", () => {
@@ -391,10 +408,38 @@ describe("UpdateToastPresenter — deferred restart countdown", () => {
 
     render(<UpdateToastPresenter />);
 
-    const countdown = raisedWithId(RESTART_COUNTDOWN_TOAST_ID) as {
-      description: string;
+    expect(descriptionText(raisedWithId(RESTART_COUNTDOWN_TOAST_ID)))
+      .toContain("restarts in 1 second.");
+  });
+
+  it("keeps the ticking numeral away from the live region that would repeat it", () => {
+    // Sonner's toast list is a `polite` live region with
+    // `aria-relevant="additions text"`, so the numeral that makes this warning
+    // honest to a sighted user would be re-announced once a second to a
+    // screen-reader user. The count is therefore hidden from assistive tech and
+    // a countless sentence carries the same meaning, announced once.
+    updaterMocks.phase = "ready";
+    updaterMocks.restartCountdownStartedAt = Date.now() - 6_400;
+
+    render(<UpdateToastPresenter />);
+
+    const description = raisedWithId(RESTART_COUNTDOWN_TOAST_ID) as {
+      description: ReactNode;
     };
-    expect(countdown.description).toContain("restarts in 1 second.");
+    const { container } = render(<>{description.description}</>);
+
+    const counted = container.querySelector('[aria-hidden="true"]');
+    expect(counted?.textContent).toContain("restarts in 4 seconds");
+
+    const spoken = container.querySelector(".sr-only");
+    expect(spoken?.textContent).toContain("restarts in a few seconds");
+    // The one thing the hidden sentence must not do is reintroduce the numeral
+    // it exists to avoid.
+    expect(spoken?.textContent).not.toMatch(/\d/);
+    // A screen-reader user who cannot see the buttons still needs to know the
+    // way out, since a persistent toast takes no focus.
+    expect(spoken?.textContent).toContain("Restart now");
+    expect(spoken?.textContent).toContain("Not now");
   });
 
   it("supersedes the ready announcement instead of stacking on it", () => {

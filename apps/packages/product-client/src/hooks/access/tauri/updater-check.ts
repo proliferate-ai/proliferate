@@ -80,7 +80,8 @@ export async function runUpdateCheck(
   checkInFlight = true;
 
   // Recorded before the phase flips, so every consumer of `checking` — the
-  // Settings row, the sidebar pill — can already tell whose check this is.
+  // Settings row, the sidebar update button — can already tell whose check
+  // this is.
   store.setCheckOrigin(options.userInitiated ? "manual" : "background");
   store.setPhase("checking");
   deps.track("app_update_check_started", undefined);

@@ -50,9 +50,9 @@ export interface UserPreferences {
   pasteAttachmentsEnabled: boolean;
   /**
    * Keep Proliferate up to date: when on (the default), an available update
-   * downloads on its own and the sidebar pill is the only surface until it is
-   * ready. When off, the `available` phase surfaces a toast asking for the
-   * click, because then a click is genuinely required.
+   * downloads on its own and the sidebar update button is the only surface
+   * until it is ready. When off, the `available` phase surfaces a toast asking
+   * for the click, because then a click is genuinely required.
    */
   autoUpdateEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
