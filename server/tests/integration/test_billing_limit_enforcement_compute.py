@@ -535,8 +535,8 @@ async def test_resume_allowed_without_hold(
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
     monkeypatch.setattr(settings, "pro_billing_enabled", False)
     user_id = await _create_user(db_session)
-    await ensure_personal_billing_subject(db_session, user_id)
-    await ensure_free_included_grant(db_session, user_id)
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    await ensure_free_included_grant(db_session, user_id, billing_subject_id=subject.id)
     await db_session.commit()
     sandbox = SimpleNamespace(owner_user_id=user_id, organization_id=None)
     await assert_cloud_sandbox_resume_allowed(db_session, sandbox)  # type: ignore[arg-type]

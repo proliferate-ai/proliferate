@@ -111,7 +111,7 @@ describe("MarkdownBody presentation", () => {
       </ChatContentSearchQueryContext.Provider>,
     );
 
-    expect(html).toContain('class="transcript-find-match"');
+    expect(html).toContain('class="content-find-match"');
     expect(html).toContain('data-content-search-row="assistant-1"');
   });
 

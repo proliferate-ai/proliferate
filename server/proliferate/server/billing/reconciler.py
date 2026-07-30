@@ -444,7 +444,7 @@ async def run_billing_reconcile_pass() -> None:
     async def _run(_db: object) -> None:
         await run_billing_accounting_pass()
 
-        snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
+        snapshots_by_subject: dict[tuple[UUID, UUID | None], BillingSnapshot] = {}
         recorded_hold_decision_subjects: set[UUID] = set()
         # Org budget-limit enforcement caches (spec §4.2), scoped to this pass:
         # org→enabled compute limits, and org window usage keyed by
@@ -468,12 +468,21 @@ async def run_billing_reconcile_pass() -> None:
             # invariant guards real reconciliation work.
             if provider is None:
                 raise RuntimeError("sandbox provider unresolved with open usage segments")
-            billing_snapshot = snapshots_by_subject.get(segment.billing_subject_id)
+            # Keyed by (subject, actor), not subject alone: parts of the snapshot
+            # are per-user, so on an ORG subject (no ``subject.user_id``) they need
+            # the actor. ``remaining_seconds`` is safe either way — grants list by
+            # subject, and segment-open already minted this user's allowance onto
+            # the payer — but ``active_sandbox_count`` and ``active_cloud_repo_count``
+            # reach their rows through a user and read 0 without one, which is what
+            # the enforce-hold receipts below then report (W-F1).
+            snapshot_key = (segment.billing_subject_id, segment.user_id)
+            billing_snapshot = snapshots_by_subject.get(snapshot_key)
             if billing_snapshot is None:
                 billing_snapshot = await get_billing_snapshot_for_subject(
-                    segment.billing_subject_id
+                    segment.billing_subject_id,
+                    grant_user_id=segment.user_id,
                 )
-                snapshots_by_subject[segment.billing_subject_id] = billing_snapshot
+                snapshots_by_subject[snapshot_key] = billing_snapshot
             if (
                 billing_snapshot.active_spend_hold
                 and segment.billing_subject_id not in recorded_hold_decision_subjects

@@ -66,8 +66,8 @@ async def _seed_exhausted_user(db_session: AsyncSession) -> uuid.UUID:
 async def _seed_healthy_user(db_session: AsyncSession) -> uuid.UUID:
     """A subject with trial credits and no hold (never exhausted)."""
     user_id = await _create_user(db_session)
-    await ensure_personal_billing_subject(db_session, user_id)
-    await ensure_free_included_grant(db_session, user_id)
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    await ensure_free_included_grant(db_session, user_id, billing_subject_id=subject.id)
     await db_session.commit()
     return user_id
 

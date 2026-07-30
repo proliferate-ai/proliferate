@@ -12,13 +12,16 @@ from sqlalchemy import and_, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.billing import BILLING_RECONCILER_LOCK_KEY
 from proliferate.db.models.billing import BillingDecisionEvent, UsageSegment, WebhookEventReceipt
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import (
+    ensure_free_included_grant,
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )
+from proliferate.db.store.billing_subscriptions import user_has_healthy_personal_subscription
 from proliferate.db.store.organizations import get_current_membership_for_user
 from proliferate.utils.time import utcnow
 
@@ -77,26 +80,53 @@ async def resolve_organization_id_for_user(
     return membership.organization.id if membership is not None else None
 
 
+async def resolve_payer_organization_id_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> UUID | None:
+    """The org that PAYS for this user, or ``None`` when they pay personally.
+
+    Law W1 says the org always pays, with one exception: a user already holding a
+    healthy subscription on their PERSONAL subject. Subscriptions are still sold
+    personally (org subscriptions need PRO, off at launch — W-F2/W-F3), so for them
+    personal genuinely is the payer. That exception belongs HERE, in the one resolver
+    both reads and spend call; applying it to reads alone split-brained exactly the
+    paying customers (UI said ``plan: cloud`` while the gate resolved the org and
+    refused every start). Answers who pays, NOT which org usage is attributed to.
+    """
+    organization_id = await resolve_organization_id_for_user(db, user_id)
+    if organization_id is None:
+        return None
+    if await user_has_healthy_personal_subscription(db, user_id):
+        return None
+    return organization_id
+
+
 async def resolve_billing_subject_id_for_user(
     db: AsyncSession,
     user_id: UUID,
 ) -> UUID:
     """The subject that pays for a user's compute.
 
-    A user acting under a current org membership bills the org's billing subject
-    (org Stripe customer + org grant pool); an org-less user bills their personal
-    subject. The LLM track has no personal branch at all anymore — every gateway
-    enrollment is minted against an org billing subject
-    (``ensure_org_enrollment``, model-gateway.md §Account model) — so this
-    membership test only governs compute attribution. Deriving both the paying
-    subject and ``organization_id`` from the one membership lookup keeps compute
-    attribution and enforcement scope from ever disagreeing.
+    An org payer bills the org's subject (org Stripe customer + org grant pool);
+    anyone ``resolve_payer_organization_id_for_user`` leaves personal bills their own.
+    The LLM track has no personal branch anymore (every gateway enrollment is minted
+    against an org subject), so this only governs compute.
     """
-    organization_id = await resolve_organization_id_for_user(db, user_id)
+    organization_id = await resolve_payer_organization_id_for_user(db, user_id)
     if organization_id is not None:
         subject = await ensure_organization_billing_subject(db, organization_id)
-        return subject.id
-    subject = await ensure_personal_billing_subject(db, user_id)
+    else:
+        subject = await ensure_personal_billing_subject(db, user_id)
+    # Law W1 governs money IN too: the user's one free allowance follows the payer
+    # (W-F1). Re-homing it here, rather than in each snapshot loader, is what makes
+    # the enforce gate, segment-open, and the reconciler agree — all three resolve
+    # the payer through this function, so none can see a pool that is empty only
+    # because the allowance is stranded on a subject that never pays. Idempotent.
+    # Skipped under PRO, which mints ``free_trial_v2`` (personal-only, in the
+    # snapshot loader) instead; PRO is off at launch, W-F2/W-F3 are its follow-ups.
+    if not settings.pro_billing_enabled:
+        await ensure_free_included_grant(db, user_id, billing_subject_id=subject.id)
     return subject.id
 
 
@@ -117,17 +147,6 @@ async def _get_runtime_environment_billing_subject(
 ) -> tuple[UUID, UUID]:
     del db, runtime_environment_id
     raise RuntimeError("Cloud runtime environments have been removed.")
-
-
-async def resolve_billing_subject_id_for_workspace(
-    db: AsyncSession,
-    workspace_id: UUID,
-) -> UUID:
-    billing_subject_id, _owner_user_id = await _get_workspace_billing_subject(
-        db,
-        workspace_id,
-    )
-    return billing_subject_id
 
 
 async def create_usage_segment(
@@ -483,15 +502,16 @@ async def ensure_sandbox_usage_started(
         owner_user_id = actor_user_id
     else:
         raise RuntimeError("Usage segment requires a runtime environment, workspace, or user.")
-    # Resolve the org the segment belongs to from the owner's current
-    # membership. This is both the enforcement/attribution scope and, when set,
-    # who pays: an owner acting under an org bills the org billing subject (org
-    # Stripe customer + org grants), matching the LLM track; an org-less owner
-    # keeps the personal subject resolved above. Both derive from one membership
-    # lookup so ``organization_id`` and ``billing_subject_id`` can never disagree.
+    # Two questions, two lookups. ``organization_id`` is the enforcement SCOPE, from
+    # plain membership: the org-scoped sums (``compute_usage_seconds_in_window_for_org``,
+    # the usage-by-user view) filter on it so an org sees every member's compute
+    # whatever subject the segment is invoiced to — stamping the payer would hide a
+    # personally-subscribed member's usage from their org's caps. Who PAYS is separate
+    # and must match the gate and read model, else the reconciler chases a dry pool.
     organization_id = await resolve_organization_id_for_user(db, owner_user_id)
-    if organization_id is not None:
-        org_subject = await ensure_organization_billing_subject(db, organization_id)
+    payer_organization_id = await resolve_payer_organization_id_for_user(db, owner_user_id)
+    if payer_organization_id is not None:
+        org_subject = await ensure_organization_billing_subject(db, payer_organization_id)
         billing_subject_id = org_subject.id
     return await create_usage_segment(
         db,
@@ -645,6 +665,7 @@ async def record_billing_decision_event(
     reason: str | None,
     active_sandbox_count: int,
     remaining_seconds: float | None,
+    refused_cents: int | None = None,
 ) -> None:
     db.add(
         BillingDecisionEvent(
@@ -658,6 +679,7 @@ async def record_billing_decision_event(
             reason=reason,
             active_sandbox_count=active_sandbox_count,
             remaining_seconds=remaining_seconds,
+            refused_cents=refused_cents,
             created_at=utcnow(),
         )
     )

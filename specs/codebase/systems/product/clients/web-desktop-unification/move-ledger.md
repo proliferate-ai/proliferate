@@ -2395,7 +2395,7 @@ hooks/access/tauri/workspace-scratch/query-keys.ts	move	pure host.desktop.scratc
 hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
 hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad.test.tsx	move	test of the relocated scratch hook; runs in the package vitest lane
 hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
-components/workspace/git/GitReviewFileTree.tsx	delete	main merge (post-merge reconciliation): deleted on origin/main by the git-review-v2 PR #1214 (flat Codex-style review document replaces the tree/stage/badge components); source gone from apps/desktop/src, no product target
+components/workspace/git/GitReviewFileTree.tsx	delete	main merge (post-merge reconciliation): deleted on origin/main by the git-review-v2 PR #1214 (flat review document replaces the tree/stage/badge components); source gone from apps/desktop/src, no product target
 components/workspace/git/GitReviewStageAction.tsx	delete	main merge: deleted on origin/main by git-review-v2 PR #1214; replaced by the flat review document
 components/workspace/git/GitReviewStatusBadge.tsx	delete	main merge: deleted on origin/main by git-review-v2 PR #1214; replaced by the flat review document
 hooks/chat/ui/use-composer-ultra-emphasis.ts	delete	main merge: deleted on origin/main by the workspace-status-card PR #1210 (composer ultra-emphasis removed)
