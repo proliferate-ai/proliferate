@@ -1,6 +1,6 @@
 """agent auth selection rebuild
 
-Destructive P1 auth-model rebuild (codex/p1-auth-contract.md §1). Replaces the
+Destructive P1 auth-model rebuild (agent-auth selection model). Replaces the
 route-selection wiring with ``agent_auth_selection`` (source_kind gateway|api_key,
 no native, no slot) and re-shapes ``agent_api_key`` into a titled, provider-less
 vault. No users exist, so there is no data migration.

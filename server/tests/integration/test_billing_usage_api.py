@@ -20,11 +20,28 @@ from proliferate.db.models.billing import BillingBudgetLimit, UsageSegment
 from proliferate.db.models.cloud.agent_gateway import AgentLlmUsageEvent
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.agent_gateway.credits import create_llm_credit_grant
+from proliferate.db.store.billing_runtime_usage import resolve_billing_subject_id_for_user
 from proliferate.db.store.billing_subjects import (
     ensure_organization_billing_subject,
-    ensure_personal_billing_subject,
+    get_billing_subject_by_id,
 )
 from tests.helpers.desktop_auth import mint_desktop_token_payload
+
+
+async def _payer_subject(db_session: AsyncSession, user_id: uuid.UUID):
+    """The billing subject that PAYS for this user — where seeded usage belongs.
+
+    Signup places a hosted identity into a default organization, so the payer is
+    normally that org's subject, and an unscoped billing read resolves the payer
+    too (law W1, "the org always pays"). Seeding the personal subject instead
+    attributes fixture usage and credits to a pool the endpoint never reads.
+    """
+    subject = await get_billing_subject_by_id(
+        db_session,
+        await resolve_billing_subject_id_for_user(db_session, user_id),
+    )
+    assert subject is not None
+    return subject
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -94,7 +111,7 @@ async def test_usage_summary_reflects_mtd_usage_and_llm_balance(
 ) -> None:
     session = await _register_and_login(client, "usage-summary-seeded@example.com")
     user_id = uuid.UUID(session["user_id"])
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject = await _payer_subject(db_session, user_id)
     now = datetime.now(UTC)
 
     db_session.add(
@@ -150,7 +167,7 @@ async def test_usage_timeseries_zero_fills_missing_buckets(
 ) -> None:
     session = await _register_and_login(client, "usage-timeseries@example.com")
     user_id = uuid.UUID(session["user_id"])
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject = await _payer_subject(db_session, user_id)
     now = datetime.now(UTC)
     segment_start = now - timedelta(minutes=30)
 
@@ -196,7 +213,7 @@ async def test_usage_timeseries_kind_filter_excludes_other_meter(
 ) -> None:
     session = await _register_and_login(client, "usage-timeseries-kind@example.com")
     user_id = uuid.UUID(session["user_id"])
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject = await _payer_subject(db_session, user_id)
     now = datetime.now(UTC)
     db_session.add(
         AgentLlmUsageEvent(
@@ -238,7 +255,7 @@ async def test_llm_balance_endpoint_matches_grants_minus_usage(
 ) -> None:
     session = await _register_and_login(client, "usage-llm-balance@example.com")
     user_id = uuid.UUID(session["user_id"])
-    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject = await _payer_subject(db_session, user_id)
     await create_llm_credit_grant(
         db_session,
         billing_subject_id=subject.id,

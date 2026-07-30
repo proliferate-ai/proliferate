@@ -151,19 +151,17 @@ function computeBalanceSummary(
     throw new Error("Compute balance requires billing plan data.");
   }
 
-  const visibleGrants = (plan.grantAllocations ?? []).filter((grant) =>
-    grant.active || grant.consumedSeconds > 0 || grant.remainingSeconds > 0
-  );
-  if (visibleGrants.length > 0) {
-    const purchased = visibleGrants.reduce(
+  const activeGrants = (plan.grantAllocations ?? []).filter((grant) => grant.active);
+  if (activeGrants.length > 0) {
+    const purchased = activeGrants.reduce(
       (total, grant) => total + secondsToCredits(grant.totalSeconds),
       0,
     );
-    const available = visibleGrants.reduce(
+    const available = activeGrants.reduce(
       (total, grant) => total + secondsToCredits(grant.remainingSeconds),
       0,
     );
-    const used = visibleGrants.reduce(
+    const used = activeGrants.reduce(
       (total, grant) => total + secondsToCredits(grant.consumedSeconds),
       0,
     );

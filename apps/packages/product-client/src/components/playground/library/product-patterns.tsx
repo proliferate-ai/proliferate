@@ -1,4 +1,9 @@
 import { useState } from "react";
+import {
+  BillingBalanceNotice,
+  BillingGateState,
+  billingGateView,
+} from "@proliferate/product-ui/patterns/BillingGateState";
 import { ModelTable } from "@proliferate/product-ui/patterns/ModelTable";
 import { PrStatusDot } from "@proliferate/product-ui/patterns/PrStatusBadge";
 import { ProductPageShell } from "@proliferate/product-ui/patterns/ProductPageShell";
@@ -86,7 +91,32 @@ function SecretManagementPanelDemo() {
   );
 }
 
+function BillingGateStateDemo() {
+  return (
+    <div className="flex w-full flex-col gap-3">
+      <BillingGateState
+        size="compact"
+        view={billingGateView("credits_exhausted", {
+          isPaidPlan: false,
+          canManageBilling: true,
+          onUpgrade: noop,
+          onOpenBilling: noop,
+        })}
+      />
+      <BillingBalanceNotice
+        view={{
+          kind: "refill",
+          title: "Credits running low",
+          description: "2 hours of compute remaining this period.",
+          primaryAction: { label: "Add credits", onClick: noop },
+        }}
+      />
+    </div>
+  );
+}
+
 export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
+  { name: "BillingGateState", subpath: "@proliferate/product-ui/patterns/BillingGateState", render: BillingGateStateDemo },
   { name: "ModelTable", subpath: "@proliferate/product-ui/patterns/ModelTable", render: ModelTableDemo },
   { name: "PrStatusBadge", subpath: "@proliferate/product-ui/patterns/PrStatusBadge", render: () => (
     <PrStatusDot status={{ kind: "open", number: 42 }} />
