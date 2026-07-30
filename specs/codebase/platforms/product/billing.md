@@ -364,11 +364,15 @@ meter/window
 ([`OrganizationBudgetsPane.tsx`](../../../../apps/packages/product-client/src/components/settings/panes/OrganizationBudgetsPane.tsx),
 [`OrganizationLimitsEditor.tsx`](../../../../apps/packages/product-client/src/components/settings/panes/OrganizationLimitsEditor.tsx)).
 
-When authenticated with usage metering enabled, the sidebar footer exposes
-one usage trigger (concentric **Compute**/**LLM** rings, accessible name
-reports both) opening
+When authenticated with usage metering enabled, usage renders inside the
+account popover as status rows — one per meter, each stating its label,
+percentage used, and what remains — rather than behind a separate footer
+trigger. The rows come from
 [`SidebarConsumptionCard`](../../../../apps/packages/product-client/src/components/app/sidebar/SidebarConsumptionCard.tsx),
-pinned by
+mounted by
+[`SidebarUsageSection`](../../../../apps/packages/product-client/src/components/app/sidebar/SidebarUsageSection.tsx),
+which renders nothing at all — separator included — when the capability is
+off; both are pinned by
 [`SidebarConsumptionCard.test.tsx`](../../../../apps/packages/product-client/src/components/app/sidebar/SidebarConsumptionCard.test.tsx).
 It preserves explicit loading/unavailable states, renders each ready meter
 from its own returned units and limit state, and gates the billing action

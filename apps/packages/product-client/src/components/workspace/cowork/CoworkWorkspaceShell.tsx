@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ChatView } from "#product/components/workspace/chat/ChatView";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
-import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { CoworkArtifactsPanel } from "#product/components/workspace/cowork/CoworkArtifactsPanel";
@@ -10,7 +9,6 @@ import { CoworkWorkspaceHeader } from "#product/components/workspace/cowork/Cowo
 import { useResize } from "#product/hooks/ui/layout/use-resize";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
-import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import {
   resolveCoworkWorkspaceChromeClasses,
   resolveMainSidebarEdgeClassName,
@@ -72,14 +70,6 @@ export function CoworkWorkspaceShell({
   const activeSlot = useSessionDirectoryStore((state) =>
     activeSessionId ? state.entriesById[activeSessionId] ?? null : null
   );
-  const {
-    phase: updaterPhase,
-    downloadProgress,
-    restartWhenIdle,
-    downloadUpdate,
-    openRestartPrompt,
-  } = useUpdater();
-
   const onLeftSeparatorDown = useResize({
     direction: "horizontal",
     size: sidebarWidth,
@@ -147,15 +137,6 @@ export function CoworkWorkspaceShell({
               >
                 <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
               </IconButton>
-              {/* The update pill's single home is the top-left, next to the
-                  sidebar toggle. */}
-              <SidebarUpdatePill
-                phase={updaterPhase}
-                downloadProgress={downloadProgress}
-                restartWhenIdle={restartWhenIdle}
-                onDownloadUpdate={downloadUpdate}
-                onOpenRestartPrompt={openRestartPrompt}
-              />
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-hidden">
@@ -190,13 +171,6 @@ export function CoworkWorkspaceShell({
                 >
                   <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
                 </IconButton>
-                <SidebarUpdatePill
-                  phase={updaterPhase}
-                  downloadProgress={downloadProgress}
-                  restartWhenIdle={restartWhenIdle}
-                  onDownloadUpdate={downloadUpdate}
-                  onOpenRestartPrompt={openRestartPrompt}
-                />
               </div>
             )}
             <CoworkWorkspaceHeader

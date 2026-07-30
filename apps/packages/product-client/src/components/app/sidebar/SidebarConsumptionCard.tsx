@@ -1,4 +1,3 @@
-import { forwardRef, type ButtonHTMLAttributes } from "react";
 import type { UsageSummary } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 
@@ -31,16 +30,9 @@ export type SidebarConsumptionActions =
   | { kind: "unavailable"; message: string };
 
 const CONSUMPTION_NEAR_LIMIT_PERCENT = 80;
-const CONSUMPTION_RING_GEOMETRY: Record<
-  SidebarConsumptionMeter,
-  { radius: number; circumference: number }
-> = {
-  compute: { radius: 10, circumference: 2 * Math.PI * 10 },
-  llm: { radius: 6.25, circumference: 2 * Math.PI * 6.25 },
-};
 
 const CONSUMPTION_METER_TEXT_CLASS: Record<ConsumptionMeterTone, string> = {
-  default: "text-sidebar-muted-foreground",
+  default: "text-sidebar-foreground",
   warning: "text-warning-foreground",
   destructive: "text-destructive",
 };
@@ -90,21 +82,6 @@ function resolveConsumptionMeterState(
   };
 }
 
-function consumptionMeterAriaStatus(state: ConsumptionMeterState): string {
-  switch (state.kind) {
-    case "zero-allocation":
-      return "No allocation";
-    case "exhausted":
-      return `100% used, exhausted${state.blocked ? ", blocked" : ""}`;
-    case "blocked":
-      return "blocked";
-    case "unlimited":
-      return "unlimited";
-    case "available":
-      return `${Math.round(state.percent ?? 0)}% used`;
-  }
-}
-
 function consumptionMeterDetailLabel(state: ConsumptionMeterState): string {
   switch (state.kind) {
     case "zero-allocation":
@@ -150,146 +127,36 @@ function metersForState(state: SidebarConsumptionState) {
   };
 }
 
-interface SidebarUsageTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  state: SidebarConsumptionState;
-}
-
-function meterStatusLabel(
-  state: SidebarConsumptionState,
-  meter: SidebarConsumptionMeter,
-): string {
-  if (state.kind === "loading") {
-    return "loading";
-  }
-  if (state.kind === "unavailable") {
-    return "unavailable";
-  }
-  return consumptionMeterAriaStatus(metersForState(state)![meter]);
-}
-
-function ConcentricMeterRing({
-  meter,
-  meterState,
-  fallbackTone,
-}: {
-  meter: SidebarConsumptionMeter;
-  meterState: ConsumptionMeterState | null;
-  fallbackTone: ConsumptionMeterTone;
-}) {
-  const geometry = CONSUMPTION_RING_GEOMETRY[meter];
-  const percent = meterState?.percent ?? null;
-  const dashOffset = percent === null
-    ? geometry.circumference
-    : geometry.circumference * (1 - Math.max(0, Math.min(100, percent)) / 100);
-  const tone = meterState?.tone ?? fallbackTone;
-
-  return (
-    <>
-      <circle
-        data-meter={meter}
-        data-part="track"
-        cx="14"
-        cy="14"
-        r={geometry.radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        className="opacity-20"
-      />
-      <circle
-        data-meter={meter}
-        data-part="progress"
-        cx="14"
-        cy="14"
-        r={geometry.radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeDasharray={geometry.circumference}
-        strokeDashoffset={dashOffset}
-        className={CONSUMPTION_METER_TEXT_CLASS[tone]}
-      />
-    </>
-  );
-}
-
-/** One focusable usage trigger with outer Compute and inner LLM rings. */
-export const SidebarUsageTrigger = forwardRef<
-  HTMLButtonElement,
-  SidebarUsageTriggerProps
->(function SidebarUsageTrigger({
-  state,
-  className = "",
-  ...buttonProps
-}, ref) {
-  const meters = metersForState(state);
-  const fallbackTone: ConsumptionMeterTone = state.kind === "unavailable"
-    ? "destructive"
-    : "default";
-
-  return (
-    <Button
-      {...buttonProps}
-      ref={ref}
-      type="button"
-      variant="unstyled"
-      size="unstyled"
-      aria-label={`Usage. Compute, ${meterStatusLabel(state, "compute")}. LLM, ${meterStatusLabel(state, "llm")}. Open usage details`}
-      title="Usage"
-      className={`relative flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-hover active:bg-active hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring data-[state=open]:bg-active data-[state=open]:text-sidebar-foreground ${className}`}
-    >
-      {/* 20/28 of the control tier matches the CircleHelp glyph's 20/24 of
-          the paired tier, while both surrounding hit targets remain 40px. */}
-      <svg viewBox="0 0 28 28" className="icon-control -rotate-90 [font-size:var(--text-sidebar-row)]" aria-hidden="true">
-        <ConcentricMeterRing
-          meter="compute"
-          meterState={meters?.compute ?? null}
-          fallbackTone={fallbackTone}
-        />
-        <ConcentricMeterRing
-          meter="llm"
-          meterState={meters?.llm ?? null}
-          fallbackTone={fallbackTone}
-        />
-      </svg>
-      {state.kind === "unavailable" ? (
-        <span className="pointer-events-none absolute text-ui-sm font-semibold leading-none text-destructive" aria-hidden="true">
-          !
-        </span>
-      ) : null}
-    </Button>
-  );
-});
-
+/**
+ * One usage line: what the meter is, how far into it you are, and what is
+ * left. Consumption used to be drawn as two concentric rings on a dedicated
+ * footer trigger, which spent a whole control slot on a shape nobody can read
+ * a number off. The same three facts fit on one text row, so they read as
+ * ordinary status inside the account menu instead of a chart.
+ */
 function ConsumptionDetailRow({
   label,
-  ringLabel,
   state,
   remainingLabel,
 }: {
   label: string;
-  ringLabel: string;
   state: ConsumptionMeterState;
   remainingLabel: string;
 }) {
-  const usedLabel = consumptionMeterDetailLabel(state);
   return (
-    <div className="flex items-center justify-between gap-3 px-2.5 py-1.5">
-      <div>
-        <div className="text-ui text-sidebar-foreground">{label}</div>
-        <div className={`text-ui-sm ${CONSUMPTION_METER_TEXT_CLASS[state.tone]}`}>
-          {usedLabel} · {ringLabel}
-        </div>
-      </div>
-      <div className={`text-right text-ui-sm ${CONSUMPTION_METER_TEXT_CLASS[state.tone]}`}>
-        {remainingLabel}
-      </div>
+    <div className="flex items-baseline justify-between gap-3 px-2.5 py-1">
+      <span className="text-ui-sm text-sidebar-muted-foreground">{label}</span>
+      <span className="flex min-w-0 items-baseline gap-1.5 text-ui-sm">
+        <span className={CONSUMPTION_METER_TEXT_CLASS[state.tone]}>
+          {consumptionMeterDetailLabel(state)}
+        </span>
+        <span className="truncate text-faint">{remainingLabel}</span>
+      </span>
     </div>
   );
 }
 
-/** Usage detail surface opened by the circular footer meters. */
+/** Usage/consumption status rows, hosted inline by the account menu. */
 export function ConsumptionCard({
   state,
   onRetry,
@@ -301,7 +168,7 @@ export function ConsumptionCard({
 }) {
   if (state.kind === "loading") {
     return (
-      <div className="px-3 py-3 text-ui text-sidebar-muted-foreground" role="status">
+      <div className="px-2.5 py-1.5 text-ui-sm text-sidebar-muted-foreground" role="status">
         Loading usage…
       </div>
     );
@@ -309,8 +176,8 @@ export function ConsumptionCard({
 
   if (state.kind === "unavailable") {
     return (
-      <div className="space-y-2 px-3 py-3">
-        <div className="text-ui text-sidebar-foreground">Usage unavailable</div>
+      <div className="space-y-1.5 px-2.5 py-1.5">
+        <div className="text-ui-sm text-sidebar-foreground">Usage unavailable</div>
         <div className="text-ui-sm text-sidebar-muted-foreground">{state.message}</div>
         {onRetry ? (
           <Button type="button" variant="secondary" size="sm" className="w-full" onClick={onRetry}>
@@ -330,40 +197,36 @@ export function ConsumptionCard({
     || meters.llm.kind === "exhausted";
 
   return (
-    <div className="py-1">
-      <div className="px-2.5 pb-1 pt-1 text-ui-sm font-medium text-sidebar-muted-foreground">
-        Usage
-      </div>
+    <div>
+      <div className="px-2.5 pb-0.5 pt-1 text-ui-sm text-faint">Usage</div>
       <ConsumptionDetailRow
         label="Compute"
-        ringLabel="Outer ring"
         state={meters.compute}
         remainingLabel={formatRemainingHours(state.usageSummary.computeRemainingSeconds)}
       />
       <ConsumptionDetailRow
         label="LLM"
-        ringLabel="Inner ring"
         state={meters.llm}
         remainingLabel={formatRemainingUsd(state.usageSummary.llmRemainingUsd)}
       />
       {blocked && actions?.kind === "admin-managed" ? (
-        <div className="px-2.5 py-1.5 text-ui-sm text-destructive">
+        <div className="px-2.5 py-1 text-ui-sm text-destructive">
           Ask your admin to raise your limit.
         </div>
       ) : null}
       {!blocked && actions?.kind === "admin-managed" ? (
-        <div className="px-2.5 py-1.5 text-ui-sm text-sidebar-muted-foreground">
+        <div className="px-2.5 py-1 text-ui-sm text-sidebar-muted-foreground">
           {actions.message}
         </div>
       ) : null}
       {actions?.kind === "unavailable" ? (
-        <div className="px-2.5 py-1.5 text-ui-sm text-sidebar-muted-foreground">
+        <div className="px-2.5 py-1 text-ui-sm text-sidebar-muted-foreground">
           {actions.message}
         </div>
       ) : null}
       {actions?.kind === "billing" || actions?.kind === "admin-managed" ? (
-        <div className="mt-1 flex gap-2 border-t border-border-light px-2 py-2">
-          <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={actions.onBilling}>
+        <div className="px-2 pb-1 pt-1.5">
+          <Button type="button" variant="secondary" size="sm" className="w-full" onClick={actions.onBilling}>
             Billing
           </Button>
         </div>

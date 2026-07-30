@@ -1,12 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useUsageSummary } from "@proliferate/cloud-sdk-react";
 import {
-  POPOVER_SURFACE_CLASS,
-  PopoverButton,
-} from "@proliferate/ui/primitives/PopoverButton";
-import {
   ConsumptionCard,
-  SidebarUsageTrigger,
   type SidebarConsumptionState,
   type SidebarConsumptionActions,
 } from "#product/components/app/sidebar/SidebarConsumptionCard";
@@ -15,8 +10,13 @@ import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-
 import { useSelectedCloudOwner } from "#product/hooks/organizations/derived/use-selected-cloud-owner";
 import { buildBillingSettingsHref } from "#product/lib/domain/settings/navigation";
 
-/** Capability-gated usage concern with concentric Compute/LLM rings. */
-export function SidebarUsageFooter() {
+/**
+ * Capability-gated usage concern, rendered as status rows inside the account
+ * menu rather than as its own footer control. Deployments without usage
+ * metering render nothing at all — that empty result is the correct answer,
+ * not a missing state.
+ */
+export function SidebarUsageSection({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
   const authStatus = useProductAuthStatus();
   const capabilities = useAppCapabilities();
@@ -37,34 +37,28 @@ export function SidebarUsageFooter() {
         message: "We couldn't load current usage.",
       };
   const billingHref = buildBillingSettingsHref(usageOwner);
-  const openBilling = (href: string, close: () => void) => {
+  const openBilling = (href: string) => {
     navigate(href);
-    close();
+    onNavigate?.();
   };
 
+  // The separator belongs to the section, not to its host: a gated-off
+  // deployment must leave no empty banded row behind in the menu.
   return (
-    <PopoverButton
-      align="end"
-      side="top"
-      offset={8}
-      trigger={<SidebarUsageTrigger state={state} />}
-      className={`w-64 ${POPOVER_SURFACE_CLASS}`}
-    >
-      {(close) => (
-        <ConsumptionCard
-          state={state}
-          onRetry={state.kind === "unavailable"
-            ? () => { void usageQuery.refetch(); }
-            : undefined}
-          actions={resolveConsumptionActions(
-            state,
-            capabilities.billingEnabled,
-            billingHref,
-            billingHref ? () => openBilling(billingHref, close) : undefined,
-          )}
-        />
-      )}
-    </PopoverButton>
+    <div className="border-t border-border-light py-1">
+      <ConsumptionCard
+        state={state}
+        onRetry={state.kind === "unavailable"
+          ? () => { void usageQuery.refetch(); }
+          : undefined}
+        actions={resolveConsumptionActions(
+          state,
+          capabilities.billingEnabled,
+          billingHref,
+          billingHref ? () => openBilling(billingHref) : undefined,
+        )}
+      />
+    </div>
   );
 }
 
@@ -93,7 +87,7 @@ function resolveConsumptionActions(
     }
     return {
       kind: "unavailable",
-      message: "Billing for personal usage isn't available from this sidebar.",
+      message: "Billing for personal usage isn't available from this menu.",
     };
   }
   if (billingHref && openBilling) {
@@ -101,6 +95,6 @@ function resolveConsumptionActions(
   }
   return {
     kind: "unavailable",
-    message: "Billing for personal usage isn't available from this sidebar.",
+    message: "Billing for personal usage isn't available from this menu.",
   };
 }

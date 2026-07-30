@@ -63,7 +63,7 @@ describe("TranscriptActivityBlock entry motion", () => {
     );
     const css = readFileSync(cssPath, "utf8");
     const start = css.indexOf("@keyframes transcript-activity-in");
-    const end = css.indexOf("/* ---- Sidebar update pill ---- */", start);
+    const end = css.indexOf("Proliferate loading mark", start);
     const section = css.slice(start, end);
 
     expect(section).toContain("opacity: 0");

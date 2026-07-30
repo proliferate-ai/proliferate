@@ -32,11 +32,16 @@ import { useKeyboardShortcutsDialogStore } from "#product/stores/shortcuts/keybo
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { OrganizationSwitchDialog } from "#product/components/app/sidebar/OrganizationSwitchDialog";
 import { SidebarHelpFooter } from "#product/components/app/sidebar/SidebarHelpFooter";
-import { SidebarUsageFooter } from "#product/components/app/sidebar/SidebarUsageFooter";
+import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
+import { SidebarUsageSection } from "#product/components/app/sidebar/SidebarUsageSection";
 
 /**
- * Shared sidebar footer: a wide identity/account trigger plus independent
- * usage and help concerns. Organization behavior stays in the account surface.
+ * Shared sidebar footer: one row of the identity/account trigger plus the
+ * small controls that belong beside it (update, then help). It is deliberately
+ * the lightest row in the sidebar — 28px controls, the small UI type step, and
+ * no second stacked band — because everything it owns is secondary to the
+ * workspace list above it. Usage/consumption is status, not a control, so it
+ * reads inside the account menu instead of claiming a footer slot.
  */
 export function SidebarAccountFooter() {
   const navigate = useNavigate();
@@ -93,7 +98,7 @@ export function SidebarAccountFooter() {
   return (
     <div className="shrink-0">
       <div aria-hidden className="mx-3 h-[0.5px] bg-border" />
-      <div className="flex items-center gap-1 px-2 py-2">
+      <div className="flex items-center gap-0.5 px-2 py-1.5">
         <PopoverButton
           align="start"
           side="top"
@@ -104,21 +109,23 @@ export function SidebarAccountFooter() {
               variant="unstyled"
               size="unstyled"
               aria-label="Open account menu"
-              className="flex h-10 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-hover active:bg-active data-[state=open]:bg-active"
+              className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left text-sidebar-foreground hover:bg-hover active:bg-active data-[state=open]:bg-active"
               title={displayName}
             >
               <UserAvatar
                 displayName={displayName}
                 avatarUrl={user?.avatarUrl}
-                className="size-7 rounded-full border-0 text-sidebar-foreground"
+                className="size-5 rounded-full border-0 text-sidebar-foreground"
               />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-ui">{displayName}</span>
+              {/* One line, not a stacked identity block: the organization is a
+                  suffix here and gets its own row inside the menu. */}
+              <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                <span className="truncate text-ui-sm">{displayName}</span>
                 {organizationName ? (
                   <span className="truncate text-ui-sm text-faint">{organizationName}</span>
                 ) : null}
               </span>
-              <ChevronUpDown className="icon-paired shrink-0 text-sidebar-muted-foreground" />
+              <ChevronUpDown className="icon-tight shrink-0 text-sidebar-muted-foreground" />
             </Button>
           )}
           className={`w-72 ${POPOVER_SURFACE_CLASS}`}
@@ -208,6 +215,8 @@ export function SidebarAccountFooter() {
                 </div>
               ) : null}
 
+              <SidebarUsageSection onNavigate={close} />
+
               {authStatus === "authenticated" && planLabel ? (
                 <div className="border-t border-border-light py-1">
                   <PopoverMenuItem
@@ -255,7 +264,8 @@ export function SidebarAccountFooter() {
             </div>
           )}
         </PopoverButton>
-        <SidebarUsageFooter />
+        {/* Update sits immediately left of help: one row, same footprint. */}
+        <SidebarUpdateFooterButton />
         <SidebarHelpFooter />
       </div>
       <ConfirmationDialog

@@ -578,7 +578,6 @@ entrances decelerate, exits do not need to.
 | `activity.thinkingCycleMs` | 1800 | The thinking-text gleam cycle. |
 | `activity.streamRevealFadeMs` | 320 | Per-word fade of streamed text (`--activity-stream-reveal-fade`). |
 | `activity.streamRevealHandoffDelayMs` | 160 | Delay before the reveal hands off to static text. |
-| `activity.updateReadySweepMs` | 700 | The update-ready band sweep (`--activity-update-ready-sweep`). |
 
 > **Activity cadence is a separate scale because reduced motion must not stop
 > it.** The generated stylesheet zeroes all six interaction durations under
@@ -819,7 +818,7 @@ here is not library-sanctioned; the index is the closed set, not a sample of it.
 | `Select` | [Select.tsx](../../../../apps/packages/ui/src/primitives/Select.tsx) | Native select styled to tokens. |
 | `ShortcutBadge` | [ShortcutBadge.tsx](../../../../apps/packages/ui/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
 | `Skeleton` | [Skeleton.tsx](../../../../apps/packages/ui/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
-| `Sonner` | [Sonner.tsx](../../../../apps/packages/ui/src/primitives/Sonner.tsx) | Raw `sonner` toast wrapper, styled to tokens. |
+| `Sonner` | [Sonner.tsx](../../../../apps/packages/ui/src/primitives/Sonner.tsx) | Sole toast treatment: `sonner` wrapped in the canonical popover frame (shared by reference from `popover-surface.ts`), 12px padding, closed type ramp, 24px action pair with only the primary filled. |
 | `Spinner` | [Spinner.tsx](../../../../apps/packages/ui/src/primitives/Spinner.tsx) | Inline loading spinner. |
 | `Switch` | [Switch.tsx](../../../../apps/packages/ui/src/primitives/Switch.tsx) | Toggle switch. |
 | `Textarea` | [Textarea.tsx](../../../../apps/packages/ui/src/primitives/Textarea.tsx) | Multi-line text input (default/ghost/flush/code variants). |

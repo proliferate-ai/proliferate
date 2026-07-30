@@ -20,10 +20,6 @@ vi.mock("#product/components/workspace/shell/sidebar/MainSidebar", () => ({
   MainSidebar: () => <div data-testid="main-sidebar" />,
 }));
 
-vi.mock("#product/components/workspace/shell/sidebar/SidebarUpdatePill", () => ({
-  SidebarUpdatePill: () => <div data-testid="sidebar-update-pill" />,
-}));
-
 vi.mock("@proliferate/ui/primitives/IconButton", () => ({
   IconButton: ({
     children,
@@ -72,15 +68,6 @@ const productHostState = vi.hoisted(() => ({ desktop: {} as object | null }));
 
 vi.mock("#product/host/ProductHostProvider", () => ({
   useProductHost: () => productHostState,
-}));
-
-vi.mock("#product/hooks/access/tauri/use-updater", () => ({
-  useUpdater: () => ({
-    phase: "idle",
-    downloadProgress: null,
-    downloadUpdate: vi.fn(),
-    openRestartPrompt: vi.fn(),
-  }),
 }));
 
 const workspaceUiState = vi.hoisted(() => ({
@@ -172,42 +159,21 @@ describe("CoworkWorkspaceShell", () => {
     );
   });
 
-  it("keeps the update pill in the sidebar's top-left header while the sidebar is open", () => {
-    workspaceUiState.sidebarOpen = true;
-
-    const { getAllByTestId } = render(
-      <CoworkWorkspaceShell
-        workspaceId="workspace-cowork"
-        workspacePath="/tmp/workspace-cowork"
-      />,
-    );
-
-    // The pill's single home is the top-left next to the sidebar toggle — it
-    // must be mounted even when the sidebar (with its account footer) is open.
-    const pills = getAllByTestId("sidebar-update-pill");
-    expect(pills).toHaveLength(1);
-    expect(document.getElementById("cowork-sidebar")?.contains(pills[0])).toBe(true);
-  });
-
-  it("keeps the update pill in the content header while the sidebar is hidden", () => {
-    workspaceUiState.sidebarOpen = false;
-
-    try {
-      const { getAllByTestId } = render(
+  it("never renders an update affordance in the top-left window chrome", () => {
+    for (const sidebarOpen of [true, false]) {
+      workspaceUiState.sidebarOpen = sidebarOpen;
+      const { queryByTestId, unmount } = render(
         <CoworkWorkspaceShell
           workspaceId="workspace-cowork"
           workspacePath="/tmp/workspace-cowork"
         />,
       );
 
-      // The collapsed sidebar stays mounted at width 0 (clipped), so the
-      // visible pill is the one rendered outside of it, in the content header.
-      const sidebar = document.getElementById("cowork-sidebar");
-      const visiblePills = getAllByTestId("sidebar-update-pill")
-        .filter((pill) => !sidebar?.contains(pill));
-      expect(visiblePills).toHaveLength(1);
-    } finally {
-      workspaceUiState.sidebarOpen = true;
+      // The persistent update affordance lives in the sidebar footer next to
+      // help; the top-left chrome carries the sidebar toggle and nothing else.
+      expect(queryByTestId("sidebar-update-footer-button")).toBeNull();
+      unmount();
     }
+    workspaceUiState.sidebarOpen = true;
   });
 });

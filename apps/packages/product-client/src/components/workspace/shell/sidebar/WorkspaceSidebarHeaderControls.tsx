@@ -1,5 +1,3 @@
-import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
-import type { UpdaterPhase } from "#product/stores/updater/updater-store";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanelLeft } from "@proliferate/ui/icons";
 
@@ -7,24 +5,18 @@ interface WorkspaceSidebarHeaderControlsProps {
   className: string;
   toggleTitle: string;
   iconTone?: "sidebar";
-  phase: UpdaterPhase;
-  downloadProgress: number | null;
-  restartWhenIdle: boolean;
   onToggleSidebar: () => void;
-  onDownloadUpdate: () => void;
-  onOpenRestartPrompt: () => void;
 }
 
+/**
+ * Top-left window chrome: the sidebar toggle and nothing else. The update
+ * affordance lives in the sidebar footer next to help, never here.
+ */
 export function WorkspaceSidebarHeaderControls({
   className,
   toggleTitle,
   iconTone,
-  phase,
-  downloadProgress,
-  restartWhenIdle,
   onToggleSidebar,
-  onDownloadUpdate,
-  onOpenRestartPrompt,
 }: WorkspaceSidebarHeaderControlsProps) {
   return (
     <div className={`flex h-full items-center gap-2 ${className}`}>
@@ -37,16 +29,6 @@ export function WorkspaceSidebarHeaderControls({
       >
         <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
       </IconButton>
-      {/* The update pill's single home is the top-left, next to the sidebar
-          toggle — it covers every updater phase whether the sidebar is open
-          or hidden. */}
-      <SidebarUpdatePill
-        phase={phase}
-        downloadProgress={downloadProgress}
-        restartWhenIdle={restartWhenIdle}
-        onDownloadUpdate={onDownloadUpdate}
-        onOpenRestartPrompt={onOpenRestartPrompt}
-      />
     </div>
   );
 }
