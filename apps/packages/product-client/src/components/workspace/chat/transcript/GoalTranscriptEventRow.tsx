@@ -141,7 +141,7 @@ function presentGoalTranscriptEvent(event: GoalTranscriptEvent): GoalTranscriptE
     case "blocked":
       return {
         Icon: CircleAlert,
-        iconClassName: "text-warning",
+        iconClassName: "text-warning-foreground",
         label: "Goal blocked",
         detailPreview: event.detail ? truncateGoalObjective(event.detail, ROW_PREVIEW_MAX_CHARS) : null,
         fullDetail: event.detail,

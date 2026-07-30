@@ -32,7 +32,7 @@ export function HarnessStatusDot({ agent }: HarnessStatusDotProps) {
   if (agent.installState === "failed") {
     colorClass = "bg-destructive";
   } else if (agent.credentialState === "login_required" || agent.credentialState === "missing_env") {
-    colorClass = "bg-warning";
+    colorClass = "bg-warning-foreground";
   } else {
     // unknown or other states → red
     colorClass = "bg-destructive";

@@ -303,7 +303,7 @@ function GoalBarGlyph({
     }
     return (
       <CircleAlert
-        className={twMerge(className, state.outcome === "blocked" ? "text-warning" : "text-destructive")}
+        className={twMerge(className, state.outcome === "blocked" ? "text-warning-foreground" : "text-destructive")}
         aria-hidden
       />
     );

@@ -69,7 +69,7 @@ export function WorkflowRunDetail({
           <StatusCard label="Freshness" value={presentation.freshness.label} tone={presentation.freshness.tone} />
         </section>
 
-        {presentation.notice ? <p className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-ui text-warning" role="status">{presentation.notice}</p> : null}
+        {presentation.notice ? <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-ui text-warning-foreground" role="status">{presentation.notice}</p> : null}
         {presentation.canStartDelivery && !deliveryCapabilityEnabled ? (
           <p className="rounded-md border border-border bg-surface-raised px-3 py-2 text-ui text-muted-foreground" role="status">
             Managed Workflow delivery is not enabled on this server. This prepared run remains available.
@@ -132,7 +132,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 function toneClass(tone: string): string {
   if (tone === "danger") return "text-destructive";
-  if (tone === "warning") return "text-warning";
+  if (tone === "warning") return "text-warning-foreground";
   if (tone === "success") return "text-success";
   return "text-foreground";
 }

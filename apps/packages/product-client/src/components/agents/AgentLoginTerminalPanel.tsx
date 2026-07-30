@@ -100,7 +100,7 @@ export function AgentLoginTerminalPanel({
       ) : null}
 
       {connectionError ? (
-        <div className="border-b border-border/70 px-3 py-2 text-ui text-warning">
+        <div className="border-b border-border/70 px-3 py-2 text-ui text-warning-foreground">
           {connectionError}
         </div>
       ) : null}

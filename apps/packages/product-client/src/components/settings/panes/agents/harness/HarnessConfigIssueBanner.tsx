@@ -20,10 +20,10 @@ export function HarnessConfigIssueBanner({
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3.5 sm:flex-row sm:items-center"
+      className="flex flex-col gap-3 rounded-lg border border-warning-border bg-warning-subtle p-3.5 sm:flex-row sm:items-center"
       data-harness-runtime-state={agent.readiness}
     >
-      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
+      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-warning-subtle text-warning-foreground">
         <ProviderIcon kind={agent.kind} className="icon-control" />
       </span>
       <div className="min-w-0 flex-1 space-y-1">

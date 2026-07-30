@@ -76,7 +76,7 @@ export function WorkflowRunList({
 
 function toneClass(tone: string): string {
   if (tone === "danger") return "text-destructive";
-  if (tone === "warning") return "text-warning";
+  if (tone === "warning") return "text-warning-foreground";
   if (tone === "success") return "text-success";
   return "text-muted-foreground";
 }

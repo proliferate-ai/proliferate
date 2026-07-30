@@ -104,7 +104,7 @@ export function composerIntegrationHealthDot(
     case "ready":
       return { className: "bg-success", label: "Connected" };
     case "needs_reauth":
-      return { className: "bg-warning", label: "Needs re-authentication" };
+      return { className: "bg-warning-foreground", label: "Needs re-authentication" };
     case "error":
       return { className: "bg-destructive", label: "Error" };
     case "needs_auth":
