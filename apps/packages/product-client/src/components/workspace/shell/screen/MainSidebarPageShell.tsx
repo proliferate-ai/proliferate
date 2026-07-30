@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { useResize } from "#product/hooks/ui/layout/use-resize";
+import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import {
   resolveMainSidebarEdgeClassName,
@@ -14,6 +15,7 @@ import {
 } from "#product/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
+import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
 
 interface MainSidebarPageShellProps {
   children: ReactNode;
@@ -26,6 +28,9 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const desktopHost = useProductHost().desktop !== null;
+  // Only a host that actually paints macOS window buttons reserves room for
+  // them; on Web (and non-Mac desktop) the inset was dead space above the nav.
+  const macWindowControlsInsetClass = useMacWindowControlsInsetClass();
   const chromeClasses = resolveStandardWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
@@ -56,7 +61,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         style={{ width: sidebarOpen ? sidebarWidth : 0 }}
       >
         <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
-          <div className="flex h-full items-center gap-2 pl-[82px]">
+          <div className={`flex h-full items-center gap-2 ${macWindowControlsInsetClass}`}>
             <IconButton
               tone="sidebar"
               size="sm"
@@ -91,7 +96,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
           data-tauri-drag-region="true"
         >
           {!sidebarOpen && (
-            <div className="flex h-full items-center gap-2 pl-[82px] pr-2">
+            <div className={`flex h-full items-center gap-2 pr-2 ${macWindowControlsInsetClass}`}>
               <IconButton
                 size="sm"
                 onClick={() => setSidebarOpen(true)}
@@ -100,6 +105,12 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
               >
                 <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
               </IconButton>
+              {/* This shell has no hover-peek fallback for the collapsed
+                  sidebar (unlike WorkspaceShellSidebar), so the update
+                  control needs its own seat in the always-visible header
+                  chrome or it is unreachable — by mouse, keyboard, or touch
+                  — for as long as the sidebar stays collapsed. */}
+              <SidebarUpdateFooterButton />
             </div>
           )}
         </div>

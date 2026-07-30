@@ -20,6 +20,7 @@ export function useWorktreeMissingActions(args: {
   const { markDone } = useWorkspaceRetireActions();
   const restoreMutation = useRestoreWorktreeWorkspaceMutation();
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const [isCheckingAgain, setIsCheckingAgain] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -53,7 +54,7 @@ export function useWorktreeMissingActions(args: {
     }
   }, [args.workspaceId, refresh, restoreMutation, showToast]);
 
-  const deleteWorkspace = useCallback(async (): Promise<boolean> => {
+  const deleteWorkspace = useCallback(async function deleteWorkspace(): Promise<boolean> {
     setIsDeleting(true);
     try {
       const result = await markDone(args.workspaceId, {
@@ -68,13 +69,17 @@ export function useWorktreeMissingActions(args: {
       }
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to delete workspace: ${message}`);
+      showErrorToast({
+        headline: "Workspace not deleted",
+        consequence: "It is still listed, still missing its worktree on disk.",
+        cause: error instanceof Error ? error.message : String(error),
+        retry: () => void deleteWorkspace(),
+      });
       return false;
     } finally {
       setIsDeleting(false);
     }
-  }, [args.logicalWorkspaceId, args.workspaceId, markDone, showToast]);
+  }, [args.logicalWorkspaceId, args.workspaceId, markDone, showErrorToast, showToast]);
 
   return {
     checkAgain,

@@ -22,6 +22,10 @@ function baseState(overrides: Partial<DevUpdaterMockState>): DevUpdaterMockState
     errorMessage: null,
     errorSource: null,
     manualCheckCompletedAt: null,
+    lastProgressAt: null,
+    downloadRetryCount: 0,
+    downloadStartedAt: null,
+    restartCountdownStartedAt: null,
     ...overrides,
   };
 }
@@ -76,6 +80,50 @@ describe("updater dev mock", () => {
     expect(readDevUpdaterMock()).toMatchObject({ phase: "available", restartWhenIdle: false });
   });
 
+  it("keeps the figures a stall stalled at, in both stall shapes", () => {
+    // "Stalled at 38%, no data for 12 seconds, retried twice" is authored from
+    // these three numbers, so the phase has to carry all of them.
+    writeDevUpdaterMock(
+      baseState({
+        phase: "stalled",
+        downloadProgress: 38,
+        downloadTotalBytes: 125_000_000,
+        lastProgressAt: 1_000,
+        downloadRetryCount: 2,
+      }),
+    );
+    expect(readDevUpdaterMock()).toMatchObject({
+      phase: "stalled",
+      downloadProgress: 38,
+      lastProgressAt: 1_000,
+      downloadRetryCount: 2,
+    });
+
+    // The no-progress-bar shape: no advertised total, so no percentage to name.
+    writeDevUpdaterMock(
+      baseState({ phase: "stalled", downloadTotalBytes: null, lastProgressAt: 1_000 }),
+    );
+    expect(readDevUpdaterMock()).toMatchObject({
+      phase: "stalled",
+      downloadProgress: null,
+      downloadTotalBytes: null,
+      lastProgressAt: 1_000,
+    });
+  });
+
+  it("round-trips a running restart countdown only for the ready phase", () => {
+    writeDevUpdaterMock(
+      baseState({ phase: "ready", restartWhenIdle: true, restartCountdownStartedAt: 500 }),
+    );
+    expect(readDevUpdaterMock()).toMatchObject({ restartCountdownStartedAt: 500 });
+
+    // Nothing is counting down to a relaunch that hasn't been downloaded.
+    writeDevUpdaterMock(
+      baseState({ phase: "downloading", restartCountdownStartedAt: 500 }),
+    );
+    expect(readDevUpdaterMock()).toMatchObject({ restartCountdownStartedAt: null });
+  });
+
   it("fills byte progress for a legacy downloading preview", () => {
     window.localStorage.setItem(
       DEV_UPDATER_MOCK_KEY,
@@ -104,6 +152,9 @@ describe("updater dev mock", () => {
       errorSource: "check",
       restartWhenIdle: false,
       manualCheckCompletedAt: null,
+      lastProgressAt: null,
+      downloadRetryCount: 0,
+      restartCountdownStartedAt: null,
     });
     expect(readDevUpdaterMock()?.errorMessage).toEqual(expect.any(String));
   });

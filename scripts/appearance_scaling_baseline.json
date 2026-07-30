@@ -32,7 +32,6 @@
   },
   "stagedViolations": {
     "apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx|fixed-glyph-attribute": 2,
-    "apps/packages/product-client/src/components/playground/UpdateUiPlayground.tsx|fixed-status-glyph-utility": 3,
     "apps/packages/product-client/src/components/playground/loading/PlaygroundThinkingTimingControls.tsx|foreground-alpha-foundation": 2,
     "apps/packages/product-client/src/components/playground/subagents-ux/full-flow/FullFlowChatViews.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-client/src/components/playground/subagents-ux/identity-receipts/IdentityReceiptsPrototype.tsx|foreground-alpha-foundation": 1,

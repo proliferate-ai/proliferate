@@ -263,6 +263,22 @@
       "types": "./dist/primitives/Sonner.d.ts",
       "import": "./dist/primitives/Sonner.js"
     },
+    "./utils/toast-model": {
+      "types": "./dist/utils/toast-model.d.ts",
+      "import": "./dist/utils/toast-model.js"
+    },
+    "./utils/show-toast": {
+      "types": "./dist/utils/show-toast.d.ts",
+      "import": "./dist/utils/show-toast.js"
+    },
+    "./patterns/ToastHost": {
+      "types": "./dist/patterns/ToastHost.d.ts",
+      "import": "./dist/patterns/ToastHost.js"
+    },
+    "./utils/toast-payload": {
+      "types": "./dist/utils/toast-payload.d.ts",
+      "import": "./dist/utils/toast-payload.js"
+    },
     "./primitives/tooltip-primitive": {
       "types": "./dist/primitives/tooltip-primitive.d.ts",
       "import": "./dist/primitives/tooltip-primitive.js"

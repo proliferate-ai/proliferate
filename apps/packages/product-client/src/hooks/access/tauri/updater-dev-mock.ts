@@ -12,7 +12,7 @@ const DEV_UPDATER_MOCK_DOWNLOAD_TOTAL_BYTES = 125_000_000;
 
 type DevUpdaterMockPhase = Extract<
   UpdaterPhase,
-  "current" | "available" | "downloading" | "ready" | "error"
+  "current" | "available" | "downloading" | "stalled" | "ready" | "error"
 >;
 
 export interface DevUpdaterMockState {
@@ -28,6 +28,21 @@ export interface DevUpdaterMockState {
   errorMessage: string | null;
   errorSource: UpdaterErrorSource | null;
   manualCheckCompletedAt: number | null;
+  /**
+   * The stall clock's zero and the retry tally behind "no data for 12 seconds —
+   * retried twice". Forced rather than measured: a forced phase has no bytes to
+   * go quiet, so the copy's inputs are supplied directly.
+   */
+  lastProgressAt: number | null;
+  downloadRetryCount: number;
+  /**
+   * When the forced download "began". The pill's remaining-time estimate is
+   * derived from this, so nulling it under the mock left that estimate
+   * unreachable at `/playground/updates` — the one surface it gets reviewed on.
+   */
+  downloadStartedAt: number | null;
+  /** Set to render the cancellable countdown before a deferred relaunch. */
+  restartCountdownStartedAt: number | null;
 }
 
 let mockDownloadTimeouts: number[] = [];
@@ -39,7 +54,7 @@ export function isDevUpdaterMockSupported(): boolean {
 let envSeedApplied = false;
 
 // Dev convenience: boot straight into a forced updater phase via
-// `VITE_PROLIFERATE_UPDATER_MOCK=current|available|downloading|ready|error` (e.g. when
+// `VITE_PROLIFERATE_UPDATER_MOCK=current|available|downloading|stalled|ready|error` (e.g. when
 // running `pdev`), so the real pill / toast / confirm can be exercised without the
 // playground. Runs once and never clobbers an existing mock (e.g. one the playground set).
 export function seedDevUpdaterMockFromEnv(): void {
@@ -177,6 +192,7 @@ function isDevUpdaterMockPhase(value: unknown): value is DevUpdaterMockPhase {
     value === "current" ||
     value === "available" ||
     value === "downloading" ||
+    value === "stalled" ||
     value === "ready" ||
     value === "error"
   );
@@ -202,6 +218,10 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
       errorMessage: raw === "error" ? DEV_UPDATER_MOCK_ERROR_MESSAGE : null,
       errorSource: raw === "error" ? "check" : null,
       manualCheckCompletedAt: null,
+      lastProgressAt: null,
+      downloadRetryCount: 0,
+      downloadStartedAt: null,
+      restartCountdownStartedAt: null,
     };
   }
 
@@ -214,7 +234,11 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
     return null;
   }
 
-  const isDownloading = candidate.phase === "downloading";
+  // A stall keeps the figures it stalled at — "stalled at 38%" is the whole
+  // point of naming the phase — so both phases carry progress here. A stall
+  // with no total is the no-progress-bar shape, and stays null.
+  const isDownloading =
+    candidate.phase === "downloading" || candidate.phase === "stalled";
   const downloadTotalBytes = isDownloading
     ? candidate.downloadTotalBytes === null
       ? null
@@ -264,6 +288,26 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
     manualCheckCompletedAt:
       typeof candidate.manualCheckCompletedAt === "number"
         ? candidate.manualCheckCompletedAt
+        : null,
+    lastProgressAt:
+      candidate.phase === "stalled"
+        && isNonNegativeFiniteNumber(candidate.lastProgressAt)
+        ? candidate.lastProgressAt
+        : null,
+    downloadRetryCount: isNonNegativeFiniteNumber(candidate.downloadRetryCount)
+      ? candidate.downloadRetryCount
+      : 0,
+    // Only a live transfer has a start; a forced "available" or "ready" has none.
+    downloadStartedAt:
+      (candidate.phase === "downloading" || candidate.phase === "stalled")
+        && isNonNegativeFiniteNumber(candidate.downloadStartedAt)
+        ? candidate.downloadStartedAt
+        : null,
+    // Only a downloaded ("ready") update can be counting down to a relaunch.
+    restartCountdownStartedAt:
+      candidate.phase === "ready"
+        && isNonNegativeFiniteNumber(candidate.restartCountdownStartedAt)
+        ? candidate.restartCountdownStartedAt
         : null,
   };
 }

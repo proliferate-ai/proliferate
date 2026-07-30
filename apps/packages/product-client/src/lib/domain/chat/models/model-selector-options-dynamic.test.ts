@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
   buildModelSelectorGroups,
+  unsupportedModelKey,
 } from "#product/lib/domain/chat/models/model-selector-options";
 
 function launchAgent(
@@ -151,6 +152,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         displayName: "Auto",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
       {
         kind: "cursor",
@@ -158,6 +160,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         displayName: "GPT 5.4",
         actionKind: "select",
         isSelected: true,
+        isUnsupported: false,
       },
     ]);
   });
@@ -261,6 +264,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         displayName: "Auto",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
       {
         kind: "cursor",
@@ -268,6 +272,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         displayName: "Composer 2.5",
         actionKind: "select",
         isSelected: true,
+        isUnsupported: false,
       },
     ]);
   });
@@ -309,6 +314,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         displayName: "Auto",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
       {
         kind: "cursor",
@@ -316,6 +322,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         displayName: "Composer 2.5 Fast",
         actionKind: "select",
         isSelected: true,
+        isUnsupported: false,
       },
       {
         kind: "cursor",
@@ -323,7 +330,83 @@ describe("buildModelSelectorGroups dynamic models", () => {
         displayName: "Composer 2.5",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
     ]);
+  });
+  it("marks only the rows the target refused, and leaves everything else alone", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent("claude", [
+          model("us.anthropic.claude-opus-4-8", "Opus 4.8", true),
+          model("haiku", "Haiku 4.5", false),
+        ]),
+        launchAgent("codex", [model("gpt-5.5", "GPT 5.5", true)]),
+      ],
+      null,
+      null,
+      null,
+      {},
+      new Set([unsupportedModelKey("claude", "us.anthropic.claude-opus-4-8")]),
+    );
+
+    const marked = groups
+      .flatMap((group) => group.models)
+      .filter((candidate) => candidate.isUnsupported)
+      .map((candidate) => candidate.modelId);
+    expect(marked).toEqual(["us.anthropic.claude-opus-4-8"]);
+  });
+
+  it("does not carry a refusal across harnesses that share a model id", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent("claude", [model("shared-model", "Shared", true)]),
+        launchAgent("codex", [model("shared-model", "Shared", true)]),
+      ],
+      null,
+      null,
+      null,
+      {},
+      new Set([unsupportedModelKey("codex", "shared-model")]),
+    );
+
+    expect(groups.find((group) => group.kind === "claude")?.models[0].isUnsupported)
+      .toBe(false);
+    expect(groups.find((group) => group.kind === "codex")?.models[0].isUnsupported)
+      .toBe(true);
+  });
+
+  it("marks a row rendered under an equivalent id when the refusal names the catalog id", () => {
+    // "opus" resolves to the 4.8 catalog row by equivalence, so the row renders
+    // the selection's id while the refusal was recorded against the id that was
+    // actually sent. Matching only one of the two would leave the row enabled.
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent("claude", [
+          model("us.anthropic.claude-opus-4-8", "Opus 4.8", true, {
+            aliases: ["claude-opus-4-8"],
+          }),
+        ]),
+      ],
+      { kind: "claude", modelId: "opus" },
+      { kind: "claude", modelId: "opus" },
+      null,
+      {},
+      new Set([unsupportedModelKey("claude", "us.anthropic.claude-opus-4-8")]),
+    );
+
+    const row = groups[0]?.models[0];
+    expect(row?.modelId).toBe("opus");
+    expect(row?.isUnsupported).toBe(true);
+  });
+
+  it("marks nothing when no refusal has been observed", () => {
+    const groups = buildModelSelectorGroups(
+      [launchAgent("claude", [model("haiku", "Haiku 4.5", true)])],
+      null,
+      null,
+    );
+
+    expect(groups[0]?.models.every((candidate) => !candidate.isUnsupported)).toBe(true);
   });
 });

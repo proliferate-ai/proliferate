@@ -19,7 +19,7 @@ const toneClasses: Record<BadgeTone, string> = {
   accent: "border-border/70 bg-surface-control text-accent-foreground",
   success: "border-success/25 bg-success/10 text-success",
   info: "border-info/25 bg-info/10 text-info",
-  warning: "border-warning/30 bg-warning/10 text-warning",
+  warning: "border-warning-border bg-warning-subtle text-warning-foreground",
   destructive: "border-destructive/30 bg-destructive/10 text-destructive",
   sidebar: "border-border bg-surface-control text-sidebar-muted-foreground",
 };

@@ -2,9 +2,9 @@ import { Suspense, lazy } from "react"
 import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
-import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog"
-import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter"
-import { Toaster } from "@proliferate/ui/primitives/Sonner"
+import { ToastHost } from "@proliferate/ui/patterns/ToastHost"
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
+import { useSupportModalStore } from "#product/stores/support/support-modal-store"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
@@ -20,6 +20,15 @@ import type { ProductRoutesComponent } from "#product/ProductClient"
 // eagerly pulls the authenticated-only chunks (editor/terminal/etc.).
 const AuthenticatedProductClient = lazy(
   () => import("#product/app/AuthenticatedProductClient"),
+)
+
+// Desktop-only: the app-update flow (restart dialog, phase toasts, automatic
+// download). Lazy so the public shell — and /login, which has a fail-closed
+// first-load JS budget — never pulls the updater state machine.
+const DesktopUpdateSurface = lazy(() =>
+  import("#product/components/feedback/DesktopUpdateSurface").then((m) => ({
+    default: m.DesktopUpdateSurface,
+  })),
 )
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
@@ -117,10 +126,13 @@ interface AppProps {
 // owns only the route tree, public feedback hosts, and toasts. Repository and
 // workspace hosts live behind the lazy authenticated product boundary.
 export function App({ RoutesComponent }: AppProps) {
+  // "Report a bug" in the toast details modal reuses the existing feedback
+  // modal rather than inventing a second reporting path.
+  const openSupportFeedback = useSupportModalStore((s) => s.openFeedback)
+
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
-        <UpdateRestartDialog />
         <WorktreeCleanupPolicySyncGate />
         <RoutesComponent>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
@@ -248,11 +260,34 @@ export function App({ RoutesComponent }: AppProps) {
           <Route path="*" element={<Navigate to="/" replace />} />
         </RoutesComponent>
         <SupportModalHost />
-        {/* Kit Sonner toaster: all toasts (update lifecycle + legacy
-            toast-store call sites, which now delegate to Sonner). */}
-        <Toaster />
-        <UpdateToastPresenter />
+        {/* The single toast mount: the kit Toaster plus the one details modal
+            a `details: { kind: "modal" }` toast opens. Every toast in the app
+            goes through it, so the three weights, the visible cap and the
+            details destination are configured in exactly one place. */}
+        <ToastHost onReportBug={openSupportFeedback} />
+        <AppUpdateSurface />
       </ShortcutRevealProvider>
+  )
+}
+
+/**
+ * The whole app-update surface — the restart dialog, the phase toasts, and the
+ * automatic download — behind the one condition that makes any of it reachable:
+ * a host that actually has an updater. On Web there is none, so the browser
+ * never loads a state machine it cannot enter, and /login (which has a
+ * fail-closed first-load JS budget) never pays for the desktop updater at all.
+ */
+function AppUpdateSurface() {
+  const hasUpdater = Boolean(useProductHost().desktop?.updater)
+
+  if (!hasUpdater) {
+    return null
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <DesktopUpdateSurface />
+    </Suspense>
   )
 }
 

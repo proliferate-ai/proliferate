@@ -76,6 +76,7 @@ describe("buildModelSelectorGroups Claude models", () => {
             displayName: "Opus 4.7",
             actionKind: "select",
             isSelected: true,
+            isUnsupported: false,
           },
           {
             kind: "claude",
@@ -83,6 +84,7 @@ describe("buildModelSelectorGroups Claude models", () => {
             displayName: "Sonnet 4.6",
             actionKind: "update_current_chat",
             isSelected: false,
+            isUnsupported: false,
           },
         ],
       },
@@ -96,6 +98,7 @@ describe("buildModelSelectorGroups Claude models", () => {
             displayName: "GPT 5.4",
             actionKind: "open_new_chat",
             isSelected: false,
+            isUnsupported: false,
           },
         ],
       },
@@ -147,6 +150,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Sonnet 4.6",
         actionKind: "select",
         isSelected: true,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -154,6 +158,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Sonnet 4.6 (1M context)",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
     ]);
   });
@@ -188,6 +193,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Opus 4.8",
         actionKind: "select",
         isSelected: true,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -195,6 +201,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Sonnet 4.6",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
     ]);
   });
@@ -275,6 +282,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Sonnet 4.6",
         actionKind: "select",
         isSelected: true,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -282,6 +290,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Haiku 4.5",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -289,6 +298,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Opus 4.7",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
     ]);
   });
@@ -340,6 +350,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Sonnet 4.6",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -347,6 +358,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Haiku 4.5",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -354,6 +366,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Opus 4.8",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -361,6 +374,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Opus 4.8 (1M context)",
         actionKind: "select",
         isSelected: true,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -368,6 +382,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Opus 4.7",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
     ]);
   });
@@ -435,6 +450,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Opus 4.8",
         actionKind: "select",
         isSelected: true,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -442,6 +458,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Opus 4.7",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
       {
         kind: "claude",
@@ -449,6 +466,7 @@ describe("buildModelSelectorGroups Claude models", () => {
         displayName: "Sonnet 4.6",
         actionKind: "update_current_chat",
         isSelected: false,
+        isUnsupported: false,
       },
     ]);
   });

@@ -207,7 +207,11 @@ export function ComposerCommandEditor({
       ? null
       : findComposerMenuTrigger(context.plainText, context.focusOffset);
     commandTriggerRef.current = activeTrigger;
-    if (!activeTrigger || !openMenu || activeTrigger.kind !== (slashTrigger ? "slash" : "mention")) {
+    // The trigger is recomputed fresh from the DOM here, since the keydown can
+    // land before React re-renders; require it to still match the kind of
+    // menu that's actually open (from the last render) rather than reasoning
+    // about the two triggers' presence indirectly.
+    if (!activeTrigger || !openMenu || activeTrigger.kind !== trigger?.kind) {
       return false;
     }
     if ((event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) && openMenuItemCount > 0) {
@@ -216,7 +220,7 @@ export function ComposerCommandEditor({
       return true;
     }
     return false;
-  }, [disabled, openMenu, openMenuItemCount, searchSuppressed, slashTrigger]);
+  }, [disabled, openMenu, openMenuItemCount, searchSuppressed, trigger]);
 
   const searchTray = slashTrigger ? (
     <ComposerSlashCommandSearch
@@ -226,6 +230,7 @@ export function ComposerCommandEditor({
       onSelect={handleSelectSearchResult}
       onRowMouseEnter={search.handleRowMouseEnter}
       setRowRef={search.setRowRef}
+      getRowId={search.getRowId}
     />
   ) : mentionTrigger ? (
     <ComposerFileMentionSearch
@@ -240,8 +245,18 @@ export function ComposerCommandEditor({
       onSelect={handleSelectFileMention}
       onRowMouseEnter={mentions.handleRowMouseEnter}
       setRowRef={mentions.setRowRef}
+      getRowId={mentions.getRowId}
     />
   ) : null;
+  // Focus deliberately stays in the composer's contenteditable while a menu is
+  // open (a menu row must never steal it, see the row's onMouseDown), so the
+  // highlighted row is announced via aria-activedescendant on the editable
+  // rather than by moving native focus onto the row.
+  const activeDescendantId = slashTrigger
+    ? search.activeDescendantId
+    : mentionTrigger
+      ? mentions.activeDescendantId
+      : undefined;
 
   return (
     <>
@@ -264,6 +279,7 @@ export function ComposerCommandEditor({
             onEditorContextChange={setEditorContext}
             onKeyDown={handleKeyDown}
             onCommandKey={handleCommandKey}
+            activeDescendantId={activeDescendantId}
             submitBehavior="workspace"
             canSubmit={canSubmit}
             onSubmit={onSubmit}

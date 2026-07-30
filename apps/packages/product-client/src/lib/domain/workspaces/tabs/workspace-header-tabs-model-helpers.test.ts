@@ -4,6 +4,7 @@ import {
   buildHeaderLiveVisibilityCandidates,
   buildKnownHeaderSessions,
   getKnownSessionCanFork,
+  getKnownSessionHasAssignedTitle,
   getKnownSessionId,
   getKnownSessionViewState,
   resolveHierarchyMaterializedSessionId,
@@ -201,6 +202,56 @@ describe("getKnownSessionViewState", () => {
         },
       },
     })).toBe("working");
+  });
+});
+
+describe("getKnownSessionHasAssignedTitle", () => {
+  it("is false for a placeholder, which never carries a server title", () => {
+    expect(getKnownSessionHasAssignedTitle({ kind: "placeholder", sessionId: "remembered-session" }))
+      .toBe(false);
+  });
+
+  it("is false for a slot with neither a title nor a transcript title", () => {
+    expect(getKnownSessionHasAssignedTitle({ kind: "slot", slot: idleSlot(false) })).toBe(false);
+  });
+
+  it("is true for a slot with an explicit title", () => {
+    expect(getKnownSessionHasAssignedTitle({
+      kind: "slot",
+      slot: { ...idleSlot(false), title: "Refactor the router" },
+    })).toBe(true);
+  });
+
+  it("is true for a slot whose title falls back to the live transcript title", () => {
+    expect(getKnownSessionHasAssignedTitle({
+      kind: "slot",
+      slot: {
+        ...idleSlot(false),
+        title: null,
+        activity: { ...idleSlot(false).activity, transcriptTitle: "Fix the flaky test" },
+      },
+    })).toBe(true);
+  });
+
+  it("is false for a materialized session with no title, so it falls back to the provider name", () => {
+    expect(getKnownSessionHasAssignedTitle({
+      kind: "session",
+      session: session(false, { title: null }),
+    })).toBe(false);
+  });
+
+  it("is true for a materialized session with a real title", () => {
+    expect(getKnownSessionHasAssignedTitle({
+      kind: "session",
+      session: session(false, { title: "Ship the release notes" }),
+    })).toBe(true);
+  });
+
+  it("treats a whitespace-only title the same as no title", () => {
+    expect(getKnownSessionHasAssignedTitle({
+      kind: "session",
+      session: session(false, { title: "   " }),
+    })).toBe(false);
   });
 });
 

@@ -48,6 +48,7 @@ import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const forceNewSession = options?.forceNewSession ?? false;
   const showToast = useToastStore((store) => store.show);
+  const showErrorToast = useToastStore((store) => store.showError);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
@@ -81,13 +82,13 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const gitPromptEffects = useGitPromptSnapshotEffects();
   const telemetry = useProductTelemetry();
 
-  const handleSubmit = useCallback(async (input?: {
+  const handleSubmit = useCallback(async function handleSubmit(input?: {
     text: string;
     blocks: PromptInputBlock[];
     attachmentSnapshots?: PromptAttachmentSnapshot[];
     optimisticContentParts?: ContentPart[];
     measurementOperationId?: MeasurementOperationId | null;
-  }): Promise<boolean> => {
+  }): Promise<boolean> {
     const pendingWorkspaceUiKey = pendingWorkspaceEntry
       ? buildPendingWorkspaceUiKey(pendingWorkspaceEntry)
       : null;
@@ -263,7 +264,24 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
       } else {
         const message = error instanceof Error ? error.message : String(error);
-        showToast(`Failed to send message: ${message}`);
+        // The draft has already been cleared by this point, so saying where the
+        // text went is the whole job of this toast: without it the user is left
+        // looking at an empty composer with no message sent. Retry re-sends the
+        // resolved prompt rather than calling back in with no argument, which
+        // would re-read the now-empty draft and send nothing.
+        showErrorToast({
+          headline: "Message not sent",
+          consequence: "It was not delivered. Retry to send it again.",
+          cause: message,
+          retry: () => void handleSubmit({
+            text,
+            blocks,
+            attachmentSnapshots,
+            ...(input?.optimisticContentParts
+              ? { optimisticContentParts: input.optimisticContentParts }
+              : {}),
+          }),
+        });
       }
       return false;
     }
@@ -288,20 +306,26 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     selectedWorkspaceId,
     sendBlockedReason,
     setWorkspaceArrivalEvent,
+    showErrorToast,
     showToast,
     scopedLaunchIdentity,
     telemetry,
   ]);
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = useCallback(function handleCancel() {
     if (forceNewSession) {
       return;
     }
     void cancelActiveSession().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to cancel message: ${message}`);
+      showErrorToast({
+        headline: "Message not cancelled",
+        consequence: "The session is still working on it.",
+        cause: message,
+        retry: handleCancel,
+      });
     });
-  }, [cancelActiveSession, forceNewSession, showToast]);
+  }, [cancelActiveSession, forceNewSession, showErrorToast]);
 
   return {
     handleSubmit,

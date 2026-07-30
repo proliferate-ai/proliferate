@@ -1,21 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-updater-bridge";
-import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdaterStore } from "#product/stores/updater/updater-store";
-import {
-  readPersistedJsonValue,
-  readPersistedStringValue,
-  writePersistedJson,
-  type ProductStorageContext,
-} from "#product/lib/infra/persistence/product-storage";
 import type { UpdaterErrorSource, UpdaterPhase } from "#product/stores/updater/updater-store";
-import {
-  useProductTelemetry,
-  type TrackProductEvent,
-} from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
-import { normalizeReleaseTitle } from "#product/lib/domain/updates/release-notice";
 import {
   clearDevUpdaterMockDownload,
   DEV_UPDATER_MOCK_EVENT,
@@ -28,141 +16,15 @@ import {
   type DevUpdaterMockState,
 } from "./updater-dev-mock";
 import { runDownloadAndPrepareRestart } from "./updater-download";
+import {
+  attachAutoCheckScheduler,
+  runUpdateCheck,
+  type UpdaterSchedulerDeps,
+} from "./updater-check";
+import { isDownloadStalled } from "#product/lib/domain/updates/download-stall";
 
-const INITIAL_CHECK_DELAY_MS = 10_000;
-const CHECK_INTERVAL_MS = 1_800_000; // 30 minutes
-const UPDATER_METADATA_KEY = "updater_metadata";
-const LEGACY_LAST_CHECKED_KEY = "updater_lastCheckedAt";
-
-let checkInFlight = false;
-let autoCheckConsumerCount = 0;
-let stopAutoCheckScheduler: (() => void) | null = null;
-
-interface UpdaterMetadata {
-  lastCheckedAt: string | null;
-}
-
-/**
- * The host facades the updater's module-level scheduler needs (ruling G1). The
- * hook — which has host access — arms these; the plain scheduler functions
- * receive them as an explicit argument, mirroring the measurement port. Event
- * names/payloads and the persisted metadata key are byte-identical to the
- * pre-move Desktop hook.
- */
-export interface UpdaterSchedulerDeps {
-  track: TrackProductEvent;
-  captureException: (error: unknown, context?: ErrorContext) => void;
-  storage: ProductStorageContext;
-}
-
-async function persistUpdaterMetadata(
-  storage: ProductStorageContext,
-  metadata: UpdaterMetadata,
-): Promise<void> {
-  await writePersistedJson(storage, UPDATER_METADATA_KEY, metadata);
-}
-
-async function loadLastCheckedAt(
-  storage: ProductStorageContext,
-): Promise<string | null> {
-  const metadata = await readPersistedJsonValue<{ lastCheckedAt?: string | null }>(
-    storage,
-    UPDATER_METADATA_KEY,
-  );
-  if (metadata?.lastCheckedAt) {
-    return metadata.lastCheckedAt;
-  }
-  // The legacy key stored a bare ISO string (not JSON), so read it as a string.
-  return (await readPersistedStringValue(storage, LEGACY_LAST_CHECKED_KEY)) ?? null;
-}
-
-async function runUpdateCheck(
-  updater: DesktopUpdaterBridge,
-  deps: UpdaterSchedulerDeps,
-  options: { userInitiated?: boolean } = {},
-): Promise<void> {
-  const store = useUpdaterStore.getState();
-  if (store.phase === "downloading" || checkInFlight) {
-    return;
-  }
-  checkInFlight = true;
-
-  store.setPhase("checking");
-  deps.track("app_update_check_started", undefined);
-
-  try {
-    const result = await updater.check();
-    const timestamp = new Date().toISOString();
-    useUpdaterStore.getState().setChecked(timestamp);
-    void persistUpdaterMetadata(deps.storage, { lastCheckedAt: timestamp });
-
-    if (result !== null) {
-      useUpdaterStore.getState().setAvailable(
-        result,
-        normalizeReleaseTitle(result.title),
-      );
-      deps.track("app_update_available", { version: result.version });
-    } else {
-      useUpdaterStore.getState().setPhase("current");
-      if (options.userInitiated) {
-        // One-shot "you're up to date" signal. Only manual checks raise it —
-        // background checks that find nothing stay silent by design.
-        useUpdaterStore.getState().setManualCheckCompleted(Date.now());
-      }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    useUpdaterStore.getState().setError(message, "check");
-    deps.captureException(error, {
-      tags: {
-        action: "check_for_update",
-        domain: "updater",
-        route: "settings",
-      },
-    });
-  } finally {
-    checkInFlight = false;
-  }
-}
-
-async function ensureAutoCheckScheduler(
-  updater: DesktopUpdaterBridge,
-  deps: UpdaterSchedulerDeps,
-): Promise<void> {
-  const lastChecked = await loadLastCheckedAt(deps.storage);
-  if (lastChecked) {
-    useUpdaterStore.getState().setChecked(lastChecked);
-  }
-
-  const elapsed = lastChecked
-    ? Date.now() - new Date(lastChecked).getTime()
-    : Infinity;
-
-  let timeout: number | null = null;
-  let interval: number | null = null;
-
-  if (elapsed >= CHECK_INTERVAL_MS) {
-    timeout = window.setTimeout(() => {
-      void runUpdateCheck(updater, deps);
-    }, INITIAL_CHECK_DELAY_MS);
-  }
-
-  interval = window.setInterval(() => {
-    void runUpdateCheck(updater, deps);
-  }, CHECK_INTERVAL_MS);
-
-  stopAutoCheckScheduler = () => {
-    if (timeout) {
-      window.clearTimeout(timeout);
-      timeout = null;
-    }
-    if (interval) {
-      window.clearInterval(interval);
-      interval = null;
-    }
-    stopAutoCheckScheduler = null;
-  };
-}
+/** How often the stall clock is read. Well under the 8s threshold it tests. */
+const STALL_POLL_INTERVAL_MS = 1_000;
 
 export function useUpdater() {
   const updater = useProductHost().desktop?.updater ?? null;
@@ -195,6 +57,13 @@ export function useUpdater() {
   const storeRestartPromptOpen = useUpdaterStore((s) => s.restartPromptOpen);
   const storeRestartWhenIdle = useUpdaterStore((s) => s.restartWhenIdle);
   const storeManualCheckCompletedAt = useUpdaterStore((s) => s.manualCheckCompletedAt);
+  const storeLastProgressAt = useUpdaterStore((s) => s.lastProgressAt);
+  const storeDownloadStartedAt = useUpdaterStore((s) => s.downloadStartedAt);
+  const storeDownloadRetryCount = useUpdaterStore((s) => s.downloadRetryCount);
+  const storeCheckOrigin = useUpdaterStore((s) => s.checkOrigin);
+  const storeRestartCountdownStartedAt = useUpdaterStore(
+    (s) => s.restartCountdownStartedAt,
+  );
   const isPackaged = updater?.isSupported() ?? false;
   const [devMock, setDevMock] = useState<DevUpdaterMockState | null>(() => readDevUpdaterMock());
 
@@ -221,6 +90,22 @@ export function useUpdater() {
     ? devMock.manualCheckCompletedAt
     : storeManualCheckCompletedAt;
   const updatesSupported = isPackaged || devMock !== null;
+  // The dev mock forces a phase directly, so its stall/retry/countdown figures
+  // are supplied by the mock rather than measured from a live download. They
+  // still have to reach the surfaces: the stall copy and the restart countdown
+  // are authored *from* these numbers, so nulling them would make two states
+  // unreachable in dev and therefore unreviewable.
+  const lastProgressAt = devMock ? devMock.lastProgressAt : storeLastProgressAt;
+  const downloadStartedAt = devMock
+    ? devMock.downloadStartedAt
+    : storeDownloadStartedAt;
+  const downloadRetryCount = devMock
+    ? devMock.downloadRetryCount
+    : storeDownloadRetryCount;
+  const checkOrigin = devMock ? "manual" : storeCheckOrigin;
+  const restartCountdownStartedAt = devMock
+    ? devMock.restartCountdownStartedAt
+    : storeRestartCountdownStartedAt;
 
   useEffect(() => {
     if (!isDevUpdaterMockSupported()) {
@@ -290,6 +175,91 @@ export function useUpdater() {
     await runDownloadAndPrepareRestart(updater, depsRef.current);
   }, [devMock, isPackaged, updater]);
 
+  /**
+   * Stall detection: while a download is in flight, poll the byte clock and
+   * name the silence. The clock lives in the store (set by every progress
+   * event), so this only decides when the silence has lasted long enough.
+   */
+  useEffect(() => {
+    if (phase !== "downloading" || devMock) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      const state = useUpdaterStore.getState();
+      if (state.phase !== "downloading") {
+        return;
+      }
+      if (
+        isDownloadStalled({ lastProgressAt: state.lastProgressAt, now: Date.now() })
+      ) {
+        state.setStalled();
+      }
+    }, STALL_POLL_INTERVAL_MS);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [devMock, phase]);
+
+  const retryDownload = useCallback(async () => {
+    if (devMock) {
+      // "Retry now" is the stalled toast's commit button, so it has to do
+      // something under the mock too — otherwise the one recovery path out of
+      // the stall can't be exercised on the surface built to review it. Restart
+      // the forced download and re-arm the stall clock, mirroring the real
+      // store's `retryDownload`.
+      updateDevUpdaterMock((current) =>
+        current
+          ? {
+              ...current,
+              phase: "downloading",
+              downloadRetryCount: current.downloadRetryCount + 1,
+              lastProgressAt: Date.now(),
+              downloadStartedAt: Date.now(),
+            }
+          : current,
+      );
+      startDevUpdaterMockDownload();
+      return;
+    }
+
+    if (!isPackaged || updater === null) {
+      return;
+    }
+    useUpdaterStore.getState().retryDownload();
+    await runDownloadAndPrepareRestart(updater, depsRef.current);
+  }, [devMock, isPackaged, updater]);
+
+  /** Abandon this update entirely; the pill and any toast go away. */
+  const cancelUpdate = useCallback(() => {
+    if (devMock) {
+      writeDevUpdaterMock(null);
+      return;
+    }
+    useUpdaterStore.getState().reset();
+  }, [devMock]);
+
+  const skipVersion = useCallback(() => {
+    const version = availableVersion;
+    if (devMock || version === null) {
+      return;
+    }
+    useUpdaterStore.getState().skipVersion(version);
+  }, [availableVersion, devMock]);
+
+  const cancelRestartCountdown = useCallback(() => {
+    if (devMock) {
+      // "Not now" has to actually stop the countdown under the mock too, or the
+      // one cancellable state in the flow can't be exercised.
+      updateDevUpdaterMock((current) =>
+        current
+          ? { ...current, restartCountdownStartedAt: null, restartWhenIdle: false }
+          : current,
+      );
+      return;
+    }
+    useUpdaterStore.getState().cancelRestartCountdown();
+  }, [devMock]);
+
   const openRestartPrompt = useCallback(() => {
     if (devMock) {
       updateDevUpdaterMock((current) =>
@@ -340,18 +310,7 @@ export function useUpdater() {
     if (!isPackaged || updater === null) {
       return;
     }
-
-    autoCheckConsumerCount += 1;
-    if (autoCheckConsumerCount === 1 && !stopAutoCheckScheduler) {
-      void ensureAutoCheckScheduler(updater, depsRef.current);
-    }
-
-    return () => {
-      autoCheckConsumerCount -= 1;
-      if (autoCheckConsumerCount === 0) {
-        stopAutoCheckScheduler?.();
-      }
-    };
+    return attachAutoCheckScheduler(updater, depsRef.current);
   }, [isPackaged, updater]);
 
   return {
@@ -364,18 +323,28 @@ export function useUpdater() {
     downloadProgress,
     downloadReceivedBytes,
     downloadTotalBytes,
+    lastProgressAt,
+    downloadStartedAt,
+    downloadRetryCount,
+    checkOrigin,
     restartPromptOpen,
     restartWhenIdle,
+    restartCountdownStartedAt,
     manualCheckCompletedAt,
     updatesSupported,
     checkNow,
     clearManualCheckCompleted,
     downloadUpdate,
+    retryDownload,
+    cancelUpdate,
+    skipVersion,
     openRestartPrompt,
     closeRestartPrompt,
     scheduleRestartWhenIdle,
+    cancelRestartCountdown,
     restartNow,
   };
 }
 
 export type { UpdaterErrorSource, UpdaterPhase };
+export type { UpdaterSchedulerDeps };

@@ -98,6 +98,7 @@ export function createPlaygroundModelSelectorProps(): ModelSelectorProps {
             displayName: "GPT 5.5",
             actionKind: "select",
             isSelected: true,
+            isUnsupported: false,
           },
           {
             kind: "codex",
@@ -105,6 +106,7 @@ export function createPlaygroundModelSelectorProps(): ModelSelectorProps {
             displayName: "GPT 5.4",
             actionKind: "select",
             isSelected: false,
+            isUnsupported: false,
           },
         ],
       },
@@ -118,6 +120,7 @@ export function createPlaygroundModelSelectorProps(): ModelSelectorProps {
             displayName: "Opus 4.1",
             actionKind: "open_new_chat",
             isSelected: false,
+            isUnsupported: false,
           },
         ],
       },

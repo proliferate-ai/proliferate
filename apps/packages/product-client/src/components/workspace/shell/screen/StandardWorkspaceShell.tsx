@@ -20,6 +20,7 @@ import { WorkspaceShellSidebar } from "#product/components/workspace/shell/sideb
 import {
   WorkspaceSidebarHeaderControls,
 } from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
+import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { OfflineIndicator } from "#product/components/app/OfflineIndicator";
 import { useMainScreenState } from "#product/hooks/main/facade/use-main-screen-state";
@@ -255,9 +256,15 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                       <>
                         {!sidebarOpen && (
                           <WorkspaceSidebarHeaderControls
-                            className="pl-[82px] pr-2"
+                            className="pr-2"
                             toggleTitle="Show sidebar"
                             onToggleSidebar={actions.onToggleSidebar}
+                            // Collapsed, the sidebar footer that would normally
+                            // host this control is offscreen and only reachable
+                            // by hovering the peek edge. Mounting it here too
+                            // keeps it keyboard- and touch-reachable without
+                            // depending on that hover.
+                            trailing={<SidebarUpdateFooterButton />}
                           />
                         )}
                         {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (

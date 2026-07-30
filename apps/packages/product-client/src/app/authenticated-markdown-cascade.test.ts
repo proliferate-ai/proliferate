@@ -71,10 +71,15 @@ beforeAll(async () => {
   browser = await chromium.launch({ channel: "chrome", headless: true });
 }, 60_000);
 
+// Same budget as `beforeAll`: tearing down a Chrome instance and a Vite server
+// is the same order of work as starting them, and under a full-suite run (where
+// this file competes with ~646 others for CPU) the default 10s hook timeout is
+// not enough. The test itself passed in every observed failure — only the
+// teardown timed out — so the asymmetry produced a red file with zero red tests.
 afterAll(async () => {
   await browser?.close();
   await viteServer?.close();
-});
+}, 60_000);
 
 describe("authenticated Markdown stylesheet cascade", () => {
   it("preserves transcript semantics and explicit proposal hierarchy", async () => {

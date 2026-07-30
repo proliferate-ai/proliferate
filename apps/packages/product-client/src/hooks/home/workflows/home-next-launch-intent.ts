@@ -3,13 +3,31 @@ import {
   resolveLaunchIntentPendingWorkspaceId,
   type ChatLaunchRetryMode,
 } from "#product/lib/domain/chat/launch/launch-intent";
-import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
 import type { PendingWorkspaceInitialSession } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function homeNextLaunchErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Names the place the work was going to run. Home launches from a repo card, so
+ * by the time a toast appears the user may have several plausible targets in
+ * mind; the branch or repo they picked is what disambiguates.
+ */
+export function describeHomeLaunchTarget(target: HomeLaunchTarget): string {
+  switch (target.kind) {
+    case "cowork":
+      return "a new Cowork thread";
+    case "local":
+      return target.sourceRoot;
+    case "worktree":
+      return `a worktree from ${target.baseBranch}`;
+    case "cloud":
+      return `${target.gitOwner}/${target.gitRepoName} (${target.baseBranch})`;
+  }
 }
 
 export function modeOptions(modeId: string | null): { modeId?: string } {

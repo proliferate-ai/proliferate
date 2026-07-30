@@ -27,7 +27,7 @@ export function useSessionLoopActions(): SessionLoopActions {
   const activeSessionId = useActiveSessionId();
   const setLoopMutation = useSetSessionLoopMutation();
   const clearLoopMutation = useClearSessionLoopMutation();
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
 
   const resolveLoopTarget = useCallback(() => {
     if (!activeSessionId) {
@@ -50,40 +50,56 @@ export function useSessionLoopActions(): SessionLoopActions {
     if (!target || !prompt || !expr) {
       return;
     }
-    void setLoopMutation
-      .mutateAsync({
-        sessionId: target.sessionId,
-        workspaceId: target.workspaceId,
-        request: {
-          prompt,
-          schedule: { kind: input.schedule.kind, expr },
-          recurring: input.recurring,
-        },
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        logLatency("session.loop.set.failed", { sessionId: target.sessionId, message });
-        showToast(`Failed to arm loop: ${message}`);
-      });
-  }, [resolveLoopTarget, setLoopMutation, showToast]);
+    const attempt = () => {
+      void setLoopMutation
+        .mutateAsync({
+          sessionId: target.sessionId,
+          workspaceId: target.workspaceId,
+          request: {
+            prompt,
+            schedule: { kind: input.schedule.kind, expr },
+            recurring: input.recurring,
+          },
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          logLatency("session.loop.set.failed", { sessionId: target.sessionId, message });
+          showErrorToast({
+            headline: "Loop not armed",
+            consequence: "Nothing is scheduled; the loop panel is unchanged.",
+            cause: message,
+            retry: attempt,
+          });
+        });
+    };
+    attempt();
+  }, [resolveLoopTarget, setLoopMutation, showErrorToast]);
 
   const deleteLoop = useCallback((loopId: string) => {
     const target = resolveLoopTarget();
     if (!target || !loopId) {
       return;
     }
-    void clearLoopMutation
-      .mutateAsync({
-        sessionId: target.sessionId,
-        workspaceId: target.workspaceId,
-        loopId,
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        logLatency("session.loop.clear.failed", { sessionId: target.sessionId, loopId, message });
-        showToast(`Failed to delete loop: ${message}`);
-      });
-  }, [clearLoopMutation, resolveLoopTarget, showToast]);
+    const attempt = () => {
+      void clearLoopMutation
+        .mutateAsync({
+          sessionId: target.sessionId,
+          workspaceId: target.workspaceId,
+          loopId,
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          logLatency("session.loop.clear.failed", { sessionId: target.sessionId, loopId, message });
+          showErrorToast({
+            headline: "Loop not deleted",
+            consequence: "It is still armed and will run on its schedule.",
+            cause: message,
+            retry: attempt,
+          });
+        });
+    };
+    attempt();
+  }, [clearLoopMutation, resolveLoopTarget, showErrorToast]);
 
   const pendingWrite = setLoopMutation.isPending || clearLoopMutation.isPending;
 

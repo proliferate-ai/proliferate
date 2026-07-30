@@ -56,7 +56,7 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
   const setGoalMutation = useSetSessionGoalMutation();
   const clearGoalMutation = useClearSessionGoalMutation();
   const cancelSessionMutation = useCancelSessionMutation();
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const beginComposingInStore = useGoalBarStore((state) => state.beginComposing);
   const endComposingInStore = useGoalBarStore((state) => state.endComposing);
   const dismissResultInStore = useGoalBarStore((state) => state.dismissResult);
@@ -90,7 +90,7 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
     };
   }, [activeSessionId]);
 
-  const editGoal = useCallback((objective: string) => {
+  const editGoal = useCallback(function editGoal(objective: string) {
     const target = resolveGoalTarget();
     const trimmed = objective.trim();
     if (!target || !trimmed) {
@@ -118,9 +118,14 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
         clearPendingGoalInStore(target.clientSessionId);
         const message = error instanceof Error ? error.message : String(error);
         logLatency("session.goal.set.failed", { sessionId: target.sessionId, message });
-        showToast(`Failed to set goal: ${message}`);
+        showErrorToast({
+          headline: "Goal not set",
+          consequence: "The previous goal, if any, is unchanged.",
+          cause: message,
+          retry: () => editGoal(objective),
+        });
       });
-  }, [clearPendingGoalInStore, endComposing, endComposingInStore, resolveGoalTarget, setPendingGoalInStore, setGoalMutation, showToast]);
+  }, [clearPendingGoalInStore, endComposing, endComposingInStore, resolveGoalTarget, setPendingGoalInStore, setGoalMutation, showErrorToast]);
 
   const cancelCurrentWork = useCallback(async (target: GoalMutationTarget) => {
     const result = await cancelSessionMutation.mutateAsync({
@@ -131,7 +136,7 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
     return result;
   }, [cancelSessionMutation]);
 
-  const setArmState = useCallback((status: GoalArmState) => {
+  const setArmState = useCallback(function setArmState(status: GoalArmState) {
     const target = resolveGoalTarget();
     if (!target) {
       return;
@@ -149,11 +154,21 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
       .catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
         logLatency("session.goal.arm.failed", { sessionId: target.sessionId, status, message });
-        showToast(`Failed to ${status === "paused" ? "pause" : "resume"} goal: ${message}`);
+        // Two literal headlines rather than one built from `status`: a headline
+        // is written copy, and picking between written lines is not the same
+        // thing as assembling one.
+        showErrorToast({
+          headline: status === "paused" ? "Goal not paused" : "Goal not resumed",
+          consequence: status === "paused"
+            ? "It is still active and will keep working."
+            : "It is still paused.",
+          cause: message,
+          retry: () => setArmState(status),
+        });
       });
-  }, [resolveGoalTarget, setGoalMutation, showToast]);
+  }, [resolveGoalTarget, setGoalMutation, showErrorToast]);
 
-  const pauseGoal = useCallback(() => {
+  const pauseGoal = useCallback(function pauseGoal() {
     const target = resolveGoalTarget();
     if (!target) {
       return;
@@ -178,15 +193,20 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
         status: "paused",
         message,
       });
-      showToast(`Failed to pause goal or stop current work: ${message}`);
+      showErrorToast({
+        headline: "Goal not paused",
+        consequence: "It is still active, and the current turn is still running.",
+        cause: message,
+        retry: pauseGoal,
+      });
     });
-  }, [cancelCurrentWork, resolveGoalTarget, setGoalMutation, showToast]);
+  }, [cancelCurrentWork, resolveGoalTarget, setGoalMutation, showErrorToast]);
 
   const resumeGoal = useCallback(() => {
     setArmState("active");
   }, [setArmState]);
 
-  const clearGoal = useCallback(() => {
+  const clearGoal = useCallback(function clearGoal() {
     const target = resolveGoalTarget();
     if (!target) {
       return;
@@ -213,9 +233,14 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
       .catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
         logLatency("session.goal.clear.failed", { sessionId: target.sessionId, message });
-        showToast(`Failed to clear goal or stop current work: ${message}`);
+        showErrorToast({
+          headline: "Goal not cleared",
+          consequence: "It is still set, and the current turn is still running.",
+          cause: message,
+          retry: clearGoal,
+        });
       });
-  }, [cancelCurrentWork, clearGoalMutation, resolveGoalTarget, showToast]);
+  }, [cancelCurrentWork, clearGoalMutation, resolveGoalTarget, showErrorToast]);
 
   const dismissResult = useCallback(() => {
     if (!goal || !activeSessionId) {

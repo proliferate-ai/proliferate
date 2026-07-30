@@ -33,6 +33,7 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
     activeSessionId ? state.entriesById[activeSessionId]?.workspaceId ?? null : null
   ));
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const scheduleWakeMutation = useScheduleSubagentWakeMutation({
     workspaceId: activeWorkspaceId ?? selectedWorkspaceId,
   });
@@ -51,7 +52,7 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
       ...subagents,
       rows: visibleRows,
       isSchedulingWake: scheduleWakeMutation.isPending,
-      scheduleWake: (childSessionId) => {
+      scheduleWake: function scheduleWake(childSessionId) {
         const parentSessionId = subagents.parent?.parentSessionId ?? activeSessionId;
         if (!parentSessionId) {
           showToast("Select a parent session before scheduling a wake.");
@@ -61,11 +62,16 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
           sessionId: parentSessionId,
           childSessionId,
         }).catch((error) => {
-          showToast(`Failed to schedule wake: ${errorMessage(error)}`);
+          showErrorToast({
+            headline: "Wake not scheduled",
+            consequence: "The delegated session is still asleep.",
+            cause: errorMessage(error),
+            retry: () => scheduleWake(childSessionId),
+          });
         });
       },
     };
-  }, [activeSessionId, scheduleWakeMutation, showToast, subagents]);
+  }, [activeSessionId, scheduleWakeMutation, showErrorToast, showToast, subagents]);
 
   const summary = useMemo(() => deriveDelegatedWorkSummary([
     ...subagentSummaryCandidates(subagentModel),

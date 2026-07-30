@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   setPendingGoal: vi.fn(),
   clearPendingGoal: vi.fn(),
   showToast: vi.fn(),
+  showErrorToast: vi.fn(),
   logLatency: vi.fn(),
   activeGoal: null as ReturnType<typeof goalSnapshot> | null,
 }));
@@ -66,7 +67,7 @@ vi.mock("#product/stores/activity/goal-bar-store", () => ({
 vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (
     selector: (state: Record<string, unknown>) => unknown,
-  ) => selector({ show: mocks.showToast }),
+  ) => selector({ show: mocks.showToast, showError: mocks.showErrorToast }),
 }));
 
 vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
@@ -303,7 +304,14 @@ describe("useSessionGoalActions", () => {
       result.current.pauseGoal();
     });
 
-    await waitFor(() => expect(mocks.showToast).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.showErrorToast).toHaveBeenCalledTimes(1));
+    // The pause did not take, so the turn keeps running: the consequence has to
+    // say both, because a user who saw only "not paused" would still expect the
+    // cancel that never happened.
+    expect(mocks.showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
+      headline: "Goal not paused",
+      consequence: "It is still active, and the current turn is still running.",
+    }));
     expect(mocks.cancelSession).not.toHaveBeenCalled();
   });
 });

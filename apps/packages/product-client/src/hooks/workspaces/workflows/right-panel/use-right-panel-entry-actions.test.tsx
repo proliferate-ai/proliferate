@@ -37,8 +37,8 @@ vi.mock("#product/hooks/workspaces/workflows/right-panel/use-right-panel-viewer-
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
-  useToastStore: (selector: (state: { show: (message: string) => void }) => unknown) =>
-    selector({ show: vi.fn() }),
+  useToastStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ show: vi.fn(), showError: vi.fn() }),
 }));
 
 afterEach(() => {

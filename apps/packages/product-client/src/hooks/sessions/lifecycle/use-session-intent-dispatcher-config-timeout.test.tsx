@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
   persistDefaultSessionModePreference: vi.fn(),
   showToast: vi.fn(),
+  showErrorToast: vi.fn(),
   upsertWorkspaceSessionRecord: vi.fn(),
 }));
 
@@ -79,8 +80,8 @@ vi.mock("#product/hooks/access/anyharness/sessions/use-workspace-session-cache",
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
-  useToastStore: (selector: (state: { show: typeof mocks.showToast }) => unknown) =>
-    selector({ show: mocks.showToast }),
+  useToastStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ show: mocks.showToast, showError: mocks.showErrorToast }),
 }));
 
 vi.mock("#product/hooks/sessions/lifecycle/session-intent-interaction-dispatch", () => ({
@@ -161,10 +162,11 @@ describe("useSessionIntentDispatcher config timeout", () => {
       errorMessage: "request timed out",
     });
     expect(firstSignal?.aborted).toBe(true);
-    expect(mocks.showToast).toHaveBeenCalledTimes(1);
-    expect(mocks.showToast).toHaveBeenCalledWith(
-      "Failed to update session config: request timed out",
-    );
+    expect(mocks.showErrorToast).toHaveBeenCalledTimes(1);
+    expect(mocks.showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
+      headline: "Setting not changed",
+      cause: "request timed out",
+    }));
     expect(getSessionRecord("session-1")?.modeId).toBe("bypass");
     expect(mocks.persistDefaultSessionModePreference).toHaveBeenCalledTimes(1);
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
@@ -179,7 +181,7 @@ describe("useSessionIntentDispatcher config timeout", () => {
     expect(useSessionIntentStore.getState().entriesById["config-plan"]).toMatchObject({
       status: "failed",
     });
-    expect(mocks.showToast).toHaveBeenCalledTimes(1);
+    expect(mocks.showErrorToast).toHaveBeenCalledTimes(1);
     expect(mocks.persistDefaultSessionModePreference).toHaveBeenCalledTimes(1);
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
   });
@@ -229,10 +231,11 @@ describe("useSessionIntentDispatcher config timeout", () => {
       status: "failed",
       errorMessage: "request timed out",
     });
-    expect(mocks.showToast).toHaveBeenCalledTimes(1);
-    expect(mocks.showToast).toHaveBeenCalledWith(
-      "Failed to update session config: request timed out",
-    );
+    expect(mocks.showErrorToast).toHaveBeenCalledTimes(1);
+    expect(mocks.showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
+      headline: "Setting not changed",
+      cause: "request timed out",
+    }));
     expect(getSessionRecord("session-1")?.modeId).toBe("bypass");
 
     await act(async () => {
@@ -245,7 +248,7 @@ describe("useSessionIntentDispatcher config timeout", () => {
     });
 
     expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
-    expect(mocks.showToast).toHaveBeenCalledTimes(1);
+    expect(mocks.showErrorToast).toHaveBeenCalledTimes(1);
     expect(getSessionRecord("session-1")?.modeId).toBe("bypass");
     expect(mocks.persistDefaultSessionModePreference).toHaveBeenCalledTimes(1);
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);

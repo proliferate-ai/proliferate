@@ -7,6 +7,7 @@ import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { CoworkArtifactsPanel } from "#product/components/workspace/cowork/CoworkArtifactsPanel";
 import { CoworkWorkspaceHeader } from "#product/components/workspace/cowork/CoworkWorkspaceHeader";
 import { useResize } from "#product/hooks/ui/layout/use-resize";
+import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import {
@@ -58,6 +59,9 @@ export function CoworkWorkspaceShell({
   const setArtifactPanelOpen = useCoworkUiStore((state) => state.setArtifactPanelOpen);
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const desktopHost = useProductHost().desktop !== null;
+  // Only a host that actually paints macOS window buttons reserves room for
+  // them; on Web (and non-Mac desktop) the inset was dead space above the nav.
+  const macWindowControlsInsetClass = useMacWindowControlsInsetClass();
   const chromeClasses = resolveCoworkWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
@@ -127,7 +131,7 @@ export function CoworkWorkspaceShell({
           style={{ width: sidebarOpen ? sidebarWidth : 0 }}
         >
           <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
-            <div className="flex h-full items-center gap-2 pl-[82px]">
+            <div className={`flex h-full items-center gap-2 ${macWindowControlsInsetClass}`}>
               <IconButton
                 tone="sidebar"
                 size="sm"
@@ -162,7 +166,7 @@ export function CoworkWorkspaceShell({
             data-tauri-drag-region="true"
           >
             {!sidebarOpen && (
-              <div className="flex items-center gap-2 pl-[82px] pr-2">
+              <div className={`flex items-center gap-2 pr-2 ${macWindowControlsInsetClass}`}>
                 <IconButton
                   size="sm"
                   onClick={() => setSidebarOpen(true)}

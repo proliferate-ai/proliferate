@@ -57,6 +57,10 @@ describe("useUpdater", () => {
     });
     window.localStorage.clear();
     useUpdaterStore.getState().reset();
+    // `reset` deliberately keeps skipped versions — cancelling an update is not
+    // the user changing their mind about a version they skipped — so a test
+    // that skips one has to clear it here or it leaks into the next test.
+    useUpdaterStore.setState({ skippedVersions: [] });
   });
 
   afterEach(() => {
@@ -114,6 +118,48 @@ describe("useUpdater", () => {
     expect(useUpdaterStore.getState().manualCheckCompletedAt).toBeNull();
     expect(useUpdaterStore.getState().availableTitle).toBe("Introducing Grok");
     expect(result.current.availableTitle).toBe("Introducing Grok");
+  });
+
+  it("records who asked, so every consumer of `checking` can tell", async () => {
+    updaterMocks.check.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useUpdater());
+    await act(async () => {
+      await result.current.checkNow();
+    });
+    expect(useUpdaterStore.getState().checkOrigin).toBe("manual");
+
+    useUpdaterStore.getState().reset();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTO_CHECK_INITIAL_DELAY_MS);
+    });
+    expect(useUpdaterStore.getState().checkOrigin).toBe("background");
+  });
+
+  it("treats a skipped version as nothing to report", async () => {
+    updaterMocks.check.mockResolvedValue({
+      version: "0.2.0",
+      title: null,
+      handle: {},
+    });
+
+    const { result } = renderHook(() => useUpdater());
+    await act(async () => {
+      await result.current.checkNow();
+    });
+    act(() => {
+      result.current.skipVersion();
+    });
+    expect(useUpdaterStore.getState().skippedVersions).toEqual(["0.2.0"]);
+
+    // The next check finds the same version. It must resolve as "current", or
+    // the version the user skipped comes straight back.
+    await act(async () => {
+      await result.current.checkNow();
+    });
+
+    expect(useUpdaterStore.getState().phase).toBe("current");
+    expect(useUpdaterStore.getState().availableVersion).toBeNull();
   });
 
   it("attributes a failed check to the check step", async () => {

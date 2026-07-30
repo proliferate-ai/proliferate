@@ -5,17 +5,15 @@ import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/us
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
-import {
-  buildDeferredHomeLaunchId,
-  useDeferredHomeLaunchStore,
-} from "#product/stores/home/deferred-home-launch-store";
+import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import { failLatencyFlow, startLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
+import { launchHomeCloudTarget } from "#product/hooks/home/workflows/launch-home-cloud-target";
 import {
   buildHomePendingWorkspaceInitialSession,
   buildResolvedHomeLaunchControlValues,
+  describeHomeLaunchTarget,
   homeLaunchFailureRetryMode,
   homeNextLaunchErrorMessage,
   markHomeLaunchIntentMaterializedFromPendingWorkspace,
@@ -36,6 +34,7 @@ export function useHomeNextLaunch() {
   const [isLaunching, setIsLaunching] = useState(false);
   const inFlightRef = useRef(false);
   const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const enqueueDeferredLaunch = useDeferredHomeLaunchStore((state) => state.enqueue);
   const beginLaunchIntent = useChatLaunchIntentStore((state) => state.begin);
   const clearLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.clearIfActive);
@@ -262,114 +261,41 @@ export function useHomeNextLaunch() {
         return true;
       }
 
-      const latencyFlowId = startLatencyFlow({
-        flowKind: "cloud_workspace_create",
-        source: "home",
-      });
-      const resultPromise = createCloudWorkspaceAndEnterWithResult(
-        {
-          gitOwner: target.gitOwner,
-          gitRepoName: target.gitRepoName,
-          baseBranch: target.baseBranch,
-        },
-          {
-            latencyFlowId,
-            initialSession,
-          },
-        );
-      const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
-        text: prompt,
+      return await launchHomeCloudTarget({
+        target,
+        prompt,
         promptId,
         launchIntentId,
-        waitUntil: resultPromise,
-      });
-      if (queuedProjectedSessionId) {
-        navigate("/");
-      }
-      const result = await resultPromise;
-      if (result.status === "interrupted") {
-        failLatencyFlow(latencyFlowId, "cloud_workspace_create_interrupted");
-        // Prefer the resolved server message (e.g. a billing gate 402) so the
-        // toast shows why the launch failed instead of a generic string.
-        throw new Error(result.failureMessage ?? "Cloud workspace creation was interrupted.");
-      }
-      if (!queuedProjectedSessionId) {
-        navigate("/");
-      }
-      if (result.status === "ready") {
-        const projectedSessionId = queuedProjectedSessionId ?? result.projectedSessionId;
-        markLaunchIntentMaterialized(launchIntentId, {
-          workspaceId: result.workspaceId,
-          clientSessionId: projectedSessionId,
-        });
-        if (!queuedProjectedSessionId) {
-          await promptProjectedOrCreateFreshSession({
-            workspaceId: result.workspaceId,
-            projectedSessionId,
-            modelSelection,
-            modeId,
-            launchControlValues: resolvedLaunchControlValues,
-            text: prompt,
-            promptId,
-            launchIntentId,
-            allowFreshFallback: false,
-          });
-        }
-        clearLaunchIntentIfActive(launchIntentId);
-        return true;
-      }
-      const projectedSessionId = queuedProjectedSessionId ?? result.projectedSessionId;
-      markLaunchIntentMaterialized(launchIntentId, {
-        workspaceId: result.workspaceId,
-        clientSessionId: projectedSessionId,
-      });
-
-      if (projectedSessionId) {
-        if (!queuedProjectedSessionId) {
-          await promptProjectedOrCreateFreshSession({
-            workspaceId: result.workspaceId,
-            projectedSessionId,
-            modelSelection,
-            modeId,
-            launchControlValues: resolvedLaunchControlValues,
-            text: prompt,
-            promptId,
-            launchIntentId,
-            allowFreshFallback: false,
-          });
-        }
-        clearLaunchIntentIfActive(launchIntentId);
-        showToast("Prompt queued. It will send when the cloud workspace is ready.", "info");
-        return true;
-      }
-
-      enqueueDeferredLaunch({
-        id: buildDeferredHomeLaunchId({
-          cloudWorkspaceId: result.cloudWorkspaceId,
-          attemptId: result.attemptId,
-        }),
-        status: "pending",
-        workspaceId: result.workspaceId,
-        cloudWorkspaceId: result.cloudWorkspaceId,
-        cloudAttemptId: result.attemptId,
-        agentKind: modelSelection.kind,
-        modelId: modelSelection.modelId,
+        modelSelection,
         modeId,
         launchControlValues: resolvedLaunchControlValues,
-        promptText: prompt,
-        promptId,
-        launchIntentId,
+        initialSession,
         createdAt: Date.now(),
+      }, {
+        createCloudWorkspaceAndEnterWithResult,
+        promptProjectedPendingWorkspaceSession,
+        promptProjectedOrCreateFreshSession,
+        markLaunchIntentMaterialized,
+        clearLaunchIntentIfActive,
+        enqueueDeferredLaunch,
+        navigate,
+        showToast,
       });
-      showToast("Prompt queued. It will send when the cloud workspace is ready.", "info");
-      return true;
     } catch (error) {
       markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
       failLaunchIntentIfActive(launchIntentId, {
         message: homeNextLaunchErrorMessage(error),
         retryMode: homeLaunchFailureRetryMode(launchIntentId),
       });
-      showToast(`Failed to start work: ${homeNextLaunchErrorMessage(error)}`);
+      // No Retry here: the Home composer puts the prompt back in the editor
+      // when `launch` returns false, so the composer's own send button is the
+      // retry. A second entry point would leave a duplicate draft behind.
+      showErrorToast({
+        headline: "Work not started",
+        consequence:
+          `Nothing was started on ${describeHomeLaunchTarget(target)}. Your prompt is back in the composer.`,
+        cause: homeNextLaunchErrorMessage(error),
+      });
       return false;
     } finally {
       inFlightRef.current = false;
@@ -391,6 +317,7 @@ export function useHomeNextLaunch() {
     navigate,
     promptExistingSession,
     selectWorkspace,
+    showErrorToast,
     showToast,
   ]);
 

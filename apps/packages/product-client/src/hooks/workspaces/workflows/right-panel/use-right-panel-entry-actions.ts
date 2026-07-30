@@ -77,6 +77,7 @@ export function useRightPanelEntryActions({
   const { createTab, closeTab, renameTab } = useTerminalActions();
   const navigate = useNavigate();
   const showToast = useToastStore((store) => store.show);
+  const showErrorToast = useToastStore((store) => store.showError);
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
   const activationApplicationQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -106,7 +107,9 @@ export function useRightPanelEntryActions({
     setTerminalFocusNonce((nonce) => nonce + 1);
   }, [setActiveTerminalForWorkspace, updateState, workspaceId]);
 
-  const createTerminal = useCallback(async (options?: { activate?: boolean }) => {
+  const createTerminal = useCallback(async function createTerminal(
+    options?: { activate?: boolean },
+  ) {
     if (!workspaceId || !shouldRenderContent) {
       return null;
     }
@@ -146,8 +149,12 @@ export function useRightPanelEntryActions({
         }
         return result.terminalId;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        showToast(`Failed to create terminal tab: ${message}`);
+        showErrorToast({
+          headline: "Terminal not opened",
+          consequence: "No new tab was added to the panel.",
+          cause: error instanceof Error ? error.message : String(error),
+          retry: () => void createTerminal(options),
+        });
         return null;
       }
     };
@@ -166,6 +173,7 @@ export function useRightPanelEntryActions({
     getWorkspaceRuntimeBlockReason,
     isCloudWorkspaceSelected,
     shouldRenderContent,
+    showErrorToast,
     showToast,
     updateState,
     workspaceId,
@@ -264,18 +272,27 @@ export function useRightPanelEntryActions({
     [closeTab, isCloudWorkspaceSelected, updateState, workspaceId],
   );
 
-  const handleRenameTerminal = useCallback(async (terminalId: string, title: string) => {
+  const handleRenameTerminal = useCallback(async function handleRenameTerminal(
+    terminalId: string,
+    title: string,
+  ) {
     if (!workspaceId) {
       return;
     }
     try {
       await renameTab(terminalId, workspaceId, title);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to rename terminal: ${message}`);
+      // The tab label reverts on the rethrow below, so the consequence names
+      // the name the user typed: it is the thing that just disappeared.
+      showErrorToast({
+        headline: "Terminal not renamed",
+        consequence: `The tab is still under its previous name, not "${title}".`,
+        cause: error instanceof Error ? error.message : String(error),
+        retry: () => void handleRenameTerminal(terminalId, title),
+      });
       throw error;
     }
-  }, [renameTab, showToast, workspaceId]);
+  }, [renameTab, showErrorToast, workspaceId]);
 
   const closeActiveRightPanelEntry = useCallback(() => {
     const entry = parseRightPanelHeaderEntryKey(state.activeEntryKey);

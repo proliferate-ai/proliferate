@@ -37,7 +37,10 @@ const MAX_MENTION_QUERY_LENGTH = 120;
  *
  * Unlike slash commands, mentions are legal anywhere in the prompt — but the
  * "@" must open a token (start of draft or after whitespace), so `user@host`
- * and email addresses never open the menu.
+ * and email addresses never open the menu. The composer is also where shell
+ * snippets and pasted code land, so an "@" that is inside a fenced or inline
+ * markdown code span (a decorator, an npm scope reference, a shell arg) is
+ * prompt content, not a mention request, and must not open the menu either.
  */
 export function findFileMentionTrigger(
   text: string,
@@ -52,6 +55,10 @@ export function findFileMentionTrigger(
     return null;
   }
 
+  if (isInsideMarkdownCode(text, tokenStart)) {
+    return null;
+  }
+
   const query = text.slice(tokenStart + 1, selectionOffset);
   if (query.length > MAX_MENTION_QUERY_LENGTH) {
     return null;
@@ -62,6 +69,32 @@ export function findFileMentionTrigger(
     end: findTokenEnd(text, selectionOffset),
     query,
   };
+}
+
+/**
+ * True when `position` falls inside an unclosed fenced (```) or inline (`)
+ * markdown code span. Scans from the start of the draft rather than trying to
+ * pair backticks locally, since a single-character delimiter can't be told
+ * apart from its own closer without tracking every prior toggle.
+ */
+function isInsideMarkdownCode(text: string, position: number): boolean {
+  let inFence = false;
+  let inSpan = false;
+  let offset = 0;
+  while (offset < position) {
+    if (!inSpan && text.startsWith("```", offset)) {
+      inFence = !inFence;
+      offset += 3;
+      continue;
+    }
+    if (!inFence && text[offset] === "`") {
+      inSpan = !inSpan;
+      offset += 1;
+      continue;
+    }
+    offset += 1;
+  }
+  return inFence || inSpan;
 }
 
 /**

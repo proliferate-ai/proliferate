@@ -53,6 +53,8 @@ export interface ComposerRichTextEditorProps {
   onEditorContextChange?: (context: ComposerEditorContext) => void;
   onKeyDown?: (event: ComposerKeyboardEventLike & { defaultPrevented: boolean; preventDefault(): void; currentTarget: EventTarget | null }) => void;
   onCommandKey?: (event: KeyboardEvent) => boolean;
+  /** Id of the highlighted row in an open inline menu, for aria-activedescendant. */
+  activeDescendantId?: string;
   submitBehavior: "workspace" | "home" | "editing";
   canSubmit: boolean;
   onSubmit: () => void;
@@ -70,6 +72,7 @@ export function ComposerRichTextEditor({
   onEditorContextChange,
   onKeyDown,
   onCommandKey,
+  activeDescendantId,
   submitBehavior,
   canSubmit,
   onSubmit,
@@ -108,6 +111,7 @@ export function ComposerRichTextEditor({
               data-home-composer-editor={surface === "home" ? true : undefined}
               data-telemetry-mask
               ref={rootRef}
+              aria-activedescendant={activeDescendantId}
               aria-placeholder={placeholder}
               placeholder={<></>}
               spellCheck={false}

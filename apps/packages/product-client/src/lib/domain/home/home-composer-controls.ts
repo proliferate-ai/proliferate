@@ -52,6 +52,10 @@ export function buildHomeModelSelectorProps({
         displayName: model.displayName,
         actionKind: "select" as const,
         isSelected: model.isSelected,
+        // Never marked here: Home is pre-session, so no target has had the
+        // chance to refuse anything yet. A refusal is a fact about one target,
+        // and Home has not picked one.
+        isUnsupported: false,
       })),
     })),
     hasAgents: groups.length > 0,

@@ -14,11 +14,16 @@ export interface SpinnerProps {
  *    its transformed bounding box every frame, which is what makes a compact
  *    tab or sidebar spinner appear to orbit. `.proliferate-spinner`'s
  *    `animation: none !important` neutralizes any such class.
- * 2. **`aspect-square` pins the box square.** The glyph tiers are `em`-based
+ * 2. **The box is pinned square, twice.** The glyph tiers are `em`-based
  *    (`--icon-paired` is `1.230769em`), so a spinner placed in a flex or grid
  *    parent that stretches one axis resolves a non-square box. `size-full`
  *    then makes the SVG non-square too, and a rotating non-square box sweeps
- *    an arc wider than its own footprint, which reads as wobble.
+ *    an arc wider than its own footprint, which reads as wobble. The
+ *    constraint is stated both here as `aspect-square` and in the theme's
+ *    `.proliferate-spinner` rule as `aspect-ratio: 1 / 1`; the duplication is
+ *    deliberate, because the two are loaded independently — the utility holds
+ *    where the product stylesheet is absent, and the theme rule holds where a
+ *    caller's own `className` competes with it.
  * 3. **The SVG owns the rotation, about its own view box.** The rotation
  *    origin must resolve against the `0 0 24 24` view box, whose exact centre
  *    is (12,12) and where both drawn paths are exactly centred (their combined

@@ -183,9 +183,12 @@ body {
    --color-card is #212121 on the #181818 pane in dark, so the fill alone
    separates the bubble; in light the card is #ffffff on a #ffffff pane, so the
    fill separates nothing and the edge is the only thing carrying the shape.
-   Authored here rather than as utilities because a generated shadow-* utility
-   inlines one mode's value at build time — the same reason the composer's
-   elevation lives in this file. */
+   The border and the elevation are one decision, so they are authored together
+   here rather than split across a border utility and a shadow utility. The
+   shadow token itself is now mode-responsive at runtime (see the shadow note in
+   `scripts/generate-theme.mjs`), so `var(--shadow-user-message)` and the
+   `shadow-user-message` utility resolve identically — this is co-location, not
+   a workaround. */
 .chat-user-message-bubble {
   border-color: var(--color-user-message-border);
   box-shadow: var(--shadow-user-message);

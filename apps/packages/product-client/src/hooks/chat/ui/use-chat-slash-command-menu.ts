@@ -52,5 +52,7 @@ export function useChatSlashCommandMenu({
     selectHighlighted,
     setRowRef: navigation.setRowRef,
     handleRowMouseEnter: navigation.handleRowMouseEnter,
+    getRowId: navigation.getRowId,
+    activeDescendantId: navigation.activeDescendantId,
   };
 }

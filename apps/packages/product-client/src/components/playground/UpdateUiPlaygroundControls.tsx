@@ -15,9 +15,12 @@ import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/Sideb
 type ProductionSurfacePreview =
   | "available"
   | "downloading"
+  | "stalled"
+  | "stalled-no-total"
   | "ready-reminder"
   | "restart-dialog"
   | "ready-armed"
+  | "restart-countdown"
   | "manual-check-current"
   | "check-error"
   | "download-error";
@@ -27,15 +30,20 @@ const PREVIEW_TITLE = "Introducing Grok";
 const CHECK_ERROR_MESSAGE = "Couldn't reach the update server.";
 const DOWNLOAD_ERROR_MESSAGE = "Couldn't finish downloading the update.";
 const PREVIEW_DOWNLOAD_TOTAL_BYTES = 125_000_000;
+/** Comfortably past the 8s stall threshold, so the copy reads "12 seconds". */
+const PREVIEW_STALL_SILENCE_MS = 12_000;
 const PRODUCTION_SURFACE_PREVIEWS: {
   id: ProductionSurfacePreview;
   label: string;
 }[] = [
   { id: "available", label: "Available" },
   { id: "downloading", label: "Downloading" },
+  { id: "stalled", label: "Stalled" },
+  { id: "stalled-no-total", label: "Stalled (no size)" },
   { id: "ready-reminder", label: "Ready reminder" },
   { id: "restart-dialog", label: "Restart dialog" },
   { id: "ready-armed", label: "Restart armed" },
+  { id: "restart-countdown", label: "Restart countdown" },
   { id: "manual-check-current", label: "Up to date" },
   { id: "check-error", label: "Check failed" },
   { id: "download-error", label: "Download failed" },
@@ -67,6 +75,10 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
     errorMessage: null,
     errorSource: null,
     manualCheckCompletedAt: null,
+    lastProgressAt: null,
+    downloadRetryCount: 0,
+    downloadStartedAt: null,
+    restartCountdownStartedAt: null,
   } satisfies Omit<DevUpdaterMockState, "phase">;
 
   if (preview === "downloading") {
@@ -76,6 +88,35 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
       downloadProgress: 68,
       downloadReceivedBytes: 85_000_000,
       downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
+      // 68% in 30s: gives the pill's remaining-time estimate real inputs, which
+      // is the only way that label can be reviewed here.
+      downloadStartedAt: Date.now() - 30_000,
+      lastProgressAt: Date.now(),
+    };
+  }
+
+  // Bytes frozen at a known percentage, twice retried: the full stall copy.
+  if (preview === "stalled") {
+    return {
+      ...baseState,
+      phase: "stalled",
+      downloadProgress: 38,
+      downloadReceivedBytes: 47_500_000,
+      downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
+      lastProgressAt: Date.now() - PREVIEW_STALL_SILENCE_MS,
+      downloadStartedAt: Date.now() - PREVIEW_STALL_SILENCE_MS - 40_000,
+      downloadRetryCount: 2,
+    };
+  }
+
+  // The other stall shape: a server that advertised no total, so there is no
+  // percentage to name and no bar to freeze — only the silence.
+  if (preview === "stalled-no-total") {
+    return {
+      ...baseState,
+      phase: "stalled",
+      downloadTotalBytes: null,
+      lastProgressAt: Date.now() - PREVIEW_STALL_SILENCE_MS,
     };
   }
 
@@ -99,6 +140,16 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
       ...baseState,
       phase: "ready",
       restartWhenIdle: true,
+    };
+  }
+
+  // Armed, sessions have gone idle, clock running: the cancellable warning.
+  if (preview === "restart-countdown") {
+    return {
+      ...baseState,
+      phase: "ready",
+      restartWhenIdle: true,
+      restartCountdownStartedAt: Date.now(),
     };
   }
 
@@ -301,7 +352,10 @@ export function UpdateUiPlaygroundControls() {
       <div className="flex flex-wrap items-center gap-6 rounded-lg border border-border bg-card/60 p-3">
         <div className="flex min-h-6 items-center">
           <SidebarUpdateFooterButton />
-          {livePhase !== "available" && livePhase !== "downloading" && livePhase !== "ready" && (
+          {livePhase !== "available"
+            && livePhase !== "downloading"
+            && livePhase !== "stalled"
+            && livePhase !== "ready" && (
             <span className="text-ui-sm text-muted-foreground">
               No footer control for this phase
             </span>

@@ -11,6 +11,15 @@
  *                           its `themeFallback` literal.
  *   :root                   dark runtime values (relative `color-mix()` form).
  *   :root[data-mode=light]  one flattened light root (no second light block).
+ *
+ * Shadows are the one namespace that cannot use that scheme. Tailwind inlines a
+ * `shadow-*` utility's value into `--tw-shadow` at build time, so whatever
+ * `@theme` holds is what every call site paints in BOTH modes — redeclaring
+ * `--shadow-*` under `[data-mode=light]` changes nothing, because no utility
+ * reads it. So each `--shadow-*` is emitted into `@theme` as a `var()` pointing
+ * at a parallel `--elevation-*` property, and the two roots carry the real
+ * per-mode values under that name. The utility then inlines the indirection
+ * instead of a literal and resolves per mode at runtime.
  *   @utility …              semantic z / duration / ease / icon-button/radius
  *                           utilities generated from the same names.
  *   keyframes + reduced motion.
@@ -24,11 +33,36 @@ import { themeTokens } from "../dist/tokens.js";
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const entries = Object.entries(themeTokens);
 
+/**
+ * `--shadow-x` in `@theme` becomes `var(--elevation-x)`; the per-mode literal
+ * moves to `--elevation-x` in each root. See the shadow note in the file header
+ * for why this namespace needs the indirection and the others do not.
+ */
+const ELEVATION_PREFIX = "--elevation-";
+const SHADOW_PREFIX = "--shadow-";
+
+function elevationName(shadowName) {
+  return `${ELEVATION_PREFIX}${shadowName.slice(SHADOW_PREFIX.length)}`;
+}
+
 function declarations(mode, indent = "  ") {
   return entries
-    .map(([name, value]) => {
+    .flatMap(([name, value]) => {
+      if (name.startsWith(SHADOW_PREFIX)) {
+        // In `@theme` the token points at its elevation twin so the generated
+        // utility inlines a var() rather than one mode's literal. In a mode root
+        // the twin carries that mode's value, and the token itself is kept as an
+        // alias so `var(--shadow-*)` in hand-authored CSS still resolves.
+        return mode === "theme"
+          ? [`${indent}${name}: var(${elevationName(name)});`]
+          : [
+              `${indent}${elevationName(name)}: ${value[mode]};`,
+              `${indent}${name}: var(${elevationName(name)});`,
+            ];
+      }
+
       const renderedValue = mode === "theme" ? (value.themeFallback ?? value.dark) : value[mode];
-      return `${indent}${name}: ${renderedValue};`;
+      return [`${indent}${name}: ${renderedValue};`];
     })
     .join("\n");
 }

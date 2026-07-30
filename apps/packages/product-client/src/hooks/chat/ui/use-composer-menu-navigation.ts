@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 /**
  * Keyboard/pointer highlight state shared by the composer's inline menus
@@ -8,6 +8,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * composer, driven by Arrow keys with Enter/Tab committing the highlighted row
  * and the pointer taking over the highlight on hover. Keeping one
  * implementation is what keeps the two menus from drifting apart.
+ *
+ * The hook also owns row `id`s: focus never leaves the composer's
+ * contenteditable, so the highlighted row is announced to assistive tech via
+ * `aria-activedescendant` on that editable pointing at a row rendered
+ * elsewhere in the DOM, rather than via native focus.
  */
 export function useComposerMenuNavigation({
   open,
@@ -21,6 +26,8 @@ export function useComposerMenuNavigation({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const idPrefix = useId();
+  const getRowId = useCallback((index: number) => `${idPrefix}row-${index}`, [idPrefix]);
 
   const activeIndex = itemCount === 0 ? 0 : Math.min(highlightedIndex, itemCount - 1);
 
@@ -58,5 +65,8 @@ export function useComposerMenuNavigation({
     moveHighlight,
     setRowRef,
     handleRowMouseEnter,
+    getRowId,
+    /** Row id for the composer's `aria-activedescendant`, or undefined when nothing is open to announce. */
+    activeDescendantId: open && itemCount > 0 ? getRowId(activeIndex) : undefined,
   };
 }
