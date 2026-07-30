@@ -105,3 +105,13 @@ apps/packages/product-client/src/generated/
 
 # Local dev symlink into the root workspace node_modules (never committed)
 tests/release/node_modules
+
+# design-sync (claude.ai/design) working state — tracked on its own branch
+# (claude/design-sync-ui-import); here it is regenerable working state that
+# carried over in the working tree when this branch was cut.
+.ds-sync/
+ds-bundle/
+.design-sync/
+apps/packages/*/.ds-entry.mjs
+apps/packages/*/.ds-compiled.css
+apps/packages/ui/index.d.ts
