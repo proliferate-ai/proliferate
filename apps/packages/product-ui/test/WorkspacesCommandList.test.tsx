@@ -89,6 +89,31 @@ describe("WorkspacesCommandList", () => {
     expect(screen.getByText("↑2 ↓1")).toBeTruthy();
   });
 
+  it("renders the session count and omits it when there are none", () => {
+    const { rerender } = render(
+      <WorkspacesCommandList groups={groups([item({ sessionCount: 3 })])} />,
+    );
+
+    expect(screen.getByLabelText("3 sessions").textContent).toContain("3");
+
+    rerender(<WorkspacesCommandList groups={groups([item({ sessionCount: 0 })])} />);
+    expect(screen.queryByLabelText("0 sessions")).toBeNull();
+
+    rerender(<WorkspacesCommandList groups={groups([item({ sessionCount: 1 })])} />);
+    expect(screen.getByLabelText("1 session")).toBeTruthy();
+  });
+
+  it("badges non-local placement only when a label is supplied", () => {
+    const { rerender } = render(
+      <WorkspacesCommandList groups={groups([item({ placementLabel: "Cloud" })])} />,
+    );
+
+    expect(screen.getByText("Cloud")).toBeTruthy();
+
+    rerender(<WorkspacesCommandList groups={groups([item({ placementLabel: null })])} />);
+    expect(screen.queryByText("Cloud")).toBeNull();
+  });
+
   it("matches the filter against the PR number", () => {
     render(
       <WorkspacesCommandList

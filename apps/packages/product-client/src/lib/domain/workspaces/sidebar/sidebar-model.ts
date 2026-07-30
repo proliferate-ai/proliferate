@@ -89,6 +89,13 @@ export interface SidebarWorkspaceItemState {
   workspaceLocationCopyToastLabel: string | null;
   branchName: string | null;
   /**
+   * Total sessions recorded against this workspace's materialization, read
+   * from the workspace record's execution summary that the workspace
+   * collections query already carries. Null when the owning materialization
+   * reports no summary (cloud-only entries and pending projections).
+   */
+  sessionCount: number | null;
+  /**
    * Composed git/PR status keyed by this item's logical workspace id
    * (§2.7). Null when no status is known for the workspace.
    */

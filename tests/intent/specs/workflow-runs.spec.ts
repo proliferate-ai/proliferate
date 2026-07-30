@@ -12,6 +12,8 @@ import {
   passwordLogin,
   webBaseUrl,
 } from "../stack/seed.ts";
+// TEMPORARY (workflows beta gate): see tests/intent/stack/workflows-beta-gate.ts.
+import { dismissWorkflowsBetaGate } from "../stack/workflows-beta-gate.ts";
 
 test.describe.configure({ mode: "serial" });
 
@@ -46,6 +48,9 @@ test.beforeAll(async () => {
 test("launches once, reloads durable history, and cancels before sandbox execution", async ({ page }) => {
   await signIn(page);
   await page.goto(`${webBaseUrl()}/workflows/${workflowId}`);
+  // TEMPORARY (workflows beta gate): dismiss the "in beta" notice the way a user
+  // would before driving the surface underneath it.
+  await dismissWorkflowsBetaGate(page);
 
   await expect(page.getByRole("heading", { name: TITLE, level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "Run in Cloud" })).toBeEnabled();

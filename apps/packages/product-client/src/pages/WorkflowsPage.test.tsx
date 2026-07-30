@@ -100,6 +100,9 @@ function renderWorkflows(path = "/workflows") {
 describe("WorkflowsPage authentication boundary", () => {
   beforeEach(() => {
     authMode.devBypassed = false;
+    // TEMPORARY (workflows beta gate): the notice acknowledgement lives in
+    // sessionStorage, so each test starts from a fresh browser session.
+    window.sessionStorage.clear();
     useAuthStore.setState({
       status: "anonymous",
       session: null,
@@ -175,6 +178,39 @@ describe("WorkflowsPage authentication boundary", () => {
       selectedWorkflowId: "workflow-1",
       managedRunsEnabled: true,
     }));
+  });
+
+  // TEMPORARY (workflows beta gate): delete with WORKFLOWS_BETA_GATE_ENABLED.
+  it("raises the beta notice over the mounted surface and dismisses it", () => {
+    useAuthStore.setState({
+      status: "authenticated",
+      session: null,
+      user: {
+        id: "user-1",
+        email: "user@example.com",
+        display_name: "Test User",
+      },
+      error: null,
+    });
+
+    renderWorkflows();
+
+    expect(screen.getByText("This feature is in beta")).toBeTruthy();
+    // The gate is an interstitial, not a removal: the surface is still mounted.
+    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
+    expect(workflowSurface).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue anyway" }));
+
+    expect(screen.queryByText("This feature is in beta")).toBeNull();
+    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
+
+    // The acknowledgement is session-scoped, so a remount (route change, or a
+    // reload inside the same browser session) does not re-raise the notice.
+    cleanup();
+    renderWorkflows();
+    expect(screen.queryByText("This feature is in beta")).toBeNull();
+    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
   });
 
   it("mounts the definition-scoped run deep link with the authenticated scope", () => {
