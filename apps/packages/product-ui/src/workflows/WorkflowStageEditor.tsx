@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "@proliferate/ui/icons";
 import {
   workflowAgentOptions,
   workflowAgentSupportsGoals,

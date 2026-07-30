@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound } from "@proliferate/ui/icons";
 import { SecretManagementPanel } from "@proliferate/product-ui/patterns/secrets/SecretManagementPanel";
 import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";

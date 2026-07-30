@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreditCard, Keyboard, LogOut, Settings } from "lucide-react";
-import { Check, ChevronUpDown, Mail } from "@proliferate/ui/icons";
+import {
+  Check,
+  ChevronUpDown,
+  CreditCard,
+  Keyboard,
+  LogOut,
+  Mail,
+  Settings,
+} from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import {

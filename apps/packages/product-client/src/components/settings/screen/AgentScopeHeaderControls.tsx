@@ -1,4 +1,4 @@
-import { Cloud, Laptop } from "lucide-react";
+import { Cloud, Laptop } from "@proliferate/ui/icons";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 

@@ -1,4 +1,4 @@
-import { Check, CheckCircle2 } from "lucide-react";
+import { Check, CheckCircle2 } from "@proliferate/ui/icons";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";

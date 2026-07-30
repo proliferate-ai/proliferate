@@ -9,7 +9,7 @@ import {
   Target,
   Trash2,
   X,
-} from "lucide-react";
+} from "@proliferate/ui/icons";
 import {
   deriveGoalBarState,
   goalStatusLabel,

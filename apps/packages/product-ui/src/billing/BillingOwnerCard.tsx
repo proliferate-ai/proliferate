@@ -1,4 +1,4 @@
-import { Building2, Cloud, CreditCard, Gauge, Server } from "lucide-react";
+import { Building2, Cloud, CreditCard, Gauge, Server } from "@proliferate/ui/icons";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 

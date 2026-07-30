@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Cloud } from "lucide-react";
+import { Cloud } from "@proliferate/ui/icons";
 import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { resolveRepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";

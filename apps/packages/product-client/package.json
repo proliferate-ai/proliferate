@@ -86,7 +86,6 @@
     "cmdk": "^1.1.1",
     "geist": "^1.7.2",
     "lexical": "^0.48.0",
-    "lucide-react": "0.577.0",
     "react-markdown": "^9",
     "react-router-dom": "^7",
     "remark-gfm": "^4",

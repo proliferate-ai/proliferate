@@ -1,11 +1,13 @@
 import {
+  ArrowUpRight,
   BookMarked,
   BookOpen,
+  Discord,
   Globe,
   Lightbulb,
+  Mail,
   MessageSquare,
-} from "lucide-react";
-import { ArrowUpRight, Discord, Mail } from "@proliferate/ui/icons";
+} from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { PROLIFERATE_DOCS_URL } from "#product/config/capabilities";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeyRound, Plus } from "lucide-react";
+import { KeyRound, Plus } from "@proliferate/ui/icons";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";

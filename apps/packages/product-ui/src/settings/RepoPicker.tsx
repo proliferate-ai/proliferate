@@ -1,5 +1,4 @@
-import { Check, ChevronsUpDown, Cloud, Plus } from "lucide-react";
-import { GitHub } from "@proliferate/ui/icons";
+import { Check, ChevronsUpDown, Cloud, GitHub, Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   POPOVER_SURFACE_CLASS,

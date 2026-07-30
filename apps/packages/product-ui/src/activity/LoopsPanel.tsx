@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, RotateCw, Trash2 } from "lucide-react";
+import { Plus, RotateCw, Trash2 } from "@proliferate/ui/icons";
 import {
   humanizeLoopCadence,
   loopNextFireAtMs,

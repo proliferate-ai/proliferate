@@ -1,4 +1,4 @@
-import { Hand } from "lucide-react";
+import { Hand } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 export type ClaimBannerView =

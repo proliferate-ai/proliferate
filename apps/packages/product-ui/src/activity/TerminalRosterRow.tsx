@@ -1,4 +1,4 @@
-import { SquareTerminal } from "lucide-react";
+import { SquareTerminal } from "@proliferate/ui/icons";
 import {
   processElapsedLabel,
   processStatusLabel,

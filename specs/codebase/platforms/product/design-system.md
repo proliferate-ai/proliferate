@@ -347,6 +347,10 @@ either background. The `warning` family is the exception in shape: its base
 token is already a tint rather than a hue, with the hue held in
 `warning-foreground`.
 
+**Warning tone.** `--color-warning` is a fill, never an ink; warning text and
+icons take `--color-warning-foreground` (guard:
+[warning-ink-guard.test.ts](../../../../apps/packages/ui/test/warning-ink-guard.test.ts)).
+
 Git and review state carry a parallel set of roles rather than reusing these:
 `--color-git-green`/`-red`/`-yellow`, `--color-diff-added`,
 `--color-diff-deleted`, `--color-pr-merged` (`#ad7bf9`/`#8250df`),
@@ -887,10 +891,19 @@ grandfathered.
 
 | Component | Path | Purpose |
 | --- | --- | --- |
-| `icons` (barrel) | [index.tsx](../../../../apps/packages/ui/src/icons/index.tsx) | General glyph set — re-exports the `core`/`workspace`/`product`/`platform`/`status`/`app-shell` detail modules. |
+| `icons` (barrel) | [index.tsx](../../../../apps/packages/ui/src/icons/index.tsx) | General glyph set — re-exports the `core`/`workspace`/`product`/`platform`/`status`/`app-shell`/`lucide` detail modules. |
 | `command-palette-icons` | [command-palette-icons.tsx](../../../../apps/packages/ui/src/icons/command-palette-icons.tsx) | Icon set scoped to the command palette. |
 | `proliferate-icons` | [proliferate-icons.tsx](../../../../apps/packages/ui/src/icons/proliferate-icons.tsx) | The Proliferate brand-mark glyph. |
 | `provider-icons` | [provider-icons.tsx](../../../../apps/packages/ui/src/icons/provider-icons.tsx) | Auth/model-provider brand glyphs, composes `proliferate-icons` for the Proliferate entry. |
+
+**Icon source.** Product code imports icons from `@proliferate/ui/icons` only;
+`lucide-react` is an implementation detail of the `ui` package.
+[lucide.ts](../../../../apps/packages/ui/src/icons/lucide.ts) re-exports the
+vendor glyphs the system has not drawn in-house — and only names with no owned
+equivalent: where an owned module and the vendor set share a name, the owned
+glyph is canonical and the vendor one is not re-exported. The gate is
+[icon-source-guard.test.ts](../../../../apps/packages/ui/test/icon-source-guard.test.ts),
+which fails any `from "lucide-react"` outside `apps/packages/ui`.
 
 #### Patterns — domain-aware (`product-ui/src/patterns/`)
 

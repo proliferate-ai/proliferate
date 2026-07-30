@@ -16,7 +16,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Users,
-} from "lucide-react";
+} from "@proliferate/ui/icons";
 import { SidebarNavRow } from "@proliferate/ui/patterns/SidebarNavRow";
 import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { SettingsEyebrow } from "@proliferate/product-ui/patterns/SettingsEyebrow";

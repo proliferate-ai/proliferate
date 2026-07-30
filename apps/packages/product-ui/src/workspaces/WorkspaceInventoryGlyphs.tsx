@@ -9,7 +9,7 @@ import {
   Monitor,
   Smartphone,
   UsersRound,
-} from "lucide-react";
+} from "@proliferate/ui/icons";
 
 import type {
   WorkspaceInventorySourceKind,

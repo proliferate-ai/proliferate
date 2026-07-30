@@ -1,9 +1,4 @@
-import {
-  LayoutGrid,
-  LifeBuoy,
-  Workflow,
-} from "lucide-react";
-import { AppShellNewChatIcon } from "@proliferate/ui/icons";
+import { AppShellNewChatIcon, LayoutGrid, LifeBuoy, Workflow } from "@proliferate/ui/icons";
 import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
 import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
 

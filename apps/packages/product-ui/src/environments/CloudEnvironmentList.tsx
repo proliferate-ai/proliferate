@@ -1,4 +1,4 @@
-import { Cloud, Folder, Plus } from "lucide-react";
+import { Cloud, Folder, Plus } from "@proliferate/ui/icons";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";

@@ -1,12 +1,5 @@
 import { type FormEvent } from "react";
-import {
-  Archive,
-  Check,
-  Lock,
-  RotateCw,
-  ShieldAlert,
-} from "lucide-react";
-import { GitHub } from "@proliferate/ui/icons";
+import { Archive, Check, GitHub, Lock, RotateCw, ShieldAlert } from "@proliferate/ui/icons";
 
 import {
   Dialog,

@@ -1,4 +1,4 @@
-import { CircleHelp } from "lucide-react";
+import { CircleHelp } from "@proliferate/ui/icons";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {

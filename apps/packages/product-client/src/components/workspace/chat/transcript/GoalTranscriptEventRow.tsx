@@ -1,8 +1,7 @@
-import { useState } from "react";
-// Matches the goal bar's own iconography exactly (GoalBar.tsx sources the
-// same three glyphs from lucide-react directly — Target/CircleCheck aren't
-// in the curated @proliferate/ui/icons set).
-import { CircleAlert, CircleCheck, Target } from "lucide-react";
+import { useState, type ComponentType } from "react";
+// Matches the goal bar's own iconography exactly (GoalBar.tsx uses the same
+// three glyphs).
+import { CircleAlert, CircleCheck, Target, type IconProps } from "@proliferate/ui/icons";
 import { truncateGoalObjective } from "@proliferate/product-domain/activity/goal";
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -95,7 +94,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
 }
 
 interface GoalTranscriptEventPresentation {
-  Icon: typeof Target;
+  Icon: ComponentType<IconProps>;
   iconClassName: string;
   label: string;
   detailPreview: string | null;

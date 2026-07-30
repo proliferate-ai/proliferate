@@ -1,4 +1,4 @@
-import { Folder, Laptop } from "lucide-react";
+import { Folder, Laptop } from "@proliferate/ui/icons";
 import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";

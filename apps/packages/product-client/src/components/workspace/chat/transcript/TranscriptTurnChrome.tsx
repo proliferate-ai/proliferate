@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
-// CircleCheck isn't in the curated @proliferate/ui/icons set — the goal bar
-// and goal transcript rows source it directly from lucide-react too.
-import { CircleCheck } from "lucide-react";
 import {
+  CircleCheck,
   CircleQuestion,
   MessageCircleQuestion,
   Sparkles,

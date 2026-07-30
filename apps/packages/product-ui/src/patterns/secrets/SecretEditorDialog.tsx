@@ -1,7 +1,6 @@
 import { type ClipboardEvent, type FormEvent, useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { CloudUpload, Eye, EyeOff } from "@proliferate/ui/icons";
 
-import { CloudUpload } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";

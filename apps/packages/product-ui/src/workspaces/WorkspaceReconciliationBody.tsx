@@ -1,4 +1,4 @@
-import { GitBranch } from "lucide-react";
+import { GitBranch } from "@proliferate/ui/icons";
 import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 
 /** One target column's presentation, derived entirely by the caller

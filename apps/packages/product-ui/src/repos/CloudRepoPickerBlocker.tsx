@@ -1,4 +1,4 @@
-import { Check, ShieldAlert } from "lucide-react";
+import { Check, ShieldAlert } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { CloudRepoPickerBlockerView } from "./CloudRepoPicker";
 

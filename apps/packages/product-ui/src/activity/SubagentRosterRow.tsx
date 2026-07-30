@@ -1,4 +1,4 @@
-import { GitFork } from "lucide-react";
+import { GitFork } from "@proliferate/ui/icons";
 import {
   subagentDisplayTitle,
   subagentStatusLabel,

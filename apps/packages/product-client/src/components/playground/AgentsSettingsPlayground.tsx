@@ -5,7 +5,7 @@ import { ProductHostProvider, useProductHost } from "@proliferate/product-client
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Cloud, Laptop } from "lucide-react";
+import { Cloud, Laptop } from "@proliferate/ui/icons";
 import { ApiKeysPane } from "#product/components/settings/panes/agents/api-keys/ApiKeysPane";
 import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";

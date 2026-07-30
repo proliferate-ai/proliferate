@@ -3,7 +3,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { ArrowLeft, Cloud, FolderOpen, GitBranch } from "lucide-react";
+import { ArrowLeft, Cloud, FolderOpen, GitBranch } from "@proliferate/ui/icons";
 
 import {
   Dialog,

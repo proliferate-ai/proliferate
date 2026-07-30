@@ -4,7 +4,7 @@ import { toast } from "@proliferate/ui/primitives/Sonner";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";
-import { X } from "lucide-react";
+import { X } from "@proliferate/ui/icons";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import {
   byteProgressPercent,

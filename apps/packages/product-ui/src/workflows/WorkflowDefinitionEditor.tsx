@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2 } from "@proliferate/ui/icons";
 import {
   workflowAgentOptions,
   workflowDefaultAgentKind,

@@ -7,3 +7,6 @@ export { PixelAgentSprite, Robot, ClipboardList, ClipboardListFilled, ReadModeFi
 export { Mail, Calendar, CalendarClock, CreditCard, Discord, GitHub, Globe, Smartphone, Sun, Moon, Monitor, Home, Grid, CloudUpload, Blocks, CircleUser, Building2, UsersRound, CloudIcon, Server, RefreshCw } from "./platform";
 export { CheckCircleFilled, Circle, CircleAlert, ShieldCheckFilled, Spinner, BrailleSweepBadge } from "./status";
 export { AppShellReviewIcon, AppShellBrowserIcon, AppShellTerminalIcon, AppShellPlusIcon, AppShellPanelToggleIcon, AppShellTabCloseIcon, AppShellNewChatIcon, SplitPanel, SplitPanelLeft, SplitPanelRight } from "./app-shell";
+// Vendor glyphs without an owned equivalent yet; the owned modules above stay
+// canonical for any name they already export (see ./lucide for the rule).
+export { AlertTriangle, BookMarked, BookOpen, Bot, Braces, CheckCircle2, ChevronUp, ChevronsUpDown, CircleCheck, CircleHelp, Cloud, Edit3, Eye, EyeOff, Gauge, GitFork, Hand, HelpCircle, Laptop, LayoutGrid, Lightbulb, ListChecks, Lock, MousePointerClick, Plug, RotateCw, Save, Scissors, Settings2, ShieldAlert, Trash2, Users, WifiOff, Workflow } from "./lucide";

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronsUpDown } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { InterHunkGap } from "#product/lib/domain/files/diff-parser";
 

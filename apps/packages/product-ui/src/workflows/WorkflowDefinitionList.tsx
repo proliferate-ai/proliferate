@@ -1,4 +1,4 @@
-import { Plus, RotateCcw, Workflow } from "lucide-react";
+import { Plus, RotateCcw, Workflow } from "@proliferate/ui/icons";
 import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
 import { EmptyState } from "@proliferate/ui/patterns/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";

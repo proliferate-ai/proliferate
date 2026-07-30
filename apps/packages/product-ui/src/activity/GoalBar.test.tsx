@@ -108,8 +108,12 @@ describe("GoalBar chips", () => {
     expect(screen.queryByText("2 loops")).toBeNull();
     expect(container.querySelector("[data-session-goal-bar] > div")?.className.split(" "))
       .toContain("gap-1.5");
-    expect(container.querySelector("svg.lucide-target")?.getAttribute("class")?.split(" "))
-      .toContain("mt-[0.175em]");
+    // The goal target glyph (the muted-foreground svg) stays nudged down to
+    // align with the editor's first line.
+    const glyph = [...container.querySelectorAll("svg")].find((el) =>
+      el.getAttribute("class")?.split(" ").includes("text-muted-foreground"),
+    );
+    expect(glyph?.getAttribute("class")?.split(" ")).toContain("mt-[0.175em]");
   });
 
   it("preserves the original hidden behavior when chips are absent", () => {

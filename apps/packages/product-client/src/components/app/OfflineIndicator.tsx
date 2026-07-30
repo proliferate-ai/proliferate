@@ -1,4 +1,4 @@
-import { WifiOff } from "lucide-react";
+import { WifiOff } from "@proliferate/ui/icons";
 import { useConnectivityStore } from "#product/stores/infra/connectivity-store";
 
 /**

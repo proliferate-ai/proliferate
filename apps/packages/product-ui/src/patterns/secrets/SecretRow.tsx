@@ -1,4 +1,4 @@
-import { Edit3, Trash2 } from "lucide-react";
+import { Edit3, Trash2 } from "@proliferate/ui/icons";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 

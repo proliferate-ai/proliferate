@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@proliferate/ui/icons";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 
