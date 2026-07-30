@@ -81,6 +81,11 @@ TEXT_ROLES: tuple[tuple[str, float], ...] = (
     ("--color-muted-foreground", SECONDARY_FLOOR),
     ("--color-foreground-tertiary", FAINT_FLOOR),
     ("--color-faint", FAINT_FLOOR),
+    # A link sits at prose weight, not decoration, so it is held to the same
+    # floor as the other secondary-weight roles rather than left unmeasured —
+    # this is the exact token a "link legibility" change should have been
+    # gating against and previously was not.
+    ("--color-link-foreground", SECONDARY_FLOOR),
 )
 # Every opaque plane the product actually paints text on, not just the two the
 # page starts from. In light mode `surface`, `background`, `card`, `popover`,
