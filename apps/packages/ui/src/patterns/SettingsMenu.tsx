@@ -57,7 +57,14 @@ export function SettingsMenu({
           size="sm"
           className={`h-7 justify-between rounded-lg border border-input bg-transparent px-2.5 text-ui font-control leading-4 text-foreground shadow-none hover:bg-hover active:bg-active data-[state=open]:bg-active ${className}`}
         >
-          {leading}
+          {leading && (
+            // Bare icons take the row's paired tier; the :not guard leaves any
+            // icon that names its own icon-* tier alone, since the wrapper's
+            // descendant selector would otherwise outrank a class on the svg.
+            <span className="flex shrink-0 items-center [&_svg:not([class*='icon-'])]:icon-paired">
+              {leading}
+            </span>
+          )}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
           <ChevronDown className="icon-paired shrink-0 text-muted-foreground" />
         </Button>

@@ -191,6 +191,38 @@ describe("Tooltip", () => {
     });
   });
 
+  it("renders content without any hover when open is controlled on", async () => {
+    render(
+      <Tooltip content="Reasoning: High" open>
+        <button type="button">bars</button>
+      </Tooltip>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Reasoning: High").length).toBeGreaterThan(0);
+    });
+  });
+
+  /**
+   * A controlled tooltip must not let the internal hover/press machinery
+   * fight the caller: with `open={false}` the caller's value is the whole
+   * truth, so hovering and pressing change nothing.
+   */
+  it("stays closed under hover and press when open is controlled off", async () => {
+    render(
+      <Tooltip content="Reasoning: High" keepOpenOnPress open={false}>
+        <button type="button">bars</button>
+      </Tooltip>,
+    );
+
+    const trigger = screen.getByRole("button");
+    hover(trigger.parentElement!);
+    press(trigger);
+    await waitFor(() => {
+      expect(screen.queryByText("Reasoning: High")).toBeNull();
+    });
+  });
+
   it("leaves the default press-to-dismiss behavior alone when not opted in", async () => {
     render(
       <Tooltip content="Opens a menu">

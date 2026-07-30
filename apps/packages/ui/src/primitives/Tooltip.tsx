@@ -32,6 +32,17 @@ interface TooltipProps {
    * primitive's default dismissal.
    */
   keepOpenOnPress?: boolean;
+  /**
+   * Controls visibility from outside. When provided, the caller's value is
+   * the only input the primitive sees: hover, focus, and the press machinery
+   * above all stand down, so internal state can never disagree with it.
+   */
+  open?: boolean;
+  /**
+   * Hover delay before opening, in ms. Defaults to 0 — these tooltips label
+   * controls, and a label should answer immediately.
+   */
+  delayDuration?: number;
 }
 
 export function Tooltip({
@@ -40,8 +51,14 @@ export function Tooltip({
   className = "inline-flex shrink-0",
   singleLine = false,
   keepOpenOnPress = false,
+  open,
+  delayDuration = 0,
 }: TooltipProps) {
   const [hoverOpen, setHoverOpen] = useState(false);
+  // A caller-supplied `open` wins outright: the press machinery exists to
+  // reinterpret pointer intent, and a controlled tooltip leaves no intent to
+  // reinterpret — running it anyway would only fight the caller's value.
+  const pressManaged = keepOpenOnPress && open === undefined;
   // Only the close request raised by pressing the trigger is suppressed.
   // Ignoring *every* close request would also swallow Escape and trigger blur,
   // the only ways a keyboard or switch-access user has to dismiss hover/focus
@@ -59,7 +76,7 @@ export function Tooltip({
   const suppressingPress = () => pressUntilRef.current > performance.now();
 
   useEffect(() => {
-    if (!keepOpenOnPress) return;
+    if (!pressManaged) return;
     // Any keystroke ends the press window immediately, so Escape is never
     // swallowed even mid-press. Capture phase: the dismissable layer's own
     // Escape handling listens on the document, and this must run first.
@@ -72,7 +89,7 @@ export function Tooltip({
       window.removeEventListener("keydown", endPress, { capture: true });
       window.removeEventListener("pointercancel", endPress);
     };
-  }, [keepOpenOnPress]);
+  }, [pressManaged]);
 
   const handleOpenChange = useCallback((next: boolean) => {
     if (next) {
@@ -83,12 +100,14 @@ export function Tooltip({
     setHoverOpen(false);
   }, []);
 
-  const controlled = keepOpenOnPress
-    ? { open: hoverOpen, onOpenChange: handleOpenChange }
-    : {};
+  const controlled = open !== undefined
+    ? { open }
+    : pressManaged
+      ? { open: hoverOpen, onOpenChange: handleOpenChange }
+      : {};
 
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={delayDuration}>
       <KitTooltip {...controlled}>
         <TooltipTrigger asChild>
           <span
@@ -96,7 +115,7 @@ export function Tooltip({
             // Capture phase: the primitive raises its close request from its
             // own pointer-down handler on the inner trigger, which in the
             // bubble phase would run before this one and close first.
-            onPointerDownCapture={keepOpenOnPress
+            onPointerDownCapture={pressManaged
               ? (event) => {
                 // Touch keeps the primitive's own behavior (see onPointerEnter),
                 // so there is nothing to suppress and no window to open.
@@ -104,7 +123,7 @@ export function Tooltip({
                 pressUntilRef.current = performance.now() + PRESS_SUPPRESSION_MS;
               }
               : undefined}
-            onPointerEnter={keepOpenOnPress
+            onPointerEnter={pressManaged
               ? (event) => {
                 // Touch fires `pointerenter` but never `pointerleave`, so
                 // opening here would pin the tooltip open on a tap with no way
@@ -114,7 +133,7 @@ export function Tooltip({
                 setHoverOpen(true);
               }
               : undefined}
-            onPointerLeave={keepOpenOnPress
+            onPointerLeave={pressManaged
               ? () => {
                 pressUntilRef.current = 0;
                 setHoverOpen(false);

@@ -27,6 +27,7 @@ interface EnvironmentSearchSelectProps {
   closeOnSelect?: boolean;
   leading?: ReactNode;
   disabled?: boolean;
+  externalOpen?: boolean;
 }
 
 export function EnvironmentSearchSelect({
@@ -39,6 +40,7 @@ export function EnvironmentSearchSelect({
   closeOnSelect = true,
   leading,
   disabled = false,
+  externalOpen,
 }: EnvironmentSearchSelectProps) {
   const [searchValue, setSearchValue] = useState("");
   const filteredOptions = useMemo(() => (
@@ -51,6 +53,7 @@ export function EnvironmentSearchSelect({
   return (
     <PopoverButton
       align="start"
+      externalOpen={externalOpen}
       trigger={(
         <Button
           type="button"

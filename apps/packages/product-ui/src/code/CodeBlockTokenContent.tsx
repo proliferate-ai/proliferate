@@ -54,6 +54,10 @@ export function CodeBlockTokenContent({
           tokens={tokens}
           lineIndex={index}
           renderToken={renderToken}
+          // Tokenized lines carry no trailing newline, so each line must be
+          // its own block — inline spans would run the whole snippet together
+          // on a single line.
+          className="block"
         />
       ))}
     </code>
