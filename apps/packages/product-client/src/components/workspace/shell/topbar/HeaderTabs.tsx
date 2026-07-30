@@ -12,6 +12,7 @@ import {
 } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { WorkspaceTabStrip } from "#product/components/workspace/shell/tabs/WorkspaceTabStrip";
 import { NewChatButton, ClosedSessionsTrigger } from "#product/components/workspace/shell/topbar/HeaderTabsActions";
+import { HeaderTabsClosingGhosts } from "#product/components/workspace/shell/topbar/HeaderTabsClosingGhosts";
 import { HeaderTabsStripRows } from "#product/components/workspace/shell/topbar/HeaderTabsStripRows";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { useSessionForkActions } from "#product/hooks/sessions/workflows/use-session-fork-actions";
@@ -19,6 +20,7 @@ import { useSessionTitleActions } from "#product/hooks/sessions/workflows/use-se
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useResizeObserverWidth } from "#product/hooks/ui/layout/use-resize-observer-width";
 import { useHeaderTabsCloseActions } from "#product/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions";
+import { useHeaderTabCloseTransition } from "#product/hooks/workspaces/ui/tabs/use-header-tab-close-transition";
 import { useHeaderTabsGroupEditor } from "#product/hooks/workspaces/ui/tabs/use-header-tabs-group-editor";
 import {
   useHeaderTabsLayout,
@@ -123,10 +125,15 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     shellRows: viewModel.shellRows,
     reservedWidth,
   });
-  const contentWidth = layout.widths.length > 0
-    ? (layout.positions[layout.positions.length - 1] ?? 0)
-      + (layout.widths[layout.widths.length - 1] ?? 0)
-    : 0;
+  const {
+    closingTabs,
+    contentWidth,
+    beginCloseChatTab,
+  } = useHeaderTabCloseTransition({
+    shellRows: viewModel.shellRows,
+    positions: layout.positions,
+    widths: layout.widths,
+  });
 
   const activeTabIndex = viewModel.shellRows.findIndex((shellRow) =>
     shellRow.kind === "chat"
@@ -264,9 +271,11 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     if (!chatVisibilityActions.canHideChatSessionTabs([sessionId])) {
       return;
     }
+    beginCloseChatTab(sessionId);
     multiSelect.clearSelection();
     chatVisibilityActions.hideChatSessionTabs([sessionId], { selectFallback: true });
   }, [
+    beginCloseChatTab,
     chatVisibilityActions.canHideChatSessionTabs,
     chatVisibilityActions.hideChatSessionTabs,
     multiSelect.clearSelection,
@@ -290,7 +299,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
             stripRef={stripScrollRef}
             contentWidth={contentWidth}
             data-workspace-tab-strip
-            className="h-7 min-w-0 shrink"
+            className="workspace-shell-tab-strip__viewport h-7 min-w-0 shrink"
             style={{ maxWidth: contentWidth }}
             {...shellDrag.stripDragProps}
           >
@@ -306,6 +315,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
                 }}
               />
             ))}
+            <HeaderTabsClosingGhosts closingTabs={closingTabs} />
             <HeaderTabsStripRows
               shellRows={viewModel.shellRows}
               widths={layout.widths}

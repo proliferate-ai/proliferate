@@ -133,6 +133,7 @@ export function ChatTabWithMenu({
       hideRightDivider={hideRightDivider}
       icon={renderChatTabIcon(tab)}
       label={getChatTabLabel(tab)}
+      hasAssignedLabel={tab.delegatedAgent ? true : tab.hasAssignedTitle}
       isChild={tab.isChild}
       groupColor={tab.groupColor}
       onSelect={onSelect}

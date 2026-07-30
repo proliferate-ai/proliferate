@@ -187,6 +187,10 @@
       "types": "./dist/primitives/Skeleton.d.ts",
       "import": "./dist/primitives/Skeleton.js"
     },
+    "./primitives/TypewriterRevealText": {
+      "types": "./dist/primitives/TypewriterRevealText.d.ts",
+      "import": "./dist/primitives/TypewriterRevealText.js"
+    },
     "./primitives/Spinner": {
       "types": "./dist/primitives/Spinner.d.ts",
       "import": "./dist/primitives/Spinner.js"

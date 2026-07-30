@@ -62,6 +62,13 @@ export const motion = {
      * departure that then decelerates into the top.
      */
     levelBarStepMs: 500,
+    /**
+     * Typewriter reveal of a tab label the first time a session is titled.
+     * A cadence, not an interaction: it is per-character and must survive the
+     * reduced-motion zeroing of the interaction scale as a plain instant
+     * label. JS drives the character clock, so it reads this number directly.
+     */
+    tabNameRevealMs: 420,
   },
   /** UI choreography delays; these are not animation durations. */
   delay: {

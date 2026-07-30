@@ -122,6 +122,7 @@ function buildTab(overrides: Partial<HeaderChatTabEntry> = {}): HeaderChatTabEnt
     manualGroupId: null,
     isHierarchyResolved: true,
     isResolvingSession: false,
+    hasAssignedTitle: true,
     isEmptyChat: false,
     delegatedAgent: null,
     parentSessionId: null,
