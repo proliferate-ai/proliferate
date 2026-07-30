@@ -87,6 +87,12 @@ function RichPreview({
         content={content}
         className="[&>*:first-child]:mt-0"
         renderCodeBlock={renderDesktopCodeBlock}
+        // This body is the file's own bytes, not conversation content. The
+        // surface flag keeps message-only reading affordances (the inline-code
+        // hex-colour swatch) out of displayed file text: a `#rrggbb` inside a
+        // stylesheet or a design doc is part of the document, and annotating it
+        // with a chip the file does not contain misrepresents the file.
+        surface="file-content"
       />
     </div>
   );

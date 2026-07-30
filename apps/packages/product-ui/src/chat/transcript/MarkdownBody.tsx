@@ -17,6 +17,12 @@ import { ProviderLinkMention } from "./ProviderLinkMention";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "./TranscriptLinkStyles";
 import { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 import {
+  MARKDOWN_INLINE_CODE_CLASS,
+  MarkdownInlineCode,
+  MarkdownSurfaceProvider,
+  type MarkdownSurface,
+} from "./MarkdownInlineCode";
+import {
   ChatContentSearchQueryContext,
   useChatContentSearchPaint,
   type ChatContentSearchPaint,
@@ -49,6 +55,14 @@ interface MarkdownBodyProps {
    * highlighted and never appears in the search index.
    */
   enableContentSearch?: boolean;
+  /**
+   * What kind of text this body holds. Defaults to conversation content;
+   * a file viewer rendering a file's own markdown must pass "file-content" so
+   * message-only reading affordances (the inline-code hex swatch) stay out of
+   * displayed file bytes. See MarkdownSurface for why the default points this
+   * way.
+   */
+  surface?: MarkdownSurface;
 }
 
 /**
@@ -347,6 +361,7 @@ export const MarkdownBody = memo(function MarkdownBody({
   revealText = false,
   revealedUpTo = 0,
   enableContentSearch = false,
+  surface = "message",
 }: MarkdownBodyProps) {
   const parsedContent = useMemo(
     () => (isStreaming ? stabilizeStreamingMarkdown(content) : content),
@@ -393,17 +408,23 @@ export const MarkdownBody = memo(function MarkdownBody({
   );
 
   const body = (
-    <MarkdownRevealContext.Provider value={revealState}>
-      <div className={markdownClassName} data-markdown-body="true">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          urlTransform={markdownUrlTransform}
-          components={components}
+    <MarkdownSurfaceProvider value={surface}>
+      <MarkdownRevealContext.Provider value={revealState}>
+        <div
+          className={markdownClassName}
+          data-markdown-body="true"
+          data-markdown-surface={surface}
         >
-          {parsedContent}
-        </ReactMarkdown>
-      </div>
-    </MarkdownRevealContext.Provider>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            urlTransform={markdownUrlTransform}
+            components={components}
+          >
+            {parsedContent}
+          </ReactMarkdown>
+        </div>
+      </MarkdownRevealContext.Provider>
+    </MarkdownSurfaceProvider>
   );
 
   // Secondary chrome (tool detail bodies, plan cards) reuses MarkdownBody but
@@ -433,7 +454,7 @@ function MarkdownCode({
     return (
       <code
         {...rest}
-        className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 align-baseline font-mono text-foreground"
+        className={MARKDOWN_INLINE_CODE_CLASS}
         data-markdown-inline-code="true"
         dangerouslySetInnerHTML={dangerouslySetInnerHTML}
       />
@@ -453,14 +474,12 @@ function MarkdownCode({
   if (renderedInlineCode !== null && renderedInlineCode !== undefined) {
     return <>{renderedInlineCode}</>;
   }
+  // Inline code owns its own presentation module, including the hex-colour
+  // swatch that precedes a `#rgb`/`#rrggbb`/`#rrggbbaa` literal.
   return (
-    <code
-      {...rest}
-      className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 align-baseline font-mono text-foreground"
-      data-markdown-inline-code="true"
-    >
+    <MarkdownInlineCode {...rest} code={codeString}>
       {children}
-    </code>
+    </MarkdownInlineCode>
   );
 }
 

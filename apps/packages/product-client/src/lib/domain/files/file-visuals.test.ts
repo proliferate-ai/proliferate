@@ -64,6 +64,22 @@ describe("getFileVisual", () => {
       kind: "test-jsx",
     });
   });
+
+  // This is the single extension→visual authority that transcript file
+  // references consult to decide whether a referenced file gets a
+  // type-appropriate glyph instead of the generic path-mention glyph, so the
+  // markdown/image/default classes it promises are pinned here.
+  it("classifies markdown, image, and unknown referenced files", () => {
+    expect(getFileVisual("FORMATTING.md", "docs/FORMATTING.md", "file").kind)
+      .toBe("markdown");
+    expect(getFileVisual("notes.mdx", "notes.mdx", "file").kind).toBe("markdown");
+    for (const name of ["shot.png", "shot.jpg", "shot.jpeg", "shot.gif", "shot.webp"]) {
+      expect(getFileVisual(name, name, "file").kind).toBe("image");
+    }
+    expect(getFileVisual("logo.svg", "logo.svg", "file").kind).toBe("svg");
+    expect(getFileVisual("NOTES", "NOTES", "file").kind).toBe("default");
+    expect(getFileVisual("archive.zzz", "archive.zzz", "file").kind).toBe("default");
+  });
 });
 
 describe("getExpandedFileVisualKind", () => {

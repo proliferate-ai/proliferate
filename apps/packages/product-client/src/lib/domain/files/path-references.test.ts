@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  fileReferenceBasename,
+  inlineFileReferenceLabel,
   pickFuzzyPathMatch,
   resolveFileReference,
   resolveFileReferencePrimaryAction,
@@ -90,5 +92,56 @@ describe("resolveFileReferencePrimaryAction", () => {
     [{ pathKind: null, canOpenViewer: true, canReveal: true }, "unavailable"],
   ])("routes %o to %s", (input, expected) => {
     expect(resolveFileReferencePrimaryAction(input)).toBe(expected);
+  });
+});
+
+describe("inlineFileReferenceLabel", () => {
+  const resolveAbsolute = (path: string) => path;
+
+  it("renders a markdown link's path:line destination as basename plus line", () => {
+    const reference = resolveFileReference({
+      rawPath: "/Users/x/proliferate/docs/FORMATTING.md:7",
+      workspaceRoot: null,
+      resolveAbsolute,
+    });
+
+    expect(inlineFileReferenceLabel(reference)).toBe("FORMATTING.md (line 7)");
+  });
+
+  it("prefers the workspace-relative basename when the reference is inside the workspace", () => {
+    const reference = resolveFileReference({
+      rawPath: "/repo/apps/web/src/App.tsx:42:8",
+      workspaceRoot: "/repo",
+      resolveAbsolute,
+    });
+
+    expect(inlineFileReferenceLabel(reference)).toBe("App.tsx (line 42)");
+  });
+
+  it("keeps the path when there is no line to anchor on", () => {
+    const reference = resolveFileReference({
+      rawPath: "apps/web/src/App.tsx",
+      workspaceRoot: "/repo",
+      resolveAbsolute,
+    });
+
+    expect(inlineFileReferenceLabel(reference)).toBe("apps/web/src/App.tsx");
+  });
+
+  it("tolerates a bare basename reference", () => {
+    expect(inlineFileReferenceLabel({
+      path: "FORMATTING.md",
+      workspacePath: null,
+      line: 7,
+    })).toBe("FORMATTING.md (line 7)");
+  });
+});
+
+describe("fileReferenceBasename", () => {
+  it("takes the last segment of posix and windows paths", () => {
+    expect(fileReferenceBasename("a/b/c.md")).toBe("c.md");
+    expect(fileReferenceBasename("a\\b\\c.md")).toBe("c.md");
+    expect(fileReferenceBasename("c.md")).toBe("c.md");
+    expect(fileReferenceBasename("a/b/")).toBe("b");
   });
 });

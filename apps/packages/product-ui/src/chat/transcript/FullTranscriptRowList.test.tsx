@@ -167,6 +167,17 @@ describe("FullTranscriptRowList", () => {
     expect(structuralInset?.style.height).toBe("120px");
     expect(structuralInset?.className).toContain("shrink-0");
   });
+
+  it("floats no control the user cannot press", () => {
+    // The turn-stepper pair used to render here with both halves permanently
+    // disabled, waiting on behavior that never landed. Guarding its absence
+    // keeps the visuals from being re-added ahead of the wiring.
+    const { container } = render(<FullTranscriptRowList {...makeProps(vi.fn(), 50)} />);
+
+    expect(container.querySelector("[data-transcript-turn-navigator]")).toBeNull();
+    const disabled = container.querySelectorAll("button[disabled]");
+    expect(disabled).toHaveLength(0);
+  });
 });
 
 function stubCapturingResizeObserver(): () => void {

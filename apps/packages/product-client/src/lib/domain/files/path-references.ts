@@ -93,6 +93,31 @@ export function pickFuzzyPathMatch(
   return matches.length === 1 ? matches[0] : null;
 }
 
+/**
+ * Human-readable label for an inline file reference.
+ *
+ * A line-anchored reference reads as `basename (line N)`: the raw `path:line`
+ * form (and the absolute directory chain in front of it) is machine syntax, and
+ * what matters about a jump target is the file and the line. References without
+ * a line keep their path — with no line to anchor on, the path is what
+ * identifies the file. Either way this is display only; the reference's raw
+ * path stays the click target and the tooltip.
+ */
+export function inlineFileReferenceLabel(
+  reference: Pick<ResolvedFileReference, "path" | "workspacePath" | "line">,
+): string {
+  const path = reference.workspacePath ?? reference.path;
+  if (reference.line === null) {
+    return path;
+  }
+  return `${fileReferenceBasename(path)} (line ${reference.line})`;
+}
+
+export function fileReferenceBasename(path: string): string {
+  const segments = path.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] ?? path;
+}
+
 function normalizeWorkspacePathOverride(path: string | null): string | null {
   if (!path) {
     return null;
