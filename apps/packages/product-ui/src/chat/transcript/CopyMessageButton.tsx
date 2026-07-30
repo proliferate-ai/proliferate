@@ -45,20 +45,20 @@ export function CopyMessageButton({
       size="xs"
       onClick={handleCopy}
       title={copied ? "Copied" : "Copy message"}
-      // Reference: the "Copy message" button is text-token-text-tertiary at
-      // rest (our --color-foreground-tertiary, the same dim tone the
-      // adjacent date already uses) — not the brighter muted-foreground.
+      // The "Copy message" button is --color-foreground-tertiary at
+      // rest (the same dim tone the adjacent date already uses) — not the
+      // brighter muted-foreground.
       className="!size-icon-button-sm !p-0 rounded-full !text-foreground-tertiary hover:!text-foreground"
     >
       {/*
-       * Reference: pages/thread's "Copy message" button renders a 16px glyph
-       * (icon-xs) against --codex-chat-font-size: 13px — a 1.230769em ratio,
-       * which is exactly --icon-paired (already used for every other small
-       * inline glyph in the transcript), not --icon-control (1.333333em,
-       * ~17px at this base — visibly larger than the reference). Pin the em
-       * base to --text-chat explicitly since this button sits in the
-       * text-chat-meta (11px) row, same pattern as the pending-interaction
-       * and goal-met glyphs elsewhere in the transcript.
+       * The "Copy message" button renders a 16px glyph (icon-xs) against our
+       * chat font size of 13px — a 1.230769em ratio, which is exactly
+       * --icon-paired (already used for every other small inline glyph in
+       * the transcript), not --icon-control (1.333333em, ~17px at this
+       * base — visibly larger). Pin the em base to --text-chat explicitly
+       * since this button sits in the text-chat-meta (11px) row, same
+       * pattern as the pending-interaction and goal-met glyphs elsewhere in
+       * the transcript.
        */}
       {copied
         ? <Check className="icon-paired [font-size:var(--text-chat)]" />

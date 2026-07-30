@@ -11,11 +11,11 @@ describe("CopyMessageButton", () => {
     expect(html).toContain("!size-icon-button-sm !p-0");
   });
 
-  it("sizes the glyph to the reference's 16px/13px (icon-paired) ratio, not icon-control", () => {
-    // Reference: pages/thread's "Copy message" button renders a 16px glyph
-    // against --codex-chat-font-size: 13px — 1.230769em, which is
-    // --icon-paired. --icon-control (1.333333em) is visibly larger and was
-    // the round-2 regression this guards against.
+  it("sizes the glyph to our 16px/13px (icon-paired) ratio, not icon-control", () => {
+    // The "Copy message" button renders a 16px glyph against our chat font
+    // size of 13px — 1.230769em, which is --icon-paired. --icon-control
+    // (1.333333em) is visibly larger and was the round-2 regression this
+    // guards against.
     const html = renderToStaticMarkup(
       <CopyMessageButton content="Answer" visibilityClassName="opacity-100" />,
     );

@@ -207,6 +207,10 @@
       "types": "./dist/patterns/SettingsEmptyState.d.ts",
       "import": "./dist/patterns/SettingsEmptyState.js"
     },
+    "./patterns/BillingGateState": {
+      "types": "./dist/patterns/BillingGateState.d.ts",
+      "import": "./dist/patterns/BillingGateState.js"
+    },
     "./patterns/SettingsEyebrow": {
       "types": "./dist/patterns/SettingsEyebrow.d.ts",
       "import": "./dist/patterns/SettingsEyebrow.js"

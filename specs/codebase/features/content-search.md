@@ -56,7 +56,7 @@ truth.
   `apps/packages/product-ui/src/chat/transcript/ChatContentSearchContext.tsx`).
   `MarkdownBody` (assistant prose, opted in via `enableContentSearch`) and the
   desktop `FileLinkedText` (user prose) wrap query matches in
-  `<mark class="codex-thread-find-match" data-content-search-row={rowUnitId}>` —
+  `<mark class="content-find-match" data-content-search-row={rowUnitId}>` —
   no per-match id at render time. Everything is inert when the query context is
   null; secondary chrome (tool detail bodies, plan cards) reuses `MarkdownBody`
   without `enableContentSearch` and shadows the query context to null so its

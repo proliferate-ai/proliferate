@@ -113,8 +113,8 @@ export function GoalBar({
   }
 
   // Editing/composing swaps the fixed single-row layout for a tall,
-  // auto-growing textarea (Conductor reference): the glyph aligns with the
-  // textarea's first line instead of a fixed-height row.
+  // auto-growing textarea: the glyph aligns with the textarea's first line
+  // instead of a fixed-height row.
   const isEditingLayout = goalVisible && (composing || (state.kind === "live" && editing));
   // Chips are suppressed while the multi-line editor is showing — its
   // absolute-positioned commit/cancel icons already crowd that row.

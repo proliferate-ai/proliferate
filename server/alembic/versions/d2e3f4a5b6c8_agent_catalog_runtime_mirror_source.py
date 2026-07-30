@@ -1,6 +1,6 @@
 """agent catalog runtime mirror source
 
-P3 runtime catalog (codex/p3-catalog-contract.md §4): the runtime mirror
+P3 runtime catalog (agent-catalog update runbook): the runtime mirror
 endpoint stores probe snapshots with ``source="runtime-mirror"``. Widen the
 ``agent_catalog_snapshot.source`` check constraint to admit that value
 alongside the existing probe/seed/override sources.
