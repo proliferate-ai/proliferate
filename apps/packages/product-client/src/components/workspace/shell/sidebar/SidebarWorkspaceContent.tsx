@@ -3,6 +3,7 @@ import type {
   CloudRepoActionState,
   CloudWorkspaceRepoTarget,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { cloudWorkspaceMenuLabel } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
@@ -173,6 +174,12 @@ export function SidebarWorkspaceContent({
       cloudRepoTarget: group.cloudRepoTarget,
     });
 
+    const environmentKind = resolveRepoGroupEnvironmentKind(group, configuredCloudRepoKeys);
+    // Local workspaces need both a local checkout for this repo and a host that
+    // can run one. Where neither holds, the create popover offers exactly one
+    // kind of workspace and must not qualify it as "cloud".
+    const localWorkspacesAvailable = isDesktopHost && environmentKind !== "cloud";
+
     return (
       <CloudRepoActionGate
         key={`${group.sourceRoot}:${group.repoRootId ?? "no-repo-root"}:${groupIndex}`}
@@ -185,7 +192,8 @@ export function SidebarWorkspaceContent({
       <RepoGroup
         name={group.name}
         collapsed={collapsedRepoGroupKeys.has(group.sourceRoot)}
-        environmentKind={resolveRepoGroupEnvironmentKind(group, configuredCloudRepoKeys)}
+        environmentKind={environmentKind}
+        localWorkspacesSupported={isDesktopHost}
         onToggleCollapsed={() => onToggleRepoCollapsed(group.sourceRoot)}
         onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId, group.sourceRoot)}
         onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot, group.sourceRoot)}
@@ -196,7 +204,10 @@ export function SidebarWorkspaceContent({
             ? "Loading cloud configuration..."
             : cloudWorkspaceTooltip
         }
-        cloudWorkspaceLabel={cloudRepoAction.label ?? undefined}
+        cloudWorkspaceLabel={cloudWorkspaceMenuLabel({
+          action: cloudRepoAction,
+          localWorkspacesAvailable,
+        })}
         onCloudWorkspaceAction={cloudRepoTarget
           ? () => {
             if (cloudRepoAction.kind === "create") {

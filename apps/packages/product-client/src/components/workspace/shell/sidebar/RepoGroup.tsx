@@ -20,6 +20,7 @@ import {
   type RepoGroupMenuAction,
   type RepoGroupMenuHandlers,
 } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
+import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
@@ -35,6 +36,12 @@ interface RepoGroupProps {
   onCloudWorkspaceAction?: () => void;
   newWorkspaceCommandScope?: NewWorkspaceCommandScope | null;
   cloudWorkspaceLabel?: string;
+  /**
+   * False when this host cannot create local workspaces at all (Web). The
+   * create popover then offers only the cloud action, so it stops describing
+   * that action as the "cloud" one.
+   */
+  localWorkspacesSupported?: boolean;
   cloudWorkspaceEnabled?: boolean;
   cloudWorkspaceTooltip?: string;
   onRemoveRepo?: () => Promise<void> | void;
@@ -66,6 +73,7 @@ export function RepoGroup({
   onCloudWorkspaceAction,
   newWorkspaceCommandScope,
   cloudWorkspaceLabel = "New cloud workspace",
+  localWorkspacesSupported = true,
   cloudWorkspaceEnabled = true,
   cloudWorkspaceTooltip,
   onRemoveRepo,
@@ -134,7 +142,7 @@ export function RepoGroup({
       }
     };
   }, [clearActiveNewWorkspaceScope, newWorkspaceCommandScope?.id]);
-  const showLocalWorkspaceActions = environmentKind !== "cloud";
+  const showLocalWorkspaceActions = localWorkspacesSupported && environmentKind !== "cloud";
 
   const headerRow = (
     <ProductSidebarRepoGroupHeader
@@ -227,6 +235,11 @@ export function RepoGroup({
                     />
                   </Tooltip>
                 )
+              )}
+              {!localWorkspacesSupported && (
+                <p className="mt-1 border-t border-border px-2 pb-0.5 pt-2 text-ui-sm text-muted-foreground">
+                  {DESKTOP_POINTER_COPY.sidebarCreateWorkspace}
+                </p>
               )}
             </>
           )}

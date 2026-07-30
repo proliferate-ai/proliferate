@@ -28,6 +28,17 @@ interface SettingsMenuProps {
   menuClassName?: string;
 }
 
+/**
+ * Settings-row select. The trigger sits on the app's 28px control tier, the
+ * same height as composer controls, so adjacent settings rows read as one
+ * list instead of three different heights.
+ *
+ * The height is a plain `h-7` because the semantic control-height tier utility
+ * is still landing in the design layer (alongside the em-based `icon-*` tiers);
+ * this converts to that utility in one line once it exists. Callers that live
+ * in a form-field context rather than a settings row can override the height
+ * through `className` — it is merged after the base classes.
+ */
 export function SettingsMenu({
   label,
   leading,
@@ -44,7 +55,7 @@ export function SettingsMenu({
           type="button"
           variant="outline"
           size="sm"
-          className={`h-8 justify-between rounded-lg border border-input bg-transparent px-2.5 text-ui font-control leading-4 text-foreground shadow-none hover:bg-hover active:bg-active data-[state=open]:bg-active ${className}`}
+          className={`h-7 justify-between rounded-lg border border-input bg-transparent px-2.5 text-ui font-control leading-4 text-foreground shadow-none hover:bg-hover active:bg-active data-[state=open]:bg-active ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>

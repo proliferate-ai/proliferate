@@ -25,6 +25,7 @@ import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
+import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
 
 /**
  * App-level host for the unified add-repository flow. Entry offers only the
@@ -293,6 +294,7 @@ export function AddRepoFlowHost() {
       step={step}
       options={options}
       adding={isAddingRepo}
+      entryNote={files ? null : DESKTOP_POINTER_COPY.addRepository}
       error={step.kind === "cloud" ? null : flowError}
       cloudPicker={resolvedCloudPicker}
       clonePicker={resolvedClonePicker}
