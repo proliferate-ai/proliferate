@@ -8,6 +8,20 @@
  * rides with the ProductClient package entry — see apps/desktop/src/main.tsx.
  * ======================================================================== */
 
+/* ---- Transparent window canvas ----
+   The Tauri main window is created with "transparent": true
+   (apps/desktop/src-tauri/tauri.conf.json) and macOS vibrancy is applied to it
+   in apps/desktop/src-tauri/src/lib.rs (apply_vibrancy with the Sidebar
+   material) for the translucent sidebar. That native material only shows
+   through when the web content leaves the canvas unpainted, so this rule
+   strips the base background product.css paints for browser embeds. It works
+   by source order: this stylesheet loads after product.css (see
+   apps/desktop/src/main.tsx) and re-declares the same html/body selector. */
+html,
+body {
+  background: transparent;
+}
+
 /* ---- Drag region styles ---- */
 [data-tauri-drag-region] {
   -webkit-user-select: none;

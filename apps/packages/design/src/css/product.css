@@ -13,10 +13,14 @@
 @source "../../../product-surfaces/src";
 @source "../../../product-client/src";
 
-/* -- Geist font loading (kept for fallback / mono) -- */
+/* -- Geist font loading (kept for fallback / mono) --
+   The urls are relative to this stylesheet's published location
+   (dist/css/product.css); scripts/copy-css.mjs copies the woff2 files from the
+   geist package into dist/fonts/ so the paths resolve for any consumer, not
+   only a dev server that can serve /node_modules. */
 @font-face {
   font-family: "Geist";
-  src: url("/node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2") format("woff2");
+  src: url("../fonts/geist-sans/Geist-Variable.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -24,7 +28,7 @@
 
 @font-face {
   font-family: "Geist Mono";
-  src: url("/node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2") format("woff2");
+  src: url("../fonts/geist-mono/GeistMono-Variable.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -852,13 +856,19 @@ mark.transcript-find-active {
 }
 
 /* ---- Base styles ---- */
+/* The document canvas paints the background token here, so the product theme
+   stands on its own — an embedding that never mounts the app shell (#root and
+   the client wrappers) still gets a painted page instead of the UA's white
+   canvas under dark tokens. The desktop host needs the canvas transparent for
+   its native window treatment and re-overrides this in desktop.css, which
+   loads after this file. */
 html,
 body {
   height: 100%;
   margin: 0;
   padding: 0;
   overscroll-behavior: none;
-  background: transparent;
+  background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
   font-weight: var(--font-weight-body);

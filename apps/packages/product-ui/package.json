@@ -7,6 +7,10 @@
     "dist"
   ],
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./code/code-theme-tokens": {
       "types": "./dist/code/code-theme-tokens.d.ts",
       "import": "./dist/code/code-theme-tokens.js"
