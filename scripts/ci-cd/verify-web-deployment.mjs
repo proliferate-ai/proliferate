@@ -14,10 +14,10 @@ function normalizeHttpUrl(value, name) {
   return url.toString().replace(/\/+$/, "");
 }
 
-async function fetchOk(fetchImpl, url, label, headers = undefined) {
+async function fetchOk(fetchImpl, url, label, options = undefined) {
   let response;
   try {
-    response = await fetchImpl(url, { headers });
+    response = await fetchImpl(url, options);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`${label} was unreachable at ${url}: ${detail}`);
@@ -26,6 +26,40 @@ async function fetchOk(fetchImpl, url, label, headers = undefined) {
     throw new Error(`${label} returned HTTP ${response.status} at ${url}`);
   }
   return response;
+}
+
+async function verifyProductHealth(fetchImpl, healthUrl) {
+  const response = await fetchOk(fetchImpl, healthUrl, "API health", {
+    headers: { Accept: "application/json" },
+    redirect: "manual",
+  });
+  if (response.redirected) {
+    throw new Error(`API health redirected away from ${healthUrl}`);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(`API health did not return JSON at ${healthUrl}`);
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error(`API health returned invalid JSON at ${healthUrl}`);
+  }
+  if (
+    payload === null
+    || typeof payload !== "object"
+    || Array.isArray(payload)
+    || payload.status !== "ok"
+    || typeof payload.version !== "string"
+    || payload.version.trim().length === 0
+  ) {
+    throw new Error(
+      `API health did not return the product health contract at ${healthUrl}`,
+    );
+  }
 }
 
 function scriptSources(html) {
@@ -37,6 +71,13 @@ function scriptSources(html) {
   return [...new Set(sources)];
 }
 
+function containsExactStringLiteral(sourceText, value) {
+  return ['"', "'", "`"].some(
+    (quote) => !value.includes(quote)
+      && sourceText.includes(`${quote}${value}${quote}`),
+  );
+}
+
 export async function verifyWebDeployment({
   webUrl,
   apiBaseUrl,
@@ -46,15 +87,13 @@ export async function verifyWebDeployment({
   const normalizedApiBaseUrl = normalizeHttpUrl(apiBaseUrl, "apiBaseUrl");
   const healthUrl = `${normalizedApiBaseUrl}/health`;
 
-  await fetchOk(fetchImpl, healthUrl, "API health", {
-    Accept: "application/json",
-  });
+  await verifyProductHealth(fetchImpl, healthUrl);
 
   const htmlResponse = await fetchOk(
     fetchImpl,
     normalizedWebUrl,
     "candidate Web",
-    { Accept: "text/html" },
+    { headers: { Accept: "text/html" } },
   );
   const html = await htmlResponse.text();
   const sources = scriptSources(html);
@@ -72,7 +111,7 @@ export async function verifyWebDeployment({
     );
     const sourceText = await assetResponse.text();
     checkedAssets.push(assetUrl);
-    if (sourceText.includes(normalizedApiBaseUrl)) {
+    if (containsExactStringLiteral(sourceText, normalizedApiBaseUrl)) {
       return {
         apiBaseUrl: normalizedApiBaseUrl,
         healthUrl,

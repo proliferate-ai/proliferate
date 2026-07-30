@@ -18,21 +18,26 @@ function response(body, status = 200, contentType = "text/plain") {
 
 function fakeFetch(routes) {
   const calls = [];
-  const fetchImpl = async (input) => {
+  const requests = [];
+  const fetchImpl = async (input, options) => {
     const url = String(input);
     calls.push(url);
+    requests.push({ options, url });
     const value = routes.get(url);
     if (!value) {
       throw new Error(`unexpected URL ${url}`);
     }
     return value;
   };
-  return { calls, fetchImpl };
+  return { calls, fetchImpl, requests };
 }
 
-function healthyRoutes(assetSource = `const apiBase = "${API_BASE_URL}";`) {
+function healthyRoutes(
+  assetSource = `const apiBase = "${API_BASE_URL}";`,
+  healthBody = '{"status":"ok","version":"1.2.3"}',
+) {
   return new Map([
-    [HEALTH_URL, response('{"status":"ok"}', 200, "application/json")],
+    [HEALTH_URL, response(healthBody, 200, "application/json")],
     [
       WEB_URL,
       response(
@@ -55,6 +60,7 @@ test("verifies the API health and exact base baked into the candidate bundle", a
   });
 
   assert.deepEqual(fake.calls, [HEALTH_URL, WEB_URL, ASSET_URL]);
+  assert.equal(fake.requests[0].options?.redirect, "manual");
   assert.deepEqual(receipt, {
     apiBaseUrl: API_BASE_URL,
     healthUrl: HEALTH_URL,
@@ -80,9 +86,79 @@ test("rejects the production Cloudflare 530 failure before checking Web", async 
   assert.deepEqual(fake.calls, [HEALTH_URL]);
 });
 
+test("rejects an API health redirect before checking Web", async () => {
+  const routes = healthyRoutes();
+  routes.set(HEALTH_URL, response("", 302));
+  const fake = fakeFetch(routes);
+
+  await assert.rejects(
+    () =>
+      verifyWebDeployment({
+        webUrl: WEB_URL,
+        apiBaseUrl: API_BASE_URL,
+        fetchImpl: fake.fetchImpl,
+      }),
+    /API health returned HTTP 302/,
+  );
+  assert.equal(fake.requests[0].options?.redirect, "manual");
+  assert.deepEqual(fake.calls, [HEALTH_URL]);
+});
+
+test("rejects an unrelated successful health response before checking Web", async () => {
+  const routes = healthyRoutes();
+  routes.set(
+    HEALTH_URL,
+    response("<html>Sign in</html>", 200, "text/html"),
+  );
+  const fake = fakeFetch(routes);
+
+  await assert.rejects(
+    () =>
+      verifyWebDeployment({
+        webUrl: WEB_URL,
+        apiBaseUrl: API_BASE_URL,
+        fetchImpl: fake.fetchImpl,
+      }),
+    /API health did not return JSON/,
+  );
+  assert.deepEqual(fake.calls, [HEALTH_URL]);
+});
+
+test("rejects a generic JSON health response before checking Web", async () => {
+  const fake = fakeFetch(healthyRoutes('const unused = "ok";', '{"status":"ok"}'));
+
+  await assert.rejects(
+    () =>
+      verifyWebDeployment({
+        webUrl: WEB_URL,
+        apiBaseUrl: API_BASE_URL,
+        fetchImpl: fake.fetchImpl,
+      }),
+    /API health did not return the product health contract/,
+  );
+  assert.deepEqual(fake.calls, [HEALTH_URL]);
+});
+
 test("rejects a candidate bundle that baked a stale API base", async () => {
   const fake = fakeFetch(
     healthyRoutes('const apiBase = "https://api.proliferate.test";'),
+  );
+
+  await assert.rejects(
+    () =>
+      verifyWebDeployment({
+        webUrl: WEB_URL,
+        apiBaseUrl: API_BASE_URL,
+        fetchImpl: fake.fetchImpl,
+      }),
+    /did not bake the expected API base/,
+  );
+  assert.deepEqual(fake.calls, [HEALTH_URL, WEB_URL, ASSET_URL]);
+});
+
+test("rejects a longer API base that only contains the expected target", async () => {
+  const fake = fakeFetch(
+    healthyRoutes(`const apiBase = "${API_BASE_URL}/v2";`),
   );
 
   await assert.rejects(
