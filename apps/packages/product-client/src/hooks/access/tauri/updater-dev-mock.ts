@@ -35,6 +35,12 @@ export interface DevUpdaterMockState {
    */
   lastProgressAt: number | null;
   downloadRetryCount: number;
+  /**
+   * When the forced download "began". The pill's remaining-time estimate is
+   * derived from this, so nulling it under the mock left that estimate
+   * unreachable at `/playground/updates` — the one surface it gets reviewed on.
+   */
+  downloadStartedAt: number | null;
   /** Set to render the cancellable countdown before a deferred relaunch. */
   restartCountdownStartedAt: number | null;
 }
@@ -214,6 +220,7 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
       manualCheckCompletedAt: null,
       lastProgressAt: null,
       downloadRetryCount: 0,
+      downloadStartedAt: null,
       restartCountdownStartedAt: null,
     };
   }
@@ -290,6 +297,12 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
     downloadRetryCount: isNonNegativeFiniteNumber(candidate.downloadRetryCount)
       ? candidate.downloadRetryCount
       : 0,
+    // Only a live transfer has a start; a forced "available" or "ready" has none.
+    downloadStartedAt:
+      (candidate.phase === "downloading" || candidate.phase === "stalled")
+        && isNonNegativeFiniteNumber(candidate.downloadStartedAt)
+        ? candidate.downloadStartedAt
+        : null,
     // Only a downloaded ("ready") update can be counting down to a relaunch.
     restartCountdownStartedAt:
       candidate.phase === "ready"

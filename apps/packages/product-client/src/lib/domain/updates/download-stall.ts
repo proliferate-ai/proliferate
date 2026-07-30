@@ -2,10 +2,21 @@
  * Stall detection for the update download.
  *
  * A dead connection and a slow one are indistinguishable without this: the
- * progress bar simply stops, and `totalBytes === null` means there is no bar to
- * stop. Both collapse into one named phase here, so the UI can say "stalled at
- * 38%, no data for 12 seconds, retried twice" instead of sitting on "Starting
- * download…" indefinitely.
+ * progress bar simply stops. Naming that silence is what lets the UI say
+ * "stalled at 38%, no data for 12 seconds, retried twice" instead of sitting on
+ * "Starting download…" indefinitely.
+ *
+ * One clock covers every failure shape, including the "no progress bar at all"
+ * one. `runDownloadAndPrepareRestart` primes the store with a zero-byte progress
+ * event before awaiting the transfer, so `lastProgressAt` is armed the moment
+ * the download starts — a download that never reports a single byte therefore
+ * stalls on the same eight-second threshold as one that stops halfway.
+ *
+ * Note what is deliberately NOT a stall: bytes arriving from a server that
+ * advertised no `Content-Length`. `totalBytes` is null so there is no percentage
+ * to show, but the download is alive and `lastProgressAt` keeps advancing.
+ * Calling that stalled would offer Retry for a problem the user does not have,
+ * which is why silence rather than the missing total is what this measures.
  */
 
 /** Bytes frozen for longer than this is a stall, not a slow link. */
@@ -21,21 +32,13 @@ export interface DownloadStallInput {
   now: number;
 }
 
-/**
- * True when the download has gone quiet long enough to name it.
- *
- * One clock covers both failure shapes. A server that advertises no total gives
- * no progress bar, so silence is the only signal available there; a server that
- * does advertise one still goes quiet the same way when the connection drops.
- * Measuring only the silence is what lets both cases share one phase and one
- * piece of copy.
- */
+/** True when the download has gone quiet long enough to name it. */
 export function isDownloadStalled({
   lastProgressAt,
   now,
 }: DownloadStallInput): boolean {
-  // Nothing has been observed yet — the download hasn't reported in at all, so
-  // there is no interval to judge.
+  // Null only before the download is requested at all — the priming progress
+  // event arms this clock — so there is no interval to judge yet.
   if (lastProgressAt === null) {
     return false;
   }

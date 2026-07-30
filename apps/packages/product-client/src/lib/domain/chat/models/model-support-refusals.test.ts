@@ -119,6 +119,28 @@ describe("refusal copy", () => {
     expect(message).toContain("proliferate");
   });
 
+  it("predicts no remedy it cannot verify", () => {
+    // No catalog entry carries a per-model minimum runtime version, so naming a
+    // version — or an upgrade at all — sends people to check a number no surface
+    // can confirm. The row hint beside it already refuses to; this is the same
+    // refusal, pinned so the sentence cannot drift back.
+    const messages = [
+      modelUnsupportedControlMessage({
+        modelDisplayName: "Opus 9",
+        targetLabel: "proliferate",
+      }),
+      modelUnsupportedControlMessage({
+        modelDisplayName: "Opus 9",
+        targetLabel: null,
+      }),
+      MODEL_UNSUPPORTED_ROW_HINT,
+    ];
+
+    for (const message of messages) {
+      expect(message).not.toMatch(/newer|upgrade|update|version/i);
+    }
+  });
+
   it("never says only 'the selected model' or 'the target'", () => {
     const withTarget = modelUnsupportedControlMessage({
       modelDisplayName: "Opus 9",

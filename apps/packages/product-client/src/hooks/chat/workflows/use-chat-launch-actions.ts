@@ -276,10 +276,17 @@ function reportChatOpenFailure(
     // gets the one toast replaced, not a second copy of it.
     deps.showErrorToast({
       id: `model-unsupported:${refusal.workspaceId}:${refusal.agentKind}:${refusal.modelId}`,
-      headline: "Model not supported on this target",
+      // A headline is a written literal, so the specific model and target live
+      // in the consequence — the field built to name them.
+      headline: "That model was refused",
+      // States the refusal, not a diagnosis of it: nothing in the catalog carries
+      // a per-model minimum runtime version, so "needs a newer AnyHarness"
+      // asserted a cause no surface can confirm, and a stale catalog entry lands
+      // here just as easily as an old runtime. The docs link below still offers
+      // the upgrade as something to try; it just no longer arrives as a finding.
       consequence: deps.workspaceLabel
-        ? `${selection.modelId} needs a newer AnyHarness on ${deps.workspaceLabel}. Your model setting wasn't changed.`
-        : `${selection.modelId} needs a newer AnyHarness on this target. Your model setting wasn't changed.`,
+        ? `${deps.workspaceLabel} refused ${selection.modelId}. Your model setting wasn't changed.`
+        : `This target refused ${selection.modelId}. Your model setting wasn't changed.`,
       cause: refusal.detail,
       // Docs as the `link`, not as Details: Details is where the runtime's own
       // refusal text lives, and both are worth having — one says what to do,

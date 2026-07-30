@@ -14,6 +14,7 @@ import {
   stalledSeconds,
 } from "#product/lib/domain/updates/download-stall";
 import { RESTART_COUNTDOWN_MS } from "#product/hooks/access/tauri/use-update-restart-watcher";
+import { useTickingSeconds } from "#product/hooks/activity/derived/use-ticking-seconds";
 
 export const UPDATE_TOAST_ID = "app-update";
 // The "you're up to date" receipt is a transient answer to a question the user
@@ -35,21 +36,6 @@ const UPDATE_TOAST_PHASES = new Set<UpdaterPhase>([
 ]);
 
 const UPDATE_BADGE = "UPDATE";
-const DOWNLOAD_ERROR_FALLBACK =
-  "Something went wrong downloading the update. Try again.";
-
-/**
- * Keep the raw updater message only when it reads like a sentence a human
- * wrote: short, single-line, no "Error:" prefixes or stack-frame markers.
- */
-function humanizeDownloadError(message: string): string {
-  const looksHuman =
-    message.length < 80
-    && !message.includes("\n")
-    && !/error:/i.test(message)
-    && !/\bat\s+\S+:\d+/.test(message);
-  return looksHuman ? message : DOWNLOAD_ERROR_FALLBACK;
-}
 
 /**
  * The update flow's toasts.
@@ -80,6 +66,7 @@ export function UpdateToastPresenter() {
     cancelRestartCountdown,
     openRestartPrompt,
     restartNow,
+    checkNow,
     clearManualCheckCompleted,
   } = useUpdater();
   const { data: currentVersion } = useAppVersion();
@@ -93,6 +80,12 @@ export function UpdateToastPresenter() {
   // phase or version changes (progress ticks must not resurface it).
   const dismissedKeyRef = useRef<string | null>(null);
   const shownErrorRef = useRef<string | null>(null);
+  // Two pieces of copy in this flow state a duration, and both are only true at
+  // the instant they are computed. The clock runs only while one of them is on
+  // screen.
+  const nowMs = useTickingSeconds(
+    phase === "stalled" || restartCountdownStartedAt !== null,
+  );
 
   // One-shot "you're up to date" receipt. Only manual checks raise the signal —
   // a background check that finds nothing has nothing to report — and we clear
@@ -128,18 +121,23 @@ export function UpdateToastPresenter() {
     // toast's choice is already made — leaving it up asks the same question
     // twice and lets "Later" contradict a restart that is seconds away.
     dismissToast(UPDATE_TOAST_ID);
-    const seconds = Math.round(RESTART_COUNTDOWN_MS / 1000);
+    // Counts down against the watcher's clock rather than restating the interval
+    // constant: a toast that says "restarts in 10 seconds" for the whole ten
+    // seconds and then restarts mid-sentence reads as a broken promise, and the
+    // number is the entire reason the warning window exists.
+    const remainingMs = restartCountdownStartedAt + RESTART_COUNTDOWN_MS - nowMs;
+    const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
     showToast({
       id: RESTART_COUNTDOWN_TOAST_ID,
       weight: "announcement",
       badge: UPDATE_BADGE,
       tone: "info",
       title: "Restarting to update",
-      description: `Your sessions finished, so Proliferate restarts in ${seconds} seconds.`,
+      description: `Your sessions finished, so Proliferate restarts in ${seconds} second${seconds === 1 ? "" : "s"}.`,
       secondary: { label: "Not now", onClick: cancelRestartCountdown },
       commit: { label: "Restart now", onClick: () => void restartNow() },
     });
-  }, [cancelRestartCountdown, restartCountdownStartedAt, restartNow]);
+  }, [cancelRestartCountdown, nowMs, restartCountdownStartedAt, restartNow]);
 
   useEffect(() => {
     const dismissalKey = `${phase}:${availableVersion ?? "unknown"}`;
@@ -163,17 +161,30 @@ export function UpdateToastPresenter() {
         badge: UPDATE_BADGE,
         tone: "destructive",
         title: checkFailed ? "Couldn't check for updates" : "Update failed",
+        // The description states the consequence; the raw updater string is the
+        // cause and goes to Details, per the kit's rule that a cause is never
+        // rendered in the body. Putting the exception text here would both break
+        // that rule and leave the full message nowhere else to be read.
         description: checkFailed
           ? "Check your connection and try again. You're still on the version you had."
-          : humanizeDownloadError(errorMessage),
+          : `The update wasn't installed, so you're still on ${currentVersion ?? "the version you had"}.`,
+        details: {
+          kind: "modal",
+          title: checkFailed ? "Couldn't check for updates" : "Update failed",
+          payload: errorMessage,
+        },
         // A failure the user can act on never auto-closes: `isError` plus the
         // Retry action both force persistence.
         isError: true,
         secondary: { label: "Dismiss", onClick: cancelUpdate },
+        // Retry has to redo the thing that failed. A failed CHECK never
+        // populated the store's update handle, and both download paths bail on
+        // `if (!update) return` — so routing a check failure at a download made
+        // the only button on a toast that never auto-closes a silent no-op.
         commit: {
           label: "Retry",
           onClick: () => {
-            void (checkFailed ? downloadUpdate() : retryDownload());
+            void (checkFailed ? checkNow() : retryDownload());
           },
         },
       });
@@ -234,7 +245,7 @@ export function UpdateToastPresenter() {
     }
 
     if (phase === "stalled") {
-      const seconds = stalledSeconds(lastProgressAt, Date.now());
+      const seconds = stalledSeconds(lastProgressAt, nowMs);
       showToast({
         id: UPDATE_TOAST_ID,
         weight: "announcement",
@@ -288,12 +299,14 @@ export function UpdateToastPresenter() {
     availableTitle,
     availableVersion,
     cancelUpdate,
+    checkNow,
     downloadProgress,
     downloadRetryCount,
     downloadUpdate,
     errorMessage,
     errorSource,
     lastProgressAt,
+    nowMs,
     openExternal,
     openRestartPrompt,
     phase,

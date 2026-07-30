@@ -170,9 +170,6 @@ export interface ToastErrorInput {
   link?: ToastAction;
 }
 
-/** A headline is one line of human outcome; past this it is a description. */
-export const TOAST_HEADLINE_MAX_CHARS = 60;
-
 /**
  * Project an error into the `announcement` weight.
  *

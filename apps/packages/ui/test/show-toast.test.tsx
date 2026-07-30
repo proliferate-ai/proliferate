@@ -39,6 +39,29 @@ describe("showToast — status", () => {
     expect(screen.queryAllByRole("button", { name: /details|copy/i })).toEqual([]);
   });
 
+  it("speaks the severity the dot carries, since a colour reads as nothing", async () => {
+    // On a status line the dot is the *only* severity signal — the message text
+    // carries no "Failed"/"Done" marker of its own — and the dot is aria-hidden,
+    // so without this "Couldn't save" and "Saved" reach a screen reader as the
+    // same sentence.
+    await raise({ message: "Couldn't save the workspace", tone: "destructive" });
+
+    const label = screen.getByText("Error:", { exact: false });
+    expect(label.className).toContain("sr-only");
+    expect(screen.getByTestId("toast-tone-dot").getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+  });
+
+  it("stays silent for neutral, which is the absence of severity", async () => {
+    // Prefixing every ordinary status line with "Neutral" is noise, not
+    // information.
+    await raise({ message: "Workspace saved" });
+
+    const [node] = document.querySelectorAll<HTMLElement>("[data-sonner-toast]");
+    expect(node.querySelector(".sr-only")).toBeNull();
+  });
+
   it("truncates rather than wrapping, keeping the full string on title", async () => {
     const long = "This message is comfortably longer than a single status line allows";
     await raise({ message: long });
