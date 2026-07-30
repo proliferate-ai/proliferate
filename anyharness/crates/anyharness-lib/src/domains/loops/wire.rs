@@ -1,5 +1,5 @@
 //! LoopPort wire contract v1 (pinned 2026-07-02, tagged-chunk vocabulary per
-//! `codex/session-activity-architecture.md`): the normalized shapes the
+//! the session-activity architecture): the normalized shapes the
 //! sidecars speak — `LoopWire` payloads on tagged notification chunks and
 //! (once the loop runtime PR lands) `_anyharness/loop/*` ext-method
 //! responses. Status/schedule vocabulary arrives already normalized by the

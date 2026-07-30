@@ -170,8 +170,8 @@ export function formatCollapsedActionsSummary(
 ): string {
   const fragments: string[] = [];
 
-  // Match Codex's calm completed-activity voice. The expanded ledger owns
-  // exact counts. One representative exploration phrase summarizes the whole
+  // Keep a calm, understated completed-activity voice. The expanded ledger
+  // owns exact counts. One representative exploration phrase summarizes the whole
   // read/search/list/fetch family (copy priority: read > search > list > fetch)
   // so the collapsed row stays short even when the ledger is heterogeneous.
   if (summary.edits > 0) {
@@ -204,9 +204,10 @@ export function formatCollapsedActionsSummary(
 }
 
 /**
- * Resolve the dominant completed-work glyph. Codex intentionally uses search
- * for mixed search/read groups even while its concise copy says "Read files".
- * Keep this shared so desktop and cloud cannot derive different icons.
+ * Resolve the dominant completed-work glyph. Mixed search/read groups use
+ * the search glyph even though the concise copy says "Read files" — the
+ * icon favors the broader action. Keep this shared so desktop and cloud
+ * cannot derive different icons.
  */
 export function resolveCollapsedActionsLeadingKind(
   summary: CollapsedActionSummary,

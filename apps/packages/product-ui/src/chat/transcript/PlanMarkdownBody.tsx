@@ -53,7 +53,7 @@ const PROPOSED_PLAN_MARKDOWN_CLASSNAME = [
   "[&_ol]:mb-4 [&_ol]:mt-1 [&_ol]:list-decimal [&_ol]:pl-5",
   "[&_ul]:mb-4 [&_ul]:mt-1 [&_ul]:list-disc [&_ul]:pl-5",
   "[&_li]:mb-0.5 [&_li]:text-chat [&_li::marker]:text-muted-foreground",
-  // Codex task-list treatment: no markers/indent (the grid columns come from
+  // Task-list treatment: no markers/indent (the grid columns come from
   // MarkdownBody's grid task-list items) and 0.5rem gaps between items.
   "[&_ul.contains-task-list]:pl-0",
   "[&_li.task-list-item+li.task-list-item]:mt-2",

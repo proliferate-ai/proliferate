@@ -12,7 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.engine import async_session_factory
 from proliferate.db.engine import run_after_commit as db_run_after_commit
 from proliferate.integrations.sentry import report_critical
-from proliferate.server.billing.authorization import CloudSandboxResumeBlockedError
+from proliferate.server.billing.authorization import (
+    BillingStateUnavailableError,
+    CloudSandboxResumeBlockedError,
+)
 from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
 
 logger = logging.getLogger("proliferate.cloud.materialization")
@@ -41,6 +44,28 @@ def _log_billing_block(exc: CloudSandboxResumeBlockedError, **context: object) -
     )
 
 
+def _log_billing_unavailable(exc: BillingStateUnavailableError, **context: object) -> None:
+    """Log a fail-closed billing-read denial without paging a second time.
+
+    ``_deny_unreadable_billing_state`` already fired ``report_critical`` at the
+    raise site (that alert is part of law N6), so routing this through the
+    generic ``except Exception`` handler below would double-page for one outage.
+    Warning-level here keeps the correlation context in the log stream while
+    leaving the single page to the billing gate that owns it.
+    """
+    logger.warning(
+        "cloud_materialization_billing_unavailable",
+        extra={
+            "decision_type": exc.decision_type,
+            "billing_subject_id": (
+                str(exc.billing_subject_id) if exc.billing_subject_id is not None else None
+            ),
+            "user_id": str(exc.owner_user_id) if exc.owner_user_id is not None else None,
+            **context,
+        },
+    )
+
+
 async def run_after_commit(
     db: AsyncSession,
     *,
@@ -52,6 +77,8 @@ async def run_after_commit(
             await task()
         except CloudSandboxResumeBlockedError as exc:
             _log_billing_block(exc, label=label)
+        except BillingStateUnavailableError as exc:
+            _log_billing_unavailable(exc, label=label)
         except Exception as exc:
             report_critical(
                 exc,
@@ -95,6 +122,9 @@ async def _run_with_fresh_session(
         except CloudSandboxResumeBlockedError as exc:
             await db.rollback()
             _log_billing_block(exc, fn=getattr(fn, "__name__", repr(fn)))
+        except BillingStateUnavailableError as exc:
+            await db.rollback()
+            _log_billing_unavailable(exc, fn=getattr(fn, "__name__", repr(fn)))
         except Exception as exc:
             await db.rollback()
             report_critical(
