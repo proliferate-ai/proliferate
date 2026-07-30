@@ -60,6 +60,8 @@ vi.mock("#product/hooks/chat/ui/use-chat-file-mention-menu", () => ({
       },
       setRowRef: vi.fn(),
       handleRowMouseEnter: vi.fn(),
+      getRowId: (index: number) => `file-mention-row-${index}`,
+      activeDescendantId: open && fileMentionMock.results.length > 0 ? "file-mention-row-0" : undefined,
     };
   },
 }));
@@ -85,6 +87,8 @@ vi.mock("#product/hooks/chat/ui/use-chat-slash-command-menu", () => ({
     },
     setRowRef: vi.fn(),
     handleRowMouseEnter: vi.fn(),
+    getRowId: (index: number) => `slash-command-row-${index}`,
+    activeDescendantId: open && slashCommandMock.commands.length > 0 ? "slash-command-row-0" : undefined,
   }),
 }));
 
@@ -227,6 +231,30 @@ describe("ComposerCommandEditor", () => {
     await waitFor(() => expect(container.textContent).toContain("setup.md"));
     expect(fileMentionMock.lastQuery).toBe("set");
     expect(container.textContent).toContain("docs");
+  });
+
+  it("wires the file mention menu as a listbox announced from the composer's editable", async () => {
+    fileMentionMock.results = [
+      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    ];
+    const { container, textarea } = renderEditor({ draft: createTextDraft("Open @set") });
+
+    await waitFor(() => expect(container.textContent).toContain("setup.md"));
+
+    const listbox = container.querySelector('[role="listbox"]');
+    expect(listbox).toBeTruthy();
+    const option = container.querySelector('[role="option"]');
+    expect(option).toBeTruthy();
+    expect(option?.getAttribute("aria-selected")).toBe("true");
+    // Focus stays in the composer while the menu is open, so the highlighted
+    // row is announced via aria-activedescendant rather than native focus.
+    expect(textarea.getAttribute("aria-activedescendant")).toBe(option?.id);
+  });
+
+  it("does not set aria-activedescendant when no menu is open", () => {
+    const { textarea } = renderEditor({ draft: createTextDraft("hello") });
+
+    expect(textarea.hasAttribute("aria-activedescendant")).toBe(false);
   });
 
   it("submits instead of completing when no file matches the mention query", () => {

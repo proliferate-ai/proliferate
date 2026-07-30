@@ -16,10 +16,12 @@ import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
  */
 export function ComposerInlineMenuPanel({
   listRef,
+  label,
   children,
   className,
 }: {
   listRef: RefObject<HTMLDivElement | null>;
+  label: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -31,6 +33,8 @@ export function ComposerInlineMenuPanel({
     >
       <div
         ref={listRef}
+        role="listbox"
+        aria-label={label}
         // 320px is the height at which the list still reads as a menu rather
         // than a panel: ~10 rows visible, the rest scrolled.
         className="file-tree-scroll flex max-h-[320px] min-h-0 flex-col overflow-y-auto"
@@ -52,6 +56,7 @@ export function ComposerInlineMenuPanel({
  * the keyboard position), not a persisted selection.
  */
 export function ComposerInlineMenuRow({
+  id,
   index,
   selected,
   leading,
@@ -63,6 +68,7 @@ export function ComposerInlineMenuRow({
   onRowMouseEnter,
   setRowRef,
 }: {
+  id: string;
   index: number;
   selected: boolean;
   leading?: ReactNode;
@@ -77,9 +83,11 @@ export function ComposerInlineMenuRow({
   return (
     <Button
       ref={(element) => setRowRef(index, element)}
+      id={id}
       type="button"
       variant="unstyled"
       size="unstyled"
+      role="option"
       data-list-navigation-item
       aria-selected={selected}
       title={title}

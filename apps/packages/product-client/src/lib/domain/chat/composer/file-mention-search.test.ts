@@ -42,6 +42,28 @@ describe("findFileMentionTrigger", () => {
     expect(findFileMentionTrigger("@rea", -1)).toBeNull();
     expect(findFileMentionTrigger(`@${"a".repeat(200)}`, 201)).toBeNull();
   });
+
+  it("does not open inside an inline code span", () => {
+    const text = "run `echo @host` please";
+    // The "@" opens its own whitespace-delimited token, so the plain
+    // token-boundary rule alone would trigger here; the backtick pair around
+    // it is what must suppress the menu.
+    expect(findFileMentionTrigger(text, text.indexOf("@host") + "@host".length)).toBeNull();
+  });
+
+  it("does not open inside a fenced code block", () => {
+    const text = "```\nimport thing from @proliferate/ui;\n```";
+    expect(findFileMentionTrigger(text, text.indexOf("@proliferate") + "@proliferate".length)).toBeNull();
+  });
+
+  it("still opens for an @ in prose once any earlier code span is closed", () => {
+    const text = "see `readme.md` then check @rea";
+    expect(findFileMentionTrigger(text, text.length)).toEqual({
+      start: text.indexOf("@rea"),
+      end: text.length,
+      query: "rea",
+    });
+  });
 });
 
 describe("rankFileMentionResults", () => {

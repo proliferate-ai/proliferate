@@ -88,5 +88,7 @@ export function useChatFileMentionMenu({
     selectHighlighted,
     setRowRef: navigation.setRowRef,
     handleRowMouseEnter: navigation.handleRowMouseEnter,
+    getRowId: navigation.getRowId,
+    activeDescendantId: navigation.activeDescendantId,
   };
 }

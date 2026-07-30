@@ -17,6 +17,7 @@ interface ComposerSlashCommandSearchProps {
   onSelect: (command: SessionSlashCommandViewModel) => void;
   onRowMouseEnter: (index: number) => void;
   setRowRef: (index: number, element: HTMLButtonElement | null) => void;
+  getRowId: (index: number) => string;
   className?: string;
 }
 
@@ -27,16 +28,18 @@ export function ComposerSlashCommandSearch({
   onSelect,
   onRowMouseEnter,
   setRowRef,
+  getRowId,
   className,
 }: ComposerSlashCommandSearchProps) {
   return (
-    <ComposerInlineMenuPanel listRef={listRef} className={className}>
+    <ComposerInlineMenuPanel listRef={listRef} label="Slash commands" className={className}>
       {commands.length > 0 ? (
         commands.map((command, index) => (
           <SlashCommandRow
             key={command.id}
             command={command}
             index={index}
+            id={getRowId(index)}
             selected={index === highlightedIndex}
             showGroupLabel={shouldShowGroupLabel(commands, index)}
             onSelect={onSelect}
@@ -54,6 +57,7 @@ export function ComposerSlashCommandSearch({
 function SlashCommandRow({
   command,
   index,
+  id,
   selected,
   showGroupLabel,
   onSelect,
@@ -62,6 +66,7 @@ function SlashCommandRow({
 }: {
   command: SessionSlashCommandViewModel;
   index: number;
+  id: string;
   selected: boolean;
   showGroupLabel: boolean;
   onSelect: (command: SessionSlashCommandViewModel) => void;
@@ -91,6 +96,7 @@ function SlashCommandRow({
         </>
       ) : null}
       <ComposerInlineMenuRow
+        id={id}
         index={index}
         selected={selected}
         title={fullText}
