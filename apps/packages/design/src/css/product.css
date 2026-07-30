@@ -577,7 +577,11 @@ body {
   color: var(--diffs-fg);
 }
 
+<<<<<<< HEAD
 mark.transcript-find-match {
+=======
+mark.content-find-match {
+>>>>>>> origin/main
   background-color: var(--color-terminal-yellow);
   color: var(--color-background);
   border-radius: calc(var(--radius) / 4);
@@ -591,7 +595,11 @@ mark.transcript-find-match {
   vertical-align: baseline;
 }
 
+<<<<<<< HEAD
 mark.transcript-find-active {
+=======
+mark.content-find-active {
+>>>>>>> origin/main
   background-color: hsl(30 95% 65%);
 }
 

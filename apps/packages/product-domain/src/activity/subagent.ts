@@ -1,9 +1,8 @@
 /**
  * Activity subagent — pure mirror of `anyharness-contract v1::ActivitySubagent`.
  * A harness-native subagent (Claude Task agent, Codex collab child thread,
- * Cursor `cursor/task`). Read-only roster element; per
- * `codex/session-activity-architecture.md` the ⑂ chip routes to the existing
- * delegated-work surfaces — harness-native subagents become a new
+ * Cursor `cursor/task`). Read-only roster element; the ⑂ chip routes to
+ * the existing delegated-work surfaces — harness-native subagents become a new
  * delegated-work *source* feeding `kind: "subagent"` items, so this module
  * also owns the pure status/field mapping into that shape (identity
  * synthesis — generated name/color — stays desktop-owned, same as the

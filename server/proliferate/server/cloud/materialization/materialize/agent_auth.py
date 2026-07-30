@@ -1,7 +1,7 @@
 """Agent-auth state materialization into cloud sandboxes (state.json v2).
 
 Writes the declarative AUTH-ONLY contract file that AnyHarness renders into
-per-harness launch profiles (contract ``codex/p1-auth-contract.md`` §3). The
+per-harness launch profiles (the agent-auth state.json delivery contract). The
 file lives at ``<anyharness home>/agent-auth/state.json`` (mode 0600):
 
 .. code-block:: json

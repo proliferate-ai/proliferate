@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.billing import BILLING_MODE_ENFORCE
+from proliferate.constants.billing import BILLING_DECISION_ENFORCE_ACTIVE_SPEND
 from proliferate.db.models.billing import UsageSegment
 from proliferate.db.store.billing_runtime_usage import open_usage_segment_for_sandbox
 from proliferate.server.cloud.webhooks import service as webhook_service
@@ -167,11 +167,23 @@ async def test_e2b_webhook_failed_quota_pause_keeps_receipt_retryable(
             if pause_calls == 1:
                 raise RuntimeError("pause failed")
 
-    async def _billing_snapshot(_billing_subject_id):
-        return SimpleNamespace(billing_mode=BILLING_MODE_ENFORCE, active_spend_hold=True)
+    async def _billing_block(*_args, **_kwargs):
+        return SimpleNamespace(
+            billing_subject_id=uuid.uuid4(),
+            decision_type=BILLING_DECISION_ENFORCE_ACTIVE_SPEND,
+            reason="admin_hold",
+            active_spend_hold=True,
+            start_blocked=True,
+            active_sandbox_count=1,
+            remaining_seconds=0.0,
+        )
+
+    async def _record_block(*_args, **_kwargs):
+        return None
 
     monkeypatch.setattr(webhook_service, "get_sandbox_provider", lambda _provider: _Provider())
-    monkeypatch.setattr(webhook_service, "get_billing_snapshot_for_subject", _billing_snapshot)
+    monkeypatch.setattr(webhook_service, "resolve_cloud_sandbox_billing_block", _billing_block)
+    monkeypatch.setattr(webhook_service, "record_cloud_sandbox_billing_block", _record_block)
 
     with pytest.raises(RuntimeError, match="pause failed"):
         await client.post(

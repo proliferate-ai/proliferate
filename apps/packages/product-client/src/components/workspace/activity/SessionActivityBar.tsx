@@ -45,8 +45,8 @@ export function SessionActivityBar() {
   }), [activity.loops, activity.processes, activity.agents]);
 
   // TODO(activity-integration): the ⑂ agents chip's `onOpen` is the remaining
-  // documented integration seam — see
-  // codex/session-activity-architecture.md "Product UI". It should route into
+  // documented integration seam ("Product UI" section of the session-activity
+  // architecture notes). It should route into
   // the existing delegated-work surfaces (features/delegated-work.md) once this
   // roster is merged into DelegatedWorkComposerViewModel as a new `subagent`
   // source. Until then the chip's popover is a fully-functional, self-contained

@@ -125,26 +125,77 @@ async def ensure_organization_billing_subject(
     return subject
 
 
-async def ensure_free_included_grant(db: AsyncSession, user_id: UUID) -> bool:
-    subject = await ensure_personal_billing_subject(db, user_id)
+async def ensure_free_included_grant(
+    db: AsyncSession,
+    user_id: UUID,
+    *,
+    billing_subject_id: UUID,
+) -> bool:
+    """Mint (or re-home) a user's one free-included grant on the subject that PAYS.
+
+    ``billing_subject_id`` is REQUIRED and must be the paying subject as resolved
+    by ``resolve_billing_subject_id_for_user`` — the org subject for a user acting
+    under a membership, personal only for a user who genuinely pays personally.
+    It has no default on purpose: this function re-homes an existing grant onto
+    whatever subject it is handed, so a personal-subject default would let a
+    caller with no owner context silently move an org-paying user's allowance
+    back onto a subject that never pays — reintroducing W-F1 through the door it
+    was closed at.
+
+    Law W1 ("the org always pays") applies to money IN, not just money out: a
+    grant minted on the personal subject while spend drains the org subject is
+    an unspendable balance. ``source_ref`` is globally unique
+    (``free_included:{user_id}``), and deliberately so — a user gets exactly ONE
+    free allowance for their lifetime, no matter how many subjects they pass
+    through. So when the paying subject changes (a user joins their first org)
+    this MOVES the existing grant, preserving ``remaining_seconds``: re-homing
+    must never re-grant hours a user already spent, and must never strand hours
+    they have not.
+    """
     now = utcnow()
+    source_ref = f"{FREE_INCLUDED_GRANT_TYPE}:{user_id}"
     result = await db.execute(
         pg_insert(BillingGrant)
         .values(
             user_id=user_id,
-            billing_subject_id=subject.id,
+            billing_subject_id=billing_subject_id,
             grant_type=FREE_INCLUDED_GRANT_TYPE,
             hours_granted=settings.cloud_free_sandbox_hours,
             remaining_seconds=max(settings.cloud_free_sandbox_hours * 3600.0, 0.0),
             effective_at=now,
             expires_at=None,
-            source_ref=f"{FREE_INCLUDED_GRANT_TYPE}:{user_id}",
+            source_ref=source_ref,
             created_at=now,
             updated_at=now,
         )
         .on_conflict_do_nothing(index_elements=[BillingGrant.source_ref])
     )
-    return (result.rowcount or 0) > 0
+    if (result.rowcount or 0) > 0:
+        return True
+    # The grant already exists. Re-home it if the payer moved (personal → org on
+    # a first membership). ``remaining_seconds`` is carried untouched: this is a
+    # change of pool, not a new allowance — re-homing must never re-grant hours a
+    # user already spent, nor strand hours they have not.
+    #
+    # A conditional UPDATE rather than SELECT ... FOR UPDATE: this runs on every
+    # payer resolution, and in the steady state (grant already on the payer) it
+    # matches zero rows and so takes no row lock, where a blanket FOR UPDATE
+    # would serialize concurrent starts for the same user behind one grant row.
+    #
+    # ``synchronize_session="fetch"`` so an ORM copy of the moved row already in
+    # this session sees the new subject. (Blanket ``expire_all()`` would instead
+    # invalidate every loaded object, turning a later attribute read into a
+    # lazy-load — an IO attempt from sync context under asyncpg.)
+    await db.execute(
+        sa_update(BillingGrant)
+        .where(
+            BillingGrant.source_ref == source_ref,
+            BillingGrant.billing_subject_id != billing_subject_id,
+        )
+        .values(billing_subject_id=billing_subject_id, updated_at=now)
+        .execution_options(synchronize_session="fetch"),
+    )
+    return False
 
 
 async def ensure_free_trial_v2_grant(db: AsyncSession, subject: BillingSubject) -> bool:
