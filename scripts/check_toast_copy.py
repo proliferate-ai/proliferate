@@ -45,6 +45,9 @@ SCANNED_ROOTS = [
     "apps/packages/product-surfaces/src",
     "apps/packages/product-client/src",
     "apps/desktop/src",
+    # Web raises toasts through the same kit, so a ban that skipped it would be a
+    # ban on one host — and the shape would simply reappear on the other.
+    "apps/web/src",
 ]
 
 EXTENSIONS = {".ts", ".tsx"}
@@ -72,7 +75,10 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
         "interpolated-headline",
         # headline: `…${x}…`  /  headline: "a" + b
         re.compile(
-            r"\bheadline\s*:\s*(?:`[^`]*\$\{|[^,\n]*?[\"'`]\s*\+|\w+\s*\+)",
+            # `[^,]` rather than `[^,\n]` for the concatenation arms: the value
+            # may be wrapped across lines, and a comma is what ends a property,
+            # so this still cannot wander into the next one.
+            r"\bheadline\s*:\s*(?:`[^`]*\$\{|[^,]{0,200}?[\"'`]\s*\+|\w+\s*\+)",
         ),
         "a headline is a written line, not a built string — put the dynamic text in `consequence` or the exception in `cause`",
     ),
@@ -94,13 +100,25 @@ def scan_file(path: Path) -> list[tuple[int, str, str, str]]:
     except (UnicodeDecodeError, OSError):
         return []
 
+    # Matched against the whole file, not line by line. Prettier wraps a long
+    # call, so the banned shape arrives split across lines as often as not::
+    #
+    #     showToast(
+    #       `Couldn't save: ${errorMessage(error)}`,
+    #     )
+    #
+    # and a per-line scan sees only fragments of it — neither line contains both
+    # the call and the interpolation. The patterns' character classes are all
+    # negated (`[^`]`, `[^,]`), which match newlines, so they span the wrap
+    # without needing DOTALL and still cannot run past the delimiter that ends
+    # the value they are reading.
     findings: list[tuple[int, str, str, str]] = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        for rule, pattern, hint in PATTERNS:
-            match = pattern.search(line)
-            if match:
-                findings.append((lineno, rule, match.group(0).strip(), hint))
-    return findings
+    for rule, pattern, hint in PATTERNS:
+        for match in pattern.finditer(text):
+            lineno = text.count("\n", 0, match.start()) + 1
+            snippet = " ".join(match.group(0).split())
+            findings.append((lineno, rule, snippet, hint))
+    return sorted(findings)
 
 
 def iter_source_files() -> list[Path]:

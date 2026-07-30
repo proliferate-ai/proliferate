@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { useUpdaterStore } from "#product/stores/updater/updater-store";
 import {
   DOWNLOAD_STALL_THRESHOLD_MS,
   formatStallDescription,
@@ -10,6 +11,10 @@ import {
 const NOW = 1_000_000;
 
 describe("isDownloadStalled", () => {
+  beforeEach(() => {
+    useUpdaterStore.getState().reset();
+  });
+
   it("is not a stall before the download has reported anything", () => {
     expect(isDownloadStalled({ lastProgressAt: null, now: NOW })).toBe(false);
   });
@@ -31,6 +36,35 @@ describe("isDownloadStalled", () => {
     // The point of one clock: a server with no Content-Length gives no progress
     // bar, but the same silence still means the same thing.
     expect(isDownloadStalled({ lastProgressAt: NOW - 20_000, now: NOW })).toBe(true);
+  });
+
+  it("does not stall a live download that simply has no percentage", () => {
+    // `totalBytes: null` means no progress bar, not a dead connection. Bytes are
+    // still landing, so `lastProgressAt` keeps advancing and Retry would be
+    // offered for a problem the user does not have.
+    useUpdaterStore.getState().setDownloadProgress(
+      { receivedBytes: 4_096, totalBytes: null },
+      NOW,
+    );
+    const { lastProgressAt, downloadProgress } = useUpdaterStore.getState();
+    expect(downloadProgress).toBeNull();
+    expect(isDownloadStalled({ lastProgressAt, now: NOW + 1_000 })).toBe(false);
+  });
+
+  it("arms the clock from the priming event, so a download that never reports still stalls", () => {
+    // The "Starting download… forever" case. `runDownloadAndPrepareRestart`
+    // primes the store with a zero-byte event before awaiting the transfer; if
+    // that stopped arming `lastProgressAt`, a download that produces no progress
+    // event at all could never reach the phase built for it.
+    useUpdaterStore.getState().setDownloadProgress(
+      { receivedBytes: 0, totalBytes: null },
+      NOW,
+    );
+    const { lastProgressAt } = useUpdaterStore.getState();
+    expect(lastProgressAt).toBe(NOW);
+    expect(
+      isDownloadStalled({ lastProgressAt, now: NOW + DOWNLOAD_STALL_THRESHOLD_MS }),
+    ).toBe(true);
   });
 });
 

@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import { modelUnsupportedControlMessage } from "#product/lib/domain/chat/models/model-support-refusals";
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 
 // Records `externalOpen` on the DOM so a test can assert the refusal reopened
@@ -157,7 +158,13 @@ it("pins the refusal to the model control and points the trigger at it", () => {
     hasAgents: true,
     isLoading: false,
     onSelect: vi.fn(),
-    unsupportedSelectionMessage: "Opus 9 needs a newer AnyHarness on proliferate. Pick another model to start this chat.",
+    // The real projection rather than a hand-copied sentence: this test asserts
+    // the control surfaces the message, so a literal here would keep passing
+    // after the copy itself changed underneath it.
+    unsupportedSelectionMessage: modelUnsupportedControlMessage({
+      modelDisplayName: "Opus 9",
+      targetLabel: "proliferate",
+    }),
   };
 
   const { container } = render(

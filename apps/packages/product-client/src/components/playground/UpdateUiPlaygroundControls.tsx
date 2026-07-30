@@ -77,6 +77,7 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
     manualCheckCompletedAt: null,
     lastProgressAt: null,
     downloadRetryCount: 0,
+    downloadStartedAt: null,
     restartCountdownStartedAt: null,
   } satisfies Omit<DevUpdaterMockState, "phase">;
 
@@ -87,6 +88,10 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
       downloadProgress: 68,
       downloadReceivedBytes: 85_000_000,
       downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
+      // 68% in 30s: gives the pill's remaining-time estimate real inputs, which
+      // is the only way that label can be reviewed here.
+      downloadStartedAt: Date.now() - 30_000,
+      lastProgressAt: Date.now(),
     };
   }
 
@@ -99,6 +104,7 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
       downloadReceivedBytes: 47_500_000,
       downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
       lastProgressAt: Date.now() - PREVIEW_STALL_SILENCE_MS,
+      downloadStartedAt: Date.now() - PREVIEW_STALL_SILENCE_MS - 40_000,
       downloadRetryCount: 2,
     };
   }

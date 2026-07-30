@@ -45,6 +45,51 @@ class HeadlineRejected(unittest.TestCase):
         )
 
 
+class WrappedCallsAreNotAnEscapeHatch(unittest.TestCase):
+    """Prettier wraps a long call, so the banned shape arrives split across lines
+    at least as often as it arrives on one. A line-by-line scan sees only
+    fragments — neither line holds both the call and the interpolation — which
+    made the wrapped form a silent way around an otherwise absolute ban."""
+
+    def test_wrapped_toast_call(self) -> None:
+        self.assertIn(
+            "error-in-toast-message",
+            findings_for(
+                "showToast(\n"
+                "  `Couldn't save the workspace: ${errorMessage(error)}`,\n"
+                ");",
+            ),
+        )
+
+    def test_wrapped_headline_value(self) -> None:
+        self.assertIn(
+            "interpolated-headline",
+            findings_for(
+                "toastError({\n"
+                "  headline:\n"
+                '    "Couldn\'t save "\n'
+                "    + target,\n"
+                "});",
+            ),
+        )
+
+    def test_a_wrapped_property_does_not_reach_into_the_next_one(self) -> None:
+        """The comma that ends a property is what bounds the concatenation arms,
+        so a clean headline followed by a legitimately built `consequence` still
+        passes. Without this the widened pattern would flag the good shape."""
+        self.assertEqual(
+            [],
+            findings_for(
+                "toastError({\n"
+                '  headline: "Message not sent",\n'
+                "  consequence:\n"
+                '    "Still in the composer, unsent on "\n'
+                "    + target.label,\n"
+                "});",
+            ),
+        )
+
+
 class ErrorInMessageRejected(unittest.TestCase):
     def test_the_original_failure(self) -> None:
         """The exact line the sweep was written to delete."""

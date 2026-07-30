@@ -96,7 +96,9 @@ export function useUpdater() {
   // are authored *from* these numbers, so nulling them would make two states
   // unreachable in dev and therefore unreviewable.
   const lastProgressAt = devMock ? devMock.lastProgressAt : storeLastProgressAt;
-  const downloadStartedAt = devMock ? null : storeDownloadStartedAt;
+  const downloadStartedAt = devMock
+    ? devMock.downloadStartedAt
+    : storeDownloadStartedAt;
   const downloadRetryCount = devMock
     ? devMock.downloadRetryCount
     : storeDownloadRetryCount;
@@ -199,7 +201,28 @@ export function useUpdater() {
   }, [devMock, phase]);
 
   const retryDownload = useCallback(async () => {
-    if (devMock || !isPackaged || updater === null) {
+    if (devMock) {
+      // "Retry now" is the stalled toast's commit button, so it has to do
+      // something under the mock too — otherwise the one recovery path out of
+      // the stall can't be exercised on the surface built to review it. Restart
+      // the forced download and re-arm the stall clock, mirroring the real
+      // store's `retryDownload`.
+      updateDevUpdaterMock((current) =>
+        current
+          ? {
+              ...current,
+              phase: "downloading",
+              downloadRetryCount: current.downloadRetryCount + 1,
+              lastProgressAt: Date.now(),
+              downloadStartedAt: Date.now(),
+            }
+          : current,
+      );
+      startDevUpdaterMockDownload();
+      return;
+    }
+
+    if (!isPackaged || updater === null) {
       return;
     }
     useUpdaterStore.getState().retryDownload();

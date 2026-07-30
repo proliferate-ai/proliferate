@@ -54,16 +54,38 @@ function clampDescription(text: string): string {
     : `${text.slice(0, ANNOUNCEMENT_DESCRIPTION_MAX_CHARS - 1).trimEnd()}…`;
 }
 
+/**
+ * Severity, spoken. The dot itself stays `aria-hidden` — a coloured circle has
+ * no text to read — but the announcement weights carry a Badge that names the
+ * tone, and a status line carries nothing at all. So the word rides alongside
+ * it, visually hidden, or "Couldn't save" and "Saved" reach a screen reader as
+ * the same sentence with the only distinguishing signal being a colour.
+ *
+ * `neutral` is silent on purpose: it is the absence of severity, and prefixing
+ * every ordinary status line with "Neutral" is noise, not information.
+ */
+const DOT_TONE_LABEL: Record<ToastTone, string | null> = {
+  neutral: null,
+  success: "Success",
+  info: "Information",
+  warning: "Warning",
+  destructive: "Error",
+};
+
 function ToneDot({ tone }: { tone: ToastTone }) {
+  const label = DOT_TONE_LABEL[tone];
   return (
-    <span
-      aria-hidden="true"
-      data-testid="toast-tone-dot"
-      className={twMerge(
-        "icon-status shrink-0 rounded-full",
-        DOT_TONE_CLASS[tone],
-      )}
-    />
+    <>
+      <span
+        aria-hidden="true"
+        data-testid="toast-tone-dot"
+        className={twMerge(
+          "icon-status shrink-0 rounded-full",
+          DOT_TONE_CLASS[tone],
+        )}
+      />
+      {label ? <span className="sr-only">{label}: </span> : null}
+    </>
   );
 }
 
@@ -166,8 +188,10 @@ function ToastExcerpt({ payload }: { payload: string }) {
       data-testid="toast-excerpt"
       className="mt-2 block rounded-md border border-border/60 bg-surface-elevated-secondary px-2 py-1.5 font-mono text-ui-sm leading-5 text-muted-foreground"
     >
-      {reading.lines.map((line) => (
-        <span key={line} className="block truncate" title={line}>
+      {/* Keyed by index, not by content: an output log repeating an identical
+          line is ordinary, and a duplicate key would warn and reconcile wrong. */}
+      {reading.lines.map((line, index) => (
+        <span key={index} className="block truncate" title={line}>
           {line}
         </span>
       ))}
@@ -194,6 +218,14 @@ export function AnnouncementToastBody({
 }) {
   const tone = input.tone ?? "neutral";
   const payload = input.weight === "detail" ? input.payload : null;
+  // A blob payload (prose, a stack trace) is structurally unrenderable as an
+  // excerpt, so `ToastExcerpt` returns null for it. Without this the toast would
+  // show a headline and nothing else. Its first sentence is the one part of a
+  // blob that reads as a sentence, so it stands in as the description.
+  const payloadReading = payload === null ? null : readToastPayload(payload);
+  const description =
+    input.description
+    ?? (payloadReading?.blob ? payloadReading.firstSentence || undefined : undefined);
   const jump = input.weight === "detail" ? input.jump : undefined;
 
   return (
@@ -209,11 +241,20 @@ export function AnnouncementToastBody({
       >
         {input.title}
       </span>
-      {input.description ? (
+      {description ? (
         <span className="mt-0.5 block min-w-0 whitespace-normal text-ui-sm leading-5 text-muted-foreground">
-          {typeof input.description === "string"
-            ? clampDescription(input.description)
-            : input.description}
+          {/* Two clamps, because the character count alone is a guess: at a
+              narrow width 140 characters can still wrap to three lines, and the
+              frame's max-height would then clip the third mid-word rather than
+              ellipsising it. `line-clamp-2` is the guarantee; the character
+              clamp keeps the ellipsis near a word boundary.
+
+              The link sits OUTSIDE the clamped box on purpose. Inside it, a long
+              description would clamp away the only affordance the toast offers,
+              which is the one part of this block that must survive. */}
+          <span className="line-clamp-2 block">
+            {typeof description === "string" ? clampDescription(description) : description}
+          </span>
           {input.link ? (
             <>
               {" "}

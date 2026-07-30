@@ -24,6 +24,7 @@ function baseState(overrides: Partial<DevUpdaterMockState>): DevUpdaterMockState
     manualCheckCompletedAt: null,
     lastProgressAt: null,
     downloadRetryCount: 0,
+    downloadStartedAt: null,
     restartCountdownStartedAt: null,
     ...overrides,
   };

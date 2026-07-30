@@ -7,7 +7,6 @@ import { CloudRepoActionDialogHost } from "#product/components/workspace/repo-se
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import type { CloudRepositoryIntent } from "#product/lib/domain/workspaces/cloud/cloud-repository-intent";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
-import { useToastStore } from "#product/stores/toast/toast-store";
 
 // The live mutable readiness inputs the host reads. `configured` is what the
 // host derives from `useRepositories`; flipping it mid-flight simulates the
@@ -201,7 +200,6 @@ describe("CloudRepoActionDialogHost", () => {
       step: { kind: "entry" },
       onCompleted: null,
     });
-    useToastStore.setState({ toasts: [] });
   });
 
   afterEach(() => {
@@ -212,7 +210,6 @@ describe("CloudRepoActionDialogHost", () => {
       step: { kind: "entry" },
       onCompleted: null,
     });
-    useToastStore.setState({ toasts: [] });
   });
 
   it("clears the intent and closes on success even when the readiness flag flips mid-flight (B1)", async () => {

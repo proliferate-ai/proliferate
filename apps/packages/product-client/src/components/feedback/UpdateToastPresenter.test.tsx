@@ -36,6 +36,7 @@ const updaterMocks = vi.hoisted(() => ({
   cancelRestartCountdown: vi.fn(),
   openRestartPrompt: vi.fn(),
   restartNow: vi.fn(),
+  checkNow: vi.fn(),
   clearManualCheckCompleted: vi.fn(),
 }));
 
@@ -268,7 +269,7 @@ describe("UpdateToastPresenter — error", () => {
     });
   });
 
-  it("keeps a short human download message", () => {
+  it("states the consequence of a failed download and names the version kept", () => {
     updaterMocks.phase = "error";
     updaterMocks.errorSource = "download";
     updaterMocks.errorMessage = "The download was interrupted.";
@@ -277,22 +278,39 @@ describe("UpdateToastPresenter — error", () => {
 
     expect(raisedWithId(UPDATE_TOAST_ID)).toMatchObject({
       title: "Update failed",
-      description: "The download was interrupted.",
+      description: "The update wasn't installed, so you're still on 0.1.22.",
     });
   });
 
-  it("replaces a machine-y download message with fallback copy", () => {
-    updaterMocks.phase = "error";
-    updaterMocks.errorSource = "download";
-    updaterMocks.errorMessage =
-      "Error: EACCES: permission denied, open '/Applications/Proliferate.app'";
+  it.each([
+    ["The download was interrupted.", "a short human sentence"],
+    [
+      "Error: EACCES: permission denied, open '/Applications/Proliferate.app'",
+      "a raw exception",
+    ],
+  ])(
+    "sends %s to Details rather than the body, because a cause is never rendered inline (%s)",
+    (errorMessage) => {
+      updaterMocks.phase = "error";
+      updaterMocks.errorSource = "download";
+      updaterMocks.errorMessage = errorMessage;
 
-    render(<UpdateToastPresenter />);
+      render(<UpdateToastPresenter />);
 
-    expect(raisedWithId(UPDATE_TOAST_ID)).toMatchObject({
-      description: "Something went wrong downloading the update. Try again.",
-    });
-  });
+      const toastInput = raisedWithId(UPDATE_TOAST_ID) as {
+        description: string;
+        details: { kind: string; title: string; payload: string };
+      };
+      // The whole point of the fields split: no width of body copy can print
+      // the updater's string, whatever shape it arrived in.
+      expect(toastInput.description).not.toContain(errorMessage);
+      expect(toastInput.details).toEqual({
+        kind: "modal",
+        title: "Update failed",
+        payload: errorMessage,
+      });
+    },
+  );
 
   it("raises one toast per message and carries Retry", () => {
     updaterMocks.phase = "error";
@@ -308,6 +326,26 @@ describe("UpdateToastPresenter — error", () => {
     expect(toastInput.commit.label).toBe("Retry");
     toastInput.commit.onClick();
     expect(updaterMocks.retryDownload).toHaveBeenCalledTimes(1);
+    expect(updaterMocks.checkNow).not.toHaveBeenCalled();
+  });
+
+  // Retry has to redo the thing that failed. A failed *check* never populated
+  // the store's update handle, and both download paths bail on `if (!update)
+  // return` — so routing a check failure at `retryDownload` made the only button
+  // on a toast that never auto-closes a silent no-op.
+  it("retries the check, not the download, when it was the check that failed", () => {
+    updaterMocks.phase = "error";
+    updaterMocks.errorSource = "check";
+    updaterMocks.errorMessage = "getaddrinfo ENOTFOUND releases.proliferate.dev";
+
+    render(<UpdateToastPresenter />);
+
+    const toastInput = raisedWithId(UPDATE_TOAST_ID) as {
+      commit: { label: string; onClick: () => void };
+    };
+    toastInput.commit.onClick();
+    expect(updaterMocks.checkNow).toHaveBeenCalledTimes(1);
+    expect(updaterMocks.retryDownload).not.toHaveBeenCalled();
   });
 });
 
@@ -331,6 +369,34 @@ describe("UpdateToastPresenter — deferred restart countdown", () => {
     expect(updaterMocks.cancelRestartCountdown).toHaveBeenCalledTimes(1);
   });
 
+  // The number is the entire reason the warning window exists: a toast that
+  // says "10 seconds" for the whole ten seconds and then relaunches mid-sentence
+  // reads as a broken promise. So the copy is counted against the watcher's
+  // clock, not restated from the interval constant.
+  it("counts against the watcher's clock rather than restating the interval", () => {
+    updaterMocks.phase = "ready";
+    updaterMocks.restartCountdownStartedAt = Date.now() - 6_400;
+
+    render(<UpdateToastPresenter />);
+
+    const countdown = raisedWithId(RESTART_COUNTDOWN_TOAST_ID) as {
+      description: string;
+    };
+    expect(countdown.description).toContain("restarts in 4 seconds");
+  });
+
+  it("says one second, not one seconds, on the last tick", () => {
+    updaterMocks.phase = "ready";
+    updaterMocks.restartCountdownStartedAt = Date.now() - 9_500;
+
+    render(<UpdateToastPresenter />);
+
+    const countdown = raisedWithId(RESTART_COUNTDOWN_TOAST_ID) as {
+      description: string;
+    };
+    expect(countdown.description).toContain("restarts in 1 second.");
+  });
+
   it("supersedes the ready announcement instead of stacking on it", () => {
     // Both toasts are about the same update and both offer Restart, so showing
     // them together asks the same question twice — and lets "Later" contradict a
@@ -350,7 +416,23 @@ describe("UpdateToastPresenter — deferred restart countdown", () => {
 
     render(<UpdateToastPresenter />);
 
+    expect(raisedWithId(RESTART_COUNTDOWN_TOAST_ID)).toBeUndefined();
     expect(toastMocks.dismissToast).toHaveBeenCalledWith(
+      RESTART_COUNTDOWN_TOAST_ID,
+    );
+  });
+
+  // The paired negative: the assertion above passes vacuously if the countdown
+  // is dismissed unconditionally (or never raised at all), so pin that a running
+  // clock is *not* dismissed.
+  it("does not dismiss the countdown while the clock is running", () => {
+    updaterMocks.phase = "ready";
+    updaterMocks.restartCountdownStartedAt = Date.now();
+
+    render(<UpdateToastPresenter />);
+
+    expect(raisedWithId(RESTART_COUNTDOWN_TOAST_ID)).toBeDefined();
+    expect(toastMocks.dismissToast).not.toHaveBeenCalledWith(
       RESTART_COUNTDOWN_TOAST_ID,
     );
   });
