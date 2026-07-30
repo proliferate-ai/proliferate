@@ -17,6 +17,7 @@ import {
   collapseSelection,
 } from "#product/lib/domain/chat/composer/file-mention-draft-position";
 import {
+  composerFileMentionDirectoryLabel,
   formatMarkdownFileLink,
   isValidWorkspaceRelativePath,
   tokenizeSerializedFileLinks,
@@ -125,6 +126,25 @@ describe("chat file mentions", () => {
         path: "docs/file (copy).tsx",
       },
     ]);
+  });
+
+  it("elides a mention's directory from the head so the identifying tail survives", () => {
+    // Shallow paths are shown whole: the chip can afford them.
+    expect(composerFileMentionDirectoryLabel("docs/setup.md")).toBe("docs");
+    // A file at the workspace root has no directory to show.
+    expect(composerFileMentionDirectoryLabel("README.md")).toBe("");
+    // Deep paths lose their head, never their tail — where a file lives is the
+    // part of the chain that identifies it.
+    expect(composerFileMentionDirectoryLabel(
+      "apps/packages/product-client/src/components/workspace/chat/input/Editor.tsx",
+    )).toBe("…/components/workspace/chat/input");
+    // Even a single directory longer than the whole budget keeps its tail.
+    const single = composerFileMentionDirectoryLabel(
+      "a-very-long-directory-name-that-exceeds-budget/file.ts",
+    );
+    expect(single.startsWith("…")).toBe(true);
+    expect(single.endsWith("exceeds-budget")).toBe(true);
+    expect(single.length).toBe(33);
   });
 
   it("rejects unsafe paths", () => {

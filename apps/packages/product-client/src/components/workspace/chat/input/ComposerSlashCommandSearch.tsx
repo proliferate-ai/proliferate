@@ -1,7 +1,10 @@
 import type { RefObject } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import {
+  ComposerInlineMenuGroupLabel,
+  ComposerInlineMenuPanel,
+  ComposerInlineMenuRow,
+  ComposerInlineMenuStatusRow,
+} from "#product/components/workspace/chat/input/ComposerInlineMenu";
 import type {
   SessionSlashCommandGroup,
   SessionSlashCommandViewModel,
@@ -27,43 +30,24 @@ export function ComposerSlashCommandSearch({
   className,
 }: ComposerSlashCommandSearchProps) {
   return (
-    <div
-      data-composer-overlay-floating-ui
-      data-telemetry-mask
-      className={twMerge(
-        // One step darker than the standard popover surface (Pablo: the pane
-        // should sit visually below the composer, not float brighter than it).
-        "mb-2 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-1 text-popover-foreground shadow-popover backdrop-blur-sm",
-        className,
+    <ComposerInlineMenuPanel listRef={listRef} className={className}>
+      {commands.length > 0 ? (
+        commands.map((command, index) => (
+          <SlashCommandRow
+            key={command.id}
+            command={command}
+            index={index}
+            selected={index === highlightedIndex}
+            showGroupLabel={shouldShowGroupLabel(commands, index)}
+            onSelect={onSelect}
+            onRowMouseEnter={onRowMouseEnter}
+            setRowRef={setRowRef}
+          />
+        ))
+      ) : (
+        <ComposerInlineMenuStatusRow>No matching slash commands.</ComposerInlineMenuStatusRow>
       )}
-    >
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div
-          ref={listRef}
-          className="flex max-h-[320px] min-h-0 flex-1 flex-col overflow-y-auto"
-          style={{ scrollbarWidth: "thin", scrollbarColor: "var(--color-scrollbar-thumb) transparent" }}
-        >
-          {commands.length > 0 ? (
-            commands.map((command, index) => (
-              <SlashCommandRow
-                key={command.id}
-                command={command}
-                index={index}
-                selected={index === highlightedIndex}
-                showGroupLabel={shouldShowGroupLabel(commands, index)}
-                onSelect={onSelect}
-                onRowMouseEnter={onRowMouseEnter}
-                setRowRef={setRowRef}
-              />
-            ))
-          ) : (
-            <div className="px-2 py-4 text-center text-ui-sm text-muted-foreground">
-              No matching slash commands.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    </ComposerInlineMenuPanel>
   );
 }
 
@@ -84,64 +68,42 @@ function SlashCommandRow({
   onRowMouseEnter: (index: number) => void;
   setRowRef: (index: number, element: HTMLButtonElement | null) => void;
 }) {
-  const detail = command.description || command.inputHint;
-  // Rows truncate aggressively; the hover tooltip carries the full details.
-  const tooltipContent = [command.displayName, command.description, command.inputHint]
-    .filter(Boolean)
-    .join("\n");
-  // The leading slash renders as its own, slightly larger glyph so the
-  // command name reads as name-after-slash instead of one undifferentiated
-  // token (composer-size slash + ui-size name share a baseline).
+  // Typographic ranking, three steps in one row: the command name carries the
+  // control weight at reading size, the description drops a size step into the
+  // muted role, and the argument hint trails at the same muted step. Nothing
+  // needs a bold — at 11-12px the weight token plus color does the whole
+  // hierarchy.
   const commandName = command.displayName.startsWith("/")
     ? command.displayName.slice(1)
     : command.displayName;
+  const detail = command.description || command.inputHint;
+  // Rows truncate; the native title carries the full text on hover.
+  const fullText = [command.displayName, command.description, command.inputHint]
+    .filter(Boolean)
+    .join(" — ");
 
   return (
     <>
       {showGroupLabel ? (
         <>
           <div data-slash-command-group-label-marker="" />
-          <div className="px-2.5 py-1 text-ui-sm text-muted-foreground">
-            {command.group}
-          </div>
+          <ComposerInlineMenuGroupLabel>{command.group}</ComposerInlineMenuGroupLabel>
         </>
       ) : null}
-      <Tooltip content={tooltipContent} className="flex w-full">
-        <Button
-          ref={(element) => setRowRef(index, element)}
-          type="button"
-          variant="unstyled"
-          size="unstyled"
-          data-list-navigation-item
-          aria-selected={selected}
-          onMouseEnter={() => onRowMouseEnter(index)}
-          onMouseDown={(event) => {
-            event.preventDefault();
-          }}
-          onClick={() => onSelect(command)}
-          className={twMerge(
-            // Color-token hover promotion, not row opacity — opacity flips
-            // re-rasterize the glyphs and read as shimmer (styling.md).
-            "flex w-full shrink-0 cursor-pointer items-baseline gap-2 overflow-hidden whitespace-normal rounded-lg px-2.5 py-1 text-left text-ui outline-none hover:bg-hover focus:bg-hover",
-            selected && "bg-selected",
-          )}
-        >
-          <span className="flex-none truncate text-popover-foreground">
-            <span className="text-composer">/</span>
-            {commandName}
-          </span>
-          {detail ? (
-            <span className="min-w-0 flex-1 truncate text-ui-sm text-muted-foreground">
-              {detail}
-            </span>
-          ) : null}
-          {command.inputHint && command.description ? (
-            <span className="ml-auto shrink-0 truncate text-ui-sm text-muted-foreground">
-              {command.inputHint}
-            </span>
-          ) : null}
-        </Button>
-      </Tooltip>
+      <ComposerInlineMenuRow
+        index={index}
+        selected={selected}
+        title={fullText}
+        // The leading slash is its own muted glyph so the row reads as
+        // "name, after a slash" rather than one undifferentiated token.
+        leading={<span className="shrink-0 font-control text-muted-foreground">/</span>}
+        primary={<span className="font-control">{commandName}</span>}
+        secondary={detail}
+        trailing={command.inputHint && command.description ? command.inputHint : undefined}
+        onSelect={() => onSelect(command)}
+        onRowMouseEnter={onRowMouseEnter}
+        setRowRef={setRowRef}
+      />
     </>
   );
 }

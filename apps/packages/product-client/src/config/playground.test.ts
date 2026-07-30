@@ -275,6 +275,20 @@ describe("playground scenarios", () => {
     expect(emptyHtml).toContain("No matching slash commands.");
   });
 
+  it("includes file mention scenarios with results and an empty state", () => {
+    expect(Object.keys(SCENARIOS)).toContain("file-mention-search");
+    expect(Object.keys(SCENARIOS)).toContain("file-mention-empty");
+
+    const resultsText = visibleText(renderComposerSurfaceMarkup("file-mention-search"));
+    expect(resultsText).toContain("tokens.ts");
+    // The directory is the row's disambiguator and must be visible next to the
+    // basename, not hidden behind a tooltip.
+    expect(resultsText).toContain("apps/packages/design/src");
+
+    expect(renderComposerSurfaceMarkup("file-mention-empty"))
+      .toContain("No matching files.");
+  });
+
   it("renders a long composer input scenario through the shared editor surface", () => {
     expect(Object.keys(SCENARIOS)).toContain("composer-long-input");
     const html = renderComposerSurfaceMarkup("composer-long-input");

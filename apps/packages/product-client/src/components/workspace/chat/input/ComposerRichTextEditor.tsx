@@ -1,34 +1,19 @@
 import { useEffect, useRef, type MutableRefObject, type Ref } from "react";
 import {
-  $createRangeSelection,
   $getRoot,
   $getSelection,
   $isRangeSelection,
-  $setSelection,
   COMMAND_PRIORITY_HIGH,
   INDENT_CONTENT_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_TAB_COMMAND,
   OUTDENT_CONTENT_COMMAND,
   type LexicalEditor,
-  type LexicalNode,
-  type TextNode,
 } from "lexical";
-import { LinkNode } from "@lexical/link";
-import { $isListItemNode, ListItemNode, ListNode } from "@lexical/list";
+import { $isListItemNode } from "@lexical/list";
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
-  BOLD_ITALIC_STAR,
-  BOLD_ITALIC_UNDERSCORE,
-  BOLD_STAR,
-  BOLD_UNDERSCORE,
-  ITALIC_STAR,
-  ITALIC_UNDERSCORE,
-  LINK,
-  ORDERED_LIST,
-  UNORDERED_LIST,
-  type Transformer,
 } from "@lexical/markdown";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -39,31 +24,23 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ComposerCaretPlugin } from "#product/components/workspace/chat/input/ComposerCaretPlugin";
+import {
+  COMPOSER_INPUT_TRANSFORMERS,
+  COMPOSER_NODES,
+  COMPOSER_OUTPUT_TRANSFORMERS,
+  readComposerEditorContext,
+  type ComposerEditorContext,
+} from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import { ComposerLinkPastePlugin } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "@proliferate/product-ui/chat/transcript/TranscriptLinkStyles";
 import type { ComposerKeyboardEventLike } from "#product/lib/domain/chat/composer/composer-keyboard";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
-const INPUT_TRANSFORMERS: Transformer[] = [
-  UNORDERED_LIST,
-  ORDERED_LIST,
-  BOLD_ITALIC_STAR,
-  BOLD_ITALIC_UNDERSCORE,
-  BOLD_STAR,
-  BOLD_UNDERSCORE,
-  ITALIC_STAR,
-  ITALIC_UNDERSCORE,
-];
-const OUTPUT_TRANSFORMERS: Transformer[] = [...INPUT_TRANSFORMERS, LINK];
+const INPUT_TRANSFORMERS = COMPOSER_INPUT_TRANSFORMERS;
+const OUTPUT_TRANSFORMERS = COMPOSER_OUTPUT_TRANSFORMERS;
 const EXTERNAL_VALUE_TAG = "external-composer-value";
 
 type ComposerNativeKeyboardEvent = KeyboardEvent & ComposerKeyboardEventLike;
-
-export interface ComposerEditorContext {
-  plainText: string;
-  anchorOffset: number;
-  focusOffset: number;
-}
 
 export interface ComposerRichTextEditorProps {
   value: string;
@@ -104,7 +81,7 @@ export function ComposerRichTextEditor({
   const eventTimeStampRef = useRef<number | undefined>(undefined);
   const initialConfig = {
     namespace: "ProliferateChatComposer",
-    nodes: [ListNode, ListItemNode, LinkNode],
+    nodes: COMPOSER_NODES,
     editable: !disabled,
     theme: {
       paragraph: "m-0 min-h-[1lh]",
@@ -264,7 +241,7 @@ function ComposerEditorBridge({
 
   useEffect(() => editor.registerUpdateListener(({ editorState, dirtyElements, dirtyLeaves, tags }) => {
     editorState.read(() => {
-      onEditorContextChange?.(readEditorContext());
+      onEditorContextChange?.(readComposerEditorContext());
       if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
       const payload = JSON.stringify(editorState.toJSON());
       if (payload === lastDocumentPayloadRef.current) return;
@@ -339,57 +316,3 @@ function selectionIsInList(): boolean {
   return $isListItemNode(node);
 }
 
-function readEditorContext(): ComposerEditorContext {
-  const selection = $getSelection();
-  const plainText = $getRoot().getTextContent();
-  if (!$isRangeSelection(selection)) return { plainText, anchorOffset: plainText.length, focusOffset: plainText.length };
-  return {
-    plainText,
-    anchorOffset: globalPointOffset(selection.anchor.getNode(), selection.anchor.offset),
-    focusOffset: globalPointOffset(selection.focus.getNode(), selection.focus.offset),
-  };
-}
-
-export function getComposerEditorContext(editor: LexicalEditor): ComposerEditorContext {
-  let context: ComposerEditorContext = { plainText: "", anchorOffset: 0, focusOffset: 0 };
-  editor.getEditorState().read(() => { context = readEditorContext(); });
-  return context;
-}
-
-function globalPointOffset(node: LexicalNode, localOffset: number): number {
-  let offset = 0;
-  for (const textNode of $getRoot().getAllTextNodes()) {
-    if (textNode.is(node)) return offset + localOffset;
-    offset += textNode.getTextContentSize();
-  }
-  return offset;
-}
-
-function pointAtOffset(offset: number): { node: TextNode; offset: number } | null {
-  const nodes = $getRoot().getAllTextNodes();
-  let traversed = 0;
-  for (const node of nodes) {
-    const end = traversed + node.getTextContentSize();
-    if (offset <= end) return { node, offset: Math.max(0, offset - traversed) };
-    traversed = end;
-  }
-  const last = nodes[nodes.length - 1];
-  return last ? { node: last, offset: last.getTextContentSize() } : null;
-}
-
-export function replaceComposerTextRange(
-  editor: LexicalEditor,
-  start: number,
-  end: number,
-  replacement: string,
-) {
-  editor.update(() => {
-    const anchor = pointAtOffset(start);
-    const focus = pointAtOffset(end);
-    if (!anchor || !focus) return;
-    const selection = $createRangeSelection();
-    selection.setTextNodeRange(anchor.node, anchor.offset, focus.node, focus.offset);
-    $setSelection(selection);
-    selection.insertText(replacement);
-  });
-}

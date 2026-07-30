@@ -5,6 +5,7 @@ import { ArrowRight } from "@proliferate/ui/icons";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ChatInputControlRow } from "#product/components/workspace/chat/input/ChatInputControlRow";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
+import { ComposerFileMentionSearch } from "#product/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
 import { ComposerTextarea } from "@proliferate/ui/patterns/ComposerTextarea";
 import { ComposerTextareaFrame } from "@proliferate/ui/patterns/ComposerTextareaFrame";
@@ -19,9 +20,11 @@ import {
   createPlaygroundModelSelectorProps,
   createPlaygroundSessionConfigControls,
   createPlaygroundUltraSessionConfigControls,
+  PLAYGROUND_FILE_MENTIONS,
   PLAYGROUND_LONG_COMPOSER_DRAFT,
   PLAYGROUND_SLASH_COMMANDS,
 } from "#product/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
+import type { FileMentionResult } from "#product/lib/domain/chat/composer/file-mention-search";
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
@@ -55,6 +58,10 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
       return <PlaygroundSlashCommandComposerSurface commands={PLAYGROUND_SLASH_COMMANDS} />;
     case "slash-command-empty":
       return <PlaygroundSlashCommandComposerSurface commands={[]} />;
+    case "file-mention-search":
+      return <PlaygroundFileMentionComposerSurface results={PLAYGROUND_FILE_MENTIONS} />;
+    case "file-mention-empty":
+      return <PlaygroundFileMentionComposerSurface results={[]} />;
     default:
       return <PlaygroundComposerSurface />;
   }
@@ -173,6 +180,49 @@ function PlaygroundSlashCommandComposerSurface({
             className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-composer text-foreground"
           >
             <span>/rev</span>
+          </div>
+          <PlaygroundComposerControlRow />
+        </form>
+      </ChatComposerSurface>
+    </>
+  );
+}
+
+function PlaygroundFileMentionComposerSurface({
+  results,
+}: {
+  results: FileMentionResult[];
+}) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  return (
+    <>
+      <div className="relative z-popover flex flex-col px-5">
+        <ComposerFileMentionSearch
+          results={results}
+          highlightedIndex={0}
+          listRef={listRef}
+          query="tok"
+          isLoading={false}
+          isError={false}
+          isPending={false}
+          runtimeReady
+          onSelect={noop}
+          onRowMouseEnter={noop}
+          setRowRef={(index, element) => {
+            rowRefs.current[index] = element;
+          }}
+          className="mx-0"
+        />
+      </div>
+      <ChatComposerSurface>
+        <form className="relative flex flex-col">
+          <div
+            data-telemetry-mask
+            className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-composer text-foreground"
+          >
+            <span>Look at @tok</span>
           </div>
           <PlaygroundComposerControlRow />
         </form>

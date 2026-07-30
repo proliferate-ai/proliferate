@@ -231,6 +231,38 @@ body {
   }
 }
 
+/* ---- Composer file-mention chip ----
+   A file picked with "@" reads as a file reference, not as a bare name: the
+   file-type glyph leads, the basename carries the weight, and the elided
+   directory trails behind it in the muted role.
+
+   The chip is a Lexical TextNode, which is why the directory is a generated box
+   rather than a DOM element. Lexical owns the text element's children and
+   anchors carets inside it, so a real sibling there would be reconciled away or
+   become a caret trap. `content:` cannot be selected, cannot be reached by the
+   caret, and stays out of textContent, so the path is painted without joining
+   the draft's text — the reason this relationship lives here rather than as a
+   utility at the callsite. */
+.composer-file-mention {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+
+/* The glyph is optically centered against the basename's x-height rather than
+   sitting on the shared baseline, which a square mark overshoots. */
+.composer-file-mention-glyph {
+  align-self: center;
+}
+
+.composer-file-mention [data-composer-file-mention-directory]::after {
+  content: " " attr(data-composer-file-mention-directory);
+  color: var(--color-muted-foreground);
+  font-size: var(--text-ui-sm);
+}
+
 /* ---- Skeleton shimmer ----
    Loading blocks share one motion family with the thinking-text sweep in
    product.css: a soft gradient band travelling left→right via transform
@@ -577,11 +609,7 @@ body {
   color: var(--diffs-fg);
 }
 
-<<<<<<< HEAD
-mark.transcript-find-match {
-=======
 mark.content-find-match {
->>>>>>> origin/main
   background-color: var(--color-terminal-yellow);
   color: var(--color-background);
   border-radius: calc(var(--radius) / 4);
@@ -595,11 +623,7 @@ mark.content-find-match {
   vertical-align: baseline;
 }
 
-<<<<<<< HEAD
-mark.transcript-find-active {
-=======
 mark.content-find-active {
->>>>>>> origin/main
   background-color: hsl(30 95% 65%);
 }
 

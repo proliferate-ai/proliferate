@@ -15,9 +15,9 @@ import {
 } from "lexical";
 import {
   ComposerRichTextEditor,
-  replaceComposerTextRange,
   type ComposerRichTextEditorProps,
 } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
+import { replaceComposerTextRange } from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
 let originalRangeRectDescriptor: PropertyDescriptor | undefined;
@@ -160,6 +160,35 @@ describe("ComposerRichTextEditor", () => {
     await typeCharacters(typed.editor, "[Docs](https://example.com)");
     expect(typed.root.querySelector("a")).toBeNull();
     expect(typed.root.textContent).toBe("[Docs](https://example.com)");
+  });
+
+  it("serializes a file mention chip back to its markdown link unchanged", async () => {
+    const onChange = vi.fn();
+    const harness = renderEditor({ value: "", onChange });
+    await harness.ready();
+    act(() => resetText(harness.editor, ""));
+    onChange.mockClear();
+
+    // Typing the markdown form is what promotes it to a chip, so this round-trips
+    // the chip's glyph/path decoration back through markdown export.
+    await typeCharacters(harness.editor, "See [setup.md](docs/guides/setup.md)");
+
+    const chip = await waitFor(() => {
+      const next = harness.root.querySelector<HTMLElement>("[data-composer-file-mention]");
+      expect(next).toBeTruthy();
+      return next!;
+    });
+    expect(chip.querySelector("[data-composer-file-mention-glyph] svg")).toBeTruthy();
+    expect(
+      chip
+        .querySelector("[data-composer-file-mention-content]")
+        ?.getAttribute("data-composer-file-mention-directory"),
+    ).toBe("docs/guides");
+    // Neither the glyph nor the painted directory reaches the text stream.
+    expect(harness.root.textContent).toBe("See setup.md");
+    expect(onChange.mock.calls[onChange.mock.calls.length - 1]?.[0]).toBe(
+      "See [setup.md](docs/guides/setup.md)",
+    );
   });
 
   it("formats complete pasted Markdown lists as editable list blocks", async () => {
