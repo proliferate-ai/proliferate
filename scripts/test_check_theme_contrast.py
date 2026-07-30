@@ -13,6 +13,7 @@ import unittest
 import unittest.mock
 
 from scripts.check_theme_contrast import (
+    TEXT_PLANES,
     Measurement,
     Resolver,
     Rgb,
@@ -200,6 +201,50 @@ class Ratchet(unittest.TestCase):
             clear=True,
         ):
             self.assertTrue(self.measurement(1.30).stale_pin)
+
+
+class PlaneCoverage(unittest.TestCase):
+    """The original defect was not a bad ratio, it was an unmeasured plane.
+
+    Light mode collapses six elevation roles onto white, so a guard that reads
+    only `--color-surface` and `--color-background` reports green while the
+    sidebar and the one-step-off-white fills go unchecked. These tests pin the
+    plane list itself, so adding an elevation role without adding it here fails
+    rather than silently widening the blind spot.
+    """
+
+    def test_every_opaque_elevation_role_is_measured(self) -> None:
+        # Every `--color-*` role in the authority that names an opaque plane text
+        # is painted on. Transient state fills are excluded deliberately — see
+        # the note on TEXT_PLANES.
+        expected = {
+            "--color-surface",
+            "--color-background",
+            "--color-card",
+            "--color-popover",
+            "--color-surface-elevated",
+            "--color-surface-elevated-secondary",
+            "--color-surface-control",
+            "--color-surface-under",
+            "--color-muted",
+            "--color-sidebar",
+        }
+        self.assertEqual(set(TEXT_PLANES), expected)
+
+    def test_state_fills_are_not_text_planes(self) -> None:
+        # Holding the faint tier to 4.5:1 on top of `active` would force faint
+        # to collapse into secondary and flatten the ramp; state fills get their
+        # own step floors instead.
+        for role in ("--color-hover", "--color-selected", "--color-active"):
+            self.assertNotIn(role, TEXT_PLANES)
+
+    def test_the_faint_tier_is_measured_against_the_darkest_light_plane(self) -> None:
+        # The regression that shipped: #686e76 cleared 4.5:1 on white but not on
+        # the sidebar. Graded against the plane, not the page.
+        faint = Rgb(0x64, 0x6A, 0x72)
+        sidebar = Rgb(0xED, 0xF0, 0xF2)
+        self.assertGreaterEqual(contrast(faint, sidebar), 4.5)
+        self.assertLess(contrast(Rgb(0x68, 0x6E, 0x76), sidebar), 4.5)
 
 
 if __name__ == "__main__":

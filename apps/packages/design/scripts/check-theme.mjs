@@ -45,6 +45,20 @@ function assert(condition, message) {
 function project(mode) {
   const lines = [];
   for (const [name, value] of tokenEntries) {
+    // Shadows carry a per-mode value only if the generated utility reads a
+    // var() instead of an inlined literal — see the shadow note in
+    // `generate-theme.mjs`. Re-projected here independently so the indirection
+    // is pinned by this validator rather than trusted from the generator.
+    if (name.startsWith("--shadow-")) {
+      const twin = `--elevation-${name.slice("--shadow-".length)}`;
+      if (mode === "theme") {
+        lines.push(`  ${name}: var(${twin});`);
+      } else {
+        lines.push(`  ${twin}: ${value[mode]};`);
+        lines.push(`  ${name}: var(${twin});`);
+      }
+      continue;
+    }
     const rendered = mode === "theme" ? (value.themeFallback ?? value.dark) : value[mode];
     lines.push(`  ${name}: ${rendered};`);
   }
