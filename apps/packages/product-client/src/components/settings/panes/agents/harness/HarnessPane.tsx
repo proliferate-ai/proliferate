@@ -251,7 +251,7 @@ function HarnessRuntimeStatusRow({
 }
 
 /**
- * The v2 pane anatomy (reference/design-handoff): identity → Authentication
+ * The v2 pane anatomy (design-handoff v2): identity → Authentication
  * (method cards with the ONE status badge merged into the header, detail area
  * below the cards) → harness settings → Models. There is no separate Status
  * section — the state is said exactly once, in the section header. OpenCode
