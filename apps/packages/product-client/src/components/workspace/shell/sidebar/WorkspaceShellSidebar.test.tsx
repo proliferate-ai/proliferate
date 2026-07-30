@@ -18,6 +18,12 @@ vi.mock("#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderContr
   WorkspaceSidebarHeaderControls: () => <div data-testid="sidebar-header-controls" />,
 }));
 
+const coarsePointer = vi.hoisted(() => ({ value: false }));
+
+vi.mock("#product/hooks/ui/layout/use-coarse-pointer", () => ({
+  useCoarsePointer: () => coarsePointer.value,
+}));
+
 function renderSidebar(open = false) {
   const result = render(
     <WorkspaceShellSidebar open={open} width={280} onToggleSidebar={() => {}} />,
@@ -45,6 +51,7 @@ describe("WorkspaceShellSidebar hover peek", () => {
   afterEach(() => {
     vi.useRealTimers();
     cleanup();
+    coarsePointer.value = false;
   });
 
   it("arms the peek immediately on the edge trigger", () => {
@@ -165,5 +172,23 @@ describe("WorkspaceShellSidebar hover peek", () => {
     fireEvent.mouseEnter(trigger);
 
     expect(panel.hasAttribute("inert")).toBe(false);
+  });
+
+  /**
+   * A touch tap fires a synthetic `mouseenter` with no matching `mouseleave`
+   * once the finger lifts, so a coarse pointer that reached this handler would
+   * arm the peek and then have no gesture available to close it again. The
+   * hook is expected to refuse to arm at all on such a device, rather than
+   * open and then rely on some other close path a touch device doesn't have.
+   */
+  it("never arms the peek on a coarse (touch) pointer", () => {
+    coarsePointer.value = true;
+    const { panel, trigger } = renderSidebar();
+
+    fireEvent.mouseEnter(trigger);
+    expect(peekState(panel)).toBe("closed");
+
+    fireEvent.mouseEnter(panel);
+    expect(peekState(panel)).toBe("closed");
   });
 });

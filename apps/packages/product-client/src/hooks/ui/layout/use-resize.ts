@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface UseResizeOptions {
   /** "horizontal" = drag left/right to change width, "vertical" = drag up/down to change height */
@@ -26,6 +26,12 @@ export function useResize({
   max = Infinity,
 }: UseResizeOptions) {
   const startRef = useRef({ pos: 0, size: 0 });
+  // Holds whatever the in-flight drag needs torn down (listeners + the cursor
+  // overlay). A drag that ends via mouseup clears this itself; this ref exists
+  // for the drag that never gets a mouseup — the owning panel unmounting
+  // mid-gesture (a workspace switch, an error boundary, session teardown) —
+  // so the unmount effect below has something to call.
+  const activeDragCleanupRef = useRef<(() => void) | null>(null);
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -54,13 +60,23 @@ export function useResize({
         overlay.remove();
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
+        activeDragCleanupRef.current = null;
       };
 
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+      activeDragCleanupRef.current = handleMouseUp;
     },
     [direction, size, onResize, reverse, min, max],
   );
+
+  // Mirrors handleMouseUp's teardown without firing onResize or removing the
+  // listeners twice: a normal mouseup already nulls the ref before this could
+  // ever run for that gesture, so this only fires for the unmount-mid-drag
+  // case handleMouseUp was never going to see.
+  useEffect(() => () => {
+    activeDragCleanupRef.current?.();
+  }, []);
 
   return onMouseDown;
 }

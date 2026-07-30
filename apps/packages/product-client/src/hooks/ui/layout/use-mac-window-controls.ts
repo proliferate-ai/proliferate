@@ -1,4 +1,4 @@
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductHost } from "#product/host/ProductHostProvider";
 
 /**
  * Left inset that clears the macOS window buttons in a 40px title row.
