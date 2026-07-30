@@ -10,9 +10,16 @@ import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
-export type SecretEditorKind = "env" | "file";
-export type SecretFileContentSource = "text" | "upload";
-export type SecretFilePathMode = "absolute" | "relative";
+import {
+  FILE_CONTENT_SOURCE_LABELS,
+  FILE_CONTENT_SOURCE_OPTIONS,
+  SECRET_KIND_LABELS,
+  SECRET_KIND_OPTIONS,
+  type SecretEditorKind,
+  type SecretFileContentSource,
+  type SecretFilePathMode,
+} from "./secret-editor-vocabulary";
+
 
 export interface SecretEditorDialogState {
   mode: "create" | "edit";
@@ -40,18 +47,6 @@ export type SecretEditorSaveInput =
   | { kind: "env"; nameOrPath: string; secret: string }
   | { kind: "file"; nameOrPath: string; content: string }
   | { kind: "file"; nameOrPath: string; file: File };
-
-const SECRET_KIND_LABELS: Record<SecretEditorKind, string> = {
-  env: "Environment variable",
-  file: "File",
-};
-
-const SECRET_KIND_OPTIONS: readonly SecretEditorKind[] = ["env", "file"];
-const FILE_CONTENT_SOURCE_LABELS: Record<SecretFileContentSource, string> = {
-  text: "Paste text",
-  upload: "Upload file",
-};
-const FILE_CONTENT_SOURCE_OPTIONS: readonly SecretFileContentSource[] = ["text", "upload"];
 
 const fieldLabelClass = "text-body-emphasis font-medium text-foreground";
 const toggleClass =
@@ -315,7 +310,17 @@ export function SecretEditorDialog({
           <>
             <div className="space-y-1.5">
               <div className={fieldLabelClass}>Content source</div>
+              {/* This consumer is a FORM, not a control row. The segmented
+                  control sits in a stack of text fields whose primitive base is
+                  36px (`Input`'s h-9), so it aligns to its neighbours here
+                  rather than to the 28px `h-control` tier the primitive
+                  defaults to — the tier is a row-level agreement between
+                  sibling controls, and in this stack the siblings are inputs.
+                  `className` lands on the primitive's wrapper, so the height has
+                  to be reached through a child variant; that selector is also
+                  what lets it win over the button's own `h-control`. */}
               <SegmentedControl
+                className="[&>button]:h-9"
                 ariaLabel="File content source"
                 items={FILE_CONTENT_SOURCE_OPTIONS.map((option) => ({
                   id: option,

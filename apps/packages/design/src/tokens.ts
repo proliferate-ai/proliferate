@@ -32,6 +32,11 @@ export const themeTokens = {
     light: motion.cssMs(motion.activity.streamRevealFadeMs),
     provenance: "[SHIPPED:motion/authority]",
   },
+  "--activity-level-bar-step": {
+    dark: motion.cssMs(motion.activity.levelBarStepMs),
+    light: motion.cssMs(motion.activity.levelBarStepMs),
+    provenance: "[RETUNE:motion/level-bar-cadence]",
+  },
   "--activity-update-ready-sweep": {
     dark: motion.cssMs(motion.activity.updateReadySweepMs),
     light: motion.cssMs(motion.activity.updateReadySweepMs),
@@ -108,11 +113,6 @@ export const themeTokens = {
     dark: "color-mix(in oklab, #ffffff 5%, transparent)",
     light: "color-mix(in oklab, var(--color-foreground) 5%, transparent)",
     themeFallback: "rgba(255, 255, 255, 0.05)",
-    provenance: "[SHIPPED]",
-  },
-  "--color-brand-logo-tile": {
-    dark: "hsl(0 0% 100%)",
-    light: "hsl(0 0% 100%)",
     provenance: "[SHIPPED]",
   },
   "--color-card": {
@@ -892,6 +892,11 @@ export const themeTokens = {
     light: motion.ease.linear,
     provenance: "[RETUNE:motion/roles]",
   },
+  "--ease-out-cubic": {
+    dark: motion.ease.outCubic,
+    light: motion.ease.outCubic,
+    provenance: "[RETUNE:motion/level-bar-cadence]",
+  },
   "--ease-out-quint": {
     dark: motion.ease.outQuint,
     light: motion.ease.outQuint,
@@ -930,6 +935,39 @@ export const themeTokens = {
     dark: "450",
     light: "450",
     provenance: "[RETUNE:type/control-weight]",
+  },
+  /**
+   * The single interactive-control height. Every compact control that sits in a
+   * row with its peers — composer model/mode/integration/add-file/send buttons,
+   * segmented controls, header pills, settings toggles — is 28px tall at the
+   * same 12px `--text-ui` label. The composer already shipped that height at
+   * ~70 call sites, so this token names the shipped winner rather than
+   * introducing a new one; `--size-icon-button-lg` and
+   * `--workspace-shell-action-size` are the same 1.75rem, which is the
+   * agreement this tier makes reusable instead of re-derived per surface.
+   *
+   * Deliberately NOT em, unlike the `--icon-*` tiers directly below. An em is
+   * right for a glyph because a glyph belongs to the text it sits in: the
+   * callsite's font-size IS its intended scale reference, so `--icon-paired`
+   * tracks whatever role labels that particular control. A control BOX has the
+   * opposite relationship. It is a row-level agreement between siblings that
+   * carry DIFFERENT text roles (a `--text-ui` picker beside a `--text-ui-sm`
+   * pill beside an icon-only button with no label at all), so resolving its
+   * height against each callsite's own font-size produces a ragged row at a
+   * single appearance preference — the exact drift this tier exists to end.
+   * rem also keeps the box on the unchanged html root (see the `body` rule in
+   * product.css), so the UI font-size presets retune glyphs and labels inside a
+   * stable control rhythm, and window zoom still scales the whole geometry.
+   *
+   * Lives in Tailwind's `--height-*` namespace, which generates exactly
+   * `h-control` / `min-h-control` / `max-h-control` and nothing else. The
+   * `--spacing-*` namespace would also emit `w-`/`p-`/`gap-control`, offering a
+   * 28px gap and a 28px pad that no rule here sanctions.
+   */
+  "--height-control": {
+    dark: "1.75rem",
+    light: "1.75rem",
+    provenance: "[RETUNE:controls/unified-28px-height]",
   },
   "--icon-compact": {
     dark: "1em",

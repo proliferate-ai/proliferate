@@ -17,9 +17,9 @@ export interface PopoverSearchFieldProps {
 }
 
 /**
- * Inline search row for popovers/pickers (our popover chrome recipe): a muted
- * magnifier icon + a borderless, transparent input sitting directly in the
- * popover — NO boxed field — with a hairline divider below. Single source of
+ * Inline search row for popovers/pickers: a muted magnifier icon + a
+ * borderless, transparent input sitting directly in the popover — NO boxed
+ * field — with a hairline divider below. Single source of
  * truth for every picker search; do not hand-roll a boxed `bg-surface-control`
  * field again.
  */

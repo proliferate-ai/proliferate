@@ -13,9 +13,8 @@ import { useWorkspacePublishWorkflow } from "#product/hooks/workspaces/workflows
 import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
 /* Git-modal anatomy: no intent tabs and no Cancel/Submit footer — the
- * bottom of the card is a command list. The row for the current intent is
- * the primary action and carries the ⌘⏎ hint; clicking another row
- * switches intent. */
+ * bottom of the card is a command list. The row for the current intent is the primary action and
+ * carries the ⌘⏎ hint; clicking another row switches intent. */
 const PUBLISH_INTENTS: ReadonlyArray<{
   id: PublishIntent;
   label: string;
@@ -317,7 +316,7 @@ export function PublishDialog({
   );
 }
 
-/* Command-list row recipe: rounded-lg row, icon slot + truncating label,
+/* Command-row anatomy: rounded-lg row, icon slot + truncating label,
  * hover paint on the selected/primary row, disabled rows dimmed, and
  * the primary row carries the ⌘⏎ hint. */
 function PublishActionRow({

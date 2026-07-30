@@ -48,7 +48,7 @@ describe("DiffViewer chat variant", () => {
     expect(sharedSurfaceRule).toContain("background-color: var(--color-diff-code-surface);");
   });
 
-  it("renders diff data attributes and dynamic gutter width", () => {
+  it("renders stable data attributes and dynamic gutter width", () => {
     const html = renderToStaticMarkup(
       createElement(DiffViewer, {
         patch: PATCH,

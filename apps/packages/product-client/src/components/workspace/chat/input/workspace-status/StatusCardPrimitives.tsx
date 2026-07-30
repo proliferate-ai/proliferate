@@ -9,9 +9,9 @@ import {
 } from "@proliferate/ui/primitives/tooltip-primitive";
 
 /**
- * The status card anatomy, extracted from the workspace-status card so
+ * The ambient card anatomy, extracted from the workspace-status card so
  * every composer ambient surface — status card, environment popover —
- * shares one section/row recipe.
+ * shares one section/row anatomy.
  */
 
 export type WorkspaceStatusDetailState =
@@ -51,8 +51,9 @@ export function StatusSection({
   );
 }
 
-/* Row recipe: h-7, icon in a fixed slot, truncating label, trailing meta,
-   full-row hover paint via ::before that outsets 8px past the row box. */
+/* Summary-panel row anatomy: h-7, icon in a fixed slot, truncating label,
+   trailing meta, full-row hover paint via ::before that outsets 8px past the
+   row box. */
 const STATUS_ROW_CLASS =
   "group/status-row relative isolate flex h-7 w-full min-w-0 items-center gap-2 rounded-md py-1 text-left text-ui text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-md before:content-['']";
 
@@ -75,7 +76,7 @@ export function StatusRow({
   trailing?: ReactNode;
   hoverItems?: WorkspaceStatusDetailItem[];
   onSelect?: () => void;
-  /** Disabled recipe: dimmed, no hover paint, no action. */
+  /** Disabled command-row treatment: dimmed, no hover paint, no action. */
   disabled?: boolean;
   title?: string;
 }) {
@@ -119,10 +120,10 @@ export function StatusRow({
     return row;
   }
 
-  /* Leaf detail on hover, tooltip recipe: rounded-xl, translucent popover bg,
-     0.5px ring, backdrop blur; radix-portaled so the card's scroll container
-     can't clip it; opens leftward over the transcript — the free side next to
-     a right-anchored card. */
+  /* Leaf detail on hover, canonical tooltip chrome: rounded-xl,
+     translucent popover bg, 0.5px ring, backdrop blur; radix-portaled so the
+     card's scroll container can't clip it; opens leftward over the
+     transcript — the free side next to a right-anchored card. */
   return (
     <TooltipProvider delayDuration={150}>
       <KitTooltip>

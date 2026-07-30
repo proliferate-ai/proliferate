@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  CONTROL_HEIGHT_TOKEN_IDS,
   ICON_BUTTON_SIZE_TOKEN_IDS,
   TEXT_SIZE_TOKEN_IDS,
   twMerge,
@@ -255,6 +256,35 @@ describe("generated design-package semantic text tokens", () => {
       // And it must itself be overridable by a later stock box.
       expect(twMerge(`size-icon-button-${step} size-6`)).toBe("size-6");
     }
+  });
+
+  it("registers every generated control-height tier in twMerge's height groups", () => {
+    // `--height-*` is one of Tailwind's own namespaces, so the utilities are
+    // emitted by the compiler rather than declared as an `@utility` in
+    // product.css. Derive the ids from the generated theme's declarations so a
+    // renamed or added tier cannot go unregistered.
+    const generatedControlHeightIds = Object.keys(themeDeclarations)
+      .filter((property) => property.startsWith("--height-"))
+      .map((property) => property.replace(/^--height-/, ""));
+
+    expect(generatedControlHeightIds).toEqual([...CONTROL_HEIGHT_TOKEN_IDS]);
+    expect(themeDeclarations["--height-control"]).toBe("1.75rem");
+
+    for (const id of generatedControlHeightIds) {
+      // Both directions of the conflict, because an unregistered id belongs to
+      // no group at all and therefore silently coexists with the class it was
+      // meant to replace.
+      expect(twMerge(`h-8 h-${id}`)).toBe(`h-${id}`);
+      expect(twMerge(`h-${id} h-8`)).toBe("h-8");
+      expect(twMerge(`min-h-0 min-h-${id}`)).toBe(`min-h-${id}`);
+      expect(twMerge(`max-h-${id} max-h-24`)).toBe("max-h-24");
+    }
+
+    // Guards the guard: an id twMerge does not know coexists with h-8 instead
+    // of replacing it, and then loses on generated-CSS source order.
+    expect(twMerge("h-8 h-not-a-registered-control-height")).toBe(
+      "h-8 h-not-a-registered-control-height",
+    );
   });
 });
 

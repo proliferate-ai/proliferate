@@ -43,8 +43,12 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     // Press was previously absent entirely, so the control had no down-state
     // at all.
     const baseClassName = `cursor-pointer disabled:cursor-default gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-hover hover:text-current active:bg-active focus:outline-none data-[state=open]:bg-hover ${classes}`;
+    // Icon-only controls are a 28px square *floor*, not a fixed box: a
+    // wide-glyph icon (e.g. a long level-bar ladder) grows the pill instead of
+    // being squeezed inside it. Single-glyph icons are narrower than the floor,
+    // so they still render as the same square they always did.
     const buttonClassName = iconOnly
-      ? `h-7 w-7 shrink-0 !justify-center px-0 ${baseClassName} ${className}`
+      ? `h-7 min-w-7 shrink-0 !justify-center px-1 ${baseClassName} ${className}`
       : `h-7 min-w-0 max-w-full !justify-start px-1.5 py-0 text-left text-ui ${baseClassName} ${className}`;
     const iconOnlyLabel = typeof label === "string"
       ? label

@@ -780,7 +780,7 @@ describe("buildTurnPresentation", () => {
     )).toBe("Read files");
   });
 
-  it("expands active Codex ops shell batches into read and search rows", () => {
+  it("expands active ops shell batches into read and search rows", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       scan: parsedCommandItem("scan", "turn-1", 1, [{

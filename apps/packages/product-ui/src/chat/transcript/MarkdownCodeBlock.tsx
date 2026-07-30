@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Check, Copy } from "@proliferate/ui/icons";
 
 /**
- * Our code block card: bordered rounded shell with a header carrying
+ * Code block card: bordered rounded shell with a header carrying
  * the language label and an always-visible copy icon button. `children`
  * overrides the rendered code content (e.g. app-injected highlighted HTML);
  * `code` remains the copy payload and the plain-text fallback.

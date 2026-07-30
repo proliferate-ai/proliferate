@@ -30,29 +30,38 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
 // "wave" (see composer-level-bar-wave in product.css) used to force a
 // repaint of the whole icon every frame. Plain <span> bars with
 // currentColor backgrounds pick up the same scaleY/opacity keyframes on
-// the compositor instead. Every ladder owns the semantic control-tier slot.
-// All internal geometry is proportional to the owning text role: short
-// ladders get heavier bars, while longer ladders stay inside the slot instead
-// of consuming the icon-to-label gap.
-const LEVEL_BAR_CONTAINER_EM = 4 / 3;
-const LEVEL_BAR_GAP_EM = LEVEL_BAR_CONTAINER_EM / 16;
-const LEVEL_BAR_MAX_WIDTH_EM = LEVEL_BAR_CONTAINER_EM / 4;
-const LEVEL_BAR_MIN_HEIGHT_EM = LEVEL_BAR_CONTAINER_EM / 8;
+// the compositor instead.
+//
+// Geometry: the bar *stroke* is the invariant, not the total width. Every
+// ladder draws the same weight of bar at the same gap, so a longer ladder
+// simply reads as a wider icon instead of squeezing more hairlines into a
+// fixed slot (which made 5- and 6-level ladders illegible). Height stays
+// pinned to the semantic control-tier slot, so the icon still lines up with
+// every other composer control; only the width tracks the level count.
+const LEVEL_BAR_HEIGHT_EM = 4 / 3;
+const LEVEL_BAR_GAP_EM = LEVEL_BAR_HEIGHT_EM / 16;
+const LEVEL_BAR_WIDTH_EM = LEVEL_BAR_HEIGHT_EM / 4;
+// A bar never draws shorter than it is wide: below that it stops reading as a
+// bar and becomes a squashed stub.
+const LEVEL_BAR_MIN_HEIGHT_EM = LEVEL_BAR_WIDTH_EM;
 
 function formatEm(value: number): string {
   return `${Number(value.toFixed(6))}em`;
 }
 
-function resolveLevelBarGeometry(barCount: number): { barGapEm: string; barWidthEm: string } {
+function resolveLevelBarGeometry(barCount: number): {
+  barGapEm: string;
+  barWidthEm: string;
+  iconWidthEm: string;
+} {
   const safeBarCount = Math.max(1, barCount);
-  const barGap = safeBarCount <= 1
-    ? 0
-    : Math.min(LEVEL_BAR_GAP_EM, LEVEL_BAR_CONTAINER_EM / (safeBarCount * 2));
-  const availableWidth = LEVEL_BAR_CONTAINER_EM
-    - (Math.max(0, safeBarCount - 1) * barGap);
+  const barGap = safeBarCount <= 1 ? 0 : LEVEL_BAR_GAP_EM;
   return {
     barGapEm: formatEm(barGap),
-    barWidthEm: formatEm(Math.min(LEVEL_BAR_MAX_WIDTH_EM, availableWidth / safeBarCount)),
+    barWidthEm: formatEm(LEVEL_BAR_WIDTH_EM),
+    iconWidthEm: formatEm(
+      (safeBarCount * LEVEL_BAR_WIDTH_EM) + (Math.max(0, safeBarCount - 1) * barGap),
+    ),
   };
 }
 
@@ -60,6 +69,12 @@ function resolveLevelBarGeometry(barCount: number): { barGapEm: string; barWidth
 // it only paces the per-bar offset within a single ~150-250ms burst, not an
 // interaction-scale duration/ease role.
 const LEVEL_BAR_TRANSITION_STAGGER_MS = 40;
+
+// Per-bar offset of the continuous ultra "wave". Paced against the wave's own
+// cycle (composer-level-bar-wave in product.css) rather than an interaction
+// duration: it is ambient activity, so the travelling crest should read as one
+// slow sweep across the ladder, not N bars pulsing near-together.
+const LEVEL_BAR_WAVE_STAGGER_MS = 480;
 
 type LevelBarStepTransition =
   | { kind: "increase" | "decrease"; from: number; to: number }
@@ -97,10 +112,14 @@ function useLevelBarStepTransition(currentIndex: number, levelCount: number): Le
     setTransition(next);
 
     // Matches the animation-duration of .composer-level-bar-fill-in/
-    // -drain-out (--duration-hover) and .composer-level-bars-wrap
-    // (--duration-disclosure) in product.css.
+    // -drain-out (--activity-level-bar-step) and .composer-level-bars-wrap
+    // (--duration-disclosure) in product.css. Holding the class for the full
+    // span matters more now that the step is half a second: clearing it early
+    // would snap the bar to its final height mid-climb.
     const staggerSpan = isWrap ? 0 : Math.abs(currentIndex - prev) * LEVEL_BAR_TRANSITION_STAGGER_MS;
-    const totalMs = isWrap ? motion.duration.disclosureMs : motion.duration.hoverMs + staggerSpan;
+    const totalMs = isWrap
+      ? motion.duration.disclosureMs
+      : motion.activity.levelBarStepMs + staggerSpan;
     const timer = window.setTimeout(() => setTransition(null), totalMs);
     return () => window.clearTimeout(timer);
   }, [currentIndex, levelCount]);
@@ -120,7 +139,7 @@ function LevelBarsIcon({
   levelOptionAttribute?: string;
 }) {
   const barCount = levels.length;
-  const { barGapEm, barWidthEm } = resolveLevelBarGeometry(barCount);
+  const { barGapEm, barWidthEm, iconWidthEm } = resolveLevelBarGeometry(barCount);
   const transition = useLevelBarStepTransition(currentIndex, barCount);
 
   const bars = Array.from({ length: barCount }, (_, i) => {
@@ -148,19 +167,37 @@ function LevelBarsIcon({
       ? { [levelOptionAttribute]: levels[i]!.value }
       : undefined;
 
+    // Two elements per bar, not one. The outer span is the bar's full-height
+    // track and never animates, so the dim silhouette of the whole ladder stays
+    // put; the inner span is the lit fill, and it is the only thing that grows
+    // or drains. Scaling a single element instead (what this used to do) shrank
+    // the bar itself, so at a duration long enough to watch, the bar visibly
+    // disappeared and regrew rather than filling in place.
     return (
       <span
         key={i}
         {...optionAttr}
-        className={`block shrink-0 rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}${stepClass}`}
+        className="relative block shrink-0 overflow-hidden rounded-full"
         style={{
           height: `${proportionalHeight}%`,
           minHeight: formatEm(LEVEL_BAR_MIN_HEIGHT_EM),
           width: barWidthEm,
-          opacity: lit ? 1 : 0.3,
-          animationDelay: wave ? `${i * 110}ms` : stepDelayMs !== undefined ? `${stepDelayMs}ms` : undefined,
         }}
-      />
+      >
+        {/* Sibling of the fill rather than its parent: as an ancestor its 30%
+            would multiply into the fill's own alpha and mute the lit ink. */}
+        <span className="absolute inset-0 rounded-full bg-current opacity-30" />
+        {lit || stepClass ? (
+          <span
+            className={`absolute inset-0 origin-bottom rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}${stepClass}`}
+            style={{
+              animationDelay: wave
+                ? `${i * LEVEL_BAR_WAVE_STAGGER_MS}ms`
+                : stepDelayMs !== undefined ? `${stepDelayMs}ms` : undefined,
+            }}
+          />
+        ) : null}
+      </span>
     );
   });
 
@@ -174,7 +211,10 @@ function LevelBarsIcon({
   return (
     <span
       className={`icon-control inline-flex shrink-0 items-end justify-center ${emphasisClass}${wrapClass}`}
-      style={{ gap: barGapEm }}
+      // Height comes from the control-tier icon slot (icon-control); width is
+      // overridden per ladder length so the bars keep their stroke instead of
+      // being divided out of a fixed slot.
+      style={{ gap: barGapEm, width: iconWidthEm }}
       aria-hidden="true"
       data-level-bars-icon
       data-level-bars-count={barCount}

@@ -1,85 +1,52 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-/** Seed namespaces whose logos ship as image assets. */
-const IMAGE_NAMESPACES = [
-  "notion",
-  "context7",
-  "exa",
-  "gitlab",
-  "render",
-  "neon",
-  "axiom",
-  "posthog",
-  "sentry",
-  "supabase",
-] as const;
+vi.mock("#product/hooks/theme/derived/use-resolved-mode", () => ({
+  useResolvedMode: () => "dark" as const,
+}));
 
-/** Seed namespaces whose logos render as inline monochrome glyphs. */
-const GLYPH_NAMESPACES = ["linear", "slack", "tavily"] as const;
+const { IntegrationIcon } = await import(
+  "#product/components/settings/panes/integrations/IntegrationIcon"
+);
 
+/**
+ * The artwork must never be able to exceed the tile that clips it. Sizing both
+ * in `em` made them independent — the tile took its box from the caller while
+ * the artwork resolved its own em — so a tile one tier smaller than the artwork
+ * cropped the mark. A share of the tile cannot invert, and these tests pin this
+ * half of that arrangement: the component marks which branch its artwork is and
+ * sizes nothing itself. The shares themselves are pinned in
+ * integration-icon-shares.test.ts, which reads the design CSS under node.
+ */
 describe("IntegrationIcon", () => {
-  afterEach(() => {
-    cleanup();
-    delete document.documentElement.dataset.mode;
+  afterEach(cleanup);
+
+  function artworkFor(namespace: string): Element {
+    render(<IntegrationIcon namespace={namespace} className="icon-paired" />);
+    return screen.getByTestId("integration-icon-artwork");
+  }
+
+  it("hangs the tile's share rules off the tile class", () => {
+    const tile = artworkFor("slack").parentElement;
+    expect(tile?.className).toContain("integration-icon-tile");
   });
 
-  it("renders an image logo for every image-backed seed namespace", () => {
-    for (const namespace of IMAGE_NAMESPACES) {
-      const { container, unmount } = render(<IntegrationIcon namespace={namespace} />);
-      const img = container.querySelector("img");
-      expect(img, `expected image logo for ${namespace}`).toBeTruthy();
-      expect(img?.getAttribute("aria-hidden")).toBe("true");
-      unmount();
-    }
+  it.each([
+    ["slack", "image"],
+    ["linear", "glyph"],
+    ["definitely-unknown", "glyph"],
+  ])("marks %s artwork as the %s branch and carries no size class", (namespace, branch) => {
+    const artwork = artworkFor(namespace);
+    expect(artwork.getAttribute("data-integration-icon-artwork")).toBe(branch);
+    // `className` on an SVG element is an SVGAnimatedString, so read the
+    // attribute to compare either branch the same way. Neither branch may size
+    // itself: an em tier here is what let the artwork outgrow its tile.
+    expect(artwork.getAttribute("class") ?? "").not.toMatch(/(?:^|\s)(?:size|icon)-/);
   });
 
-  it("renders a brand glyph (not the generic fallback) for glyph seed namespaces", () => {
-    for (const namespace of GLYPH_NAMESPACES) {
-      const { container, unmount } = render(<IntegrationIcon namespace={namespace} />);
-      const svg = container.querySelector("svg");
-      expect(svg, `expected brand glyph for ${namespace}`).toBeTruthy();
-      // The generic fallback is a lucide icon; brand glyphs are bespoke paths.
-      expect(
-        svg?.classList.contains("lucide"),
-        `expected a bespoke brand glyph for ${namespace}, got the lucide fallback`,
-      ).toBe(false);
-      unmount();
-    }
-  });
-
-  it("swaps to the dark asset variant when the resolved mode is dark", () => {
-    document.documentElement.dataset.mode = "light";
-    const light = render(<IntegrationIcon namespace="render" />);
-    const lightSrc = light.container.querySelector("img")?.getAttribute("src");
-    light.unmount();
-
-    document.documentElement.dataset.mode = "dark";
-    const dark = render(<IntegrationIcon namespace="render" />);
-    const darkSrc = dark.container.querySelector("img")?.getAttribute("src");
-
-    expect(lightSrc).toBeTruthy();
-    expect(darkSrc).toBeTruthy();
-    expect(darkSrc).not.toBe(lightSrc);
-  });
-
-  it("falls back to a generic lucide glyph for unknown namespaces", () => {
-    const { container } = render(<IntegrationIcon namespace="some_custom_mcp" />);
-    expect(container.querySelector("img")).toBeNull();
-    const svg = container.querySelector("svg");
-    expect(svg).toBeTruthy();
-    expect(svg?.classList.contains("lucide")).toBe(true);
-  });
-
-  it("applies caller classes on the tile", () => {
-    const { container } = render(
-      <IntegrationIcon namespace="linear" className="rounded-2xl" />,
-    );
-    const tile = container.firstElementChild;
-    expect(tile?.className).toContain("rounded-2xl");
-    expect(tile?.className).not.toContain("rounded-md");
+  it("falls back to a plug glyph for an unknown namespace", () => {
+    expect(artworkFor("definitely-unknown").tagName.toLowerCase()).toBe("svg");
   });
 });

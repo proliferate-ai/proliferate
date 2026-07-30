@@ -70,6 +70,22 @@ export const ICON_SIZE_TOKEN_IDS = [
 export const ICON_BUTTON_SIZE_TOKEN_IDS = ["sm", "md", "lg"] as const;
 
 /**
+ * The generated control-height tiers (`--height-control` → `h-control`,
+ * `min-h-control`, `max-h-control`), registered into tailwind-merge's stock
+ * `h` / `min-h` / `max-h` groups.
+ *
+ * Unregistered, `h-control` is not a member of any group, so it never conflicts
+ * with anything: `twMerge("h-8 h-control")` keeps BOTH and the winner is decided
+ * by generated-CSS source order rather than by the caller — the same failure the
+ * `size-icon-button-*` note above describes. Membership makes the later class
+ * win in either direction, so a consumer can override the tier and the tier can
+ * override a stock height.
+ *
+ * Locked against the generated theme in appearance-css-drift.test.ts.
+ */
+export const CONTROL_HEIGHT_TOKEN_IDS = ["control"] as const;
+
+/**
  * The one true twMerge: knows the design-package font-size tokens. Import it
  * from here — never from "tailwind-merge" directly. check-design-system.sh
  * enforces this across desktop, web, and the shared UI packages — every
@@ -82,6 +98,9 @@ export const twMerge = extendTailwindMerge<"icon-size">({
       "font-size": [{ text: [...TEXT_SIZE_TOKEN_IDS] }],
       "icon-size": [{ icon: [...ICON_SIZE_TOKEN_IDS] }],
       size: [{ size: ICON_BUTTON_SIZE_TOKEN_IDS.map((step) => `icon-button-${step}`) }],
+      h: [{ h: [...CONTROL_HEIGHT_TOKEN_IDS] }],
+      "min-h": [{ "min-h": [...CONTROL_HEIGHT_TOKEN_IDS] }],
+      "max-h": [{ "max-h": [...CONTROL_HEIGHT_TOKEN_IDS] }],
     },
   },
 });

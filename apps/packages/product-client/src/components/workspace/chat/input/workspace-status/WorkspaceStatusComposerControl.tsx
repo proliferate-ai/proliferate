@@ -29,8 +29,8 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 
 /**
  * Workspace status: the single ambient-state surface for a session.
- * One icon-only trigger in the composer's trailing cluster opens the
- * status card anatomy:
+ * One icon-only trigger in the composer's trailing cluster opens a
+ * status card:
  *   - Source control first (review / commit-push / compare / checks)
  *   - Subagents (ours): pixel sprite + name rows
  *   - Native agents & terminals as count rows with hover detail cards
@@ -168,7 +168,7 @@ export function WorkspaceStatusCard({
   };
 
   return (
-    // Status card surface: 300px, 20px radius (rounded-3xl base is
+    // Card surface: 300px, 20px radius (the rounded-3xl base is
     // 1.25rem), solid dropdown background, elevation-prominent = 0.5px
     // stroke painted in the shadow stack + two soft shadows — no ring.
     <ComposerPopoverSurface
@@ -324,7 +324,7 @@ function SubagentGroupRow({
   );
 }
 
-/* Avatar-group cluster: the group's sprites sit side by side ahead of the
+/* Avatar group: the group's sprites sit side by side ahead of the
    "N working" label, capped at four. */
 function SubagentSpriteCluster({ rows }: { rows: WorkspaceStatusSubagentRow[] }) {
   return (

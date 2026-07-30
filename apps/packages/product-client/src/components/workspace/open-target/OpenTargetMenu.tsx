@@ -52,9 +52,9 @@ interface OpenTargetMenuProps {
 }
 
 /**
- * Compact "open in <app>" dropdown (canonical popover recipe: 220px,
- * icon+label rows). Built on the canonical Radix PopoverButton so it
- * portals, handles collision/dismiss, and matches every other menu's chrome.
+ * Compact "open in <app>" dropdown: 220px wide, icon+label rows. Built on
+ * the canonical Radix PopoverButton so it portals, handles collision and
+ * dismiss, and matches every other menu's chrome.
  */
 export function OpenTargetMenu({ targets, onTargetClick, trigger, align = "start" }: OpenTargetMenuProps) {
   return (

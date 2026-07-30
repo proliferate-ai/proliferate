@@ -1,4 +1,4 @@
-import type { ComponentType, SVGProps } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Plug } from "lucide-react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import axiomIcon from "../../../../assets/connector-icons/axiom.svg";
@@ -13,6 +13,7 @@ import renderIcon from "../../../../assets/connector-icons/render.svg";
 import renderDarkIcon from "../../../../assets/connector-icons/render-dark.svg";
 import sentryIcon from "../../../../assets/connector-icons/sentry.svg";
 import sentryDarkIcon from "../../../../assets/connector-icons/sentry-dark.svg";
+import slackIcon from "../../../../assets/connector-icons/slack.svg";
 import supabaseIcon from "../../../../assets/connector-icons/supabase.png";
 import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 
@@ -48,64 +49,40 @@ function TavilyGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
   );
 }
 
-function SlackGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="currentColor"
-      viewBox="0 0 24 24"
-      className={className}
-      {...props}
-    >
-      <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
-    </svg>
-  );
-}
-
 /**
  * Monochrome brand marks rendered as inline SVG glyphs (currentColor), for
- * providers whose logo reads best as a single-color mark.
+ * providers whose logo reads best as a single-color mark. A provider whose
+ * identity lives in its palette belongs in `INTEGRATION_ICON_IMAGES` instead:
+ * inline glyphs inherit text color, so a multi-color logo routed through here
+ * flattens into an unrecognizable silhouette.
  */
 const INTEGRATION_GLYPHS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
   linear: LinearGlyph,
-  slack: SlackGlyph,
   tavily: TavilyGlyph,
 };
 
 interface IntegrationIconImageConfig {
   lightSrc: string;
   darkSrc?: string;
-  tileClassName?: string;
-  darkTileClassName?: string;
 }
 
 /**
  * Full-color brand logos shipped as image assets, keyed by the integration
- * definition's namespace. Logos default to a stable logo tile; providers with
- * a dedicated dark asset override the source and tile treatment in dark mode.
+ * definition's namespace. Providers with a dedicated dark asset override the
+ * source in dark mode; the marks sit directly on the surface, so there is no
+ * per-provider tile treatment to configure.
  */
 const INTEGRATION_ICON_IMAGES: Record<string, IntegrationIconImageConfig> = {
-  axiom: {
-    lightSrc: axiomIcon,
-    darkSrc: axiomDarkIcon,
-    darkTileClassName: "bg-background",
-  },
+  axiom: { lightSrc: axiomIcon, darkSrc: axiomDarkIcon },
   context7: { lightSrc: context7Icon },
   exa: { lightSrc: exaIcon },
   gitlab: { lightSrc: gitlabIcon },
   neon: { lightSrc: neonIcon },
   notion: { lightSrc: notionIcon },
   posthog: { lightSrc: posthogIcon },
-  render: {
-    lightSrc: renderIcon,
-    darkSrc: renderDarkIcon,
-    darkTileClassName: "bg-background",
-  },
-  sentry: {
-    lightSrc: sentryIcon,
-    darkSrc: sentryDarkIcon,
-    darkTileClassName: "bg-background",
-  },
+  render: { lightSrc: renderIcon, darkSrc: renderDarkIcon },
+  sentry: { lightSrc: sentryIcon, darkSrc: sentryDarkIcon },
+  slack: { lightSrc: slackIcon },
   supabase: { lightSrc: supabaseIcon },
 };
 
@@ -116,15 +93,24 @@ function selectIconImage(
   return resolvedMode === "dark" && config.darkSrc ? config.darkSrc : config.lightSrc;
 }
 
-function selectIconTileClass(
-  config: IntegrationIconImageConfig,
-  resolvedMode: "dark" | "light",
-): string {
-  if (resolvedMode === "dark") {
-    return config.darkTileClassName ?? "bg-transparent";
-  }
-  return config.tileClassName ?? "bg-brand-logo-tile";
-}
+/**
+ * Shared centering box for both artwork branches. Deliberately chrome-free:
+ * no border and no background plate, so a row reads as a column of brand
+ * marks rather than a column of framed swatches. It contributes only the
+ * layout box — default size-8, overridden via `className` (callers pass a
+ * semantic icon tier).
+ *
+ * The artwork inside is sized as a share of THIS tile by
+ * `.integration-icon-tile` in the design CSS, keyed off the artwork's
+ * `data-integration-icon-artwork` branch. That relationship cannot be two
+ * independent em sizes: the tile resolved its em against the callsite font size
+ * and the artwork resolved its own against the same one, so their ratio was
+ * pinned at whatever the two tiers happened to be — above 1 for a tile a tier
+ * below the artwork, which made the mark larger than the box clipping it, and
+ * edge-to-edge even where the numbers agreed.
+ */
+const TILE_BASE_CLASS =
+  "integration-icon-tile flex size-8 shrink-0 items-center justify-center overflow-hidden text-muted-foreground";
 
 interface IntegrationIconProps {
   /** The integration definition's namespace (e.g. "linear", "sentry"). */
@@ -136,40 +122,39 @@ interface IntegrationIconProps {
 /**
  * Brand icon tile for an integration provider, keyed by definition namespace.
  * Unknown namespaces (e.g. org-custom MCP definitions) fall back to a generic
- * plug glyph.
+ * plug glyph. Both artwork branches share one tile shell and size their artwork
+ * as a share of that tile (`.integration-icon-tile` in the design CSS), so a
+ * new provider can't land at a divergent optical size and a caller only has to
+ * choose the tile's icon tier.
  */
 export function IntegrationIcon({ namespace, className }: IntegrationIconProps) {
   const resolvedMode = useResolvedMode();
   const imageConfig = INTEGRATION_ICON_IMAGES[namespace] ?? null;
 
+  let artwork: ReactNode;
+
   if (imageConfig) {
-    return (
-      <div
-        className={twMerge(
-          "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/70",
-          selectIconTileClass(imageConfig, resolvedMode),
-          className,
-        )}
-      >
-        <img
-          src={selectIconImage(imageConfig, resolvedMode)}
-          alt=""
-          aria-hidden="true"
-          className="size-full object-contain"
-        />
-      </div>
+    artwork = (
+      <img
+        src={selectIconImage(imageConfig, resolvedMode)}
+        alt=""
+        aria-hidden="true"
+        data-testid="integration-icon-artwork"
+        data-integration-icon-artwork="image"
+      />
+    );
+  } else {
+    const Glyph = INTEGRATION_GLYPHS[namespace] ?? Plug;
+    artwork = (
+      <Glyph
+        aria-hidden="true"
+        data-testid="integration-icon-artwork"
+        data-integration-icon-artwork="glyph"
+      />
     );
   }
 
-  const Glyph = INTEGRATION_GLYPHS[namespace] ?? Plug;
   return (
-    <div
-      className={twMerge(
-        "flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-transparent text-ui text-muted-foreground [&_svg]:icon-large",
-        className,
-      )}
-    >
-      <Glyph aria-hidden="true" className="shrink-0" />
-    </div>
+    <div className={twMerge(TILE_BASE_CLASS, className)}>{artwork}</div>
   );
 }

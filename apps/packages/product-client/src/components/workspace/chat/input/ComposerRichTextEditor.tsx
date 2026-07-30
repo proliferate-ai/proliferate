@@ -145,12 +145,12 @@ export function ComposerRichTextEditor({
             />
           )}
           placeholder={(
-            // ui-foundation-escalation: [CHAT-03] wants a placeholder ink
-            // target that isn't expressible in the ruled vocabulary — the
-            // two candidate readings of the reference split apart. Its prose
-            // target is a tertiary/description role (~49.8% white) while its
-            // actual implementation is a separate placeholder token further
-            // multiplied by `opacity: .5` (~25-35% effective) —
+            // ui-foundation-escalation: [CHAT-03] wants the reference
+            // placeholder ink, but neither reading of it is expressible in the
+            // ruled vocabulary. The prose target is a tertiary/description
+            // role (~49.8% white) while the actual implementation is a separate
+            // placeholder-foreground token further multiplied by
+            // `opacity: .5` (~25-35% effective) —
             // ui-foundation-chat-addendum.md [CHAT-03] flags exactly this split.
             // `text-foreground-tertiary` (--color-foreground-tertiary, 50%) is
             // the closest legal role and the addendum's recommendation; it

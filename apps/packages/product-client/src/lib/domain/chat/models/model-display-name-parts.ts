@@ -34,20 +34,33 @@ export function splitProviderDisplayName(displayName: string): DisplayNameParts 
 }
 
 /**
- * Drops the redundant "GPT-" family prefix from OpenAI model names and
- * title-cases the variant suffix: "GPT-5.6 Sol" / "gpt-5.6-sol" → "5.6 Sol".
- * The provider icon on the pill already carries the family identity, so the
- * prefix is noise. Non-GPT names pass through unchanged. Display-only — never
- * touches catalog identity or modelId.
+ * Drops the redundant vendor-family prefix from a model name and title-cases
+ * the variant suffix: "GPT-5.6 Sol" / "gpt-5.6-sol" → "5.6 Sol", and
+ * "Claude-Sonnet-5" / "Claude Sonnet 5" → "Sonnet 5". The provider icon on the
+ * pill already carries the family identity, so the prefix is noise. Names in
+ * other families pass through unchanged. Display-only — never touches catalog
+ * identity or modelId.
  */
+const REDUNDANT_FAMILY_PREFIX = /^(?:gpt|claude)[-\s]+(.+)$/i;
+
 export function formatModelLeafName(name: string): string {
-  const match = /^gpt[-\s]+(.+)$/i.exec(name.trim());
+  const match = REDUNDANT_FAMILY_PREFIX.exec(name.trim());
   if (!match) {
     return name;
   }
 
-  return match[1]
-    .split(/[-\s]+/)
+  const remainder = match[1]!.trim();
+  // Hyphens are word separators only in an all-hyphen remainder. Once a label
+  // already contains spaces, its hyphens are meaningful punctuation — a date
+  // suffix like "(2025-09-29)" must survive intact rather than becoming
+  // "(2025 09 29)".
+  const separator = /\s/.test(remainder) ? /\s+/ : "-";
+
+  // Title-casing runs either way. Splitting on spaces and then returning the
+  // pieces unchanged is what produced "4o mini" beside "Opus 5": the casing
+  // pass has to apply per word, not only to hyphen-separated names.
+  return remainder
+    .split(separator)
     .filter(Boolean)
     .map((part) =>
       /^[a-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part

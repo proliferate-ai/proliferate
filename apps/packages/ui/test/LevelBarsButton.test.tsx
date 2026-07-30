@@ -30,7 +30,7 @@ describe("LevelBarsButton", () => {
     expect(icon?.children.length).toBe(3);
   });
 
-  it("keeps one icon slot while adapting bar width to short and long ladders", () => {
+  it("keeps one bar stroke while widening the icon for longer ladders", () => {
     const onStep = vi.fn();
     const twoLevels = levels.slice(0, 2);
     const sixLevels = [
@@ -48,9 +48,11 @@ describe("LevelBarsButton", () => {
     expect(twoLevelIcon?.className).toContain("icon-control");
     expect(twoLevelIcon?.dataset.levelBarsCount).toBe("2");
     expect(twoLevelIcon?.style.gap).toBe("0.083333em");
+    // 2 bars * 0.333333em + 1 gap * 0.083333em
+    expect(twoLevelIcon?.style.width).toBe("0.75em");
     expect(twoLevelBars?.[0]?.style.width).toBe("0.333333em");
     expect(twoLevelBars?.[0]?.style.height).toBe("50%");
-    expect(twoLevelBars?.[0]?.style.minHeight).toBe("0.166667em");
+    expect(twoLevelBars?.[0]?.style.minHeight).toBe("0.333333em");
 
     rerender(<LevelBarsButton levels={sixLevels} currentIndex={5} onStep={onStep} />);
 
@@ -58,9 +60,11 @@ describe("LevelBarsButton", () => {
     const sixLevelBars = sixLevelIcon?.querySelectorAll<HTMLElement>(":scope > span");
     expect(sixLevelIcon?.className).toContain("icon-control");
     expect(sixLevelIcon?.dataset.levelBarsCount).toBe("6");
-    expect(sixLevelBars?.[0]?.style.width).toBe("0.152778em");
+    // The bar stroke is the invariant across ladder lengths; the icon widens.
+    expect(sixLevelBars?.[0]?.style.width).toBe("0.333333em");
+    expect(sixLevelIcon?.style.width).toBe("2.416667em");
     expect(sixLevelBars?.[0]?.style.height).toBe("16.666666666666664%");
-    expect(sixLevelBars?.[0]?.style.minHeight).toBe("0.166667em");
+    expect(sixLevelBars?.[0]?.style.minHeight).toBe("0.333333em");
     expect(sixLevelBars?.[5]?.style.height).toBe("100%");
   });
 
@@ -77,7 +81,7 @@ describe("LevelBarsButton", () => {
     );
 
     expect(screen.getByRole("button", { name: "Reasoning: Medium" }).className)
-      .toContain("w-7");
+      .toContain("min-w-7");
     expect(screen.getByText("Medium").className).toContain("sr-only");
   });
 

@@ -57,6 +57,42 @@ describe("appearance-owned glyph sizing", () => {
     expect(item.className).toContain("[&_svg]:icon-paired");
   });
 
+  it("takes its box from the shared control-height tier, not an arbitrary height", () => {
+    const { getByRole } = render(
+      <SegmentedControl
+        items={[{ id: "one", label: "One" }]}
+        value="one"
+        onChange={() => undefined}
+      />,
+    );
+
+    const item = getByRole("radio", { name: "One" });
+    expect(item.className).toContain("h-control");
+    expect(item.className).not.toContain("h-[30px]");
+  });
+
+  it("puts an incoming className on the group, not on the height-bearing segments", () => {
+    // Load-bearing for consumers that must depart from the control tier (a
+    // segmented control inside a form stack of 36px inputs): a plain `h-9` in
+    // `className` lands on the wrapper and never reaches the buttons, so such a
+    // callsite has to use a child variant. Documented as a test so the next
+    // person overriding the height does not discover it visually.
+    const { getByRole } = render(
+      <SegmentedControl
+        className="h-9"
+        items={[{ id: "one", label: "One" }]}
+        value="one"
+        onChange={() => undefined}
+      />,
+    );
+
+    const group = getByRole("radiogroup");
+    const item = getByRole("radio", { name: "One" });
+    expect(group.className).toContain("h-9");
+    expect(item.className).not.toContain("h-9");
+    expect(item.className).toContain("h-control");
+  });
+
   it("scales sidebar action glyphs without scaling their pointer target", () => {
     const { getByRole } = render(
       <SidebarActionButton title="Add repository">

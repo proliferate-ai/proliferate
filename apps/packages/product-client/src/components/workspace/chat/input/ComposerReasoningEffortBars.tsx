@@ -11,7 +11,7 @@ import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { LevelBarsButton } from "@proliferate/ui/patterns/LevelBarsButton";
 
 // Tier-label tint ladder for ultra-capable ladders. Ultra keeps the
-// established purple (same hue as --color-pr-merged); max keeps the app
+// convention purple (same hue as --color-pr-merged); max keeps the app
 // special blue. Tinted tiers pin their color through hover (the control
 // button's base `hover:text-current` would otherwise wash the tint back to
 // plain ink); gray tiers keep the standard muted→full hover promotion.
@@ -61,17 +61,19 @@ export function ComposerReasoningEffortBars({
   ) + ". Click to step.";
 
   const tierTone = resolveReasoningEffortTierTone(currentOption?.value ?? null);
-  // The codex harness's frontier ladders (GPT Sol) trade the purple ultra
-  // tint for the active chip while the icon itself keeps the semantic tier
-  // color.
+  // Codex frontier ladders (GPT Sol) trade the purple ultra tint for the
+  // active chip while the icon itself keeps the semantic tier color.
   const isUltraTier = isUltraLadder && tierTone === "ultra";
   // Ultra "on" reads like the fast-mode zap when enabled: a filled purple
   // chip behind the bars. Pinned through hover so it doesn't wash back.
   const chipClass = isUltraTier ? "composer-reasoning-ultra-chip" : "";
   const toneClass = isUltraLadder ? TIER_TONE_CLASSES[tierTone] : "";
 
+  // The bars are a stepper: clicking cycles the level in place, so the tooltip
+  // naming the level must survive the press instead of blinking out on every
+  // step.
   return (
-    <Tooltip content={tooltip}>
+    <Tooltip content={tooltip} keepOpenOnPress>
       <LevelBarsButton
         levels={levels}
         currentIndex={effectiveIndex}
