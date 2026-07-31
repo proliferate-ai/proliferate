@@ -31,8 +31,8 @@ post-login the app shell renders with the seeded user.
 Negatives: wrong password rejected; second claim attempt rejected.
 
 ### T2-AUTH-2: session revocation
-Steps: log in in context A; revoke the session (settings UI or API); context A
-performs any authenticated call.
+Steps: sign in from context A; revoke that session (settings UI or API); make
+any authenticated call from context A.
 Assert: the call fails and the UI returns to signed-out state.
 
 ### T2-AUTH-3: SSO OIDC round-trip (mock IdP)
