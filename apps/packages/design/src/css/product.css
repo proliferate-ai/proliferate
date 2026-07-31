@@ -1592,6 +1592,14 @@ body {
   transition: color var(--duration-hover) ease;
 }
 
+.workspace-shell-tab .workspace-shell-tab__shortcut {
+  padding: var(--workspace-shell-tab-shortcut-block-padding)
+    var(--workspace-shell-tab-shortcut-inline-padding);
+  font-size: var(--workspace-shell-tab-shortcut-font-size);
+  line-height: var(--workspace-shell-tab-shortcut-line-height);
+  border-radius: var(--workspace-shell-tab-shortcut-radius);
+}
+
 .workspace-shell-tab__underline {
   inset-inline: var(--workspace-shell-tab-active-underline-size);
   bottom: 0;

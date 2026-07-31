@@ -29,7 +29,9 @@ describe("ChromeWorkspaceTab", () => {
     expect(sessionTitle.className).toContain("font-medium");
     expect(sessionTitle.style.maskImage).toBe("");
     expect(sessionTitle.style.webkitMaskImage).toBe("");
-    expect(screen.getByText("⌘1").className).toContain("opacity-100");
+    const shortcutBadge = screen.getByText("⌘1");
+    expect(shortcutBadge.className).toContain("workspace-shell-tab__shortcut");
+    expect(shortcutBadge.className).toContain("opacity-100");
 
     const tabRoot = container.querySelector(".workspace-shell-tab");
     const underline = container.querySelector(".workspace-shell-tab__underline");

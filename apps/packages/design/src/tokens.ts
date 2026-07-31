@@ -1688,6 +1688,31 @@ export const themeTokens = {
     light: "transparent",
     provenance: "[RETUNE:header/unboxed-tabs]",
   },
+  "--workspace-shell-tab-shortcut-block-padding": {
+    dark: "2px",
+    light: "2px",
+    provenance: "[TABS:shortcut-badge]",
+  },
+  "--workspace-shell-tab-shortcut-font-size": {
+    dark: "9.5px",
+    light: "9.5px",
+    provenance: "[TABS:shortcut-badge]",
+  },
+  "--workspace-shell-tab-shortcut-inline-padding": {
+    dark: "5px",
+    light: "5px",
+    provenance: "[TABS:shortcut-badge]",
+  },
+  "--workspace-shell-tab-shortcut-line-height": {
+    dark: "11px",
+    light: "11px",
+    provenance: "[TABS:shortcut-badge]",
+  },
+  "--workspace-shell-tab-shortcut-radius": {
+    dark: "4px",
+    light: "4px",
+    provenance: "[TABS:shortcut-badge]",
+  },
   "--z-base": {
     dark: "0",
     light: "0",

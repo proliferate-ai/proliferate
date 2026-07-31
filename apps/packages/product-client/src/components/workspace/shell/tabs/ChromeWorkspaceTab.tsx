@@ -110,7 +110,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
           {showShortcut && shortcutLabel ? (
             <ShortcutBadge
               label={shortcutLabel}
-              className={`pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 ${
+              className={`workspace-shell-tab__shortcut pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 ${
                 shortcutRevealVisible ? "opacity-100" : ""
               }`}
             />

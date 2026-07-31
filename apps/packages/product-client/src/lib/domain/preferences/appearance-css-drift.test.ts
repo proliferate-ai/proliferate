@@ -324,6 +324,25 @@ describe("right-panel tab typography", () => {
   });
 });
 
+describe("workspace header tab shortcut badge", () => {
+  const shortcutRule = readRule(
+    productCss,
+    /\.workspace-shell-tab \.workspace-shell-tab__shortcut\s*\{([\s\S]*?)\}/,
+  );
+
+  it("keeps the shortcut hint smaller than tab labels with explicit capsule padding", () => {
+    expect(themeDeclarations["--workspace-shell-tab-shortcut-font-size"]).toBe("9.5px");
+    expect(themeDeclarations["--workspace-shell-tab-shortcut-line-height"]).toBe("11px");
+    expect(themeDeclarations["--workspace-shell-tab-shortcut-inline-padding"]).toBe("5px");
+    expect(themeDeclarations["--workspace-shell-tab-shortcut-block-padding"]).toBe("2px");
+    expect(themeDeclarations["--workspace-shell-tab-shortcut-radius"]).toBe("4px");
+    expect(shortcutRule).toContain("font-size: var(--workspace-shell-tab-shortcut-font-size);");
+    expect(shortcutRule).toContain("line-height: var(--workspace-shell-tab-shortcut-line-height);");
+    expect(shortcutRule).toContain("padding: var(--workspace-shell-tab-shortcut-block-padding)");
+    expect(shortcutRule).toContain("var(--workspace-shell-tab-shortcut-inline-padding);");
+  });
+});
+
 /**
  * [CHAT-01..04] pinned values from `ui-foundation-chat-addendum.md`'s RULED
  * block. These are visual-only retunes with no behavioural surface, so the
