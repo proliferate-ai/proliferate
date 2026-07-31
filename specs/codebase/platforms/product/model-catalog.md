@@ -270,8 +270,10 @@ protect live sessions and the machine, not staleness bookkeeping:
   not persisted across restarts
   ([model_snapshot/config.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/config.rs),
   [backoff.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/backoff.rs)).
-- **Orphan sweep.** At engine construction the owner sweeps abandoned scratch
-  roots (a SIGKILLed probe runs no guard), age-thresholded.
+- **Orphan sweep.** The owner sweeps abandoned scratch roots (a SIGKILLed
+  probe runs no guard), age-thresholded — at engine construction, and again
+  on late lock acquisition, because a dead owner's scratch has no other
+  process left to reclaim it.
 - **One engine per runtime home.** The engine holds an advisory exclusive
   lock; a second runtime sharing the home degrades to read-only — serves the
   document and status, neither probes nor sweeps, and refuses a forced

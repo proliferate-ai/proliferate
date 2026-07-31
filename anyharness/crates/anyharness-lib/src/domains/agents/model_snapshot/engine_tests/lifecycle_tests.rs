@@ -434,6 +434,33 @@ async fn a_read_only_engine_reacquires_the_lock_once_the_owner_exits() {
     );
 }
 
+/// The automatic pokes self-heal too, not just the manual refresh. The 409 was
+/// only the SYMPTOM a user could see; the common recovery paths are the
+/// event-driven pokes (auth-apply, install-completed), and a regression that
+/// re-froze only those would leave the refresh-path proof above green.
+#[tokio::test]
+async fn a_read_only_engine_reacquires_the_lock_on_an_automatic_poke() {
+    let home = seeded_home("engine-lock-reacquire-poke", "opencode");
+    let (owner, _owner_runner, _owner_plan) = engine(&home, "opencode", test_config());
+    let (second, second_runner, _second_plan) = engine(&home, "opencode", test_config());
+    assert_eq!(second.mode(), ProbeEngineMode::ReadOnly);
+
+    // While the owner lives, an automatic poke on the loser stays a no-op.
+    second
+        .clone()
+        .poke_harness("opencode", PokeReason::AuthApplied);
+    tokio::task::yield_now().await;
+    assert_eq!(second_runner.count(), 0);
+
+    drop(owner);
+
+    second
+        .clone()
+        .poke_harness("opencode", PokeReason::AuthApplied);
+    wait_until("the self-healed poke's probe", || second_runner.count() >= 1).await;
+    assert_eq!(second.mode(), ProbeEngineMode::Owner);
+}
+
 // ---------------------------------------------------------------------------
 // Poke fan-out
 // ---------------------------------------------------------------------------

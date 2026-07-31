@@ -98,8 +98,10 @@ fn set_private_dir_permissions(_dir: &Path) -> Result<(), RouteAuthError> {
 // ---------------------------------------------------------------------------
 
 /// Reclaim scratch roots whose owning process died without running any guard
-/// (SIGKILL, power loss). Called once at startup, and only by the runtime that
-/// holds the probe-engine lock.
+/// (SIGKILL, power loss). Called only by the runtime that holds the
+/// probe-engine lock: once at engine construction, and again whenever a
+/// runtime acquires the lock late (a boot-time loser whose owner has since
+/// exited — see `ModelSnapshotService::ensure_owner`).
 ///
 /// A root is removed only when **both** hold:
 /// (a) its embedded pid is neither ours nor live, and

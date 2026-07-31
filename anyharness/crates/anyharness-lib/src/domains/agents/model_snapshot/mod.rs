@@ -293,7 +293,7 @@ impl ModelSnapshotService {
     /// Reclaim scratch roots abandoned by a process that died without running any
     /// guard. Owner only: a read-only runtime must never delete the owner's
     /// in-flight scratch — that is the data-loss case the lock exists for.
-    pub fn sweep_orphan_scratch(&self) {
+    pub(crate) fn sweep_orphan_scratch(&self) {
         if !self.is_owner() {
             return;
         }
