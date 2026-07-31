@@ -1,4 +1,4 @@
-import { Fork, Grid, LifeBuoy, Pencil } from "@proliferate/ui/icons";
+import { AppShellNewChatIcon, Fork, Grid, LifeBuoy } from "@proliferate/ui/icons";
 import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
 import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
 
@@ -34,7 +34,7 @@ export function SidebarPrimaryNavigation({
     {
       id: "new-chat",
       active: homeActive,
-      icon: <Pencil className="icon-paired" />,
+      icon: <AppShellNewChatIcon className="icon-paired" />,
       label: "New chat",
       shortcutLabel: shortcutLabels.newChat,
     },

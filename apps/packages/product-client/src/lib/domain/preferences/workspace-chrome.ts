@@ -9,11 +9,11 @@
 const WORKSPACE_GLASS_HEADER_BASE_CLASS =
   "flex h-[46px] shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60";
 const WORKSPACE_GLASS_HEADER_CLASS =
-  `${WORKSPACE_GLASS_HEADER_BASE_CLASS} border-b border-foreground/10`;
+  `${WORKSPACE_GLASS_HEADER_BASE_CLASS} relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border after:content-['']`;
 const WORKSPACE_SOLID_HEADER_BASE_CLASS =
   "flex h-[46px] shrink-0 items-center bg-background";
 const WORKSPACE_SOLID_HEADER_CLASS =
-  `${WORKSPACE_SOLID_HEADER_BASE_CLASS} border-b border-border/70`;
+  `${WORKSPACE_SOLID_HEADER_BASE_CLASS} relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border after:content-['']`;
 
 const EDITOR_GLASS_TABLIST_CLASS =
   "flex h-9 shrink-0 items-end gap-1 overflow-x-auto border-b border-foreground/10 bg-background/60 px-1 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-background/50";

@@ -22,7 +22,7 @@ describe("workspace chrome classes", () => {
     })).toEqual({
       root: "bg-transparent",
       contentShell: "bg-background",
-      header: "flex h-[46px] shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-b border-foreground/10",
+      header: "flex h-[46px] shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border after:content-['']",
     });
 
     expect(resolveStandardWorkspaceChromeClasses({
@@ -31,7 +31,7 @@ describe("workspace chrome classes", () => {
     })).toEqual({
       root: "bg-sidebar",
       contentShell: "bg-background rounded-tl-2xl border-l border-border border-t",
-      header: "flex h-[46px] shrink-0 items-center bg-background border-b border-border/70",
+      header: "flex h-[46px] shrink-0 items-center bg-background relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border after:content-['']",
     });
 
     expect(resolveStandardWorkspaceChromeClasses({

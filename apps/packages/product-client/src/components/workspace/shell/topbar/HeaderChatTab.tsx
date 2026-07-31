@@ -149,7 +149,7 @@ export function HeaderChatTab({
     <div
       {...(rowDragProps ?? {})}
       onPointerEnter={onPointerEnter}
-      className={`absolute bottom-0 h-7 app-region-no-drag ${
+      className={`absolute inset-y-0 app-region-no-drag ${
         isDragging
           ? "z-sticky cursor-grabbing opacity-80"
           : `${tab.isActive ? "z-sticky" : "z-base hover:z-raised"} ${

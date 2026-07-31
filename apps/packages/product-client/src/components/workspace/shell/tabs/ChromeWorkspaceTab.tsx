@@ -57,8 +57,6 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     const isSmall = contentWidth < 84;
     const showBadge = !isSmall;
     const showShortcut = Boolean(shortcutLabel) && !isSmall;
-    const titleMaskEnd = showShortcut ? 36 : 20;
-    const titleMask = `linear-gradient(90deg, #000 0%, #000 calc(100% - ${titleMaskEnd}px), transparent)`;
 
     return (
       <div
@@ -67,7 +65,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
         data-telemetry-mask="true"
         data-active={isActive ? true : undefined}
         data-multi-selected={isMultiSelected ? true : undefined}
-        className={`workspace-shell-tab group/tab relative h-7 min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
+        className={`workspace-shell-tab group/tab relative h-full min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
         style={{
           width,
           ...style,
@@ -76,10 +74,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
       >
         <span
           aria-hidden="true"
-          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 border transition-[background-color,border-color] duration-hover"
+          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 border"
         />
         <div
-          className="workspace-shell-tab__content absolute inset-0 flex items-center overflow-hidden px-2 py-1"
+          className="workspace-shell-tab__content absolute inset-0 flex items-center overflow-hidden"
         >
           <Button
             type="button"
@@ -89,20 +87,14 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             size="sm"
             onClick={onSelect}
             onPointerDownCapture={onSelectPointerDownCapture}
-            className={`workspace-shell-tab__button relative z-10 h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 hover:bg-transparent ${
-              isActive
-                ? "font-medium text-sidebar-foreground"
-                : isMultiSelected
-                  ? "font-medium text-sidebar-foreground"
-                  : "font-normal text-sidebar-muted-foreground group-hover/tab:text-sidebar-foreground"
-            } gap-(--workspace-shell-tab-content-gap) transition-colors duration-hover`}
+            className="workspace-shell-tab__button relative z-10 h-full min-w-0 flex-1 justify-start gap-(--workspace-shell-tab-content-gap) rounded-none bg-transparent px-(--workspace-shell-tab-inline-padding) py-0 hover:bg-transparent"
           >
             <span
-              className="workspace-shell-tab__label min-w-0 overflow-hidden whitespace-nowrap text-left text-ui-sm"
-              style={{
-                WebkitMaskImage: titleMask,
-                maskImage: titleMask,
-              }}
+              className={`workspace-shell-tab__label min-w-0 truncate whitespace-nowrap text-left ${
+                isActive || isMultiSelected
+                  ? "font-medium text-sidebar-foreground"
+                  : "font-normal text-sidebar-muted-foreground group-hover/tab:text-sidebar-foreground"
+              }`}
             >
               <TypewriterRevealText
                 text={label}
@@ -110,7 +102,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               />
             </span>
             {showBadge && badge && (
-              <span className="flex shrink-0 items-center transition-opacity duration-hover group-hover/tab:opacity-0 group-focus-within/tab:opacity-0">
+              <span className="flex shrink-0 items-center group-hover/tab:opacity-0 group-focus-within/tab:opacity-0">
                 {badge}
               </span>
             )}
@@ -118,7 +110,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
           {showShortcut && shortcutLabel ? (
             <ShortcutBadge
               label={shortcutLabel}
-              className={`pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity duration-hover ${
+              className={`pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 ${
                 shortcutRevealVisible ? "opacity-100" : ""
               }`}
             />
@@ -141,6 +133,12 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             </Button>
           )}
         </div>
+        {isActive ? (
+          <span
+            aria-hidden="true"
+            className="workspace-shell-tab__underline pointer-events-none absolute z-raised"
+          />
+        ) : null}
       </div>
     );
   },

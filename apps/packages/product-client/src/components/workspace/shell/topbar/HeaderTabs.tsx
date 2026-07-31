@@ -291,7 +291,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     <DebugProfiler id="header-tabs">
       <div
         ref={outerMeasure.ref}
-        className="flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden pl-1"
+        className="flex h-full min-w-0 flex-1 items-stretch gap-1.5 overflow-hidden pl-1"
       >
         <DebugProfiler id="header-tabs-strip">
           <WorkspaceTabStrip
@@ -299,7 +299,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
             stripRef={stripScrollRef}
             contentWidth={contentWidth}
             data-workspace-tab-strip
-            className="workspace-shell-tab-strip__viewport h-7 min-w-0 shrink"
+            className="workspace-shell-tab-strip__viewport h-full min-w-0 shrink"
             style={{ maxWidth: contentWidth }}
             {...shellDrag.stripDragProps}
           >

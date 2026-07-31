@@ -1638,10 +1638,20 @@ export const themeTokens = {
     light: "0.4375rem",
     provenance: "[TABS:activity-gap]",
   },
+  "--workspace-shell-tab-font-size": {
+    dark: "12.5px",
+    light: "12.5px",
+    provenance: "[TABS:reference-geometry]",
+  },
   "--workspace-shell-tab-height": {
-    dark: "1.75rem",
-    light: "1.75rem",
-    provenance: "[SHIPPED]",
+    dark: "100%",
+    light: "100%",
+    provenance: "[TABS:reference-geometry]",
+  },
+  "--workspace-shell-tab-inline-padding": {
+    dark: "13px",
+    light: "13px",
+    provenance: "[TABS:reference-geometry]",
   },
   "--workspace-shell-tab-hover-background": {
     dark: "var(--color-hover)",

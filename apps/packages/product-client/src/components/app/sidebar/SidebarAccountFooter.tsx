@@ -90,6 +90,7 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
+      <div aria-hidden className="mx-3 h-[0.5px] bg-border" />
       <div className="flex items-center gap-1 px-2 pt-1 pb-2">
         <PopoverButton
           align="start"
@@ -101,13 +102,13 @@ export function SidebarAccountFooter() {
               variant="sidebar"
               size="unstyled"
               aria-label="Open account menu"
-              className="flex min-w-0 flex-1 items-center justify-start gap-2 rounded-md px-2 py-1 text-left text-body text-sidebar-foreground data-[state=open]:bg-active"
+              className="flex min-w-0 flex-1 items-center justify-start gap-2 rounded-md px-2 py-1 text-left text-sidebar-row text-sidebar-foreground data-[state=open]:bg-active"
               title={displayName}
             >
               <UserAvatar
                 displayName={displayName}
                 avatarUrl={user?.avatarUrl}
-                className="size-6 rounded-full border-0 text-sidebar-foreground"
+                className="size-5 rounded-full border-0 text-sidebar-foreground"
               />
               <span className="min-w-0 flex-1 truncate">{displayName}</span>
             </Button>

@@ -1,5 +1,4 @@
 import { useSearchParams } from "react-router-dom";
-import { MessageSquare } from "@proliferate/ui/icons";
 import { PlaygroundComposer } from "#product/components/playground/PlaygroundComposer";
 import { PlaygroundScenarioBar } from "#product/components/playground/PlaygroundScenarioBar";
 import { PlaygroundSidebarGitDiff } from "#product/components/playground/PlaygroundSidebarGitDiff";
@@ -59,12 +58,11 @@ export function ChatPlaygroundPage() {
         <>
           <header
             aria-label="Populated session preview"
-            className="flex h-10 shrink-0 items-center border-b border-border bg-sidebar px-3"
+            className="relative flex h-[46px] shrink-0 items-stretch bg-sidebar px-3 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border after:content-['']"
           >
             <ChromeWorkspaceTab
               isActive
               width={256}
-              icon={<MessageSquare className="icon-paired" />}
               label="Chat playground"
               onSelect={() => {}}
               onClose={() => {}}

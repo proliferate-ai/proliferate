@@ -1574,11 +1574,9 @@ body {
   height: var(--workspace-shell-tab-height);
 }
 
-/* Header tabs are unboxed: no chip fill and no border in the resting or active
-   state. Hover is the only fill an ordinary tab gets, and selection is carried
-   by a 1px underline flush with the strip's baseline rather than by a box. The
-   surface span still owns fill/border/underline so the tab's own content box
-   never animates its geometry. */
+/* Header tabs fill the 46px bar so an active underline at bottom: 0 overlaps
+   the bar separator. The tab surface has no visual transition; only the label
+   color eases between inactive and hover states. */
 .workspace-shell-tab__surface {
   background-color: var(--workspace-shell-tab-inactive-background);
   border-color: var(--workspace-shell-tab-inactive-border);
@@ -1589,16 +1587,17 @@ body {
   border-radius: var(--workspace-shell-tab-radius);
 }
 
-.workspace-shell-tab__surface::after {
-  content: "";
-  position: absolute;
+.workspace-shell-tab__label {
+  font-size: var(--workspace-shell-tab-font-size);
+  transition: color var(--duration-hover) ease;
+}
+
+.workspace-shell-tab__underline {
   inset-inline: var(--workspace-shell-tab-active-underline-size);
   bottom: 0;
   height: var(--workspace-shell-tab-active-underline-size);
   border-radius: calc(var(--workspace-shell-tab-active-underline-size) / 2);
   background-color: var(--workspace-shell-tab-active-underline);
-  opacity: 0;
-  transition: opacity var(--duration-hover) var(--ease-standard);
 }
 
 .workspace-shell-tab:hover .workspace-shell-tab__surface {
@@ -1614,10 +1613,6 @@ body {
 .workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface {
   background-color: var(--workspace-shell-tab-active-background);
   border-color: var(--workspace-shell-tab-active-border);
-}
-
-.workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface::after {
-  opacity: 1;
 }
 
 /* Tab close: the closing tab fades and collapses its own width while the
