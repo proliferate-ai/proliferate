@@ -151,7 +151,7 @@ export function ChatTabWithMenu({
     />
   );
   const renameTrigger = tab.delegatedAgent ? (
-    <DelegatedAgentHoverCard agent={tab.delegatedAgent}>
+    <DelegatedAgentHoverCard agent={tab.delegatedAgent} className="h-full">
       {tabElement}
     </DelegatedAgentHoverCard>
   ) : tabElement;
@@ -163,7 +163,7 @@ export function ChatTabWithMenu({
       className={`w-52 ${POPOVER_SURFACE_CLASS}`}
       trigger={(
         <span
-          className="inline-flex min-w-0 shrink-0 app-region-no-drag"
+          className="inline-flex h-full min-w-0 shrink-0 app-region-no-drag"
           onContextMenuCapture={(event) => {
             onContextMenuTarget?.(rectToAnchor(event.currentTarget.getBoundingClientRect()));
             onContextMenuCapture(event);

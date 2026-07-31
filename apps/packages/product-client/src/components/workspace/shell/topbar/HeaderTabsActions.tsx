@@ -10,7 +10,7 @@ import type {
 } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 const HEADER_FLAT_ICON_BUTTON_CLASS =
-  "workspace-shell-icon-button workspace-shell-icon-button--flat shrink-0 disabled:pointer-events-none disabled:opacity-40";
+  "workspace-shell-icon-button workspace-shell-icon-button--flat shrink-0 self-center disabled:pointer-events-none disabled:opacity-40";
 
 interface NewChatButtonProps {
   canOpenNewSessionTab: boolean;
