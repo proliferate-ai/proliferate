@@ -343,6 +343,30 @@ describe("workspace header tab shortcut badge", () => {
   });
 });
 
+describe("workspace header tab hover treatment", () => {
+  it("changes only inactive label color without painting the tab surface", () => {
+    expect(themeDeclarations["--workspace-shell-tab-hover-background"]).toBeUndefined();
+    expect(themeDeclarations["--workspace-shell-tab-hover-border"]).toBeUndefined();
+    expect(productCss).not.toMatch(
+      /\.workspace-shell-tab:hover\s+\.workspace-shell-tab__surface/,
+    );
+  });
+});
+
+describe("workspace header tab trailing status", () => {
+  const statusRule = readRule(
+    productCss,
+    /\.workspace-shell-tab__status\s*\{([\s\S]*?)\}/,
+  );
+
+  it("anchors activity in a fixed trailing slot", () => {
+    expect(themeDeclarations["--workspace-shell-tab-status-size"]).toBe("13px");
+    expect(statusRule).toContain("position: absolute;");
+    expect(statusRule).toContain("right: var(--workspace-shell-tab-inline-padding);");
+    expect(statusRule).toContain("width: var(--workspace-shell-tab-status-size);");
+  });
+});
+
 /**
  * [CHAT-01..04] pinned values from `ui-foundation-chat-addendum.md`'s RULED
  * block. These are visual-only retunes with no behavioural surface, so the

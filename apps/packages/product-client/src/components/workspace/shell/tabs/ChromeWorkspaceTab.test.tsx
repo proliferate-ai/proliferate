@@ -13,8 +13,8 @@ describe("ChromeWorkspaceTab", () => {
         isActive
         width={180}
         label="Session one"
+        badge={<span aria-hidden="true">Working</span>}
         shortcutLabel="⌘1"
-        shortcutRevealVisible
         onSelect={vi.fn()}
         onClose={vi.fn()}
       />,
@@ -26,14 +26,17 @@ describe("ChromeWorkspaceTab", () => {
     expect(tabButton.className).toContain("py-0");
     const sessionTitle = screen.getByText("Session one");
     expect(sessionTitle.className).toContain("workspace-shell-tab__label");
+    expect(sessionTitle.className).toContain("flex-1");
     expect(sessionTitle.className).toContain("font-medium");
     expect(sessionTitle.style.maskImage).toBe("");
     expect(sessionTitle.style.webkitMaskImage).toBe("");
     const shortcutBadge = screen.getByText("⌘1");
     expect(shortcutBadge.className).toContain("workspace-shell-tab__shortcut");
-    expect(shortcutBadge.className).toContain("opacity-100");
+    const statusSlot = screen.getByText("Working").parentElement;
+    expect(statusSlot?.className).toContain("workspace-shell-tab__status");
 
     const tabRoot = container.querySelector(".workspace-shell-tab");
+    expect(tabRoot?.getAttribute("data-has-status")).toBe("true");
     const underline = container.querySelector(".workspace-shell-tab__underline");
     expect(tabRoot?.className).toContain("h-full");
     expect(underline?.parentElement).toBe(tabRoot);
@@ -53,8 +56,27 @@ describe("ChromeWorkspaceTab", () => {
 
     const sessionTitle = screen.getByText("Session two");
     expect(sessionTitle.className).toContain("text-sidebar-muted-foreground");
+    expect(sessionTitle.className).toContain("group-hover/tab:text-sidebar-foreground");
     expect(sessionTitle.style.maskImage).toBe("");
     expect(sessionTitle.style.webkitMaskImage).toBe("");
     expect(container.querySelector(".workspace-shell-tab__underline")).toBeNull();
+  });
+
+  it("yields the trailing status slot to a revealed shortcut", () => {
+    render(
+      <ChromeWorkspaceTab
+        isActive
+        width={180}
+        label="Session one"
+        badge={<span aria-hidden="true">Working</span>}
+        shortcutLabel="⌘1"
+        shortcutRevealVisible
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Working").parentElement?.className).toContain("opacity-0");
+    expect(screen.getByText("⌘1").className).toContain("opacity-100");
   });
 });

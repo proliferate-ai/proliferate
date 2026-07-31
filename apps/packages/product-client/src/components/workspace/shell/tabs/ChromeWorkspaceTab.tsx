@@ -56,6 +56,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     const contentWidth = Math.max(0, width);
     const isSmall = contentWidth < 84;
     const showBadge = !isSmall;
+    const showStatus = showBadge && badge != null;
     const showShortcut = Boolean(shortcutLabel) && !isSmall;
 
     return (
@@ -65,6 +66,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
         data-telemetry-mask="true"
         data-active={isActive ? true : undefined}
         data-multi-selected={isMultiSelected ? true : undefined}
+        data-has-status={showStatus ? true : undefined}
         className={`workspace-shell-tab group/tab relative h-full min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
         style={{
           width,
@@ -90,7 +92,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             className="workspace-shell-tab__button relative z-10 h-full min-w-0 flex-1 justify-start gap-(--workspace-shell-tab-content-gap) rounded-none bg-transparent px-(--workspace-shell-tab-inline-padding) py-0 hover:bg-transparent"
           >
             <span
-              className={`workspace-shell-tab__label min-w-0 truncate whitespace-nowrap text-left ${
+              className={`workspace-shell-tab__label min-w-0 flex-1 truncate whitespace-nowrap text-left ${
                 isActive || isMultiSelected
                   ? "font-medium text-sidebar-foreground"
                   : "font-normal text-sidebar-muted-foreground group-hover/tab:text-sidebar-foreground"
@@ -101,11 +103,15 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
                 revealOnFirstAssignment={hasAssignedLabel}
               />
             </span>
-            {showBadge && badge && (
-              <span className="flex shrink-0 items-center group-hover/tab:opacity-0 group-focus-within/tab:opacity-0">
+            {showStatus ? (
+              <span
+                className={`workspace-shell-tab__status flex items-center justify-center group-hover/tab:opacity-0 group-focus-within/tab:opacity-0 ${
+                  shortcutRevealVisible ? "opacity-0" : ""
+                }`}
+              >
                 {badge}
               </span>
-            )}
+            ) : null}
           </Button>
           {showShortcut && shortcutLabel ? (
             <ShortcutBadge

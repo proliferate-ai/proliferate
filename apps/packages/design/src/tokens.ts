@@ -1653,16 +1653,6 @@ export const themeTokens = {
     light: "13px",
     provenance: "[TABS:reference-geometry]",
   },
-  "--workspace-shell-tab-hover-background": {
-    dark: "var(--color-hover)",
-    light: "var(--color-hover)",
-    provenance: "[RETUNE:header/unboxed-tabs]",
-  },
-  "--workspace-shell-tab-hover-border": {
-    dark: "transparent",
-    light: "transparent",
-    provenance: "[SHIPPED]",
-  },
   "--workspace-shell-tab-inactive-background": {
     dark: "transparent",
     light: "transparent",
@@ -1687,6 +1677,11 @@ export const themeTokens = {
     dark: "transparent",
     light: "transparent",
     provenance: "[RETUNE:header/unboxed-tabs]",
+  },
+  "--workspace-shell-tab-status-size": {
+    dark: "13px",
+    light: "13px",
+    provenance: "[TABS:trailing-status]",
   },
   "--workspace-shell-tab-shortcut-block-padding": {
     dark: "2px",

@@ -1592,6 +1592,20 @@ body {
   transition: color var(--duration-hover) ease;
 }
 
+.workspace-shell-tab[data-has-status="true"] .workspace-shell-tab__label {
+  padding-right: calc(
+    var(--workspace-shell-tab-status-size) + var(--workspace-shell-tab-content-gap)
+  );
+}
+
+.workspace-shell-tab__status {
+  position: absolute;
+  right: var(--workspace-shell-tab-inline-padding);
+  top: 50%;
+  width: var(--workspace-shell-tab-status-size);
+  transform: translateY(-50%);
+}
+
 .workspace-shell-tab .workspace-shell-tab__shortcut {
   padding: var(--workspace-shell-tab-shortcut-block-padding)
     var(--workspace-shell-tab-shortcut-inline-padding);
@@ -1606,11 +1620,6 @@ body {
   height: var(--workspace-shell-tab-active-underline-size);
   border-radius: calc(var(--workspace-shell-tab-active-underline-size) / 2);
   background-color: var(--workspace-shell-tab-active-underline);
-}
-
-.workspace-shell-tab:hover .workspace-shell-tab__surface {
-  background-color: var(--workspace-shell-tab-hover-background);
-  border-color: var(--workspace-shell-tab-hover-border);
 }
 
 .workspace-shell-tab[data-multi-selected="true"] .workspace-shell-tab__surface {
