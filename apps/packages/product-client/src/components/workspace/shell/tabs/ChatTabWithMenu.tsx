@@ -12,7 +12,6 @@ import type { ManualChatGroupEditorAnchorRect } from "#product/components/worksp
 import { TabContextMenu } from "#product/components/workspace/shell/tabs/TabContextMenu";
 import {
   getChatTabLabel,
-  renderChatTabIcon,
   renderChatTabStatusBadge,
 } from "#product/components/workspace/shell/tabs/tab-rendering";
 import { useWorkspaceTabNativeContextMenu } from "#product/hooks/workspaces/ui/tabs/use-workspace-tab-native-context-menu";
@@ -131,7 +130,6 @@ export function ChatTabWithMenu({
       width={width}
       hideLeftDivider={hideLeftDivider}
       hideRightDivider={hideRightDivider}
-      icon={renderChatTabIcon(tab)}
       label={getChatTabLabel(tab)}
       hasAssignedLabel={tab.delegatedAgent ? true : tab.hasAssignedTitle}
       isChild={tab.isChild}

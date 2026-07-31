@@ -13,7 +13,6 @@ describe("ChromeWorkspaceTab", () => {
       <ChromeWorkspaceTab
         isActive
         width={180}
-        icon={<span aria-hidden="true" />}
         label="Session one"
         shortcutLabel="⌘1"
         shortcutRevealVisible

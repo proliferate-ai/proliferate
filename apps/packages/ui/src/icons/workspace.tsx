@@ -240,6 +240,16 @@ export function FolderOpen({ className, ...props }: IconProps) {
   );
 }
 
+/** Closed outline folder for collapsed sidebar repository groups. */
+export function FolderClosed({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l1.7 2H18.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z" />
+      <path d="M3 10.5h18" />
+    </svg>
+  );
+}
+
 /** Filled closed folder for sidebar project folders */
 export function FolderClosedFilled({ className, ...props }: IconProps) {
   return (

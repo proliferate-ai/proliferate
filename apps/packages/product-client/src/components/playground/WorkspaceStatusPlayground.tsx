@@ -364,11 +364,8 @@ function FullSidebarPane() {
                     branchName={row.gitStatus?.branch ?? null}
                     gitStatus={row.gitStatus ?? null}
                     statusIndicator={row.statusIndicator ?? null}
-                    detailIndicators={row.detailIndicators ?? []}
-                    cloudStatus={row.cloudStatus ?? null}
                     needsReview={row.needsReview}
                     archived={row.archived}
-                    lastInteracted={row.lastInteracted ?? null}
                     shortcutLabel={shortcutIndex <= 9 ? `⌘${shortcutIndex}` : null}
                     shortcutRevealVisible={shortcutReveal}
                     onSelect={() => {}}

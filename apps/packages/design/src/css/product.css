@@ -129,6 +129,114 @@ body {
   aspect-ratio: 1 / 1;
 }
 
+@keyframes om-wave {
+  0% { transform: scale(0); opacity: 0; }
+  16% { transform: scale(1); opacity: 1; }
+  44% { transform: scale(1); opacity: 1; }
+  62%, 100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes om-dot {
+  0%, 55%, 100% { opacity: 0.22; }
+  12%, 32% { opacity: 1; }
+}
+
+@keyframes om-scan {
+  0%, 42%, 100% { opacity: 0.14; }
+  10%, 26% { opacity: 1; }
+}
+
+@keyframes om-helix {
+  0%, 45%, 100% { opacity: 0.18; }
+  15%, 28% { opacity: 1; }
+}
+
+@keyframes om-breathe {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+.dot-cell-loader {
+  --dot-cell-size: 0.1875rem;
+  --dot-cell-gap: 0.125rem;
+  display: inline-grid;
+  grid-template-columns: repeat(3, var(--dot-cell-size));
+  gap: var(--dot-cell-gap);
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.dot-cell-loader[data-size="compact"] {
+  --dot-cell-size: 0.15625rem;
+  --dot-cell-gap: 0.09375rem;
+}
+
+.dot-cell-loader__dot {
+  width: var(--dot-cell-size);
+  height: var(--dot-cell-size);
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot {
+  transform: scale(0);
+  animation: om-wave var(--activity-dot-cell-wave-cycle) var(--ease-standard) infinite;
+}
+
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(2) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 3); }
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(3) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 6); }
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(4) { animation-delay: var(--activity-dot-cell-wave-step); }
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(5) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 4); }
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(6) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 7); }
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(7) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 2); }
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(8) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 5); }
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(9) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 8); }
+
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot {
+  animation: om-dot var(--activity-dot-cell-orbit-cycle) var(--ease-linear) infinite;
+}
+
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(2) { animation-delay: var(--activity-dot-cell-orbit-step); }
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(3) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 2); }
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(4) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 7); }
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(5) { visibility: hidden; animation: none; }
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(6) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 3); }
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(7) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 6); }
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(8) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 5); }
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(9) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 4); }
+
+.dot-cell-loader[data-variant="scan"] .dot-cell-loader__dot {
+  animation: om-scan var(--activity-dot-cell-scan-cycle) var(--ease-standard) infinite;
+}
+
+.dot-cell-loader[data-variant="scan"] .dot-cell-loader__dot:nth-child(n+4):nth-child(-n+6) { animation-delay: var(--activity-dot-cell-scan-step); }
+.dot-cell-loader[data-variant="scan"] .dot-cell-loader__dot:nth-child(n+7) { animation-delay: calc(var(--activity-dot-cell-scan-step) * 2); }
+
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot {
+  animation: om-helix var(--activity-dot-cell-helix-cycle) var(--ease-standard) infinite;
+}
+
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(2) { animation-delay: var(--activity-dot-cell-helix-column-step); }
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(3) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) * 2); }
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(4) { animation-delay: var(--activity-dot-cell-helix-row-step); }
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(5) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) + var(--activity-dot-cell-helix-row-step)); }
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(6) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) * 2 + var(--activity-dot-cell-helix-row-step)); }
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(7) { animation-delay: calc(var(--activity-dot-cell-helix-row-step) * 2); }
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(8) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) + var(--activity-dot-cell-helix-row-step) * 2); }
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(9) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) * 2 + var(--activity-dot-cell-helix-row-step) * 2); }
+
+.dot-cell-loader[data-variant="breathe"] .dot-cell-loader__dot {
+  animation: om-breathe var(--activity-dot-cell-breathe-cycle) var(--ease-standard) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-cell-loader__dot {
+    animation: none !important;
+    transform: scale(1) !important;
+    opacity: 0.6;
+  }
+}
+
 /*
  * Neutralize the browser's default anchor color/underline, but keep it in
  * `@layer base` so intentional utility classes on a link (text-link-foreground,
@@ -1484,9 +1592,10 @@ body {
 .workspace-shell-tab__surface::after {
   content: "";
   position: absolute;
-  inset-inline: 0;
+  inset-inline: var(--workspace-shell-tab-active-underline-size);
   bottom: 0;
   height: var(--workspace-shell-tab-active-underline-size);
+  border-radius: calc(var(--workspace-shell-tab-active-underline-size) / 2);
   background-color: var(--workspace-shell-tab-active-underline);
   opacity: 0;
   transition: opacity var(--duration-hover) var(--ease-standard);

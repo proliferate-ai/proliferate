@@ -10,7 +10,7 @@ import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new
 vi.mock("@proliferate/ui/icons", () => ({
   ChevronRight: () => <span data-icon="chevron" />,
   CloudIcon: () => <span data-icon="cloud" />,
-  FolderClosedFilled: () => <span data-icon="folder-closed" />,
+  FolderClosed: () => <span data-icon="folder-closed" />,
   FolderFilled: () => <span data-icon="folder-filled" />,
   FolderRemote: () => <span data-icon="folder-remote" />,
   MoreHorizontal: () => <span data-icon="more" />,

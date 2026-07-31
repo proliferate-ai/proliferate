@@ -1,8 +1,20 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
-import { getChatTabLabel, renderChatTabIcon } from "#product/components/workspace/shell/tabs/tab-rendering";
+import {
+  getChatTabLabel,
+  renderChatTabIcon,
+  renderChatTabStatusBadge,
+} from "#product/components/workspace/shell/tabs/tab-rendering";
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("getChatTabLabel", () => {
   it("uses only the generated agent name for delegated header tabs", () => {
@@ -50,5 +62,70 @@ describe("renderChatTabIcon", () => {
 
     expect(html).toContain("bg-muted");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
+  });
+});
+
+describe("renderChatTabStatusBadge", () => {
+  it("uses the breathe cell only for waiting-on-input state", () => {
+    const html = renderToStaticMarkup(renderChatTabStatusBadge({
+      id: "waiting-session",
+      viewState: "needs_input",
+      hasUnreadActivity: false,
+    }));
+
+    expect(html).toContain('data-variant="breathe"');
+    expect(html).toContain('aria-label="Waiting for input"');
+  });
+
+  it("keeps one randomized loader variant for a run and chooses again next run", () => {
+    vi.spyOn(Math, "random")
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.99);
+
+    const { container, rerender } = render(
+      <>
+        {renderChatTabStatusBadge({
+          id: "running-session",
+          viewState: "working",
+          hasUnreadActivity: false,
+        })}
+        {renderChatTabStatusBadge({
+          id: "running-session",
+          viewState: "working",
+          hasUnreadActivity: false,
+        })}
+      </>,
+    );
+    expect(
+      Array.from(container.querySelectorAll("[data-dot-cell-loader]"), (loader) => (
+        loader.getAttribute("data-variant")
+      )),
+    ).toEqual(["wave", "wave"]);
+    expect(Math.random).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <>{renderChatTabStatusBadge({
+        id: "running-session",
+        viewState: "working",
+        hasUnreadActivity: true,
+      })}</>,
+    );
+    expect(container.querySelector("[data-dot-cell-loader]")?.getAttribute("data-variant"))
+      .toBe("wave");
+
+    rerender(<>{renderChatTabStatusBadge({
+      id: "running-session",
+      viewState: "idle",
+      hasUnreadActivity: false,
+    })}</>);
+    rerender(
+      <>{renderChatTabStatusBadge({
+        id: "running-session",
+        viewState: "working",
+        hasUnreadActivity: false,
+      })}</>,
+    );
+    expect(container.querySelector("[data-dot-cell-loader]")?.getAttribute("data-variant"))
+      .toBe("helix");
   });
 });

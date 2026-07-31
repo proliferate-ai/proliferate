@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, FolderRemote, MoreHorizontal, Plus, Settings, Trash } from "@proliferate/ui/icons";
+import { ChevronRight, CloudIcon, FolderClosed, FolderFilled, FolderRemote, MoreHorizontal, Plus, Settings, Trash } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -326,7 +326,7 @@ function RepoGroupEnvironmentIcon({
     return <FolderRemote className="icon-paired shrink-0" />;
   }
 
-  const FolderIcon = expanded ? FolderFilled : FolderClosedFilled;
+  const FolderIcon = expanded ? FolderFilled : FolderClosed;
   return <FolderIcon className="icon-paired shrink-0" />;
 }
 

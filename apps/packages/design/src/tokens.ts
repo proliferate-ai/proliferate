@@ -27,6 +27,56 @@ export interface ThemeTokenValue {
 
 /** Final global CSS values, including all newly ruled canonical entries. */
 export const themeTokens = {
+  "--activity-dot-cell-breathe-cycle": {
+    dark: motion.cssMs(2200),
+    light: motion.cssMs(2200),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-helix-column-step": {
+    dark: motion.cssMs(470),
+    light: motion.cssMs(470),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-helix-cycle": {
+    dark: motion.cssMs(1400),
+    light: motion.cssMs(1400),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-helix-row-step": {
+    dark: motion.cssMs(160),
+    light: motion.cssMs(160),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-orbit-cycle": {
+    dark: motion.cssMs(1150),
+    light: motion.cssMs(1150),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-orbit-step": {
+    dark: motion.cssMs(140),
+    light: motion.cssMs(140),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-scan-cycle": {
+    dark: motion.cssMs(1300),
+    light: motion.cssMs(1300),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-scan-step": {
+    dark: motion.cssMs(160),
+    light: motion.cssMs(160),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-wave-cycle": {
+    dark: motion.cssMs(1700),
+    light: motion.cssMs(1700),
+    provenance: "[TABS:dot-cell-motion]",
+  },
+  "--activity-dot-cell-wave-step": {
+    dark: motion.cssMs(100),
+    light: motion.cssMs(100),
+    provenance: "[TABS:dot-cell-motion]",
+  },
   "--activity-stream-reveal-fade": {
     dark: motion.cssMs(motion.activity.streamRevealFadeMs),
     light: motion.cssMs(motion.activity.streamRevealFadeMs),
@@ -580,6 +630,26 @@ export const themeTokens = {
     dark: "rgba(127, 193, 255, 0.747)",
     light: "var(--color-ring)",
     provenance: "[SHIPPED]",
+  },
+  "--color-sidebar-status-error": {
+    dark: "rgb(255 100 89)",
+    light: "rgb(255 100 89)",
+    provenance: "[SIDEBAR:status-system]",
+  },
+  "--color-sidebar-status-unseen": {
+    dark: "rgb(108 184 255)",
+    light: "rgb(108 184 255)",
+    provenance: "[SIDEBAR:status-system]",
+  },
+  "--color-sidebar-status-waiting": {
+    dark: "rgb(255 180 50)",
+    light: "rgb(255 180 50)",
+    provenance: "[SIDEBAR:status-system]",
+  },
+  "--color-sidebar-status-worktree": {
+    dark: "rgb(173 123 249)",
+    light: "rgb(173 123 249)",
+    provenance: "[SIDEBAR:status-system]",
   },
   "--color-special": {
     dark: "#339cff",
@@ -1549,14 +1619,14 @@ export const themeTokens = {
     provenance: "[RETUNE:header/unboxed-tabs]",
   },
   "--workspace-shell-tab-active-underline": {
-    dark: "var(--color-foreground)",
-    light: "var(--color-foreground)",
-    provenance: "[RETUNE:header/unboxed-tabs]",
+    dark: "rgb(255 255 255)",
+    light: "rgb(255 255 255)",
+    provenance: "[TABS:active-underline]",
   },
   "--workspace-shell-tab-active-underline-size": {
-    dark: "1px",
-    light: "1px",
-    provenance: "[RETUNE:header/unboxed-tabs]",
+    dark: "2px",
+    light: "2px",
+    provenance: "[TABS:active-underline]",
   },
   "--workspace-shell-tab-close-collapse": {
     dark: "tab-close-collapse var(--duration-enter) var(--ease-out-quint) both",
@@ -1564,9 +1634,9 @@ export const themeTokens = {
     provenance: "[RETUNE:header/tab-close-slide]",
   },
   "--workspace-shell-tab-content-gap": {
-    dark: "0.5rem",
-    light: "0.5rem",
-    provenance: "[SHIPPED]",
+    dark: "0.4375rem",
+    light: "0.4375rem",
+    provenance: "[TABS:activity-gap]",
   },
   "--workspace-shell-tab-height": {
     dark: "1.75rem",

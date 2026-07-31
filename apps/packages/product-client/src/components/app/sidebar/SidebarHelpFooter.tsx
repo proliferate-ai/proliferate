@@ -1,6 +1,6 @@
-import { CircleHelp } from "lucide-react";
+import { CircleQuestion } from "@proliferate/ui/icons";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
@@ -14,9 +14,7 @@ import { useSupportMenuAction } from "#product/hooks/support/derived/use-support
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
- * Help/support owns its own compact footer trigger and popover. Its 28px box
- * and compact glyph tier are the footprint the update affordance next to it
- * copies exactly, so the footer reads as one row of same-sized controls.
+ * Help/support owns the footer's right-hand icon button and its popover.
  */
 export function SidebarHelpFooter() {
   const { openExternal } = useProductHost().links;
@@ -42,16 +40,16 @@ export function SidebarHelpFooter() {
       side="top"
       offset={8}
       trigger={(
-        <Button
+        <IconButton
           type="button"
-          variant="unstyled"
-          size="unstyled"
+          tone="sidebar"
+          size="md"
           aria-label="Open help menu"
           title="Help and support"
-          className="size-7 rounded-md text-sidebar-muted-foreground hover:bg-hover active:bg-active hover:text-sidebar-foreground data-[state=open]:bg-active data-[state=open]:text-sidebar-foreground"
+          className="rounded-md data-[state=open]:bg-active data-[state=open]:text-sidebar-foreground"
         >
-          <CircleHelp className="icon-compact" />
-        </Button>
+          <CircleQuestion className="icon-paired" />
+        </IconButton>
       )}
       className={`w-64 ${POPOVER_SURFACE_CLASS}`}
     >

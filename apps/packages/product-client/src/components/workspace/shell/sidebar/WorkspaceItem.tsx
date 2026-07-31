@@ -1,24 +1,22 @@
 import { useState } from "react";
-import {
-  CLOUD_SIDEBAR_STATUS_DEFINITIONS,
-  type CloudSidebarStatus,
-} from "#product/config/cloud-sidebar";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   Archive,
+  CloudIcon,
   Folder,
   GitBranchIcon,
   GitPullRequest,
   Pencil,
   Trash,
 } from "@proliferate/ui/icons";
+import { GitBranch } from "lucide-react";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
-  SidebarDetailIndicator,
   SidebarIndicatorAction,
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
@@ -32,9 +30,7 @@ import {
   sidebarGitGlyphForStatus,
 } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { formatSidebarRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import {
-  SidebarDetailIndicatorsView,
   SidebarStatusIndicatorView,
 } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
@@ -55,7 +51,6 @@ interface WorkspaceItemProps {
   hasDisplayNameOverride?: boolean;
   subtitle?: string | null;
   variant?: SidebarWorkspaceVariant;
-  cloudStatus?: CloudSidebarStatus | null;
   active?: boolean;
   archived?: boolean;
   /**
@@ -64,24 +59,17 @@ interface WorkspaceItemProps {
    * per the row's trailing-cell precedence, and it beats the unread dot.
    */
   statusIndicator?: SidebarStatusIndicator | null;
-  detailIndicators?: SidebarDetailIndicator[];
   shortcutLabel?: string | null;
   shortcutRevealVisible?: boolean;
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
   /**
-   * Last interaction timestamp for this workspace. Rendered as a relative
-   * timestamp in the trailing label cell; trumped by trailingStatus
-   * (spinner/error) and unreadDot per ProductSidebarWorkspaceRow's precedence.
-   */
-  lastInteracted?: string | null;
-  /**
-   * Composed git/PR status. Drives the compact right-side git glyph and tone,
+   * Composed git/PR status. Drives the left trailing identity glyph and tone,
    * its tooltip, and the "Open pull request" menu item. Rows without a real
-   * PR omit the glyph, so missing git data degrades gracefully.
+   * PR fall back to worktree/cloud identity when applicable.
    */
   gitStatus?: WorkspaceGitStatus | null;
-  /** Renders the trailing unseen-activity dot (§3.4, codex pattern). */
+  /** Renders the trailing unseen-activity dot. */
   needsReview?: boolean;
   onSelect?: () => void;
   /** Opens the PR URL externally; enables the "Open pull request" menu item. */
@@ -112,15 +100,12 @@ export function WorkspaceItem({
   hasDisplayNameOverride = false,
   subtitle: _subtitle,
   variant = "local",
-  cloudStatus = null,
   active = false,
   archived = false,
   statusIndicator = null,
-  detailIndicators = [],
   shortcutLabel = null,
   shortcutRevealVisible = false,
   branchName = null,
-  lastInteracted = null,
   gitStatus = null,
   needsReview = false,
   onSelect,
@@ -138,14 +123,6 @@ export function WorkspaceItem({
   onRename,
 }: WorkspaceItemProps) {
   const hasArchiveAction = !!(onArchive || onUnarchive);
-  // Suppress the "ready" status badge — the cloud variant icon already
-  // conveys "this is a cloud workspace". Non-ready statuses (queued,
-  // provisioning, syncing, cloning, starting, stopped, error) still show
-  // because they carry information the icon doesn't.
-  const cloudStatusDefinition =
-    variant === "cloud" && cloudStatus && cloudStatus !== "ready"
-      ? CLOUD_SIDEBAR_STATUS_DEFINITIONS[cloudStatus]
-      : null;
   const [renameOpen, setRenameOpen] = useState(false);
   const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const handleRenameCommand = () => setRenameOpen(true);
@@ -159,27 +136,7 @@ export function WorkspaceItem({
   const gitDetail = gitGlyph && prStatusView
     ? <SidebarWorkspaceGitGlyph glyph={gitGlyph} status={prStatusView} />
     : null;
-  const detail = detailIndicators.length > 0 || cloudStatusDefinition || gitDetail ? (
-    <>
-      <SidebarDetailIndicatorsView
-        indicators={detailIndicators}
-        archived={archived}
-        onAction={onIndicatorAction}
-      />
-      {cloudStatusDefinition && (
-        <span className="flex shrink-0 items-center gap-1">
-          <span
-            aria-hidden="true"
-            className={`size-1.5 shrink-0 rounded-full ${cloudStatusDefinition.dotClassName}`}
-          />
-          <span className={`text-ui-sm ${cloudStatusDefinition.textClassName}`}>
-            {cloudStatusDefinition.label}
-          </span>
-        </span>
-      )}
-      {gitDetail}
-    </>
-  ) : null;
+  const trailingIdentity = gitDetail ?? workspaceVariantIdentity(variant);
   const pullRequestUrl = gitStatus?.pr?.url ?? null;
   const pullRequestNumber = gitStatus?.pr?.number ?? null;
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
@@ -237,13 +194,6 @@ export function WorkspaceItem({
     />
   ) : null;
 
-  // Git/PR state lives in the right-side detail cluster, matching the
-  // compact row treatment and keeping the left edge free of stacked glyphs.
-  // Activity indicators live in the row's RIGHT slot (trailingStatus).
-  // Relative timestamp (trailingLabel) is also in the RIGHT slot, with lower
-  // precedence than trailingStatus and unreadDot.
-  const timestampLabel = lastInteracted ? formatSidebarRelativeTime(lastInteracted) : null;
-
   const row = (
     <ProductSidebarWorkspaceRow
       active={active}
@@ -254,9 +204,8 @@ export function WorkspaceItem({
           onAction={onIndicatorAction}
         />
       ) : null}
-      trailingLabel={timestampLabel}
+      trailingIdentity={trailingIdentity}
       label={name}
-      detail={detail}
       unreadDot={needsReview}
       shortcutLabel={shortcutLabel}
       shortcutRevealVisible={shortcutRevealVisible}
@@ -434,4 +383,29 @@ export function WorkspaceItem({
       trigger={<div>{contextMenu}</div>}
     />
   );
+}
+
+function workspaceVariantIdentity(variant: SidebarWorkspaceVariant) {
+  if (variant === "worktree") {
+    return (
+      <Tooltip content="Worktree" className="inline-flex shrink-0 items-center justify-center">
+        <span role="img" aria-label="Worktree">
+          <GitBranch
+            className="icon-indicator text-sidebar-status-worktree [font-size:var(--text-sidebar-row)]"
+            strokeWidth={1.75}
+          />
+        </span>
+      </Tooltip>
+    );
+  }
+  if (variant === "cloud") {
+    return (
+      <Tooltip content="Cloud workspace" className="inline-flex shrink-0 items-center justify-center">
+        <span role="img" aria-label="Cloud workspace">
+          <CloudIcon className="icon-indicator text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)]" />
+        </span>
+      </Tooltip>
+    );
+  }
+  return null;
 }
