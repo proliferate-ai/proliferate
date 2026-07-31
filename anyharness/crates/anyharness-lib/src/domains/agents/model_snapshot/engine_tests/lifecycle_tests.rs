@@ -375,6 +375,65 @@ async fn only_one_runtime_owns_the_probe_engine_for_a_home() {
     );
 }
 
+/// **Proof B7 (re-acquisition).** Losing the startup lock race is per-attempt,
+/// not for life. While the owner lives, the loser's forced refresh is the typed
+/// refusal and retrying never steals the lock; the moment the owner is gone
+/// (`drop` here — a killed process gets the same flock release from the OS),
+/// the loser's next trigger acquires the lock, runs the owner's orphan sweep,
+/// and probes. No restart required.
+///
+/// The wedge this pins: a sidecar orphaned by a dead desktop app held the lock,
+/// so the next app launch's runtime booted read-only and every manual refresh
+/// answered 409 ("this runtime does not hold the probe-engine lock") for the
+/// rest of its life — even after the orphan was killed and the lock was free.
+#[tokio::test]
+async fn a_read_only_engine_reacquires_the_lock_once_the_owner_exits() {
+    let home = seeded_home("engine-lock-reacquire", "opencode");
+    let (owner, _owner_runner, _owner_plan) = engine(&home, "opencode", test_config());
+    assert_eq!(owner.mode(), ProbeEngineMode::Owner);
+
+    let (second, second_runner, _second_plan) = engine(&home, "opencode", test_config());
+    assert_eq!(second.mode(), ProbeEngineMode::ReadOnly);
+
+    // The two-live-runtimes ruling is untouched: the retry loses while the
+    // owner holds the lock, and the refusal keeps its typed code.
+    let refused = second
+        .refresh_now("opencode")
+        .await
+        .expect_err("the owner is alive, so the retry must lose");
+    assert!(matches!(refused, RefreshError::NotOwner));
+    assert_eq!(second.mode(), ProbeEngineMode::ReadOnly);
+
+    // An abandoned root from a long-dead pid, so the sweep leg of late
+    // acquisition is observable (same fixture shape as the construction sweep).
+    let abandoned = home
+        .path()
+        .join("agent-auth-probe")
+        .join(format!("codex-{}-1", 999_999));
+    std::fs::create_dir_all(&abandoned).expect("create abandoned root");
+
+    drop(owner);
+
+    // The next forced refresh self-heals: acquires the lock, sweeps, probes.
+    second
+        .refresh_now("opencode")
+        .await
+        .expect("the refresh must succeed once the lock is free");
+    assert_eq!(
+        second.mode(),
+        ProbeEngineMode::Owner,
+        "ownership must follow the lock's availability"
+    );
+    assert!(
+        second_runner.count() >= 1,
+        "the once-read-only engine must actually probe"
+    );
+    assert!(
+        !abandoned.exists(),
+        "late acquisition must run the owner's orphan sweep"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Poke fan-out
 // ---------------------------------------------------------------------------

@@ -161,7 +161,14 @@ impl Drop for LiveStateGuard {
 pub struct ModelSnapshotService {
     runtime_home: PathBuf,
     /// `None` ⇒ read-only mode: serve the document, never probe, never sweep.
-    engine_lock: Option<lock::ProbeEngineLock>,
+    ///
+    /// Re-acquirable, not a boot-time verdict: every poke and forced refresh
+    /// retries the lock when this is `None` (see [`Self::ensure_owner`]). A
+    /// runtime that lost the startup race to a process that later exited —
+    /// a dev sidecar quit, or a sidecar orphaned by a dead desktop app —
+    /// must not stay read-only for its whole life when the lock is free; that
+    /// wedge made every manual refresh 409 until a full app restart.
+    engine_lock: Mutex<Option<lock::ProbeEngineLock>>,
     slots: Mutex<HashMap<String, Arc<HarnessSlot>>>,
     probe_semaphore: Arc<tokio::sync::Semaphore>,
     plan_producer: Arc<dyn GatewayModelResolve>,
@@ -195,7 +202,7 @@ impl ModelSnapshotService {
         let engine_lock = lock::ProbeEngineLock::try_acquire(&runtime_home);
         let service = Self {
             runtime_home,
-            engine_lock,
+            engine_lock: Mutex::new(engine_lock),
             slots: Mutex::new(HashMap::new()),
             probe_semaphore: Arc::new(tokio::sync::Semaphore::new(
                 config.max_concurrent_probes.max(1),
@@ -229,14 +236,58 @@ impl ModelSnapshotService {
     }
 
     pub fn mode(&self) -> ProbeEngineMode {
-        match self.engine_lock {
-            Some(_) => ProbeEngineMode::Owner,
-            None => ProbeEngineMode::ReadOnly,
+        match self.is_owner() {
+            true => ProbeEngineMode::Owner,
+            false => ProbeEngineMode::ReadOnly,
         }
     }
 
     fn is_owner(&self) -> bool {
-        self.engine_lock.is_some()
+        self.engine_lock
+            .lock()
+            .expect("probe engine lock slot poisoned")
+            .is_some()
+    }
+
+    /// Own the probe engine, acquiring the lock now if this runtime does not
+    /// hold it yet.
+    ///
+    /// The startup acquisition is a race, not a verdict: the loser stays fully
+    /// functional except for probing, and the winner can exit at any time (a
+    /// dev sidecar shut down, a sidecar orphaned by a crashed desktop app and
+    /// later killed). Retrying at every probe entry point means ownership
+    /// follows the lock's actual availability instead of freezing the
+    /// boot-time outcome — the read-only runtime self-heals on its next poke
+    /// or manual refresh rather than 409ing until a restart.
+    ///
+    /// Late acquisition runs the same orphan sweep construction runs, because
+    /// the sweep is an owner duty ("at engine construction the OWNER sweeps"):
+    /// a previous owner may have died mid-probe, and its abandoned scratch —
+    /// which can hold a copy of real credential material — now has no other
+    /// process left to reclaim it. The slot mutex is released first:
+    /// `sweep_orphan_scratch` re-checks `is_owner`, which takes the same lock.
+    fn ensure_owner(&self) -> bool {
+        {
+            let mut slot = self
+                .engine_lock
+                .lock()
+                .expect("probe engine lock slot poisoned");
+            if slot.is_some() {
+                return true;
+            }
+            match lock::ProbeEngineLock::try_acquire(&self.runtime_home) {
+                Some(acquired) => {
+                    tracing::info!(
+                        path = %acquired.path().display(),
+                        "acquired the probe-engine lock after startup; this runtime now owns the probe engine"
+                    );
+                    *slot = Some(acquired);
+                }
+                None => return false,
+            }
+        }
+        self.sweep_orphan_scratch();
+        true
     }
 
     /// Reclaim scratch roots abandoned by a process that died without running any
@@ -270,7 +321,7 @@ impl ModelSnapshotService {
     /// whether to probe, because the comparison machinery cost more in complexity
     /// than the handful of background spawns it saved.
     pub fn poke_all(self: Arc<Self>, reason: PokeReason) {
-        if !self.is_owner() {
+        if !self.ensure_owner() {
             return;
         }
         for harness in self.targets.auto_harnesses() {
@@ -288,7 +339,7 @@ impl ModelSnapshotService {
     /// enumeration, so the pokes that name a harness directly bypassed it and
     /// spawned `cursor-agent` unattended.
     pub fn poke_harness(self: Arc<Self>, harness_kind: &str, reason: PokeReason) {
-        if !self.is_owner() {
+        if !self.ensure_owner() {
             return;
         }
         if !reason.is_user_initiated() && !self.targets.allows_automatic_probe(harness_kind) {
@@ -346,7 +397,7 @@ impl ModelSnapshotService {
 
     /// Poke exactly the harnesses an applied auth document names.
     pub fn poke_harnesses(self: Arc<Self>, harness_kinds: &[String], reason: PokeReason) {
-        if !self.is_owner() {
+        if !self.ensure_owner() {
             return;
         }
         for harness in harness_kinds {
@@ -404,7 +455,7 @@ impl ModelSnapshotService {
         &self,
         harness_kind: &str,
     ) -> Result<ModelSnapshotDocument, RefreshError> {
-        if !self.is_owner() {
+        if !self.ensure_owner() {
             return Err(RefreshError::NotOwner);
         }
         if !self.targets.is_installed(harness_kind) {

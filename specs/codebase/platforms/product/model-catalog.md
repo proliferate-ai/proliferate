@@ -275,7 +275,10 @@ protect live sessions and the machine, not staleness bookkeeping:
 - **One engine per runtime home.** The engine holds an advisory exclusive
   lock; a second runtime sharing the home degrades to read-only — serves the
   document and status, neither probes nor sweeps, and refuses a forced
-  refresh rather than silently ignoring it.
+  refresh rather than silently ignoring it. Read-only is per-attempt, not
+  for life: every poke and forced refresh retries the acquisition, so once
+  the owner exits the surviving runtime takes the lock (and runs the owner's
+  orphan sweep) instead of refusing refreshes until a restart.
 - **Cursor is manual-refresh only.** Its credential lives in the macOS
   keychain, so an unattended spawn can surface an OS keychain prompt with no
   user-visible cause. Every other harness probes under the events above;

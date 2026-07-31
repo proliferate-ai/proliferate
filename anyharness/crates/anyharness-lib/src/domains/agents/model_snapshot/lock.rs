@@ -14,6 +14,12 @@
 //! nothing durable — a later poke on the owner restores it — while a runtime that
 //! WAITED for the lock would hold a startup task forever.
 //!
+//! Degrading is per-attempt, not for life: the loser retries this acquisition on
+//! every later poke and forced refresh (`ModelSnapshotService::ensure_owner`), so
+//! when the owner exits — or dies and the OS releases its flock — the surviving
+//! runtime becomes the owner on its next probe trigger instead of refusing
+//! refreshes until a restart.
+//!
 //! A crash releases the lock via the OS, which is why this is an flock and not a
 //! pid file.
 
