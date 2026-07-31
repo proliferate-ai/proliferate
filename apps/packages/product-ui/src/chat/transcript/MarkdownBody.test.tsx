@@ -10,6 +10,7 @@ import {
   MarkdownBody,
   type MarkdownLinkRenderInput,
 } from "./MarkdownBody";
+import { CHAT_TRANSCRIPT_LINK_CLASS } from "./TranscriptLinkStyles";
 
 const COMPLETE_MARKDOWN = `# Heading one
 
@@ -124,7 +125,10 @@ describe("MarkdownBody presentation", () => {
   it("uses the shared stable-color, hover-underline treatment for web links", () => {
     const html = renderMarkdown("Open [docs](https://example.com/docs).");
 
-    expect(html).toContain("text-link-foreground no-underline hover:text-link-foreground hover:underline");
+    // The shared constant itself, not a copy: the property under test is that
+    // the anchor wears the one shared treatment, so a retune of that treatment
+    // must not fail here — only the anchor abandoning it should.
+    expect(html).toContain(CHAT_TRANSCRIPT_LINK_CLASS);
     expect(html).not.toContain("hover:text-foreground");
   });
 });
