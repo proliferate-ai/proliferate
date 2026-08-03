@@ -10,9 +10,7 @@ import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/wo
 import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
-import type { CloudSidebarStatus } from "#product/config/cloud-sidebar";
 import type {
-  SidebarDetailIndicator,
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
@@ -130,8 +128,6 @@ interface SidebarFixtureRow {
   variant: SidebarWorkspaceVariant;
   gitStatus?: WorkspaceGitStatus | null;
   statusIndicator?: SidebarStatusIndicator | null;
-  detailIndicators?: SidebarDetailIndicator[];
-  cloudStatus?: CloudSidebarStatus | null;
   needsReview?: boolean;
   archived?: boolean;
   lastInteracted?: string | null;
@@ -246,32 +242,25 @@ const SIDEBAR_FIXTURE_GROUPS: SidebarFixtureGroup[] = [
       {
         name: "Nightly triage",
         variant: "cloud",
-        cloudStatus: "ready",
         gitStatus: makeGitStatus({
           pr: { state: "open", number: 820, url: "https://github.com/acme/repo/pull/820", checks: "passing", reviewDecision: "none" },
         }),
-        detailIndicators: [
-          { kind: "automation", tooltip: "Started by the nightly triage workflow" },
-        ],
         statusIndicator: { kind: "iterating", tooltip: "Agent is working" },
       },
       {
         name: "Provisioning box",
         variant: "cloud",
-        cloudStatus: "materializing",
         gitStatus: null,
       },
       {
         name: "Queued clone",
         variant: "cloud",
-        cloudStatus: "pending",
         gitStatus: null,
         statusIndicator: { kind: "waiting_plan", tooltip: "Waiting for plan approval" },
       },
       {
         name: "Boot failed",
         variant: "cloud",
-        cloudStatus: "error",
         gitStatus: null,
         needsReview: true,
       },

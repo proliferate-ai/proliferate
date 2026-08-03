@@ -4,11 +4,9 @@ import type {
   CloudWorkspaceOriginContext,
   CloudWorkspaceRepoRef,
   CloudWorkspaceRuntimeSummary,
-  CloudWorkspaceStatus,
   CloudWorkspaceSummary,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
-export type SidebarCloudWorkspaceStatus = CloudWorkspaceStatus;
 export type SidebarCloudRuntimeStatus = CloudRuntimeStatus;
 export type SidebarCloudWorkspaceRepoRef = CloudWorkspaceRepoRef;
 export type SidebarCloudWorkspaceOriginContext = CloudWorkspaceOriginContext | null | undefined;

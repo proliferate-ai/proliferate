@@ -8,20 +8,16 @@ import {
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { humanizeBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
 import { workspaceDefaultDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
-import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
-import type { SidebarCloudWorkspaceStatus } from "#product/lib/domain/workspaces/sidebar/cloud-workspace";
 import { cloudSidebarEntryDefaultDisplayName } from "#product/lib/domain/workspaces/sidebar/sidebar-entries";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
 import {
   activeWorkspaceActivity,
-  logicalWorkspaceSshTargetId,
   sidebarStatusIndicatorFromActivity,
   sidebarWorkspaceVariantForLogicalWorkspace,
   worktreeMissingStatusIndicator,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { detailIndicatorsForWorkspace } from "#product/lib/domain/workspaces/sidebar/sidebar-detail-indicators";
 import { isWorkspaceNeedsReview } from "#product/lib/domain/workspaces/sidebar/sidebar-review";
 import { logicalWorkspaceHasUnreadSessionActivity } from "#product/lib/domain/workspaces/sidebar/workspace-activity-indicator";
 import { workspaceCopyMetadataForLogicalWorkspace } from "#product/lib/domain/workspaces/workspace-copy-metadata";
@@ -54,7 +50,6 @@ export function buildSidebarWorkspaceItems(args: {
   sessionWorkspaceIds?: Record<string, string | null>;
   sessionLastInteracted?: Record<string, string>;
   sessionLastViewedAt?: Record<string, string>;
-  targetAppearanceById?: Record<string, ComputeTargetAppearance>;
   suppressActiveNeedsReview?: boolean;
   /** This Mac's native desktop worker install id (PR 5), used to resolve the
    * workspace-copy availability commands. Null on Web / no worker. */
@@ -141,8 +136,7 @@ function buildSidebarWorkspaceItem(
     sessionWorkspaceIds?: Record<string, string | null>;
     sessionLastInteracted?: Record<string, string>;
     sessionLastViewedAt?: Record<string, string>;
-    targetAppearanceById?: Record<string, ComputeTargetAppearance>;
-    suppressActiveNeedsReview?: boolean;
+      suppressActiveNeedsReview?: boolean;
     desktopInstallId?: string | null;
     linkCandidateCloudWorkspaceIds: ReadonlySet<string>;
   },
@@ -196,10 +190,6 @@ function buildSidebarWorkspaceItem(
       }));
   const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
   const copyMetadata = workspaceCopyMetadataForLogicalWorkspace(entry);
-  const sshTargetId = variant === "ssh" ? logicalWorkspaceSshTargetId(entry) : null;
-  const targetAppearance = sshTargetId
-    ? args.targetAppearanceById?.[sshTargetId] ?? null
-    : null;
 
   // Workspace-copy availability commands (PR 5). A logical workspace that has
   // both a local and a Cloud side without an explicit materialization for this
@@ -254,14 +244,6 @@ function buildSidebarWorkspaceItem(
           pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
           errorAction: { kind: "open_workspace", workspaceId: entry.id },
         }),
-      detailIndicators: detailIndicatorsForWorkspace(
-        entry,
-        variant,
-        targetAppearance,
-      ),
-      cloudStatus: preferredCloudWorkspace
-        ? preferredCloudWorkspace.status as SidebarCloudWorkspaceStatus
-        : null,
       lastInteracted,
       needsReview,
       workspaceLocationCopyLabel: copyMetadata.workspaceLocation?.menuLabel ?? null,

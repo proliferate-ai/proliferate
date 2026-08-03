@@ -1,11 +1,7 @@
 import type { Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceRepoTarget } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import type { SidebarCloudWorkspaceSummary } from "#product/lib/domain/workspaces/sidebar/cloud-workspace";
 import type {
-  SidebarCloudWorkspaceStatus,
-  SidebarCloudWorkspaceSummary,
-} from "#product/lib/domain/workspaces/sidebar/cloud-workspace";
-import type {
-  SidebarDetailIndicator,
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
@@ -80,8 +76,6 @@ export interface SidebarWorkspaceItemState {
   archived: boolean;
   variant: SidebarWorkspaceVariant;
   statusIndicator: SidebarStatusIndicator | null;
-  detailIndicators: SidebarDetailIndicator[];
-  cloudStatus: SidebarCloudWorkspaceStatus | null;
   lastInteracted: string | null;
   needsReview: boolean;
   workspaceLocationCopyLabel: string | null;

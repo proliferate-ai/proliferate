@@ -3,7 +3,6 @@ import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurem
 import { isMainThreadMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
-import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
 import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { isCloudWorkspacePending } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
@@ -49,38 +48,6 @@ export type SidebarStatusIndicator =
   }
   | {
     kind: "queued_prompt";
-    tooltip: string;
-  };
-
-export type SidebarDetailIndicator =
-  | {
-    kind: "automation";
-    tooltip: string;
-    action?: SidebarIndicatorAction | null;
-  }
-  | {
-    kind: "agent";
-    tooltip: string;
-    action?: SidebarIndicatorAction | null;
-  }
-  | {
-    kind: "materialization";
-    variant: SidebarWorkspaceVariant;
-    tooltip: string;
-    targetAppearance?: ComputeTargetAppearance | null;
-  }
-  | {
-    kind: "cloud_access";
-    tone: "neutral" | "success" | "warning" | "muted";
-    tooltip: string;
-  }
-  | {
-    kind: "cloud_exposure";
-    tone: "neutral" | "success" | "warning" | "muted";
-    tooltip: string;
-  }
-  | {
-    kind: "origin";
     tooltip: string;
   };
 

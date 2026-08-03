@@ -5,7 +5,6 @@ import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logi
 import { repoRootGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { parseLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
-import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type {
   SidebarGroupState,
@@ -93,7 +92,6 @@ export function buildSidebarGroupStates(args: {
   sessionWorkspaceIds?: Record<string, string | null>;
   sessionLastInteracted?: Record<string, string>;
   sessionLastViewedAt?: Record<string, string>;
-  targetAppearanceById?: Record<string, ComputeTargetAppearance>;
   suppressActiveNeedsReview?: boolean;
   desktopInstallId?: string | null;
 }): SidebarGroupState[] {
@@ -175,7 +173,6 @@ export function buildSidebarGroupStates(args: {
         sessionWorkspaceIds: args.sessionWorkspaceIds,
         sessionLastInteracted: args.sessionLastInteracted,
         sessionLastViewedAt: args.sessionLastViewedAt,
-        targetAppearanceById: args.targetAppearanceById,
         suppressActiveNeedsReview: args.suppressActiveNeedsReview,
         desktopInstallId: args.desktopInstallId,
       });
