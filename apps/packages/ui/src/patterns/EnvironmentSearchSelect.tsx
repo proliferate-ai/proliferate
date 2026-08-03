@@ -27,6 +27,13 @@ interface EnvironmentSearchSelectProps {
   closeOnSelect?: boolean;
   leading?: ReactNode;
   disabled?: boolean;
+  /**
+   * Controlled open state, forwarded to the underlying `PopoverButton`.
+   * Without it the menu is only reachable by a real click, so the open state
+   * cannot be driven from a test or a static capture.
+   */
+  externalOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function EnvironmentSearchSelect({
@@ -39,6 +46,8 @@ export function EnvironmentSearchSelect({
   closeOnSelect = true,
   leading,
   disabled = false,
+  externalOpen,
+  onOpenChange,
 }: EnvironmentSearchSelectProps) {
   const [searchValue, setSearchValue] = useState("");
   const filteredOptions = useMemo(() => (
@@ -51,6 +60,8 @@ export function EnvironmentSearchSelect({
   return (
     <PopoverButton
       align="start"
+      externalOpen={externalOpen}
+      onOpenChange={onOpenChange}
       trigger={(
         <Button
           type="button"

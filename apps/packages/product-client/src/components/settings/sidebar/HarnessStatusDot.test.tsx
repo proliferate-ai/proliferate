@@ -43,7 +43,7 @@ describe("HarnessStatusDot", () => {
 
   it("still flags a harness whose credentials are genuinely missing", () => {
     const warning = dot(agent({ credentialState: "login_required", readiness: "login_required" }));
-    expect(warning?.className).toContain("bg-warning");
+    expect(warning?.className).toContain("bg-warning-foreground");
   });
 
   it("still flags a failed install as an error", () => {

@@ -13,10 +13,15 @@
 @source "../../../product-surfaces/src";
 @source "../../../product-client/src";
 
-/* -- Geist font loading (kept for fallback / mono) -- */
+/* -- Geist font loading (kept for fallback / mono) --
+   Relative to the EMITTED stylesheet (dist/css/product.css); `copy-css.mjs`
+   places the woff2s in dist/fonts/. These were absolute `/node_modules/…`
+   URLs, which only resolve when a dev server serves node_modules — every
+   other bundler or deploy target got a dangling rule and fell back to a
+   system mono font. Keep these paths in step with copy-css.mjs. */
 @font-face {
   font-family: "Geist";
-  src: url("/node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2") format("woff2");
+  src: url("../fonts/Geist-Variable.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -24,7 +29,7 @@
 
 @font-face {
   font-family: "Geist Mono";
-  src: url("/node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2") format("woff2");
+  src: url("../fonts/GeistMono-Variable.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;

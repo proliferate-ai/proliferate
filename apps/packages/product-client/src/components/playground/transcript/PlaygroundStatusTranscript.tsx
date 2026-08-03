@@ -277,7 +277,7 @@ function LiveStreamPreview() {
 
 function WarningNotice({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-chat text-warning-foreground">
+    <div className="rounded-lg border border-warning-border bg-warning-subtle px-3 py-2 text-chat text-warning-foreground">
       <div className="flex items-center gap-2 font-medium">
         <CircleAlert className="text-chat icon-paired" />
         <span>{title}</span>

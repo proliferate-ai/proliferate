@@ -103,8 +103,10 @@ export function composerIntegrationHealthDot(
   switch (health) {
     case "ready":
       return { className: "bg-success", label: "Connected" };
+    // The ink token, not `bg-warning`: that is a 15%-alpha FILL, so an 8px dot
+    // filled with it is invisible beside its opaque `bg-success` siblings.
     case "needs_reauth":
-      return { className: "bg-warning", label: "Needs re-authentication" };
+      return { className: "bg-warning-foreground", label: "Needs re-authentication" };
     case "error":
       return { className: "bg-destructive", label: "Error" };
     case "needs_auth":

@@ -57,7 +57,7 @@ export function ComposerIntegrationsControl() {
             isUrgent ? (
               <span
                 aria-hidden="true"
-                className="block icon-status rounded-full bg-warning/70"
+                className="block icon-status rounded-full bg-warning-foreground"
               />
             ) : (
               // Reference: the sidebar's own "Connections" entry (the

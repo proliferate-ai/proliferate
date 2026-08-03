@@ -40,7 +40,7 @@ function statusToneClass(
 ): string {
   switch (indicator.tone) {
     case "attention":
-      return surface === "sidebar" ? "text-sidebar-muted-foreground" : "text-warning";
+      return surface === "sidebar" ? "text-sidebar-muted-foreground" : "text-warning-foreground";
     case "progress":
       return "text-info";
     case "success":

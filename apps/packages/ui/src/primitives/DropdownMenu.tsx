@@ -247,14 +247,19 @@ function DropdownMenuSubContent({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
   return (
-    <DropdownMenuPrimitive.SubContent
-      data-slot="dropdown-menu-sub-content"
-      className={cn(
-        `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
-        className,
-      )}
-      {...props}
-    />
+    // Portalled for the same reason `DropdownMenuContent` is: the parent
+    // content is `overflow-hidden`, so an in-tree submenu panel gets clipped
+    // away instead of overflowing its parent.
+    <DropdownMenuPrimitive.Portal>
+      <DropdownMenuPrimitive.SubContent
+        data-slot="dropdown-menu-sub-content"
+        className={cn(
+          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
+          className,
+        )}
+        {...props}
+      />
+    </DropdownMenuPrimitive.Portal>
   );
 }
 

@@ -32,7 +32,9 @@ export function HarnessStatusDot({ agent }: HarnessStatusDotProps) {
   if (agent.installState === "failed") {
     colorClass = "bg-destructive";
   } else if (agent.credentialState === "login_required" || agent.credentialState === "missing_env") {
-    colorClass = "bg-warning";
+    // The ink token, not `bg-warning`: that is a 15%-alpha FILL, so an 8px dot
+    // filled with it is invisible beside its opaque `bg-destructive` sibling.
+    colorClass = "bg-warning-foreground";
   } else {
     // unknown or other states → red
     colorClass = "bg-destructive";

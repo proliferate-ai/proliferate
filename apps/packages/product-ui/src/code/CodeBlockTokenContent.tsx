@@ -49,11 +49,16 @@ export function CodeBlockTokenContent({
   return (
     <code className={`block whitespace-pre font-mono ${className}`}>
       {lines.map((tokens, index) => (
+        // `block` is load-bearing: shiki's tokens carry no trailing newline and
+        // `CodeTokenLine` emits a bare inline <span>, so without it every line
+        // of a highlighted block runs onto one line. The gutter branch above
+        // gets its line breaks from the table rows instead.
         <CodeTokenLine
           key={index}
           tokens={tokens}
           lineIndex={index}
           renderToken={renderToken}
+          className="block"
         />
       ))}
     </code>

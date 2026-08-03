@@ -119,7 +119,7 @@ export function ConnectServerDialog({ controller, context }: ConnectServerDialog
             </p>
           )}
           {versionWarning ? (
-            <p className="text-ui-sm text-warning">{versionWarning}</p>
+            <p className="text-ui-sm text-warning-foreground">{versionWarning}</p>
           ) : null}
           {error && <p className="text-ui text-destructive">{error}</p>}
         </div>
