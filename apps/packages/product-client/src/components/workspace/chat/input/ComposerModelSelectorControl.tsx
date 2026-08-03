@@ -77,7 +77,7 @@ export function ComposerModelSelectorControl({
     setPickerOpen(true);
   }, [pickerRequestNonce]);
   useShortcutHandler("workspace.open-model-selector", () => {
-    setPickerOpen(true);
+    setPickerOpen((open) => !open);
   }, {
     enabled: keyboardShortcutEnabled
       && selectorEnabled

@@ -152,8 +152,8 @@ Rules:
   remain in the nested Advanced row. Do not render a separate click-to-cycle
   effort-bars button or a separate Fast icon button. Model-only contexts such
   as plan handoff may omit the tuning rows.
-- `Ctrl+Shift+M` opens the active compact root menu, including while the
-  composer editor is focused. It does nothing while that selector is
+- `Ctrl+Shift+M` toggles the active compact root menu open and closed, including
+  while the composer editor is focused. It does nothing while that selector is
   unavailable.
 - Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
   so on); do not rewrite distinct values to internal spellings such as

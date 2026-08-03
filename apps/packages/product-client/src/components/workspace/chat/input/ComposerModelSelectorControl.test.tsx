@@ -255,7 +255,7 @@ it("opens the picker when a refusal asks for it, and again on the next refusal",
   expect(menuState()).toBe("open");
 });
 
-it("opens model options from the active macOS workspace, not a background route", () => {
+it("toggles model options from the active macOS workspace, not a background route", () => {
   vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
   const props: ModelSelectorProps = {
     connectionState: "healthy",
@@ -317,6 +317,23 @@ it("opens model options from the active macOS workspace, not a background route"
   expect(
     container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
   ).toBe("open");
+  const closeShortcut = new KeyboardEvent("keydown", {
+    key: "M",
+    code: "KeyM",
+    ctrlKey: true,
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+
+  act(() => {
+    prompt.dispatchEvent(closeShortcut);
+  });
+
+  expect(closeShortcut.defaultPrevented).toBe(true);
+  expect(
+    container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+  ).toBe("closed");
   prompt.remove();
 
   unmount();
