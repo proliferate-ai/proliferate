@@ -804,6 +804,7 @@ here is not library-sanctioned; the index is the closed set, not a sample of it.
 | `checkbox-primitive` | [checkbox-primitive.tsx](../../../../apps/packages/ui/src/primitives/checkbox-primitive.tsx) | Raw `@radix-ui/react-checkbox` wrapper — see Collision pairs below. |
 | `Command` | [Command.tsx](../../../../apps/packages/ui/src/primitives/Command.tsx) | Raw `cmdk` wrapper. `CommandPalette` (below) imports `cmdk` directly rather than this wrapper; today's only consumer is [WorkspacesCommandList.tsx](../../../../apps/packages/product-ui/src/workspaces/WorkspacesCommandList.tsx) — two parallel `cmdk` consumers, a transitional gap, not a migration in progress. |
 | `Dialog` | [Dialog.tsx](../../../../apps/packages/ui/src/primitives/Dialog.tsx) | Raw `@radix-ui/react-dialog` wrapper; `ModalShell` composes it. |
+| `DotCellLoader` | [DotCellLoader.tsx](../../../../apps/packages/ui/src/primitives/DotCellLoader.tsx) | Nine-dot activity indicator with wave, orbit, scan, helix, and breathe motion variants. |
 | `DropdownMenu` | [DropdownMenu.tsx](../../../../apps/packages/ui/src/primitives/DropdownMenu.tsx) | Raw `@radix-ui/react-dropdown-menu` wrapper — see DropdownMenu status below. |
 | `FixedPositionLayer` | [FixedPositionLayer.tsx](../../../../apps/packages/ui/src/primitives/FixedPositionLayer.tsx) | Fixed-position wrapper for viewport-anchored overlay content. |
 | `IconButton` | [IconButton.tsx](../../../../apps/packages/ui/src/primitives/IconButton.tsx) | Icon-only button, tone/size variants. |

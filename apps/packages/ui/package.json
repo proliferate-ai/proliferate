@@ -255,6 +255,10 @@
       "types": "./dist/primitives/DropdownMenu.d.ts",
       "import": "./dist/primitives/DropdownMenu.js"
     },
+    "./primitives/DotCellLoader": {
+      "types": "./dist/primitives/DotCellLoader.d.ts",
+      "import": "./dist/primitives/DotCellLoader.js"
+    },
     "./primitives/Popover": {
       "types": "./dist/primitives/Popover.d.ts",
       "import": "./dist/primitives/Popover.js"

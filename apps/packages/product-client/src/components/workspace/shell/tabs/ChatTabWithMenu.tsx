@@ -12,7 +12,6 @@ import type { ManualChatGroupEditorAnchorRect } from "#product/components/worksp
 import { TabContextMenu } from "#product/components/workspace/shell/tabs/TabContextMenu";
 import {
   getChatTabLabel,
-  renderChatTabIcon,
   renderChatTabStatusBadge,
 } from "#product/components/workspace/shell/tabs/tab-rendering";
 import { useWorkspaceTabNativeContextMenu } from "#product/hooks/workspaces/ui/tabs/use-workspace-tab-native-context-menu";
@@ -131,7 +130,6 @@ export function ChatTabWithMenu({
       width={width}
       hideLeftDivider={hideLeftDivider}
       hideRightDivider={hideRightDivider}
-      icon={renderChatTabIcon(tab)}
       label={getChatTabLabel(tab)}
       hasAssignedLabel={tab.delegatedAgent ? true : tab.hasAssignedTitle}
       isChild={tab.isChild}
@@ -153,7 +151,7 @@ export function ChatTabWithMenu({
     />
   );
   const renameTrigger = tab.delegatedAgent ? (
-    <DelegatedAgentHoverCard agent={tab.delegatedAgent}>
+    <DelegatedAgentHoverCard agent={tab.delegatedAgent} className="h-full">
       {tabElement}
     </DelegatedAgentHoverCard>
   ) : tabElement;
@@ -165,7 +163,7 @@ export function ChatTabWithMenu({
       className={`w-52 ${POPOVER_SURFACE_CLASS}`}
       trigger={(
         <span
-          className="inline-flex min-w-0 shrink-0 app-region-no-drag"
+          className="inline-flex h-full min-w-0 shrink-0 app-region-no-drag"
           onContextMenuCapture={(event) => {
             onContextMenuTarget?.(rectToAnchor(event.currentTarget.getBoundingClientRect()));
             onContextMenuCapture(event);

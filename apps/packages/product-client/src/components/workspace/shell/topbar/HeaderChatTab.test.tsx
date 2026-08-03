@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProductHost } from "#product/host/product-host";
 import { ProductHostProvider } from "#product/host/ProductHostProvider";
 import { HeaderChatTab } from "#product/components/workspace/shell/topbar/HeaderChatTab";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import type { HeaderChatTabEntry } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
@@ -55,6 +56,38 @@ describe("HeaderChatTab", () => {
     renderHeaderChatTab({ canClose: false });
 
     expect(screen.queryByRole("button", { name: "Close tab" })).toBeNull();
+  });
+
+  it("preserves full height through the context-menu trigger wrapper", () => {
+    const { container } = renderHeaderChatTab();
+
+    const tabRoot = container.querySelector(".workspace-shell-tab");
+    expect(tabRoot?.parentElement?.className).toContain("h-full");
+    expect(tabRoot?.className).toContain("h-full");
+  });
+
+  it("preserves full height through the delegated-agent hover wrapper", () => {
+    const { container } = renderHeaderChatTab({
+      tab: buildTab({
+        delegatedAgent: {
+          identity: buildDelegatedAgentIdentity({
+            id: "delegated-agent",
+            title: "Investigate tabs",
+            sessionId: "delegated-session",
+          }),
+          kind: "subagent",
+          originLabel: "Subagent",
+          statusCategory: "running",
+          statusLabel: "Working",
+          parentTitle: "Session one",
+          hoverTitle: "Subagent",
+        },
+      }),
+    });
+
+    const tabRoot = container.querySelector(".workspace-shell-tab");
+    expect(tabRoot?.parentElement?.className).toContain("h-full");
+    expect(tabRoot?.parentElement?.parentElement?.className).toContain("h-full");
   });
 });
 

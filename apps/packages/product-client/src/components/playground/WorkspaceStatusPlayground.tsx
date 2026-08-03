@@ -10,9 +10,7 @@ import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/wo
 import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
-import type { CloudSidebarStatus } from "#product/config/cloud-sidebar";
 import type {
-  SidebarDetailIndicator,
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
@@ -71,7 +69,7 @@ const SCENARIOS: ScenarioRow[] = [
     }),
   },
   {
-    label: "Conflicts — red issue dot",
+    label: "Conflicts — amber attention dot",
     name: "Rebase me",
     gitStatus: makeGitStatus({
       dirty: true,
@@ -81,14 +79,14 @@ const SCENARIOS: ScenarioRow[] = [
     }),
   },
   {
-    label: "Merged PR — purple merge glyph",
+    label: "Merged PR — muted merge glyph",
     name: "Shipped thing",
     gitStatus: makeGitStatus({
       pr: { state: "merged", number: 810, url: "https://github.com/acme/repo/pull/810", checks: "passing", reviewDecision: "approved" },
     }),
   },
   {
-    label: "No PR — no glyph",
+    label: "No PR — worktree glyph",
     name: "Local only",
     gitStatus: makeGitStatus({
       ahead: 2,
@@ -97,7 +95,7 @@ const SCENARIOS: ScenarioRow[] = [
     }),
   },
   {
-    label: "Working · spinner in right slot",
+    label: "Working · wave cell in right slot",
     name: "Agent running",
     gitStatus: makeGitStatus(),
     statusIndicator: { kind: "iterating", tooltip: "Agent is working" },
@@ -130,8 +128,6 @@ interface SidebarFixtureRow {
   variant: SidebarWorkspaceVariant;
   gitStatus?: WorkspaceGitStatus | null;
   statusIndicator?: SidebarStatusIndicator | null;
-  detailIndicators?: SidebarDetailIndicator[];
-  cloudStatus?: CloudSidebarStatus | null;
   needsReview?: boolean;
   archived?: boolean;
   lastInteracted?: string | null;
@@ -145,9 +141,9 @@ interface SidebarFixtureGroup {
 
 /**
  * A realistic composed sidebar: one repo group per environment kind, rows
- * chosen so every status system is on screen at once — git/PR glyph tones,
- * right-slot activity indicators, cloud status chips, detail indicators,
- * unread dots, archived rows, and relative timestamps.
+ * chosen so every strict trailing-cell state is on screen at once — PR,
+ * worktree, and cloud identity in the left cell plus activity, waiting,
+ * error, and unread status in the right cell.
  */
 const SIDEBAR_FIXTURE_GROUPS: SidebarFixtureGroup[] = [
   {
@@ -246,32 +242,25 @@ const SIDEBAR_FIXTURE_GROUPS: SidebarFixtureGroup[] = [
       {
         name: "Nightly triage",
         variant: "cloud",
-        cloudStatus: "ready",
         gitStatus: makeGitStatus({
           pr: { state: "open", number: 820, url: "https://github.com/acme/repo/pull/820", checks: "passing", reviewDecision: "none" },
         }),
-        detailIndicators: [
-          { kind: "automation", tooltip: "Started by the nightly triage workflow" },
-        ],
         statusIndicator: { kind: "iterating", tooltip: "Agent is working" },
       },
       {
         name: "Provisioning box",
         variant: "cloud",
-        cloudStatus: "materializing",
         gitStatus: null,
       },
       {
         name: "Queued clone",
         variant: "cloud",
-        cloudStatus: "pending",
         gitStatus: null,
         statusIndicator: { kind: "waiting_plan", tooltip: "Waiting for plan approval" },
       },
       {
         name: "Boot failed",
         variant: "cloud",
-        cloudStatus: "error",
         gitStatus: null,
         needsReview: true,
       },
@@ -364,11 +353,8 @@ function FullSidebarPane() {
                     branchName={row.gitStatus?.branch ?? null}
                     gitStatus={row.gitStatus ?? null}
                     statusIndicator={row.statusIndicator ?? null}
-                    detailIndicators={row.detailIndicators ?? []}
-                    cloudStatus={row.cloudStatus ?? null}
                     needsReview={row.needsReview}
                     archived={row.archived}
-                    lastInteracted={row.lastInteracted ?? null}
                     shortcutLabel={shortcutIndex <= 9 ? `⌘${shortcutIndex}` : null}
                     shortcutRevealVisible={shortcutReveal}
                     onSelect={() => {}}
@@ -406,11 +392,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  * the PrStatusBadge kinds. No live data — pure fixtures, so states that need
  * a real PR (merged, CI failing...) are reviewable at any time.
  *
- * Layout rules under test: the leading well carries the PR glyph + dot ONLY
- * for real PR states (no branch fallback, no icon for no-PR/degraded rows);
- * activity indicators (spinner/waiting/error) render in the row's RIGHT slot
- * where the relative timestamp used to live, beating the unread dot but
- * yielding to hover affordances.
+ * Layout rules under test: the left trailing cell carries PR identity when
+ * present and otherwise falls back to worktree or cloud identity. Activity,
+ * waiting, and error indicators render in the right trailing cell, beating
+ * the unread dot while yielding to hover affordances.
  */
 export function WorkspaceStatusPlayground() {
   return (

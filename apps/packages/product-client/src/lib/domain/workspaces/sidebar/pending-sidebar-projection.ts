@@ -7,10 +7,7 @@ import {
   type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { LogicalWorkspaceRecency } from "#product/lib/domain/workspaces/sidebar/recency";
-import type {
-  SidebarDetailIndicator,
-  SidebarWorkspaceVariant,
-} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { SidebarGroupState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 
 export interface PendingSidebarProjection {
@@ -59,13 +56,6 @@ export function buildPendingSidebarProjection(args: {
   const sourceRoot = repoRoot?.path
     ?? pendingSidebarSourceRoot(entry)
     ?? repoKey;
-  const detailIndicators: SidebarDetailIndicator[] = variant === "local"
-    ? []
-    : [{
-      kind: "materialization",
-      variant,
-      tooltip: pendingMaterializationTooltip(variant),
-    }];
 
   return {
     repoKey,
@@ -89,8 +79,6 @@ export function buildPendingSidebarProjection(args: {
       archived: false,
       variant,
       statusIndicator: null,
-      detailIndicators,
-      cloudStatus: null,
       lastInteracted: createdAt,
       needsReview: false,
       workspaceLocationCopyLabel: null,
@@ -247,18 +235,5 @@ function pendingSidebarSourceRoot(entry: PendingWorkspaceEntry): string | null {
       return null;
     case "select-existing":
       return pendingSelectExistingSourceRoot(entry) ?? pendingExistingWorkspaceKey(entry);
-  }
-}
-
-function pendingMaterializationTooltip(variant: SidebarWorkspaceVariant): string {
-  switch (variant) {
-    case "worktree":
-      return "Local worktree";
-    case "cloud":
-      return "Cloud workspace";
-    case "ssh":
-      return "SSH target";
-    case "local":
-      return "Local workspace";
   }
 }

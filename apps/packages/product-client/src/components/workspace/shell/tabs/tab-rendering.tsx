@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 import {
   CircleAlert,
@@ -7,6 +7,10 @@ import {
   Spinner,
 } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import {
+  DotCellLoader,
+  type DotCellLoaderVariant,
+} from "@proliferate/ui/primitives/DotCellLoader";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 import type {
@@ -105,26 +109,70 @@ export function getChatTabLabel(
 }
 
 export function renderChatTabStatusBadge(
-  tab: Pick<HeaderChatTabEntry | HeaderChatMenuEntry, "viewState" | "hasUnreadActivity">,
+  tab: Pick<HeaderChatTabEntry | HeaderChatMenuEntry, "id" | "viewState" | "hasUnreadActivity">,
 ): ReactNode {
+  if (tab.viewState === "working") {
+    return <RunningChatTabIndicator sessionId={tab.id} />;
+  }
+  runningLoaderVariantsBySession.delete(tab.id);
+  if (tab.viewState === "needs_input") {
+    return (
+      <span role="img" aria-label="Waiting for input" className="inline-flex shrink-0 text-sidebar-muted-foreground">
+        <DotCellLoader aria-hidden="true" variant="breathe" />
+      </span>
+    );
+  }
+  if (tab.viewState === "errored") {
+    return (
+      <CircleAlert
+        role="img"
+        aria-label="Session error"
+        className="icon-compact shrink-0 text-sidebar-status-error [font-size:var(--text-sidebar-row)]"
+      />
+    );
+  }
   if (
     tab.hasUnreadActivity
-    && tab.viewState !== "needs_input"
-    && tab.viewState !== "working"
-    && tab.viewState !== "errored"
   ) {
     return (
       <span
         aria-hidden="true"
-        className="icon-status shrink-0 rounded-full bg-info [font-size:var(--text-sidebar-row)]"
+        className="icon-status shrink-0 rounded-full bg-sidebar-status-unseen [font-size:var(--text-sidebar-row)]"
       />
     );
   }
   return undefined;
 }
 
+const RUNNING_LOADER_VARIANTS: readonly DotCellLoaderVariant[] = [
+  "wave",
+  "orbit",
+  "scan",
+  "helix",
+];
+
+const runningLoaderVariantsBySession = new Map<string, DotCellLoaderVariant>();
+
+function RunningChatTabIndicator({ sessionId }: { sessionId: string }) {
+  const [variant] = useState<DotCellLoaderVariant>(() => {
+    const retainedVariant = runningLoaderVariantsBySession.get(sessionId);
+    if (retainedVariant) {
+      return retainedVariant;
+    }
+    const index = Math.floor(Math.random() * RUNNING_LOADER_VARIANTS.length);
+    const nextVariant = RUNNING_LOADER_VARIANTS[index] ?? "wave";
+    runningLoaderVariantsBySession.set(sessionId, nextVariant);
+    return nextVariant;
+  });
+  return (
+    <span role="img" aria-label="Working" className="inline-flex shrink-0 text-sidebar-muted-foreground">
+      <DotCellLoader aria-hidden="true" variant={variant} />
+    </span>
+  );
+}
+
 export function renderChatMenuStatus(
-  tab: Pick<HeaderChatMenuEntry, "viewState" | "isActive" | "hasUnreadActivity">,
+  tab: Pick<HeaderChatMenuEntry, "id" | "viewState" | "isActive" | "hasUnreadActivity">,
 ): ReactNode {
   if (!tab.isActive) {
     return renderChatTabStatusBadge(tab);

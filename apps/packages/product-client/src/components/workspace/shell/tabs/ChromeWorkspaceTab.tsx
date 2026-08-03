@@ -14,7 +14,6 @@ interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "
   isActive: boolean;
   isMultiSelected?: boolean;
   width: number;
-  icon: ReactNode;
   label: string;
   /** True once `label` is a real assigned name; reveals it once, on the first
    *  assignment only. */
@@ -37,7 +36,6 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     isActive,
     isMultiSelected = false,
     width,
-    icon,
     label,
     hasAssignedLabel = false,
     onSelect,
@@ -56,14 +54,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     ...props
   }, ref) {
     const contentWidth = Math.max(0, width);
-    const isMini = contentWidth < 48;
-    const isSmaller = contentWidth < 60;
     const isSmall = contentWidth < 84;
-    const showTitle = !isMini && !isSmaller;
     const showBadge = !isSmall;
+    const showStatus = showBadge && badge != null;
     const showShortcut = Boolean(shortcutLabel) && !isSmall;
-    const titleMaskEnd = showShortcut ? 36 : 20;
-    const titleMask = `linear-gradient(90deg, #000 0%, #000 calc(100% - ${titleMaskEnd}px), transparent)`;
 
     return (
       <div
@@ -72,7 +66,8 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
         data-telemetry-mask="true"
         data-active={isActive ? true : undefined}
         data-multi-selected={isMultiSelected ? true : undefined}
-        className={`workspace-shell-tab group/tab relative h-7 min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
+        data-has-status={showStatus ? true : undefined}
+        className={`workspace-shell-tab group/tab relative h-full min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
         style={{
           width,
           ...style,
@@ -81,46 +76,11 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
       >
         <span
           aria-hidden="true"
-          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 border transition-[background-color,border-color] duration-hover"
+          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 border"
         />
         <div
-          className={`workspace-shell-tab__content absolute inset-0 flex items-center overflow-hidden py-1 ${
-            isMini ? "gap-1 px-1" : isSmall ? "gap-1 px-2" : "gap-2 px-2"
-          }`}
+          className="workspace-shell-tab__content absolute inset-0 flex items-center overflow-hidden"
         >
-          {isMini ? (
-            // [CHAT-05] RULED: the close button's hit target is 20px
-            // (--size-icon-button-sm), so the mini tab's leading slot — which
-            // swaps the 16px file glyph for that button on hover — is sized to
-            // the LARGER of the two. At the glyph's old 16px the 20px button
-            // overflowed its own slot by 2px per side and shifted the label.
-            <span className="workspace-shell-tab__leading relative z-20 flex size-icon-button-sm shrink-0 items-center justify-center">
-              <span className="workspace-shell-tab__icon flex size-4 shrink-0 items-center justify-center group-hover/tab:hidden group-focus-within/tab:hidden">
-                {icon}
-              </span>
-              {canClose && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  data-tab-drag-ignore="true"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onClose();
-                  }}
-                  title="Close tab"
-                  aria-label="Close tab"
-                  className="workspace-shell-tab__close hidden size-icon-button-sm shrink-0 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
-                >
-                  <X className="icon-compact" />
-                </Button>
-              )}
-            </span>
-          ) : (
-            <span className="workspace-shell-tab__icon relative z-20 flex size-4 shrink-0 items-center justify-center">
-              {icon}
-            </span>
-          )}
           <Button
             type="button"
             role="tab"
@@ -129,43 +89,39 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             size="sm"
             onClick={onSelect}
             onPointerDownCapture={onSelectPointerDownCapture}
-            className={`workspace-shell-tab__button relative z-10 h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 hover:bg-transparent ${
-              isActive
-                ? "font-medium text-foreground"
-                : isMultiSelected
-                  ? "font-medium text-foreground"
-                : "font-medium text-muted-foreground group-hover/tab:text-foreground"
-            } ${isSmall ? "gap-1" : "gap-2"}`}
+            className="workspace-shell-tab__button relative z-10 h-full min-w-0 flex-1 justify-start gap-(--workspace-shell-tab-content-gap) rounded-none bg-transparent px-(--workspace-shell-tab-inline-padding) py-0 hover:bg-transparent"
           >
-            {showTitle && (
+            <span
+              className={`workspace-shell-tab__label min-w-0 flex-1 truncate whitespace-nowrap text-left ${
+                isActive || isMultiSelected
+                  ? "font-medium text-sidebar-foreground"
+                  : "font-normal text-sidebar-muted-foreground group-hover/tab:text-sidebar-foreground"
+              }`}
+            >
+              <TypewriterRevealText
+                text={label}
+                revealOnFirstAssignment={hasAssignedLabel}
+              />
+            </span>
+            {showStatus ? (
               <span
-                className="workspace-shell-tab__label min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left text-ui-sm"
-                style={{
-                  WebkitMaskImage: titleMask,
-                  maskImage: titleMask,
-                }}
+                className={`workspace-shell-tab__status flex items-center justify-center group-hover/tab:opacity-0 group-focus-within/tab:opacity-0 ${
+                  shortcutRevealVisible ? "opacity-0" : ""
+                }`}
               >
-                <TypewriterRevealText
-                  text={label}
-                  revealOnFirstAssignment={hasAssignedLabel}
-                />
-              </span>
-            )}
-            {showBadge && badge && (
-              <span className="flex shrink-0 items-center transition-opacity duration-hover group-hover/tab:opacity-0 group-focus-within/tab:opacity-0">
                 {badge}
               </span>
-            )}
+            ) : null}
           </Button>
           {showShortcut && shortcutLabel ? (
             <ShortcutBadge
               label={shortcutLabel}
-              className={`pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity duration-hover ${
+              className={`workspace-shell-tab__shortcut pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 ${
                 shortcutRevealVisible ? "opacity-100" : ""
               }`}
             />
           ) : null}
-          {!isMini && canClose && (
+          {canClose && (
             <Button
               type="button"
               variant="ghost"
@@ -183,6 +139,12 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             </Button>
           )}
         </div>
+        {isActive ? (
+          <span
+            aria-hidden="true"
+            className="workspace-shell-tab__underline pointer-events-none absolute z-raised"
+          />
+        ) : null}
       </div>
     );
   },

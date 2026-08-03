@@ -7,6 +7,7 @@ import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Checkbox as CheckboxPrimitive } from "@proliferate/ui/primitives/checkbox-primitive";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@proliferate/ui/primitives/Command";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@proliferate/ui/primitives/Dialog";
+import { DotCellLoader } from "@proliferate/ui/primitives/DotCellLoader";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@proliferate/ui/primitives/DropdownMenu";
 import { FixedPositionLayer } from "@proliferate/ui/primitives/FixedPositionLayer";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
@@ -250,6 +251,15 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
   { name: "checkbox-primitive", subpath: "@proliferate/ui/primitives/checkbox-primitive", render: () => <CheckboxPrimitive defaultChecked /> },
   { name: "Command", subpath: "@proliferate/ui/primitives/Command", render: CommandDemo },
   { name: "Dialog", subpath: "@proliferate/ui/primitives/Dialog", render: DialogDemo },
+  { name: "DotCellLoader", subpath: "@proliferate/ui/primitives/DotCellLoader", render: () => (
+    <span className="flex items-center gap-3 text-foreground">
+      <DotCellLoader variant="wave" />
+      <DotCellLoader variant="orbit" />
+      <DotCellLoader variant="scan" />
+      <DotCellLoader variant="helix" />
+      <DotCellLoader variant="breathe" />
+    </span>
+  ) },
   { name: "DropdownMenu", subpath: "@proliferate/ui/primitives/DropdownMenu", render: DropdownMenuDemo },
   { name: "FixedPositionLayer", subpath: "@proliferate/ui/primitives/FixedPositionLayer", render: () => (
     <div className="relative h-16 w-full">

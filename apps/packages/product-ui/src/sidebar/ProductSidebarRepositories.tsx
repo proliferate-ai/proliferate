@@ -91,6 +91,11 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   detail?: ReactNode;
   trailingLabel?: string | null;
   /**
+   * Git/worktree/cloud identity rendered in the left trailing cell. The cell
+   * is omitted when identity is absent, so a single status remains rightmost.
+   */
+  trailingIdentity?: ReactNode;
+  /**
    * Activity indicator (spinner / waiting / error) in the TRAILING cell.
    * Right-slot precedence: shortcut reveal and hover actions win (it fades
    * out like the other trailing content), then `trailingStatus`, then
@@ -124,6 +129,7 @@ export function ProductSidebarWorkspaceRow({
   subtitle = null,
   detail = null,
   trailingLabel = null,
+  trailingIdentity = null,
   trailingStatus = null,
   shortcutLabel = null,
   shortcutRevealVisible = false,
@@ -135,6 +141,22 @@ export function ProductSidebarWorkspaceRow({
   ...props
 }: ProductSidebarWorkspaceRowProps) {
   const hasSubtitle = Boolean(subtitle);
+  const statusCell = trailingStatus ? (
+    trailingStatus
+  ) : unreadDot ? (
+    <Tooltip content="Unseen activity" className="flex size-5 items-center justify-center">
+      <span
+        role="img"
+        aria-label="Unseen activity"
+        className="block icon-status rounded-full bg-sidebar-status-unseen [font-size:var(--text-sidebar-row)]"
+      />
+    </Tooltip>
+  ) : trailingLabel ? (
+    <span className="truncate whitespace-nowrap text-ui-sm tabular-nums text-faint">
+      {trailingLabel}
+    </span>
+  ) : null;
+  const hasTrailingCells = Boolean(trailingIdentity || statusCell);
 
   return (
     <SidebarRowSurface
@@ -185,49 +207,27 @@ export function ProductSidebarWorkspaceRow({
           ) : null}
         </div>
 
-        {(trailingLabel || trailingStatus || shortcutLabel || hoverAction || unreadDot) ? (
-          <div className={`grid h-5 min-w-[26px] shrink-0 items-center justify-items-end ${detail ? "ml-[5px]" : "ml-1.5"
+        {(hasTrailingCells || shortcutLabel || hoverAction) ? (
+          <div className={`grid h-5 min-w-5 shrink-0 items-center justify-items-end ${detail ? "ml-[5px]" : "ml-1.5"
             }`}>
-
-            {trailingStatus ? (
+            {hasTrailingCells ? (
               <div
-                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
+                data-sidebar-trailing-cells
+                className={`col-start-1 row-start-1 flex items-center justify-end gap-1.5 transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                     ? "opacity-0"
                     : "group-hover:opacity-0 group-focus-within:opacity-0"
                   }`}
               >
-                {trailingStatus}
-              </div>
-            ) : unreadDot ? (
-              // Same fixed 20px cell as the activity indicators (which sit
-              // justify-end + centered in their own min-w-5 box): the dot's
-              // center lands 10px from the right edge, exactly where the
-              // spinner/error badge centers land, instead of hugging the edge.
-              <Tooltip
-                content="Unseen activity"
-                className={`col-start-1 row-start-1 flex h-5 w-5 items-center justify-center justify-self-end transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
-                    ? "opacity-0"
-                    : "group-hover:opacity-0 group-focus-within:opacity-0"
-                  }`}
-              >
-                <span
-                  role="img"
-                  aria-label="Unseen activity"
-                  className="block icon-status rounded-full bg-info/70 text-sidebar-brand"
-                />
-              </Tooltip>
-            ) : trailingLabel ? (
-              // Centered in the same end-anchored 20px cell as the activity
-              // glyphs and unread dot, so the time column shares their axis
-              // instead of hugging the right edge. `text-ui-sm` (the ramp's meta
-              // step), not the row's own `text-sidebar-row`: the timestamp is
-              // metadata about the row, and at the row's size it competed with
-              // the workspace name for the eye.
-              <div className={`col-start-1 row-start-1 flex h-5 min-w-5 items-center justify-center justify-self-end overflow-visible truncate whitespace-nowrap text-ui-sm tabular-nums text-faint transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
-                  ? "opacity-0"
-                  : "group-hover:opacity-0 group-focus-within:opacity-0"
-                }`}>
-                {trailingLabel}
+                {trailingIdentity ? (
+                  <span className="flex size-5 shrink-0 items-center justify-center">
+                    {trailingIdentity}
+                  </span>
+                ) : null}
+                {statusCell ? (
+                  <span className="flex size-5 shrink-0 items-center justify-center">
+                    {statusCell}
+                  </span>
+                ) : null}
               </div>
             ) : null}
 

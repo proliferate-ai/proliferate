@@ -32,7 +32,6 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";
-import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
@@ -138,7 +137,6 @@ export function useWorkspaceSidebarState({
   const desktopInstallId = useDesktopInstallId();
   const { data: gitStatus } = useWorkspaceMetadataSync();
   const { statusesByLogicalId: gitStatusesByLogicalId } = useWorkspaceGitStatuses();
-  const computeTargets = useComputeTargetOptions();
 
   const sessionWorkspaceIds = useSessionDirectoryStore(useShallow((state) => {
     const ids: Record<string, string | null> = {};
@@ -183,7 +181,6 @@ export function useWorkspaceSidebarState({
       "workspaceActivities",
       "gitStatus",
       "gitStatuses",
-      "targetAppearance",
     ],
     count: (value) => value.length,
   }, () => buildSidebarGroupStates({
@@ -207,13 +204,11 @@ export function useWorkspaceSidebarState({
       sessionWorkspaceIds,
       sessionLastInteracted,
       sessionLastViewedAt,
-      targetAppearanceById: computeTargets.targetAppearanceById,
       suppressActiveNeedsReview: windowFocused,
       desktopInstallId,
     })), [
     activeSessionTitle,
     archivedSet,
-    computeTargets.targetAppearanceById,
     desktopInstallId,
     gitStatus,
     gitStatusesByLogicalId,

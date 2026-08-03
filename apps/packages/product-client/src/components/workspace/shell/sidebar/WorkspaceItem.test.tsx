@@ -117,7 +117,7 @@ describe("WorkspaceItem", () => {
     expect(onCopyBranchName).toHaveBeenCalledTimes(1);
   });
 
-  it("renders PR status as a compact git detail glyph", () => {
+  it("renders PR status as the left identity glyph", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -129,7 +129,7 @@ describe("WorkspaceItem", () => {
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
   });
 
-  it("renders activity and PR state together in the right-side details", () => {
+  it("renders PR identity and activity together in the two trailing cells", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -140,12 +140,15 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
-    // Live activity does not evict the compact PR detail glyph.
+    // Live activity does not evict the PR identity cell.
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
+    const cells = screen.getByRole("img", { name: "PR #805 · Open" })
+      .closest("[data-sidebar-trailing-cells]");
+    expect(cells?.children).toHaveLength(2);
   });
 
-  it("renders no git glyph for an authoritative no-PR branch", () => {
-    const { container } = renderWithProductHost(
+  it("falls back to worktree identity for an authoritative no-PR branch", () => {
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -161,13 +164,11 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.queryByRole("img")).toBeNull();
-    // No branch-glyph fallback is shown without a PR.
-    expect(container.querySelector("svg")).toBeNull();
+    expect(screen.getByRole("img", { name: "Worktree" })).toBeTruthy();
   });
 
-  it("renders no git glyph when PR data is unknown", () => {
-    const { container } = renderWithProductHost(
+  it("falls back to worktree identity when PR data is unknown", () => {
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -175,8 +176,15 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.queryByRole("img")).toBeNull();
-    expect(container.querySelector("svg")).toBeNull();
+    expect(screen.getByRole("img", { name: "Worktree" })).toBeTruthy();
+  });
+
+  it("uses cloud identity when there is no PR or worktree", () => {
+    renderWithProductHost(
+      <WorkspaceItem name="Cloud workspace" variant="cloud" />,
+    );
+
+    expect(screen.getByRole("img", { name: "Cloud workspace" })).toBeTruthy();
   });
 
   it("shows the unread dot in the right slot when the row needs review", () => {

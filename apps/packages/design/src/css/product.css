@@ -134,6 +134,107 @@ body {
   aspect-ratio: 1 / 1;
 }
 
+@keyframes om-wave {
+  0% { transform: scale(0); opacity: 0; }
+  16% { transform: scale(1); opacity: 1; }
+  44% { transform: scale(1); opacity: 1; }
+  62%, 100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes om-dot {
+  0%, 55%, 100% { opacity: 0; }
+  12%, 32% { opacity: 1; }
+}
+
+@keyframes om-scan {
+  0%, 42%, 100% { opacity: 0; }
+  10%, 26% { opacity: 1; }
+}
+
+@keyframes om-helix {
+  0%, 45%, 100% { opacity: 0; }
+  15%, 28% { opacity: 1; }
+}
+
+@keyframes om-breathe {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+.dot-cell-loader {
+  --dot-cell-size: 0.1875rem;
+  --dot-cell-gap: 0.125rem;
+  display: inline-grid;
+  grid-template-columns: repeat(3, var(--dot-cell-size));
+  gap: var(--dot-cell-gap);
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.dot-cell-loader[data-size="compact"] {
+  --dot-cell-size: 0.15625rem;
+  --dot-cell-gap: 0.09375rem;
+}
+
+/* Each dot carries its grid coordinates (--om-r/--om-c) and its clockwise
+   ring position (--om-o); every variant derives its per-dot delay from those
+   in one calc() instead of a per-variant nth-child ladder. */
+.dot-cell-loader__dot {
+  --om-r: 0;
+  --om-c: 0;
+  --om-o: 0;
+  width: var(--dot-cell-size);
+  height: var(--dot-cell-size);
+  border-radius: var(--radius-full);
+  background: currentColor;
+  opacity: 0;
+}
+
+.dot-cell-loader__dot:nth-child(2) { --om-c: 1; --om-o: 1; }
+.dot-cell-loader__dot:nth-child(3) { --om-c: 2; --om-o: 2; }
+.dot-cell-loader__dot:nth-child(4) { --om-r: 1; --om-o: 7; }
+.dot-cell-loader__dot:nth-child(5) { --om-r: 1; --om-c: 1; }
+.dot-cell-loader__dot:nth-child(6) { --om-r: 1; --om-c: 2; --om-o: 3; }
+.dot-cell-loader__dot:nth-child(7) { --om-r: 2; --om-o: 6; }
+.dot-cell-loader__dot:nth-child(8) { --om-r: 2; --om-c: 1; --om-o: 5; }
+.dot-cell-loader__dot:nth-child(9) { --om-r: 2; --om-c: 2; --om-o: 4; }
+
+/* Wave sweeps column-major: delay order transposes the grid (col * 3 + row). */
+.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot {
+  transform: scale(0);
+  animation: om-wave var(--activity-dot-cell-wave-cycle) var(--ease-standard) infinite;
+  animation-delay: calc(var(--activity-dot-cell-wave-step) * (var(--om-c) * 3 + var(--om-r)));
+}
+
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot {
+  animation: om-dot var(--activity-dot-cell-orbit-cycle) var(--ease-linear) infinite;
+  animation-delay: calc(var(--activity-dot-cell-orbit-step) * var(--om-o));
+}
+
+.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(5) { visibility: hidden; animation: none; }
+
+.dot-cell-loader[data-variant="scan"] .dot-cell-loader__dot {
+  animation: om-scan var(--activity-dot-cell-scan-cycle) var(--ease-standard) infinite;
+  animation-delay: calc(var(--activity-dot-cell-scan-step) * var(--om-r));
+}
+
+.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot {
+  animation: om-helix var(--activity-dot-cell-helix-cycle) var(--ease-standard) infinite;
+  animation-delay: calc(var(--activity-dot-cell-helix-column-step) * var(--om-c) + var(--activity-dot-cell-helix-row-step) * var(--om-r));
+}
+
+.dot-cell-loader[data-variant="breathe"] .dot-cell-loader__dot {
+  animation: om-breathe var(--activity-dot-cell-breathe-cycle) var(--ease-standard) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-cell-loader__dot {
+    animation: none !important;
+    transform: scale(1) !important;
+    opacity: 0.6;
+  }
+}
+
 /*
  * Neutralize the browser's default anchor color/underline, but keep it in
  * `@layer base` so intentional utility classes on a link (text-link-foreground,
@@ -1471,11 +1572,9 @@ body {
   height: var(--workspace-shell-tab-height);
 }
 
-/* Header tabs are unboxed: no chip fill and no border in the resting or active
-   state. Hover is the only fill an ordinary tab gets, and selection is carried
-   by a 1px underline flush with the strip's baseline rather than by a box. The
-   surface span still owns fill/border/underline so the tab's own content box
-   never animates its geometry. */
+/* Header tabs fill the 46px bar so an active underline at bottom: 0 overlaps
+   the bar separator. The tab surface has no visual transition; only the label
+   color eases between inactive and hover states. */
 .workspace-shell-tab__surface {
   background-color: var(--workspace-shell-tab-inactive-background);
   border-color: var(--workspace-shell-tab-inactive-border);
@@ -1486,20 +1585,39 @@ body {
   border-radius: var(--workspace-shell-tab-radius);
 }
 
-.workspace-shell-tab__surface::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  height: var(--workspace-shell-tab-active-underline-size);
-  background-color: var(--workspace-shell-tab-active-underline);
-  opacity: 0;
-  transition: opacity var(--duration-hover) var(--ease-standard);
+.workspace-shell-tab__label {
+  font-size: var(--workspace-shell-tab-font-size);
+  transition: color var(--duration-hover) ease;
 }
 
-.workspace-shell-tab:hover .workspace-shell-tab__surface {
-  background-color: var(--workspace-shell-tab-hover-background);
-  border-color: var(--workspace-shell-tab-hover-border);
+.workspace-shell-tab[data-has-status="true"] .workspace-shell-tab__label {
+  padding-right: calc(
+    var(--workspace-shell-tab-status-size) + var(--workspace-shell-tab-content-gap)
+  );
+}
+
+.workspace-shell-tab__status {
+  position: absolute;
+  right: var(--workspace-shell-tab-inline-padding);
+  top: 50%;
+  width: var(--workspace-shell-tab-status-size);
+  transform: translateY(-50%);
+}
+
+.workspace-shell-tab .workspace-shell-tab__shortcut {
+  padding: var(--workspace-shell-tab-shortcut-block-padding)
+    var(--workspace-shell-tab-shortcut-inline-padding);
+  font-size: var(--workspace-shell-tab-shortcut-font-size);
+  line-height: var(--workspace-shell-tab-shortcut-line-height);
+  border-radius: var(--workspace-shell-tab-shortcut-radius);
+}
+
+.workspace-shell-tab__underline {
+  inset-inline: var(--workspace-shell-tab-active-underline-size);
+  bottom: 0;
+  height: var(--workspace-shell-tab-active-underline-size);
+  border-radius: calc(var(--workspace-shell-tab-active-underline-size) / 2);
+  background-color: var(--workspace-shell-tab-active-underline);
 }
 
 .workspace-shell-tab[data-multi-selected="true"] .workspace-shell-tab__surface {
@@ -1510,10 +1628,6 @@ body {
 .workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface {
   background-color: var(--workspace-shell-tab-active-background);
   border-color: var(--workspace-shell-tab-active-border);
-}
-
-.workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface::after {
-  opacity: 1;
 }
 
 /* Tab close: the closing tab fades and collapses its own width while the

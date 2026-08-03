@@ -120,7 +120,7 @@ export const GlobalHeader = memo(function GlobalHeader({
 
         <WorkspaceActionsMenuContainer />
 
-        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+        <div className="flex h-full min-w-0 flex-1 items-stretch overflow-hidden">
           <HeaderTabs />
         </div>
 

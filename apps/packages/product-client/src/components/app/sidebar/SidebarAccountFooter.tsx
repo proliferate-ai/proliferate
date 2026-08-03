@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditCard, Keyboard, LogOut, Settings } from "lucide-react";
-import { Check, ChevronUpDown, Mail } from "@proliferate/ui/icons";
+import { Check, Mail } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import {
@@ -32,16 +32,11 @@ import { useKeyboardShortcutsDialogStore } from "#product/stores/shortcuts/keybo
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { OrganizationSwitchDialog } from "#product/components/app/sidebar/OrganizationSwitchDialog";
 import { SidebarHelpFooter } from "#product/components/app/sidebar/SidebarHelpFooter";
-import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
 import { SidebarUsageSection } from "#product/components/app/sidebar/SidebarUsageSection";
 
 /**
- * Shared sidebar footer: one row of the identity/account trigger plus the
- * small controls that belong beside it (update, then help). It is deliberately
- * the lightest row in the sidebar — 28px controls, the small UI type step, and
- * no second stacked band — because everything it owns is secondary to the
- * workspace list above it. Usage/consumption is status, not a control, so it
- * reads inside the account menu instead of claiming a footer slot.
+ * Shared sidebar footer: one account trigger and one help trigger. Detailed
+ * identity, organization, and usage information live inside the account menu.
  */
 export function SidebarAccountFooter() {
   const navigate = useNavigate();
@@ -53,7 +48,6 @@ export function SidebarAccountFooter() {
   const capabilities = useAppCapabilities();
   const { data: billingPlan } = useCloudBilling();
   const {
-    activeOrganization,
     activeOrganizationId,
     organizations,
     organizationsQuery,
@@ -70,7 +64,6 @@ export function SidebarAccountFooter() {
   const [switchTarget, setSwitchTarget] = useState<OrganizationRecord | null>(null);
 
   const displayName = user?.displayName?.trim() || user?.email || "Account";
-  const organizationName = activeOrganization?.name ?? null;
   // Vendor plan/credits only mean something where the server offers billing.
   const planLabel = capabilities.billingEnabled && billingPlan
     ? (billingPlan.isPaidCloud ? "Pro" : "Free")
@@ -98,7 +91,7 @@ export function SidebarAccountFooter() {
   return (
     <div className="shrink-0">
       <div aria-hidden className="mx-3 h-[0.5px] bg-border" />
-      <div className="flex items-center gap-0.5 px-2 py-1.5">
+      <div className="flex items-center gap-1 px-2 pt-1 pb-2">
         <PopoverButton
           align="start"
           side="top"
@@ -106,10 +99,10 @@ export function SidebarAccountFooter() {
           trigger={(
             <Button
               type="button"
-              variant="unstyled"
+              variant="sidebar"
               size="unstyled"
               aria-label="Open account menu"
-              className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left text-sidebar-foreground hover:bg-hover active:bg-active data-[state=open]:bg-active"
+              className="flex min-w-0 flex-1 items-center justify-start gap-2 rounded-md px-2 py-1 text-left text-sidebar-row text-sidebar-foreground data-[state=open]:bg-active"
               title={displayName}
             >
               <UserAvatar
@@ -117,15 +110,7 @@ export function SidebarAccountFooter() {
                 avatarUrl={user?.avatarUrl}
                 className="size-5 rounded-full border-0 text-sidebar-foreground"
               />
-              {/* One line, not a stacked identity block: the organization is a
-                  suffix here and gets its own row inside the menu. */}
-              <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                <span className="truncate text-ui-sm">{displayName}</span>
-                {organizationName ? (
-                  <span className="truncate text-ui-sm text-faint">{organizationName}</span>
-                ) : null}
-              </span>
-              <ChevronUpDown className="icon-tight shrink-0 text-sidebar-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate">{displayName}</span>
             </Button>
           )}
           className={`w-72 ${POPOVER_SURFACE_CLASS}`}
@@ -264,8 +249,6 @@ export function SidebarAccountFooter() {
             </div>
           )}
         </PopoverButton>
-        {/* Update sits immediately left of help: one row, same footprint. */}
-        <SidebarUpdateFooterButton />
         <SidebarHelpFooter />
       </div>
       <ConfirmationDialog
