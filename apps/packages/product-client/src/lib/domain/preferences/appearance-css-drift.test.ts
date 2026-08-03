@@ -442,6 +442,59 @@ describe("chat retune tokens", () => {
   });
 });
 
+describe("tab and sidebar status tokens across modes", () => {
+  /**
+   * Light mode is authored independently of dark (PR #1587 ruling): the tab
+   * underline and the sidebar status inks each carry their own light-column
+   * value rather than inheriting dark's. Nothing else pins light≠dark for
+   * these tokens, so a future edit could silently collapse the light column
+   * back onto the dark literals and every existing test would still pass.
+   */
+  const darkRoot = readRule(generatedThemeCss, /:root\s*\{([\s\S]*?)\n\}/);
+  const lightRoot = readRule(generatedThemeCss, /:root\[data-mode="light"\]\s*\{([\s\S]*?)\n\}/);
+  const MODE_AUTHORED_TOKENS = [
+    "--workspace-shell-tab-active-underline",
+    "--color-sidebar-status-error",
+    "--color-sidebar-status-unseen",
+    "--color-sidebar-status-waiting",
+    "--color-sidebar-status-worktree",
+  ] as const;
+
+  function readDeclaration(block: string | undefined, property: string): string | undefined {
+    return block?.match(new RegExp(`${property}:\\s*([^;]+);`))?.[1]?.trim();
+  }
+
+  it.each(MODE_AUTHORED_TOKENS)("%s carries a light value distinct from dark", (token) => {
+    const darkValue = readDeclaration(darkRoot, token);
+    const lightValue = readDeclaration(lightRoot, token);
+    expect(darkValue, `${token} missing from dark root`).toBeDefined();
+    expect(lightValue, `${token} missing from light root`).toBeDefined();
+    expect(lightValue).not.toBe(darkValue);
+  });
+
+  it("keeps the light column on the adopted readable inks, not dark's bright ones", () => {
+    // The exact light literals adopted with the independent light column: a
+    // near-black underline and darkened status inks that hold contrast on a
+    // white sidebar. Locked so "fix light mode" edits can't quietly regress
+    // to the dark palette's values, which are unreadable on light surfaces.
+    // Expressed as RGB channels (like the composer locks above): tokens.ts
+    // owns the literal spelling, so no second raw-hex literal lives here.
+    const LIGHT_STATUS_INKS: ReadonlyArray<
+      readonly [token: string, channels: readonly [number, number, number]]
+    > = [
+      ["--workspace-shell-tab-active-underline", [0x16, 0x18, 0x1b]],
+      ["--color-sidebar-status-error", [0xc0, 0x26, 0x22]],
+      ["--color-sidebar-status-unseen", [0x0b, 0x6b, 0xcb]],
+      ["--color-sidebar-status-waiting", [0x8a, 0x5a, 0x00]],
+      ["--color-sidebar-status-worktree", [0x82, 0x50, 0xdf]],
+    ];
+    for (const [token, channels] of LIGHT_STATUS_INKS) {
+      expect({ token, value: readDeclaration(lightRoot, token) })
+        .toEqual({ token, value: rgbToHex(channels) });
+    }
+  });
+});
+
 describe("appearance scaling CSS defaults", () => {
   const defaultCodeScale = READABLE_CODE_FONT_SCALES[DEFAULT_APPEARANCE_SIZE_ID];
 
