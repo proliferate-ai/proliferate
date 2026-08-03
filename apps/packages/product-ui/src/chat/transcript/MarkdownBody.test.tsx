@@ -124,7 +124,10 @@ describe("MarkdownBody presentation", () => {
   it("uses the shared stable-color, hover-underline treatment for web links", () => {
     const html = renderMarkdown("Open [docs](https://example.com/docs).");
 
-    expect(html).toContain("text-link-foreground no-underline hover:text-link-foreground hover:underline");
+    expect(html).toContain("text-link-foreground");
+    expect(html).toContain("no-underline");
+    expect(html).toContain("hover:text-link-foreground");
+    expect(html).toContain("hover:underline");
     expect(html).not.toContain("hover:text-foreground");
   });
 });
