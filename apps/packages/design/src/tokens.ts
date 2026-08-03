@@ -633,22 +633,22 @@ export const themeTokens = {
   },
   "--color-sidebar-status-error": {
     dark: "rgb(255 100 89)",
-    light: "rgb(255 100 89)",
+    light: "#c02622",
     provenance: "[SIDEBAR:status-system]",
   },
   "--color-sidebar-status-unseen": {
     dark: "rgb(108 184 255)",
-    light: "rgb(108 184 255)",
+    light: "#0b6bcb",
     provenance: "[SIDEBAR:status-system]",
   },
   "--color-sidebar-status-waiting": {
     dark: "rgb(255 180 50)",
-    light: "rgb(255 180 50)",
+    light: "#8a5a00",
     provenance: "[SIDEBAR:status-system]",
   },
   "--color-sidebar-status-worktree": {
     dark: "rgb(173 123 249)",
-    light: "rgb(173 123 249)",
+    light: "#8250df",
     provenance: "[SIDEBAR:status-system]",
   },
   "--color-special": {
@@ -1620,7 +1620,7 @@ export const themeTokens = {
   },
   "--workspace-shell-tab-active-underline": {
     dark: "rgb(255 255 255)",
-    light: "rgb(255 255 255)",
+    light: "#16181b",
     provenance: "[TABS:active-underline]",
   },
   "--workspace-shell-tab-active-underline-size": {

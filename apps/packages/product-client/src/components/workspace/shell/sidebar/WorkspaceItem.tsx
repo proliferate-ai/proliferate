@@ -4,12 +4,12 @@ import {
   Archive,
   CloudIcon,
   Folder,
+  GitBranch,
   GitBranchIcon,
   GitPullRequest,
   Pencil,
   Trash,
 } from "@proliferate/ui/icons";
-import { GitBranch } from "lucide-react";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
