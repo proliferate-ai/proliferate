@@ -367,6 +367,29 @@ describe("workspace header tab trailing status", () => {
   });
 });
 
+describe("dot-cell activity motion", () => {
+  it("hides dots before their delayed animation begins", () => {
+    const dotRule = readRule(
+      productCss,
+      /\.dot-cell-loader__dot\s*\{([\s\S]*?)\}/,
+    );
+
+    expect(dotRule).toContain("opacity: 0;");
+  });
+
+  it.each(["om-wave", "om-dot", "om-scan", "om-helix", "om-breathe"])(
+    "%s fully hides inactive dots",
+    (animationName) => {
+      const keyframes = readRule(
+        productCss,
+        new RegExp(`@keyframes ${animationName}\\s*\\{([\\s\\S]*?)\\n\\}`),
+      );
+
+      expect(keyframes).toContain("opacity: 0;");
+    },
+  );
+});
+
 /**
  * [CHAT-01..04] pinned values from `ui-foundation-chat-addendum.md`'s RULED
  * block. These are visual-only retunes with no behavioural surface, so the

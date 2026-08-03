@@ -137,22 +137,22 @@ body {
 }
 
 @keyframes om-dot {
-  0%, 55%, 100% { opacity: 0.22; }
+  0%, 55%, 100% { opacity: 0; }
   12%, 32% { opacity: 1; }
 }
 
 @keyframes om-scan {
-  0%, 42%, 100% { opacity: 0.14; }
+  0%, 42%, 100% { opacity: 0; }
   10%, 26% { opacity: 1; }
 }
 
 @keyframes om-helix {
-  0%, 45%, 100% { opacity: 0.18; }
+  0%, 45%, 100% { opacity: 0; }
   15%, 28% { opacity: 1; }
 }
 
 @keyframes om-breathe {
-  0%, 100% { opacity: 0.25; }
+  0%, 100% { opacity: 0; }
   50% { opacity: 1; }
 }
 
@@ -176,6 +176,7 @@ body {
   height: var(--dot-cell-size);
   border-radius: var(--radius-full);
   background: currentColor;
+  opacity: 0;
 }
 
 .dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot {
