@@ -17,6 +17,11 @@ vi.mock("#product/stores/activity/goal-bar-store", () => ({
 vi.mock("#product/hooks/cloud/derived/use-composer-integrations-state", () => ({
   useComposerIntegrationsState: () => ({ mode: "hidden", connectedCount: 0, providers: [], reauthLabel: null }),
 }));
+Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
+  configurable: true,
+  value: vi.fn(),
+});
+
 afterEach(() => {
   cleanup();
 });
@@ -135,24 +140,14 @@ describe("ChatInputControlRow", () => {
     expect(screen.getByText("Opus 4.1")).toBeTruthy();
   });
 
-  it("renders effort bars control", () => {
+  it("folds reasoning effort into the model selector", () => {
     renderControlRow();
-    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
-    expect(reasoning.getAttribute("title")?.startsWith("Reasoning: Medium")).toBe(true);
-    expect(reasoning.className).toContain("w-7");
-    expect(reasoning.querySelector("[data-level-bars-icon]")).not.toBeNull();
-    expect(screen.getByText("Medium").className).toContain("sr-only");
-  });
-
-  it("does not reserve a pending glyph beside reasoning", () => {
-    const controls = createControls();
-    const effortControl = controls.find((control) => control.key === "effort")!;
-    effortControl.pendingState = "queued";
-
-    renderControlRow({ sessionConfigControls: controls });
-
-    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
-    expect(reasoning.parentElement?.querySelector("svg")).toBeNull();
+    const selector = screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
+    });
+    expect(selector.textContent).toContain("Opus 4.1");
+    expect(selector.textContent).toContain("Medium");
+    expect(screen.queryByRole("button", { name: "Reasoning: Medium" })).toBeNull();
   });
 
   it("renders working mode as plain text with no disclosure chevron", () => {
@@ -173,20 +168,18 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
-  it("orders model, working mode, reasoning bars, and fast mode in the visible row", () => {
+  it("orders the combined selector before working mode without separate tuning controls", () => {
     renderControlRow();
 
-    const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
-    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
+    const model = screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
+    });
     const mode = screen.getByRole("button", { name: "Mode: Default" });
-    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
 
     expect(model.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(mode.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(reasoning.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reasoning: Medium" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Fast mode: Slow" })).toBeNull();
   });
 
   it("renders plus button for file attach", () => {
@@ -198,12 +191,13 @@ describe("ChatInputControlRow", () => {
   it("uses control-sized optics for the visible primary composer actions", () => {
     renderControlRow();
 
-    const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
-    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
+    const model = screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
+    });
     const integrations = screen.getByRole("button", { name: /connected integrations/i });
     const send = screen.getByRole("button", { name: /Send/ });
 
-    for (const control of [model, fast, integrations, send]) {
+    for (const control of [model, integrations, send]) {
       expect(control.querySelector("svg")?.className.baseVal).toContain("icon-control");
     }
   });
@@ -226,64 +220,41 @@ describe("ChatInputControlRow", () => {
     expect(onAttachFile).toHaveBeenCalledTimes(1);
   });
 
-  it("effort bars step on click", () => {
+  it("selects an explicit effort option without closing the popup", () => {
     const controls = createControls();
     const effortControl = controls.find((c) => c.key === "effort")!;
     renderControlRow({ sessionConfigControls: controls });
 
-    const barsButton = screen.getByRole("button", { name: "Reasoning: Medium" });
-    fireEvent.click(barsButton);
-    // Clicking should advance from index 1 (Medium) to index 2 (High)
+    fireEvent.click(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
+    }));
+    expect(
+      document.querySelector('[data-session-config-control="effort"]')
+        ?.getAttribute("data-session-config-selected"),
+    ).toBe("medium");
+    fireEvent.click(screen.getByRole("button", { name: "High" }));
+
     expect(effortControl.onSelect).toHaveBeenCalledWith("high");
+    expect(screen.getByText("Reasoning effort")).toBeTruthy();
   });
 
-  it("visually distinguishes Fast off and on while preserving its accessible state", () => {
+  it("toggles Fast mode from the combined popup", () => {
     const controls = createControls();
     const fastControl = controls.find((control) => control.key === "fast_mode")!;
-    const { rerender } = renderControlRow({ sessionConfigControls: controls });
+    renderControlRow({ sessionConfigControls: controls });
 
-    const offButton = screen.getByRole("button", { name: "Fast mode: Slow" });
-    expect(offButton.querySelector("svg")?.getAttribute("class")).toContain("opacity-100");
-    expect(offButton.querySelector("svg")?.getAttribute("class")).toContain("fill-none");
-    expect(offButton.querySelector("svg")?.getAttribute("class")).toContain("stroke-current");
-
-    fastControl.isEnabled = true;
-    fastControl.detail = "On";
-    fastControl.options = fastControl.options.map((option) => ({
-      ...option,
-      selected: option.value === "on",
+    fireEvent.click(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
     }));
-    rerender(
-      <MemoryRouter>
-        <ChatInputControlRow
-          runtimeControlsDisabled={false}
-          modelSelectorProps={createModelSelectorProps()}
-          agentKind="claude"
-          sessionConfigControls={controls}
-          isEditingQueuedPrompt={false}
-          chatDisabled={false}
-          isSubmitting={false}
-          supportsAttachments
-          canAttachFiles
-          activeSessionId="test-session"
-          onAttachFile={vi.fn()}
-          isRunning={false}
-          isEmpty
-          onSubmit={vi.fn()}
-          onCancel={vi.fn()}
-        />
-      </MemoryRouter>,
-    );
+    const fastOption = document.querySelector('[data-session-config-control="fast_mode"]');
+    expect(fastOption?.getAttribute("data-session-config-selected")).toBe("off");
+    expect(fastOption?.getAttribute("data-session-config-option")).toBe("fast_mode:on");
+    fireEvent.click(screen.getByRole("button", { name: /Fast mode.*Slow/u }));
 
-    const onButton = screen.getByRole("button", { name: "Fast mode: Fast" });
-    expect(onButton.className).toContain("bg-hover");
-    expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("fill-current");
-    expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("stroke-none");
-    expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("opacity-100");
+    expect(fastControl.onSelect).toHaveBeenCalledWith("on");
   });
 
-
-  it("renders two-level reasoning with bars when effort is unavailable", () => {
+  it("offers two-level reasoning in the popup when effort is unavailable", () => {
     const controls = createControls().filter((control) => control.key !== "effort");
     const reasoningControl: LiveSessionControlDescriptor = {
       key: "reasoning",
@@ -305,19 +276,24 @@ describe("ChatInputControlRow", () => {
     controls.push(reasoningControl);
     renderControlRow({ sessionConfigControls: controls });
 
-    fireEvent.click(screen.getByRole("button", { name: "Reasoning: On" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, On, Fast mode: Slow",
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Off" }));
     expect(reasoningControl.onSelect).toHaveBeenCalledWith("off");
-    expect(screen.queryByRole("button", { name: "More configuration options" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reasoning: On" })).toBeNull();
   });
 
-  it("shows non-settable reasoning effort as disabled bars", () => {
+  it("shows non-settable reasoning effort as disabled popup choices", () => {
     const controls = createControls();
     const effortControl = controls.find((control) => control.key === "effort")!;
     effortControl.settable = false;
     renderControlRow({ sessionConfigControls: controls });
 
-    expect(screen.getByRole("button", { name: "Reasoning: Medium" }))
-      .toHaveProperty("disabled", true);
-  });
+    fireEvent.click(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
+    }));
 
+    expect(screen.getByRole("button", { name: "High" })).toHaveProperty("disabled", true);
+  });
 });

@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { APP_ROUTES } from "#product/config/app-routes";
 import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 import { getSettingsSectionForHarnessKind } from "#product/lib/domain/settings/navigation-presentation";
 import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-display-name-parts";
 import { orderModelGroupsActiveFirst } from "#product/lib/domain/chat/models/order-model-groups";
+import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
+import { resolveSessionToggleControlStateLabel } from "#product/lib/domain/chat/session-controls/session-toggle-control";
 import type {
   ModelSelectorGroup,
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
-import { ArrowUpRight, Check, Plus, Settings } from "@proliferate/ui/icons";
+import { ArrowUpRight, Check, ChevronDown, Plus, Settings, Zap } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
@@ -25,15 +29,26 @@ import {
   modelRowKey,
   useModelPickerKeyboardNav,
 } from "#product/hooks/chat/ui/use-model-picker-keyboard-nav";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { ComposerModelTuningControls } from "#product/components/workspace/chat/input/ComposerModelTuningControls";
 
 interface ComposerModelSelectorControlProps {
   modelSelectorProps: ModelSelectorProps;
+  reasoningControl?: LiveSessionControlDescriptor | null;
+  fastModeControl?: LiveSessionControlDescriptor | null;
+  disabled?: boolean;
+  keyboardShortcutEnabled?: boolean;
 }
 
 export function ComposerModelSelectorControl({
   modelSelectorProps,
+  reasoningControl = null,
+  fastModeControl = null,
+  disabled = false,
+  keyboardShortcutEnabled = false,
 }: ComposerModelSelectorControlProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     connectionState,
     currentModel,
@@ -43,7 +58,7 @@ export function ComposerModelSelectorControl({
     onSelect,
     unsupportedSelectionMessage = null,
   } = modelSelectorProps;
-  const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
+  const selectorEnabled = !disabled && connectionState === "healthy" && !isLoading && hasAgents;
   // The picker opens itself after a refusal so the marked rows are in front of
   // the user rather than one click away. Nonce-driven: two refusals in a row
   // each reopen it, and nothing has to reset a flag.
@@ -55,7 +70,23 @@ export function ComposerModelSelectorControl({
     }
     setPickerOpen(true);
   }, [pickerRequestNonce]);
+  useShortcutHandler("workspace.open-model-selector", () => {
+    setPickerOpen(true);
+  }, {
+    enabled: keyboardShortcutEnabled
+      && selectorEnabled
+      && location.pathname === APP_ROUTES.home,
+    priority: "contextual",
+  });
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
+  const selectedReasoningOption = reasoningControl?.options.find((option) => option.selected) ?? null;
+  const reasoningLabel = resolveReasoningEffortPresentation(
+    selectedReasoningOption?.value ?? null,
+    selectedReasoningOption?.label ?? reasoningControl?.detail,
+  ).shortLabel;
+  const fastModeLabel = fastModeControl
+    ? resolveSessionToggleControlStateLabel("fast_mode", !!fastModeControl.isEnabled)
+    : null;
   // Stable qualification hook (attributes only): prefer the model whose
   // rendered identity matches the current chip. During live-config restore,
   // the requested launch row can remain selected while `currentModel` already
@@ -96,6 +127,7 @@ export function ComposerModelSelectorControl({
         data-composer-selected-model={selectedModelId}
         icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
         label={triggerLabel}
+        detail={reasoningLabel}
         className="max-w-[15rem]"
       />
     );
@@ -111,10 +143,21 @@ export function ComposerModelSelectorControl({
             data-composer-selected-model={selectedModelId}
             icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
             label={triggerLabel}
-            trailing={currentModel?.pendingState
-              ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
-              : null}
-            aria-label={`Model: ${triggerLabel}`}
+            detail={reasoningLabel}
+            trailing={(
+              <span className="flex items-center gap-1">
+                {fastModeControl?.isEnabled && (
+                  <Zap aria-hidden="true" className="icon-paired fill-current text-muted-foreground" />
+                )}
+                <PendingConfigIndicator pendingState={currentModel?.pendingState ?? null} />
+                <PendingConfigIndicator pendingState={reasoningControl?.pendingState ?? null} />
+                <PendingConfigIndicator pendingState={fastModeControl?.pendingState ?? null} />
+                <ChevronDown aria-hidden="true" className="icon-paired text-muted-foreground" />
+              </span>
+            )}
+            aria-label={`${reasoningLabel
+              ? `Model and reasoning: ${triggerLabel}, ${reasoningLabel}`
+              : `Model: ${triggerLabel}`}${fastModeControl ? `, Fast mode: ${fastModeLabel}` : ""}`}
             aria-invalid={unsupportedSelectionMessage ? true : undefined}
             aria-describedby={unsupportedSelectionMessage
               ? MODEL_UNSUPPORTED_MESSAGE_ID
@@ -133,6 +176,8 @@ export function ComposerModelSelectorControl({
           <ComposerModelPickerPopover
             groups={groups}
             currentModel={currentModel}
+            reasoningControl={reasoningControl}
+            fastModeControl={fastModeControl}
             onSelect={(selection) => {
               onSelect(selection);
               close();
@@ -165,12 +210,16 @@ const MODEL_UNSUPPORTED_MESSAGE_ID = "composer-model-unsupported";
 function ComposerModelPickerPopover({
   groups,
   currentModel,
+  reasoningControl,
+  fastModeControl,
   onSelect,
   onAddProvider,
   onSettings,
 }: {
   groups: ModelSelectorGroup[];
   currentModel: ModelSelectorProps["currentModel"];
+  reasoningControl: LiveSessionControlDescriptor | null;
+  fastModeControl: LiveSessionControlDescriptor | null;
   onSelect: (selection: ModelSelectorSelection) => void;
   onAddProvider: () => void;
   onSettings: () => void;
@@ -242,6 +291,13 @@ function ComposerModelPickerPopover({
           <p className="px-3 py-4 text-center text-ui text-muted-foreground">
             No models match "{search}"
           </p>
+        )}
+
+        {!search.trim() && (reasoningControl || fastModeControl) && (
+          <ComposerModelTuningControls
+            reasoningControl={reasoningControl}
+            fastModeControl={fastModeControl}
+          />
         )}
       </div>
 

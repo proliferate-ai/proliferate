@@ -211,6 +211,16 @@ export const WORKSPACE_SHORTCUTS = {
     match: { kind: "fixed", key: "l", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
+  openModelSelector: {
+    id: "workspace.open-model-selector",
+    label: "⌃⇧M",
+    nonMacLabel: "Ctrl+Shift+M",
+    description: "Open model and reasoning options",
+    owner: "js",
+    match: { kind: "fixed-code", code: "KeyM", meta: false, ctrl: true, shift: true, alt: false },
+    nonMacMatch: { kind: "fixed-code", code: "KeyM", meta: true, shift: true, alt: false },
+    allowInInputs: true,
+  },
   openTerminal: {
     id: "workspace.open-terminal",
     label: "⌘J",

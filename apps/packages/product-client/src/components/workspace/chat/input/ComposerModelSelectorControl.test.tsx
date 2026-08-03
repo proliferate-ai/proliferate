@@ -6,8 +6,11 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { modelUnsupportedControlMessage } from "#product/lib/domain/chat/models/model-support-refusals";
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";
+import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher";
+import { clearShortcutHandlerRegistryForTests } from "#product/lib/domain/shortcuts/registry";
 
 // Records `externalOpen` on the DOM so a test can assert the refusal reopened
 // the picker without driving a real popover through jsdom.
@@ -35,8 +38,15 @@ Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
 
 afterEach(() => {
   cleanup();
+  clearShortcutHandlerRegistryForTests();
   useModelSupportStore.setState({ refusalsByKey: {}, pickerRequestNonce: 0 });
+  vi.unstubAllGlobals();
 });
+
+function ShortcutDispatcher() {
+  useShortcutDispatcher();
+  return null;
+}
 
 it("identifies model rows by both harness kind and model id", () => {
   const props: ModelSelectorProps = {
@@ -253,4 +263,101 @@ it("opens the picker when a refusal asks for it, and again on the next refusal",
     useModelSupportStore.getState().requestPicker();
   });
   expect(popoverOpen()).toBe("true");
+});
+
+it("opens model options from the active macOS workspace, not a background route", () => {
+  vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+  const props: ModelSelectorProps = {
+    connectionState: "healthy",
+    currentModel: { kind: "claude", displayName: "Haiku 4.5", pendingState: null },
+    groups: [
+      {
+        kind: "claude",
+        providerDisplayName: "Claude Code",
+        models: [
+          { kind: "claude", modelId: "haiku", displayName: "Haiku 4.5", actionKind: "select", isSelected: true, isUnsupported: false },
+        ],
+      },
+    ],
+    hasAgents: true,
+    isLoading: false,
+    onSelect: vi.fn(),
+  };
+  const reasoningControl: LiveSessionControlDescriptor = {
+    key: "effort",
+    label: "Reasoning effort",
+    detail: "High",
+    rawConfigId: "effort",
+    settable: true,
+    pendingState: null,
+    kind: "select",
+    options: [
+      { value: "medium", label: "Medium", selected: false },
+      { value: "high", label: "High", selected: true },
+    ],
+    onSelect: vi.fn(),
+  };
+
+  const { container, unmount } = render(
+    <MemoryRouter>
+      <ShortcutDispatcher />
+      <ComposerModelSelectorControl
+        modelSelectorProps={props}
+        reasoningControl={reasoningControl}
+        keyboardShortcutEnabled
+      />
+    </MemoryRouter>,
+  );
+  const prompt = document.createElement("textarea");
+  document.body.append(prompt);
+  const shortcut = new KeyboardEvent("keydown", {
+    key: "M",
+    code: "KeyM",
+    ctrlKey: true,
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+
+  act(() => {
+    prompt.dispatchEvent(shortcut);
+  });
+
+  expect(shortcut.defaultPrevented).toBe(true);
+  expect(
+    container.querySelector("[data-test-popover-open]")?.getAttribute("data-test-popover-open"),
+  ).toBe("true");
+  prompt.remove();
+
+  unmount();
+  const hidden = render(
+    <MemoryRouter initialEntries={["/settings"]}>
+      <ShortcutDispatcher />
+      <ComposerModelSelectorControl
+        modelSelectorProps={props}
+        reasoningControl={reasoningControl}
+        keyboardShortcutEnabled
+      />
+    </MemoryRouter>,
+  );
+  const settingsPrompt = document.createElement("textarea");
+  document.body.append(settingsPrompt);
+  const backgroundShortcut = new KeyboardEvent("keydown", {
+    key: "M",
+    code: "KeyM",
+    ctrlKey: true,
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+
+  act(() => {
+    settingsPrompt.dispatchEvent(backgroundShortcut);
+  });
+
+  expect(backgroundShortcut.defaultPrevented).toBe(false);
+  expect(
+    hidden.container.querySelector("[data-test-popover-open]")?.getAttribute("data-test-popover-open"),
+  ).toBe("false");
+  settingsPrompt.remove();
 });

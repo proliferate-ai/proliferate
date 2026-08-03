@@ -148,10 +148,8 @@ Rules:
   reasoning-effort choices and Fast mode when the harness exposes them. Do not
   render a separate click-to-cycle effort-bars button or a separate Fast icon
   button. Model-only contexts such as plan handoff may omit the tuning section.
-  *Status: this combined pill is a ruled target whose implementation was
-  deferred (#1134); the shipped composer still renders separate effort-bars and
-  Fast controls. Until the redesign lands, the separate effort control follows
-  the reasoning-tier presentation rules in §1.2.*
+- `Ctrl+Shift+M` opens the active combined picker, including while the composer
+  editor is focused. It does nothing while that selector is unavailable.
 - Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
   so on); do not rewrite distinct values to internal spellings such as
   `Xhigh`.
@@ -186,17 +184,6 @@ leading mode icon.
 Visible controls use one consistent inter-item rhythm. Compact controls must
 not reserve a trailing pending-state slot when no pending state exists; that
 empty flex child shifts icon-only controls and creates uneven visual gaps.
-
-Reasoning-tier presentation: ladders that top out at the ultra tier (frontier
-models only — `reasoningLadderTopsOutAtUltra`) name the current tier next to
-the bars ("Ultra", "Max", "Extra High"…, authored labels preserved); all other
-models keep the compact icon-only bars. Emphasis states: "max" (top rung of a
-non-ultra ladder) tints the bars with the app accent; "ultra" (top rung is the
-ultra tier) names the tier in foreground-weight text with accent bars plus the
-compositor-only bar wave. The word is the signal — no spectrum gradients, no
-composer-wide ring, no border takeover. The old animated rainbow ring
-(chip gradient + masked surface/cap ring pseudo-elements) was removed
-deliberately; do not reintroduce it.
 
 `collaboration_mode` is the primary working mode whenever it exposes a choice.
 Otherwise a legacy fused `mode` control is primary only when its choices carry

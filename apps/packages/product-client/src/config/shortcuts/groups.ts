@@ -61,6 +61,7 @@ export const SHORTCUT_GROUPS = [
     title: "Current Workspace",
     shortcutKeys: [
       "focusChat",
+      "openModelSelector",
       "openTerminal",
       "toggleLeftSidebar",
       "toggleRightPanel",
