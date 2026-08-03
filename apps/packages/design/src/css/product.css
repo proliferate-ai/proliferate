@@ -171,7 +171,13 @@ body {
   --dot-cell-gap: 0.09375rem;
 }
 
+/* Each dot carries its grid coordinates (--om-r/--om-c) and its clockwise
+   ring position (--om-o); every variant derives its per-dot delay from those
+   in one calc() instead of a per-variant nth-child ladder. */
 .dot-cell-loader__dot {
+  --om-r: 0;
+  --om-c: 0;
+  --om-o: 0;
   width: var(--dot-cell-size);
   height: var(--dot-cell-size);
   border-radius: var(--radius-full);
@@ -179,52 +185,38 @@ body {
   opacity: 0;
 }
 
+.dot-cell-loader__dot:nth-child(2) { --om-c: 1; --om-o: 1; }
+.dot-cell-loader__dot:nth-child(3) { --om-c: 2; --om-o: 2; }
+.dot-cell-loader__dot:nth-child(4) { --om-r: 1; --om-o: 7; }
+.dot-cell-loader__dot:nth-child(5) { --om-r: 1; --om-c: 1; }
+.dot-cell-loader__dot:nth-child(6) { --om-r: 1; --om-c: 2; --om-o: 3; }
+.dot-cell-loader__dot:nth-child(7) { --om-r: 2; --om-o: 6; }
+.dot-cell-loader__dot:nth-child(8) { --om-r: 2; --om-c: 1; --om-o: 5; }
+.dot-cell-loader__dot:nth-child(9) { --om-r: 2; --om-c: 2; --om-o: 4; }
+
+/* Wave sweeps column-major: delay order transposes the grid (col * 3 + row). */
 .dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot {
   transform: scale(0);
   animation: om-wave var(--activity-dot-cell-wave-cycle) var(--ease-standard) infinite;
+  animation-delay: calc(var(--activity-dot-cell-wave-step) * (var(--om-c) * 3 + var(--om-r)));
 }
-
-.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(2) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 3); }
-.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(3) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 6); }
-.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(4) { animation-delay: var(--activity-dot-cell-wave-step); }
-.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(5) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 4); }
-.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(6) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 7); }
-.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(7) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 2); }
-.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(8) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 5); }
-.dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot:nth-child(9) { animation-delay: calc(var(--activity-dot-cell-wave-step) * 8); }
 
 .dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot {
   animation: om-dot var(--activity-dot-cell-orbit-cycle) var(--ease-linear) infinite;
+  animation-delay: calc(var(--activity-dot-cell-orbit-step) * var(--om-o));
 }
 
-.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(2) { animation-delay: var(--activity-dot-cell-orbit-step); }
-.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(3) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 2); }
-.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(4) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 7); }
 .dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(5) { visibility: hidden; animation: none; }
-.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(6) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 3); }
-.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(7) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 6); }
-.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(8) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 5); }
-.dot-cell-loader[data-variant="orbit"] .dot-cell-loader__dot:nth-child(9) { animation-delay: calc(var(--activity-dot-cell-orbit-step) * 4); }
 
 .dot-cell-loader[data-variant="scan"] .dot-cell-loader__dot {
   animation: om-scan var(--activity-dot-cell-scan-cycle) var(--ease-standard) infinite;
+  animation-delay: calc(var(--activity-dot-cell-scan-step) * var(--om-r));
 }
-
-.dot-cell-loader[data-variant="scan"] .dot-cell-loader__dot:nth-child(n+4):nth-child(-n+6) { animation-delay: var(--activity-dot-cell-scan-step); }
-.dot-cell-loader[data-variant="scan"] .dot-cell-loader__dot:nth-child(n+7) { animation-delay: calc(var(--activity-dot-cell-scan-step) * 2); }
 
 .dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot {
   animation: om-helix var(--activity-dot-cell-helix-cycle) var(--ease-standard) infinite;
+  animation-delay: calc(var(--activity-dot-cell-helix-column-step) * var(--om-c) + var(--activity-dot-cell-helix-row-step) * var(--om-r));
 }
-
-.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(2) { animation-delay: var(--activity-dot-cell-helix-column-step); }
-.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(3) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) * 2); }
-.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(4) { animation-delay: var(--activity-dot-cell-helix-row-step); }
-.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(5) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) + var(--activity-dot-cell-helix-row-step)); }
-.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(6) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) * 2 + var(--activity-dot-cell-helix-row-step)); }
-.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(7) { animation-delay: calc(var(--activity-dot-cell-helix-row-step) * 2); }
-.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(8) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) + var(--activity-dot-cell-helix-row-step) * 2); }
-.dot-cell-loader[data-variant="helix"] .dot-cell-loader__dot:nth-child(9) { animation-delay: calc(var(--activity-dot-cell-helix-column-step) * 2 + var(--activity-dot-cell-helix-row-step) * 2); }
 
 .dot-cell-loader[data-variant="breathe"] .dot-cell-loader__dot {
   animation: om-breathe var(--activity-dot-cell-breathe-cycle) var(--ease-standard) infinite;
