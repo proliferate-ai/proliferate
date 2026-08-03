@@ -1,7 +1,6 @@
 /* @vitest-environment jsdom */
 
-import type { ReactNode } from "react";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
@@ -11,25 +10,6 @@ import { modelUnsupportedControlMessage } from "#product/lib/domain/chat/models/
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher";
 import { clearShortcutHandlerRegistryForTests } from "#product/lib/domain/shortcuts/registry";
-
-// Records `externalOpen` on the DOM so a test can assert the refusal reopened
-// the picker without driving a real popover through jsdom.
-vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
-  PopoverButton: ({
-    trigger,
-    children,
-    externalOpen,
-  }: {
-    trigger: ReactNode;
-    children: (close: () => void) => ReactNode;
-    externalOpen?: boolean;
-  }) => (
-    <span data-test-popover-open={externalOpen ? "true" : "false"}>
-      {trigger}
-      {children(() => undefined)}
-    </span>
-  ),
-}));
 
 Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
   configurable: true,
@@ -46,6 +26,14 @@ afterEach(() => {
 function ShortcutDispatcher() {
   useShortcutDispatcher();
   return null;
+}
+
+function openModelOptions(container: HTMLElement) {
+  fireEvent.pointerDown(container.querySelector<HTMLElement>("[data-composer-model-trigger]")!, {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(document.querySelector<HTMLElement>("[data-composer-model-menu]")!);
 }
 
 it("identifies model rows by both harness kind and model id", () => {
@@ -79,7 +67,8 @@ it("identifies model rows by both harness kind and model id", () => {
     </MemoryRouter>,
   );
 
-  const codexRow = container.querySelector('button[data-model-kind="codex"][data-model-option="gpt-5.5"]');
+  openModelOptions(container);
+  const codexRow = document.querySelector('[data-model-kind="codex"][data-model-option="gpt-5.5"]');
   expect(codexRow).not.toBeNull();
 });
 
@@ -139,16 +128,17 @@ it("marks a refused row as disabled and explains it, rather than hiding the mode
     </MemoryRouter>,
   );
 
-  const refusedRow = container.querySelector<HTMLButtonElement>('button[data-model-option="opus-9"]');
+  openModelOptions(container);
+  const refusedRow = document.querySelector<HTMLElement>('[data-model-option="opus-9"]');
   expect(refusedRow).not.toBeNull();
   expect(refusedRow?.getAttribute("data-model-unsupported")).toBe("true");
-  expect(refusedRow?.disabled).toBe(true);
+  expect(refusedRow?.hasAttribute("data-disabled")).toBe(true);
   expect(refusedRow?.textContent).toContain("Not supported on this target");
 
-  const supportedRow = container.querySelector<HTMLButtonElement>('button[data-model-option="haiku"]');
-  expect(supportedRow?.disabled).toBe(false);
+  const supportedRow = document.querySelector<HTMLElement>('[data-model-option="haiku"]');
+  expect(supportedRow?.hasAttribute("data-disabled")).toBe(false);
 
-  refusedRow?.click();
+  if (refusedRow) fireEvent.click(refusedRow);
   expect(onSelect).not.toHaveBeenCalled();
 });
 
@@ -244,15 +234,15 @@ it("opens the picker when a refusal asks for it, and again on the next refusal",
       <ComposerModelSelectorControl modelSelectorProps={props} />
     </MemoryRouter>,
   );
-  const popoverOpen = () =>
-    container.querySelector("[data-test-popover-open]")?.getAttribute("data-test-popover-open");
+  const menuState = () =>
+    container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state");
 
-  expect(popoverOpen()).toBe("false");
+  expect(menuState()).toBe("closed");
 
   act(() => {
     useModelSupportStore.getState().requestPicker();
   });
-  expect(popoverOpen()).toBe("true");
+  expect(menuState()).toBe("open");
 
   // The user closes it without changing anything; the next refusal must still
   // be able to bring it back, which a latched boolean could not do.
@@ -262,7 +252,7 @@ it("opens the picker when a refusal asks for it, and again on the next refusal",
   act(() => {
     useModelSupportStore.getState().requestPicker();
   });
-  expect(popoverOpen()).toBe("true");
+  expect(menuState()).toBe("open");
 });
 
 it("opens model options from the active macOS workspace, not a background route", () => {
@@ -325,8 +315,8 @@ it("opens model options from the active macOS workspace, not a background route"
 
   expect(shortcut.defaultPrevented).toBe(true);
   expect(
-    container.querySelector("[data-test-popover-open]")?.getAttribute("data-test-popover-open"),
-  ).toBe("true");
+    container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+  ).toBe("open");
   prompt.remove();
 
   unmount();
@@ -357,7 +347,7 @@ it("opens model options from the active macOS workspace, not a background route"
 
   expect(backgroundShortcut.defaultPrevented).toBe(false);
   expect(
-    hidden.container.querySelector("[data-test-popover-open]")?.getAttribute("data-test-popover-open"),
-  ).toBe("false");
+    hidden.container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+  ).toBe("closed");
   settingsPrompt.remove();
 });

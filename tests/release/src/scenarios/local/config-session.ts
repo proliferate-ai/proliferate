@@ -1086,6 +1086,7 @@ async function selectModelInComposer(
     try {
       await trigger.waitFor({ state: "visible", timeout: 5_000 });
       await trigger.click();
+      await p.locator("[data-composer-model-menu]").first().click();
     } catch {
       await sleep(1_500);
       continue;
@@ -1357,6 +1358,7 @@ async function selectTuningValue(
     `[data-session-config-control="${cssAttr(control.key)}"]`,
   ).first();
   await controlSurface.waitFor({ state: "visible", timeout: 15_000 });
+  await controlSurface.click();
   const option = p.locator(
     `[data-session-config-option="${cssAttr(`${control.key}:${value}`)}"]`,
   ).first();
@@ -1754,6 +1756,7 @@ async function selectHarnessInComposer(
     try {
       await trigger.waitFor({ state: "visible", timeout: 5_000 });
       await trigger.click();
+      await p.locator("[data-composer-model-menu]").first().click();
     } catch {
       await sleep(1_500);
       continue;

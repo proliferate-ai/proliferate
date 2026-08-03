@@ -1,8 +1,13 @@
-import { Check, Zap } from "@proliferate/ui/icons";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { useState } from "react";
+import { Check } from "@proliferate/ui/icons";
+import {
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "@proliferate/ui/primitives/DropdownMenu";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import { resolveSessionToggleControlStateLabel } from "#product/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 interface ComposerModelTuningControlsProps {
@@ -10,79 +15,99 @@ interface ComposerModelTuningControlsProps {
   fastModeControl: LiveSessionControlDescriptor | null;
 }
 
+interface TuningOption {
+  value: string;
+  label: string;
+  selected: boolean;
+}
+
 export function ComposerModelTuningControls({
   reasoningControl,
   fastModeControl,
 }: ComposerModelTuningControlsProps) {
-  const selectedReasoningValue = reasoningControl?.options
-    .find((option) => option.selected)?.value ?? "";
-  const selectedFastModeValue = fastModeControl?.options.find((option) => option.selected)?.value
+  const reasoningOptions = reasoningControl?.options.map((option) => ({
+    value: option.value,
+    label: resolveReasoningEffortPresentation(option.value, option.label).shortLabel
+      ?? option.label,
+    selected: option.selected,
+  })) ?? [];
+  const selectedSpeedValue = fastModeControl?.options.find((option) => option.selected)?.value
     ?? (fastModeControl?.isEnabled
       ? fastModeControl.enabledValue
-      : fastModeControl?.disabledValue)
-    ?? "";
-  const nextFastModeValue = fastModeControl?.isEnabled
-    ? fastModeControl.disabledValue
-    : fastModeControl?.enabledValue;
+      : fastModeControl?.disabledValue);
+  const speedOptions = fastModeControl?.options.map((option) => ({
+    value: option.value,
+    label: option.value === fastModeControl.enabledValue ? "Fast" : "Default",
+    selected: option.value === selectedSpeedValue,
+  })) ?? [];
 
   return (
-    <div className="mt-1 border-t border-border pt-1">
+    <>
       {reasoningControl && (
-        <div
-          data-session-config-control={reasoningControl.key}
-          data-session-config-selected={selectedReasoningValue}
-        >
-          <div className="px-2.5 pb-1 pt-1.5 text-ui-sm text-muted-foreground">
-            Reasoning effort
-          </div>
-          {reasoningControl.options.map((option) => (
-            <PopoverMenuItem
-              key={option.value}
-              data-session-config-option={`${reasoningControl.key}:${option.value}`}
-              label={resolveReasoningEffortPresentation(
-                option.value,
-                option.label,
-              ).shortLabel ?? option.label}
-              trailing={(
-                <span className="flex items-center gap-1">
-                  {option.selected && <Check className="icon-paired text-foreground/60" />}
-                  {option.selected && (
-                    <PendingConfigIndicator pendingState={reasoningControl.pendingState} />
-                  )}
-                </span>
-              )}
-              disabled={!reasoningControl.settable}
-              labelClassName="text-composer"
-              className={`px-2.5 py-2 ${option.selected ? "bg-hover" : ""}`}
-              onClick={() => reasoningControl.onSelect(option.value)}
-            />
-          ))}
-        </div>
-      )}
-
-      {fastModeControl && (
-        <PopoverMenuItem
-          data-session-config-control={fastModeControl.key}
-          data-session-config-selected={selectedFastModeValue}
-          data-session-config-option={`${fastModeControl.key}:${nextFastModeValue ?? ""}`}
-          icon={<Zap className={`icon-paired ${fastModeControl.isEnabled ? "fill-current" : ""}`} />}
-          label="Fast mode"
-          trailing={(
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <span>{resolveSessionToggleControlStateLabel("fast_mode", !!fastModeControl.isEnabled)}</span>
-              <PendingConfigIndicator pendingState={fastModeControl.pendingState} />
-            </span>
-          )}
-          disabled={!fastModeControl.settable || !nextFastModeValue}
-          labelClassName="text-composer"
-          className="px-2.5 py-2"
-          onClick={() => {
-            if (nextFastModeValue) {
-              fastModeControl.onSelect(nextFastModeValue);
-            }
-          }}
+        <TuningSubmenu
+          label="Effort"
+          control={reasoningControl}
+          options={reasoningOptions}
         />
       )}
-    </div>
+      {fastModeControl && (
+        <TuningSubmenu
+          label="Speed"
+          control={fastModeControl}
+          options={speedOptions}
+        />
+      )}
+    </>
+  );
+}
+
+function TuningSubmenu({
+  label,
+  control,
+  options,
+}: {
+  label: "Effort" | "Speed";
+  control: LiveSessionControlDescriptor;
+  options: TuningOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedOption = options.find((option) => option.selected) ?? null;
+
+  return (
+    <DropdownMenuSub open={open} onOpenChange={setOpen}>
+      <DropdownMenuSubTrigger
+        data-session-config-control={control.key}
+        data-session-config-selected={selectedOption?.value ?? ""}
+        className="py-2 text-composer"
+        onClick={() => setOpen(true)}
+      >
+        <span className="min-w-0 flex-1">{label}</span>
+        <span className="max-w-28 truncate text-muted-foreground">
+          {selectedOption?.label ?? control.detail}
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent sideOffset={4} alignOffset={-4} className="w-56">
+        {options.map((option) => (
+          <DropdownMenuItem
+            key={option.value}
+            data-session-config-option={`${control.key}:${option.value}`}
+            disabled={!control.settable}
+            className="py-2 text-composer"
+            onSelect={(event) => {
+              event.preventDefault();
+              control.onSelect(option.value);
+            }}
+          >
+            <span className="min-w-0 flex-1 truncate">{option.label}</span>
+            <span className="flex size-3.5 shrink-0 items-center justify-center">
+              {option.selected && <Check className="icon-paired text-foreground/60" />}
+              {option.selected && (
+                <PendingConfigIndicator pendingState={control.pendingState} />
+              )}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }

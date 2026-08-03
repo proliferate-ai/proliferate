@@ -143,11 +143,30 @@ describe("ChatInputControlRow", () => {
   it("folds reasoning effort into the model selector", () => {
     renderControlRow();
     const selector = screen.getByRole("button", {
-      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Default",
     });
     expect(selector.textContent).toContain("Opus 4.1");
     expect(selector.textContent).toContain("Medium");
     expect(screen.queryByRole("button", { name: "Reasoning: Medium" })).toBeNull();
+  });
+
+  it("opens a compact root with nested Model, Effort, and Speed rows", () => {
+    renderControlRow();
+
+    fireEvent.pointerDown(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Default",
+    }), { button: 0, ctrlKey: false });
+
+    expect(document.querySelector("[data-composer-model-menu]")?.textContent)
+      .toContain("Model");
+    expect(document.querySelector('[data-session-config-control="effort"]')?.textContent)
+      .toContain("Effort");
+    expect(document.querySelector('[data-session-config-control="fast_mode"]')?.textContent)
+      .toContain("Speed");
+    expect(document.querySelector("[data-model-option]")).toBeNull();
+
+    fireEvent.click(document.querySelector<HTMLElement>("[data-composer-model-menu]")!);
+    expect(document.querySelector('[data-model-option="opus-4.1"]')).not.toBeNull();
   });
 
   it("renders working mode as plain text with no disclosure chevron", () => {
@@ -172,14 +191,14 @@ describe("ChatInputControlRow", () => {
     renderControlRow();
 
     const model = screen.getByRole("button", {
-      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Default",
     });
     const mode = screen.getByRole("button", { name: "Mode: Default" });
 
     expect(model.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
     expect(screen.queryByRole("button", { name: "Reasoning: Medium" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Fast mode: Slow" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Fast mode: Default" })).toBeNull();
   });
 
   it("renders plus button for file attach", () => {
@@ -192,7 +211,7 @@ describe("ChatInputControlRow", () => {
     renderControlRow();
 
     const model = screen.getByRole("button", {
-      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Default",
     });
     const integrations = screen.getByRole("button", { name: /connected integrations/i });
     const send = screen.getByRole("button", { name: /Send/ });
@@ -220,36 +239,36 @@ describe("ChatInputControlRow", () => {
     expect(onAttachFile).toHaveBeenCalledTimes(1);
   });
 
-  it("selects an explicit effort option without closing the popup", () => {
+  it("opens the Effort submenu and selects an explicit option", () => {
     const controls = createControls();
     const effortControl = controls.find((c) => c.key === "effort")!;
     renderControlRow({ sessionConfigControls: controls });
 
-    fireEvent.click(screen.getByRole("button", {
-      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
-    }));
-    expect(
-      document.querySelector('[data-session-config-control="effort"]')
-        ?.getAttribute("data-session-config-selected"),
-    ).toBe("medium");
-    fireEvent.click(screen.getByRole("button", { name: "High" }));
+    fireEvent.pointerDown(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Default",
+    }), { button: 0, ctrlKey: false });
+    const effortMenu = document.querySelector<HTMLElement>('[data-session-config-control="effort"]')!;
+    expect(effortMenu.getAttribute("data-session-config-selected")).toBe("medium");
+    fireEvent.click(effortMenu);
+    fireEvent.click(screen.getByRole("menuitem", { name: "High" }));
 
     expect(effortControl.onSelect).toHaveBeenCalledWith("high");
-    expect(screen.getByText("Reasoning effort")).toBeTruthy();
   });
 
-  it("toggles Fast mode from the combined popup", () => {
+  it("opens the Speed submenu and selects Fast", () => {
     const controls = createControls();
     const fastControl = controls.find((control) => control.key === "fast_mode")!;
     renderControlRow({ sessionConfigControls: controls });
 
-    fireEvent.click(screen.getByRole("button", {
-      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
-    }));
+    fireEvent.pointerDown(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Default",
+    }), { button: 0, ctrlKey: false });
     const fastOption = document.querySelector('[data-session-config-control="fast_mode"]');
     expect(fastOption?.getAttribute("data-session-config-selected")).toBe("off");
-    expect(fastOption?.getAttribute("data-session-config-option")).toBe("fast_mode:on");
-    fireEvent.click(screen.getByRole("button", { name: /Fast mode.*Slow/u }));
+    fireEvent.click(fastOption!);
+    const fastChoice = document.querySelector<HTMLElement>('[data-session-config-option="fast_mode:on"]')!;
+    expect(fastChoice.textContent).toContain("Fast");
+    fireEvent.click(fastChoice);
 
     expect(fastControl.onSelect).toHaveBeenCalledWith("on");
   });
@@ -276,10 +295,11 @@ describe("ChatInputControlRow", () => {
     controls.push(reasoningControl);
     renderControlRow({ sessionConfigControls: controls });
 
-    fireEvent.click(screen.getByRole("button", {
-      name: "Model and reasoning: Opus 4.1, On, Fast mode: Slow",
-    }));
-    fireEvent.click(screen.getByRole("button", { name: "Off" }));
+    fireEvent.pointerDown(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, On, Fast mode: Default",
+    }), { button: 0, ctrlKey: false });
+    fireEvent.click(document.querySelector<HTMLElement>('[data-session-config-control="reasoning"]')!);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Off" }));
     expect(reasoningControl.onSelect).toHaveBeenCalledWith("off");
     expect(screen.queryByRole("button", { name: "Reasoning: On" })).toBeNull();
   });
@@ -290,10 +310,12 @@ describe("ChatInputControlRow", () => {
     effortControl.settable = false;
     renderControlRow({ sessionConfigControls: controls });
 
-    fireEvent.click(screen.getByRole("button", {
-      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Slow",
-    }));
+    fireEvent.pointerDown(screen.getByRole("button", {
+      name: "Model and reasoning: Opus 4.1, Medium, Fast mode: Default",
+    }), { button: 0, ctrlKey: false });
 
-    expect(screen.getByRole("button", { name: "High" })).toHaveProperty("disabled", true);
+    fireEvent.click(document.querySelector<HTMLElement>('[data-session-config-control="effort"]')!);
+    expect(screen.getByRole("menuitem", { name: "High" }).hasAttribute("data-disabled"))
+      .toBe(true);
   });
 });

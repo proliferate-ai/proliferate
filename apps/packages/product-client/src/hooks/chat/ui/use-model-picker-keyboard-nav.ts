@@ -55,13 +55,13 @@ export function useModelPickerKeyboardNav(
     return flatModelKeys[0] ?? null;
   }, [filteredGroups, flatModelKeys]);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(initialHighlightKey);
-  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const rowRefs = useRef(new Map<string, HTMLElement>());
   const effectiveHighlightedKey =
     highlightedKey && flatModelKeys.includes(highlightedKey)
       ? highlightedKey
       : initialHighlightKey;
 
-  const setRowRef = useCallback((key: string, element: HTMLButtonElement | null) => {
+  const setRowRef = useCallback((key: string, element: HTMLElement | null) => {
     if (element) {
       rowRefs.current.set(key, element);
     } else {

@@ -144,12 +144,17 @@ display labels or from one provider's raw runtime id shape.
 Rules:
 
 - Model and reasoning effort share one composer pill: `Model · Effort`. Its
-  popover contains the searchable grouped model catalog followed by explicit
-  reasoning-effort choices and Fast mode when the harness exposes them. Do not
-  render a separate click-to-cycle effort-bars button or a separate Fast icon
-  button. Model-only contexts such as plan handoff may omit the tuning section.
-- `Ctrl+Shift+M` opens the active combined picker, including while the composer
-  editor is focused. It does nothing while that selector is unavailable.
+  compact root menu presents `Model`, `Effort`, and `Speed` as nested rows when
+  the harness exposes those controls. Each row shows the current value and
+  opens its complete choice list in a side panel. The Model panel retains the
+  searchable grouped catalog; Effort preserves the authored option ladder;
+  Speed presents the default and fast choices. Provider setup and settings
+  remain in the nested Advanced row. Do not render a separate click-to-cycle
+  effort-bars button or a separate Fast icon button. Model-only contexts such
+  as plan handoff may omit the tuning rows.
+- `Ctrl+Shift+M` opens the active compact root menu, including while the
+  composer editor is focused. It does nothing while that selector is
+  unavailable.
 - Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
   so on); do not rewrite distinct values to internal spellings such as
   `Xhigh`.
