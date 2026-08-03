@@ -110,7 +110,7 @@ describe("composerIntegrationHealthDot", () => {
   });
 
   it("maps needs_reauth to a warning dot", () => {
-    expect(composerIntegrationHealthDot("needs_reauth").className).toBe("bg-warning");
+    expect(composerIntegrationHealthDot("needs_reauth").className).toBe("bg-warning-foreground");
   });
 
   it("maps error to a destructive dot", () => {

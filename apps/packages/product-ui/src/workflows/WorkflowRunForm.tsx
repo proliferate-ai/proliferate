@@ -69,9 +69,9 @@ export function WorkflowRunForm({
         </p>
       ) : null}
       {blockers.length > 0 ? (
-        <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 px-3 py-2" role="status">
-          <p className="text-ui font-medium text-warning">This workflow cannot run yet.</p>
-          <ul className="mt-1 space-y-1 text-ui text-warning">
+        <div className="mt-3 rounded-md border border-warning-border bg-warning-subtle px-3 py-2" role="status">
+          <p className="text-ui font-medium text-warning-foreground">This workflow cannot run yet.</p>
+          <ul className="mt-1 space-y-1 text-ui text-warning-foreground">
             {[...blockers]
               .sort((a, b) => a.path.localeCompare(b.path) || a.code.localeCompare(b.code))
               .map((blocker) => (

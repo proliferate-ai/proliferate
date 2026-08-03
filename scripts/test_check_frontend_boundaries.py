@@ -169,5 +169,59 @@ class UiSrcTopLevelShapeTest(unittest.TestCase):
         self.assertEqual(violations, [])
 
 
+class WarningInkBoundaryTest(unittest.TestCase):
+    def run_rule(self, source: str) -> list[check_module.Violation]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            ui_src = root / "apps" / "packages" / "ui" / "src"
+            ui_src.mkdir(parents=True)
+            (ui_src / "Sample.tsx").write_text(source, encoding="utf-8")
+            empty = root / "empty"
+            with patch.object(check_module, "REPO_ROOT", root), patch.object(
+                check_module, "UI_SRC", ui_src
+            ), patch.multiple(
+                check_module,
+                PRODUCT_UI_SRC=empty,
+                PRODUCT_SURFACES_SRC=empty,
+                PRODUCT_CLIENT_SRC=empty,
+                DESKTOP_SRC=empty,
+                WEB_SRC=empty,
+            ):
+                return check_module.find_warning_ink_violations()
+
+    def test_bare_text_warning_fails(self) -> None:
+        violations = self.run_rule('const tone = "text-warning";\n')
+
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0].rule_id, "WARNING_TOKEN_AS_INK")
+        self.assertIn("text-warning-foreground", violations[0].message)
+
+    def test_purpose_built_tokens_pass(self) -> None:
+        violations = self.run_rule(
+            'const tone = "border-warning-border bg-warning-subtle text-warning-foreground";\n'
+        )
+
+        self.assertEqual(violations, [])
+
+    def test_alpha_modified_fill_and_border_fail(self) -> None:
+        violations = self.run_rule('const tone = "border-warning/30 bg-warning/10";\n')
+
+        self.assertEqual(len(violations), 2)
+        self.assertEqual(
+            {violation.rule_id for violation in violations}, {"WARNING_TOKEN_AS_INK"}
+        )
+
+    def test_solid_fill_is_allowed(self) -> None:
+        # Using the fill token AS a fill is correct (OfflineIndicator's banner).
+        violations = self.run_rule('const tone = "bg-warning text-warning-foreground";\n')
+
+        self.assertEqual(violations, [])
+
+    def test_commented_usage_is_ignored(self) -> None:
+        violations = self.run_rule('// historical note: text-warning was wrong\n')
+
+        self.assertEqual(violations, [])
+
+
 if __name__ == "__main__":
     unittest.main()

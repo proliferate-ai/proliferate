@@ -120,7 +120,7 @@ export function BillingBalanceNotice({
         "flex items-start gap-3 rounded-lg border p-3 text-body",
         tone === "destructive"
           ? "border-destructive/30 bg-destructive/10 text-destructive"
-          : "border-warning/30 bg-warning/10 text-warning-foreground",
+          : "border-warning-border bg-warning-subtle text-warning-foreground",
         className,
       )}
     >

@@ -55,7 +55,11 @@ export function SettingsMenu({
           type="button"
           variant="outline"
           size="sm"
-          className={`h-7 justify-between rounded-lg border border-input bg-transparent px-2.5 text-ui font-control leading-4 text-foreground shadow-none hover:bg-hover active:bg-active data-[state=open]:bg-active ${className}`}
+          // `[&_svg]:icon-paired` sizes a bare icon passed through `leading`
+          // (the same descendant-selector idiom `SegmentedControl` and
+          // `RadioCardGroup` use). Without it an unsized SVG renders at its
+          // viewport default and every call site has to compensate.
+          className={`h-7 justify-between rounded-lg border border-input bg-transparent px-2.5 text-ui font-control leading-4 text-foreground shadow-none [&_svg]:icon-paired hover:bg-hover active:bg-active data-[state=open]:bg-active ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
