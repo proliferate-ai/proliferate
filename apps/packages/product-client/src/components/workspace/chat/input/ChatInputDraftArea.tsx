@@ -100,7 +100,6 @@ export function ChatInputDraftArea({
                 onEditDraftChange(value);
               }}
               onKeyDown={onKeyDown}
-              submitBehavior="editing"
               canSubmit={canSubmit}
               onSubmit={onSubmit}
               placeholder={placeholder}

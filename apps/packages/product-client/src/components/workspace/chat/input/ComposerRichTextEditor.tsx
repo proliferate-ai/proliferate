@@ -55,7 +55,6 @@ export interface ComposerRichTextEditorProps {
   onCommandKey?: (event: KeyboardEvent) => boolean;
   /** Id of the highlighted row in an open inline menu, for aria-activedescendant. */
   activeDescendantId?: string;
-  submitBehavior: "workspace" | "home" | "editing";
   canSubmit: boolean;
   onSubmit: () => void;
   editorRef?: (editor: LexicalEditor) => void;
@@ -73,7 +72,6 @@ export function ComposerRichTextEditor({
   onKeyDown,
   onCommandKey,
   activeDescendantId,
-  submitBehavior,
   canSubmit,
   onSubmit,
   editorRef, rootRef, surface = "workspace",
@@ -149,7 +147,6 @@ export function ComposerRichTextEditor({
       <ListPlugin />
       <MarkdownShortcutPlugin transformers={INPUT_TRANSFORMERS} />
       <ComposerBehaviorPlugin
-        submitBehavior={submitBehavior}
         canSubmit={canSubmit}
         onSubmit={onSubmit}
         onKeyDown={onKeyDown}
@@ -267,12 +264,11 @@ function ComposerEditorBridge({
 }
 
 function ComposerBehaviorPlugin({
-  submitBehavior,
   canSubmit,
   onSubmit,
   onKeyDown,
   onCommandKey,
-}: Pick<ComposerRichTextEditorProps, "submitBehavior" | "canSubmit" | "onSubmit" | "onKeyDown" | "onCommandKey">) {
+}: Pick<ComposerRichTextEditorProps, "canSubmit" | "onSubmit" | "onKeyDown" | "onCommandKey">) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -283,8 +279,7 @@ function ComposerBehaviorPlugin({
       const plainEnter = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
       const primaryEnter = !event.shiftKey && !event.altKey && (event.metaKey || event.ctrlKey);
       if (plainEnter && inList) return false;
-      const ownsSubmit = submitBehavior === "home" ? primaryEnter : plainEnter || primaryEnter;
-      if (!ownsSubmit) return false;
+      if (!plainEnter && !primaryEnter) return false;
       event.preventDefault();
       if (!event.repeat && canSubmit) onSubmit();
       return true;
@@ -303,7 +298,7 @@ function ComposerBehaviorPlugin({
       );
     }, COMMAND_PRIORITY_HIGH);
     return () => { unregisterEnter(); unregisterTab(); };
-  }, [canSubmit, editor, onCommandKey, onKeyDown, onSubmit, submitBehavior]);
+  }, [canSubmit, editor, onCommandKey, onKeyDown, onSubmit]);
 
   return null;
 }
