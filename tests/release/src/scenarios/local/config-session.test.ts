@@ -177,7 +177,7 @@ function control(overrides: Partial<LocalConfigControl> = {}): LocalConfigContro
     currentValue: "low",
     settable: true,
     values: ["low", "high"],
-    surface: "reasoning",
+    surface: "tuning",
     ...overrides,
   };
 }
@@ -382,7 +382,7 @@ test("cycleConfigControls: mutates model last so dependent controls are not stal
     fakePage(),
     [
       control({ key: "model", surface: "model", currentValue: "gpt-a", values: ["gpt-a", "gpt-b"] }),
-      control({ key: "reasoning", surface: "reasoning", currentValue: "low", values: ["low", "high"] }),
+      control({ key: "reasoning", surface: "tuning", currentValue: "low", values: ["low", "high"] }),
       control({ key: "mode", surface: "mode", currentValue: "default", values: ["default", "plan"] }),
     ],
     {
@@ -646,7 +646,7 @@ test("enumerateControls keeps only promoted UI controls and drops shadowed reaso
   const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1", "claude", "claude-haiku");
   assert.deepEqual(
     controls.map((control) => `${control.key}:${control.surface}`).sort(),
-    ["collaboration_mode:mode", "effort:reasoning"],
+    ["collaboration_mode:mode", "effort:tuning"],
   );
 });
 
@@ -894,13 +894,13 @@ test("model config selection remains unavailable to non-Grok harnesses", async (
 
 test("configSurfaceFor maps the catalog model picker and promoted live-composer controls", () => {
   // The live chat composer renders exactly the promoted control groups
-  // (ChatInputControlRow): effort/reasoning bars and the working-mode control.
-  assert.equal(configSurfaceFor("effort"), "reasoning");
-  assert.equal(configSurfaceFor("reasoning"), "reasoning");
+  // (ChatInputControlRow): combined model/tuning and working-mode controls.
+  assert.equal(configSurfaceFor("effort"), "tuning");
+  assert.equal(configSurfaceFor("reasoning"), "tuning");
+  assert.equal(configSurfaceFor("fast_mode"), "tuning");
   assert.equal(configSurfaceFor("mode"), "mode");
   assert.equal(configSurfaceFor("collaboration_mode"), "mode");
   assert.equal(configSurfaceFor("model"), "model");
-  // fast_mode has no testid, and arbitrary ACP controls have no live-composer strip.
-  assert.equal(configSurfaceFor("fast_mode"), null);
+  // Arbitrary ACP controls have no live-composer strip.
   assert.equal(configSurfaceFor("temperature"), null);
 });

@@ -2,44 +2,6 @@ export interface SessionReasoningEffortPresentation {
   shortLabel: string | null;
 }
 
-// Ladders that top out at the ultra tier (frontier models only) present the
-// tier by name in the composer — "Ultra" / "Max" / "X High" — instead of the
-// icon-only bars every other model keeps.
-export function reasoningLadderTopsOutAtUltra(
-  options: ReadonlyArray<{ value: string }>,
-): boolean {
-  if (options.length < 2) {
-    return false;
-  }
-  return options[options.length - 1]?.value.toLowerCase() === "ultra";
-}
-
-export type ReasoningEffortTierTone =
-  | "muted"
-  | "secondary"
-  | "foreground"
-  | "special"
-  | "ultra";
-
-// Tint ladder for the tier-label chip (ultra-capable ladders show the tier
-// by name instead of bars): quiet grays through the working range, the app
-// special blue at max, and the convention purple for ultra.
-const TIER_TONES: Readonly<Record<string, ReasoningEffortTierTone>> = {
-  minimal: "muted",
-  low: "muted",
-  medium: "secondary",
-  high: "foreground",
-  xhigh: "foreground",
-  max: "special",
-  ultra: "ultra",
-};
-
-export function resolveReasoningEffortTierTone(
-  value: string | null,
-): ReasoningEffortTierTone {
-  return TIER_TONES[value?.toLowerCase() ?? ""] ?? "secondary";
-}
-
 const TITLE_CASE_SPLIT = /[^a-z0-9]+/i;
 
 export function resolveReasoningEffortPresentation(

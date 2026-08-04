@@ -34,9 +34,12 @@ describe("buildShortcutSections", () => {
     ]);
 
     const tabs = sections.find((section) => section.title === "Tabs");
+    const currentWorkspace = sections.find((section) => section.title === "Current Workspace");
     expect(findEntry(tabs, "Previous tab")?.labels).toEqual(["⌘⇧[", "⌘⌥←"]);
     expect(findEntry(tabs, "Close other tabs")?.labels).toEqual(["⌘⌥O", "⌘⇧O"]);
     expect(findEntry(tabs, "New chat")?.labels).toEqual(["⌘T"]);
+    expect(findEntry(currentWorkspace, "Open model and reasoning options")?.labels)
+      .toEqual(["⌃⇧M"]);
   });
 
   it("matches by binding label and keeps only the matching alias", () => {

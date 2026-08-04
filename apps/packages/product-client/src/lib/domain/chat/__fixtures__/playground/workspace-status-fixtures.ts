@@ -24,7 +24,7 @@ export function createPlaygroundWorkspaceStatusModel(): WorkspaceStatusModel {
             key: "check-vitest",
             name: "CI / desktop-vitest",
             state: "failing",
-            detail: "ComposerReasoningEffortBars renders the tier label for ultra ladders — expected \"Ultra\", received \"Xhigh\".",
+            detail: "ComposerModelSelectorControl renders the authored effort label — expected \"Ultra\", received \"Xhigh\".",
             meta: "4m",
           },
           {

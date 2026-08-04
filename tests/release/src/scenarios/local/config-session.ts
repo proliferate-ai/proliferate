@@ -125,9 +125,9 @@ export interface LocalConfigDriver {
 
   /**
    * Selects `value` for `control` THROUGH the product UI (composer
-   * SessionConfigControls / SessionModeControl / ComposerReasoningEffortBars /
-   * model picker), waits beyond the rejection window, and reads the value back
-   * from the UI. Returns whether it was accepted or rejected-and-restored.
+   * combined model/tuning picker, mode control, or model picker), waits beyond
+   * the rejection window, and reads the value back from the UI. Returns whether
+   * it was accepted or rejected-and-restored.
    */
   selectConfigValueInUi(
     context: LocalConfigSelectionContext,
@@ -149,7 +149,7 @@ export interface LocalConfigControl {
   /** Which composer surface renders it, so the driver picks the right testid.
    * Grok's catalog-backed `model` control is driven through the composer model
    * picker; mode and reasoning use their promoted live composer controls. */
-  surface: "model" | "mode" | "reasoning";
+  surface: "model" | "mode" | "tuning";
 }
 
 export interface LocalConfigSelectionContext {
@@ -221,9 +221,9 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
   async enumerateControls(world, sessionId, harness, activeModelId) {
     const live = await world.runtime.client.getLiveConfig(sessionId);
     const normalized = Object.values(live.normalizedControls);
-    // The reasoning bars render ONE ladder: `effort` wins over `reasoning` when
-    // both are advertised (resolveReasoningEffortControl), so a shadowed
-    // `reasoning` control has no surface of its own.
+    // The combined picker renders ONE reasoning ladder: `effort` wins over
+    // `reasoning` when both are advertised (resolveReasoningEffortControl), so
+    // a shadowed `reasoning` control has no surface of its own.
     const hasEffort = normalized.some((control) => control.key === "effort");
     // The composer likewise renders ONE promoted mode control:
     // `collaboration_mode` wins over the legacy `mode` control when it has a
@@ -892,13 +892,12 @@ function allCleanupBooleansTrue(cleanup: LocalCleanupV1): boolean {
  * Picks the live-composer surface (and thus testid family) for a normalized
  * live-config control, or null when the composer renders no UI for it.
  *
- * Ground truth (fix round 4, verified in product source): the live chat
- * composer (ChatInputControlRow) renders ONLY the promoted control groups from
+ * Ground truth (verified in product source): the live chat composer
+ * (ChatInputControlRow) renders ONLY the promoted control groups from
  * `buildComposerSessionControlGroups` —
- *   - `collaboration_mode` / `mode`  → SessionModeControl (data-session-mode-*)
- *   - `effort` / `reasoning`         → ComposerReasoningEffortBars
- *                                      (data-reasoning-effort-*)
- *   - `fast_mode`                    → ComposerFastModeToggle (NO testid)
+ *   - `collaboration_mode` / `mode` → SessionModeControl (data-session-mode-*)
+ *   - `effort` / `reasoning` / `fast_mode` → combined model/tuning picker
+ *     (data-session-config-*)
  * and the product's supported normalized keys are exactly that set
  * (config/session-controls.ts SupportedLiveControlKey). Everything else has no
  * composer surface:
@@ -911,15 +910,13 @@ function allCleanupBooleansTrue(cleanup: LocalCleanupV1): boolean {
  *   - the generic SessionConfigControls strip (data-session-config-control)
  *     renders only on the Settings/automations composers, not the live chat
  *     composer;
- *   - `fast_mode` carries no data-* testid, and no assigned harness currently
- *     advertises it on this candidate (claude/grok probe fastMode=false).
  */
 export function configSurfaceFor(key: string): LocalConfigControl["surface"] | null {
   if (key === "model") {
     return "model";
   }
-  if (key === "effort" || key === "reasoning") {
-    return "reasoning";
+  if (key === "effort" || key === "reasoning" || key === "fast_mode") {
+    return "tuning";
   }
   if (key === "collaboration_mode" || key === "mode") {
     return "mode";
@@ -1089,6 +1086,7 @@ async function selectModelInComposer(
     try {
       await trigger.waitFor({ state: "visible", timeout: 5_000 });
       await trigger.click();
+      await p.locator("[data-composer-model-menu]").first().click();
     } catch {
       await sleep(1_500);
       continue;
@@ -1161,8 +1159,8 @@ async function selectConfigValueInUi(
     return switchGrokModelAndProveTurn(context, control, value);
   }
   const { page } = context;
-  if (control.surface === "reasoning") {
-    return stepReasoningEffortToValue(page, value, control.values.length);
+  if (control.surface === "tuning") {
+    return selectTuningValue(page, control, value);
   }
   // Mode uses the compact stepper in the current composer. Retain the popover
   // path for any non-compact surface, but drive the stamped next-value contract
@@ -1346,57 +1344,33 @@ async function stepSessionModeToValue(
   return { accepted: readback === value, readback };
 }
 
-/**
- * Drives the reasoning-effort ladder to `value`. ComposerReasoningEffortBars is
- * a STEPPER, not a menu: the whole control is one button whose click advances
- * the selection to the next level ((currentIndex + 1) % levels — LevelBarsButton),
- * and the `data-reasoning-effort-option` spans inside it are decorative level
- * bars whose clicks just bubble to the same button (round-3 note: "click may
- * STEP, not jump"). So step until the trigger's own readback attribute reports
- * the target, bounded by one full lap of the ladder; a step whose readback never
- * moves is a rejected apply (the UI stayed on the last-accepted value).
- *
- * `ladderSize` is the enumerated control value count (`control.values.length`),
- * NOT the count of `data-reasoning-effort-option` spans: the tier-label branch
- * (e.g. the 6-value low..ultra ladder) renders a plain ComposerControlButton
- * with NO option spans, so a DOM-span count would be 0 there and cap the walk at
- * 2 steps — enough to give up early on a >2-step target and record a FALSE
- * rejection. Bounding by the enumerated ladder length covers both the bars and
- * tier-label renderings.
- */
-async function stepReasoningEffortToValue(
+/** Selects an explicit reasoning or Fast value from the combined picker. */
+async function selectTuningValue(
   page: ProductPage,
+  control: LocalConfigControl,
   value: string,
-  ladderSize: number,
 ): Promise<{ accepted: boolean; readback: string }> {
   const p = page.page;
-  const trigger = p.locator("[data-reasoning-effort-trigger]").first();
+  const trigger = p.locator("[data-composer-model-trigger]").first();
   await trigger.waitFor({ state: "visible", timeout: 15_000 });
-  const maxSteps = Math.max(ladderSize, 2);
-  let readback = (await trigger.getAttribute("data-reasoning-effort-selected").catch(() => null)) ?? "";
-  for (let step = 0; step < maxSteps && readback !== value; step += 1) {
-    const before = readback;
-    await trigger.click();
-    // Each step round-trips through the runtime's apply seam; wait (bounded by
-    // the rejection window) for the readback attribute to move before deciding.
-    const deadline = Date.now() + CONFIG_REJECTION_WINDOW_MS;
-    while (Date.now() < deadline) {
-      readback = (await trigger.getAttribute("data-reasoning-effort-selected").catch(() => null)) ?? "";
-      if (readback !== before) {
-        break;
-      }
-      await sleep(300);
-    }
-    if (readback === before) {
-      // The step was rejected (or the control is wedged): the UI held the
-      // last-accepted value. Report it so the cycle records a clean rejection.
-      break;
-    }
-  }
-  // Let a late rejection revert before the final readback (same settle the
-  // popover path uses).
+  await trigger.click();
+  const controlSurface = p.locator(
+    `[data-session-config-control="${cssAttr(control.key)}"]`,
+  ).first();
+  await controlSurface.waitFor({ state: "visible", timeout: 15_000 });
+  await controlSurface.click();
+  const option = p.locator(
+    `[data-session-config-option="${cssAttr(`${control.key}:${value}`)}"]`,
+  ).first();
+  await option.waitFor({ state: "visible", timeout: 15_000 });
+  await option.click();
+
+  // Let a late rejection restore the last accepted value before readback.
   await sleep(CONFIG_REJECTION_WINDOW_MS);
-  readback = (await trigger.getAttribute("data-reasoning-effort-selected").catch(() => null)) ?? "";
+  const readback = (await controlSurface.getAttribute("data-session-config-selected")) ?? "";
+  if (await controlSurface.isVisible().catch(() => false)) {
+    await p.keyboard.press("Escape");
+  }
   return { accepted: readback === value, readback };
 }
 
@@ -1782,6 +1756,7 @@ async function selectHarnessInComposer(
     try {
       await trigger.waitFor({ state: "visible", timeout: 5_000 });
       await trigger.click();
+      await p.locator("[data-composer-model-menu]").first().click();
     } catch {
       await sleep(1_500);
       continue;

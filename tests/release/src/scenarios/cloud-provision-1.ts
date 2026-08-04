@@ -2434,6 +2434,7 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
     try {
       await trigger.waitFor({ state: "visible", timeout: 5_000 });
       await trigger.click();
+      await p.locator("[data-composer-model-menu]").first().click();
     } catch {
       lastComposerState = await readCloudComposerUiState(page);
       if (!cloudComposerTargetSelectionIsStable(lastComposerState)) {
