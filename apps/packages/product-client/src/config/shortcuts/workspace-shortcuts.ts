@@ -102,6 +102,16 @@ export const WORKSPACE_SHORTCUTS = {
     match: { kind: "fixed", key: "ArrowLeft", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
+  previousTabCtrlTab: {
+    id: "workspace.previous-tab",
+    label: "⌃⇧⇥",
+    nonMacLabel: "Ctrl+Shift+Tab",
+    description: "Previous tab",
+    owner: "js",
+    match: { kind: "fixed", key: "Tab", meta: false, ctrl: true, shift: true, alt: false },
+    nonMacMatch: { kind: "fixed", key: "Tab", meta: true, shift: true, alt: false },
+    allowInInputs: true,
+  },
   nextTab: {
     id: "workspace.next-tab",
     label: "⌘⇧]",
@@ -118,6 +128,16 @@ export const WORKSPACE_SHORTCUTS = {
     description: "Next tab",
     owner: "js",
     match: { kind: "fixed", key: "ArrowRight", meta: true, shift: false, alt: true },
+    allowInInputs: true,
+  },
+  nextTabCtrlTab: {
+    id: "workspace.next-tab",
+    label: "⌃⇥",
+    nonMacLabel: "Ctrl+Tab",
+    description: "Next tab",
+    owner: "js",
+    match: { kind: "fixed", key: "Tab", meta: false, ctrl: true, shift: false, alt: false },
+    nonMacMatch: { kind: "fixed", key: "Tab", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
   tabByIndex: {

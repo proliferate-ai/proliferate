@@ -490,6 +490,34 @@ describe("shortcut dispatch policy", () => {
         isContentEditable: false,
       } as unknown as EventTarget,
     } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTabCtrlTab, {
+      key: "Tab",
+      code: "Tab",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: true,
+      altKey: false,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabCtrlTab, {
+      key: "Tab",
+      code: "Tab",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
   });
 
   it("allows close-other-tabs aliases through default-prevented non-input targets", () => {

@@ -46,8 +46,10 @@ export const SHORTCUT_GROUPS = [
     shortcutKeys: [
       "previousTab",
       "previousTabArrow",
+      "previousTabCtrlTab",
       "nextTab",
       "nextTabArrow",
+      "nextTabCtrlTab",
       "tabByIndex",
       "newSessionTab",
       "restoreTab",
