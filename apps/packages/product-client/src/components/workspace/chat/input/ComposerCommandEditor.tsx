@@ -280,7 +280,6 @@ export function ComposerCommandEditor({
             onKeyDown={handleKeyDown}
             onCommandKey={handleCommandKey}
             activeDescendantId={activeDescendantId}
-            submitBehavior="workspace"
             canSubmit={canSubmit}
             onSubmit={onSubmit}
             editorRef={(editor) => { editorRef.current = editor; }}

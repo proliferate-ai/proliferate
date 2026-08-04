@@ -87,7 +87,7 @@ describe("ComposerRichTextEditor", () => {
 
   it("keeps list Enter and indentation Lexical-owned", async () => {
     const onSubmit = vi.fn();
-    const harness = renderEditor({ submitBehavior: "workspace", onSubmit });
+    const harness = renderEditor({ onSubmit });
     await harness.ready();
     act(() => resetText(harness.editor, ""));
     await typeCharacters(harness.editor, "- one");
@@ -257,23 +257,41 @@ describe("ComposerRichTextEditor", () => {
     ));
   });
 
-  it("gives each surface exactly one submit owner", async () => {
-    const workspaceSubmit = vi.fn();
-    const workspace = renderEditor({ submitBehavior: "workspace", onSubmit: workspaceSubmit });
-    await workspace.ready();
-    act(() => { workspace.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter")); });
-    expect(workspaceSubmit).toHaveBeenCalledTimes(1);
+  it("submits on plain or primary-modified Enter and inserts a newline on Shift-Enter", async () => {
+    const onSubmit = vi.fn();
+    const harness = renderEditor({ onSubmit });
+    await harness.ready();
+    act(() => resetText(harness.editor, "draft"));
+    act(() => { harness.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter")); });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(harness.root.querySelector("br")).toBeNull();
+    act(() => {
+      harness.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter", { shiftKey: true }));
+    });
+    await waitFor(() => expect(harness.root.querySelector("br")).toBeTruthy());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    act(() => {
+      harness.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter", { metaKey: true }));
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not submit on Enter while sending is refused or composition is active", async () => {
+    const onSubmit = vi.fn();
+    const refused = renderEditor({ onSubmit, canSubmit: false });
+    await refused.ready();
+    act(() => resetText(refused.editor, ""));
+    act(() => { refused.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter")); });
+    expect(onSubmit).not.toHaveBeenCalled();
 
     cleanup();
-    const homeSubmit = vi.fn();
-    const home = renderEditor({ submitBehavior: "home", onSubmit: homeSubmit });
-    await home.ready();
-    act(() => { home.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter")); });
-    expect(homeSubmit).not.toHaveBeenCalled();
+    const composingSubmit = vi.fn();
+    const composing = renderEditor({ onSubmit: composingSubmit });
+    await composing.ready();
     act(() => {
-      home.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter", { metaKey: true }));
+      composing.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter", { isComposing: true }));
     });
-    expect(homeSubmit).toHaveBeenCalledTimes(1);
+    expect(composingSubmit).not.toHaveBeenCalled();
   });
 
   it("shows a one-pixel replacement caret only after valid geometry", async () => {
@@ -352,7 +370,6 @@ function renderEditor(overrides: Partial<ComposerRichTextEditorProps> = {}) {
   const defaults: ComposerRichTextEditorProps = {
     value: "seed",
     onChange: vi.fn(),
-    submitBehavior: "workspace",
     canSubmit: true,
     onSubmit: vi.fn(),
     placeholder: "Message",

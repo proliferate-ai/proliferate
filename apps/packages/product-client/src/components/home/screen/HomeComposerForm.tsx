@@ -160,7 +160,6 @@ export function HomeComposerForm({
                 snapshot={composer.editorSnapshot}
                 onChange={handleDraftChange}
                 onKeyDown={composer.handleKeyDown}
-                submitBehavior="home"
                 canSubmit={composer.canSubmit}
                 onSubmit={() => { void composer.submit(); }}
                 placeholder={CHAT_COMPOSER_LABELS.placeholder}

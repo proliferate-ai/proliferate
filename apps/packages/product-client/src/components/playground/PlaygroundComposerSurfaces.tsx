@@ -93,7 +93,6 @@ export function PlaygroundComposerSurface({
                 setDraft(value);
                 setEditorSnapshot(snapshot);
               }}
-              submitBehavior="workspace"
               canSubmit={false}
               onSubmit={noop}
               placeholder="Type while the response renders"
