@@ -134,6 +134,21 @@ Discovery follows the current caret rather than the end of the document, and a
 selection replaces only the active slash-token range while preserving text and
 formatting around it.
 
+Composer focus follows the app lifecycle. The workspace composer takes focus
+after mount and workspace switches (`ChatInput.tsx`), and the Home composer
+takes focus after mount (`HomeComposerForm.tsx`); both surfaces mark their
+region with `data-focus-zone="chat"` so `focusChatInput` can route focus. On
+Desktop, the visible composer also regains focus when the app window becomes
+active again, via `focusChatInputOnActivation`
+(`apps/packages/product-client/src/lib/domain/focus-zone.ts`, mounted through
+`DesktopProductLifecycleRoot`). Activation restore never steals focus: it
+moves focus only when focus is unowned (the document body) or resting on a
+non-interactive chat-zone surface — any other zone, dialog, menu, portaled
+overlay, control, or editor keeps ownership, and a live text selection is
+never collapsed. A composer kept mounted behind an `aria-hidden` route host
+(the settings overlay) is never focused. Hosted Web applies no activation
+restore.
+
 ## 1.1 Model Selector Semantics
 
 The composer model selector presents the model-catalog contract from

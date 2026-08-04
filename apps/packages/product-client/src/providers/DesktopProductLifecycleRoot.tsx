@@ -4,6 +4,7 @@ import type {
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
+import { useComposerActivationFocus } from "#product/hooks/chat/lifecycle/use-composer-activation-focus";
 import { useExportRunningAgentCount } from "#product/hooks/app/lifecycle/use-export-running-agent-count";
 import { useDesktopRuntimeBootstrapLifecycle } from "#product/hooks/app/lifecycle/use-desktop-runtime-bootstrap-lifecycle";
 import { useUpdateRestartWatcher } from "#product/hooks/access/tauri/use-update-restart-watcher";
@@ -17,7 +18,8 @@ import { recordBootDiagnosticOnce } from "#product/lib/infra/measurement/measure
  * The single Desktop product-lifecycle root, mounted outside auth and route
  * gates. It reads the Desktop bridge from the host and, when present, mounts
  * local-runtime, updater, worker-enrollment, and native-UI lifecycles through
- * that bridge. On a non-Desktop host (`desktop === null`) it renders nothing.
+ * that bridge, plus Desktop-only activation UX (composer focus restore). On a
+ * non-Desktop host (`desktop === null`) it renders nothing.
  */
 export function DesktopProductLifecycleRoot() {
   const { auth, desktop } = useProductHost();
@@ -60,5 +62,6 @@ function DesktopProductLifecycles({
   useWorkspaceActivityIndicator(nativeUi.setWorkspaceActivity);
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_activity_indicator");
   useDesktopZoomPreferenceLifecycle(nativeUi.setZoom);
+  useComposerActivationFocus();
   return null;
 }

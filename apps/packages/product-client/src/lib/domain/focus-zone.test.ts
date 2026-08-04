@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   focusChatInput,
+  focusChatInputOnActivation,
   focusTerminal,
   getFocusZone,
   isRightPanelFocusZone,
@@ -39,6 +40,106 @@ describe("focus-zone helpers", () => {
     expect(focusChatInput()).toBe(true);
     expect(querySelector).toHaveBeenCalledWith("[data-chat-composer-editor], textarea");
     expect(focus).toHaveBeenCalledWith({ preventScroll: false });
+  });
+
+  it("focuses the chat composer on activation when nothing owns focus", () => {
+    const focus = vi.fn();
+    const querySelector = vi.fn(() => ({ focus }));
+    vi.stubGlobal("document", {
+      activeElement: null,
+      querySelector: vi.fn(() => ({ querySelector, closest: vi.fn(() => null) })),
+    });
+    vi.stubGlobal("window", {
+      getSelection: vi.fn(() => ({ isCollapsed: true })),
+    });
+
+    expect(focusChatInputOnActivation()).toBe(true);
+    expect(focus).toHaveBeenCalledWith({ preventScroll: false });
+  });
+
+  it("restores composer focus from a non-interactive chat-zone surface", () => {
+    const focus = vi.fn();
+    const querySelector = vi.fn(() => ({ focus }));
+    const activeZone = { getAttribute: vi.fn(() => "chat") };
+    vi.stubGlobal("document", {
+      body: {},
+      activeElement: {
+        closest: vi.fn((selector: string) =>
+          (selector === "[data-focus-zone]" ? activeZone : null)),
+      },
+      querySelector: vi.fn(() => ({ querySelector, closest: vi.fn(() => null) })),
+    });
+    vi.stubGlobal("window", {
+      getSelection: vi.fn(() => ({ isCollapsed: true })),
+    });
+
+    expect(focusChatInputOnActivation()).toBe(true);
+    expect(focus).toHaveBeenCalledWith({ preventScroll: false });
+  });
+
+  it("does not focus a composer kept mounted inside an aria-hidden route host", () => {
+    const editorQuerySelector = vi.fn();
+    vi.stubGlobal("document", {
+      activeElement: null,
+      querySelector: vi.fn(() => ({
+        querySelector: editorQuerySelector,
+        closest: vi.fn(() => ({})),
+      })),
+    });
+    vi.stubGlobal("window", {
+      getSelection: vi.fn(() => ({ isCollapsed: true })),
+    });
+
+    expect(focusChatInputOnActivation()).toBe(false);
+    expect(editorQuerySelector).not.toHaveBeenCalled();
+  });
+
+  it("does not steal activation focus from a surface outside the chat zone", () => {
+    const documentQuerySelector = vi.fn();
+    vi.stubGlobal("document", {
+      body: {},
+      activeElement: { closest: vi.fn(() => null) },
+      querySelector: documentQuerySelector,
+    });
+    vi.stubGlobal("window", {
+      getSelection: vi.fn(() => ({ isCollapsed: true })),
+    });
+
+    expect(focusChatInputOnActivation()).toBe(false);
+    expect(documentQuerySelector).not.toHaveBeenCalled();
+  });
+
+  it("does not steal activation focus from an interactive chat-zone control", () => {
+    const documentQuerySelector = vi.fn();
+    const chatZone = { getAttribute: vi.fn(() => "chat") };
+    vi.stubGlobal("document", {
+      body: {},
+      activeElement: {
+        closest: vi.fn((selector: string) =>
+          (selector === "[data-focus-zone]" ? chatZone : {})),
+      },
+      querySelector: documentQuerySelector,
+    });
+    vi.stubGlobal("window", {
+      getSelection: vi.fn(() => ({ isCollapsed: true })),
+    });
+
+    expect(focusChatInputOnActivation()).toBe(false);
+    expect(documentQuerySelector).not.toHaveBeenCalled();
+  });
+
+  it("does not collapse a live text selection on activation", () => {
+    const documentQuerySelector = vi.fn();
+    vi.stubGlobal("document", {
+      activeElement: null,
+      querySelector: documentQuerySelector,
+    });
+    vi.stubGlobal("window", {
+      getSelection: vi.fn(() => ({ isCollapsed: false })),
+    });
+
+    expect(focusChatInputOnActivation()).toBe(false);
+    expect(documentQuerySelector).not.toHaveBeenCalled();
   });
 
   it("focuses xterm's helper textarea when the terminal focus zone exists", () => {
