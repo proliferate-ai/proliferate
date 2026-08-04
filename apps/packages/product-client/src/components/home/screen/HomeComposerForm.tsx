@@ -6,6 +6,7 @@ import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/compos
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { focusChatInputOnActivation } from "#product/lib/domain/focus-zone";
 import { useHomeNextComposerState } from "#product/hooks/home/ui/use-home-next-composer-state";
 import {
   finishOrCancelMeasurementOperation,
@@ -136,10 +137,20 @@ export function HomeComposerForm({
     typingOperationRef.current = null;
   }, []);
 
+  // The home screen opens ready to type: focus the composer on mount, the
+  // same contract as the workspace composer's mount focus in `ChatInput`. The
+  // activation variant keeps the focus-ownership and hidden-route guards.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      focusChatInputOnActivation();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <>
       <DebugProfiler id="home-composer">
-        <div className="relative z-10">
+        <div className="relative z-10" data-focus-zone="chat">
         <ChatComposerSurface>
           <form
             className="relative flex flex-col"
