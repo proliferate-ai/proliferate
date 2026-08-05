@@ -1,0 +1,255 @@
+import {
+  useCallback,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
+import { ArrowLeft, Cloud, FolderOpen, GitBranch } from "lucide-react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@proliferate/ui/primitives/Dialog";
+import { Button } from "@proliferate/ui/primitives/Button";
+import type { CloudRepoPickerProps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
+import { CloudRepoPicker } from "./CloudRepoPicker";
+
+/**
+ * The host-truthful entry choices. `add-existing-folder` registers an existing
+ * checkout on this machine (Desktop only); `clone-from-github` clones an
+ * authorized GitHub repository to this machine (Desktop only, GitHub-App-ready);
+ * `cloud` walks the readiness → repo picker → authority → save sequence (both
+ * hosts).
+ */
+export type AddRepoFlowOption = "add-existing-folder" | "clone-from-github" | "cloud";
+
+export type AddRepoFlowStep =
+  | { kind: "entry" }
+  | { kind: "cloud" }
+  | { kind: "clone" };
+
+export interface AddRepoFlowProps {
+  open: boolean;
+  step: AddRepoFlowStep;
+  /** Which entry options this host actually supports. Web omits the local
+   * option so the flow can never offer an operation that errors at click time. */
+  options: readonly AddRepoFlowOption[];
+  /** True while a local add is committing (disables entry options). */
+  adding?: boolean;
+  /**
+   * Optional note under the entry options explaining what this host cannot
+   * offer. Authored by the host so this component stays copy-free.
+   */
+  entryNote?: string | null;
+  error?: string | null;
+  /** View model for the cloud step, wired by the host's controller layer. */
+  cloudPicker?: CloudRepoPickerProps | null;
+  /** View model for the clone-from-github step, wired by the host. Reuses the
+   * repo picker; on select the host runs the local clone. */
+  clonePicker?: CloudRepoPickerProps | null;
+  onPickOption: (option: AddRepoFlowOption) => void;
+  onBack: () => void;
+  onClose: () => void;
+}
+
+interface EntryOption {
+  option: AddRepoFlowOption;
+  icon: ReactNode;
+  label: string;
+  description: string;
+}
+
+const ENTRY_OPTION_DEFS: Record<AddRepoFlowOption, EntryOption> = {
+  "add-existing-folder": {
+    option: "add-existing-folder",
+    icon: <FolderOpen aria-hidden className="icon-paired" />,
+    label: "Add an existing folder",
+    description: "Register a repository folder from this machine.",
+  },
+  "clone-from-github": {
+    option: "clone-from-github",
+    icon: <GitBranch aria-hidden className="icon-paired" />,
+    label: "Clone from GitHub",
+    description: "Clone an authorized GitHub repository to this machine.",
+  },
+  cloud: {
+    option: "cloud",
+    icon: <Cloud aria-hidden className="icon-paired" />,
+    label: "Set up in Cloud",
+    description: "Pick a GitHub repository to run in Proliferate Cloud.",
+  },
+};
+
+/**
+ * Unified add-repository flow. Entry shows only the host-supported choices
+ * (Desktop: add-existing-folder + cloud; Web: cloud only); the cloud option
+ * runs the readiness → pick → authority → save sequence in place via
+ * CloudRepoPicker, driven by the host's cloudPicker view model.
+ */
+export function AddRepoFlow({
+  open,
+  step,
+  options,
+  adding = false,
+  entryNote = null,
+  error = null,
+  cloudPicker = null,
+  clonePicker = null,
+  onPickOption,
+  onBack,
+  onClose,
+}: AddRepoFlowProps) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent
+        // Standard modal scrim (ModalShell recipe) so the dialog reads as an
+        // overlay against the workspace, not a floating card.
+        overlayClassName="bg-black/70 backdrop-blur-sm"
+        className="max-w-[440px] rounded-xl p-4"
+        data-telemetry-block
+      >
+        {step.kind === "entry" ? (
+          <AddRepoEntryStep
+            options={options}
+            onPickOption={onPickOption}
+            disabled={adding}
+            note={entryNote}
+          />
+        ) : step.kind === "clone" ? (
+          <AddRepoPickerStep
+            title="Clone from GitHub"
+            picker={clonePicker}
+            onBack={onBack}
+          />
+        ) : (
+          <AddRepoPickerStep
+            title="Add a cloud repo"
+            picker={cloudPicker}
+            onBack={onBack}
+          />
+        )}
+        {error ? (
+          <p className="mt-3 text-ui text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AddRepoEntryStep({
+  options,
+  onPickOption,
+  disabled = false,
+  note = null,
+}: {
+  options: readonly AddRepoFlowOption[];
+  onPickOption: (option: AddRepoFlowOption) => void;
+  disabled?: boolean;
+  note?: string | null;
+}) {
+  const entries = options.map((option) => ENTRY_OPTION_DEFS[option]);
+  const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    const index = Number.parseInt(event.key, 10) - 1;
+    const entry = entries[index];
+    if (entry) {
+      event.preventDefault();
+      onPickOption(entry.option);
+    }
+  }, [disabled, entries, onPickOption]);
+
+  return (
+    <div onKeyDown={handleKeyDown}>
+      <DialogHeader>
+        <DialogTitle className="text-workspace-title font-semibold">
+          Add a repository
+        </DialogTitle>
+      </DialogHeader>
+      <div className="mt-3">
+        {entries.map((entry, index) => (
+          <Button
+            key={entry.option}
+            type="button"
+            variant="unstyled"
+            size="unstyled"
+            disabled={disabled}
+            onClick={() => onPickOption(entry.option)}
+            className={`flex w-full items-center justify-start gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-hover active:bg-active focus-visible:bg-hover focus-visible:outline-none ${
+              index > 0 ? "border-t border-border/60" : ""
+            }`}
+          >
+            <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+              {entry.icon}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-ui font-medium leading-5 text-foreground">
+                {entry.label}
+              </span>
+              <span className="block truncate text-ui-sm text-muted-foreground">
+                {entry.description}
+              </span>
+            </span>
+            <kbd
+              aria-hidden
+              className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-surface-control font-mono text-ui-sm text-muted-foreground/70"
+            >
+              {index + 1}
+            </kbd>
+          </Button>
+        ))}
+      </div>
+      {note ? (
+        <p className="mt-3 border-t border-border/60 pt-3 text-ui-sm text-muted-foreground">
+          {note}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function AddRepoPickerStep({
+  title,
+  picker,
+  onBack,
+}: {
+  title: string;
+  picker: CloudRepoPickerProps | null;
+  onBack: () => void;
+}) {
+  return (
+    <div>
+      <DialogHeader>
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="-ml-1 size-6 rounded-md"
+            aria-label="Back"
+            onClick={onBack}
+          >
+            <ArrowLeft aria-hidden className="icon-paired" />
+          </Button>
+          <DialogTitle className="text-workspace-title font-semibold">
+            {title}
+          </DialogTitle>
+        </div>
+      </DialogHeader>
+      {picker ? (
+        <div className="mt-3">
+          <CloudRepoPicker {...picker} />
+        </div>
+      ) : null}
+    </div>
+  );
+}

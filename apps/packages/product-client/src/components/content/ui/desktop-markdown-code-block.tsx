@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { CodeBlock } from "@proliferate/product-ui/code/CodeBlock";
-import type { MarkdownCodeBlockRenderInput } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { CodeBlock } from "#product/components/content/ui/CodeBlock";
+import type { MarkdownCodeBlockRenderInput } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
 
 /**

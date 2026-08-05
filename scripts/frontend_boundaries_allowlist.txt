@@ -6,7 +6,6 @@
 # ProductClient's existing internal upward edges. These are import-statement
 # counts, including type-only edges; move the dependency/type down and shrink
 # the matching entry whenever a site is repaired.
-PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/chat/ui/use-assistant-reveal-frontier.ts 1 hook imports component-owned reveal type
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx 11 JSX-returning hook imports connected components
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/ui/diff/use-gap-expansion.ts 1 hook imports component-owned expansion type
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/workspaces/ui/tabs/use-header-tabs-group-editor.ts 1 hook imports component-owned anchor type
@@ -18,8 +17,6 @@ PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/domain/works
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/workflows/sessions/hot-session-ingest-manager.ts 1 workflow imports ingest store
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures.ts 1 domain fixture imports component-owned status type
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/domain/workspaces/status/workspace-status-model.ts 1 domain module imports component-owned status type
-PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/infra/chat/assistant-reveal-progress.ts 1 infra module imports component-owned reveal type
-PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/infra/debug/dev-assistant-reveal-log.ts 1 infra module imports component-owned reveal type
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/environment-fixtures.ts 1 domain fixture imports hook-owned pressure type
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/stores/toast/toast-store.ts 1 store imports component toast implementation
 

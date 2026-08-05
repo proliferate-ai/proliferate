@@ -41,7 +41,7 @@ import {
 } from "#product/hooks/ui/diff/diff-gap-flatten";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
-import { useChatTranscriptRow } from "@proliferate/product-ui/chat/transcript/ChatContentSearchContext";
+import { useChatTranscriptRow } from "#product/components/workspace/chat/transcript/ChatContentSearchContext";
 
 const CHAT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",

@@ -6,7 +6,7 @@ import type { SidebarSessionActivityState } from "@proliferate/product-domain/se
 import { sidebarStatusIndicatorFromActivity } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { formatSidebarRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import { coworkThreadTitle } from "#product/lib/domain/cowork/threads";
-import { ProductSidebarThreadRow } from "@proliferate/product-ui/sidebar/ProductSidebarThreads";
+import { ProductSidebarThreadRow } from "#product/components/workspace/shell/sidebar/ProductSidebarThreads";
 
 interface CoworkThreadRowProps {
   thread: CoworkThread;

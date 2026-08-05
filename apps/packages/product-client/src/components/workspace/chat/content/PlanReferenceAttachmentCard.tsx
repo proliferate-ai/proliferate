@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
 import { FileText, X } from "@proliferate/ui/icons";
-import { CollapsiblePlanCard } from "@proliferate/product-ui/chat/transcript/CollapsiblePlanCard";
+import { CollapsiblePlanCard } from "#product/components/workspace/chat/transcript/CollapsiblePlanCard";
 import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,

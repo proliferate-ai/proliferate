@@ -18,7 +18,7 @@ import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/s
 import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
-import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
+import { ProductSidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/ProductSidebarShowToggleRow";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
 import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 
@@ -295,7 +295,7 @@ export function SidebarWorkspaceContent({
               />
             ))}
             {toggleLabel && (
-              <SidebarShowToggleRow
+              <ProductSidebarShowToggleRow
                 label={toggleLabel}
                 onClick={() => onToggleRepoShowMore(group.sourceRoot)}
               />

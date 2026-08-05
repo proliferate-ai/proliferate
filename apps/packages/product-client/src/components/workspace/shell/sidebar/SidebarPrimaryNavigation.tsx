@@ -1,6 +1,6 @@
 import { AppShellNewChatIcon, Fork, Grid, LifeBuoy } from "@proliferate/ui/icons";
-import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
-import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
+import type { SidebarNavItemView } from "#product/components/workspace/shell/sidebar/ProductSidebarNavigation";
+import { ProductSidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/ProductSidebarNavigation";
 
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;

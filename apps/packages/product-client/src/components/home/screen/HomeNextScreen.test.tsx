@@ -12,7 +12,7 @@ import {
 } from "#product/hooks/home/ui/use-home-next-target-selection-state";
 import { createMemoryProductStorage, type MemoryProductStorage } from "#product/test/product-storage-test-utils";
 import type { ProductStorage } from "@proliferate/product-client/host/product-host";
-import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@proliferate/product-ui/chat/ChatColumn";
+import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
 import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 
 const screenMocks = vi.hoisted(() => {
@@ -145,7 +145,7 @@ vi.mock("#product/components/workspace/chat/input/ChatInputControlRow", () => ({
   },
 }));
 
-vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
+vi.mock("#product/components/workspace/chat/composer/ChatComposerSurface", () => ({
   ChatComposerSurface: ({ children }: { children: ReactNode }) => (
     <div data-testid="composer-surface">{children}</div>
   ),

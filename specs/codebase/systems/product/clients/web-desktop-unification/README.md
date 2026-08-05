@@ -125,8 +125,8 @@ ProductClient is a normal compiled workspace package.
   runtime instances as the hosts; they are not bundled twice.
 - Desktop and Web build, typecheck, and test ProductClient before bundling.
 - CI and frontend structure checks scan the package root.
-- ProductClient may import `product-ui`, `product-domain`,
-  `ui`, `design`, and the Cloud/AnyHarness SDKs in the allowed direction.
+- ProductClient may import `product-domain`, `ui`, `design`, and the
+  Cloud/AnyHarness SDKs in the allowed direction.
 - ProductClient never imports `apps/desktop`, `apps/web`, `@tauri-apps/**`, raw
   Tauri `invoke`, or a Desktop-relative `@/` path.
 - Hosts import public `@proliferate/product-client/<entrypoint>` subpaths and do
@@ -419,11 +419,10 @@ The Tailwind entry explicitly scans every DOM package that emits classes:
 
 ```css
 @source "../../../ui/src";
-@source "../../../product-ui/src";
 @source "../../../product-client/src";
 ```
 
-The ProductClient source line covers all connected product JSX. Without it,
+The ProductClient source line covers all product JSX. Without it,
 both apps can compile while Tailwind silently omits product classes.
 
 Each host sets its surface before React renders:

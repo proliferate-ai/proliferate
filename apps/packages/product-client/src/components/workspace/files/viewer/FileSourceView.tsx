@@ -8,8 +8,8 @@ import {
   type CSSProperties,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { CodeTokenLine } from "@proliferate/product-ui/code/CodeTokenLine";
-import type { RenderTokenFn } from "@proliferate/product-ui/code/types";
+import { CodeTokenLine } from "#product/components/content/ui/CodeTokenLine";
+import type { RenderTokenFn } from "#product/components/content/ui/CodeTokenLine";
 import { renderContentSearchMarkedToken } from "#product/components/content/ui/search/ContentSearchMarks";
 import { useHighlightedLines } from "#product/hooks/ui/highlighting/use-highlighted-lines";
 import {

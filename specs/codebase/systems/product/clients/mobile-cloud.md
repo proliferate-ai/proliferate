@@ -45,7 +45,7 @@ different product model or a simplified chat state machine.
 
 ## Non-Goals
 
-- Do not directly import DOM components from `apps/packages/product-ui/**` into
+- Do not directly import DOM components from `apps/packages/product-client/**` into
   React Native.
 - Do not force Desktop's full-width chat layout onto small screens.
 - Do not block the mobile work on moving every Desktop/Web component to shared
@@ -319,7 +319,7 @@ When Desktop/Web have a DOM component and Mobile needs the same behavior, prefer
 one of these clean extractions:
 
 1. Move pure data shaping into `apps/packages/product-domain`.
-2. Keep DOM rendering in `apps/packages/product-ui` for Desktop/Web.
+2. Keep DOM rendering in `apps/packages/product-client` for Desktop/Web.
 3. Build a React Native renderer in `apps/mobile/src/components/**` over the same
    product-domain output.
 

@@ -17,7 +17,7 @@ import {
   ProductSidebarBrandRow,
   ProductSidebarFrame,
   ProductSidebarScrollableContent,
-} from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
+} from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 import {
   isDefaultSidebarWorkspaceTypes,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";

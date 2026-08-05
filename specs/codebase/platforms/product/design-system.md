@@ -27,7 +27,7 @@ index, and the change-control model for moving a value or adding a component.
   This document names the rules that shape the value system; that document is
   the gate's specification.
 - Package dependency direction between
-  `design`/`ui`/`product-domain`/`product-ui`/`product-client` —
+  `design`/`ui`/`product-domain`/`product-client` —
   [structures/frontend/packages/README.md](../../structures/frontend/packages/README.md).
 - Per-surface product behavior (what a screen does, its flows and copy) — the
   owning [systems/product/**](../../systems/README.md) document.
@@ -52,7 +52,7 @@ apps/packages/ui/src/           the component library
 └── lib/, utils/, overlays/     supporting infrastructure (cn() joiner, tw-merge, search/scroll
                                 helpers, native-overlay-stack registration) — not components
 
-apps/packages/product-ui/src/patterns/
+apps/packages/product-client/src/components/patterns/
                                 domain-aware patterns: same composition rule as ui/src/patterns,
                                 but this tier may import product-domain view models/vocabulary
 
@@ -738,10 +738,10 @@ area** — a component's name describes what it does, not where it is used:
   atom/composition sense, so they get their own tier rather than living inside
   `primitives/` or `patterns/`.
 
-A fourth tier lives in a different package because of an import-direction
-constraint, not a different role:
+A fourth tier lives in ProductClient because of an import-direction constraint,
+not a different role:
 
-- **`product-ui/src/patterns/`** — domain-aware patterns. Same composition rule
+- **`product-client/src/components/patterns/`** — domain-aware patterns. Same composition rule
   as `ui/src/patterns/` (built from primitives/patterns + tokens), but this tier
   is allowed to import `product-domain` view models and vocabulary, which
   `ui/src/patterns/` must not (per the package boundary in
@@ -757,8 +757,8 @@ role.
 
 ### Governance rule
 
-Feature code (pages, panes, screens under `product-client`, `product-ui` outside
-`patterns/`, `apps/desktop`, `apps/web`) composes library
+Feature code (pages, panes, and screens under `product-client` outside
+`components/patterns/`, plus `apps/desktop` and `apps/web`) composes library
 components and `design` tokens. It does not invent new visual vocabulary:
 
 - **No raw Radix imports outside the library.** Every `@radix-ui/*` import must
@@ -802,7 +802,7 @@ here is not library-sanctioned; the index is the closed set, not a sample of it.
 | `Button` | [Button.tsx](../../../../apps/packages/ui/src/primitives/Button.tsx) | The button primitive — variant/size/loading/destructive API every other button-shaped component composes. |
 | `Checkbox` | [Checkbox.tsx](../../../../apps/packages/ui/src/primitives/Checkbox.tsx) | One-line re-export of `checkbox-primitive` — see Collision pairs below. |
 | `checkbox-primitive` | [checkbox-primitive.tsx](../../../../apps/packages/ui/src/primitives/checkbox-primitive.tsx) | Raw `@radix-ui/react-checkbox` wrapper — see Collision pairs below. |
-| `Command` | [Command.tsx](../../../../apps/packages/ui/src/primitives/Command.tsx) | Raw `cmdk` wrapper. `CommandPalette` (below) imports `cmdk` directly rather than this wrapper; today's only consumer is [WorkspacesCommandList.tsx](../../../../apps/packages/product-ui/src/workspaces/WorkspacesCommandList.tsx) — two parallel `cmdk` consumers, a transitional gap, not a migration in progress. |
+| `Command` | [Command.tsx](../../../../apps/packages/ui/src/primitives/Command.tsx) | Raw `cmdk` wrapper. `CommandPalette` (below) imports `cmdk` directly rather than this wrapper; today's only consumer is [WorkspacesCommandList.tsx](../../../../apps/packages/product-client/src/components/workspace/repo-setup/WorkspacesCommandList.tsx) — two parallel `cmdk` consumers, a transitional gap, not a migration in progress. |
 | `Dialog` | [Dialog.tsx](../../../../apps/packages/ui/src/primitives/Dialog.tsx) | Raw `@radix-ui/react-dialog` wrapper; `ModalShell` composes it. |
 | `DotCellLoader` | [DotCellLoader.tsx](../../../../apps/packages/ui/src/primitives/DotCellLoader.tsx) | Nine-dot activity indicator with wave, orbit, scan, helix, and breathe motion variants. |
 | `DropdownMenu` | [DropdownMenu.tsx](../../../../apps/packages/ui/src/primitives/DropdownMenu.tsx) | Raw `@radix-ui/react-dropdown-menu` wrapper — see DropdownMenu status below. |
@@ -848,8 +848,8 @@ tier. Four files still import it directly:
 [RightPanelNewTabMenu.tsx](../../../../apps/packages/product-client/src/components/workspace/shell/right-panel/RightPanelNewTabMenu.tsx),
 [WorkspaceActionsMenu.tsx](../../../../apps/packages/product-client/src/components/workspace/shell/topbar/WorkspaceActionsMenu.tsx)
 (all `product-client`), and
-[ProposedPlanCard.tsx](../../../../apps/packages/product-ui/src/chat/transcript/ProposedPlanCard.tsx)
-(`product-ui`). Migrating them onto `PopoverButton`/`PopoverMenuItem` is pending:
+[ProposedPlanCard.tsx](../../../../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx)
+(`product-client`). Migrating them onto `PopoverButton`/`PopoverMenuItem` is pending:
 Radix's dropdown-menu primitive provides roving-tabindex arrow-key navigation,
 typeahead, and managed focus-return-to-trigger that
 `PopoverButton`/`PopoverMenuItem` do not implement today. `DropdownMenu` is not
@@ -893,21 +893,21 @@ grandfathered.
 | `proliferate-icons` | [proliferate-icons.tsx](../../../../apps/packages/ui/src/icons/proliferate-icons.tsx) | The Proliferate brand-mark glyph. |
 | `provider-icons` | [provider-icons.tsx](../../../../apps/packages/ui/src/icons/provider-icons.tsx) | Auth/model-provider brand glyphs, composes `proliferate-icons` for the Proliferate entry. |
 
-#### Patterns — domain-aware (`product-ui/src/patterns/`)
+#### Patterns — domain-aware (`product-client/src/components/patterns/`)
 
 | Component | Path | Purpose |
 | --- | --- | --- |
-| `ModelTable` | [ModelTable.tsx](../../../../apps/packages/product-ui/src/patterns/ModelTable.tsx) | Model-config table rows, composes `Badge`/`Switch`. |
-| `PrStatusBadge` | [PrStatusBadge.tsx](../../../../apps/packages/product-ui/src/patterns/PrStatusBadge.tsx) | PR status dot (`PrStatusDot`), icon-overlay wrapper (`PrStatusIconOverlay`), and tooltip-text helper (`prStatusTooltip`); hand-rolls its own tone map, composes nothing. |
-| `ProductPageShell` | [ProductPageShell.tsx](../../../../apps/packages/product-ui/src/patterns/ProductPageShell.tsx) | General product page shell, composes `PageContentFrame` + `PageHeader`. |
-| `SettingsEmptyState` | [SettingsEmptyState.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsEmptyState.tsx) | Settings-scoped empty state (compact/full sizes). |
-| `SettingsEyebrow` | [SettingsEyebrow.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsEyebrow.tsx) | Settings section eyebrow label. |
-| `SettingsPageHeader` | [SettingsPageHeader.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsPageHeader.tsx) | Flat settings page header (title/description/action). |
-| `SettingsRow` | [SettingsRow.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsRow.tsx) | Settings row (label/description/control), fixed 240px control-width companion for menus. |
-| `SettingsSaveFooter` | [SettingsSaveFooter.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsSaveFooter.tsx) | Settings save/revert footer with a status badge, composes `Badge` + `Button`. |
-| `SettingsScopeTabs` | [SettingsScopeTabs.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsScopeTabs.tsx) | User/org/repo/agents underline scope-switcher tabs, composes `Button`. |
-| `SettingsSection` | [SettingsSection.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsSection.tsx) | Settings section (title/description), composes `SettingsEyebrow`. |
-| `secrets/SecretManagementPanel` | [secrets/SecretManagementPanel.tsx](../../../../apps/packages/product-ui/src/patterns/secrets/SecretManagementPanel.tsx) | Presentational secrets-management pattern (list, editor/delete dialogs, scope notice are private internals of this one export). |
+| `ModelTable` | [ModelTable.tsx](../../../../apps/packages/product-client/src/components/patterns/ModelTable.tsx) | Model-config table rows, composes `Badge`/`Switch`. |
+| `PrStatusBadge` | [PrStatusBadge.tsx](../../../../apps/packages/product-client/src/components/patterns/PrStatusBadge.tsx) | PR status dot (`PrStatusDot`), icon-overlay wrapper (`PrStatusIconOverlay`), and tooltip-text helper (`prStatusTooltip`); hand-rolls its own tone map, composes nothing. |
+| `ProductPageShell` | [ProductPageShell.tsx](../../../../apps/packages/product-client/src/components/patterns/ProductPageShell.tsx) | General product page shell, composes `PageContentFrame` + `PageHeader`. |
+| `SettingsEmptyState` | [SettingsEmptyState.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsEmptyState.tsx) | Settings-scoped empty state (compact/full sizes). |
+| `SettingsEyebrow` | [SettingsEyebrow.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsEyebrow.tsx) | Settings section eyebrow label. |
+| `SettingsPageHeader` | [SettingsPageHeader.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx) | Flat settings page header (title/description/action). |
+| `SettingsRow` | [SettingsRow.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsRow.tsx) | Settings row (label/description/control), fixed 240px control-width companion for menus. |
+| `SettingsSaveFooter` | [SettingsSaveFooter.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsSaveFooter.tsx) | Settings save/revert footer with a status badge, composes `Badge` + `Button`. |
+| `SettingsScopeTabs` | [SettingsScopeTabs.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsScopeTabs.tsx) | User/org/repo/agents underline scope-switcher tabs, composes `Button`. |
+| `SettingsSection` | [SettingsSection.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsSection.tsx) | Settings section (title/description), composes `SettingsEyebrow`. |
+| `secrets/SecretManagementPanel` | [secrets/SecretManagementPanel.tsx](../../../../apps/packages/product-client/src/components/patterns/secrets/SecretManagementPanel.tsx) | Presentational secrets-management pattern (list, editor/delete dialogs, scope notice are private internals of this one export). |
 
 ### How to add a component
 
@@ -915,19 +915,20 @@ grandfathered.
    tiers above — never an arbitrary value at the component or the callsite.
 2. **Place it in the right tier**, by role, not by the feature that needed it: a
    raw Radix/vendor wrapper or single-purpose atom goes in `ui/src/primitives/`;
-   a composition of those goes in `ui/src/patterns/` (or
-   `product-ui/src/patterns/` if it needs `product-domain`); an icon set goes in
+   a generic composition of those goes in `ui/src/patterns/`; a domain-aware
+   pattern that needs `product-domain` goes in
+   `product-client/src/components/patterns/`; an icon set goes in
    `ui/src/icons/`.
-3. **Add one export-map entry** — a canonical subpath in the owning package's
-   `package.json` `exports` (`./primitives/<Component>`,
-   `./patterns/<Component>`, `./icons/<name>`). No aliases: one subpath per
-   component, matching its file name.
+3. **Add one export-map entry for `ui` components** — a canonical subpath in
+   its `package.json` `exports` (`./primitives/<Component>`,
+   `./patterns/<Component>`, `./icons/<name>`). ProductClient patterns remain
+   internal and need no new public export. No aliases.
 4. **Add a row to the sanctioned index above** — component name, real path,
    one-line purpose, in the matching tier's table.
 5. **Consume it** via the exact export-map subpath
    (`@proliferate/ui/primitives/Button`,
-   `@proliferate/product-ui/patterns/SettingsRow`) — never a relative import
-   across a package boundary, never a barrel.
+   `#product/components/patterns/SettingsRow`) — never a relative import across
+   a package boundary, never a barrel.
 
 ## Changing The Design
 
@@ -1085,9 +1086,9 @@ this document states is not mechanically enforced.
   against an expected appearance, so a change that is token-correct and visually
   wrong is caught only by human inspection, with no artifact retained.
 - Nothing mechanically verifies that every `exports` subpath in `ui/src` or
-  `product-ui/src/patterns` has a row in the sanctioned index, or that every row
-  still points at a real export. Both directions are kept in sync by hand; drift
-  is a documentation bug, not a CI failure.
+  ProductClient domain-aware pattern has a row in the sanctioned index, or that
+  every row still points at a real owner. Both directions are kept in sync by
+  hand; drift is a documentation bug, not a CI failure.
 - `DropdownMenu`'s four grandfathered consumers have no tracking mechanism beyond
   this document — nothing fails CI if a fifth call site starts importing
   `DropdownMenu` directly.

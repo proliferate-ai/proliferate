@@ -6,7 +6,7 @@ import {
 import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
 import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
 import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
-import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
+import { ProductSidebarSectionHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 
 interface WorkspaceCleanupAttentionSectionProps {
   workspaces: Workspace[];

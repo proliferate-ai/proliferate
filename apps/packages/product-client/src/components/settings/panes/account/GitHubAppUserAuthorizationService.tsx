@@ -1,5 +1,5 @@
-import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
-import type { AccountConnectedServiceView } from "@proliferate/product-ui/account/AccountSettingsPane";
+import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
+import type { AccountConnectedServiceView } from "#product/components/settings/panes/account/AccountSettingsPane";
 
 export function buildGitHubAppUserAuthorizationServiceView({
   status,

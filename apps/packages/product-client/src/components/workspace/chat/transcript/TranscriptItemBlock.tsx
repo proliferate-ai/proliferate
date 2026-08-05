@@ -22,14 +22,12 @@ import {
 } from "@proliferate/product-domain/chats/transcript/transcript-action-time";
 import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import {
-  AssistantMessage,
-  type AssistantMessageRevealState,
-} from "#product/components/workspace/chat/transcript/AssistantMessage";
+import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
+import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
 import {
   getAssistantRevealProgress,
   recordAssistantRevealProgress,
-} from "#product/lib/infra/chat/assistant-reveal-progress";
+} from "#product/hooks/chat/ui/assistant-reveal-progress";
 import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,

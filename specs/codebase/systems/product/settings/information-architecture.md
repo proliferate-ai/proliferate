@@ -89,7 +89,7 @@ Three rules every settings page follows:
    (frontend/guides/access.md)
 
 3. Page chrome uses SettingsPageHeader + SettingsSection + SettingsRow
-   (from @proliferate/product-ui/patterns). New pages do not invent
+   (from #product/components/patterns). New pages do not invent
    new wrappers.
 
 4. The Agents `Local` surface remains useful without a Cloud session. Its
@@ -154,17 +154,17 @@ Verified against the current repository worktree on 2026-07-01.
 
 ### 4.1 What exists
 
-**Entry point**: `apps/desktop/src/pages/SettingsPage.tsx` renders
+**Entry point**: `apps/packages/product-client/src/pages/SettingsPage.tsx` renders
 `<SettingsScreen />`. `SettingsScreen` renders a two-row header — a back
 row, then a 46px row of horizontal scope tabs (`SettingsScopeTabs` from
-`@proliferate/product-ui/patterns`) — over `SettingsSidebar` (240px
+`#product/components/patterns`) — over `SettingsSidebar` (240px
 fixed rail) + a scrollable content area.
 
 **Scope-tab IA**: navigation is split into four top-level scopes,
 surfaced as underline tabs (User · Org · Repo · Agents). Each scope owns
 a short section sidebar; selecting a tab lands on the scope's first
 section. Defined in
-`apps/desktop/src/lib/domain/settings/navigation-presentation.ts`:
+`apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts`:
 
 ```text
 SETTINGS_SCOPE_ORDER / SETTINGS_SCOPE_LABELS   tab order + labels
@@ -277,7 +277,7 @@ subfolders:
 > [`agent-auth.md`](../../../platforms/product/agent-auth.md).
 
 **Existing shared primitives**: page chrome lives in
-`apps/packages/product-ui/src/patterns/`:
+`apps/packages/product-client/src/components/patterns/`:
 
 ```text
 SettingsPageHeader.tsx    title + description + action slot
@@ -285,7 +285,7 @@ SettingsSection.tsx       grouped rows with heading
 SettingsRow.tsx           label + control row
 SettingsEyebrow.tsx       group heading style (sidebar + panes)
 SettingsScopeTabs.tsx     horizontal underline scope switcher
-SettingsEmptyState.tsx / SettingsShell.tsx
+SettingsEmptyState.tsx
 ```
 
 Desktop-local `apps/desktop/src/components/settings/shared/` keeps
@@ -819,10 +819,10 @@ in copy/settings/vocabulary-copy.ts keys.
 Existing (kept; no changes):
 
 ```text
-SettingsPageHeader          apps/packages/product-ui/src/patterns/SettingsPageHeader.tsx
-SettingsSection             apps/packages/product-ui/src/patterns/SettingsSection.tsx
-SettingsRow                 apps/packages/product-ui/src/patterns/SettingsRow.tsx
-SettingsEyebrow / SettingsScopeTabs / SettingsEmptyState / SettingsShell
+SettingsPageHeader          apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx
+SettingsSection             apps/packages/product-client/src/components/patterns/SettingsSection.tsx
+SettingsRow                 apps/packages/product-client/src/components/patterns/SettingsRow.tsx
+SettingsEyebrow / SettingsScopeTabs / SettingsEmptyState
                             same directory
 ```
 
@@ -1090,7 +1090,7 @@ apps/desktop/src/lib/domain/settings/navigation-presentation.ts
     scope<->section mapping, PARKED_SECTION_SCOPES
   - adminOnly metadata on Org-scope rows
 
-apps/packages/product-ui/src/patterns/SettingsScopeTabs.tsx
+apps/packages/product-client/src/components/patterns/SettingsScopeTabs.tsx
   - horizontal underline scope switcher consumed by SettingsScreen
 
 apps/desktop/src/components/settings/sidebar/SettingsSidebar.tsx

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { ExternalLink, MessageSquare } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";

@@ -55,7 +55,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # everywhere except the one package nobody was looking at.
 PRODUCTION_ROOTS = (
     REPO_ROOT / "apps" / "packages" / "ui" / "src",
-    REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-client" / "src",
     REPO_ROOT / "apps" / "desktop" / "src",
 )
@@ -235,7 +234,7 @@ LONG_LIST_OWNER_RE = re.compile(r"(?:rows?|runs?|sessions?|workspaces?|files?|th
 # Brand and provider marks are exact-file allowlisted: their hexes are the
 # third-party brand contract, not app palette.
 RAW_HEX_FILE_ALLOWLIST = {
-    "apps/packages/product-ui/src/auth/ProviderBrandIcon.tsx",
+    "apps/packages/product-client/src/components/auth/ProviderBrandIcon.tsx",
     "apps/packages/product-client/src/components/workspace/open-target/app-icons.tsx",
     "apps/desktop/src/lib/infra/measurement/boot-stall-diagnostics-overlay.ts",
 }

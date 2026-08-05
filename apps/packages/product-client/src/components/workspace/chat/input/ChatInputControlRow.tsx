@@ -8,7 +8,7 @@ import { SessionModeControl } from "./SessionModeControl";
 import {
   buildComposerSessionControlGroups,
 } from "#product/lib/domain/chat/session-controls/composer-control-groups";
-import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
+import { ChatComposerControlRowFrame } from "#product/components/workspace/chat/composer/ChatComposerControlRowFrame";
 import { Plus, Target } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 import { deriveGoalBarState } from "@proliferate/product-domain/activity/goal";

@@ -23,7 +23,7 @@ import {
 import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
-import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
+import { ProductSidebarRepoGroupHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
 
 interface RepoGroupProps {
   name: string;

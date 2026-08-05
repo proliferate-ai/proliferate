@@ -31,13 +31,15 @@ import type { SessionViewState } from "@proliferate/product-domain/sessions/acti
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import {
   ChatTranscriptView,
-  type ChatTranscriptGoalEventRenderInput,
-  type ChatTranscriptPendingPromptRenderInput,
-  type ChatTranscriptPendingStatusInput,
-  type ChatTranscriptScrollHandle,
-  type ChatTranscriptTurnRowRenderInput,
-  type ChatTranscriptTurnStatusInput,
-} from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
+} from "#product/components/workspace/chat/transcript/ChatTranscriptView";
+import type {
+  ChatTranscriptGoalEventRenderInput,
+  ChatTranscriptPendingPromptRenderInput,
+  ChatTranscriptPendingStatusInput,
+  ChatTranscriptScrollHandle,
+  ChatTranscriptTurnRowRenderInput,
+  ChatTranscriptTurnStatusInput,
+} from "#product/hooks/chat/ui/chat-transcript-view-types";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { useChatTranscriptContentSearch } from "#product/hooks/chat/lifecycle/use-chat-transcript-content-search";
 import {

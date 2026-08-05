@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@proliferate/product-ui/chat/ChatColumn";
+} from "#product/config/chat-layout";
 import { TranscriptSwitchingPlaceholder } from "./TranscriptSwitchingPlaceholder";
 
 afterEach(cleanup);

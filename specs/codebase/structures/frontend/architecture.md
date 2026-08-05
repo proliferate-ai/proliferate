@@ -140,11 +140,11 @@ read + capabilities cause actions (workflow).
 ```text
 Desktop/Web:                    Foundations (everyone):
   product-client    connected     product-domain   pure shared rules (Mobile's sharing point)
-  product-ui        presentation  design           tokens + css (the look)
+                    presentation  design           tokens + css (the look)
   ui                primitives
 ```
 
-`apps → product-client → product-ui → ui → design`; everyone → `product-domain`.
+`apps → product-client → ui → design`; everyone → `product-domain`.
 Mobile uses only `design/react-native` + `product-domain` + SDK — never the DOM
 packages.
 
@@ -306,13 +306,10 @@ Never put disk I/O or subscriptions in the store file.
 - **`ui`** — the **single** DOM primitive system (Button, Dialog, Input, layout).
   *Hard invariant:* no DOM primitive defined anywhere else, even a renamed
   wrapper. Need a variant? Add it to `ui`.
-- **`product-ui`** — presentational product components: **data in, callbacks
-  out**; composes `ui` + `product-domain`. No SDK, access, stores, routes, Tauri,
-  React Native.
-- **`product-client`** — the connected Desktop/Web product: components render,
-  access hooks own SDK/query state, workflow hooks sequence actions, and pure
-  projections live in `lib/domain`. Native host capabilities arrive through
-  the typed host contract.
+- **`product-client`** — the shared Desktop/Web product: components own product
+  presentation, access hooks own SDK/query state, workflow hooks sequence
+  actions, and pure projections live in `lib/domain`. Native host capabilities
+  arrive through the typed host contract.
 - **`product-domain`** — pure shared decisions; the **Mobile sharing point**. No
   React/DOM/SDK clients/stores.
 

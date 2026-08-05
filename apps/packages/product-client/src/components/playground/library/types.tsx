@@ -2,10 +2,9 @@ import type { ReactNode } from "react";
 
 /**
  * One sanctioned component's spec-sheet row. `subpath` is the exact
- * package.json `exports` key from the owning package (`@proliferate/ui` or
- * `@proliferate/product-ui`) — the parity test in `library-registry.test.ts`
- * asserts this registry covers exactly the exports map, so `subpath` is the
- * join key between "what ships" and "what the sheet documents".
+ * canonical direct import: either an `@proliferate/ui` package export or a
+ * `#product/components/patterns/*` ProductClient owner. The parity test in
+ * `library-registry.test.ts` checks the appropriate real inventory.
  */
 export interface LibraryEntry {
   name: string;

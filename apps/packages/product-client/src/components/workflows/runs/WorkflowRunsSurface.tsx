@@ -1,8 +1,8 @@
 import type { ManagedWorkflowOpenTarget } from "@proliferate/cloud-sdk";
 import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
-import { WorkflowRunDetail } from "@proliferate/product-ui/workflows/WorkflowRunDetail";
-import { WorkflowRunForm } from "@proliferate/product-ui/workflows/WorkflowRunForm";
-import { WorkflowRunList } from "@proliferate/product-ui/workflows/WorkflowRunList";
+import { WorkflowRunDetail } from "#product/components/workflows/WorkflowRunDetail";
+import { WorkflowRunForm } from "#product/components/workflows/WorkflowRunForm";
+import { WorkflowRunList } from "#product/components/workflows/WorkflowRunList";
 import { useWorkflowRunDetailActions } from "#product/hooks/workflows/workflows/use-workflow-run-detail-actions";
 import { useWorkflowRunLaunchActions } from "#product/hooks/workflows/workflows/use-workflow-run-launch-actions";
 import type { WorkflowRunOpenResult } from "#product/lib/domain/workflows/workflow-run-state";

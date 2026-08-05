@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
+import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import { ComposerTextarea } from "@proliferate/ui/patterns/ComposerTextarea";
 import { ComposerTextareaFrame } from "@proliferate/ui/patterns/ComposerTextareaFrame";
 import {

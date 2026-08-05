@@ -13,7 +13,7 @@ Scope:
 - `apps/mobile/src/**`
 - `apps/desktop/src/**` only when extracting presentation or model code without
   changing Desktop behavior
-- `apps/packages/product-ui/src/**`
+- `apps/packages/product-client/src/**`
 - `apps/packages/product-domain/src/**`
 - `apps/packages/design/**` and `apps/packages/ui/**` when shared primitives need small
   extensions
@@ -81,55 +81,44 @@ Use these terms consistently in code, copy, and review notes.
 
 ### Web Chat
 
-- `apps/web/src/components/chat/screen/ChatScreen.tsx` is the Web cloud chat
-  controller. It reads snapshots and live events, derives sessions, dispatches
-  commands, manages pending prompt/config state, and renders the shared-ish
-  `CloudChatSurface`.
-- `apps/packages/product-ui/src/chat/CloudChatSurface.tsx` is the current Web chat
-  shell. It owns header layout, workspace chips, session switcher placement,
-  transcript placement, composer placement, and empty/no-session messaging.
-- `apps/packages/product-ui/src/chat/CloudChatComposer.tsx` and
+- `apps/packages/product-client/src/components/workspace/chat/ChatView.tsx` is
+  the shared Desktop/Web chat shell. ProductClient controllers read snapshots
+  and live events, derive sessions, dispatch commands, and manage pending
+  prompt/config state around it.
+- `apps/packages/product-client/src/components/workspace/chat/composer/**` and
   `apps/packages/product-domain/src/chats/cloud/composer-controls.ts` own the current
-  Web/cloud composer approximation.
-- Desktop source components for the target composer behavior live under
-  `apps/desktop/src/components/workspace/chat/input/**`.
+  Desktop/Web composer presentation and pure cloud-control projection.
 
 ### Web Sidebar And Workspace List
 
-- `apps/web/src/components/app/navigation/WebSidebarController.tsx` maps cloud
-  workspaces and session summaries into `ProductSidebar`.
-- `apps/web/src/lib/domain/sidebar/cloud-sidebar-model.ts` owns current Web sidebar
-  grouping/sorting/source labels.
+- ProductClient workspace hooks map cloud workspaces and session summaries into
+  the shared sidebar components under
+  `apps/packages/product-client/src/components/workspace/shell/sidebar/**`.
 - `apps/packages/product-domain/src/workspaces/cloud-work-inventory.ts` and
   `apps/packages/product-domain/src/workspaces/inventory-cloud.ts` already contain
   related cloud workspace inventory rules.
-- `apps/packages/product-ui/src/sidebar/ProductSidebar.tsx` is the shared sidebar
-  presentation currently used by Web.
+- ProductClient owns the shared sidebar presentation used by both hosts.
 - Web no longer has a standalone Workspaces inventory page. Home and the
   sidebar Recents surface cloud-visible workspace/session rows.
 
 ### Desktop Reference Points
 
-- `apps/desktop/src/components/workspace/shell/topbar/HeaderTabs.tsx` and
-  `apps/desktop/src/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model.ts`
+- `apps/packages/product-client/src/components/workspace/shell/topbar/HeaderTabs.tsx` and
+  `apps/packages/product-client/src/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model.ts`
   show how Desktop makes multiple sessions/tabs in one workspace explicit.
 - Desktop no longer has a standalone Cloud Workspaces inventory page. The
   workspace shell sidebar owns recent workspace/session navigation.
-- Desktop settings live under `apps/desktop/src/components/settings/**`,
-  `apps/desktop/src/hooks/settings/**`, and `apps/desktop/src/config/settings.ts`.
+- Shared Desktop/Web settings live under ProductClient's `components/settings/**`,
+  `hooks/settings/**`, and `config/settings.ts` owners.
 
 ### Web Settings
 
-- `apps/web/src/components/settings/screen/SettingsScreen.tsx` is a Web route
-  screen with a separate section model and Web-only data wiring.
-- `apps/packages/product-ui/src/patterns/**` contains the reusable settings UI
-  pieces (`SettingsRow`, `SettingsSection`, `SettingsPageHeader`, etc.);
-  `apps/packages/product-ui/src/settings/**` holds the remaining scope-specific
-  pieces (`RepoPicker`, `OrganizationSsoSettingsSurface`). Web keeps its
-  route-screen IA while sharing primitives with Desktop.
-- `apps/desktop/src/components/settings/shared/**` already re-exports shared
-  settings primitives from `apps/packages/product-ui/src/patterns/**`; extend
-  those primitives instead of re-extracting them.
+- `apps/packages/product-client/src/components/settings/screen/SettingsScreen.tsx`
+  is the shared settings route screen with host capability-aware wiring.
+- `apps/packages/product-client/src/components/patterns/**` contains reusable
+  domain-aware settings patterns (`SettingsRow`, `SettingsSection`,
+  `SettingsPageHeader`, etc.); `components/settings/panes/**` holds
+  scope-specific pieces (`RepoPicker`, `OrganizationSsoSettingsSurface`).
 
 ### Mobile
 
@@ -169,7 +158,7 @@ and should emit serializable semantic view models only. It may emit semantic
 ids such as `sourceKind: "desktop_exposed"` or
 `runtimeLocation: "cloud_sandbox"`, but not React components, Lucide icons,
 DOM classes, native icons, routes, query hooks, or client actions.
-`apps/packages/product-ui` maps semantic ids to DOM icons and styling. Mobile maps
+ProductClient maps semantic ids to DOM icons and styling. Mobile maps
 the same semantic ids to native icons and styling.
 
 ### Recent Work Item
@@ -505,8 +494,8 @@ Settings sections to exclude from Web:
 
 Sharing model:
 
-- Extend the existing shared settings primitives in
-  `apps/packages/product-ui/src/patterns/**`. Shared settings UI owns only
+- Extend the existing shared settings patterns in
+  `apps/packages/product-client/src/components/patterns/**`. Shared settings UI owns only
   presentational shells/nav/card/row/modal surfaces that accept section
   descriptors, statuses, disabled reasons, slots, and callbacks.
 - Move section definitions, ordering, search/filter labels, and capability
@@ -540,7 +529,7 @@ Required mobile outcomes:
   live transcript reload semantics match Web.
 - Settings use the same section model as Web where the sections are mobile
   relevant, rendered as native screens/sheets.
-- Mobile does not import DOM `product-ui` components.
+- Mobile does not import DOM ProductClient components.
 - Mobile may use `product-domain` helpers for source/runtime labels, command
   state, pending prompt reconciliation, and settings section definitions.
 
@@ -553,13 +542,13 @@ parity, not DOM reuse.
 Desktop
   local AnyHarness/Tauri controllers
     -> shared product-domain pure rules where applicable
-    -> shared product-ui DOM presentation where applicable
+    -> shared ProductClient DOM presentation where applicable
     -> Desktop-only native/local adapters
 
 Web
   cloud SDK/react-query/controllers
     -> shared product-domain pure rules
-    -> shared product-ui DOM presentation
+    -> shared ProductClient DOM presentation
     -> Web-only cloud command/routing adapters
 
 Mobile
@@ -708,7 +697,7 @@ Recommended checks:
 
 - `pnpm --filter @proliferate/product-domain test` when product-domain rules are
   touched.
-- `pnpm --filter @proliferate/product-ui typecheck` when shared DOM UI is
+- `pnpm --filter @proliferate/product-client typecheck` when shared DOM UI is
   touched.
 - Web typecheck/build for Web controller changes.
 - Mobile typecheck for shared product-domain changes consumed by mobile.

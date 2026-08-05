@@ -6,7 +6,7 @@ Scope:
 - `apps/web/src/**`
 - `apps/mobile/src/**`
 - shared styling under `apps/packages/design/**`, `apps/packages/ui/**`,
-  `apps/packages/product-ui/**`, and `apps/packages/product-client/**`
+  and `apps/packages/product-client/**`
 
 This file covers styling-only rules. Read
 [README.md](../README.md) for structure, ownership, and data-flow guidance.
@@ -212,8 +212,8 @@ primitive in `apps/packages/ui/**`. Callsite classes may handle layout,
 spacing, and sizing; primitives own color, border, radius, typography, focus,
 hover, disabled, and loading states.
 
-When using primitives from `apps/packages/ui/**`, shared product components
-from `apps/packages/product-ui/**`, or connected ProductClient components,
+When using primitives from `apps/packages/ui/**` or shared ProductClient
+components,
 import `@proliferate/design/product.css`;
 that shared entrypoint owns the Tailwind package source scanning.
 

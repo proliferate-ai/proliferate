@@ -1,0 +1,61 @@
+import { Badge } from "@proliferate/ui/primitives/Badge";
+
+import type { BillingPlanView } from "#product/lib/domain/billing/billing-plan";
+import {
+  formatCredits,
+  grantTypeLabel,
+  secondsToHours,
+  visibleGrantAllocations,
+} from "#product/lib/domain/billing/billing-presentation";
+
+export function CreditGrantBreakdown({ plan }: { plan: BillingPlanView }) {
+  const grants = visibleGrantAllocations(plan.grantAllocations);
+  if (grants.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3 border-t border-border-light pt-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-heading font-medium text-foreground">Usage by credit grant</div>
+          <p className="text-ui-sm text-muted-foreground">
+            Consumed PCUs across free trial, included, top-up, and Core period grants.
+          </p>
+        </div>
+        <div className="text-ui-sm text-muted-foreground">
+          {formatCredits(grants.reduce((total, grant) => total + secondsToHours(grant.consumedSeconds), 0))} used
+        </div>
+      </div>
+      <div className="space-y-2">
+        {grants.map((grant) => {
+          const totalHours = secondsToHours(grant.totalSeconds);
+          const consumedHours = secondsToHours(grant.consumedSeconds);
+          const remainingHours = secondsToHours(grant.remainingSeconds);
+          const percent = totalHours > 0
+            ? Math.min(100, Math.max(0, (consumedHours / totalHours) * 100))
+            : 0;
+          return (
+            <div key={`${grant.grantType}:${grant.totalSeconds}:${grant.active}`} className="space-y-1.5">
+              <div className="flex items-center gap-2 text-ui">
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                  {grantTypeLabel(grant.grantType)}
+                </span>
+                <span className="shrink-0 text-muted-foreground">
+                  {formatCredits(consumedHours)} / {formatCredits(totalHours)}
+                </span>
+                {!grant.active ? <Badge tone="neutral">Inactive</Badge> : null}
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-surface-control">
+                <div className="h-full rounded-full bg-foreground/70" style={{ width: `${percent}%` }} />
+              </div>
+              <div className="text-ui-sm text-muted-foreground">
+                {grant.active ? `${formatCredits(remainingHours)} remaining` : "No longer active"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

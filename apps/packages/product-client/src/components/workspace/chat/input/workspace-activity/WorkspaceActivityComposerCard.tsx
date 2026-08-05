@@ -10,7 +10,7 @@ import {
   GitPullRequest,
   StackedFiles,
 } from "@proliferate/ui/icons";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { useComposerWorkspaceActivityModel } from "#product/hooks/workspaces/derived/use-composer-workspace-activity-model";
 import type {

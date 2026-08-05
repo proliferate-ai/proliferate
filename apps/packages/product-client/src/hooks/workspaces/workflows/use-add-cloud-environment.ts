@@ -21,8 +21,8 @@ import {
   mergeRepositories,
   projectCloudRepoPickerRepositories,
   repoAuthorityMessage,
-  type CloudRepoPickerModel,
 } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
+import type { CloudRepoPickerProps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 
 const REPO_PAGE_LIMIT = 50;
 
@@ -54,7 +54,7 @@ export function useAddCloudEnvironment({
   onCopyText,
   onRepositorySelected,
   onEnvironmentAdded,
-}: UseAddCloudEnvironmentInput): CloudRepoPickerModel {
+}: UseAddCloudEnvironmentInput): CloudRepoPickerProps {
   const [query, setQuery] = useState("");
   const [manualValue, setManualValue] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);

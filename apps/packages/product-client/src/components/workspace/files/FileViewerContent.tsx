@@ -1,6 +1,6 @@
 import type { ReadWorkspaceFileResponse } from "@anyharness/sdk";
 import { LoadingState } from "#product/components/feedback/LoadingIllustration";
-import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { CenterMessage } from "#product/components/workspace/files/viewer/CenterMessage";
 import { FileDiffPane } from "#product/components/workspace/files/viewer/FileDiffPane";

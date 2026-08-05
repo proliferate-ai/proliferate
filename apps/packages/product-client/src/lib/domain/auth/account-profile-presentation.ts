@@ -1,6 +1,17 @@
-import type { AccountProviderView } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { AUTH_ACCOUNT_LABELS } from "#product/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
+
+export type AccountProviderKind = "github" | "google" | "apple" | "sso";
+
+export interface AccountProviderView {
+  provider: AccountProviderKind;
+  label: string;
+  brandLabel?: string | null;
+  accountLabel?: string | null;
+  connected: boolean;
+  status?: "ready" | "needs_reauth" | "expired";
+  primary?: boolean;
+}
 
 export interface AccountDisplayNameInput {
   email: string | null | undefined;

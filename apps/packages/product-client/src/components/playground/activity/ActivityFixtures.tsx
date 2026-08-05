@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { GoalBar } from "@proliferate/product-ui/activity/GoalBar";
-import { ActivityChips } from "@proliferate/product-ui/activity/ActivityChips";
-import { LoopsPanel } from "@proliferate/product-ui/activity/LoopsPanel";
-import { TerminalsRosterPanel } from "@proliferate/product-ui/activity/TerminalsRosterPanel";
-import { AgentsRosterPanel } from "@proliferate/product-ui/activity/AgentsRosterPanel";
+import { GoalBar } from "#product/components/workspace/activity/GoalBar";
+import { ActivityChips } from "#product/components/workspace/activity/ActivityChips";
+import { LoopsPanel } from "#product/components/workspace/activity/LoopsPanel";
+import { TerminalsRosterPanel } from "#product/components/workspace/activity/TerminalsRosterPanel";
+import { AgentsRosterPanel } from "#product/components/workspace/activity/AgentsRosterPanel";
 import { deriveActivityChips } from "@proliferate/product-domain/activity/chips";
 import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/activity/loop";
 import type { ActivityProcessWire } from "@proliferate/product-domain/activity/process";

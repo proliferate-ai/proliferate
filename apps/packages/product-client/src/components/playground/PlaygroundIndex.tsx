@@ -16,7 +16,7 @@ const DESTINATIONS: PlaygroundDestination[] = [
   {
     title: "Component library",
     path: "/playground/library",
-    description: "Spec sheet of every sanctioned ui/product-ui component, tier by tier.",
+    description: "Spec sheet of every sanctioned UI component and ProductClient pattern, tier by tier.",
   },
   {
     title: "Chat",

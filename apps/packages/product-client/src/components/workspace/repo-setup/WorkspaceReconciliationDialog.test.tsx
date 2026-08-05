@@ -19,7 +19,7 @@ vi.mock("@proliferate/ui/primitives/AlertDialog", () => ({
   AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
   AlertDialogTitle: ({ children }: any) => <h2>{children}</h2>,
 }));
-vi.mock("@proliferate/product-ui/workspaces/WorkspaceReconciliationBody", () => ({
+vi.mock("#product/components/workspace/repo-setup/WorkspaceReconciliationBody", () => ({
   WorkspaceReconciliationBody: () => <div data-testid="body" />,
 }));
 

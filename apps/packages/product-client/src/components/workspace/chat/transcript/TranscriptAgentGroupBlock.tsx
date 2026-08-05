@@ -11,7 +11,7 @@ import type {
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
-import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { SubagentLaunchLedger } from "#product/components/workspace/chat/transcript/SubagentLaunchLedger";
 import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";

@@ -3,9 +3,9 @@ import {
   type SettingsScaffoldPageCopy,
   type SettingsScaffoldPageId,
 } from "#product/copy/settings/settings-scaffold-copy";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 
 interface SettingsScaffoldPaneProps {
   pageId: SettingsScaffoldPageId;

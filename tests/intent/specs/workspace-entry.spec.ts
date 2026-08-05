@@ -55,7 +55,7 @@
 // the real Web bundle (apps/web/src/web-host.ts) sets `desktop: null` and
 // collapses to `["cloud"]`; that bundle is not what this suite boots, and its
 // cloud-only contract is pinned by unit tests instead
-// (apps/packages/product-ui/test/AddRepoFlow.test.tsx "offers only Set up in
+// (apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.test.tsx "offers only Set up in
 // Cloud on Web", apps/web/src/web-host.test.tsx "surface web and desktop null").
 //
 // So the host-truthful assertion for THIS booted client is: both the local and

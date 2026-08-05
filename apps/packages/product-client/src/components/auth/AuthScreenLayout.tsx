@@ -1,6 +1,6 @@
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
-import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
+import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark";
+import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { PasswordSignInForm } from "#product/components/auth/PasswordSignInForm";
 import { ThinkingText } from "#product/components/feedback/ThinkingText";

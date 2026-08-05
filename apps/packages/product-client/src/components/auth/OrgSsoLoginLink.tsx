@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
+import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 

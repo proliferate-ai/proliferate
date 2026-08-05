@@ -6,8 +6,8 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
-import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
 import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
 import {

@@ -1,9 +1,25 @@
-import type { PrStatusKind, PrStatusView } from "@proliferate/product-ui/patterns/PrStatusBadge";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import type {
   WorkspaceGitStatus,
   WorkspacePrStatus,
 } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+
+export type PrStatusKind =
+  | "open"
+  | "checks_failing"
+  | "pending"
+  | "changes_requested"
+  | "draft"
+  | "merged"
+  | "closed";
+
+export interface PrStatusView {
+  kind: PrStatusKind;
+  /** PR number, when known (rendered in the tooltip as `#805`). */
+  number?: number | null;
+  /** Optional custom tooltip label; defaults to `PR #{n} · {State}`. */
+  label?: string | null;
+}
 
 const PR_STATE_LABEL: Record<Exclude<WorkspacePrStatus["state"], "none">, string> = {
   open: "Open",

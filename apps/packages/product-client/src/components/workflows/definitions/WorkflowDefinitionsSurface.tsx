@@ -3,8 +3,8 @@ import type { WorkflowAgentCatalog } from "@proliferate/product-domain/workflows
 import {
   WorkflowDefinitionEditor,
   type WorkflowRepositoryOption,
-} from "@proliferate/product-ui/workflows/WorkflowDefinitionEditor";
-import { WorkflowDefinitionList } from "@proliferate/product-ui/workflows/WorkflowDefinitionList";
+} from "#product/components/workflows/WorkflowDefinitionEditor";
+import { WorkflowDefinitionList } from "#product/components/workflows/WorkflowDefinitionList";
 import {
   useWorkflowAuthoringResourcesAccess,
   useWorkflowDefinitionAccess,

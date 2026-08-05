@@ -9,7 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@proliferate/ui/primitives/AlertDialog";
-import { WorkspaceReconciliationBody } from "@proliferate/product-ui/workspaces/WorkspaceReconciliationBody";
+import { WorkspaceReconciliationBody } from "#product/components/workspace/repo-setup/WorkspaceReconciliationBody";
 import {
   resolveWorkspaceGitReconciliation,
   type WorkspaceGitReconciliationPlan,

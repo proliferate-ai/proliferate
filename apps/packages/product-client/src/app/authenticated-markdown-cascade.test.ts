@@ -1,9 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CodeBlock } from "@proliferate/product-ui/code/CodeBlock";
-import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
-import { PlanMarkdownBody } from "@proliferate/product-ui/chat/transcript/PlanMarkdownBody";
+import { CodeBlock } from "#product/components/content/ui/CodeBlock";
+import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
+import { PlanMarkdownBody } from "#product/components/workspace/chat/transcript/PlanMarkdownBody";
 import { chromium, type Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer, type Plugin, type ViteDevServer } from "vite";

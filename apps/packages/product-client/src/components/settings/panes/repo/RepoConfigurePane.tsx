@@ -1,11 +1,11 @@
 import { useMemo } from "react";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import {
   SETTINGS_CONTROL_WIDTH_CLASS,
   SettingsRow,
-} from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsSaveFooter } from "@proliferate/product-ui/patterns/SettingsSaveFooter";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+} from "#product/components/patterns/SettingsRow";
+import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import {
   EnvironmentSearchSelect,
   type EnvironmentSearchSelectOption,

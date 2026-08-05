@@ -87,18 +87,18 @@ Assistant markdown renders file references as clickable file mentions and code
 blocks as bordered highlighted cards. Ownership is split by package law:
 
 ```text
-apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx
+apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx
   presentational markdown renderer; permissive urlTransform (blocks only
   javascript:/data:/vbscript:); injection props renderLink, renderInlineCode,
   renderCodeBlock; owns the code-block shell styling
 
-apps/desktop/src/components/workspace/chat/transcript/transcript-markdown.tsx
-  desktop renderers injected at TranscriptItemBlock, ClaudePlanCard, and
+apps/packages/product-client/src/components/workspace/chat/transcript/transcript-markdown.tsx
+  ProductClient renderers injected at TranscriptItemBlock, ClaudePlanCard, and
   ConnectedProposedPlanItem: only workspace file references render FilePathLink
   mentions; external/web link hrefs defer to MarkdownBody's default anchor
   (ProviderLinkMention); fenced code renders shiki-highlighted HTML in the shell
 
-apps/packages/product-ui/src/chat/transcript/ProviderLinkMention.tsx
+apps/packages/product-client/src/components/workspace/chat/transcript/ProviderLinkMention.tsx
   shared inline provider-icon link mention + URL/host classification
   (isExternalHttpLink, linkHost); rendered by MarkdownBody's default anchor, so
   every surface (web + cloud chat included) gets icon links
@@ -297,7 +297,7 @@ reduced-motion preferences disable the entrance.
 ### Stick-to-bottom engine
 
 Bottom pinning is owned by one shared engine,
-`apps/packages/product-ui/src/chat/transcript/useTranscriptStickToBottom.ts`,
+`apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts`,
 consumed by both `FullTranscriptRowList` and `VirtualizedTranscriptRowList`. It
 distinguishes user scrolls from its own programmatic snaps (`notifyProgrammaticScroll`
 tags every `scrollTop`/`scrollToOffset` write the engine or its callers make) so

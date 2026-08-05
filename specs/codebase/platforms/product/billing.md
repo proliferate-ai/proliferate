@@ -558,7 +558,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] **U3.** The standalone upgrade/refill startup-state components (out
       of credit → upgrade; low/exhausted → refill) are not on `main` yet.
       Net-new deliverable per the 2026-07-28 ruling; lands via PR #1570
-      (`product-ui/patterns/BillingGateState` + `PlaygroundLibrary`
+      (`product-client/components/patterns/BillingGateState` + `PlaygroundLibrary`
       registration).
 - [ ] **M2 live proof.** The free-tier anti-abuse key (GitHub identity, not
       account) is unit-true in

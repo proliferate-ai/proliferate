@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
-import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
 import { Switch } from "@proliferate/ui/primitives/Switch";

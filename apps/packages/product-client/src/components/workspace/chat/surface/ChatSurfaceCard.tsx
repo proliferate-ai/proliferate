@@ -3,7 +3,7 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@proliferate/product-ui/chat/ChatColumn";
+} from "#product/config/chat-layout";
 
 interface ChatSurfaceCardProps {
   badge?: string;

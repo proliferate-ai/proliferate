@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
+import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import { ComposerTextarea } from "@proliferate/ui/patterns/ComposerTextarea";
 import { ComposerTextareaFrame } from "@proliferate/ui/patterns/ComposerTextareaFrame";
 import { DraftAttachmentPreviewList } from "#product/components/workspace/chat/content/PromptContentRenderer";

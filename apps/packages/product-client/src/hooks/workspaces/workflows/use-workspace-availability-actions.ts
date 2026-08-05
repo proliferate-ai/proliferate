@@ -28,7 +28,7 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
  * Executes the workspace-copy availability actions (PR 5 Flows 2/3/5). All
- * orchestration stays here in product-client (never in product-ui or Tauri
+ * orchestration stays here in ProductClient hooks (never in components or Tauri
  * commands); the pure sequencing lives in open-on-mac-orchestration.ts.
  *
  * Runtime routing: local materialization operations (clone/exact-ref) run

@@ -1,11 +1,11 @@
 import { type ChangeEvent } from "react";
 import type { SetupHint } from "@anyharness/sdk";
 import { useDetectRepoRootSetupQuery } from "@anyharness/sdk-react";
-import { ScriptBlock } from "@proliferate/product-ui/environments/ScriptBlock";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
-import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsSaveFooter } from "@proliferate/product-ui/patterns/SettingsSaveFooter";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { ScriptBlock } from "#product/components/settings/panes/repo/ScriptBlock";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";

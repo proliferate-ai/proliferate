@@ -411,9 +411,6 @@ jobs:
       - name: Test product domain
         run: pnpm --filter @proliferate/product-domain test
 
-      - name: Test product UI
-        run: pnpm --filter @proliferate/product-ui test
-
       - name: Test product client
         run: pnpm --filter @proliferate/product-client test
 

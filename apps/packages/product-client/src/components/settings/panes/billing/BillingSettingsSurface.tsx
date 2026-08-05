@@ -1,11 +1,11 @@
 import type { BillingReturnSurface } from "@proliferate/cloud-sdk";
-import { BillingSettingsPane } from "@proliferate/product-ui/billing/BillingSettingsPane";
+import { BillingSettingsPane } from "#product/components/billing/BillingSettingsPane";
 import {
   BillingBalanceNotice,
   billingGateView,
   toBillingGateReason,
-} from "@proliferate/product-ui/patterns/BillingGateState";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+} from "#product/components/patterns/BillingGateState";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import {
   BillingAutoTopUpCard,
   BillingPlanCard,
