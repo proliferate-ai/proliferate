@@ -32,7 +32,7 @@ point one way.
 server/proliferate/
   main.py · config.py · errors.py
   constants/<area>.py        # hardcoded policy values
-  middleware/                # cross-cutting HTTP lifecycle
+  middleware/                # cross-cutting application and HTTP lifecycle
   permissions.py             # org-authz factory deps + verdict types (leaf, imported everywhere)
   auth/                      # actor authn deps + viewer/desktop/identity APIs + crypto utils
   lib/                       # reusable cross-domain logic (leaf below domains)
@@ -239,8 +239,11 @@ outbox row and let a worker do the call.
   literals in service/api/store files are forbidden. No `localhost` outside config.
 
 ### `middleware/**`
-- Cross-cutting HTTP lifecycle only (request context, tracing, correlation ids).
-  No product logic.
+- Cross-cutting application and HTTP lifecycle only: request context, tracing,
+  correlation IDs, and application logging setup. `logging.py` configures the
+  server logger during application startup, attaches request correlation
+  context, and stamps the canonical release identity. It does not own release
+  policy or product orchestration.
 
 **Cross-cutting hygiene:** canonical files never prefixed/suffixed; no junk-drawer
 modules (`helpers.py`/`utils.py`/`misc.py`); no single-file folders (except
