@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow, type ToolActionStatus } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
 

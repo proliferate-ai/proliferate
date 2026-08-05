@@ -1,5 +1,5 @@
 import type { TranscriptState } from "@anyharness/sdk";
-import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 
 // Deterministic, cheap markdown-to-plain-text reduction used to COUNT content
 // search matches in transcript prose. It approximates the text a reader sees

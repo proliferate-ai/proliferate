@@ -7,7 +7,7 @@ import {
   EMPTY_TRANSCRIPT_TARGET_FACTS,
   type TranscriptSelectionClampEdge,
   type TranscriptTargetFacts,
-} from "@proliferate/product-domain/chats/transcript/transcript-selection";
+} from "#product/domain/chats/transcript/transcript-selection";
 
 interface ListenerRecord {
   type: string;

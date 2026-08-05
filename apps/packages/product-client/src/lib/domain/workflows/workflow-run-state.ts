@@ -2,7 +2,7 @@ import type {
   ManagedWorkflowHistoryItem,
   ManagedWorkflowInvocationResponse,
 } from "@proliferate/cloud-sdk";
-import { safeWorkflowFailureCopy } from "@proliferate/product-domain/workflows/run-presentation";
+import { safeWorkflowFailureCopy } from "#product/domain/workflows/run-presentation";
 
 export interface WorkflowCloudError {
   status: number;

@@ -4,7 +4,7 @@ import {
   resolveTranscriptVirtualizationEnabled,
   TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY,
   type TranscriptVirtualizationMode,
-} from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
+} from "#product/domain/chats/transcript/transcript-virtualization-config";
 import type {
   TranscriptRowListBaseProps,
 } from "#product/hooks/chat/ui/transcript-row-list-model";

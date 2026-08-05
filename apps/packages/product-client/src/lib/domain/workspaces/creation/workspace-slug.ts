@@ -1,5 +1,5 @@
 import type { Workspace } from "@anyharness/sdk";
-import { WORKSPACE_ANIMAL_NAMES } from "@proliferate/product-domain/workspaces/workspace-name-catalog.generated";
+import { WORKSPACE_ANIMAL_NAMES } from "#product/domain/workspaces/workspace-name-catalog.generated";
 import { localWorkspaceGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
 
 function randomIndex(length: number): number {

@@ -9,7 +9,7 @@ import {
   recentWorkSourceForWorkspace,
   recentWorkSourceLabel,
   type RecentWorkRuntimeLocation,
-} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+} from "@proliferate/product-client/internal/domain/workspaces/cloud-work-inventory";
 
 export type MobileChatIconName =
   | "brain"

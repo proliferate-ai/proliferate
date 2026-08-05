@@ -13,14 +13,14 @@ import {
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   classifyPromptDispatchFailure,
-} from "@proliferate/product-domain/sessions/intents/prompt-dispatch-failure";
+} from "#product/domain/sessions/intents/prompt-dispatch-failure";
 import {
   transcriptHasRenderablePromptEcho,
-} from "@proliferate/product-domain/sessions/intents/prompt-echo";
+} from "#product/domain/sessions/intents/prompt-echo";
 import {
   isOutboxEntryTerminal,
   type PromptOutboxEntry,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
+} from "#product/domain/sessions/intents/session-intent-model";
 import {
   getSessionClientAndWorkspace,
 } from "#product/lib/access/anyharness/session-runtime";

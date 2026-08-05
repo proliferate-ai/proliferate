@@ -5,7 +5,7 @@ import {
 import type {
   TranscriptState,
 } from "@anyharness/sdk";
-import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+import type { TurnDisplayBlock } from "#product/domain/chats/transcript/transcript-presentation";
 import { SubagentCreationGroupBlock } from "#product/components/workspace/chat/transcript/SubagentCreationGroupBlock";
 import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
 

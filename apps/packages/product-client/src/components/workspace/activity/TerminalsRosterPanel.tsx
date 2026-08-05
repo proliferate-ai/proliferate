@@ -1,4 +1,4 @@
-import { sortProcessesForDisplay, type ActivityProcessWire } from "@proliferate/product-domain/activity/process";
+import { sortProcessesForDisplay, type ActivityProcessWire } from "#product/domain/activity/process";
 import { TerminalRosterRow } from "./TerminalRosterRow";
 
 export interface TerminalsRosterPanelProps {

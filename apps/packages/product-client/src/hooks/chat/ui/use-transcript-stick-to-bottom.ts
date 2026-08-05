@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { resolveVirtualBottomDistance } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import { resolveVirtualBottomDistance } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import {
   DIRECTION_EPSILON_PX,
   GLUE_MAX_FRAMES,

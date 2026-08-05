@@ -163,7 +163,6 @@ function ensureFrontendBuilt(): void {
     { filter: "@proliferate/cloud-sdk", path: "cloud/sdk" },
     { filter: "@proliferate/cloud-sdk-react", path: "cloud/sdk-react" },
     { filter: "@proliferate/design", path: "apps/packages/design" },
-    { filter: "@proliferate/product-domain", path: "apps/packages/product-domain" },
     { filter: "@proliferate/product-client", path: "apps/packages/product-client" },
   ];
   for (const pkg of packages) {

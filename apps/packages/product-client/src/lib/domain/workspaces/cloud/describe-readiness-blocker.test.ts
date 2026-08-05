@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { RepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
+import type { RepositoryReadiness } from "#product/domain/repos/repo-readiness";
 import { describeReadinessBlocker, type ReadinessBlockerInputs } from "./describe-readiness-blocker";
 
 function inputs(readiness: RepositoryReadiness, overrides: Partial<ReadinessBlockerInputs> = {}): ReadinessBlockerInputs {

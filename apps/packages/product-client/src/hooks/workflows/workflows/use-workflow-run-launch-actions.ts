@@ -6,8 +6,8 @@ import {
   referencedWorkflowInputNames,
   type ManagedWorkflowLaunchAttempt,
   type WorkflowArgumentIssue,
-} from "@proliferate/product-domain/workflows/arguments";
-import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
+} from "#product/domain/workflows/arguments";
+import type { WorkflowDefinition } from "#product/domain/workflows/definition";
 import { useWorkflowRunLaunchAccess } from "#product/hooks/access/cloud/workflows/use-workflow-run-access";
 import {
   dedupeWorkflowRunHistory,

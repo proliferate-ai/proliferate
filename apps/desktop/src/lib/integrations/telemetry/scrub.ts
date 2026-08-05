@@ -4,7 +4,7 @@ import {
   scrubTelemetryData as scrubSharedTelemetryData,
   scrubTelemetryEvent as scrubSharedTelemetryEvent,
   scrubTelemetryText,
-} from "@proliferate/product-domain/telemetry/scrub";
+} from "@proliferate/product-client/internal/domain/telemetry/scrub";
 import type { CaptureResult } from "posthog-js/lib/src/types";
 
 export function scrubTelemetryData<T>(value: T): T {

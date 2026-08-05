@@ -8,7 +8,7 @@ import {
   type LoopCapabilities,
   type LoopScheduleKind,
   type LoopWire,
-} from "@proliferate/product-domain/activity/loop";
+} from "#product/domain/activity/loop";
 import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
 import { Input } from "#product/primitives/Input";

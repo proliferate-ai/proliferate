@@ -28,7 +28,6 @@ COPY apps/desktop/package.json apps/desktop/
 COPY apps/mobile/package.json apps/mobile/
 COPY apps/packages/design/package.json apps/packages/design/
 COPY apps/packages/product-client/package.json apps/packages/product-client/
-COPY apps/packages/product-domain/package.json apps/packages/product-domain/
 COPY server/artifact-runtime/package.json server/artifact-runtime/
 COPY apps/web/package.json apps/web/
 COPY tests/intent/package.json tests/intent/

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchServerCapabilities } from "#product/lib/access/cloud/server-capabilities";
 import {
   EXPECTED_CONTROL_PLANE_PROBE_TIMEOUT_ERROR_NAME,
-} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
+} from "#product/domain/telemetry/control-plane-probe-timeout";
 
 describe("server capabilities", () => {
   afterEach(() => {

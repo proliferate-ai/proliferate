@@ -5,8 +5,8 @@ import type {
 } from "@anyharness/sdk";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
-import { basename } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
+import { basename } from "#product/domain/chats/tools/collapsed-action-labels";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { ActionRowIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 import { GenericActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedGenericActionRow";

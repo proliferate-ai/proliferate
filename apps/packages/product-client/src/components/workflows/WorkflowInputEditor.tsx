@@ -3,7 +3,7 @@ import type {
   WorkflowDefinitionInput,
   WorkflowInputType,
   WorkflowValidationIssue,
-} from "@proliferate/product-domain/workflows/definition";
+} from "#product/domain/workflows/definition";
 import { Checkbox } from "#product/primitives/checkbox-primitive";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";

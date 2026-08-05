@@ -5,7 +5,7 @@ import {
   processStatusTone,
   type ActivityProcessWire,
   type ProcessTone,
-} from "@proliferate/product-domain/activity/process";
+} from "#product/domain/activity/process";
 import { Button } from "#product/primitives/Button";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 

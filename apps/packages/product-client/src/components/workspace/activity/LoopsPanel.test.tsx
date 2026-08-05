@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/activity/loop";
+import type { LoopCapabilities, LoopWire } from "#product/domain/activity/loop";
 import { LoopsPanel } from "./LoopsPanel";
 
 afterEach(() => {

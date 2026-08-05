@@ -2,7 +2,7 @@ import type { CoworkThread } from "@anyharness/sdk";
 import { ChevronRight } from "#product/primitives/icons/core";
 import { IconButton } from "#product/primitives/IconButton";
 import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
-import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
+import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
 import { sidebarStatusIndicatorFromActivity } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { formatSidebarRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import { coworkThreadTitle } from "#product/lib/domain/cowork/threads";

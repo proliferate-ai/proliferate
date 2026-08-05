@@ -3,11 +3,11 @@ import type { ErrorEvent, EventHint, Exception, StackFrame } from "@sentry/react
 import {
   createExpectedControlPlaneProbeTimeoutError,
   EXPECTED_CONTROL_PLANE_PROBE_TIMEOUT_ERROR_NAME,
-} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
+} from "@proliferate/product-client/internal/domain/telemetry/control-plane-probe-timeout";
 import {
   createExpectedSessionStreamStaleCloseError,
   EXPECTED_SESSION_STREAM_STALE_CLOSE_ERROR_NAME,
-} from "@proliferate/product-domain/telemetry/session-stream-stale-close";
+} from "@proliferate/product-client/internal/domain/telemetry/session-stream-stale-close";
 
 import { shouldDropExpectedWebSentryEvent } from "./sentry-event-filter";
 

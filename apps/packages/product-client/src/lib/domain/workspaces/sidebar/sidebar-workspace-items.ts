@@ -1,5 +1,5 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
-import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
+import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
 import {
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceMatchesId,
@@ -26,7 +26,7 @@ import {
   deriveWorkspaceAvailabilityInput,
   resolveWorkspaceAvailabilityCommands,
 } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
-import { canonicalRepoKey } from "@proliferate/product-domain/repos/repo-id";
+import { canonicalRepoKey } from "#product/domain/repos/repo-id";
 
 export interface SidebarWorkspaceItemWithWorkspace {
   workspace: LogicalWorkspace;

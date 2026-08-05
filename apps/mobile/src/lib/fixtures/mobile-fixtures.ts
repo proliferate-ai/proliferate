@@ -1,5 +1,5 @@
-import { demoChats, demoCurrentUser, demoWorkspaces } from "@proliferate/product-domain/chats/fixtures";
-import type { ProductChat, ProductUser, ProductWorkspace } from "@proliferate/product-domain/chats/model";
+import { demoChats, demoCurrentUser, demoWorkspaces } from "@proliferate/product-client/internal/domain/chats/fixtures";
+import type { ProductChat, ProductUser, ProductWorkspace } from "@proliferate/product-client/internal/domain/chats/model";
 
 export const currentUser: ProductUser = demoCurrentUser;
 export const workspaces: ProductWorkspace[] = demoWorkspaces;

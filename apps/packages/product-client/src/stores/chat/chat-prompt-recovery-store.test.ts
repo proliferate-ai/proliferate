@@ -5,7 +5,7 @@ import {
 } from "#product/stores/chat/chat-prompt-recovery-store";
 import {
   createPromptOutboxEntry,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
+} from "#product/domain/sessions/intents/session-intent-model";
 
 beforeEach(() => {
   useChatPromptRecoveryStore.getState().clear();

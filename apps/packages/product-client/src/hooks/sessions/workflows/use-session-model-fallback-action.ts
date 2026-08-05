@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
-import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import { resolveFallbackSessionModelId } from "#product/lib/domain/sessions/model-fallback";
 import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
 import {

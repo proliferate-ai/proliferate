@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ActivityChipDescriptor } from "@proliferate/product-domain/activity/chips";
+import type { ActivityChipDescriptor } from "#product/domain/activity/chips";
 import { ActivityChips } from "./ActivityChips";
 
 afterEach(() => {

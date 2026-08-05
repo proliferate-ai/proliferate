@@ -4,7 +4,7 @@ import {
   workflowDefinitionFromResponse,
   workflowWriteErrorMessage,
   type WorkflowDefinition,
-} from "@proliferate/product-domain/workflows/definition";
+} from "#product/domain/workflows/definition";
 
 export interface WorkflowRepositoryOptionModel {
   id: string;

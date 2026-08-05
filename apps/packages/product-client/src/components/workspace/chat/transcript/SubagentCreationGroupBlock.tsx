@@ -9,7 +9,7 @@ import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
   isSubagentWorkComplete,
-} from "@proliferate/product-domain/chats/subagents/subagent-launch";
+} from "#product/domain/chats/subagents/subagent-launch";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { useTranscriptOpenSession } from "./TranscriptContexts";
 

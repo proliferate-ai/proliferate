@@ -1,7 +1,7 @@
 import type {
   WorkflowRun,
   WorkflowRunPresentation,
-} from "@proliferate/product-domain/workflows/run-presentation";
+} from "#product/domain/workflows/run-presentation";
 import { Button } from "#product/primitives/Button";
 import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
 

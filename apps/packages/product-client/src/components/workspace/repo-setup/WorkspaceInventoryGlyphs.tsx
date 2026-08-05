@@ -14,7 +14,7 @@ import {
 import type {
   WorkspaceInventorySourceKind,
   WorkspaceInventoryStatusKind,
-} from "@proliferate/product-domain/workspaces/inventory";
+} from "#product/domain/workspaces/inventory";
 
 const STATUS_GLYPH_CLASSES: Record<WorkspaceInventoryStatusKind, string> = {
   waiting: "text-muted-foreground",

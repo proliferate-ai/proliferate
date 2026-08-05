@@ -1,13 +1,11 @@
 /**
  * Minimal, mobile-owned read of the `/meta` v2 capability contract.
  *
- * Mobile depends on `@proliferate/product-domain` (the readiness resolver) but
- * NOT on `@proliferate/product-client`, where PR 2 left the full
- * `parseServerCapabilities` parser. Rather than pull the whole desktop parser
- * across the package boundary, mobile reads only the two operator-status fields
- * the readiness resolver needs — consuming the SAME wire contract. Sharing the
- * parser in a common package is deliberately out of scope for this slice and
- * tracked as tech debt (see the PR 7 spec reconciliation, point 1).
+ * Mobile consumes the headless readiness resolver through ProductClient's
+ * internal domain boundary, but not the connected client layers where the full
+ * `parseServerCapabilities` parser lives. Rather than pull that desktop parser
+ * across the boundary, Mobile reads only the two operator-status fields the
+ * readiness resolver needs — consuming the same wire contract.
  *
  * Fail-closed: any malformed / absent capability payload resolves to
  * `disabled`, so a garbled or too-old server never reads as ready.
@@ -15,7 +13,7 @@
  * Pure, DOM-free, no React, no SDK — unit-tested directly.
  */
 
-import type { OperatorCapabilityStatus } from "@proliferate/product-domain/repos/repo-readiness";
+import type { OperatorCapabilityStatus } from "@proliferate/product-client/internal/domain/repos/repo-readiness";
 
 /** The subset of managed-Cloud / GitHub-access capability the resolver needs. */
 export interface MobileServerCapabilities {

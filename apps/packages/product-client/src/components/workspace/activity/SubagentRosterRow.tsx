@@ -6,7 +6,7 @@ import {
   subagentUsageDurationLabel,
   type ActivitySubagentWire,
   type SubagentTone,
-} from "@proliferate/product-domain/activity/subagent";
+} from "#product/domain/activity/subagent";
 import { Button } from "#product/primitives/Button";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
@@ -27,7 +27,7 @@ export interface SubagentRosterRowProps {
  * A read-only roster row for a harness-native subagent (Claude Task agent,
  * Codex collab child thread, Cursor `cursor/task`). This roster feeds a new
  * delegated-work *source* (see `activitySubagentToDelegatedWorkFields` in
- * product-domain) — this row is the interim standalone rendering until a
+ * the shared domain layer) — this row is the interim standalone rendering until a
  * follow-up pass merges it into the existing delegated-work surfaces
  * (`features/delegated-work.md`), which own generated identity/color.
  */

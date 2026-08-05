@@ -1,5 +1,5 @@
 import type { TranscriptState } from "@anyharness/sdk";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import { isSubagentItem } from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
 import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
 import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";

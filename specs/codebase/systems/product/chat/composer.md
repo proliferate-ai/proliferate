@@ -2,23 +2,23 @@
 
 Scope:
 
-- `apps/desktop/src/components/workspace/chat/input/**`
+- `apps/packages/product-client/src/components/workspace/chat/input/**`
 - `apps/packages/product-client/src/components/workspace/chat/composer/**` — the shared composer surface
   pieces live here: `ChatComposerSurface`,
   `ChatComposerControlRowFrame`, `ComposerPopoverSurface`.
 - `apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
   — the single shared implementation.
-- `apps/desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
-- `apps/desktop/src/components/workspace/chat/plans/**`
-- `apps/desktop/src/components/workspace/reviews/**`
-- `apps/desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`
-- `apps/packages/product-domain/src/chats/composer/resolve-dock-slots.ts`
-- `apps/desktop/src/hooks/chat/derived/use-active-todo-tracker.ts`
-- `apps/desktop/src/hooks/reviews/**`
-- `apps/packages/product-domain/src/chats/tools/active-todo-tracker.ts`
-- `apps/packages/product-domain/src/chats/tools/claude-plan-tool-call.ts`
-- `apps/desktop/src/lib/domain/reviews/**`
-- `apps/desktop/src/stores/reviews/**`
+- `apps/packages/product-client/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
+- `apps/packages/product-client/src/components/workspace/chat/plans/**`
+- `apps/packages/product-client/src/components/workspace/chat/input/delegated-work/**`
+- `apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx`
+- `apps/packages/product-client/src/domain/chats/composer/resolve-dock-slots.ts`
+- `apps/packages/product-client/src/hooks/chat/derived/use-active-todo-tracker.ts`
+- `apps/packages/product-client/src/domain/chats/tools/active-todo-tracker.ts`
+- `apps/packages/product-client/src/domain/chats/tools/claude-plan-tool-call.ts`
+- `apps/packages/product-client/src/lib/access/anyharness/reviews.ts`
+- `apps/packages/product-client/src/lib/domain/reviews/**`
+- `apps/packages/product-client/src/lib/workflows/reviews/**`
 
 Read this doc before changing the composer, the panels that sit above it (todo tracker, approval card, workspace status, cloud runtime), or where the Claude plan body renders. The structure below is load-bearing for several visual decisions that are not obvious from the code alone.
 
@@ -220,11 +220,13 @@ product-defined, but retains independent working-mode controls such as
 ## 2. Dock Regions
 
 `resolveComposerDockSlots`
-(`apps/packages/product-domain/src/chats/composer/resolve-dock-slots.ts`) owns the
+(`apps/packages/product-client/src/domain/chats/composer/resolve-dock-slots.ts`) owns the
 pure precedence rules for the named regions above the composer.
-`useComposerDockSlots` (`apps/desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`)
-adapts that data resolution to Desktop React nodes. Classify each inhabitant by
-state role first, not by component family. They always render in this order:
+`useComposerDockSlots`
+(`apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx`)
+adapts that data resolution to the shared Desktop/Web React nodes. Classify each
+inhabitant by state role first, not by component family. They always render in
+this order:
 
 1. **`outboundSlot`** — queued outbound work: user prompts, queued wake prompts,
    review feedback prompts, and review-complete prompts.
@@ -257,9 +259,9 @@ chat input enabled.
 
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: outbound work, active agent state, or attached context/parallel
-work. Add the precedence decision to `resolve-dock-slots.ts` and the Desktop
-node adapter to `use-composer-dock-slots.tsx` — do not compute it inline in
-`ChatView` and do not introduce a parallel arbiter elsewhere.
+work. Add the precedence decision to `resolve-dock-slots.ts` and the shared DOM
+adapter to `use-composer-dock-slots.tsx` — do not compute it inline in `ChatView`
+and do not introduce a parallel arbiter elsewhere.
 
 `attachedSlot` preserves the shared `DelegatedWorkComposerPanel` containing one
 compact `Agents` control for review agents and linked same-workspace child
@@ -477,7 +479,8 @@ Do **not** stack icon + uppercase label + `·` separator + title. That was the p
 ### 4.3 Approval options are Superset-style rows, not buttons
 
 `APPROVAL_BUTTON_CLASSNAME` is gone. Approval options render as full-width
-`ComposerOptionRow` rows (`apps/desktop/src/components/workspace/chat/input/ComposerOptionRow.tsx`):
+`ComposerOptionRow` rows
+(`apps/packages/product-client/src/components/workspace/chat/input/ComposerOptionRow.tsx`):
 hairline `border-t border-border/60` separators, a leading number-key badge
 (`ComposerOptionKeyBadge` — 24px square, 3px radius, `bg-surface-control`,
 mono), and a hover accent fill that promotes the label from muted to
@@ -548,7 +551,8 @@ the `chat-composer-surface` class, whose paint lives in
   full-width workspace-activity cap is present.
 
 Placeholder variants — strings live in
-`apps/desktop/src/copy/chat/chat-copy.ts` (`CHAT_COMPOSER_LABELS`):
+`apps/packages/product-client/src/copy/chat/chat-copy.ts`
+(`CHAT_COMPOSER_LABELS`):
 
 - "Describe a task" — the home composer and any chat whose transcript has no
   turns yet.
@@ -558,7 +562,8 @@ Placeholder variants — strings live in
 
 ## 5. No raw primitives, no inline SVGs
 
-Rules that apply everywhere in `apps/desktop/src/**` but are easy to violate in this area specifically:
+Rules that apply throughout ProductClient feature code but are easy to violate
+in this area specifically:
 
 - **No raw `<button>`.** Use `Button` from `#product/primitives/Button`. If the existing variants don't fit, add a new size/variant to the primitive table — don't hand-roll.
 - **No inline SVG icons.** Import each reusable glyph from its concrete `#product/primitives/icons/<owner>` module (`Circle` from `core`, `CheckCircleFilled` from `status`). If you need a new one, add it to the concrete owner module and import it.

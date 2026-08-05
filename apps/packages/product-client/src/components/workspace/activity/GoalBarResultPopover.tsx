@@ -5,7 +5,7 @@ import {
   goalResultStats,
   goalResultWhyLabel,
   type GoalBarState,
-} from "@proliferate/product-domain/activity/goal";
+} from "#product/domain/activity/goal";
 
 type GoalBarResultState = Extract<GoalBarState, { kind: "result" }>;
 

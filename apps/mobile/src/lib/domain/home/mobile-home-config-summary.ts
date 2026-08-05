@@ -1,7 +1,7 @@
 import {
   summarizeCloudComposerBadgeControls,
   type CloudChatComposerControlView,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 export interface MobileHomeLaunchConfigSummary {
   label: string;

@@ -9,7 +9,7 @@ import { UserMessage } from "#product/components/workspace/chat/transcript/UserM
 import { PromptAttachmentViewer } from "#product/components/workspace/files/PromptAttachmentViewer";
 import { ViewerHeaderButton } from "#product/components/workspace/shell/right-panel/ViewerHeaderButton";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
-import type { PromptAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
+import type { PromptAttachmentDescriptor } from "#product/domain/chats/composer/prompt-attachment-rules";
 import {
   viewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";

@@ -29,7 +29,7 @@ import {
 } from "#product/hooks/chat/ui/use-queued-prompt-edit";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "#product/lib/domain/chat/composer/file-mention-draft-model";
-import { promptAttachmentSnapshotsToContentParts } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
+import { promptAttachmentSnapshotsToContentParts } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "#product/lib/domain/chat/session-controls/session-controls";
 import { buildComposerSessionControlGroups } from "#product/lib/domain/chat/session-controls/composer-control-groups";

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Button } from "#product/primitives/Button";
 import { X } from "#product/primitives/icons/core";
-import { summarizeContentParts } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import { summarizeContentParts } from "#product/domain/chats/composer/prompt-display-parts";
 import { useChatPromptRecoveries } from "#product/hooks/chat/derived/use-chat-prompt-recoveries";
 import { useChatPromptRecoveryActions } from "#product/hooks/chat/workflows/use-chat-prompt-recovery-actions";
 import type { ChatPromptRecovery } from "#product/stores/chat/chat-prompt-recovery-store";

@@ -4,23 +4,23 @@ import type {
 } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { ReasoningBlock } from "#product/components/workspace/chat/tool-calls/ReasoningBlock";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
-} from "@proliferate/product-domain/chats/tools/claude-plan-tool-call";
-import { deriveModeSwitchDisplay } from "@proliferate/product-domain/chats/tools/mode-switch-display";
+} from "#product/domain/chats/tools/claude-plan-tool-call";
+import { deriveModeSwitchDisplay } from "#product/domain/chats/tools/mode-switch-display";
 import {
   isAgentSessionProvenance,
   isSubagentWakeProvenance,
-} from "@proliferate/product-domain/chats/subagents/provenance";
+} from "#product/domain/chats/subagents/provenance";
 import {
   hasProposedPlanForToolCallItem,
-} from "@proliferate/product-domain/chats/transcript/transcript-rendering";
+} from "#product/domain/chats/transcript/transcript-rendering";
 import {
   resolveUserMessageActionTime,
-} from "@proliferate/product-domain/chats/transcript/transcript-action-time";
-import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
+} from "#product/domain/chats/transcript/transcript-action-time";
+import type { TranscriptOpenSessionRole } from "#product/domain/chats/transcript/transcript-open-target";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
 import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";

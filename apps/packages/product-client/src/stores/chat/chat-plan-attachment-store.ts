@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { PLAN_ATTACHMENT_LIMIT } from "#product/config/plans";
-import type { PromptPlanAttachmentPointer } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentPointer } from "#product/domain/chats/composer/prompt-plan-attachments";
 
 interface ChatPlanAttachmentState {
   attachmentsByWorkspaceId: Record<string, PromptPlanAttachmentPointer[]>;

@@ -13,7 +13,7 @@ import {
 import {
   MemoizedVirtualTranscriptRow,
 } from "./VirtualTranscriptRow";
-import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
+import type { TranscriptVirtualizationMode } from "#product/domain/chats/transcript/transcript-virtualization-config";
 
 export function VirtualTranscriptViewport({
   bottomSpacerHeight,

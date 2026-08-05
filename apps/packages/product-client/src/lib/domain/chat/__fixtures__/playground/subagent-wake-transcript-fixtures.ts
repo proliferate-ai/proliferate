@@ -1,5 +1,5 @@
 import type { TranscriptState } from "@anyharness/sdk";
-import type { PendingPromptQueueEntry } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+import type { PendingPromptQueueEntry } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 
 export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptQueueEntry[] = [{
   seq: 7,

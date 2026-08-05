@@ -12,7 +12,7 @@ import {
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueEntry,
-} from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+} from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 
 export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {

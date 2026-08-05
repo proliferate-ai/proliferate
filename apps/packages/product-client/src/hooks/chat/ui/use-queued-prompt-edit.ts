@@ -3,11 +3,11 @@ import type { PendingPromptEntry } from "@anyharness/sdk";
 import type {
   PromptOutboxDeliveryState,
   PromptOutboxEntry,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
+} from "#product/domain/sessions/intents/session-intent-model";
 import {
   derivePendingPromptQueueRow,
   findNewestEditablePendingPrompt,
-} from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+} from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 import { useActivePendingPrompts } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { useEditPendingPrompt } from "#product/hooks/sessions/workflows/use-edit-pending-prompt";

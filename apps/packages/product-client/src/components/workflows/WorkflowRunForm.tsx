@@ -1,8 +1,8 @@
-import type { WorkflowDefinitionInput } from "@proliferate/product-domain/workflows/definition";
+import type { WorkflowDefinitionInput } from "#product/domain/workflows/definition";
 import type {
   WorkflowArgumentDraft,
   WorkflowArgumentIssue,
-} from "@proliferate/product-domain/workflows/arguments";
+} from "#product/domain/workflows/arguments";
 import { Button } from "#product/primitives/Button";
 import { Checkbox } from "#product/primitives/Checkbox";
 import { Input } from "#product/primitives/Input";

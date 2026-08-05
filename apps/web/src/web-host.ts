@@ -1,6 +1,6 @@
 import type { AuthUser } from "@proliferate/cloud-sdk";
 import { useAuthViewer } from "@proliferate/cloud-sdk-react";
-import type { AuthMethod } from "@proliferate/product-domain/auth/model";
+import type { AuthMethod } from "@proliferate/product-client/internal/domain/auth/model";
 import type {
   AuthState,
   ProductAuthHost,

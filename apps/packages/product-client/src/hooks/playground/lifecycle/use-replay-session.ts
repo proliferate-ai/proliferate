@@ -1,6 +1,6 @@
 import type { ReplayRecordingSummary } from "@anyharness/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionViewState } from "#product/domain/sessions/activity";
 import { DESKTOP_ORIGIN } from "#product/lib/domain/sessions/desktop-origin";
 import { closeSessionStreamHandle } from "#product/lib/access/anyharness/session-stream-handles";
 import { closeSession } from "#product/lib/access/anyharness/sessions";

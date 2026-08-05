@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { ChatTranscriptScrollHandle } from "#product/hooks/chat/ui/chat-transcript-view-types";
 
 /** Classification of a viewport scroll event: our own snap vs the user. */

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { WorkflowAgentCatalog } from "@proliferate/product-domain/workflows/definition";
+import type { WorkflowAgentCatalog } from "#product/domain/workflows/definition";
 import {
   WorkflowDefinitionEditor,
   type WorkflowRepositoryOption,

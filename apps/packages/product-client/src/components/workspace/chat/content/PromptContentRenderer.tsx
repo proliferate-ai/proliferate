@@ -6,8 +6,8 @@ import {
   normalizeDraftAttachments,
   type PromptDisplayAttachmentPart,
   type PromptDisplayPart,
-} from "@proliferate/product-domain/chats/composer/prompt-display-parts";
-import type { PromptDraftAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
+} from "#product/domain/chats/composer/prompt-display-parts";
+import type { PromptDraftAttachmentDescriptor } from "#product/domain/chats/composer/prompt-attachment-rules";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderTranscriptLink } from "#product/components/workspace/chat/transcript/transcript-markdown";
 

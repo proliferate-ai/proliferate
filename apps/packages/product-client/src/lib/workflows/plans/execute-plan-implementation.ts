@@ -1,7 +1,7 @@
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { isWorkspaceDirectoryMissingError } from "#product/lib/domain/sessions/creation/create-session-error";
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
-import { type PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import { type PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import { buildPlanImplementationPrompt } from "#product/lib/domain/plans/implementation-prompt";
 import { resolvePlanImplementationModeSwitch } from "#product/lib/domain/plans/implementation-mode";
 import {

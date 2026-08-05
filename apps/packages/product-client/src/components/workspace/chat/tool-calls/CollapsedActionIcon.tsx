@@ -1,4 +1,4 @@
-import type { CollapsedActionKind } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
+import type { CollapsedActionKind } from "#product/domain/chats/transcript/transcript-collapsed-actions";
 import {
   CommandWindow,
   FilePenActivity,

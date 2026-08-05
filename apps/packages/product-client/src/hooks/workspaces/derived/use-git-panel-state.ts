@@ -24,8 +24,8 @@ import { resolveGitPanelWorkspaceContext } from "#product/lib/domain/workspaces/
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
-import { collectLatestCompletedTurnTouchedFiles } from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
-import { collectTurnFileRevertPatchEntries } from "@proliferate/product-domain/chats/transcript/turn-file-patches";
+import { collectLatestCompletedTurnTouchedFiles } from "#product/domain/chats/transcript/last-turn-file-changes";
+import { collectTurnFileRevertPatchEntries } from "#product/domain/chats/transcript/turn-file-patches";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];

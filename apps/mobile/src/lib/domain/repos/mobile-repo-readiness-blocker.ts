@@ -13,7 +13,7 @@
 import type {
   CloudRepoReadinessAction,
   RepositoryReadiness,
-} from "@proliferate/product-domain/repos/repo-readiness";
+} from "@proliferate/product-client/internal/domain/repos/repo-readiness";
 
 /** What the modal should do when the CTA is pressed. `none` renders no button. */
 export type MobileRepoReadinessActionKind =

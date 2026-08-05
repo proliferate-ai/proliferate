@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { CircleAlert } from "#product/primitives/icons/status";
-import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
+import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
 import { GoalTranscriptEventRow } from "#product/components/workspace/chat/transcript/GoalTranscriptEventRow";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";

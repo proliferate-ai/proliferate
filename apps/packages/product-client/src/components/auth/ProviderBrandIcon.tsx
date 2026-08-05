@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-import type { AuthProvider } from "@proliferate/product-domain/auth/model";
+import type { AuthProvider } from "#product/domain/auth/model";
 import { Mail } from "#product/primitives/icons/platform";
 import { Shield } from "#product/primitives/icons/product";
 

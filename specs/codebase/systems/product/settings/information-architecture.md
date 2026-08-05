@@ -208,7 +208,7 @@ Agents    agent-defaults, agent-authentication
 **Routing**: URL search param `?section=<id>`. Active section is
 managed by `useSettingsNavigation()`; the active scope tab is derived
 from the section. Sections are defined in
-`apps/desktop/src/config/settings.ts`:
+`apps/packages/product-client/src/config/settings.ts`:
 
 ```typescript
 SETTINGS_CONTENT_SECTIONS = [
@@ -234,7 +234,7 @@ SETTINGS_CONTENT_SECTIONS = [
 the active scope's sidebar, so Cmd-1…N always maps to the rows currently
 on screen.
 
-**Panes** (in `apps/desktop/src/components/settings/panes/`):
+**Panes** (in `apps/packages/product-client/src/components/settings/panes/`):
 
 ```text
 AccountPane.tsx              AgentAuthenticationPane.tsx
@@ -288,7 +288,7 @@ SettingsScopeTabs.tsx     horizontal underline scope switcher
 SettingsEmptyState.tsx
 ```
 
-ProductClient's `apps/packages/product-client/src/components/settings/shared/`
+ProductClient's `src/components/settings/shared/`
 keeps `AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, and
 `RunCommandHelp`.
 Layout helpers use concrete ProductClient pattern imports
@@ -305,9 +305,14 @@ the role check resolves. `TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION`
 (currently `false`) can force-show admin rows during UI iteration. Pane
 bodies still own their detailed read/write states.
 
-**Plugins page**: `apps/desktop/src/pages/PluginsPage.tsx` is a top-level
-page, not under Settings. Renders `<PluginsScreen />` from
-`apps/desktop/src/components/plugins/catalog/PluginsScreen.tsx`.
+**Legacy Plugins page**: the former top-level Plugins page and catalog screen
+were removed. The `plugins` name survives only in compatibility deep links,
+callback paths, and telemetry normalization; supported product navigation lands
+in Settings > Integrations today. This is the current-state correction, not a
+retirement of spec 01's accepted future Plugins UI target. The package fold
+must not invent a moved ProductClient destination for the deleted files; any
+future surface is implemented from the target contract below with a new live
+owner.
 
 ### 4.2 What remains scaffolded / parked
 
@@ -555,7 +560,7 @@ Help (sidebar footer, every scope)
   check-for-updates        action (existing)
 ```
 
-Section ids (`apps/desktop/src/config/settings.ts`):
+Section ids (`apps/packages/product-client/src/config/settings.ts`):
 
 ```text
 SETTINGS_CONTENT_SECTIONS is the registry of valid section ids. The visible
@@ -791,7 +796,7 @@ SandboxType    local           -> "Local"
 Reusable files:
 
 ```text
-apps/desktop/src/lib/domain/vocabulary.ts      (new)
+apps/packages/product-client/src/domain/settings/vocabulary.ts      (new)
   WorkspaceType, Origin, Exposure, Access, SandboxType TS enums whose
   string values are the snake_case strings above (so the wire payload,
   the TS literal, and the DB CHECK enum are identical bytes)
@@ -806,7 +811,7 @@ Server-side:
 ```text
 Specs that own server migrations emit and accept the same snake_case strings
 on the wire and in DB enums. OpenAPI schema enums use these values literally so
-generated TS types match apps/desktop/src/lib/domain/vocabulary.ts at the character
+generated TS types match product-client/src/domain/settings/vocabulary.ts at the character
 level.
 
 Existing DB CHECK enums that already match this convention are left in place
@@ -833,7 +838,7 @@ New (spec 03 introduces; feature specs consume):
 
 ```text
 CredentialPicker
-  apps/desktop/src/components/settings/shared/CredentialPicker.tsx
+  apps/packages/product-client/src/components/settings/shared/CredentialPicker.tsx
   Props:
     agentKind          'claude' | 'codex' | 'opencode' | 'gemini'
     ownerContext       'personal' | { kind: 'organization', orgId }
@@ -855,7 +860,7 @@ CredentialPicker
    pane's API-key details instead)
 
 AgentRunConfigSelector
-  apps/desktop/src/components/settings/shared/AgentRunConfigSelector.tsx
+  apps/packages/product-client/src/components/settings/shared/AgentRunConfigSelector.tsx
   Props:
     agentKind?           preselect
     sandboxType?         filters configs by usable_in_*_sandboxes
@@ -875,7 +880,7 @@ AgentRunConfigSelector
    (`7d5894807`); see the correction on the `agent-defaults` row above.)
 
 RuntimeReadinessPanel
-  apps/desktop/src/components/settings/shared/RuntimeReadinessPanel.tsx
+  apps/packages/product-client/src/components/settings/shared/RuntimeReadinessPanel.tsx
   Props:
     sandboxProfileId
     targetId?            optional; omit for "summary across all targets"
@@ -891,7 +896,7 @@ RuntimeReadinessPanel
     PluginsPage detail panes (status badge only)
 
 PublicCapabilityList
-  apps/desktop/src/components/settings/shared/PublicCapabilityList.tsx
+  apps/packages/product-client/src/components/settings/shared/PublicCapabilityList.tsx
   Props:
     organizationId
     kind                 'mcp' | 'skill' | 'plugin'
@@ -904,7 +909,7 @@ PublicCapabilityList
     PluginsPage admin tab (full controls; spec 01)
 
 WhereUsedDrawer
-  apps/desktop/src/components/settings/shared/WhereUsedDrawer.tsx
+  apps/packages/product-client/src/components/settings/shared/WhereUsedDrawer.tsx
   Props:
     subject              { kind: 'mcp' | 'skill' | 'plugin' | 'credential',
                            id }
@@ -933,7 +938,7 @@ revoked        muted
 blocked        red outline
 unavailable    muted with strikethrough
 
-apps/desktop/src/components/settings/shared/StatusBadge.tsx   (new wrapper
+apps/packages/product-client/src/components/settings/shared/StatusBadge.tsx   (new wrapper
   over the existing Badge primitive that maps a status enum value to
   variant + label + tooltip)
 ```
@@ -949,7 +954,7 @@ use `ModalShell`; destructive actions use `ConfirmationDialog`.
 New hook:
 
 ```text
-apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.ts
+apps/packages/product-client/src/hooks/access/cloud/organizations/use-is-admin.ts
 
 useIsAdmin(organizationId: string | null | undefined): {
   isLoading: boolean
@@ -969,7 +974,7 @@ if (!isAdmin) return <AdminOnlyPlaceholder />;
 `AdminOnlyPlaceholder`:
 
 ```text
-apps/desktop/src/components/settings/shared/AdminOnlyPlaceholder.tsx
+apps/packages/product-client/src/components/settings/shared/AdminOnlyPlaceholder.tsx
   shows a small Card with "Admin access required" + role,
   links to the Organization pane.
 ```
@@ -987,30 +992,30 @@ once the role check resolves.
 `useIsAdmin` reuses the existing `useOrganizationMembers()` hook
 under the hood; this is purely a consolidation.
 
-### 5.6 Plugins page placement
+### 5.6 Target Plugins page placement
 
-Plugins remains a **top-level page** (`PluginsPage.tsx`), not a
-Settings pane. Reasons:
+When spec 01's Plugins UI target is implemented, it is a **top-level page**, not
+a Settings pane. No `PluginsPage.tsx` is shipping today. Target reasons:
 
 ```text
 - Plugins is a marketplace-ish discovery surface; settings panes are
   configuration surfaces. Mixing them dilutes both.
 - The Plugins page is larger and richer (catalog grid, detail modals)
   than the rest of Settings.
-- The current top-level placement is already shipping; moving it into
-  Settings is gratuitous churn.
+- The target is a dedicated discovery surface rather than another Settings
+  pane; it does not restore or move the deleted implementation files.
 ```
 
 Cross-links:
 
 ```text
-Workspace section in Settings shows a "Manage plugins" card linking
-to PluginsPage. Per-target ComputeTargetReadiness deep-links any
-plugin readiness issue back to PluginsPage filtered by the relevant
-MCP/skill.
+The Workspace section in Settings will show a "Manage plugins" card linking to
+the future top-level surface. Per-target ComputeTargetReadiness will deep-link
+plugin readiness issues to that surface filtered by the relevant MCP/skill.
 ```
 
-Plugins stays outside the Settings sidebar. This spec confirms that decision.
+The target Plugins surface stays outside the Settings sidebar. Until spec 01
+implements it, Settings > Integrations is the supported current destination.
 
 ### 5.7 Routing
 
@@ -1044,11 +1049,11 @@ Copy stays in `copy/<domain>/<domain>-copy.ts` per the existing rule.
 New copy files added by this spec:
 
 ```text
-apps/desktop/src/copy/settings/vocabulary-copy.ts
-apps/desktop/src/copy/settings/admin-gate-copy.ts
-apps/desktop/src/copy/settings/shared-environments-copy.ts
-apps/desktop/src/copy/settings/agent-authentication-copy.ts
-apps/desktop/src/copy/settings/slack-bot-copy.ts
+apps/packages/product-client/src/copy/settings/vocabulary-copy.ts
+apps/packages/product-client/src/copy/settings/admin-gate-copy.ts
+apps/packages/product-client/src/copy/settings/shared-environments-copy.ts
+apps/packages/product-client/src/copy/settings/agent-authentication-copy.ts
+apps/packages/product-client/src/copy/settings/slack-bot-copy.ts
 ```
 
 > Shipped correction: agent auth copy lives in
@@ -1064,7 +1069,8 @@ the section-id renames.
 ### 5.9 Telemetry
 
 Pane open/close events follow the existing analytics pattern in
-`apps/desktop/src/lib/telemetry/**`. New events:
+`apps/packages/product-client/src/lib/domain/telemetry/events.ts` and its
+connected telemetry hooks. New events:
 
 ```text
 settings_pane_opened    { sectionId, organizationId? }
@@ -1076,18 +1082,18 @@ The vocabulary above is logged verbatim in event payloads.
 
 ## 6. Files To Change
 
-Desktop:
+ProductClient:
 
 ```text
-apps/desktop/src/config/settings.ts
+apps/packages/product-client/src/config/settings.ts
   - register the User/Org/Repo/Agents section ids
   - keep general as the default settings section
 
-apps/desktop/src/lib/domain/settings/navigation.ts
+apps/packages/product-client/src/lib/domain/settings/navigation.ts
   - normalize/build Settings location for all registered ids
   - keep legacy repo/cloud/cloudRepo redirect behavior
 
-apps/desktop/src/lib/domain/settings/navigation-presentation.ts
+apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts
   - scopes: user | org | repo | agents (SETTINGS_SCOPES), plus
     SETTINGS_SCOPE_ORDER/LABELS, SETTINGS_HELP_ITEMS,
     scope<->section mapping, PARKED_SECTION_SCOPES
@@ -1096,27 +1102,27 @@ apps/desktop/src/lib/domain/settings/navigation-presentation.ts
 apps/packages/product-client/src/components/patterns/SettingsScopeTabs.tsx
   - horizontal underline scope switcher consumed by SettingsScreen
 
-apps/desktop/src/components/settings/sidebar/SettingsSidebar.tsx
+apps/packages/product-client/src/components/settings/sidebar/SettingsSidebar.tsx
   - 240px rail rendering the active scope's groups + help footer
   - hide adminOnly rows for non-admins
   - per-scope Cmd-digit shortcut labels
 
-apps/desktop/src/components/settings/screen/SettingsScreen.tsx
+apps/packages/product-client/src/components/settings/screen/SettingsScreen.tsx
   - scope-tab header row; scope change selects the scope's first section
   - render SettingsScaffoldPane for scaffolded pages
   - redirect non-admins away from admin-only sections
   - thread focus param to active pane
 
-apps/desktop/src/components/settings/panes/
+apps/packages/product-client/src/components/settings/panes/
   SettingsScaffoldPane.tsx            renders scaffolded page rows
   OrganizationPane.tsx                existing org settings
   BillingPane.tsx                     existing connected billing
   ComputePane.tsx                     existing personal compute / SSH targets
 
-apps/desktop/src/copy/settings/settings-scaffold-copy.ts
+apps/packages/product-client/src/copy/settings/settings-scaffold-copy.ts
   - page titles, descriptions, and rows for scaffolded pages
 
-apps/desktop/src/copy/settings/compute.ts
+apps/packages/product-client/src/copy/settings/compute.ts
   - labels compute as Personal compute
 
 apps/packages/product-client/src/components/settings/panes/billing/BillingSettingsSurface.tsx
@@ -1135,7 +1141,7 @@ vocabulary are owned by specs 00, 04, 05, 06, 07, and 08.
 Telemetry:
 
 ```text
-apps/desktop/src/lib/domain/telemetry/events.ts
+apps/packages/product-client/src/lib/domain/telemetry/events.ts
   add settings_pane_opened, settings_pane_closed, admin_gate_blocked
   events. Payload uses 5.3 vocabulary verbatim.
 ```
@@ -1176,29 +1182,30 @@ apps/desktop/src/lib/domain/telemetry/events.ts
 ## 9. Verification / Tests
 
 ```bash
-cd apps/desktop && pnpm test -- --run && pnpm typecheck
+pnpm --filter @proliferate/product-client test
+pnpm --filter @proliferate/product-client typecheck
 ```
 
 Targeted tests:
 
 ```text
-apps/desktop/src/components/settings/sidebar/SettingsSidebar.test.tsx
+apps/packages/product-client/src/components/settings/sidebar/SettingsSidebar.test.tsx
   - renders the active scope's groups in order
   - adminOnly rows render for admins
   - adminOnly rows are hidden for non-admins
 
-apps/desktop/src/components/settings/SettingsScreen.test.tsx
+apps/packages/product-client/src/components/settings/screen/SettingsScreen.test.tsx
   - ?section=repo redirects to ?section=environments
   - ?section=cloud redirects to ?section=agent-authentication
     (shipped: focus-dependent, see 5.7 correction)
   - ?section=worktrees resolves to Pruning (User scope)
 
-apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.test.ts
+apps/packages/product-client/src/hooks/access/cloud/organizations/use-is-admin.test.ts
   - returns role from useOrganizationMembers
   - returns isAdmin true for owner/admin
   - returns isAdmin false for member or no membership
 
-apps/desktop/src/lib/domain/vocabulary.test.ts
+apps/packages/product-client/src/domain/settings/vocabulary.test.ts
   - enum string values match §5.3 verbatim
 
 apps/packages/product-client/src/components/settings/panes/billing/BillingSettingsSurface.test.tsx
@@ -1231,8 +1238,10 @@ Manual smoke:
      (shipped: redirects to ?section=agent-api-keys; the per-harness
       page is ?section=agent-claude)
 
-5. Open Plugins (top-level page).
-     -> Still works; not in Settings sidebar.
+5. After spec 01 implements the Plugins target, open its top-level page.
+     -> Opens outside the Settings sidebar and accepts the target deep links.
+     -> Before that implementation lands, no Plugins page is expected;
+        Settings > Integrations is the supported current destination.
 
 6. Check the shell frame.
      -> Scope-tab header row is 46px; sidebar rail is 240px fixed;

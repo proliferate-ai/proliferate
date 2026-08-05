@@ -14,14 +14,14 @@ import {
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import {
   isSubagentWakeProvenance,
-} from "@proliferate/product-domain/chats/subagents/provenance";
+} from "#product/domain/chats/subagents/provenance";
 import {
   resolveOptimisticPromptActionTime,
-} from "@proliferate/product-domain/chats/transcript/transcript-action-time";
+} from "#product/domain/chats/transcript/transcript-action-time";
 import {
   resolvePendingPromptTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
-import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
+import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 
 const OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS = 15_000;
 

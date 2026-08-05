@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GoalCapabilities, GoalWire } from "@proliferate/product-domain/activity/goal";
+import type { GoalCapabilities, GoalWire } from "#product/domain/activity/goal";
 import { GoalBar } from "./GoalBar";
 
 afterEach(() => {

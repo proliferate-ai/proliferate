@@ -64,7 +64,7 @@ anthropic
 bedrock
 ```
 
-Avoid product-domain names:
+Avoid product-specific feature names:
 
 ```text
 workspace

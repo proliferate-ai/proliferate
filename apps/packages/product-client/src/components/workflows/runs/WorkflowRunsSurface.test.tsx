@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
-import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
+import type { WorkflowDefinition } from "#product/domain/workflows/definition";
 import { WorkflowDefinitionRunsPanel, WorkflowRunsSurface } from "./WorkflowRunsSurface";
 
 class TestIntersectionObserver {

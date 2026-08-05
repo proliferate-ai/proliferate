@@ -16,7 +16,7 @@ import {
 import { useChatLaunchIntentActions } from "#product/hooks/chat/workflows/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "#product/lib/domain/chat/launch/launch-intent";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
-import { formatTranscriptActionTime } from "@proliferate/product-domain/chats/transcript/transcript-action-time";
+import { formatTranscriptActionTime } from "#product/domain/chats/transcript/transcript-action-time";
 
 interface ChatLaunchIntentPaneProps {
   bottomInsetPx: number;

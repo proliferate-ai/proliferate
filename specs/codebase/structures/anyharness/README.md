@@ -131,7 +131,7 @@ live/terminals
 Adapters perform local operations. Domains decide product meaning. Live systems
 own running state.
 
-### Product Domains And Extensions
+### Feature Domains And Extensions
 
 Product features build on the core primitives:
 

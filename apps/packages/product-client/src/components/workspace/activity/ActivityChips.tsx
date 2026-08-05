@@ -7,7 +7,7 @@ import { twMerge } from "#product/primitives/utils/tw-merge";
 import type {
   ActivityChipDescriptor,
   ActivityChipKind,
-} from "@proliferate/product-domain/activity/chips";
+} from "#product/domain/activity/chips";
 import { ComposerPopoverSurface } from "../chat/composer/ComposerPopoverSurface";
 
 const CHIP_ICON: Record<ActivityChipKind, LucideIcon> = {

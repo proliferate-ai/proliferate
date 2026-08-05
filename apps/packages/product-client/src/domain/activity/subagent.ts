@@ -187,7 +187,7 @@ export function subagentUsageDurationLabel(usage: ActivityUsageWire | null, nowM
 // ---------------------------------------------------------------------------
 // Delegated-work roster mapping. Mirrors the value vocabulary of desktop's
 // `DelegatedWorkStatusCategory` (apps/desktop/src/lib/domain/delegated-work/
-// model.ts) by string literal — product-domain does not depend on desktop, so
+// model.ts) by string literal — this domain subtree does not depend on desktop, so
 // this is a parallel, intentionally identical union rather than a shared
 // import. Per the locked architecture only Running/Completed/Failed map here;
 // loops are a separate primitive and never become delegated work.

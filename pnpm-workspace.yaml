@@ -8,7 +8,6 @@ packages:
   - "apps/mobile"
   - "apps/packages/design"
   - "apps/packages/product-client"
-  - "apps/packages/product-domain"
   - "server/artifact-runtime"
   - "apps/web"
   - "tests/intent"

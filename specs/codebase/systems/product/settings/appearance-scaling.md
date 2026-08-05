@@ -124,7 +124,9 @@ targets are not glyph icons and do not become font-relative.
 ## Ownership and implementation seams
 
 - `apps/packages/product-client/src/lib/domain/preferences/appearance.ts`
-  owns UI, readable-code, window-zoom, and semantic glyph ladders.
+  owns UI, readable-code, window-zoom, and semantic glyph ladders. This remains
+  a connected Desktop/Web `src/lib/domain/**` owner; it is not moved into the
+  sibling Mobile-safe `src/domain/**` subtree.
 - `apps/packages/product-client/src/config/theme.ts` applies the resolved text
   and readable-code root variables through `applyAppearancePreference`; the
   stable `em` glyph ratios resolve from design CSS against those text owners.
@@ -136,6 +138,9 @@ targets are not glyph icons and do not become font-relative.
 - Production consumers live under `apps/packages/product-client/src` and
   `apps/desktop/src`. Component-local aliases must
   not preserve a fixed-size path.
+- `apps/packages/product-client/src/domain/**` is headless. The source guard
+  scans it as part of the package root, but it must produce no styling, DOM,
+  primitive, or appearance-consumer dependency.
 - Focused appearance/drift tests and a repository source guard own regression
   enforcement.
 

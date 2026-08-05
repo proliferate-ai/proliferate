@@ -8,20 +8,20 @@ import {
 import type {
   TranscriptState,
   TurnRecord,
-} from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
-import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/chats/transcript/chat-transcript-state";
+import type { SessionViewState } from "#product/domain/sessions/activity";
 import {
   findTrailingLiveExplorationBlock,
   findTrailingLiveWorkBlock,
   resolveTurnPromptTiming,
-} from "@proliferate/product-domain/chats/transcript/transcript-rendering";
+} from "#product/domain/chats/transcript/transcript-rendering";
 import {
   latestStreamingAssistantProseRevision,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
-} from "@proliferate/product-domain/chats/transcript/transcript-trailing-status";
-import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
-import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+} from "#product/domain/chats/transcript/transcript-trailing-status";
+import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
+import type { TurnDisplayBlock } from "#product/domain/chats/transcript/transcript-presentation";
 import type { ChatTranscriptTurnStatusInput } from "./chat-transcript-view-types";
 import {
   findLatestTurnPresentation,

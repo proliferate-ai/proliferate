@@ -1,4 +1,4 @@
-import type { PendingSessionConfigChangeStatus } from "@proliferate/product-domain/sessions/pending-config";
+import type { PendingSessionConfigChangeStatus } from "#product/domain/sessions/pending-config";
 import { Clock } from "#product/primitives/icons/core";
 
 interface PendingConfigIndicatorProps {

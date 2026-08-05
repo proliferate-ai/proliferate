@@ -66,6 +66,13 @@ apps/packages/product-client/src/components/settings/panes/agents/harness/Harnes
 apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 840 managed sandbox cloud workspace indicators + PR 5 explicit-materialization attachment cases extend existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
+apps/packages/product-client/src/domain/chats/cloud/transcript-view.test.ts 1160 relocated existing oversized domain test; no growth
+apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.test.ts 1155 relocated existing oversized domain test; no growth
+apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.ts 905 relocated existing oversized domain source; no growth
+apps/packages/product-client/src/domain/chats/transcript/transcript-presentation.test.ts 868 relocated existing oversized domain test; no growth
+apps/packages/product-client/src/domain/workspaces/cloud-work-inventory.test.ts 859 relocated existing oversized domain test; no growth
+apps/packages/product-client/src/domain/sessions/activity.test.ts 660 relocated existing oversized domain test; no growth
+apps/packages/product-client/src/domain/sessions/intents/session-intent.test.ts 606 relocated existing oversized domain test; no growth
 anyharness/crates/anyharness-lib/src/api/router.rs 640 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs/cancel + local materialization operations + workflow-run-workspaces routes + worktree restore route)
 anyharness/crates/anyharness-lib/src/app/mod.rs 693 AnyHarness app wiring (+gateway model planner wiring; the gateway model resolver + probe-engine store wiring is gone with the old-chain deletion, A9) (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +local materialization service wiring + worktree restore runtime wiring)
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/service_tests.rs 605 B-2 validation-cut rewrote the refusal assertions in place (single SESSION_MODEL_UNSUPPORTED); shrinks when the legacy gateway-models routes delete (C-track cutover)

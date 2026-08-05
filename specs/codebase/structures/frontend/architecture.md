@@ -13,12 +13,16 @@ goals:
 - **Legible decomposition** — complicated product work is decomposed and
   reviewable; you never have to follow imports through unrelated layers to
   understand a feature.
-- **Build broadly without re-learning** — the same folder logic across apps.
+- **Build broadly without re-learning** — the same folder logic in
+  ProductClient and native product roots, with Desktop/Web reduced to thin
+  platform hosts.
 
 **Scope:** `apps/desktop/src/**`, `apps/web/src/**`, `apps/mobile/src/**`, and
-`apps/packages/**`. Desktop/Web/Mobile share folder logic; platform-specific
-folders exist only where the platform genuinely differs (Tauri + local
-AnyHarness on Desktop; browser/Cloud on Web; native nav/RN on Mobile).
+`apps/packages/**`. ProductClient and Mobile use the layered folder logic;
+Desktop and Web are thin hosts that keep only genuine platform differences
+(Tauri + local AnyHarness on Desktop and browser adapters on Web). Mobile owns
+native navigation and React Native UI and imports only concrete ProductClient
+domain modules.
 
 **The three rules that generate everything:**
 
@@ -48,7 +52,7 @@ mix them.
 | --- | --- | --- |
 | **State** | memory | `useState`, `stores/**`, React Query, `providers/**` |
 | **Access** | transport to systems | `hooks/access/**`, `lib/access/**`, SDK packages |
-| **Work** | logic | `lib/domain/**`, `lib/workflows/**`, `lib/infra/**` |
+| **Work** | logic | `lib/domain/**`, `lib/workflows/**`, `lib/infra/**`, shared `product-client/src/domain/**` |
 | **Composition** | the glue | `hooks/**`, `components/**` |
 
 ### State — place by source of truth
@@ -72,13 +76,14 @@ disk↔store bridge).
 
 ### Access — a fixed grid
 
-Three systems × two stages. Clients are never constructed elsewhere.
+Three systems × two stages. Construction and React-facing ownership stay in
+the named boundary, even when the two stages cross the host contract.
 
-| System | Raw transport | React-facing |
+| System | Raw transport / host implementation | React-facing ProductClient owner |
 | --- | --- | --- |
-| Cloud | `@proliferate/cloud-sdk`, `lib/access/cloud/**` | `@proliferate/cloud-sdk-react`, `hooks/access/cloud/**` |
-| AnyHarness | `@anyharness/sdk` | `@anyharness/sdk-react`, `hooks/access/anyharness/**` |
-| Tauri | `lib/access/tauri/**` (only `invoke`) | `hooks/access/tauri/**` |
+| Cloud | `@proliferate/cloud-sdk`, ProductClient `lib/access/cloud/**`; each host constructs its authenticated client | `@proliferate/cloud-sdk-react`, ProductClient `hooks/access/cloud/**` |
+| AnyHarness | `@anyharness/sdk`, ProductClient `lib/access/anyharness/**`; Desktop supplies local-runtime capability through `DesktopBridge` | `@anyharness/sdk-react`, ProductClient `hooks/access/anyharness/**` |
+| Tauri | Desktop `lib/access/tauri/**` (the only raw `invoke` owner) | ProductClient `hooks/access/tauri/**`, using the typed bridge rather than Tauri imports |
 
 Query keys live beside the access hook that owns the resource — never in
 `lib/access`, never in a product folder. CI enforces raw client verbs stay under
@@ -88,7 +93,7 @@ Query keys live beside the access hook that owns the resource — never in
 
 | Stage | Address | Signature | Owns |
 | --- | --- | --- | --- |
-| **Domain** | `lib/domain/**` | `(data) → decision` | validation, projections, view models, presentation maps, reducers, side-effect *planners* |
+| **Domain** | `lib/domain/**`; shared `product-client/src/domain/**` | `(data) → decision` | validation, projections, view models, presentation maps, reducers, side-effect *planners* |
 | **Workflow** | `lib/workflows/**` | `async (input, deps)` | ordered sequences, branching on fetched data, retries, rollback, recovery |
 | **Infra** | `lib/infra/**` | generic fn | persistence, scheduling, ids, batching, measurement |
 
@@ -113,7 +118,10 @@ The one word separating **derived** from **workflow** is *capabilities* — the
 power to cause effects. Read-only ingredients describe state (derived);
 read + capabilities cause actions (workflow).
 
-### The folder tree (per app source root)
+### The folder tree (per product source root)
+
+ProductClient and Mobile use this layered shape. Desktop and Web are thin hosts
+that keep only bootstrap and genuine native/browser adapters.
 
 ```text
 <app>/src/
@@ -135,19 +143,28 @@ read + capabilities cause actions (workflow).
   styles/ · index.css
 ```
 
-### Shared packages — connected app, presentation, and foundations
+### Shared package — connected app and nested foundations
 
 ```text
-Desktop/Web:                    Foundations (everyone):
-  product-client    connected     product-domain   pure shared rules (Mobile's sharing point)
-  ├─ components     presentation  design           tokens + css (the look)
-  └─ primitives     DOM library
+product-client/src/
+  domain/       pure shared rules (Mobile-safe)
+  primitives/   Desktop/Web DOM library
+  components/ · hooks/ · stores/ · providers/ · lib/
+                connected shared Desktop/Web client
+
+design/         tokens + CSS; react-native token values
 ```
 
-`apps → product-client → design`; ProductClient's nested `primitives/**` owner
-also depends on `design`; everyone → `product-domain`. Mobile uses only
-`design/react-native` + `product-domain` + SDK — never ProductClient or its DOM
-primitives.
+Connected ProductClient code imports pure rules through
+`#product/domain/<file>` and primitives through concrete `#product/primitives/*`
+paths. Desktop and Web mount public ProductClient host entries; host adapters may
+also use concrete `@proliferate/product-client/internal/domain/<file>` modules.
+They retain other explicitly named internal seams required by host assembly and
+authentication; those paths are not Mobile-safe and are not a general internal
+import license.
+Mobile uses only those concrete domain modules plus `design/react-native` and
+SDK packages—never the package root, DOM primitives, components, hooks, stores,
+CSS, or host code.
 
 ---
 
@@ -311,8 +328,10 @@ Never put disk I/O or subscriptions in the store file.
   single DOM primitive system. Native host capabilities arrive through the
   typed host contract. The nested primitives subtree remains DOM-safe and
   cannot import product or connected-client layers.
-- **`product-domain`** — pure shared decisions; the **Mobile sharing point**. No
-  React/DOM/SDK clients/stores.
+- **`product-client/src/domain/**`** — pure shared decisions; the **Mobile
+  sharing point**. It is distinct from connected `src/lib/domain/**` and imports
+  no React, DOM, SDK clients, stores, primitives, or higher ProductClient
+  layers.
 
 ---
 

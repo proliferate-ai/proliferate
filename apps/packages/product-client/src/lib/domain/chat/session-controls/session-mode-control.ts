@@ -8,7 +8,7 @@ import {
   resolveSessionControlPresentation,
   type ConfiguredSessionControlValue,
   type SessionControlIconKey,
-} from "@proliferate/product-domain/chats/session-controls/presentation";
+} from "#product/domain/chats/session-controls/presentation";
 import type { DesktopAgentLaunchControl } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export type SessionModeIconKey = SessionControlIconKey;

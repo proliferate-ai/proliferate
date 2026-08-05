@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   TranscriptState,
   TurnRecord,
-} from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
-import { buildTranscriptVirtualRows } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+} from "#product/domain/chats/transcript/chat-transcript-state";
+import { buildTranscriptVirtualRows } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import { useLatestTranscriptLiveStatus } from "./use-latest-transcript-live-status";
 
 afterEach(() => {

@@ -1,7 +1,7 @@
 import {
   workflowHistoryItemPresentation,
   type WorkflowRunHistoryItem,
-} from "@proliferate/product-domain/workflows/run-presentation";
+} from "#product/domain/workflows/run-presentation";
 import { Button } from "#product/primitives/Button";
 
 export interface WorkflowRunListProps {

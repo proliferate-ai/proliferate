@@ -1,5 +1,5 @@
 import { Folder, Laptop } from "lucide-react";
-import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 import { Button } from "#product/primitives/Button";
 import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";

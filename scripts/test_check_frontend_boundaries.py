@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from scripts import check_frontend_boundaries as check_module
 from scripts import report_frontend_structure as structure_module
-from scripts.frontend_imports import collect_imports
+from scripts.frontend_imports import collect_imports, collect_module_specifiers
 
 
 class RadixImportBoundaryTest(unittest.TestCase):
@@ -326,7 +326,7 @@ class ProductClientPrimitiveStructureTest(unittest.TestCase):
                         'import { model } from "../../lib/domain/model";\n'
                     ),
                     "apps/packages/product-client/src/primitives/ForbiddenPackages.ts": (
-                        'import { model } from "@proliferate/product-domain";\n'
+                        'import { model } from "@proliferate/product-client/internal/domain/chats/model";\n'
                         'import { cloud } from "@proliferate/cloud-sdk";\n'
                         'import { runtime } from "@anyharness/sdk";\n'
                         'import { useQuery } from "@tanstack/react-query";\n'
@@ -1783,6 +1783,660 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 collect_violations=lambda: [],
             ), redirect_stdout(StringIO()):
                 self.assertEqual(check_module.main(), 1)
+
+
+class ModuleSpecifierCollectorTest(unittest.TestCase):
+    def test_runtime_names_preserve_mixed_type_value_semantics(self) -> None:
+        source = (
+            'import { createTranscriptState, type TranscriptState } from "@anyharness/sdk";\n'
+            'export { reduceEvents, type SessionEvent } from "@anyharness/sdk";\n'
+            'import type { CloudWorkspace } from "@proliferate/cloud-sdk";\n'
+            'import "side-effect";\n'
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.runtime_imported_names for statement in statements],
+            [
+                frozenset({"createTranscriptState"}),
+                frozenset({"reduceEvents"}),
+                frozenset(),
+                frozenset({"*"}),
+            ],
+        )
+
+    def test_augmented_collector_adds_literal_require_and_test_mocks_once(self) -> None:
+        source = (
+            'import Equals = require("import-equals");\n'
+            'const common = require("common-js");\n'
+            'vi.mock("vitest-mock", () => ({}));\n'
+            'jest.mock(("jest-mock" as const));\n'
+            'object.require("property-not-a-load");\n'
+            'require("computed/" + name);\n'
+            'foo((require))!("argument-not-a-load");\n'
+            'foo((vi)).mock("receiver-not-the-api");\n'
+            '(object.require)!("grouped-property-not-a-load");\n'
+            '(vi, other).mock("runtime-choice-not-the-api");\n'
+            'object.require?.("optional-property-not-a-load");\n'
+            '(object.require)?.("grouped-optional-property-not-a-load");\n'
+            '(other, require)?.("optional-choice-not-a-load");\n'
+            'vi.mock?.("optional-mock-not-hoisted");\n'
+            'vi?.mock("optional-receiver-not-hoisted");\n'
+            'vi["mock"]("computed-mock-not-hoisted");\n'
+            '// require("comment-only");\n'
+        )
+
+        statements = collect_module_specifiers(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in statements],
+            ["import-equals", "common-js", "vitest-mock", "jest-mock"],
+        )
+        self.assertTrue(
+            all(
+                statement.runtime_imported_names == frozenset({"*"})
+                for statement in statements
+            )
+        )
+
+    def test_augmented_collector_accepts_non_null_and_generic_loader_calls(self) -> None:
+        source = (
+            'const required = require!("require-non-null");\n'
+            'const generic = require<ModuleShape>("require-generic");\n'
+            'vi.mock!("vi-non-null");\n'
+            'vi.mock<ModuleShape>("vi-generic");\n'
+            'jest.mock!<ModuleShape>("jest-both");\n'
+            'jest.mock<() => ModuleShape>("jest-function-type");\n'
+            'vi.mock<">">("vi-literal-type");\n'
+            'vi!.mock("vi-receiver-non-null");\n'
+            '(jest!).mock("jest-grouped-receiver");\n'
+            '(vi)!.mock<ModuleShape>("vi-grouped-receiver");\n'
+            '(require)("require-grouped-plain");\n'
+            '(require)!<ModuleShape>("require-grouped-generic");\n'
+            '((require))!("require-double-grouped");\n'
+            '(vi.mock)!("vi-grouped-callee");\n'
+            '(jest.mock as MockFn)("jest-asserted-callee");\n'
+        )
+
+        statements = collect_module_specifiers(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in statements],
+            [
+                "require-non-null",
+                "require-generic",
+                "vi-non-null",
+                "vi-generic",
+                "jest-both",
+                "jest-function-type",
+                "vi-literal-type",
+                "vi-receiver-non-null",
+                "jest-grouped-receiver",
+                "vi-grouped-receiver",
+                "require-grouped-plain",
+                "require-grouped-generic",
+                "require-double-grouped",
+                "vi-grouped-callee",
+                "jest-asserted-callee",
+            ],
+        )
+
+    def test_augmented_collector_accepts_assertions_and_escaped_identifiers(self) -> None:
+        source = (
+            '(<typeof require>require)(<string>"angle-require");\n'
+            '(<typeof vi>vi).mock(("angle-vi"!));\n'
+            '(<typeof jest>jest)!.mock<ModuleShape>(<string>"angle-jest");\n'
+            r'requ\u0069re("escaped-require");' "\n"
+            r'v\u{69}.m\u006fck("escaped-vi");' "\n"
+            r'j\u0065st.mock("escaped-jest");' "\n"
+        )
+
+        statements = collect_module_specifiers(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in statements],
+            [
+                "angle-require",
+                "angle-vi",
+                "angle-jest",
+                "escaped-require",
+                "escaped-vi",
+                "escaped-jest",
+            ],
+        )
+
+    def test_collectors_evaluate_finite_metro_request_expressions(self) -> None:
+        source = (
+            'import("dynamic-" + "concat");\n'
+            'import(`dynamic-${"template"}`);\n'
+            'import(true ? "dynamic-conditional" : unknown);\n'
+            'import(",");\n'
+            'require?.("optional-require");\n'
+            '(require)?.<ModuleShape>("optional-generic");\n'
+            'require("" + "empty-prefix");\n'
+            'require("" || "logical-require");\n'
+            'require((0, "sequence-require"));\n'
+            'require("(");\n'
+            'require("<" + "angle-fragment");\n'
+            'require(("!", "punctuation-sequence"));\n'
+            'require("!" && "punctuation-logical");\n'
+            'require("!" ? "punctuation-conditional" : unknown);\n'
+            'vi.mock("mock-" + "concat");\n'
+            'jest.mock(`${"nested-" + "template"}/${`inner-${"value"}`}`);\n'
+        )
+
+        imports = collect_imports(Path("Sample.ts"), source)
+        statements = collect_module_specifiers(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in imports],
+            [
+                "dynamic-concat",
+                "dynamic-template",
+                "dynamic-conditional",
+                ",",
+            ],
+        )
+        self.assertEqual(
+            [statement.source for statement in statements],
+            [
+                "dynamic-concat",
+                "dynamic-template",
+                "dynamic-conditional",
+                ",",
+                "optional-require",
+                "optional-generic",
+                "empty-prefix",
+                "logical-require",
+                "sequence-require",
+                "(",
+                "<angle-fragment",
+                "punctuation-sequence",
+                "punctuation-logical",
+                "punctuation-conditional",
+                "mock-concat",
+                "nested-template/inner-value",
+            ],
+        )
+
+    def test_computed_requests_fail_closed_without_losing_nested_imports(self) -> None:
+        source = (
+            'import("dynamic-prefix/" + name + "/suffix");\n'
+            'require("require-prefix/" + name);\n'
+            'vi.mock(`mock-prefix/${"fragment"}/${name}`);\n'
+            'jest.mock(`mock-prefix/${/ignored/}/${"fragment"}`);\n'
+            'require(`outer/${import("nested-inner")}/${name}`);\n'
+            'require(`known-${true ? "outer" : import("nested-dead")}`);\n'
+        )
+
+        imports = collect_imports(Path("Sample.ts"), source)
+        statements = collect_module_specifiers(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in imports],
+            ["nested-inner", "nested-dead"],
+        )
+        self.assertEqual(
+            [statement.source for statement in statements],
+            ["nested-inner", "known-outer", "nested-dead"],
+        )
+
+    def test_lone_named_type_binding_is_a_runtime_symbol(self) -> None:
+        source = (
+            'import { type } from "imported";\n'
+            'export { type } from "exported";\n'
+            'import { type Contract } from "type-only";\n'
+            'type Module = typeof import("module-type");\n'
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.runtime_imported_names for statement in statements],
+            [
+                frozenset({"type"}),
+                frozenset({"type"}),
+                frozenset(),
+                frozenset(),
+            ],
+        )
+        self.assertEqual(statements[-1].imported_names, frozenset({"*"}))
+
+
+class ProductClientDomainBoundaryTest(unittest.TestCase):
+    def write_files(self, root: Path, files: dict[str, str]) -> list[Path]:
+        paths: list[Path] = []
+        for relative_path, content in files.items():
+            path = root / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            paths.append(path)
+        return paths
+
+    def run_domain_rules(
+        self, root: Path, files: dict[str, str]
+    ) -> list[check_module.Violation]:
+        paths = self.write_files(root, files)
+        product_src = root / "apps/packages/product-client/src"
+        domain_src = product_src / "domain"
+        with patch.multiple(
+            check_module,
+            REPO_ROOT=root,
+            PRODUCT_CLIENT_SRC=product_src,
+            PRODUCT_CLIENT_DOMAIN_SRC=domain_src,
+        ):
+            return [
+                violation
+                for path in paths
+                if path.suffix in {".ts", ".tsx"}
+                for violation in check_module.find_product_client_domain_violations(path)
+            ]
+
+    def test_domain_allows_exact_types_helpers_relative_imports_and_fixtures(self) -> None:
+        files = {
+            "apps/packages/product-client/src/domain/model.ts": "export type Model = {};\n",
+            "apps/packages/product-client/src/domain/allowed.ts": (
+                'import type { CloudWorkspace } from "@proliferate/cloud-sdk";\n'
+                "import {\n"
+                "  createTranscriptState,\n"
+                "  type TranscriptState,\n"
+                '} from "@anyharness/sdk";\n'
+                "import type { FeedWebSocketAuthTransport, SessionMcpTransport } "
+                'from "@anyharness/sdk";\n'
+                'export { reduceEvents } from "@anyharness/sdk";\n'
+                'import { parseToolBackgroundWork } from "@anyharness/sdk";\n'
+                'import type { Model } from "./model";\n'
+                "const load = () => import(\"@anyharness/sdk\").then("
+                "({ deriveCanonicalPlan }) => deriveCanonicalPlan);\n"
+            ),
+            "apps/packages/product-client/src/domain/workflows/definition.test.ts": (
+                'import { describe } from "vitest";\n'
+                "import full from "
+                '"../../../../../../fixtures/contracts/workflow-definition/full.json";\n'
+                "import minimal from "
+                '"../../../../../../fixtures/contracts/workflow-definition/minimal.json";\n'
+            ),
+            "apps/packages/product-client/src/domain/chats/transcript/transcript-presentation.test.ts": (
+                'import { it } from "vitest";\n'
+                "import claude from "
+                '"../../../../../../../fixtures/contracts/native-subagent-transcript/claude.json";\n'
+                "import codex from "
+                '"../../../../../../../fixtures/contracts/native-subagent-transcript/codex.json";\n'
+            ),
+            "fixtures/contracts/workflow-definition/full.json": "{}\n",
+            "fixtures/contracts/workflow-definition/minimal.json": "{}\n",
+            "fixtures/contracts/native-subagent-transcript/claude.json": "{}\n",
+            "fixtures/contracts/native-subagent-transcript/codex.json": "{}\n",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_domain_rules(Path(directory).resolve(), files)
+
+        self.assertEqual(violations, [])
+
+    def test_client_core_type_plumbing_fails_boundary_and_structure(self) -> None:
+        raw_names = (
+            "AnyHarnessClient",
+            "AnyHarnessClientOptions",
+            "AnyHarnessError",
+            "AnyHarnessMeasurementOperationId",
+            "AnyHarnessRequestOptions",
+            "AnyHarnessRequestStartEvent",
+            "AnyHarnessRequestTimingLifecycle",
+            "AnyHarnessTimingCategory",
+            "AnyHarnessTimingEvent",
+            "AnyHarnessTimingObserver",
+            "AnyHarnessTimingScope",
+            "AnyHarnessTransport",
+        )
+        self.assertEqual(
+            set(raw_names),
+            check_module.PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS,
+        )
+        self.assertEqual(
+            check_module.PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS,
+            structure_module.PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS,
+        )
+        self.assertEqual(
+            check_module.PRODUCT_CLIENT_DOMAIN_RAW_CLOUD_CLIENT_IMPORTS,
+            structure_module.PRODUCT_CLIENT_DOMAIN_RAW_CLOUD_CLIENT_IMPORTS,
+        )
+        prefix = "apps/packages/product-client/src/domain"
+        files = {
+            f"{prefix}/raw-client-core-{index}.ts": (
+                f'import type {{ {name} }} from "@anyharness/sdk";\n'
+            )
+            for index, name in enumerate(raw_names)
+        }
+        files[f"{prefix}/allowed-data-transports.ts"] = (
+            "import type { CreateSessionRequest, FeedWebSocketAuthTransport, "
+            "SessionMcpTransport, TerminalWebSocketAuthTransport } "
+            'from "@anyharness/sdk";\n'
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            paths = self.write_files(root, files)
+            product_src = root / "apps/packages/product-client/src"
+            domain_src = product_src / "domain"
+            with patch.multiple(
+                check_module,
+                REPO_ROOT=root,
+                PRODUCT_CLIENT_SRC=product_src,
+                PRODUCT_CLIENT_DOMAIN_SRC=domain_src,
+            ):
+                boundary_violations = [
+                    violation
+                    for path in paths
+                    for violation in check_module.find_product_client_domain_violations(
+                        path
+                    )
+                ]
+            with patch.multiple(
+                structure_module,
+                REPO_ROOT=root,
+                PRODUCT_CLIENT_SRC=product_src,
+                PRODUCT_CLIENT_DOMAIN_SRC=domain_src,
+                PACKAGE_ROOTS={
+                    "product-client-domain": domain_src,
+                    "product-client": product_src,
+                },
+            ):
+                structure_violations = (
+                    structure_module.find_forbidden_shared_package_imports(paths)
+                )
+
+        expected_paths = {
+            f"raw-client-core-{index}.ts" for index in range(len(raw_names))
+        }
+        self.assertEqual(
+            {violation.path.name for violation in boundary_violations},
+            expected_paths,
+        )
+        self.assertEqual(
+            {violation.path.name for violation in structure_violations},
+            expected_paths,
+        )
+
+    def test_domain_rejects_every_forbidden_dependency_family_and_api(self) -> None:
+        prefix = "apps/packages/product-client/src/domain"
+        files = {
+            f"{prefix}/react.ts": 'import React from "react";\n',
+            f"{prefix}/dom.ts": 'import { createRoot } from "react-dom/client";\n',
+            f"{prefix}/native.ts": 'import { View } from "react-native";\n',
+            f"{prefix}/query.ts": 'import { useQuery } from "@tanstack/react-query";\n',
+            f"{prefix}/cloud-react.ts": (
+                'import { useCloud } from "@proliferate/cloud-sdk-react";\n'
+            ),
+            f"{prefix}/runtime-cloud.ts": (
+                'import { createClient, type CloudWorkspace } from "@proliferate/cloud-sdk";\n'
+            ),
+            f"{prefix}/runtime-anyharness.ts": (
+                'import { AnyHarnessClient, type TranscriptState } from "@anyharness/sdk";\n'
+            ),
+            f"{prefix}/type-cloud-client.ts": (
+                "import type { CreateProliferateClientOptions, "
+                "ProliferateCloudClient, ProliferateOpenApiClient } "
+                'from "@proliferate/cloud-sdk";\n'
+            ),
+            f"{prefix}/type-anyharness-client.ts": (
+                "import type { AnyHarnessClient, AnyHarnessClientOptions, "
+                "AnyHarnessRequestOptions, AnyHarnessTransport } "
+                'from "@anyharness/sdk";\n'
+            ),
+            f"{prefix}/type-anyharness-module.ts": (
+                'type Sdk = typeof import("@anyharness/sdk");\n'
+            ),
+            f"{prefix}/lone-type-runtime.ts": (
+                'import { type } from "@anyharness/sdk";\n'
+            ),
+            f"{prefix}/sdk-react.ts": (
+                'import { getAnyHarnessClient } from "@anyharness/sdk-react";\n'
+            ),
+            f"{prefix}/self-alias.ts": (
+                'import { model } from "#product/domain/chats/model";\n'
+            ),
+            f"{prefix}/self-package.ts": (
+                "import { model } from "
+                '"@proliferate/product-client/internal/domain/chats/model";\n'
+            ),
+            f"{prefix}/ui.ts": (
+                'import { Button } from "#product/primitives/Button";\n'
+                'import { Screen } from "#product/components/Screen";\n'
+                'import { useThing } from "#product/hooks/use-thing";\n'
+                'import { store } from "#product/stores/store";\n'
+                'import { access } from "#product/lib/access/cloud/access";\n'
+                'import { host } from "#product/host/product-host";\n'
+            ),
+            f"{prefix}/styles.ts": 'import "./styles.css";\n',
+            f"{prefix}/tauri.ts": 'import { invoke } from "@tauri-apps/api/core";\n',
+            f"{prefix}/browser.ts": 'import * as Browser from "expo-web-browser";\n',
+            f"{prefix}/call-loads.test.ts": (
+                'const react = require("react");\n'
+                'vi.mock("@proliferate/product-client/internal/components/View");\n'
+                'jest.mock("@anyharness/sdk-react");\n'
+            ),
+            f"{prefix}/globals.test.ts": (
+                "window.location.reload();\n"
+                "document.createElement('div');\n"
+                "void __TAURI_INTERNALS__;\n"
+            ),
+            f"{prefix}/jsx.tsx": "export const View = () => <div />;\n",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_domain_rules(Path(directory).resolve(), files)
+
+        rule_ids = {violation.rule_id for violation in violations}
+        self.assertIn("PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT", rule_ids)
+        self.assertIn("PRODUCT_CLIENT_DOMAIN_FORBIDDEN_API", rule_ids)
+        self.assertIn("PRODUCT_CLIENT_DOMAIN_TSX", rule_ids)
+        self.assertTrue(
+            {
+                "react.ts",
+                "dom.ts",
+                "native.ts",
+                "query.ts",
+                "cloud-react.ts",
+                "runtime-cloud.ts",
+                "runtime-anyharness.ts",
+                "type-cloud-client.ts",
+                "type-anyharness-client.ts",
+                "type-anyharness-module.ts",
+                "lone-type-runtime.ts",
+                "sdk-react.ts",
+                "self-alias.ts",
+                "self-package.ts",
+                "ui.ts",
+                "styles.ts",
+                "tauri.ts",
+                "browser.ts",
+                "call-loads.test.ts",
+                "globals.test.ts",
+                "jsx.tsx",
+            }.issubset({violation.path.name for violation in violations})
+        )
+
+    def test_domain_fixture_escape_is_exact_and_production_never_escapes(self) -> None:
+        prefix = "apps/packages/product-client/src/domain"
+        files = {
+            f"{prefix}/production.ts": 'import value from "../../outside";\n',
+            f"{prefix}/workflows/definition.test.ts": (
+                "import wrong from "
+                '"../../../../../../fixtures/contracts/workflow-definition/wrong.json";\n'
+                'import local from "../../../../../../server/not-a-fixture.json";\n'
+            ),
+            "fixtures/contracts/workflow-definition/wrong.json": "{}\n",
+            "server/not-a-fixture.json": "{}\n",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_domain_rules(Path(directory).resolve(), files)
+
+        escapes = [
+            violation
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_DOMAIN_RELATIVE_ESCAPE"
+        ]
+        self.assertEqual(len(escapes), 3)
+
+    def test_structure_classifier_checks_nested_domain_before_product_client(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            product_src = root / "apps/packages/product-client/src"
+            domain_src = product_src / "domain"
+            files = self.write_files(
+                root,
+                {
+                    "apps/packages/product-client/src/domain/allowed.ts": (
+                        "import { createTranscriptState, type TranscriptState } "
+                        'from "@anyharness/sdk";\n'
+                        "import type { FeedWebSocketAuthTransport, "
+                        "SessionMcpTransport } from \"@anyharness/sdk\";\n"
+                    ),
+                    "apps/packages/product-client/src/domain/raw.ts": (
+                        'import { AnyHarnessClient } from "@anyharness/sdk";\n'
+                    ),
+                    "apps/packages/product-client/src/domain/raw-anyharness-type.ts": (
+                        "import type { AnyHarnessClient, AnyHarnessClientOptions, "
+                        "AnyHarnessRequestOptions, AnyHarnessTransport } "
+                        'from "@anyharness/sdk";\n'
+                    ),
+                    "apps/packages/product-client/src/domain/raw-cloud-type.ts": (
+                        "import type { CreateProliferateClientOptions, "
+                        "ProliferateCloudClient } "
+                        'from "@proliferate/cloud-sdk";\n'
+                    ),
+                    "apps/packages/product-client/src/domain/raw-module-type.ts": (
+                        'type CloudSdk = typeof import("@proliferate/cloud-sdk");\n'
+                    ),
+                    "apps/packages/product-client/src/domain/lone-type-runtime.ts": (
+                        'export { type } from "@anyharness/sdk";\n'
+                    ),
+                    "apps/packages/product-client/src/domain/escape.ts": (
+                        'import { Button } from "../primitives/Button";\n'
+                    ),
+                },
+            )
+            with patch.multiple(
+                structure_module,
+                REPO_ROOT=root,
+                PRODUCT_CLIENT_SRC=product_src,
+                PRODUCT_CLIENT_DOMAIN_SRC=domain_src,
+                PACKAGE_ROOTS={
+                    "product-client-domain": domain_src,
+                    "product-client": product_src,
+                },
+            ):
+                violations = structure_module.find_forbidden_shared_package_imports(files)
+
+        self.assertEqual(
+            {violation.path.name for violation in violations},
+            {
+                "raw.ts",
+                "raw-anyharness-type.ts",
+                "raw-cloud-type.ts",
+                "raw-module-type.ts",
+                "lone-type-runtime.ts",
+                "escape.ts",
+            },
+        )
+
+
+class MobileProductClientBoundaryTest(unittest.TestCase):
+    def write_files(self, root: Path, files: dict[str, str]) -> list[Path]:
+        paths: list[Path] = []
+        for relative_path, content in files.items():
+            path = root / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            paths.append(path)
+        return paths
+
+    def run_mobile_rules(
+        self, root: Path, source: str
+    ) -> list[check_module.Violation]:
+        mobile_src = root / "apps/mobile/src"
+        product_src = root / "apps/packages/product-client/src"
+        domain_src = product_src / "domain"
+        paths = self.write_files(
+            root,
+            {
+                "apps/mobile/src/Sample.test.ts": source,
+                "apps/mobile/src/local.ts": "export {};\n",
+                "apps/packages/product-client/src/domain/chats/model.ts": "export {};\n",
+                "apps/packages/product-client/src/components/View.tsx": "export {};\n",
+            },
+        )
+        mobile_file = paths[0]
+        with patch.multiple(
+            check_module,
+            REPO_ROOT=root,
+            MOBILE_SRC=mobile_src,
+            PRODUCT_CLIENT_SRC=product_src,
+            PRODUCT_CLIENT_DOMAIN_SRC=domain_src,
+        ):
+            return check_module.find_mobile_product_client_import_violations(
+                mobile_file
+            )
+
+    def test_mobile_accepts_all_literal_forms_for_one_concrete_domain_file(self) -> None:
+        target = "@proliferate/product-client/internal/domain/chats/model"
+        source = (
+            'import "./local";\n'
+            f'import {{ Model }} from "{target}";\n'
+            f'export type {{ Shape }} from "{target}";\n'
+            f'type Inline = import("{target}").Shape;\n'
+            f'const lazy = import("{target}");\n'
+            f'const common = require("{target}");\n'
+            f'import Alias = require("{target}");\n'
+            f'vi.mock("{target}");\n'
+            f'jest.mock("{target}");\n'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_mobile_rules(Path(directory).resolve(), source)
+
+        self.assertEqual(violations, [])
+
+    def test_mobile_rejects_broad_and_nonconcrete_product_client_edges(self) -> None:
+        source = (
+            'import "@proliferate/product-client";\n'
+            'const host = import("@proliferate/product-client/host/product-host");\n'
+            "const primitive = (require)!("
+            '"@proliferate/product-client/internal/primitives/Button");\n'
+            'vi!.mock<ModuleShape>("@proliferate/product-client/internal/components/View");\n'
+            '(jest!).mock!<ModuleShape>("@proliferate/product-client/internal/hooks/use-thing");\n'
+            '(require)("@proliferate/product-client/internal/providers/ProductProvider");\n'
+            'export { store } from "@proliferate/product-client/internal/stores/store";\n'
+            'type Access = import("@proliferate/product-client/internal/lib/access/cloud").Access;\n'
+            'import { missing } from "@proliferate/product-client/internal/domain/chats/missing";\n'
+            'import { directory } from "@proliferate/product-client/internal/domain/chats/model/";\n'
+            'import { domain } from "../../packages/product-client/src/domain/chats/model";\n'
+            'import { view } from "../../packages/product-client/src/components/View";\n'
+            '(<typeof require>require)(<string>'
+            '"@proliferate/product-client/internal/components/Angle");\n'
+            r'requ\u0069re("@proliferate/product-client/internal/components/Escaped");'
+            "\n"
+            'require?.("@proliferate/" + '
+            '"product-client/internal/components/Optional");\n'
+            'void import(`@proliferate/${"product-client"}'
+            '/internal/components/Template`);\n'
+            'void import(true ? '
+            '"@proliferate/product-client/internal/components/Conditional" '
+            ': "./local");\n'
+            'require("" || '
+            '"@proliferate/product-client/internal/components/Logical");\n'
+            'require((0, '
+            '"@proliferate/product-client/internal/components/Sequence"));\n'
+            '(<typeof vi>vi).mock(("@proliferate/'
+            'product-client/internal/components/Asserted"!));\n'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_mobile_rules(Path(directory).resolve(), source)
+
+        self.assertEqual(len(violations), 20)
+        self.assertEqual(
+            {violation.rule_id for violation in violations},
+            {"MOBILE_PRODUCT_CLIENT_DOMAIN_ONLY"},
+        )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import type { CloudGitRepositorySummary } from "@proliferate/cloud-sdk";
-import { blockedCloudRepositoryReason } from "@proliferate/product-domain/environments/cloud-environments";
-import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import { blockedCloudRepositoryReason } from "#product/domain/environments/cloud-environments";
+import { formatGitRepoId } from "#product/domain/repos/repo-id";
 import type {
   CloudRepoPickerBlockerView,
   CloudRepoPickerRepositoryView,
