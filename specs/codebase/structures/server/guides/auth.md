@@ -18,13 +18,16 @@ second recommended pattern.
 | **Resource access** | Can this caller touch *this* resource? | `server/<domain>/access.py` | the resource snapshot, or raises 403/404 |
 | **Product rule** | Given this state, is the action permitted now? | `server/<domain>/domain/policy.py` | `PolicyVerdict` |
 
-Dependency-free authorization currency — `OwnerContext`, `OwnerSelection`,
+Dependency-free authorization currency — `ActorIdentity`, `AuthenticatedUser`,
+`OwnerScope`, `OwnerSelection`, `OwnerContext`, `PolicyAllowed`, `PolicyDenied`,
 `PolicyVerdict`, and the pure `require_org_role` check — is defined in
 `auth/authorization.py`. `permissions.py` re-exports that vocabulary as the
 public domain-facing seam and owns request-time organization selection,
-membership resolution, request/RLS context, and FastAPI dependencies. Domain
-code imports the public names from `proliferate.permissions`; it does not reach
-into `auth.authorization` for convenience.
+membership resolution, request/RLS context, and FastAPI dependencies. New and
+refactored domain code should import the public names from
+`proliferate.permissions` rather than reach into `auth.authorization` for
+convenience. Existing direct imports are migration work, not another public
+seam.
 
 `auth/dependencies.py` centralizes **actor dependencies**, not every FastAPI
 dependency used by a route. Resource-specific dependencies stay in the domain
@@ -72,8 +75,9 @@ server/proliferate/
 
   auth/
     __init__.py
-    dependencies.py          # user actor deps: current_active_user, current_product_user,
-                             #   current_organization_actor, optional_current_active_user
+    dependencies.py          # user actor deps: current_active_user, current_limited_user,
+                             #   current_product_user, current_organization_actor,
+                             #   optional_current_active_user
     authorization.py         # dependency-free owner/policy vocabulary + pure role check
     users.py                 # UserManager (fastapi-users lifecycle plumbing)
     viewer_api/              # /auth/viewer + /users/me surface: api.py, profile_api.py, service.py, models.py
@@ -124,16 +128,14 @@ IDs or import resource-owned stores.
 ```python
 # auth/dependencies.py
 async def current_product_user(
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_limited_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> User:
-    readiness = await get_account_readiness(db, user_id=user.id)
-    if not readiness.product_ready:
-        raise PermissionDenied(
-            "Connect GitHub before using Proliferate Cloud product surfaces.",
-            code="github_link_required",
-        )
-    return user
+    if settings.single_org_mode:
+        return user
+    if await user_has_active_organization_sso_membership(db, user_id=user.id):
+        return user
+    return await _require_product_ready(db, user)
 ```
 
 Use `server/<domain>/access.py` when a route needs a concrete resource already
@@ -145,22 +147,24 @@ snapshot the handler or service will use.
 # server/cloud/workspaces/access.py
 async def workspace_user_can_archive(
     workspace_id: UUID,
-    user: User = Depends(current_product_user),
+    owner: OwnerContext = Depends(current_owner_context),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceSnapshot:
     workspace = await cloud_workspaces_store.get_workspace_snapshot(db, workspace_id)
     if workspace is None:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    role = await organizations_store.get_active_membership_role(
-        db,
-        organization_id=workspace.organization_id,
-        user_id=user.id,
-    )
+    if workspace.owner_scope != owner.owner_scope:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    if (
+        owner.owner_scope == "organization"
+        and workspace.organization_id != owner.organization_id
+    ):
+        raise HTTPException(status_code=404, detail="Workspace not found")
     verdict = policy.can_archive_workspace(
         workspace=workspace,
-        actor_user_id=user.id,
-        membership_role=role,
+        actor_user_id=owner.actor_user_id,
+        membership_role=owner.membership_role,
     )
     if isinstance(verdict, PolicyDenied):
         if verdict.code == "workspace_not_found":
@@ -332,9 +336,11 @@ no mounted Worker control, command lease/result, or applied-revision endpoint.
 
 ## Org Authorization
 
-`server/proliferate/auth/authorization.py` owns the dependency-free owner and
-policy vocabulary. `server/proliferate/permissions.py` re-exports it as the
-public domain-facing seam and owns request-time org-standing resolution.
+`server/proliferate/auth/authorization.py` owns the dependency-free vocabulary:
+`ActorIdentity`, `AuthenticatedUser`, `OwnerScope`, `OwnerSelection`,
+`OwnerContext`, `PolicyAllowed`, `PolicyDenied`, `PolicyVerdict`, and
+`require_org_role`. `server/proliferate/permissions.py` re-exports those names
+as the public domain-facing seam and owns request-time org-standing resolution.
 
 ### Allowed
 
@@ -343,8 +349,10 @@ public domain-facing seam and owns request-time org-standing resolution.
 - `current_path_org_member/admin/owner` for organization ids carried by the
   path, and `current_org_member/admin/owner` for a selected owner. These return
   `CurrentOrgUser`.
-- Re-exporting `OwnerContext`, `OwnerSelection`, `PolicyVerdict`, and the pure
-  `require_org_role(context, roles)` check from `auth/authorization.py`.
+- Re-exporting `ActorIdentity`, `AuthenticatedUser`, `OwnerScope`,
+  `OwnerSelection`, `OwnerContext`, `PolicyAllowed`, `PolicyDenied`,
+  `PolicyVerdict`, and the pure `require_org_role(context, roles)` check from
+  `auth/authorization.py`.
 - Applying request and RLS organization context after membership resolution.
 
 ### Banned
@@ -434,7 +442,7 @@ they may read stores and raise HTTP-shaped permission results, while
 # server/cloud/workspaces/access.py
 async def workspace_user_can_admin(
     workspace_id: UUID,
-    org_user: CurrentOrgUser = Depends(current_path_org_admin),
+    org_user: CurrentOrgUser = Depends(current_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceSnapshot:
     snapshot = await store.cloud_workspaces.get_workspace_snapshot(db, workspace_id)
@@ -454,8 +462,9 @@ the resource snapshot when access is granted.
 ### Resource-scoped vs platform admin
 
 When "admin" means "admin of *this* path organization", compose
-`current_path_org_admin` in `<domain>/access.py`; selected-owner routes can use
-`require_owner_role("owner", "admin")`. When it means "platform admin"
+`current_path_org_admin` in `<domain>/access.py`. A resource-only route can
+compose selected-owner `current_org_admin` or
+`require_owner_role("owner", "admin")` instead. When it means "platform admin"
 (Proliferate staff, system-wide), use the platform-admin actor from
 `auth/dependencies.py`.
 
