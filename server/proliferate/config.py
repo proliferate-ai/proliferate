@@ -388,13 +388,6 @@ class Settings(BaseSettings):
     cloud_jwt_audience_anyharness: str = "anyharness"
     cloud_jwt_direct_attach_ttl_seconds: int = 1200
     cloud_mcp_enabled: bool = True
-    automation_cloud_executor_claim_ttl_seconds: float = 300.0
-    automation_cloud_executor_heartbeat_seconds: float = 30.0
-    automation_cloud_executor_concurrency: int = 4
-    automation_cloud_executor_poll_seconds: float = 5.0
-    automation_cloud_executor_sweep_limit: int = 100
-    automation_cloud_executor_branch_prefix: str = "automation"
-    automation_cloud_executor_branch_slug_chars: int = 48
     workspace_move_cleanup_max_attempts: int = 5
     workspace_move_executor_heartbeat_timeout_seconds: int = 120
     workspace_move_cleanup_reconciler_interval_seconds: int = 300

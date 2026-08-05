@@ -14,6 +14,8 @@ from sqlalchemy.exc import SQLAlchemyError
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.auth  # noqa: F401
+
+# Retained automation tables must stay registered in SQLAlchemy metadata.
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
@@ -40,9 +42,6 @@ from proliferate.server.anonymous_telemetry.worker import (
     stop_server_anonymous_telemetry_sender,
 )
 from proliferate.server.artifact_runtime.api import router as artifact_runtime_router
-
-# AUTOMATIONS PARKED: retarget to RepoEnvironment in a later PR before remounting.
-# from proliferate.server.automations.api import router as automations_router
 from proliferate.server.billing.api import router as billing_router
 from proliferate.server.billing.reconciler import (
     start_billing_reconciler,
@@ -336,9 +335,6 @@ def create_app() -> FastAPI:
         prefix=f"{api_prefix}/v1",
         tags=["organizations"],
     )
-    # AUTOMATIONS PARKED: /v1/automations/* is intentionally disabled until the
-    # domain is retargeted from deleted cloud_repo_config rows to RepoEnvironment.
-    # app.include_router(automations_router, prefix=f"{api_prefix}/v1", tags=["automations"])
     app.include_router(devtools_router, prefix=f"{api_prefix}/v1", tags=["devtools"])
 
     # Serve the compiled ProductClient Web application (self-hosted Web) after
