@@ -82,8 +82,8 @@ warn_return_any = false
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-# cloud/runtime operates on untyped E2B sandbox objects; utils contains generic
-# helpers (JSON crypto, telemetry scrubbing, time) where Any is unavoidable.
+# cloud/runtime operates on untyped E2B sandbox objects; utils retains generic
+# JSON crypto and telemetry-scrubbing helpers where Any is unavoidable.
 module = [
     "proliferate.server.cloud.runtime.*",
     "proliferate.utils.*",

@@ -370,8 +370,9 @@ updated_at   TIMESTAMPTZ  NOT NULL     DEFAULT now()
 - **Always UTC** at the application boundary.
 - **DB defaults `now()`** for `created_at` / `updated_at`. Don't set them in
   app code unless overriding.
-- **Python:** `datetime.now(timezone.utc)`. Ban `datetime.utcnow()` (returns
-  naive — silent timezone bug source).
+- **Python:** obtain generic application UTC timestamps from
+  [proliferate.lib.infra.time.wall_clock.utcnow](../../../../../server/proliferate/lib/infra/time/wall_clock.py).
+  Ban `datetime.utcnow()` (returns naive — silent timezone bug source).
 
 ### Soft delete
 
