@@ -1,6 +1,11 @@
+//! Persistence for `workspace_access_modes` — the workspace access-mode row.
+//!
+//! Lives under `store/` because it is a store by role: SQL text and row mapping
+//! for one workspace-scoped table. `access_gate.rs` owns the decisions.
+
 use rusqlite::{params, OptionalExtension};
 
-use super::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
+use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
 use crate::persistence::Db;
 
 #[derive(Clone)]

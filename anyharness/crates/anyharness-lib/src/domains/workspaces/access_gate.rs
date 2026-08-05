@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use super::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
-use super::access_store::WorkspaceAccessStore;
 use super::model::WorkspaceLifecycleState;
-use super::store::WorkspaceStore;
+use super::store::{WorkspaceAccessStore, WorkspaceStore};
 use crate::domains::sessions::store::SessionStore;
 use crate::live::terminals::TerminalService;
 
@@ -221,15 +220,15 @@ mod tests {
     use std::sync::Arc;
 
     use super::{WorkspaceAccessError, WorkspaceAccessGate};
+    use crate::domains::repo_roots::test_support::seed_repo_root_1;
     use crate::domains::sessions::store::SessionStore;
     use crate::domains::terminals::store::TerminalStore;
     use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
-    use crate::domains::workspaces::access_store::WorkspaceAccessStore;
     use crate::domains::workspaces::model::{
         WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
         WorkspaceSurface,
     };
-    use crate::domains::workspaces::store::WorkspaceStore;
+    use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
     use crate::live::terminals::TerminalService;
     use crate::persistence::Db;
 
@@ -272,20 +271,7 @@ mod tests {
         Db,
     ) {
         let db = Db::open_in_memory().expect("open db");
-        db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO repo_roots (
-                    id, kind, path, display_name, default_branch, remote_provider, remote_owner,
-                    remote_repo_name, remote_url, created_at, updated_at
-                 ) VALUES (
-                    'repo-root-1', 'external', '/tmp/repo-root-1', NULL, 'main', NULL, NULL,
-                    NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
-                 )",
-                [],
-            )?;
-            Ok(())
-        })
-        .expect("seed repo root");
+        seed_repo_root_1(&db);
         let workspace_store = WorkspaceStore::new(db.clone());
         let session_store = SessionStore::new(db.clone());
         let access_store = WorkspaceAccessStore::new(db.clone());

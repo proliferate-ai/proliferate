@@ -213,11 +213,11 @@ use crate::domains::workflows::service::WorkflowRunService;
 use crate::domains::workflows::session_extension::WorkflowRunSessionExtension;
 use crate::domains::workflows::store::WorkflowRunStore;
 use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
-use crate::domains::workspaces::access_store::WorkspaceAccessStore;
 use crate::domains::workspaces::model::{
     WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
     WorkspaceSurface,
 };
+use crate::domains::workspaces::store::WorkspaceAccessStore;
 
 fn body_for_workspace(workspace_id: &str, model_id: Value) -> Value {
     json!({

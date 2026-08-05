@@ -47,15 +47,12 @@ API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.
 POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workspaces/retention_policy.rs 2 misnamed policy: DB-backed store with clock (Utc::now at :44 and :66); target = split into store + pure policy (grid plan PR 8c)
 
 # Rule: SQL in domains/** lives in the store.
-# 9 files, 39 occurrences.
+# 6 files, 32 occurrences.
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/activity/feeds.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/plans/service.rs 4 plan service queries plans/plan_interaction_links inline; target = plans store methods (grid plan PR 8b)
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/sessions/links/completions.rs 19 session-link completions embed 19 SQL lines outside the store; target = sessions/links store (grid plan PR 8a)
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/workspace_materialization/test_support.rs 1 format!-built COUNT query in a test-support file (not excluded by should_skip); target = none, test fixture
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_store.rs 5 access store is a store by role but not by path; target = rename/move under workspaces/store/ (grid plan PR 8c)
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/retention_policy.rs 6 misnamed policy: DB-backed store with embedded SQL; target = split into store + pure policy (grid plan PR 8c)
 
 # Rule: domains/** use domain twins, not wire contract types.

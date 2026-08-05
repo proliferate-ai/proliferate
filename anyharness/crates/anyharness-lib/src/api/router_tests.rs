@@ -28,8 +28,8 @@ use crate::{
         sessions::{model::SessionRecord, store::SessionStore},
         workspaces::{
             access_model::{WorkspaceAccessMode, WorkspaceAccessRecord},
-            access_store::WorkspaceAccessStore,
             managed_root::canonical_managed_worktrees_root,
+            store::WorkspaceAccessStore,
         },
     },
     integrations::agent_cli::executable::make_executable,

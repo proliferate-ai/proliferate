@@ -523,6 +523,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use crate::domains::repo_roots::test_support::seed_repo_root_1;
     use crate::domains::workspaces::managed_root::ANYHARNESS_WORKTREES_ROOT_ENV;
     use crate::domains::workspaces::model::{
         WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
@@ -541,20 +542,7 @@ mod tests {
         std::fs::create_dir_all(&checkout).expect("checkout");
 
         let db = Db::open_in_memory().expect("open db");
-        db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO repo_roots (
-                    id, kind, path, display_name, default_branch, remote_provider, remote_owner,
-                    remote_repo_name, remote_url, created_at, updated_at
-                 ) VALUES (
-                    'repo-root-1', 'external', '/tmp/repo-root-1', NULL, 'main', NULL, NULL,
-                    NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
-                 )",
-                [],
-            )?;
-            Ok(())
-        })
-        .expect("seed repo root");
+        seed_repo_root_1(&db);
         let workspace_store = WorkspaceStore::new(db.clone());
         workspace_store
             .insert(&workspace_record(
