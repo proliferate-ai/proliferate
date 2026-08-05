@@ -1116,7 +1116,7 @@ apps/desktop/src/copy/settings/settings-scaffold-copy.ts
 apps/desktop/src/copy/settings/compute.ts
   - labels compute as Personal compute
 
-apps/packages/product-surfaces/src/settings/BillingSettingsSurface.tsx
+apps/packages/product-client/src/components/settings/panes/billing/BillingSettingsSurface.tsx
   - labels billing as Billing
   - exposes current plan, credits, add credits, top up, and Stripe portal
     controls
@@ -1198,7 +1198,7 @@ apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.test.ts
 apps/desktop/src/lib/domain/vocabulary.test.ts
   - enum string values match §5.3 verbatim
 
-apps/packages/product-surfaces/src/settings/BillingSettingsSurface.test.tsx
+apps/packages/product-client/src/components/settings/panes/billing/BillingSettingsSurface.test.tsx
   - renders Billing and the auto top up option
 ```
 

@@ -2,23 +2,7 @@ import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSectio
 import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
-
-export type BillingUnitKind = "compute" | "llm";
-
-export interface BillingUnitBalancePresentation {
-  kind: BillingUnitKind;
-  title: string;
-  description: string;
-  purchased: string;
-  available: string;
-  used: string;
-  availablePercent: number | null;
-  topUpLabel: string;
-  lowBalanceCopy: string;
-  state: "ready" | "loading" | "error" | "unavailable";
-  stateMessage?: string;
-  onRetry?: () => void;
-}
+import type { BillingUnitBalancePresentation } from "#product/lib/domain/settings/billing-settings-presentation";
 
 export function BillingUsageUnitsSection({
   unitBalances,

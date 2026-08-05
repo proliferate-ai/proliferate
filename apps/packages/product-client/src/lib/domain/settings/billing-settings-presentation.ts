@@ -1,7 +1,37 @@
-import type { LlmBalance } from "@proliferate/cloud-sdk";
-import type { BillingPlanView } from "@proliferate/product-ui/billing/BillingSettingsPane";
-import type { BillingPlanPresentation } from "./BillingManagementCards";
-import type { BillingUnitBalancePresentation } from "./BillingUsageUnitsSection";
+import type { BillingPlanInfo, LlmBalance } from "@proliferate/cloud-sdk/types";
+
+export type BillingCheckoutReturnState = "success" | "cancel" | null;
+
+export interface BillingSettingsOrganization {
+  id: string;
+  name: string;
+  canManageBilling: boolean;
+  loading: boolean;
+}
+
+export interface BillingPlanPresentation {
+  name: string;
+  price: string;
+  badge: string;
+  badgeTone: "neutral" | "success" | "info" | "warning" | "destructive";
+}
+
+export type BillingUnitKind = "compute" | "llm";
+
+export interface BillingUnitBalancePresentation {
+  kind: BillingUnitKind;
+  title: string;
+  description: string;
+  purchased: string;
+  available: string;
+  used: string;
+  availablePercent: number | null;
+  topUpLabel: string;
+  lowBalanceCopy: string;
+  state: "ready" | "loading" | "error" | "unavailable";
+  stateMessage?: string;
+  onRetry?: () => void;
+}
 
 const COMPUTE_UNIT_COPY = {
   kind: "compute",
@@ -22,7 +52,7 @@ const LLM_UNIT_COPY = {
 export type BillingPlanViewKey = "free" | "core" | "enterprise";
 
 export function planKeyForBilling(
-  plan: BillingPlanView | null | undefined,
+  plan: BillingPlanInfo | null | undefined,
 ): BillingPlanViewKey | null {
   if (!plan) {
     return null;
@@ -35,7 +65,7 @@ export function planKeyForBilling(
 
 export function planSummary(
   planKey: BillingPlanViewKey | null,
-  plan: BillingPlanView,
+  plan: BillingPlanInfo,
 ): BillingPlanPresentation {
   const status = planStatusSummary(plan);
   if (planKey === "enterprise") {
@@ -70,7 +100,7 @@ export function billingUnitBalances({
   onRetryLlmBalance,
   enabled,
 }: {
-  plan: BillingPlanView | null | undefined;
+  plan: BillingPlanInfo | null | undefined;
   planLoading: boolean;
   planError: boolean;
   onRetryPlan: () => void;
@@ -96,7 +126,7 @@ export function billingUnitBalances({
   ];
 }
 
-function planStatusSummary(plan: BillingPlanView): Pick<
+function planStatusSummary(plan: BillingPlanInfo): Pick<
   BillingPlanPresentation,
   "badge" | "badgeTone"
 > {
@@ -140,7 +170,7 @@ function llmBalanceSummary(
 }
 
 function computeBalanceSummary(
-  plan: BillingPlanView | null | undefined,
+  plan: BillingPlanInfo | null | undefined,
   query: BillingUnitQueryState,
 ): BillingUnitBalancePresentation {
   const unavailable = unavailableUnitBalance(COMPUTE_UNIT_COPY, query, Boolean(plan));

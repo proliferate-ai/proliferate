@@ -7,20 +7,21 @@ import {
   resolveRepositoryReadiness,
   type RepositoryCapabilityRequirement,
 } from "@proliferate/product-domain/repos/repo-readiness";
-import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
 import {
   AddRepoFlow,
   type AddRepoFlowOption,
 } from "@proliferate/product-ui/repos/AddRepoFlow";
-import {
-  useAddCloudEnvironment,
-} from "@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud-environment";
+import { useAddCloudEnvironment } from "#product/hooks/workspaces/workflows/use-add-cloud-environment";
 import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";
+import type {
+  CloudRepoPickerBlockerModel,
+  CloudRepoPickerModel,
+} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
@@ -60,10 +61,10 @@ export function AddRepoFlowHost() {
   // precede repo selection; once past them the per-repo picker (its authority
   // query) owns gates 3+, so we resolve with the later gates satisfied and
   // surface a blocker only when the resolver stops at gate 1 or 2.
-  const preflightBlockers = useMemo<Record<"cloud" | "clone", CloudRepoPickerBlockerView | null>>(() => {
+  const preflightBlockers = useMemo<Record<"cloud" | "clone", CloudRepoPickerBlockerModel | null>>(() => {
     const resolve = (
       requirement: RepositoryCapabilityRequirement,
-    ): CloudRepoPickerBlockerView | null => {
+    ): CloudRepoPickerBlockerModel | null => {
       const readiness = resolveRepositoryReadiness({
         requirement,
         githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
@@ -143,6 +144,7 @@ export function AddRepoFlowHost() {
       query: [["source", "github_app_installation_callback"]],
     }),
     onOpenExternalUrl: host.links.openExternal,
+    onCopyText: host.clipboard.writeText,
     onRepositorySelected: (repo) => {
       handoffToCloud();
       beginCloudIntent({
@@ -185,6 +187,7 @@ export function AddRepoFlowHost() {
       query: [["source", "github_app_installation_callback"]],
     }),
     onOpenExternalUrl: host.links.openExternal,
+    onCopyText: host.clipboard.writeText,
     // The clone path never adds a Cloud environment; select is overridden below.
     onEnvironmentAdded: () => {},
   });
@@ -207,7 +210,7 @@ export function AddRepoFlowHost() {
     });
   }, [beginCloudIntent, handoffToCloud]);
 
-  const clonePicker = useMemo<CloudRepoPickerProps>(() => ({
+  const clonePicker = useMemo<CloudRepoPickerModel>(() => ({
     ...clonePickerBase,
     onAddRepository: (repo) => beginCloneForRepoId(repo.id),
     // Manual owner/repo entry is the same clone intent as catalog selection;
@@ -287,6 +290,8 @@ export function AddRepoFlowHost() {
       ? { ...clonePicker, blocker: preflightBlockers.clone }
       : clonePicker)
     : null;
+  const renderedCloudPicker: CloudRepoPickerProps | null = resolvedCloudPicker;
+  const renderedClonePicker: CloudRepoPickerProps | null = resolvedClonePicker;
 
   return (
     <AddRepoFlow
@@ -296,8 +301,8 @@ export function AddRepoFlowHost() {
       adding={isAddingRepo}
       entryNote={files ? null : DESKTOP_POINTER_COPY.addRepository}
       error={step.kind === "cloud" ? null : flowError}
-      cloudPicker={resolvedCloudPicker}
-      clonePicker={resolvedClonePicker}
+      cloudPicker={renderedCloudPicker}
+      clonePicker={renderedClonePicker}
       onPickOption={handlePickOption}
       onBack={handleBack}
       onClose={handleClose}

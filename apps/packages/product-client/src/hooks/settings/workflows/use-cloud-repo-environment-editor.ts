@@ -1,11 +1,6 @@
 import { useEffect, useMemo } from "react";
 import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 import {
-  useGitHubRepoAuthority,
-  useRepositories,
-  useSaveRepoEnvironment,
-} from "@proliferate/cloud-sdk-react";
-import {
   buildCoreCloudEnvironmentSaveRequest,
   cloudEnvironmentStatusPresentation,
   type CloudEnvironmentStatusPresentation,
@@ -13,7 +8,8 @@ import {
 import {
   useCloudEnvironmentDraft,
   type CloudEnvironmentDraft,
-} from "@proliferate/product-surfaces/settings/cloud-environments/use-cloud-environment-draft";
+} from "#product/hooks/settings/workflows/use-cloud-environment-draft";
+import { useCloudEnvironmentAccess } from "#product/hooks/access/cloud/use-cloud-environment-access";
 import { useCloudRepoBranches } from "#product/hooks/access/cloud/use-cloud-repo-branches";
 import {
   isCloudRepository,
@@ -36,7 +32,7 @@ export interface CloudRepoEnvironmentEditor {
   saving: boolean;
   saveError: string | null;
   repoConfigsLoading: boolean;
-  authority: ReturnType<typeof useGitHubRepoAuthority>;
+  authority: ReturnType<typeof useCloudEnvironmentAccess>["authority"];
   branches: {
     defaultBranch: string | null;
     names: readonly string[];
@@ -68,14 +64,18 @@ export function useCloudRepoEnvironmentEditor({
     capabilities.githubRepositoryAccessStatus === "ready"
     && capabilities.managedCloudStatus === "ready";
   const cloudQueryEnabled = cloudActive && signedIn && operatorReady && cloudRepository !== null;
-  const repoConfigs = useRepositories(cloudQueryEnabled);
-  const authority = useGitHubRepoAuthority(
-    {
+  const {
+    repositoryConfigs: repoConfigs,
+    authority,
+    saveEnvironment,
+  } = useCloudEnvironmentAccess({
+    repositoryConfigsEnabled: cloudQueryEnabled,
+    repository: {
       gitOwner: cloudRepository?.gitOwner,
       gitRepoName: cloudRepository?.gitRepoName,
     },
-    cloudQueryEnabled,
-  );
+    authorityEnabled: cloudQueryEnabled,
+  });
   const branchesQuery = useCloudRepoBranches(
     cloudRepository?.gitOwner ?? "",
     cloudRepository?.gitRepoName ?? "",
@@ -109,7 +109,6 @@ export function useCloudRepoEnvironmentEditor({
     sourceKey: repository.sourceRoot,
     seed,
   });
-  const saveEnvironment = useSaveRepoEnvironment();
   const status = cloudEnvironmentStatusPresentation({
     configured: cloudEnvironment !== null,
     dirty: draft.dirty,

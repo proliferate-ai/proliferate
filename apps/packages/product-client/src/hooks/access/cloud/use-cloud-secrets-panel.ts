@@ -23,7 +23,7 @@ export interface UseCloudSecretsPanelOptions {
  *   const panel = useCloudSecretsPanel({ scope });
  *   return <SecretManagementPanel {...panel} />;
  *
- * Split out of the former `CloudSecretsSettingsSurface` (product-surfaces),
+ * Split out of the former `CloudSecretsSettingsSurface`,
  * which mixed this data wiring with the panel render in one connected
  * component. The 3 real call sites (Organization/Personal/Repo-environment
  * secrets panes) now import the hook and the pattern separately.

@@ -186,7 +186,6 @@ class WarningInkBoundaryTest(unittest.TestCase):
             ), patch.multiple(
                 check_module,
                 PRODUCT_UI_SRC=empty,
-                PRODUCT_SURFACES_SRC=empty,
                 PRODUCT_CLIENT_SRC=empty,
                 DESKTOP_SRC=empty,
                 WEB_SRC=empty,

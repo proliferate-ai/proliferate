@@ -1,15 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CloudGitRepositorySummary } from "@proliferate/cloud-sdk";
-import {
-  useGitHubAppUserAuthorizationStatus,
-  useGitHubAppInstallationStatus,
-  useGitHubAppAccessibleRepos,
-  useStartGitHubAppUserAuthorization,
-  useStartGitHubAppInstallation,
-  useValidateGitHubRepoAuthority,
-  useSaveRepoEnvironment,
-  useValidateCloudRepoBranches,
-} from "@proliferate/cloud-sdk-react";
 import {
   blockedCloudRepositoryBranchReason,
   blockedCloudRepositoryReason,
@@ -20,12 +10,19 @@ import {
   parseGitRepoId,
   type GitRepoIdentity,
 } from "@proliferate/product-domain/repos/repo-id";
-import type { CloudRepoPickerProps } from "@proliferate/product-ui/repos/CloudRepoPicker";
+
+import { useCloudEnvironmentAccess } from "#product/hooks/access/cloud/use-cloud-environment-access";
+import { useGitHubRepositoryPickerAccess } from "#product/hooks/access/cloud/use-github-repository-picker-access";
+import { useDebouncedValue } from "#product/hooks/ui/timing/use-debounced-value";
 import {
   buildGitHubAppPrerequisiteBlocker,
+  cloudEnvironmentAdminRequestCopy,
+  githubSetupReturnSurface,
   mergeRepositories,
+  projectCloudRepoPickerRepositories,
   repoAuthorityMessage,
-} from "./add-cloud-environment-helpers";
+  type CloudRepoPickerModel,
+} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
 
 const REPO_PAGE_LIMIT = 50;
 
@@ -36,7 +33,8 @@ export interface UseAddCloudEnvironmentInput {
   canManageGitHubAppInstallation?: boolean;
   userAuthorizationReturnTo?: string | null;
   installationReturnTo?: string | null;
-  onOpenExternalUrl?: (url: string) => void | Promise<void>;
+  onOpenExternalUrl: (url: string) => void | Promise<void>;
+  onCopyText: (value: string) => void | Promise<void>;
   /**
    * Hand a selected repository to the app-level ordered readiness host. When
    * provided, this hook owns discovery only and does not validate or save.
@@ -45,12 +43,7 @@ export interface UseAddCloudEnvironmentInput {
   onEnvironmentAdded: (repoId: string) => void;
 }
 
-/**
- * Controller hook for the cloud repo picker: GitHub App prerequisites,
- * repo catalog search/paging, and the validate → create sequence. Returns
- * the CloudRepoPicker view model so hosts (AddRepoFlow's cloud step, the
- * standalone CloudRepoPickerDialog) stay presentational.
- */
+/** Picker state and sequencing over the ProductClient Cloud access seams. */
 export function useAddCloudEnvironment({
   enabled,
   organizationId = null,
@@ -58,9 +51,10 @@ export function useAddCloudEnvironment({
   userAuthorizationReturnTo = null,
   installationReturnTo = null,
   onOpenExternalUrl,
+  onCopyText,
   onRepositorySelected,
   onEnvironmentAdded,
-}: UseAddCloudEnvironmentInput): CloudRepoPickerProps {
+}: UseAddCloudEnvironmentInput): CloudRepoPickerModel {
   const [query, setQuery] = useState("");
   const [manualValue, setManualValue] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
@@ -68,26 +62,24 @@ export function useAddCloudEnvironment({
   const [error, setError] = useState<string | null>(null);
   const [addingRepoId, setAddingRepoId] = useState<string | null>(null);
   const debouncedQuery = useDebouncedValue(query.trim(), 250);
-  const userAuthorization = useGitHubAppUserAuthorizationStatus(enabled);
-  const startUserAuthorization = useStartGitHubAppUserAuthorization();
-  const installation = useGitHubAppInstallationStatus(
+  const {
+    userAuthorization,
+    startUserAuthorization,
+    installation,
+    startInstallation,
+    catalog,
+  } = useGitHubRepositoryPickerAccess({
+    enabled,
     organizationId,
-    enabled && organizationId !== null,
-  );
-  const startInstallation = useStartGitHubAppInstallation();
-  const prerequisitesReady = userAuthorization.data?.connected === true
-    && installation.data?.installed === true;
-  const catalog = useGitHubAppAccessibleRepos(
-    {
-      query: debouncedQuery || null,
-      cursor,
-      limit: REPO_PAGE_LIMIT,
-    },
-    enabled && prerequisitesReady,
-  );
-  const validateAuthority = useValidateGitHubRepoAuthority();
-  const validateBranches = useValidateCloudRepoBranches();
-  const saveEnvironment = useSaveRepoEnvironment();
+    query: debouncedQuery || null,
+    cursor,
+    limit: REPO_PAGE_LIMIT,
+  });
+  const {
+    validateAuthority,
+    validateBranches,
+    saveEnvironment,
+  } = useCloudEnvironmentAccess();
 
   useEffect(() => {
     if (!enabled) {
@@ -123,23 +115,15 @@ export function useAddCloudEnvironment({
     }
   }, [catalog.error]);
 
-  async function openExternalUrl(url: string) {
-    if (onOpenExternalUrl) {
-      await onOpenExternalUrl(url);
-      return;
-    }
-    window.location.assign(url);
-  }
-
-  async function authorizeUser() {
+  const authorizeUser = useCallback(async () => {
     setError(null);
     const response = await startUserAuthorization.mutateAsync({
       returnTo: userAuthorizationReturnTo,
     });
-    await openExternalUrl(response.authorizationUrl);
-  }
+    await onOpenExternalUrl(response.authorizationUrl);
+  }, [onOpenExternalUrl, startUserAuthorization, userAuthorizationReturnTo]);
 
-  async function installGitHubApp() {
+  const installGitHubApp = useCallback(async () => {
     if (!organizationId) {
       return;
     }
@@ -150,18 +134,14 @@ export function useAddCloudEnvironment({
         returnTo: installationReturnTo,
       },
     });
-    await openExternalUrl(response.installationUrl);
-  }
+    await onOpenExternalUrl(response.installationUrl);
+  }, [installationReturnTo, onOpenExternalUrl, organizationId, startInstallation]);
 
-  function copyAdminRequest() {
-    const message = [
-      "Please install the Proliferate GitHub App for our organization",
-      "so we can add Cloud environments.",
-    ].join(" ");
-    void navigator.clipboard?.writeText(message);
-  }
+  const copyAdminRequest = useCallback(() => {
+    void onCopyText(cloudEnvironmentAdminRequestCopy());
+  }, [onCopyText]);
 
-  const blocker = buildGitHubAppPrerequisiteBlocker({
+  const blocker = useMemo(() => buildGitHubAppPrerequisiteBlocker({
     organizationId,
     canManageGitHubAppInstallation,
     userAuthorizationLoading: userAuthorization.isLoading,
@@ -182,7 +162,22 @@ export function useAddCloudEnvironment({
       userAuthorizationReturnTo,
       installationReturnTo,
     ),
-  });
+  }), [
+    authorizeUser,
+    canManageGitHubAppInstallation,
+    copyAdminRequest,
+    installation.data?.installed,
+    installation.isLoading,
+    installationReturnTo,
+    installGitHubApp,
+    organizationId,
+    startInstallation.isPending,
+    startUserAuthorization.isPending,
+    userAuthorization.data?.action,
+    userAuthorization.data?.connected,
+    userAuthorization.isLoading,
+    userAuthorizationReturnTo,
+  ]);
 
   const repositoryById = useMemo(() => {
     const byId = new Map<string, CloudGitRepositorySummary>();
@@ -192,30 +187,16 @@ export function useAddCloudEnvironment({
     return byId;
   }, [repositories]);
 
-  async function addCatalogRepository(repoId: string) {
-    const repo = repositoryById.get(repoId);
-    if (!repo) {
-      setError("Repository is no longer available in this list.");
-      return;
-    }
-    await addRepository(repo);
-  }
-
-  async function addManualRepository() {
-    const parsed = parseGitRepoId(manualValue);
-    if (!parsed) {
-      setError("Enter a GitHub repository as owner/repo or a GitHub URL.");
-      return;
-    }
-    await addRepository(parsed);
-  }
-
-  async function addRepository(repo: CloudGitRepositorySummary | GitRepoIdentity) {
+  const addRepository = useCallback(async (
+    repo: CloudGitRepositorySummary | GitRepoIdentity,
+  ) => {
     const repoId = formatGitRepoId(repo);
     setAddingRepoId(repoId);
     setError(null);
     try {
-      const catalogBlockedReason = "repoConfigState" in repo ? blockedCloudRepositoryReason(repo) : null;
+      const catalogBlockedReason = "repoConfigState" in repo
+        ? blockedCloudRepositoryReason(repo)
+        : null;
       if (catalogBlockedReason) {
         throw new Error(catalogBlockedReason);
       }
@@ -261,31 +242,58 @@ export function useAddCloudEnvironment({
     } finally {
       setAddingRepoId(null);
     }
-  }
+  }, [
+    onEnvironmentAdded,
+    onRepositorySelected,
+    saveEnvironment,
+    validateAuthority,
+    validateBranches,
+  ]);
 
-  const loadingRepositories =
-    catalog.isLoading
+  const addCatalogRepository = useCallback(async (repoId: string) => {
+    const repo = repositoryById.get(repoId);
+    if (!repo) {
+      setError("Repository is no longer available in this list.");
+      return;
+    }
+    await addRepository(repo);
+  }, [addRepository, repositoryById]);
+
+  const addManualRepository = useCallback(async () => {
+    const parsed = parseGitRepoId(manualValue);
+    if (!parsed) {
+      setError("Enter a GitHub repository as owner/repo or a GitHub URL.");
+      return;
+    }
+    await addRepository(parsed);
+  }, [addRepository, manualValue]);
+
+  const loadingRepositories = catalog.isLoading
     || (catalog.isFetching && cursor === null && repositories.length === 0);
+  const repositoryModels = useMemo(
+    () => projectCloudRepoPickerRepositories(repositories),
+    [repositories],
+  );
+  const onAddRepository = useCallback((repo: { id: string }) => {
+    void addCatalogRepository(repo.id);
+  }, [addCatalogRepository]);
+  const onAddManual = useCallback(() => {
+    void addManualRepository();
+  }, [addManualRepository]);
+  const onRetry = useCallback(() => {
+    void catalog.refetch();
+  }, [catalog]);
+  const onLoadMore = useCallback(() => {
+    const nextCursor = catalog.data?.nextCursor ?? null;
+    if (nextCursor && !catalog.isFetching) {
+      setCursor(nextCursor);
+    }
+  }, [catalog.data?.nextCursor, catalog.isFetching]);
 
-  return {
+  return useMemo(() => ({
     query,
     manualValue,
-    repositories: repositories.map((repo) => ({
-      id: formatGitRepoId(repo),
-      fullName: repo.fullName,
-      defaultBranch: repo.defaultBranch,
-      private: repo.private,
-      fork: repo.fork,
-      archived: repo.archived,
-      disabled: repo.disabled,
-      permission: repo.permission ?? null,
-      configured: repo.configured,
-      repoConfigState: repo.repoConfigState,
-      ownerAvatarUrl: repo.ownerAvatarUrl,
-      pushedAt: repo.pushedAt,
-      updatedAt: repo.updatedAt,
-      disabledReason: blockedCloudRepositoryReason(repo),
-    })),
+    repositories: repositoryModels,
     blocker,
     error,
     addingRepoId,
@@ -294,39 +302,24 @@ export function useAddCloudEnvironment({
     loadingMore: catalog.isFetching && cursor !== null,
     onQueryChange: setQuery,
     onManualValueChange: setManualValue,
-    onAddRepository: (repo) => {
-      void addCatalogRepository(repo.id);
-    },
-    onAddManual: () => {
-      void addManualRepository();
-    },
-    onRetry: () => {
-      void catalog.refetch();
-    },
-    onLoadMore: () => {
-      const nextCursor = catalog.data?.nextCursor ?? null;
-      if (nextCursor && !catalog.isFetching) {
-        setCursor(nextCursor);
-      }
-    },
-  };
-}
-
-function githubSetupReturnSurface(
-  userAuthorizationReturnTo: string | null,
-  installationReturnTo: string | null,
-): "desktop" | "web" {
-  const returnTargets = [userAuthorizationReturnTo, installationReturnTo].filter(Boolean);
-  return returnTargets.some((target) => target?.startsWith("proliferate"))
-    ? "desktop"
-    : "web";
-}
-
-function useDebouncedValue(value: string, delayMs: number): string {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(timeoutId);
-  }, [delayMs, value]);
-  return debounced;
+    onAddRepository,
+    onAddManual,
+    onRetry,
+    onLoadMore,
+  }), [
+    addingRepoId,
+    blocker,
+    catalog.data?.nextCursor,
+    catalog.isFetching,
+    cursor,
+    error,
+    loadingRepositories,
+    manualValue,
+    onAddManual,
+    onAddRepository,
+    onLoadMore,
+    onRetry,
+    query,
+    repositoryModels,
+  ]);
 }

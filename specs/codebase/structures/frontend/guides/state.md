@@ -97,7 +97,7 @@ other external systems.
 hooks/access/<system>/**       # app-owned query/mutation hooks
 @anyharness/sdk-react          # generic AnyHarness query/mutation hooks
 @proliferate/cloud-sdk-react   # generic Cloud query/mutation hooks
-product-surfaces               # shared Desktop/Web Cloud surfaces
+product-client/hooks/access    # shared connected Desktop/Web resource access
 ```
 
 - Do not copy refetchable server/runtime data into Zustand as a cache.

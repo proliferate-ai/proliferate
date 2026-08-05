@@ -24,15 +24,38 @@ const cloud = vi.hoisted(() => ({
   useHistory: vi.fn(),
 }));
 
-vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useWorkflowRunEligibility: cloud.useEligibility,
-  useWorkflowRunHistory: cloud.useHistory,
-  useWorkflowRun: cloud.useRun,
-  useWorkflowRunActions: () => ({
-    putWorkflowInvocation: cloud.put,
-    deliverWorkflowInvocation: cloud.deliver,
-    cancelWorkflowInvocation: cloud.cancel,
-    checkWorkflowInvocation: cloud.check,
+vi.mock("#product/hooks/access/cloud/workflows/use-workflow-run-access", () => ({
+  useWorkflowRunLaunchAccess: (
+    workflowDefinitionId: string,
+    definitionRevision: number,
+    authCacheScope: string,
+  ) => ({
+    eligibility: cloud.useEligibility(
+      workflowDefinitionId,
+      definitionRevision,
+      authCacheScope,
+    ),
+    history: cloud.useHistory(workflowDefinitionId, authCacheScope),
+    actions: {
+      putWorkflowInvocation: cloud.put,
+      deliverWorkflowInvocation: cloud.deliver,
+      cancelWorkflowInvocation: cloud.cancel,
+      checkWorkflowInvocation: cloud.check,
+    },
+  }),
+  useWorkflowRunDetailAccess: (
+    workflowDefinitionId: string,
+    runId: string,
+    authCacheScope: string,
+    enabled: boolean,
+  ) => ({
+    query: cloud.useRun(workflowDefinitionId, runId, authCacheScope, enabled),
+    actions: {
+      putWorkflowInvocation: cloud.put,
+      deliverWorkflowInvocation: cloud.deliver,
+      cancelWorkflowInvocation: cloud.cancel,
+      checkWorkflowInvocation: cloud.check,
+    },
   }),
 }));
 

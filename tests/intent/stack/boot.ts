@@ -167,7 +167,6 @@ function ensureFrontendBuilt(): void {
     { filter: "@proliferate/product-client", path: "apps/packages/product-client" },
     { filter: "@proliferate/ui", path: "apps/packages/ui" },
     { filter: "@proliferate/product-ui", path: "apps/packages/product-ui" },
-    { filter: "@proliferate/product-surfaces", path: "apps/packages/product-surfaces" },
   ];
   for (const pkg of packages) {
     if (pathHasDist(pkg.path)) {

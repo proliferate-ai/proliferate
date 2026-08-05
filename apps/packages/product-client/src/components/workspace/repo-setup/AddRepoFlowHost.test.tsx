@@ -2,7 +2,6 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, act, waitFor } from "@testing-library/react";
-import type { CloudRepoPickerProps } from "@proliferate/product-ui/repos/CloudRepoPicker";
 import type {
   AddRepoFlowOption,
   AddRepoFlowProps,
@@ -12,6 +11,7 @@ import type {
   DirectoryPickerResult,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost";
+import type { CloudRepoPickerModel } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 
@@ -32,7 +32,7 @@ const auth = vi.hoisted(() => ({ status: "authenticated" as string }));
 const cloudHook = vi.hoisted(() => ({
   onRepositorySelected: null as null | ((repo: { gitOwner: string; gitRepoName: string }) => void),
   legacyManual: vi.fn(),
-  clonePicker: null as CloudRepoPickerProps | null,
+  clonePicker: null as CloudRepoPickerModel | null,
 }));
 const productHost = vi.hoisted(() => ({
   desktop: null as DesktopBridge | null,
@@ -62,10 +62,11 @@ vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({
   useProductAuthStatus: () => auth.status,
 }));
 
-vi.mock("@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud-environment", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-add-cloud-environment", () => ({
   useAddCloudEnvironment: (input: {
     onRepositorySelected?: (repo: { gitOwner: string; gitRepoName: string }) => void;
-  }): CloudRepoPickerProps => {
+    onCopyText: (value: string) => void | Promise<void>;
+  }): CloudRepoPickerModel => {
     if (input.onRepositorySelected) {
       cloudHook.onRepositorySelected = input.onRepositorySelected;
     }
@@ -110,6 +111,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
     desktop: productHost.desktop,
     links: { buildReturnUrl: () => "https://app.test/return", openExternal: vi.fn() },
+    clipboard: { writeText: vi.fn(async () => undefined) },
   }),
 }));
 

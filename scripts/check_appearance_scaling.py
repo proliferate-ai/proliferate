@@ -56,7 +56,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTION_ROOTS = (
     REPO_ROOT / "apps" / "packages" / "ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
-    REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src",
     REPO_ROOT / "apps" / "packages" / "product-client" / "src",
     REPO_ROOT / "apps" / "desktop" / "src",
 )
