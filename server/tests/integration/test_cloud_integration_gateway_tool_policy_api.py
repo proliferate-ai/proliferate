@@ -18,7 +18,7 @@ from proliferate.server.cloud.integration_gateway.domain.tool_policy import (
     SLACK_MUTATING_TOOL_NAMES,
 )
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
-from proliferate.utils.crypto import encrypt_json
+from proliferate.lib.infra.encryption.json import encrypt_json
 from tests.integration.test_cloud_integration_gateway_api import (
     GATEWAY_URL,
     _authed_user,

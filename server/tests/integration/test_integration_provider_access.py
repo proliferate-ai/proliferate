@@ -24,7 +24,7 @@ from proliferate.server.cloud.integrations.config import (
 )
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
 from proliferate.config import settings
-from proliferate.utils.crypto import decrypt_json, encrypt_json
+from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
 
 SLACK_SCOPES = (
     "search:read.public",

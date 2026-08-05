@@ -47,7 +47,7 @@ from proliferate.server.cloud.materialization.materialize.sandbox import (  # no
     materialize_sandbox,
 )
 from proliferate.config import settings  # noqa: E402
-from proliferate.utils.crypto import decrypt_text  # noqa: E402
+from proliferate.lib.infra.encryption.fernet import decrypt_text  # noqa: E402
 
 
 async def main(email: str, poll_timeout_seconds: int) -> dict:

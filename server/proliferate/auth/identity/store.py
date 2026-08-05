@@ -27,7 +27,7 @@ from proliferate.db.models.auth import (
     ProviderGrant,
     User,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 
 
 @dataclass(frozen=True)

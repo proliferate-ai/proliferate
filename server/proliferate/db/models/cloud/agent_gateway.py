@@ -64,7 +64,7 @@ class AgentApiKey(Base):
     # 'api_key' (default): value_ciphertext decrypts to one opaque secret
     # string. 'aws_bedrock' | 'azure_openai': value_ciphertext decrypts to a
     # JSON document (region+credentials / endpoint+deployment+key) — see
-    # proliferate.utils.crypto.{encrypt_json,decrypt_json}.
+    # proliferate.lib.infra.encryption.json.{encrypt_json,decrypt_json}.
     kind: Mapped[str] = mapped_column(
         Text,
         default="api_key",

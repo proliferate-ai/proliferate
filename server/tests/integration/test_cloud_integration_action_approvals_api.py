@@ -33,7 +33,7 @@ from proliferate.server.cloud.integrations.action_approvals.domain.actions impor
 from proliferate.server.cloud.integrations.action_approvals.transactions import (
     consume_action_for_execution_committed,
 )
-from proliferate.utils.crypto import encrypt_json
+from proliferate.lib.infra.encryption.json import encrypt_json
 from tests.integration.test_cloud_integration_gateway_api import (
     GATEWAY_URL,
     _authed_user,

@@ -57,8 +57,9 @@ ignore = ["B008"]
 "proliferate/integrations/**" = ["ANN401"]
 # runtime/ operates on untyped E2B sandbox objects
 "proliferate/server/cloud/runtime/**" = ["ANN401"]
-# utils/ contains generic helpers where Any is unavoidable at public boundaries
-"proliferate/utils/**" = ["ANN401"]
+# Recursive JSON encryption and telemetry scrubbing require Any at their data boundaries.
+"proliferate/lib/infra/encryption/json.py" = ["ANN401"]
+"proliferate/utils/telemetry_scrub.py" = ["ANN401"]
 # Inline HTML/SVG page renderers contain long literal lines.
 "proliferate/auth/desktop/pages.py" = ["E501"]
 "proliferate/utils/redirect_callback_pages.py" = ["E501"]
@@ -82,11 +83,12 @@ warn_return_any = false
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-# cloud/runtime operates on untyped E2B sandbox objects; utils contains generic
-# helpers (JSON crypto, telemetry scrubbing, time) where Any is unavoidable.
+# cloud/runtime operates on untyped E2B sandbox objects; recursive JSON encryption
+# and telemetry scrubbing require Any at their data boundaries.
 module = [
     "proliferate.server.cloud.runtime.*",
-    "proliferate.utils.*",
+    "proliferate.lib.infra.encryption.json",
+    "proliferate.utils.telemetry_scrub",
 ]
 disallow_any_explicit = false
 warn_return_any = false

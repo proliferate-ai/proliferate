@@ -22,7 +22,7 @@ from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.models.auth import AuthIdentity, ProviderGrant, User
 from proliferate.integrations.github import GitHubUserProfile
-from proliferate.utils.crypto import encrypt_text
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 from tests.helpers.desktop_auth import make_pkce_pair as _make_pkce_pair
 from tests.integration.cloud_api_helpers import configure_github_app
 

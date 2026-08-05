@@ -33,6 +33,7 @@ from proliferate.integrations.sandbox import (
     SandboxRuntimeContext,
     get_sandbox_provider,
 )
+from proliferate.lib.infra.encryption.fernet import decrypt_text
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
@@ -57,7 +58,6 @@ from proliferate.server.cloud.runtime_workers.models import (
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 from proliferate.server.version import runtime_version_pin as pinned_runtime_version
 from proliferate.server.version import worker_version_pin as pinned_worker_version
-from proliferate.utils.crypto import decrypt_text
 from proliferate.utils.time import utcnow
 
 _TOKEN_BYTES = 48

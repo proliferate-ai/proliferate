@@ -20,7 +20,7 @@ from proliferate.server.cloud.integrations.oauth import clients as oauth_clients
 from proliferate.server.cloud.integrations.oauth import service as oauth_service
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
 from proliferate.config import settings
-from proliferate.utils.crypto import decrypt_json
+from proliferate.lib.infra.encryption.json import decrypt_json
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.e2e.cloud.helpers.shared import AuthSession

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.identity.store import get_account_readiness
 from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, SsoIdentity, User
 from proliferate.config import settings
-from proliferate.utils.crypto import encrypt_text
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 

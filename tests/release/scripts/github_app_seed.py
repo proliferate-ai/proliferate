@@ -97,7 +97,7 @@ from proliferate.server.cloud.github_app.service import (  # noqa: E402
 from proliferate.server.cloud.materialization.materialize.sandbox import (  # noqa: E402
     materialize_sandbox,
 )
-from proliferate.utils.crypto import decrypt_text  # noqa: E402
+from proliferate.lib.infra.encryption.fernet import decrypt_text  # noqa: E402
 from proliferate.utils.time import utcnow  # noqa: E402
 
 _DEFAULT_STATE_PATH = (

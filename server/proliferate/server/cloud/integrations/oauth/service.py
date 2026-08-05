@@ -54,6 +54,8 @@ from proliferate.integrations.integration_oauth import (
     normalize_resource_url,
     random_urlsafe,
 )
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.lib.infra.encryption.json import encrypt_json
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import parse_definition_config, render_mcp_url
 from proliferate.server.cloud.integrations.oauth.clients import resolve_oauth_client
@@ -64,7 +66,6 @@ from proliferate.server.cloud.integrations.oauth.scope_policy import (
 from proliferate.server.cloud.integrations.oauth.scope_policy import (
     resolve_requested_oauth_scope as resolve_scope_policy,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
 
 # Callback path appended to the API base URL for the shared OAuth callback.
 OAUTH_CALLBACK_PATH = "/v1/cloud/integrations/oauth/callback"

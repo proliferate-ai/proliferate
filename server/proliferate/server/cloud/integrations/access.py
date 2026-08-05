@@ -6,7 +6,7 @@ the provider's MCP endpoint, refreshing an OAuth access token in place when it
 is missing or about to expire. :func:`resolve_launch` additionally renders the
 endpoint URL so callers get a launch-ready ``(url, headers, query)`` triple.
 
-Credential bundles (see ``proliferate.utils.crypto``):
+Credential bundles (see ``proliferate.lib.infra.encryption.json``):
   - ``secret-fields-v1`` -> ``{"secretFields": {"<id>": "<value>", ...}}``
   - ``oauth-bundle-v1``  -> ``{issuer, resource, clientId, accessToken,
     refreshToken, expiresAt, scopes, tokenEndpoint, redirectUri}``
@@ -27,6 +27,8 @@ from proliferate.db import session_ops
 from proliferate.db.store.integrations.accounts import set_account_credentials
 from proliferate.db.store.integrations.oauth_clients import get_oauth_client
 from proliferate.integrations.integration_oauth.tokens import refresh_token
+from proliferate.lib.infra.encryption.fernet import decrypt_text
+from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import (
     HeaderTemplate,
@@ -41,7 +43,6 @@ from proliferate.server.cloud.integrations.oauth.scope_policy import (
     resolve_refreshed_oauth_scopes,
     validate_stored_oauth_scopes,
 )
-from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json
 from proliferate.utils.time import utcnow
 
 if TYPE_CHECKING:

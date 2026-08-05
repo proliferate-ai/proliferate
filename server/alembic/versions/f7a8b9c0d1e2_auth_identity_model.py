@@ -17,7 +17,7 @@ import sqlalchemy as sa
 
 from alembic import op
 from proliferate.config import settings
-from proliferate.utils.crypto import encrypt_text
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 
 # revision identifiers, used by Alembic.
 revision: str = "f7a8b9c0d1e2"
