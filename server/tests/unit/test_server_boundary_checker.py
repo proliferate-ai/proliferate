@@ -4,6 +4,8 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import pytest
+
 
 def _load_checker_module():
     script_path = Path(__file__).resolve().parents[3] / "scripts" / "check_server_boundaries.py"
@@ -148,6 +150,36 @@ def test_worker_service_still_rejects_queries_engines_models_and_session_methods
     assert sum(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations) == 3
 
 
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "scalar",
+        "scalars",
+        "stream",
+        "stream_scalars",
+        "get",
+        "get_one",
+        "add_all",
+        "merge",
+        "flush",
+        "connection",
+        "run_sync",
+    ],
+)
+def test_worker_service_rejects_direct_session_escape_methods(
+    tmp_path: Path,
+    method_name: str,
+) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "worker" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(f"async def run(db) -> None:\n    db.{method_name}(value)\n")
+
+    violations = module.check_paths([path])
+
+    assert any(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations)
+
+
 def test_canonical_single_file_worker_service_folder_is_allowed(tmp_path: Path) -> None:
     module = _load_checker_module()
     root = _configure_structure_root(module, tmp_path)
@@ -159,6 +191,33 @@ def test_canonical_single_file_worker_service_folder_is_allowed(tmp_path: Path) 
     violations = module.check_structure(tmp_path)
 
     assert not any(item.path == worker for item in violations)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        Path("worker/service.py"),
+        Path("example/subdomain/worker/service.py"),
+    ],
+)
+def test_worker_service_exemption_requires_exact_domain_depth(
+    tmp_path: Path,
+    relative_path: Path,
+) -> None:
+    module = _load_checker_module()
+    root = _configure_structure_root(module, tmp_path)
+    path = root / relative_path
+    path.parent.mkdir(parents=True)
+    path.write_text("from sqlalchemy.ext.asyncio import async_sessionmaker\n")
+
+    path_violations = module.check_paths([path])
+    structure_violations = module.check_structure(tmp_path)
+
+    assert any(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in path_violations)
+    assert any(
+        item.rule_id == "SINGLE_FILE_FOLDER" and item.path == path.parent
+        for item in structure_violations
+    )
 
 
 def test_noncanonical_worker_and_arbitrary_single_file_folders_remain_rejected(
