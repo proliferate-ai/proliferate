@@ -14,7 +14,7 @@ from jose import JWTError, jwt
 
 from proliferate.auth.identity import providers
 from proliferate.auth.identity.service import hash_secret
-from proliferate.auth.sso.policy import oidc_discovery_url
+from proliferate.auth.sso.policy import SsoPolicyError, oidc_discovery_url
 from proliferate.auth.sso.types import SsoConnectionSnapshot, VerifiedSsoIdentity
 from proliferate.config import settings
 from proliferate.integrations.sso.errors import SsoIntegrationError
@@ -70,7 +70,10 @@ async def resolve_oidc_metadata(connection: SsoConnectionSnapshot) -> OidcMetada
     source_url = connection.oidc_discovery_url or connection.oidc_issuer_url
     if not source_url:
         raise SsoIntegrationError("OIDC issuer or discovery URL is required.")
-    discovery_url = oidc_discovery_url(source_url)
+    try:
+        discovery_url = oidc_discovery_url(source_url)
+    except SsoPolicyError as exc:
+        raise SsoIntegrationError(exc.message) from exc
     await _validate_oidc_url(discovery_url, "discovery_url")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

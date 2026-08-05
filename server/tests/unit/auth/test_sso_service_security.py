@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.sso import service as sso_service
 from proliferate.auth.sso import user_resolution as sso_user_resolution
 from proliferate.auth.sso.types import (
@@ -167,9 +167,11 @@ async def test_resolve_sso_user_rechecks_org_membership_for_existing_identity(
     )
 
     if not has_pending_invitation:
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AuthFlowError) as exc_info:
             await resolution
+        assert exc_info.value.code == "sso_user_not_team_member"
         assert exc_info.value.status_code == 403
+        assert exc_info.value.message == "SSO user is not a team member."
         attach_identity.assert_not_awaited()
         return
 
@@ -280,7 +282,7 @@ async def test_resolve_sso_user_rejects_unlinked_deployment_user_when_jit_disabl
     monkeypatch.setattr(sso_user_resolution, "get_user_by_email", fake_get_user_by_email)
     monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(AuthFlowError) as exc_info:
         await sso_service.resolve_sso_user(
             cast(AsyncSession, object()),
             connection=replace(
@@ -297,7 +299,9 @@ async def test_resolve_sso_user_rejects_unlinked_deployment_user_when_jit_disabl
             ),
         )
 
+    assert exc_info.value.code == "sso_jit_disabled"
     assert exc_info.value.status_code == 403
+    assert exc_info.value.message == "SSO user provisioning is disabled."
     assert attach_called is False
 
 

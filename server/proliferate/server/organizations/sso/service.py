@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.sso.policy import normalize_domains
 from proliferate.auth.sso.service import (
@@ -143,13 +144,13 @@ async def test_organization_sso_connection(
         raise NotFoundError("SSO connection not found.", code="sso_connection_not_found")
     try:
         discovered = await test_oidc_connection(db, connection=snapshot)
-    except HTTPException as exc:
+    except AuthFlowError as exc:
         updated = await sso_store.mark_sso_connection_test_result(
             db,
             connection_id=connection_id,
             organization_id=organization_id,
             success=False,
-            error=str(exc.detail),
+            error=exc.message,
             discovered=None,
             actor_user_id=actor_user_id,
         )

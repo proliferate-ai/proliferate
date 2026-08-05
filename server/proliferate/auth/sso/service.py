@@ -7,9 +7,10 @@ from datetime import UTC, datetime, timedelta
 from typing import NoReturn
 from uuid import UUID
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity import providers
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.identity.service import (
@@ -200,9 +201,13 @@ async def start_sso_auth(
     user: User | None,
 ) -> SsoStart:
     if surface not in {"web", "mobile", "desktop"}:
-        raise HTTPException(status_code=404, detail="Unknown auth surface.")
+        raise AuthFlowError("sso_surface_unknown", "Unknown auth surface.", status_code=404)
     if code_challenge_method not in SUPPORTED_CODE_CHALLENGE_METHODS:
-        raise HTTPException(status_code=400, detail="Unsupported code challenge method.")
+        raise AuthFlowError(
+            "sso_code_challenge_method_unsupported",
+            "Unsupported code challenge method.",
+            status_code=400,
+        )
     validate_redirect_uri(surface, redirect_uri)
     connection = await _connection_for_start(
         db,
@@ -212,9 +217,17 @@ async def start_sso_auth(
         require_enabled=True,
     )
     if connection is None:
-        raise HTTPException(status_code=404, detail="SSO is not configured for this account.")
+        raise AuthFlowError(
+            "sso_not_configured",
+            "SSO is not configured for this account.",
+            status_code=404,
+        )
     if connection.protocol != SsoProtocol.OIDC:
-        raise HTTPException(status_code=400, detail="Only OIDC SSO is currently supported.")
+        raise AuthFlowError(
+            "sso_protocol_unsupported",
+            "Only OIDC SSO is currently supported.",
+            status_code=400,
+        )
     _require_oidc_configured(connection)
     try:
         metadata = await resolve_oidc_metadata(connection)
@@ -282,7 +295,11 @@ async def complete_oidc_sso_callback(
     challenge = await _consume_challenge(db, state=state)
     connection = await _connection_for_challenge(db, challenge)
     if connection.protocol != SsoProtocol.OIDC:
-        raise HTTPException(status_code=400, detail="SSO callback protocol mismatch.")
+        raise AuthFlowError(
+            "sso_protocol_mismatch",
+            "SSO callback protocol mismatch.",
+            status_code=400,
+        )
     try:
         metadata = await resolve_oidc_metadata(connection)
         token = await exchange_oidc_code(
@@ -322,7 +339,11 @@ async def test_oidc_connection(
     connection: SsoConnectionSnapshot,
 ) -> dict[str, str | None]:
     if connection.protocol != SsoProtocol.OIDC:
-        raise HTTPException(status_code=400, detail="Only OIDC connection tests are supported.")
+        raise AuthFlowError(
+            "sso_connection_test_protocol_unsupported",
+            "Only OIDC connection tests are supported.",
+            status_code=400,
+        )
     _require_oidc_configured(connection)
     try:
         metadata = await resolve_oidc_metadata(connection)
@@ -366,9 +387,17 @@ async def _connection_for_start(
     if connection is None:
         return None
     if require_enabled and connection.status != SsoStatus.ENABLED:
-        raise HTTPException(status_code=403, detail="SSO connection is not enabled.")
+        raise AuthFlowError(
+            "sso_connection_disabled",
+            "SSO connection is not enabled.",
+            status_code=403,
+        )
     if email and not _email_hint_allowed_for_discovery(email, connection.allowed_domains):
-        raise HTTPException(status_code=403, detail="Email domain is not allowed for this SSO.")
+        raise AuthFlowError(
+            "sso_email_domain_not_allowed",
+            "Email domain is not allowed for this SSO.",
+            status_code=403,
+        )
     return connection
 
 
@@ -380,15 +409,31 @@ async def _connection_for_challenge(
         connection = deployment_sso_connection()
     else:
         if challenge.connection_id is None:
-            raise HTTPException(status_code=400, detail="SSO challenge is missing connection.")
+            raise AuthFlowError(
+                "sso_challenge_connection_missing",
+                "SSO challenge is missing connection.",
+                status_code=400,
+            )
         record = await sso_store.get_sso_connection(db, connection_id=challenge.connection_id)
         connection = snapshot_from_sso_connection_record(record) if record is not None else None
     if connection is None:
-        raise HTTPException(status_code=400, detail="SSO connection is no longer available.")
+        raise AuthFlowError(
+            "sso_connection_unavailable",
+            "SSO connection is no longer available.",
+            status_code=400,
+        )
     if connection.status != SsoStatus.ENABLED:
-        raise HTTPException(status_code=403, detail="SSO connection is not enabled.")
+        raise AuthFlowError(
+            "sso_connection_disabled",
+            "SSO connection is not enabled.",
+            status_code=403,
+        )
     if connection.connection_key != challenge.connection_key:
-        raise HTTPException(status_code=400, detail="SSO callback state mismatch.")
+        raise AuthFlowError(
+            "sso_state_mismatch",
+            "SSO callback state mismatch.",
+            status_code=400,
+        )
     return connection
 
 
@@ -399,7 +444,11 @@ async def _consume_challenge(
 ) -> sso_store.SsoChallengeRecord:
     challenge = await sso_store.consume_sso_challenge(db, state_hash=hash_secret(state))
     if challenge is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired SSO state.")
+        raise AuthFlowError(
+            "sso_state_invalid",
+            "Invalid or expired SSO state.",
+            status_code=400,
+        )
     return challenge
 
 
@@ -452,7 +501,11 @@ def _require_oidc_configured(
 ) -> None:
     error = oidc_configuration_error(connection, require_secret=require_secret)
     if error is not None:
-        raise HTTPException(status_code=400, detail=OIDC_CONFIG_ERROR_MESSAGES[error])
+        raise AuthFlowError(
+            f"sso_{error}",
+            OIDC_CONFIG_ERROR_MESSAGES[error],
+            status_code=400,
+        )
 
 
 def _email_hint_allowed_for_discovery(email: str, allowed_domains: tuple[str, ...]) -> bool:
@@ -462,7 +515,11 @@ def _email_hint_allowed_for_discovery(email: str, allowed_domains: tuple[str, ..
 
 
 def _raise_sso_integration_error(exc: SsoIntegrationError) -> NoReturn:
-    raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    raise AuthFlowError(
+        "sso_integration_failure",
+        exc.detail,
+        status_code=exc.status_code,
+    ) from exc
 
 
 def oidc_callback_url(request: Request) -> str:

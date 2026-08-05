@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from fastapi import HTTPException
-
 from proliferate.auth.sso.types import SsoConnectionSnapshot
 
 # Stable machine reasons for an incomplete OIDC connection, mapped to the human
@@ -18,6 +16,13 @@ OIDC_CONFIG_ERROR_MESSAGES: dict[str, str] = {
     "oidc_client_secret_missing": "OIDC client secret is required.",
     "oidc_endpoints_missing": "OIDC issuer or discovery URL is required.",
 }
+
+
+class SsoPolicyError(ValueError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
 
 
 def oidc_configuration_error(
@@ -86,16 +91,25 @@ def email_domain_allowed(email: str | None, allowed_domains: tuple[str, ...]) ->
 
 def require_email_domain_allowed(email: str | None, allowed_domains: tuple[str, ...]) -> None:
     if not email_domain_allowed(email, allowed_domains):
-        raise HTTPException(status_code=403, detail="Email domain is not allowed for this SSO.")
+        raise SsoPolicyError(
+            "sso_email_domain_not_allowed",
+            "Email domain is not allowed for this SSO.",
+        )
 
 
 def oidc_discovery_url(issuer_or_discovery_url: str) -> str:
     value = issuer_or_discovery_url.strip().rstrip("/")
     if not value:
-        raise HTTPException(status_code=400, detail="OIDC issuer URL is required.")
+        raise SsoPolicyError(
+            "sso_oidc_issuer_url_required",
+            "OIDC issuer URL is required.",
+        )
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise HTTPException(status_code=400, detail="OIDC issuer URL is invalid.")
+        raise SsoPolicyError(
+            "sso_oidc_issuer_url_invalid",
+            "OIDC issuer URL is invalid.",
+        )
     if value.endswith("/.well-known/openid-configuration"):
         return value
     return f"{value}/.well-known/openid-configuration"
