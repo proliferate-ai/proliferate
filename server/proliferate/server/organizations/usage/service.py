@@ -12,6 +12,7 @@ from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import billing as billing_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.errors import InvalidRequest
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.budget_limits import (
     BUDGET_LIMIT_KINDS,
     BUDGET_LIMIT_WINDOWS,
@@ -30,7 +31,6 @@ from proliferate.server.organizations.usage.transactions import (
     budget_limit_from_row,
     commit_replaced_limits,
 )
-from proliferate.utils.time import utcnow
 
 
 async def _org_billing_subject_id(db: AsyncSession, organization_id: UUID) -> UUID:

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.cloud.workspace_materializations import (
     CloudWorkspaceMaterialization,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 MaterializationTargetKind = Literal["managed_cloud", "local_desktop"]
 MaterializationState = Literal[

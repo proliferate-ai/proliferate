@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import GitProvider, RepoEnvironmentKind
 from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)

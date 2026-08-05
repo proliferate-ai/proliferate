@@ -53,7 +53,7 @@ from proliferate.db.store.organization_records import (
     membership_record,
     organization_record,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 _SLUG_ALLOWED = re.compile(r"[^a-z0-9]+")
 _SLUG_TRIM_CHAR = "-"

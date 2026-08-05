@@ -43,13 +43,13 @@ from proliferate.db.store.agent_gateway import usage as llm_usage_store
 from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMSpendLogEntry
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
 from proliferate.server.cloud.agent_gateway.topups import (
     reactivate_enrollment_if_credited,
     topups_enabled,
 )
-from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
 

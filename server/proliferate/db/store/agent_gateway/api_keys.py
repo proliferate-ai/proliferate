@@ -20,7 +20,7 @@ from proliferate.db.store.agent_gateway.mappers import api_key_record
 from proliferate.db.store.agent_gateway.records import AgentApiKeyRecord
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 def build_redacted_hint(value: str) -> str:

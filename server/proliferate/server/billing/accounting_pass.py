@@ -16,10 +16,10 @@ from proliferate.db.store.billing_accounting import (
     over_cap_receipt_is_current,
 )
 from proliferate.db.store.billing_runtime_usage import record_billing_decision_event
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing import accounting as billing_accounting_service
 from proliferate.server.billing import snapshot_state
 from proliferate.server.billing import snapshots as billing_snapshots
-from proliferate.server.billing.models import utcnow
 
 
 def _accounting_receipt_reason(*, exported_any: bool) -> str:

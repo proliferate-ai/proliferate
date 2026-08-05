@@ -27,7 +27,7 @@ from proliferate.db.models.organizations import OrganizationInvitation, Organiza
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store.auth_passwords import update_user_password_hash
 from proliferate.server.organizations.membership_policy import claim_instance_organization
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 # Real-shaped domains: the invitation API validates emails strictly (EmailStr)
 # and rejects reserved TLDs like .test.

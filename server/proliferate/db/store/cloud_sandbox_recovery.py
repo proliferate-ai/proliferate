@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 # Session-scoped singleton for one provider-account orphan-reap pass. This is
 # deliberately distinct from the billing reconciler lock so the two external-

@@ -20,6 +20,7 @@ from proliferate.db.store import workflow_managed_execution as managed_execution
 from proliferate.db.store import workflow_managed_history as managed_history_store
 from proliferate.db.store.background_outbox import enqueue_outbox_task
 from proliferate.db.store.workflow_invocations import WorkflowInvocationSnapshot
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.workflows.domain.managed_execution import (
     FreshnessBasis,
     derive_freshness,
@@ -30,7 +31,6 @@ from proliferate.server.workflows.errors import (
     WorkflowManagedRunsUnavailable,
     WorkflowTargetLost,
 )
-from proliferate.utils.time import utcnow
 
 
 @dataclass(frozen=True)

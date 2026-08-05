@@ -9,8 +9,8 @@ from proliferate.db.store.analytics import (
     upsert_client_daily_activity,
 )
 from proliferate.errors import InvalidRequest
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.analytics.models import ClientDailyActivityRequest
-from proliferate.utils.time import utcnow
 
 
 async def record_client_daily_activity(

@@ -61,10 +61,6 @@ class GrantAllocation:
     active: bool
 
 
-def utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
 def coerce_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None

@@ -22,6 +22,7 @@ from proliferate.integrations.sandbox import (
     SandboxProviderTargetUnavailableError,
     SandboxProviderUnavailableError,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.locks import (
@@ -36,7 +37,6 @@ from proliferate.server.cloud.materialization.materialize.repo_environment impor
 from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
 )
-from proliferate.utils.time import utcnow
 
 
 @dataclass(frozen=True)

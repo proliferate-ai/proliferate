@@ -32,7 +32,7 @@ from proliferate.db.store.agent_gateway.records import (
     LlmCreditBalanceRecord,
     LlmCreditGrantRecord,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 _ZERO = Decimal("0")
 

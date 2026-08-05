@@ -49,6 +49,7 @@ from proliferate.integrations.sandbox import (
     get_configured_sandbox_provider,
 )
 from proliferate.integrations.sentry import report_critical
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.billing.models import BillingSnapshot
@@ -64,7 +65,6 @@ from proliferate.server.cloud.materialization import locks
 from proliferate.server.cloud.materialization.failures import (
     PROVIDER_SANDBOX_MISSING_RECEIPT,
 )
-from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.billing.reconciler")
 

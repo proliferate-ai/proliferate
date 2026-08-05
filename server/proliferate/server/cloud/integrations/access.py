@@ -29,6 +29,7 @@ from proliferate.db.store.integrations.oauth_clients import get_oauth_client
 from proliferate.integrations.integration_oauth.tokens import refresh_token
 from proliferate.lib.infra.encryption.fernet import decrypt_text
 from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import (
     HeaderTemplate,
@@ -43,7 +44,6 @@ from proliferate.server.cloud.integrations.oauth.scope_policy import (
     resolve_refreshed_oauth_scopes,
     validate_stored_oauth_scopes,
 )
-from proliferate.utils.time import utcnow
 
 if TYPE_CHECKING:
     from proliferate.db.store.integrations.accounts import IntegrationAccountRecord

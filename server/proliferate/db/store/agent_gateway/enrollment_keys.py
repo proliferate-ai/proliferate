@@ -19,7 +19,7 @@ from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollmentKey
 from proliferate.db.store.agent_gateway.mappers import enrollment_key_record
 from proliferate.db.store.agent_gateway.records import AgentGatewayEnrollmentKeyRecord
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def list_active_enrollment_keys(

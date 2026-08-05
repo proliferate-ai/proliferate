@@ -12,6 +12,7 @@ from proliferate.db.store import cloud_repo_environment_materializations as repo
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store.repositories import RepoEnvironmentValue
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import manifests, operation, paths, sandbox_io
@@ -23,7 +24,6 @@ from proliferate.server.cloud.materialization.materialize import (
 from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
 )
-from proliferate.utils.time import utcnow
 
 # Exit codes emitted by the git-checkout script below. Kept in sync with the
 # literal `exit N` statements in `_materialize_git_checkout`. These map to

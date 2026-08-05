@@ -26,6 +26,7 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
 )
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.authorization import assert_cloud_sandbox_resume_allowed
 from proliferate.server.billing.runtime_usage import (
     converge_cloud_sandbox_provider_usage,
@@ -53,7 +54,6 @@ from proliferate.server.cloud.runtime.liveness_health import (
     verify_runtime_auth_enforced,
     wait_for_runtime_health,
 )
-from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.cloud.materialization.connect")
 

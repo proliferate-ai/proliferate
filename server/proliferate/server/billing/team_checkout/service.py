@@ -28,10 +28,10 @@ from proliferate.db.store.organizations import (
     get_current_team_checkout_intent,
 )
 from proliferate.integrations import stripe as stripe_billing
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.errors import BillingServiceError
 from proliferate.server.billing.models import (
     BillingReturnSurface,
-    utcnow,
 )
 from proliferate.server.billing.pricing import (
     configured_managed_cloud_overage_price_id,

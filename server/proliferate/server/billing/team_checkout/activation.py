@@ -31,6 +31,7 @@ from proliferate.db.store.organizations import (
 )
 from proliferate.integrations import resend
 from proliferate.integrations import stripe as stripe_billing
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.domain.pricing import (
     monthly_subscription_price_ids,
     overage_subscription_price_ids,
@@ -46,7 +47,7 @@ from proliferate.server.billing.domain.webhooks import (
     subscription_period as _stripe_subscription_period,
 )
 from proliferate.server.billing.errors import BillingServiceError
-from proliferate.server.billing.models import coerce_utc, utcnow
+from proliferate.server.billing.models import coerce_utc
 from proliferate.server.billing.pricing import billing_price_ids_from_settings
 from proliferate.server.cloud.agent_gateway.signup_hook import (
     schedule_agent_gateway_org_enrollment,

@@ -18,11 +18,11 @@ from proliferate.integrations.sandbox import (
     SandboxProvider,
     SandboxProviderTargetUnavailableError,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.runtime_usage import close_cloud_sandbox_provider_usage
 from proliferate.server.cloud.gateway.service import (
     invalidate_cloud_sandbox_gateway_access_for_user,
 )
-from proliferate.utils.time import utcnow
 
 _ACTIVE_STATES = {"ready", "running"}
 _INACTIVE_STATES = {"paused", "stopped"}

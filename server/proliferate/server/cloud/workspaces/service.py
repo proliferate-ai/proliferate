@@ -33,6 +33,7 @@ from proliferate.integrations.anyharness.workspaces import (
     materialize_workspace_at_ref,
     retire_runtime_workspace,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
 from proliferate.server.cloud.errors import CloudApiError
@@ -75,7 +76,6 @@ from proliferate.server.cloud.workspaces.provisioning import (
 from proliferate.server.cloud.workspaces.provisioning import (
     resolve_repo_root as _resolve_repo_root,
 )
-from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.cloud.workspaces")
 

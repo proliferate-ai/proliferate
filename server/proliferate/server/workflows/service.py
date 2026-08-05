@@ -14,6 +14,7 @@ from proliferate.db.store import workflow_invocations as invocation_store
 from proliferate.db.store import workflow_managed_execution as managed_execution_store
 from proliferate.db.store.workflow_definitions import WorkflowDefinitionSnapshot
 from proliferate.db.store.workflow_invocations import WorkflowInvocationSnapshot
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.catalogs.models import AgentCatalogResponse
 from proliferate.server.catalogs.service import read_agent_catalog
 from proliferate.server.workflows.domain.invocation import (
@@ -45,7 +46,6 @@ from proliferate.server.workflows.models import (
     WorkflowInvocationCreateRequest,
     workflow_invocation_response,
 )
-from proliferate.utils.time import utcnow
 
 
 @dataclass(frozen=True)

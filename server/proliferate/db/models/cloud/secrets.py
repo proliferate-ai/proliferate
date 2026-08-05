@@ -23,7 +23,8 @@ from proliferate.constants.cloud import (
     CloudSandboxSecretMaterializationStatus,
     CloudSecretScopeKind,
 )
-from proliferate.db.models.base import Base, utcnow
+from proliferate.db.models.base import Base
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 _CLOUD_SECRET_SCOPE_ENUM = Enum(
     CloudSecretScopeKind,

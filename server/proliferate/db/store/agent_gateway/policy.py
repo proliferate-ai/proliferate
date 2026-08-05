@@ -14,7 +14,7 @@ from proliferate.db.models.cloud.agent_gateway import AgentAuthSelection, OrgAge
 from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.agent_gateway.mappers import org_agent_policy_record
 from proliferate.db.store.agent_gateway.records import OrgAgentPolicyRecord
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)

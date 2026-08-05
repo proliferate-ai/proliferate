@@ -64,7 +64,7 @@ from proliferate.db.engine import async_session_factory
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.models.billing import BillingEntitlement
 from proliferate.constants.billing import UNLIMITED_CLOUD_ENTITLEMENT
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 USER_ID = UUID(os.environ["SEED_USER_ID"])
 

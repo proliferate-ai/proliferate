@@ -24,7 +24,7 @@ from proliferate.db.store.agent_gateway.enrollment_keys import revoke_enrollment
 from proliferate.db.store.agent_gateway.mappers import enrollment_record
 from proliferate.db.store.agent_gateway.records import AgentGatewayEnrollmentRecord
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 # The per-(org, member) LiteLLM user id prefix. A pre-migration row whose
 # stored LiteLLM user does not carry it was provisioned under the old shared

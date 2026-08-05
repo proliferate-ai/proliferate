@@ -29,7 +29,7 @@ from proliferate.db.store.background_outbox import (
     load_outbox_task,
     mark_outbox_task_published,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass

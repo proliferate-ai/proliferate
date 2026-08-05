@@ -28,6 +28,7 @@ from proliferate.db.store.organization_records import (
     OrganizationWithMembershipRecord,
     normalize_invitation_email,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.permissions import (
     CurrentOrgUser,
     OwnerContext,
@@ -63,7 +64,6 @@ from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.join_links import organization_join_url
 from proliferate.server.organizations.landing import build_join_landing_html
 from proliferate.server.organizations.membership_policy import place_new_identity
-from proliferate.utils.time import utcnow
 
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
 

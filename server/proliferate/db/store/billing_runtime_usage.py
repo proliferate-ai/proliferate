@@ -23,7 +23,7 @@ from proliferate.db.store.billing_subjects import (
 )
 from proliferate.db.store.billing_subscriptions import user_has_healthy_personal_subscription
 from proliferate.db.store.organizations import get_current_membership_for_user
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 T = TypeVar("T")
 

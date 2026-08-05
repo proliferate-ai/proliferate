@@ -6,7 +6,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import InstanceSetupToken, User
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 _SETUP_TOKEN_ROW_ID = 1
 _FIRST_RUN_CLAIM_LOCK_KEY = "proliferate-first-run-claim"

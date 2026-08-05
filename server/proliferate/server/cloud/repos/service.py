@@ -20,6 +20,7 @@ from proliferate.integrations.github import (
     get_github_repo_branches,
     list_github_repositories,
 )
+from proliferate.lib.infra.time.elapsed import duration_ms
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.repos.domain.catalog import (
@@ -35,7 +36,6 @@ from proliferate.server.cloud.repos.domain.github_credentials import (
     find_oauth_account,
 )
 from proliferate.server.cloud.repos.models import RepoBranchesResponse
-from proliferate.utils.time import duration_ms
 
 SUPPORTED_VISIBILITIES = {"all", "public", "private"}
 SUPPORTED_AFFILIATIONS = {"owner", "collaborator", "organization_member"}
