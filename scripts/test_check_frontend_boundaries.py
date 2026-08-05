@@ -1427,6 +1427,29 @@ class ProductClientBoundaryTest(unittest.TestCase):
             },
         )
 
+    def test_store_alias_tracking_distinguishes_calls_from_comma_expressions(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/call-result.ts": (
+                "import { useChatStore } from '#product/stores/chat/chat-store';\n"
+                "const chat = selectStore(value, useChatStore);\n"
+                "chat.setState({ unrelated: true });\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/comma-result.ts": (
+                "import { useChatStore } from '#product/stores/chat/chat-store';\n"
+                "const chat = (value, useChatStore);\n"
+                "chat.setState({ ready: true });\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        set_state = [
+            (violation.path.name, violation.lineno)
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+        ]
+        self.assertEqual(set_state, [("comma-result.ts", 3)])
+
     def test_domain_and_workflow_purity_covers_react_package_subpaths(self) -> None:
         files = {
             "apps/packages/product-client/src/lib/domain/chat/react.ts": (
