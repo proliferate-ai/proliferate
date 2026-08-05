@@ -203,7 +203,8 @@ Persistence rule:
   Mixed shapes are forbidden.
 - Cross-domain reads go through stores. Cross-domain writes go through the
   owning domain's public service functions.
-- `datetime.utcnow()` is forbidden. Use `datetime.now(timezone.utc)`.
+- `datetime.utcnow()` is forbidden. Generic application wall-clock timestamps
+  use [proliferate.lib.infra.time.wall_clock.utcnow](../../../../server/proliferate/lib/infra/time/wall_clock.py).
 - New resource tables use UUID primary keys, timezone-aware timestamps, and
   `deleted_at TIMESTAMPTZ NULL` for soft delete when soft delete is needed.
 

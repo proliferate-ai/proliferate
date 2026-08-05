@@ -248,7 +248,8 @@ outbox row and let a worker do the call.
 **Cross-cutting hygiene:** canonical files never prefixed/suffixed; no junk-drawer
 modules (`helpers.py`/`utils.py`/`misc.py`); no single-file folders (except
 `domain/` and canonical `worker/service.py`); a folder is all-subfolders or
-all-flat; never `datetime.utcnow()` (use `datetime.now(timezone.utc)`). Size thresholds are CI-enforced
+all-flat; never `datetime.utcnow()`
+(use [proliferate.lib.infra.time.wall_clock.utcnow](../../../../server/proliferate/lib/infra/time/wall_clock.py)). Size thresholds are CI-enforced
 (`check_max_lines.py`); boundaries by `check_server_boundaries.py`.
 
 ---
@@ -395,7 +396,8 @@ through the Worker. The server calls or proxies to AnyHarness directly.
 
 ### Conventions (enforced)
 - **UUID primary keys** (`gen_random_uuid()`); no integer PKs for new resources.
-- **`TIMESTAMPTZ` everywhere**; never naive `TIMESTAMP`; `datetime.now(timezone.utc)`.
+- **`TIMESTAMPTZ` everywhere**; never naive `TIMESTAMP`; generic application
+  timestamps use [proliferate.lib.infra.time.wall_clock.utcnow](../../../../server/proliferate/lib/infra/time/wall_clock.py).
 - **Soft delete** via `deleted_at TIMESTAMPTZ NULL`, never `is_deleted`; default to
   hard delete.
 - **No lazy ORM access past the store boundary** (the reason stores return
