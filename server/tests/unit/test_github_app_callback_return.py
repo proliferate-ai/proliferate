@@ -15,8 +15,28 @@ instead of failing.
 from __future__ import annotations
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from proliferate.server.cloud.github_app import service
+from proliferate.server.cloud.github_app.api import callback_router
+
+
+def test_connected_page_is_self_host_safe_html() -> None:
+    app = FastAPI()
+    app.include_router(callback_router, prefix="/auth")
+
+    with TestClient(app) as client:
+        response = client.get("/auth/github-app/connected")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text.startswith("<!doctype html>")
+    assert "<title>GitHub App connected</title>" in response.text
+    assert (
+        "The Proliferate GitHub App is connected. You can close this tab and return to "
+        "Proliferate."
+    ) in response.text
 
 
 def test_default_return_uses_frontend_when_configured(

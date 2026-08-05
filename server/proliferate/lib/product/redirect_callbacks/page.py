@@ -2,49 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from html import escape
 from typing import Literal
 
-from fastapi.responses import HTMLResponse
+from proliferate.lib.product.redirect_callbacks.launch import render_launch_script
 
 RedirectCallbackTone = Literal["neutral", "success", "error"]
 RedirectCallbackVariant = Literal["default", "handoff"]
-
-
-def make_redirect_callback_response(
-    *,
-    title: str,
-    status_label: str,
-    message: str,
-    tone: RedirectCallbackTone = "neutral",
-    detail: str | None = None,
-    action_label: str | None = None,
-    action_href: str | None = None,
-    action_visible: bool = True,
-    action_hint: str | None = None,
-    launch_url: str | None = None,
-    fallback_message: str | None = None,
-    reveal_action_after_ms: int = 1500,
-    variant: RedirectCallbackVariant = "default",
-) -> HTMLResponse:
-    return HTMLResponse(
-        render_redirect_callback_page(
-            title=title,
-            status_label=status_label,
-            message=message,
-            tone=tone,
-            detail=detail,
-            action_label=action_label,
-            action_href=action_href,
-            action_visible=action_visible,
-            action_hint=action_hint,
-            launch_url=launch_url,
-            fallback_message=fallback_message,
-            reveal_action_after_ms=reveal_action_after_ms,
-            variant=variant,
-        )
-    )
 
 
 def render_redirect_callback_page(
@@ -75,7 +39,7 @@ def render_redirect_callback_page(
         action_visible=action_visible,
         action_hint=action_hint,
     )
-    launch_script = _render_launch_script(
+    launch_script = render_launch_script(
         launch_url=launch_url,
         fallback_message=fallback_message,
         reveal_action_after_ms=reveal_action_after_ms,
@@ -92,7 +56,7 @@ def render_redirect_callback_page(
             action_label=action_label,
             action_href=action_href,
         )
-        handoff_launch_script = _render_launch_script(
+        handoff_launch_script = render_launch_script(
             launch_url=launch_url,
             fallback_message=None,
             reveal_action_after_ms=reveal_action_after_ms,
@@ -426,38 +390,6 @@ def _render_handoff_action_block(
       <div class="recovery" id="recovery" data-visible="true">
         <a class="action" href="{escape(action_href, quote=True)}" aria-label="{escape(action_label, quote=True)}">Click here if not redirected</a>
       </div>"""
-
-
-def _render_launch_script(
-    *,
-    launch_url: str | None,
-    fallback_message: str | None,
-    reveal_action_after_ms: int,
-) -> str:
-    if not launch_url:
-        return ""
-
-    fallback_json = json.dumps(fallback_message) if fallback_message else "null"
-    return f"""
-    <script>
-      window.addEventListener("load", () => {{
-        const launchUrl = {json.dumps(launch_url)};
-        const fallbackMessage = {fallback_json};
-        const recovery = document.getElementById("recovery");
-        const statusText = document.getElementById("status-text");
-
-        window.location.replace(launchUrl);
-
-        window.setTimeout(() => {{
-          if (recovery) {{
-            recovery.dataset.visible = "true";
-          }}
-          if (fallbackMessage && statusText) {{
-            statusText.textContent = fallbackMessage;
-          }}
-        }}, {reveal_action_after_ms});
-      }});
-    </script>"""
 
 
 _PROLIFERATE_MARK_SVG = """        <svg viewBox="300 300 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" width="32" height="32" aria-hidden="true">
