@@ -349,8 +349,12 @@ external endpoints (e.g., a multi-step worker-driven flow). Same `service.py`
 
 Domains coordinate via two legal patterns:
 
-**Reads cross via store.** A service may import another domain's store to read
-data:
+**Foreign reads cross only through a declared store edge.** A domain may use
+another domain's store read or store-owned value type only when the exact
+consumer, store module, import sites, and symbols are recorded in the
+[foreign-store-read ledger](foreign-store-reads.md). A new unlisted foreign
+read requires a reviewed ledger amendment. The declaration makes the coupling
+reviewable; it does not authorize any mutation from that store.
 
 ```python
 # billing/service.py
@@ -361,10 +365,11 @@ async def compute_subject_usage(db: AsyncSession, subject_id: UUID):
     return ...
 ```
 
-The store boundary is safe — it returns frozen dataclasses, no behavior leaks.
+The declaration remains exact to the listed read symbols even when the store
+returns frozen dataclasses.
 
-**Writes cross via service.** A service must go through another domain's
-public service functions to mutate that domain's resources:
+**Writes cross via service.** Foreign writes continue to go through another
+domain's public service functions to mutate that domain's resources:
 
 ```python
 # billing/service.py
