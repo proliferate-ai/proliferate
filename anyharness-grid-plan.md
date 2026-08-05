@@ -30,7 +30,7 @@ first. Written 2026-08-05 against `origin/main` @ `1471d4f7e`.
 PR1 (checker) ──┬── PR1.5 (lints/ folder move — lands right after PR 1, before ratcheting)
                 ├── PR2 (acp move)      [independent of 3–5, conflicts on allowlist]
                 ├── PR3 (store escapes)
-                ├── PR4 (ProblemResponse)
+                ├── PR4 (ProblemResponse) — STRUCK: already fixed by #640, recon 2026-08-05
                 ├── PR5a (workspaces SQL + retention_policy split)
                 │     └── PR5b (remaining SQL folds) ── PR5c (probe.rs fetch)
                 ├── PR6a (mobility move) ── PR6b (mobility policy)
@@ -179,17 +179,22 @@ does more than delegate.
 
 ---
 
-## PR 4 — Fold ProblemResponse into ApiError (violation #12)
+## ~~PR 4 — Fold ProblemResponse into ApiError (violation #12)~~ STRUCK
 
-**Branch**: `codex/anyharness-one-error-doctrine` off PR 1 head.
-**Touches**: `api/http/agents_model_registry.rs` (+ its `_errors`/mapper
-siblings). Replace the bespoke ProblemResponse mechanism with the standard
-one-`From<DomainError> for ApiError` impl per the `sessions_errors.rs`
-exemplar. Wire shape of responses must not change (same status codes +
-bodies) — this is an internal doctrine fold, verified by the existing
-endpoint tests; if body shape is load-bearing and differs from ApiError's
-rendering, stop and surface instead of silently changing the wire.
-**One cargo build.**
+**Recon 2026-08-05: the violation no longer exists.**
+`agents_model_registry.rs`, the ProblemResponse alias, and its routes were
+deleted by #640 (`278fb34ff`, 2026-06-11) — two months before this plan's
+base commit, which never contained them. The fold already happened:
+`agents_errors.rs:1-3` records "wire titles/codes/statuses preserved
+exactly from the retired ProblemResponse mechanism," and the surviving
+`AgentRuntimeError`/`InstallError` mappings follow the exemplar
+`From<DomainError> for ApiError` shape. ProblemResponse was never a
+distinct wire format — a local `(StatusCode, Json<ProblemDetails>)` tuple
+over the same contract struct `ApiError` serializes. Nothing to do; PR
+number retained so cross-references stay stable. Violation #12 marked
+stale in `anyharness-structure.md`. Lesson applied to the rest of the
+train: every PR's builder re-verifies its target exists at its base
+commit before writing code.
 
 ---
 
@@ -377,9 +382,9 @@ with everything).
 - **Now**: recon workflow (running) → PR 1 build-out → PR 1 up.
 - **Right after PR 1 merges**: PR 1.5 (lints/ folder) — path churn must land
   before the allowlist starts shrinking.
-- **Then serially** (allowlist conflicts + one-build rule): PR 3 → PR 4 →
-  PR 5 → PR 2 (acp last of the mechanical set — biggest rebase surface),
-  each rebased onto the previous head.
+- **Then serially** (allowlist conflicts + one-build rule): PR 3 → PR 5 →
+  PR 2 (acp last of the mechanical set — biggest rebase surface), each
+  rebased onto the previous head. (PR 4 struck — already fixed by #640.)
 - **Then**: PR 6a → 6b → 7, the structural core.
 - **Then**: PR 8 → 9; PR 11 docs PR anytime; PR 10.x cadence begins.
 - PR 12 brief and PR 13 wait for the train to be quiet + rulings.
