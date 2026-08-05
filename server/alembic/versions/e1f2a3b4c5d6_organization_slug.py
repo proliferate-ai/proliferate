@@ -27,7 +27,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 _SLUG_ALLOWED = re.compile(r"[^a-z0-9]+")
-_SLUG_TRIM = re.compile(r"^-+|-+$")
+_SLUG_TRIM_CHAR = "-"
 _SLUG_MAX_LENGTH = 48
 _SLUG_FALLBACK = "org"
 
@@ -35,9 +35,9 @@ _SLUG_FALLBACK = "org"
 def _slugify_organization(value: str | None) -> str:
     lowered = (value or "").strip().lower()
     hyphenated = _SLUG_ALLOWED.sub("-", lowered)
-    trimmed = _SLUG_TRIM.sub("", hyphenated)
+    trimmed = hyphenated.strip(_SLUG_TRIM_CHAR)
     capped = trimmed[:_SLUG_MAX_LENGTH]
-    capped = _SLUG_TRIM.sub("", capped)
+    capped = capped.strip(_SLUG_TRIM_CHAR)
     return capped or _SLUG_FALLBACK
 
 
