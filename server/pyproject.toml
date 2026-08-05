@@ -104,7 +104,6 @@ module = [
     "proliferate.auth.models",
     "proliferate.auth.desktop.models",
     "proliferate.server.cloud.repositories.models",
-    "proliferate.server.cloud.target_config.models",
     "proliferate.server.cloud.workspaces.models",
     "proliferate.server.catalogs.models",
     "proliferate.server.workflows.models",

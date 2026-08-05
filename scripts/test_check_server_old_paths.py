@@ -15,14 +15,21 @@ class ServerOldPathsTest(unittest.TestCase):
                 [],
             )
 
-    def test_rejects_resurrected_logging_compatibility_path(self) -> None:
+    def test_ignores_empty_deleted_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            blocked_path = root / "server/proliferate/utils/logging.py"
+            (root / "server/proliferate/utils").mkdir(parents=True)
+
+            self.assertEqual(check_server_old_paths.existing_blocked_paths(root), [])
+
+    def test_rejects_resurrected_utils_bucket(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            blocked_path = root / "server/proliferate/utils/time.py"
             blocked_path.parent.mkdir(parents=True)
-            blocked_path.write_text("from proliferate.middleware.logging import *\n")
+            blocked_path.write_text("def utcnow(): ...\n")
 
             self.assertEqual(
                 check_server_old_paths.existing_blocked_paths(root),
-                ["server/proliferate/utils/logging.py"],
+                ["server/proliferate/utils"],
             )

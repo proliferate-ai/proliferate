@@ -275,8 +275,9 @@ is not an import-free leaf: it composes actor deps, stores, billing services,
 and request/RLS context. The rest of `auth/**` remains below product domains;
 product account-entry orchestration belongs to
 [server/accounts/**](../../../../server/proliferate/server/accounts). Background
-tasks call domain services; the relay is the only `background/**` module that
-touches a store, and only the outbox store.
+tasks call domain services. The relay owns outbox mutations and also reads the
+bounded Managed Workflow observability snapshot; current background-store
+exceptions are recorded in the [Background guide](guides/background.md).
 
 ## CI-Enforced Repo Shape
 

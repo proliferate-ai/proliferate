@@ -18,11 +18,11 @@ from proliferate.db import session_ops as db_session
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store.organization_records import InvitationRecord
 from proliferate.integrations import resend
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.organizations.join_links import (
     invitation_registration_url,
     organization_join_url,
 )
-from proliferate.utils.time import utcnow
 
 team_checkout_logger = logging.getLogger("proliferate.billing.team_checkout.activation")
 

@@ -250,28 +250,26 @@ If every answer is yes or not applicable, the change aligns with the grid.
   In addition, `permissions.py` currently composes actor deps, stores, billing
   services, and request/RLS context; only `auth/authorization.py` is the
   dependency-free authorization leaf.
-- [ ] **Error normalization is incomplete.** Organization SSO orchestration
-  still raises `HTTPException` in
-  [organizations/sso/service.py](../../../../../server/proliferate/server/organizations/sso/service.py),
-  and the current checker does not enforce globally unique error codes or ban
-  every non-boundary service raise.
+- [ ] **Error enforcement is incomplete.** Organization SSO orchestration now
+  raises transport-neutral Organization errors, and current direct
+  `HTTPException` uses are confined to HTTP boundary modules. The checker still
+  does not classify every service/internal module or enforce globally unique
+  error codes.
 - [ ] **Library audiences are not represented or enforced.** The current
-  [lib tree](../../../../../server/proliferate/lib) contains only a Product
-  workspace-naming concern; `lib/infra` and `lib/capabilities` do not exist, and
-  the server checker does not scan `lib/**` for audience or purity rules.
-- [ ] **Integration and raw-transport placement retain two exact exceptions.**
-  [integrations/sentry.py](../../../../../server/proliferate/integrations/sentry.py)
-  imports product-owned
-  [server/release.py](../../../../../server/proliferate/server/release.py) for
-  release tagging. The checker count-locks that debt as
-  `INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sentry.py 1` in
-  [server_boundaries_allowlist.txt](../../../../../scripts/server_boundaries_allowlist.txt).
+  [lib tree](../../../../../server/proliferate/lib) contains Infrastructure
+  encryption/time and Product redirect-callback/telemetry leaves; workspace
+  naming is owned by its Cloud domain. The server checker still does not scan
+  `lib/**` for audience or purity rules, and current non-Product consumers of
+  `lib/product` remain outside the target audience.
+- [ ] **Raw-transport placement retains one exact exception.**
   [cloud/gateway/proxy.py](../../../../../server/proliferate/server/cloud/gateway/proxy.py)
-  owns raw HTTP and WebSocket proxy transport inside a product domain; its
+  owns raw HTTP and WebSocket proxy transport inside a product domain. Its
   `httpx` import is count-locked as
   `PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/gateway/proxy.py 1`
-  in the same allowlist. Both exceptions require ownership moves before the
-  integration-leaf and package-audience target can be enforced without debt.
+  in
+  [server_boundaries_allowlist.txt](../../../../../scripts/server_boundaries_allowlist.txt).
+  Sentry release identity is injected and no longer crosses into a product
+  domain.
 - [ ] **Service topology and package audiences are not gated.** Cloud Sandbox
   imports Gateway service in
   [cloud_sandboxes/service.py](../../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py),
@@ -282,11 +280,10 @@ If every answer is yes or not applicable, the change aligns with the grid.
 - [ ] **Background execution is not unified.** Periodic process loops remain in
   [Billing reconciliation](../../../../../server/proliferate/server/billing/reconciler.py),
   [anonymous telemetry](../../../../../server/proliferate/server/anonymous_telemetry/worker.py),
-  and the Agent Gateway
-  [worker](../../../../../server/proliferate/server/cloud/agent_gateway/worker.py),
-  [usage importer](../../../../../server/proliferate/server/cloud/agent_gateway/usage_import.py),
-  and [top-up worker](../../../../../server/proliferate/server/cloud/agent_gateway/topups.py).
-  The Customer.io task also performs SQL and vendor work directly in
-  [customerio_sync.py](../../../../../server/proliferate/background/tasks/customerio_sync.py).
-  These paths require a deployed, behavior-equivalent background plane before
-  loop removal can be safe.
+  and three Agent Gateway loops in
+  [worker.py](../../../../../server/proliferate/server/cloud/agent_gateway/worker.py).
+  The one-off
+  [enqueue_health.py](../../../../../server/proliferate/background/enqueue_health.py)
+  command also remains a direct background-store client. These paths require a
+  deployed, behavior-equivalent background plane or an explicitly documented
+  exception before the target can be enforced.

@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.sso import service as sso_service
 from proliferate.db.models.auth import SsoConnection
 from proliferate.db.models.organizations import Organization
 from proliferate.db.store import organizations as organization_store
+from proliferate.server.accounts.sso import service as sso_service
 
 
 @pytest.mark.asyncio

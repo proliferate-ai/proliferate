@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -71,7 +70,7 @@ async def run_customerio_engagement_sync(
                 if value is not None
             ]
             last_active_at = max(candidates) if candidates else None
-            attributes: dict[str, Any] = {
+            attributes: dict[str, object] = {
                 "workspace_count": workspace_count_by_user.get(user.id, 0),
                 "email_type": derive_email_type(user.email),
             }

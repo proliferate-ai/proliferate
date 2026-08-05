@@ -89,7 +89,10 @@ server/proliferate/
     desktop/                 # leaf models and callback pages
     identity/                # provider protocol, stores, sessions, and credential primitives
     sso/                     # SSO protocol vocabulary, policy, and configuration
-    utils/                   # auth crypto primitives only: jwt, oauth, passwords, pkce
+    jwt.py                   # auth crypto/protocol primitive
+    oauth.py                 # auth crypto/protocol primitive
+    passwords.py             # auth crypto/protocol primitive
+    pkce.py                  # auth crypto/protocol primitive
 
   server/accounts/
     desktop/                 # /auth/desktop routes and Desktop account-entry orchestration
@@ -105,8 +108,8 @@ server/proliferate/
     auth.py                  # WorkerAuthContext + opaque bearer-token dependency
 ```
 
-`auth/utils/` holds only the closed set of auth crypto primitives
-(`jwt`, `oauth`, `passwords`, `pkce`); it is not a general bucket. Not every
+The flat `auth/{jwt,oauth,passwords,pkce}.py` modules hold the closed set of auth
+crypto and protocol primitives; there is no general utility bucket. Not every
 domain needs `access.py` or `domain/policy.py` — only domains that protect
 resources or carry product rules.
 
@@ -242,7 +245,7 @@ code migration, not an assumption a caller should make from this guide.
 
 - `Depends(...)` functions returning a user actor (`User`). The separate
   Worker actor dependency remains in `server/cloud/runtime_workers/auth.py`.
-- JWT parsing (via `auth/utils/jwt`), session/user lookup.
+- JWT parsing (via `auth/jwt`), session/user lookup.
 - Platform-level admin checks that scope to identity, not a resource.
 
 ### Banned

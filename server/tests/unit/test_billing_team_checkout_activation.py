@@ -19,7 +19,7 @@ from proliferate.db.store.organization_records import (
     OrganizationWithMembershipRecord,
 )
 from proliferate.integrations import stripe as stripe_billing
-from proliferate.server.billing.models import BillingServiceError
+from proliferate.server.billing.errors import BillingServiceError
 from proliferate.server.billing.team_checkout import activation
 
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)

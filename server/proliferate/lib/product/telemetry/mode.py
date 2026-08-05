@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from proliferate.config import settings
 
@@ -13,7 +13,7 @@ def get_server_telemetry_mode() -> TelemetryMode:
         raise RuntimeError(
             "Invalid telemetry_mode; expected local_dev, self_managed, or hosted_product."
         )
-    return mode
+    return cast(TelemetryMode, mode)
 
 
 def is_vendor_telemetry_enabled() -> bool:

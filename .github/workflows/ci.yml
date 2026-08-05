@@ -72,6 +72,7 @@ jobs:
           uv run --python 3.12 --with pytest==9.1.1
           pytest --noconftest -p no:cacheprovider -c /dev/null -q
           server/tests/unit/test_server_boundary_checker.py
+          server/tests/unit/test_server_boundary_checker_named_writes.py
 
       - name: Check server layer boundaries
         run: python3 scripts/check_server_boundaries.py

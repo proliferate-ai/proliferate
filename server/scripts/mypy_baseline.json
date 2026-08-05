@@ -3,12 +3,6 @@
   "mypy_version": "1.20.2",
   "diagnostics": [
     {
-      "path": "proliferate/auth/desktop/api.py",
-      "code": "arg-type",
-      "message": "Argument \"extras_params\" to \"get_authorization_url\" of \"BaseOAuth2\" has incompatible type \"dict[str, Literal['select_account']] | None\"; expected \"GitHubOAuth2AuthorizeParams | None\"",
-      "count": 1
-    },
-    {
       "path": "proliferate/auth/identity/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
@@ -60,12 +54,6 @@
       "path": "proliferate/auth/identity/providers.py",
       "code": "no-any-return",
       "message": "Returning Any from function declared to return \"str\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/auth/identity/service.py",
-      "code": "attr-defined",
-      "message": "Module \"proliferate.auth.desktop.service\" does not explicitly export attribute \"schedule_signup_slack_notification\"",
       "count": 1
     },
     {
@@ -147,40 +135,10 @@
       "count": 1
     },
     {
-      "path": "proliferate/auth/sso/api.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 4
-    },
-    {
       "path": "proliferate/auth/sso/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
       "count": 4
-    },
-    {
-      "path": "proliferate/auth/sso/service.py",
-      "code": "name-defined",
-      "message": "Name \"sso_store.SsoChallengeRecord\" is not defined",
-      "count": 2
-    },
-    {
-      "path": "proliferate/auth/sso/service.py",
-      "code": "name-defined",
-      "message": "Name \"sso_store.SsoConnectionRecord\" is not defined",
-      "count": 2
-    },
-    {
-      "path": "proliferate/auth/sso/user_resolution.py",
-      "code": "arg-type",
-      "message": "Argument \"email\" to \"create_auth_user\" has incompatible type \"str | None\"; expected \"str\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/auth/sso/user_resolution.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"get_user_by_email\" has incompatible type \"str | None\"; expected \"str\"",
-      "count": 1
     },
     {
       "path": "proliferate/background/beat_schedule.py",
@@ -256,18 +214,6 @@
     },
     {
       "path": "proliferate/background/tasks/customerio_sync.py",
-      "code": "call-overload",
-      "message": "No overload variant of \"select\" matches argument types \"UUID\", \"str\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/background/tasks/customerio_sync.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 1
-    },
-    {
-      "path": "proliferate/background/tasks/customerio_sync.py",
       "code": "untyped-decorator",
       "message": "Untyped decorator makes function \"customerio_engagement_sync\" untyped",
       "count": 1
@@ -321,12 +267,6 @@
       "count": 1
     },
     {
-      "path": "proliferate/constants/automations.py",
-      "code": "import-untyped",
-      "message": "Library stubs not installed for \"dateutil.rrule\"",
-      "count": 1
-    },
-    {
       "path": "proliferate/db/store/agent_gateway/credits.py",
       "code": "attr-defined",
       "message": "\"Result[Any]\" has no attribute \"rowcount\"",
@@ -355,132 +295,6 @@
       "code": "attr-defined",
       "message": "\"Result[Any]\" has no attribute \"rowcount\"",
       "count": 2
-    },
-    {
-      "path": "proliferate/db/store/automation_run_claim_transitions.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_target_id_snapshot\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_run_claim_transitions.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_target_kind_snapshot\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_run_claim_transitions.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"sandbox_profile_id\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_run_claim_values.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_target_id_snapshot\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_run_claim_values.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_target_kind_snapshot\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_run_claim_values.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_workspace_exposure_id\"; maybe \"cloud_workspace_id\"?",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_run_claim_values.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"sandbox_profile_id\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_run_claims.py",
-      "code": "no-any-return",
-      "message": "Returning Any from function declared to return \"float | None\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_runs.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"where\" of \"Select\" has incompatible type \"*list[object]\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/db/store/automation_runs.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_repo_config_id_snapshot\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_runs.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_target_id_snapshot\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_runs.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_target_kind_snapshot\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_runs.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"cloud_workspace_exposure_id\"; maybe \"cloud_workspace_id\"?",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_runs.py",
-      "code": "attr-defined",
-      "message": "\"AutomationRun\" has no attribute \"sandbox_profile_id\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automation_runs.py",
-      "code": "attr-defined",
-      "message": "\"type[Automation]\" has no attribute \"cloud_repo_config_id\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/db/store/automation_runs.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.db.models.cloud.repo_config\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automations.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"where\" of \"Select\" has incompatible type \"*list[object]\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automations.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"where\" of \"Select\" has incompatible type \"*list[object]\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/db/store/automations.py",
-      "code": "attr-defined",
-      "message": "\"Automation\" has no attribute \"cloud_repo_config_id\"; maybe \"cloud_agent_run_config_id\"?",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/automations.py",
-      "code": "attr-defined",
-      "message": "\"type[Automation]\" has no attribute \"cloud_repo_config_id\"",
-      "count": 3
-    },
-    {
-      "path": "proliferate/db/store/automations.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.db.models.cloud.repo_config\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
     },
     {
       "path": "proliferate/db/store/billing.py",
@@ -799,240 +613,6 @@
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
       "count": 5
-    },
-    {
-      "path": "proliferate/server/automations/domain/schedule.py",
-      "code": "import-untyped",
-      "message": "Library stubs not installed for \"dateutil.rrule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/domain/schedule.py",
-      "code": "no-any-return",
-      "message": "Returning Any from function declared to return \"datetime\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"available_repositories\" to \"claim_local_automation_runs\" has incompatible type \"list[proliferate.server.automations.domain.claim_lifecycle.LocalAutomationRepoIdentity]\"; expected \"list[proliferate.db.store.automation_run_claims.LocalAutomationRepoIdentity]\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"transition\" to \"attach_anyharness_session_to_run\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimTransitionRule\"; expected \"proliferate.db.store.automation_run_claims.ClaimTransitionRule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"transition\" to \"attach_anyharness_workspace_to_run\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimTransitionRule\"; expected \"proliferate.db.store.automation_run_claims.ClaimTransitionRule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"transition\" to \"mark_run_creating_session\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimTransitionRule\"; expected \"proliferate.db.store.automation_run_claims.ClaimTransitionRule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"transition\" to \"mark_run_creating_workspace\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimTransitionRule\"; expected \"proliferate.db.store.automation_run_claims.ClaimTransitionRule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"transition\" to \"mark_run_dispatched\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimTransitionRule\"; expected \"proliferate.db.store.automation_run_claims.ClaimTransitionRule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"transition\" to \"mark_run_dispatching\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimTransitionRule\"; expected \"proliferate.db.store.automation_run_claims.ClaimTransitionRule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"transition\" to \"mark_run_provisioning_workspace\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimTransitionRule\"; expected \"proliferate.db.store.automation_run_claims.ClaimTransitionRule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/local_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"unconfigured_agent_failure\" to \"claim_local_automation_runs\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimFailure\"; expected \"proliferate.db.store.automation_run_claims.ClaimFailure\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 18
-    },
-    {
-      "path": "proliferate/server/automations/models.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 8
-    },
-    {
-      "path": "proliferate/server/automations/service.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.db.store.cloud_repo_config\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/service.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.server.automations.execution\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/service.py",
-      "code": "no-any-return",
-      "message": "Returning Any from function declared to return \"UUID\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/commands.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.db.store.cloud_sync.command_records\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/pipeline.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"AutomationExecutionContext | None\", variable has type \"AutomationExecutionContext\")",
-      "count": 5
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/environment.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.server.cloud.target_config.models\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/environment.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.server.cloud.target_config.service\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/target.py",
-      "code": "arg-type",
-      "message": "Argument \"transition\" to \"attach_cloud_target_snapshot_to_run\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimTransitionRule\"; expected \"proliferate.db.store.automation_run_claims.ClaimTransitionRule\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/target.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.db.store.cloud_sync\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/target.py",
-      "code": "no-any-return",
-      "message": "Returning Any from function declared to return \"bool\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "arg-type",
-      "message": "Argument \"creator_context\" to \"MaterializeWorkspacePayload\" has incompatible type \"dict[str, str]\"; expected \"dict[str, object] | None\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "arg-type",
-      "message": "Argument \"origin\" to \"MaterializeWorkspacePayload\" has incompatible type \"dict[str, str]\"; expected \"dict[str, object] | None\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"get_cloud_workspace_by_id\" has incompatible type \"UUID | None\"; expected \"UUID\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"AutomationExecutionContext | None\", variable has type \"AutomationExecutionContext\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "attr-defined",
-      "message": "\"CloudWorkspaceValue\" has no attribute \"worktree_path\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.db.store.cloud_workspace_runtime\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.server.cloud.workspaces.provisioning.service\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "union-attr",
-      "message": "Item \"None\" of \"TargetExecutionContext | None\" has no attribute \"sandbox_profile_id\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_execution/stages/workspace.py",
-      "code": "union-attr",
-      "message": "Item \"None\" of \"TargetExecutionContext | None\" has no attribute \"target_id\"",
-      "count": 4
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_executor.py",
-      "code": "arg-type",
-      "message": "Argument \"unconfigured_agent_failure\" to \"claim_cloud_automation_run\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimFailure\"; expected \"proliferate.db.store.automation_run_claims.ClaimFailure\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_executor_commands.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.db.store.cloud_sync\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_executor_commands.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.server.cloud.commands.domain.serialization\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_executor_commands.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.server.cloud.commands.preflight\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/cloud_executor_commands.py",
-      "code": "import-untyped",
-      "message": "Skipping analyzing \"proliferate.server.cloud.commands.wake\": module is installed, but missing library stubs or py.typed marker",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/service.py",
-      "code": "arg-type",
-      "message": "Argument \"dispatch_uncertain_failure\" to \"sweep_expired_dispatching_runs\" has incompatible type \"proliferate.server.automations.domain.claim_lifecycle.ClaimFailure\"; expected \"proliferate.db.store.automation_run_claims.ClaimFailure\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/automations/worker/service.py",
-      "code": "attr-defined",
-      "message": "Module \"proliferate.server.automations.domain.claim_lifecycle\" does not explicitly export attribute \"AUTOMATION_RUN_STATUS_DISPATCHING\"",
-      "count": 1
     },
     {
       "path": "proliferate/server/billing/accounting.py",
@@ -1740,12 +1320,6 @@
       "path": "proliferate/server/workflows/worker/target_plan.py",
       "code": "union-attr",
       "message": "Item \"None\" of \"str | None\" has no attribute \"strip\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/utils/telemetry_mode.py",
-      "code": "return-value",
-      "message": "Incompatible return value type (got \"str\", expected \"Literal['local_dev', 'self_managed', 'hosted_product']\")",
       "count": 1
     }
   ]

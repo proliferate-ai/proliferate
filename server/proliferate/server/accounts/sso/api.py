@@ -48,10 +48,10 @@ async def discover_sso_endpoint(
     )
     return SsoDiscoveryResponse(
         enabled=discovery.enabled,
-        scope=discovery.scope.value if discovery.scope else None,  # type: ignore[arg-type]
+        scope=discovery.scope.value if discovery.scope else None,
         connection_id=str(discovery.connection_id) if discovery.connection_id else None,
         organization_id=str(discovery.organization_id) if discovery.organization_id else None,
-        protocol=discovery.protocol.value if discovery.protocol else None,  # type: ignore[arg-type]
+        protocol=discovery.protocol.value if discovery.protocol else None,
         display_name=discovery.display_name,
         reason=discovery.reason,
     )
@@ -85,8 +85,8 @@ async def start_sso_endpoint(
         state=result.state,
         nonce=result.nonce,
         expires_at=result.expires_at,
-        scope=result.connection.scope.value,  # type: ignore[arg-type]
-        protocol=result.connection.protocol.value,  # type: ignore[arg-type]
+        scope=result.connection.scope.value,
+        protocol=result.connection.protocol.value,
         connection_id=str(result.connection.id) if result.connection.id else None,
         organization_id=(
             str(result.connection.organization_id) if result.connection.organization_id else None

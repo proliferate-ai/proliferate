@@ -330,22 +330,6 @@ Each unchecked item is a concrete difference from the target, and the
       gates, immediate-first-run cadence, retry and replay behavior for charge
       and top-up effects, and exact configuration parity are characterized for
       a Beat-fired task.
-- [ ] **Customer.io task thinness.** The real Beat-fired Celery task in
-      [`customerio_sync.py`](../../../../../server/proliferate/background/tasks/customerio_sync.py)
-      currently contains SQLAlchemy and ORM reads, keyset pagination, profile
-      assembly, and Customer.io calls instead of being a thin wrapper around an
-      owning domain service. Its internal `while True` is finite keyset
-      pagination, not a sixth periodic lifespan loop. This remains a gap until
-      the task has the thin shape asserted by the target body.
-- [ ] **Parked Automations worker tree.** The current
-      [Automations process entry point](../../../../../server/proliferate/server/automations/worker/main.py)
-      and [scheduler loop](../../../../../server/proliferate/server/automations/worker/scheduler.py)
-      remain even though the Automations router is parked and unmounted in
-      [`main.py`](../../../../../server/proliferate/main.py), so the tree is not
-      a live product surface. This conflicts with the target's
-      no-per-domain-process shape and remains a gap until a separately approved
-      behavior slice removes or otherwise reconciles the parked tree; this
-      documentation change does not make it importable.
 - [ ] **One-off health enqueue store client.**
       [`enqueue_health.py`](../../../../../server/proliferate/background/enqueue_health.py)
       is a one-off deployment proof command, not a task or loop, but it writes

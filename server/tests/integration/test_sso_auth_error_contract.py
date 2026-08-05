@@ -28,8 +28,8 @@ from proliferate.config import settings
 from proliferate.db.models.auth import SsoChallenge, SsoConnection, User
 from proliferate.integrations.sso.errors import SsoIntegrationError
 from proliferate.integrations.sso.oidc import OidcMetadata, OidcTokenResponse
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 from proliferate.server.organizations.sso import service as organization_sso_service
-from proliferate.utils.crypto import encrypt_text
 from tests.integration.test_organization_sso_membership import (
     _create_organization_for_user,
     _create_user_and_get_tokens,
@@ -453,7 +453,9 @@ async def test_connection_test_preserves_integration_detail(
             oidc_token_endpoint="https://idp.example.test/token",
             oidc_jwks_uri="https://idp.example.test/jwks",
             oidc_client_id="client-id",
-            oidc_client_secret_ciphertext=encrypt_text("client-secret"),
+            oidc_client_secret_ciphertext=encrypt_text(
+                "client-secret", secret=settings.cloud_secret_key
+            ),
             created_at=now,
             updated_at=now,
         )

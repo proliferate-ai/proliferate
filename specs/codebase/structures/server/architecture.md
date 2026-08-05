@@ -22,6 +22,11 @@ does **not** run agent sessions (AnyHarness does).
 Plus the meta-rule: **lowest layer that can own it cleanly**, and dependencies
 point one way.
 
+These rules define the ownership direction. Known current migration debt and
+unenforced target rules are enumerated in the
+[Server Grid current gaps](guides/grid-ownership-model.md#current-gaps); reviewed
+allowlists remain the operating exceptions until those gaps close.
+
 ---
 
 ## 2. 20k-Foot Detailed View
@@ -55,7 +60,7 @@ server/proliferate/
 | `service.py` | business logic, orchestration, invariants, validation | open sessions except the bounded worker-service exception below, SQLAlchemy query APIs, `select/insert/db.execute`, `commit`, inline auth |
 | `domain/**` | pure rules: validators, state machines, calculators, mappings, **planners** | `async def`, DB/ORM, FastAPI, integrations, I/O — *returns data* |
 | `db/store/**` | query construction + execution; returns **frozen dataclasses** | commit, open sessions; ORM never leaves here |
-| `db/models/**` | ORM table definitions only | imports nothing (leaf) |
+| `db/models/**` | ORM table definitions only | importing services, stores, or integrations |
 | `integrations/<vendor>` | typed vendor adapters | importing server domain code (leaf; public via `__init__`) |
 
 ### The type pipeline — the server's "state model"
@@ -92,13 +97,14 @@ ORM (db/models)  ──store returns──►  @dataclass(frozen=True)  ──mo
 ### Dependency direction
 
 ```text
-api → service → store → models → SQLAlchemy        (nothing else imports SQLAlchemy)
+api → service → store → models → SQLAlchemy query/schema mechanics
 service → integrations / domain / other domains' public services (writes) or stores (reads)
 domain → pure (no FastAPI/SQLAlchemy/store/integrations/HTTP)
 auth/authorization.py → dependency-free authorization vocabulary
 permissions.py → auth deps + stores/services needed for request owner/org context
-workers → call services, not stores; tasks own the engine/factory lifetime and
-          either open the session or pass the factory for bounded worker phases
+background task shims → domain services
+domain worker/service → stores + public integration APIs; task shims own the
+                        engine/factory lifetime and pass it for bounded phases
 ```
 
 ---
@@ -133,7 +139,8 @@ One owning domain per resource; never two domains writing the same ORM resource.
 **Service decomposition — the five legal moves** (when `service.py` grows): (1)
 internal sectioning (~700–800 lines), (2) extract pure logic to
 `domain/<concern>.py`, (3) promote a subdomain (own api/service/models), (4) move
-vendor specifics to `integrations/<vendor>/`, (5) add a worker entry point.
+vendor specifics to `integrations/<vendor>/`, (5) promote worker-facing
+orchestration to `worker/service.py`.
 **Sibling helper files are not a move.**
 
 **External-side-effect pattern (outbox):** a named orchestration function owns an

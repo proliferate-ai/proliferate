@@ -8,13 +8,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-BLOCKED_PATHS = (
-    "server/proliferate/utils/logging.py",
-)
+BLOCKED_PATHS = ("server/proliferate/utils",)
+
+
+def _contains_source(path: Path) -> bool:
+    if not path.is_dir():
+        return path.exists()
+    return any(
+        candidate.is_file() and "__pycache__" not in candidate.relative_to(path).parts
+        for candidate in path.rglob("*")
+    )
 
 
 def existing_blocked_paths(repo_root: Path = REPO_ROOT) -> list[str]:
-    return [path for path in BLOCKED_PATHS if (repo_root / path).exists()]
+    return [path for path in BLOCKED_PATHS if _contains_source(repo_root / path)]
 
 
 def main() -> int:

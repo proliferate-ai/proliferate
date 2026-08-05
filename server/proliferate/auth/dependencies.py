@@ -58,11 +58,11 @@ async def current_product_user(
 ) -> User:
     """Acting user for Proliferate Cloud product surfaces (secrets, workspaces, repos).
 
-    Hosted keeps the GitHub product-readiness gate, byte-for-byte the same as
-    ``current_organization_actor``. Single-org (self-hosted) instances admit
-    password-only accounts: the product surfaces themselves must work with no
-    GitHub OAuth app configured. Endpoints that genuinely need a GitHub token
-    (e.g. repo import) enforce that at the point of use instead of here.
+    Hosted normally keeps the GitHub product-readiness gate. Single-org
+    (self-hosted) instances admit password-only accounts: the product surfaces
+    themselves must work with no GitHub OAuth app configured. Endpoints that
+    genuinely need a GitHub token (e.g. repo import) enforce that at the point
+    of use instead of here.
 
     Users who arrived through an organization's SSO connection also pass: the
     org relationship is the vetting, so a linked GitHub identity is not required
@@ -82,10 +82,11 @@ async def current_organization_actor(
 ) -> User:
     """Acting user for organization-membership surfaces.
 
-    Hosted keeps the GitHub product-readiness gate, byte-for-byte the same as
-    ``current_product_user``. Single-org (self-hosted) instances admit
-    password-only accounts: listing the org, inviting teammates, and accepting
-    invitations must all work with no GitHub OAuth app configured.
+    Hosted applies the GitHub product-readiness gate; unlike
+    ``current_product_user``, this organization-surface actor does not add the
+    SSO-membership bypass. Single-org (self-hosted) instances admit password-only
+    accounts: listing the org, inviting teammates, and accepting invitations
+    must all work with no GitHub OAuth app configured.
     """
     if settings.single_org_mode:
         return user

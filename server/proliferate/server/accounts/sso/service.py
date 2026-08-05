@@ -42,6 +42,7 @@ from proliferate.constants.auth import SUPPORTED_CODE_CHALLENGE_METHODS
 from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.auth import create_auth_code
+from proliferate.db.store.auth_sso_records import SsoChallengeRecord, SsoConnectionRecord
 from proliferate.integrations.sso.errors import SsoIntegrationError
 from proliferate.integrations.sso.oidc import (
     build_oidc_authorization_url,
@@ -405,7 +406,7 @@ async def _connection_for_start(
 
 async def _connection_for_challenge(
     db: AsyncSession,
-    challenge: sso_store.SsoChallengeRecord,
+    challenge: SsoChallengeRecord,
 ) -> SsoConnectionSnapshot:
     if challenge.scope == SsoScope.DEPLOYMENT.value:
         connection = deployment_sso_connection()
@@ -443,7 +444,7 @@ async def _consume_challenge(
     db: AsyncSession,
     *,
     state: str,
-) -> sso_store.SsoChallengeRecord:
+) -> SsoChallengeRecord:
     challenge = await sso_store.consume_sso_challenge(db, state_hash=hash_secret(state))
     if challenge is None:
         raise AuthFlowError(
@@ -455,7 +456,7 @@ async def _consume_challenge(
 
 
 def snapshot_from_sso_connection_record(
-    record: sso_store.SsoConnectionRecord | None,
+    record: SsoConnectionRecord | None,
 ) -> SsoConnectionSnapshot | None:
     if record is None:
         return None
@@ -489,7 +490,7 @@ def snapshot_from_sso_connection_record(
 
 
 def _first_enabled_or_first(
-    records: list[sso_store.SsoConnectionRecord],
+    records: list[SsoConnectionRecord],
 ) -> SsoConnectionSnapshot | None:
     enabled = [record for record in records if record.status == SsoStatus.ENABLED.value]
     selected = enabled[0] if enabled else records[0] if records else None

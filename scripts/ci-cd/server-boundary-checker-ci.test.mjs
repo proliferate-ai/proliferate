@@ -22,7 +22,7 @@ test("repo-shape runs focused server boundary tests before enforcing the boundar
   assert.match(testStep, /uv run --python 3\.12 --with pytest==9\.1\.1/);
   assert.match(
     testStep,
-    /pytest --noconftest [\s\S]*server\/tests\/unit\/test_server_boundary_checker\.py/,
+    /pytest --noconftest [\s\S]*server\/tests\/unit\/test_server_boundary_checker\.py[\s\S]*server\/tests\/unit\/test_server_boundary_checker_named_writes\.py/,
   );
   assert.match(checkStep, /python3 scripts\/check_server_boundaries\.py/);
   assert.ok(workflow.indexOf(testStep) < workflow.indexOf(checkStep));

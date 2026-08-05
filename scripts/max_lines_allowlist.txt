@@ -58,8 +58,6 @@ server/tests/integration/test_billing_accounting.py 872 existing server oversize
 server/tests/integration/test_billing_api.py 1944 existing oversized billing integration suite; billing error normalization adds exact parent-router, nested-router, and permission-denial envelope characterization
 server/tests/integration/test_billing_fail_closed_read_errors.py 693 billing error normalization characterizes both snapshot-read and verdict-persistence inheritance corridors in the existing fail-closed integration fixture
 server/tests/integration/test_stripe_webhooks.py 1466 existing oversized Stripe webhook suite; billing error normalization pins the direct product-error envelope after route-wrapper removal
-apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx 492 existing markdown transcript renderer pending split
-apps/packages/ui/src/icons/core.tsx 413 existing consolidated icon barrel pending split
 # Relocated from apps/desktop/src by the Desktop-product move into product-client
 # (web-desktop-unification slice 04). Same files/counts/reasons — relocation, not
 # gate-weakening; product-client/src is now a check_max_lines scan root. Entries
