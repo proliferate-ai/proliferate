@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import optional_current_active_user
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.service import validate_redirect_uri
 from proliferate.auth.identity.web_beta import WebBetaAccessDenied
 from proliferate.auth.sso.models import (
@@ -185,7 +186,7 @@ def _validated_auth_redirect_url(redirect_url: str) -> str:
     for surface in ("web", "mobile", "desktop"):
         try:
             validate_redirect_uri(surface, redirect_url)
-        except HTTPException:
+        except AuthFlowError:
             continue
         return redirect_url
     raise HTTPException(status_code=400, detail="Auth redirect URI is not allowed.")
