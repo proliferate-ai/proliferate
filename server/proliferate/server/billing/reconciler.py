@@ -36,11 +36,7 @@ from proliferate.db.store.billing_runtime_usage import (
     try_acquire_billing_reconciler_lock,
 )
 from proliferate.db.store.cloud_sandboxes import (
-    accept_destroyed_cloud_sandbox_provider_observation,
-    advance_cloud_sandbox_provider_observation_floor,
-    apply_cloud_sandbox_provider_observation,
     load_cloud_sandbox_by_id,
-    mark_cloud_sandbox_provider_missing,
 )
 from proliferate.integrations.sandbox import (
     ProviderSandboxState,
@@ -57,13 +53,8 @@ from proliferate.server.billing.runtime_usage import (
     converge_cloud_sandbox_provider_usage,
 )
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
-from proliferate.server.cloud.gateway.service import (
-    invalidate_cloud_sandbox_gateway_access_for_user,
-)
+from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandbox_service
 from proliferate.server.cloud.materialization import locks
-from proliferate.server.cloud.materialization.failures import (
-    PROVIDER_SANDBOX_MISSING_RECEIPT,
-)
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.billing.reconciler")
@@ -141,42 +132,25 @@ async def _mark_sandbox_environment_unavailable(
     """
     async with db_engine.async_session_factory() as db, db.begin():
         if destroyed:
-            updated = await mark_cloud_sandbox_provider_missing(
+            updated = await cloud_sandbox_service.observe_cloud_sandbox_provider_missing(
                 db,
                 sandbox_id,
                 expected_provider_sandbox_id=expected_provider_sandbox_id,
                 expected_materialization_attempt=expected_materialization_attempt,
                 observed_at=provider_observed_at,
-                last_error=PROVIDER_SANDBOX_MISSING_RECEIPT,
             )
-            if updated is not None and updated.owner_user_id is not None:
-                invalidate_cloud_sandbox_gateway_access_for_user(
-                    updated.owner_user_id,
-                )
         else:
             # Preserve a terminal materialization receipt while still ending
             # exact provider usage for an observed pause/stop.
-            updated = await apply_cloud_sandbox_provider_observation(
+            updated = await cloud_sandbox_service.observe_cloud_sandbox_provider_stopped(
                 db,
                 sandbox_id,
-                status="paused",
                 expected_provider_sandbox_id=expected_provider_sandbox_id,
                 expected_materialization_attempt=expected_materialization_attempt,
                 observed_at=provider_observed_at,
             )
         if updated is None:
-            # Explicit deletion can win after reconciliation loaded the row.
-            # Advance only the exact attempt's provider freshness floor; the
-            # product-owned destroyed state and provider binding stay intact.
-            updated = await accept_destroyed_cloud_sandbox_provider_observation(
-                db,
-                sandbox_id,
-                expected_provider_sandbox_id=expected_provider_sandbox_id,
-                expected_materialization_attempt=expected_materialization_attempt,
-                observed_at=provider_observed_at,
-            )
-            if updated is None:
-                return False
+            return False
         await converge_cloud_sandbox_provider_usage(
             db,
             sandbox_id=sandbox_id,
@@ -202,7 +176,7 @@ async def _record_running_provider_observation(
     observed_at: datetime,
 ) -> None:
     async with db_engine.async_session_factory() as db, db.begin():
-        await advance_cloud_sandbox_provider_observation_floor(
+        await cloud_sandbox_service.observe_cloud_sandbox_provider_running(
             db,
             sandbox_id,
             expected_provider_sandbox_id=expected_provider_sandbox_id,
