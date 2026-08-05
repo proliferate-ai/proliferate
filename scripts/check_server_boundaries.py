@@ -784,6 +784,17 @@ class NamedCrossDomainWriteChecker(ast.NodeVisitor):
             )
         )
 
+    def _resolve_store_modules(self, node: ast.AST) -> set[str]:
+        dotted = _dotted_name(node)
+        if dotted is None:
+            return set()
+        if len(dotted) == 1:
+            return set(self.module_aliases.get(dotted[0], set()))
+        full_module = ".".join(dotted)
+        if full_module in self.imported_modules:
+            return {full_module}
+        return set()
+
     def visit_Attribute(self, node: ast.Attribute) -> None:
         dotted = _dotted_name(node)
         if dotted is not None and len(dotted) >= 2:
@@ -796,6 +807,21 @@ class NamedCrossDomainWriteChecker(ast.NodeVisitor):
                 candidate_modules.add(full_module)
 
             for module in sorted(candidate_modules):
+                boundary = NAMED_STORE_BOUNDARIES[module]
+                if symbol in boundary.protected_symbols:
+                    self._add(node, boundary, symbol)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        ):
+            symbol = node.args[1].value
+            for module in sorted(self._resolve_store_modules(node.args[0])):
                 boundary = NAMED_STORE_BOUNDARIES[module]
                 if symbol in boundary.protected_symbols:
                     self._add(node, boundary, symbol)
