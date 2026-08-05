@@ -80,7 +80,9 @@ async def test_organization_slug_migration_preserves_frozen_backfill_policy() ->
                 "created_at": base_time + timedelta(seconds=offset),
                 "updated_at": base_time + timedelta(seconds=offset),
             }
-            for offset, name in enumerate(("Acme Inc", " ACME---INC! ", "!!!", "é", "A" * 49))
+            for offset, name in enumerate(
+                ("Acme Inc", " ACME---INC! ", "!!!", "é", "A" * 49, "A" * 48)
+            )
         ]
         seed_engine = create_async_engine(database_url, echo=False)
         try:
@@ -121,6 +123,7 @@ async def test_organization_slug_migration_preserves_frozen_backfill_policy() ->
                 "org",
                 "org-2",
                 "a" * 48,
+                "a" * 48 + "-2",
             ]
             slug_index = next(
                 index for index in indexes if index["name"] == "ux_organization_slug"

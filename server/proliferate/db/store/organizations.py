@@ -63,14 +63,14 @@ _SLUG_TRIM_CHAR = "-"
 _SLUG_NUMERIC_ATTEMPTS = 50
 
 
-def _slugify_organization(value: str | None) -> str:
+def _slugify_organization(value: str | None, *, truncate_base: bool = True) -> str:
+    end = ORGANIZATION_SLUG_MAX_LENGTH if truncate_base else None
     slug = _SLUG_ALLOWED.sub("-", (value or "").strip().lower()).strip(_SLUG_TRIM_CHAR)
-    return slug[:ORGANIZATION_SLUG_MAX_LENGTH].strip(_SLUG_TRIM_CHAR) or ORGANIZATION_SLUG_FALLBACK
+    return slug[:end].strip(_SLUG_TRIM_CHAR) or ORGANIZATION_SLUG_FALLBACK
 
 
 async def _slug_taken(db: AsyncSession, slug: str) -> bool:
-    existing = await db.scalar(select(Organization.id).where(Organization.slug == slug).limit(1))
-    return existing is not None
+    return bool(await db.scalar(select(Organization.id).where(Organization.slug == slug).limit(1)))
 
 
 async def allocate_organization_slug(db: AsyncSession, name: str) -> str:
@@ -95,7 +95,7 @@ async def allocate_organization_slug(db: AsyncSession, name: str) -> str:
 async def get_organization_by_slug(db: AsyncSession, slug: str) -> OrganizationRecord | None:
     result = await db.execute(
         select(Organization).where(
-            Organization.slug == _slugify_organization(slug),
+            Organization.slug == _slugify_organization(slug, truncate_base=False),
             Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
         )
     )
