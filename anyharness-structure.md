@@ -197,9 +197,12 @@ fail the build. Run locally with `python3 scripts/<name>.py`.
 ### `scripts/check_anyharness_boundaries.py`
 
 The import/usage checker over `anyharness-lib/src/**` (tests skipped).
-Currently **passing** with a 2-entry ratcheted allowlist
-(`scripts/anyharness_boundaries_allowlist.txt`, format:
-`RULE_ID path count reason`; counts may only go down — stale counts fail).
+Ratcheted allowlist (`scripts/anyharness_boundaries_allowlist.txt`, format:
+`RULE_ID path count reason`; over-count fails AND stale count fails, so
+every cleanup must shrink the file in the same diff). Unit suite:
+`scripts/test_check_anyharness_boundaries.py` (78 tests).
+
+Pre-grid rules (on main before PR #1651):
 
 | Rule ID | What it forbids |
 | --- | --- |
@@ -209,13 +212,32 @@ Currently **passing** with a 2-entry ratcheted allowlist
 | `ADAPTERS_PRODUCT_DOMAIN_IMPORT` / `ADAPTERS_LIVE_RUNTIME_IMPORT` / `ADAPTERS_API_IMPORT` | `adapters/**` importing domains, live/acp, `crate::api`, or HTTP transport crates (`axum`, `http`, `tower`, `utoipa`, ...) |
 | `INTEGRATIONS_PRODUCT_IMPORT` / `INTEGRATIONS_API_IMPORT` | `integrations/**` importing domains, `crate::api`, or HTTP transport crates |
 | `PERSISTENCE_PRODUCT_IMPORT` / `PERSISTENCE_RUNTIME_IMPORT` / `PERSISTENCE_API_IMPORT` | `persistence/**` importing domains, live/acp, api, or HTTP transport crates |
-| `SESSION_STORE_API_IMPORT` / `SESSION_STORE_LIVE_IMPORT` | `domains/sessions/store/**` importing api or live |
 | `EVENT_SINK_API_IMPORT` / `EVENT_SINK_HTTP_TRANSPORT_IMPORT` | `live/sessions/event_sink/**` importing api or HTTP transport crates |
 | `LIVE_SESSION_PRIVATE_IMPORT` | importing `live/sessions/{actor,driver,event_sink,interactions,replay,background_work}` from outside `live/sessions/**` |
 | `SESSION_COMMAND_IMPORT` / `SESSION_COMMAND_USE` | importing or constructing `SessionCommand` outside `live/sessions/**` — the handle is the only door |
 | `LIVE_SESSION_COMMAND_TX_ACCESS` | touching `.command_tx` anywhere but `handle.rs` and `actor/**` |
 | `APP_STATE_IMPORT` | `AppState` referenced outside `api/**` and `app/**` |
 | `DOMAIN_CONTRACT_REQUEST_RESPONSE` | contract `*Request`/`*Response` types used in `domains/**` (2 allowlisted: goals + loops runtimes drive sidecar ext methods) |
+
+Grid rules (PR #1651, seeded with today's debt; hardened same-PR against
+multi-line SQL, AppState store fields, valve re-exports, inline paths):
+
+| Rule ID | What it forbids |
+| --- | --- |
+| `DOMAIN_LIVE_VALVE` | `crate::live` (import or inline path) in `domains/**` outside `runtime.rs`/`runtime/**`/`live_ports.rs`. **Shapes exception**: `crate::live::<area>::model::*` legal anywhere (the sanctioned observer-trait inversion) |
+| `DOMAIN_VALVE_LIVE_REEXPORT` | `pub use crate::live::<power>` inside a valve file — the valve may hold live machinery, not republish it domain-wide (`::model` exempt). Zero debt; hard rule |
+| `LIVE_DOMAIN_STORE_IMPORT` | `live/**` importing or inline-constructing any domain's store/service (import walk + line pass) |
+| `API_STORE_ESCAPE` | in `api/**`: `.store()` calls, `*Store::new`, store imports, or `state.*_store` AppState-field reaches |
+| `POLICY_PURITY` | in `*_policy.rs` or `policy.rs` under `domains/**`: `Utc::now`/`Local::now`/`SystemTime::now`/`Instant::now`/`Uuid::new_v4`/`rand::`/store/adapters imports (NOT `&self` — over-fires; stays judgment) |
+| `DOMAIN_STORE_API_IMPORT` / `DOMAIN_STORE_LIVE_IMPORT` | any `domains/*/store*` importing api or live (generalizes the retired `SESSION_STORE_*` pair) |
+| `DOMAIN_SQL_OUTSIDE_STORE` | SQL text in `domains/**` outside store modules — 12 patterns incl. split-line `SELECT`/`UPDATE…SET`, `INSERT OR … INTO`, `DROP TABLE`, `params!` |
+| `DOMAIN_CONTRACT_IMPORT` | any `anyharness_contract` path in `domains/**` — use-statements AND inline paths |
+
+Known scope limits, documented in the allowlist header, deliberate:
+store-by-role files (`*_store.rs` outside `store/`) are policed for SQL
+but invisible to the importable-store rules; counts are per-line so a
+rustfmt reflow may legitimately change one; AppState-field access beyond
+the `state.*_store` shape stays judgment.
 
 ### Other CI checks covering this crate
 
