@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import ast
 import base64
 import hashlib
+import importlib
 import inspect
 from collections.abc import Callable
+from types import ModuleType
 
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
@@ -23,11 +26,42 @@ _LEGACY_LIST_CIPHERTEXT = (
     "gAAAAABqcuweb6MVrIuS1MMf0sOfGIvaaBNCmX9lC-flv3z28tCqJQsNtj3uakYdCbo0HNonL3Ex"
     "sIgaDsG3VqhCD9qenKKj_Q=="
 )
+_CONFIG_INJECTED_STORE_MODULES = (
+    "proliferate.db.store.agent_gateway.api_keys",
+    "proliferate.db.store.agent_gateway.enrollment_keys",
+    "proliferate.db.store.agent_gateway.enrollments",
+    "proliferate.db.store.auth_sso",
+    "proliferate.db.store.auth_sso_records",
+    "proliferate.db.store.cloud_secrets",
+    "proliferate.db.store.github_app",
+)
+_CRYPTO_HELPER_NAMES = {"encrypt_json", "decrypt_json", "encrypt_text", "decrypt_text"}
 
 
 def _independent_fernet(secret: str) -> Fernet:
     key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
     return Fernet(key)
+
+
+def _store_crypto_calls(module: ModuleType) -> list[ast.Call]:
+    source = inspect.getsource(module)
+    return [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _CRYPTO_HELPER_NAMES
+    ]
+
+
+def _uses_configured_cloud_secret(call: ast.Call) -> bool:
+    secret = next((keyword.value for keyword in call.keywords if keyword.arg == "secret"), None)
+    return (
+        isinstance(secret, ast.Attribute)
+        and secret.attr == "cloud_secret_key"
+        and isinstance(secret.value, ast.Name)
+        and secret.value.id == "settings"
+    )
 
 
 @pytest.mark.parametrize(
@@ -49,6 +83,27 @@ def test_public_helpers_require_keyword_only_secret(
 
     with pytest.raises(TypeError):
         helper(value)
+
+
+@pytest.mark.parametrize("module_name", _CONFIG_INJECTED_STORE_MODULES)
+def test_config_injected_store_crypto_calls_reject_a_wrong_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    module_name: str,
+) -> None:
+    module = importlib.import_module(module_name)
+    configured_secret = f"{module_name}-configured-secret"
+    monkeypatch.setattr(module.settings, "cloud_secret_key", configured_secret)
+
+    calls = _store_crypto_calls(module)
+    assert calls
+    assert all(_uses_configured_cloud_secret(call) for call in calls)
+
+    ciphertext = encrypt_text(
+        f"{module_name} encrypted payload",
+        secret=module.settings.cloud_secret_key,
+    )
+    with pytest.raises(InvalidToken):
+        decrypt_text(ciphertext, secret=f"{module_name}-wrong-secret")
 
 
 def test_pre_inversion_text_ciphertext_remains_decryptable() -> None:
