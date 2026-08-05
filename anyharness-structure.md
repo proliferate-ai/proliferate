@@ -277,7 +277,7 @@ whether an automated check flags it today.
 | 6 | `WorkspaceService`/`WorkspaceRuntime` — duplicated, diverged use-case bodies | one entry per use case | No (judgment) | one entry surface |
 | 7 | Foreign-store mutation methods are plain `pub`; cross-domain reads-only holds by review, not law | foreign stores are READS only | No (visibility ratchet) | `pub(crate)` scoping after crate split |
 | 8 | SQL embedded outside store modules in 8 non-test files across 5 domains (~29 lines; worst: `sessions/links/completions.rs` 14; also `plans/service.rs`, `workspaces/{retention_policy,access_store,inventory,access_gate}.rs`, `activity/feeds.rs`, `plans/decision_op.rs`) | rows/SQL stay in the store | No (gap 5 + new SQL rule) | fold into each domain's `store/` |
-| 9 | `agents/` — undocumented federation of 8 subdomains, absent from the migration ledger | ledger truth | No | ledger truth-up, then promotion decisions |
+| 9 | `agents/` — 8 subfolders now named and classified below ([Agents Domain — Subfolder Ledger](#agents-domain--subfolder-ledger-pr-11-violation-9)); 3 flagged borderline | ledger truth | No (judgment) | ledger truth-up done (this PR); promotion ruling pending Pablo |
 | 10 | Provider branches (`agent_kind` matches) in ~30 shared files (worst: `session_lifecycle.rs` 30, `user_input.rs` 21, `process.rs` 20) | branching begs for a capability trait | No (judgment) | harness-capabilities trait for the worst files only — proportionality, not a blanket rewrite |
 | 11 | `acp/` homeless at src root | filing grammar | No | move to `integrations/acp` |
 | 12 | ~~`agents_model_registry.rs` ProblemResponse — a second error mechanism at the edge~~ **STALE — already resolved.** The file, type, and its routes were deleted in #640 (2026-06-11); the fold into `ApiError` happened then (`agents_errors.rs:1-3` records it, wire titles/codes/statuses preserved). Kept numbered so references stay stable. | one error doctrine per surface | — | none (recon 2026-08-05 verified nothing remains) |
@@ -289,6 +289,45 @@ Deliberately retained, not debt: `live/terminals` imports
 `domains/terminals` service+store (5 files) — the older lock-shared-registry
 doctrine rather than actors; proportionality says do not "fix" it. It gets
 allowlist entries marked "ratchet only," never a rewrite.
+
+## Agents Domain — Subfolder Ledger (PR 11, violation #9)
+
+`domains/agents/` has 8 subfolders (`auth`, `catalog`, `installer`,
+`model_snapshot`, `portability`, `readiness`, `registry`, `route_auth`)
+beside its canonical `model.rs`/`runtime.rs` root. None were named or
+classified anywhere before this entry. Read against every file, its
+importers, and the two platform docs that already partially describe pieces
+of this territory (`agent-distribution.md`, `agent-auth.md`,
+`model-catalog.md`). **These are proposals awaiting Pablo's ruling — no code
+moves land in this PR.**
+
+The promotion question per subfolder: does it have its own durable
+model/store/service set, its own lifecycle, or its own external identity
+(the "domain" bar) — or is it a reusable sub-step the domain's `runtime.rs`
+sequences (the "concern" bar)?
+
+| Subfolder | Role | Shape | Recommendation |
+| --- | --- | --- | --- |
+| `auth/` | Native credential detection (env/local login state) + pure per-slot auth-context classification + interactive login command resolution. | No store. One live import (`login_terminal.rs` → `live::terminals`, to run the login command). Imports `installer::seed`, `readiness::paths`/`service`. Imported by `catalog`, `readiness`, `sessions::service`, `api/http/agents*`. `guides/domains.md:519` claims this concern "uses contract auth structs end-to-end" as migration debt — a targeted grep today finds no `anyharness_contract` import under `auth/`; worth a recon pass, not re-litigated here. | **Concern.** No independent model/store; sequenced by `runtime.rs`; reached cross-domain only via `sessions::service`. |
+| `catalog/` | The ACTIVE agent catalog: bundled document, per-model option-matrix schema, availability + launch validation, gateway model-plan memoization. | Own bundled-JSON schema (`schema.rs`, held by `sync.rs`) — document-shaped, not row-shaped; no SQL, no live import. Cross-imports `registry` (bundled+schema), `auth::context`, `installer::install_policy`, `route_auth` (state+plan). Imported outside `agents/` by `sessions` (4 sites), `app/`, and 4 `api/http/*` files. | **Concern.** Largest by line count (~5.9k) of the eight, but everything funnels through the one read surface, `catalog::service::AgentCatalogService`, itself sequenced by `runtime.rs`. |
+| `installer/` | Pin materialization (download/npm/managed-npm/git), install manifests, seed hydration + quarantine, and the reconcile job that converges a machine to the active catalog's pins. | Own file-based manifest (`install-manifest.json`, not SQL). `seed/` is the only `anyharness_contract` import site under `domains/agents`. No live import. Cross-imports `catalog::install_policy`, `readiness` (seed, manifest), feeds `model_snapshot::document` (manifest reads). Imported outside `agents/` by `workspaces/purge`, `app/`, `api/http/agents*`. | **Concern.** Largest by file count (26) of the eight; its own `reconcile/` and `seed/` split already follows the concern-folder grammar one level down — healthy recursion, not a promotion signal. |
+| `model_snapshot/` | One composed probe observation per harness; event-driven single-flight refresh, failure backoff, orphan-scratch sweep; serves launch validation and the picker. | Has a document+atomic-file store equivalent (`document.rs`) and its own service (the `mod.rs` engine) — but `probe.rs`/`entry.rs` import `live::sessions::probe` directly, the named valve break in backlog #14 (a concern, not a `runtime.rs`, touching live). Densely cross-imports `route_auth` (state/plan/materialize, 4 files), `installer::manifest`, `catalog::gateway_plan`, `readiness::service`, `registry`. | **Borderline — needs ruling.** Shaped like a small domain (own model + own store-equivalent + a live touch), and backlog #14 already names its live import as a violation needing its own remedy independent of this ledger. Promoting it would legitimize a `runtime.rs` for that touch; but its heaviest coupling is to `route_auth` and `installer` inside `agents/`, not to anything outside it — promotion trades one named violation for one new cross-domain edge. |
+| `portability/` | Collects/installs/validates/deletes per-harness (claude/codex) session-transcript artifacts under the user's home directory, for workspace mobility export/import. | No model/store/service split — 2 files. Imports `domains::sessions::model::SessionRecord`, reaching INTO another domain for its input type. Its only importer is `domains::mobility` (`service.rs`, `model.rs`, 2 contract files); `agents::runtime.rs` never references it. | **Borderline — needs ruling, leans "not agents'."** Sole caller is `mobility`; sole non-std input is a sessions model; nothing here is catalog, install, readiness, or auth. Reads as a `mobility`- or `sessions`-owned concern filed under `agents/` because it switches on `agent_kind`. |
+| `readiness/` | Resolves per-agent launch usability (artifact presence, compatibility gates, credential state via `auth/`, route-aware upgrade via `route_auth`) into `ResolvedAgent`. | No own model/store; `service.rs` is the single entry (`resolve_agent`/`resolve_agent_unrouted`/`resolve_agent_with_env`). Cross-imports `installer` (seed, manifest, managed_npm), `auth::credentials`, `route_auth`. Second-most externally consumed concern after `runtime.rs` itself: `sessions` (4 sites), `cowork` (2 sites), `workflows/resolution`, `live/sessions/probe.rs` (backlog #14), `api/http/agents_contract`. | **Concern.** Entirely a projection over the other concerns' facts plus the static model — textbook. |
+| `registry/` | The hand-written method document (`registry.json`): per-harness install method, auth vocabulary, launch discovery. | Zero cross-imports of any other `agents/` concern, zero live imports, zero contract imports. Only outside dependency is `domains::agents::model`. Zero importers outside `domains/agents` — reached only through `runtime.rs`'s `built_in_registry()`/`descriptor()`. | **Concern.** Cleanest and most self-contained of the eight; the shape every other concern here should be measured against. |
+| `route_auth/` | The agent-auth "render plane": reads control-plane-delivered `state.json`, resolves a per-harness auth profile, renders pure env/file deltas, materializes them (incl. probe scratch + orphan sweep). Deliberately separate from `auth/`'s native-login concern (its own `mod.rs` doc comment draws this line explicitly). | Own wire contract (`state.rs`), own pure profile/render pipeline, own effectful `materialize.rs`; own API handler (`api/http/agent_auth.rs`) and own platform doc (`agent-auth.md`) with its own contract fixture. One test-only live import. Densely depended on by `catalog::gateway_plan`, `model_snapshot` (throughout), `readiness::service`, `sessions` (3 sites), `live/sessions/model.rs` (route_auth env-layering fields). | **Borderline — needs ruling, leans "concern."** Strongest independent identity of the eight (own doc, own handler, own contract fixture) — the profile most likely to read as "a domain wearing a subfolder name." But `agent-auth.md`'s own code map already files "runtime `route_auth/`" as one layer of the agent-auth platform living inside `domains/agents/`, and it has no store of its own (`state.json` is a file, not SQL rows) and no `runtime.rs` peer — the "own durable model/store/service set" promotion test (`guides/domains.md`, "Concept Promotion") does not yet clear. |
+
+None of the eight has a SQL `store/` — every one is either pure, file-based
+(manifest/document/state.json), or bundled-JSON. That is the strongest single
+signal against promoting any of them to a `domains/<name>` peer of
+`sessions`/`workspaces`/`agents`/`repo_roots` today: the core-primitive-domain
+bar in `guides/domains.md` assumes durable SQL rows, and nothing here clears
+it. The three flagged borderline are flagged for different reasons
+(`model_snapshot`: an existing valve violation plus store-shaped state;
+`portability`: wrong home entirely, not a promotion candidate so much as a
+relocation candidate; `route_auth`: the strongest platform identity without
+the store to match) — Pablo's ruling on each determines whether PR 12+ in
+this train ever touches `domains/agents/` again.
 
 ## Change Discipline
 
