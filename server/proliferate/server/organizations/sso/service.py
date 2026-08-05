@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.errors import AuthFlowError
@@ -17,6 +17,13 @@ from proliferate.server.accounts.sso.service import (
     oidc_callback_url,
     snapshot_from_sso_connection_record,
     test_oidc_connection,
+)
+from proliferate.server.organizations.errors import (
+    OrganizationSsoConnectionEnableProtocolUnsupported,
+    OrganizationSsoDisplayNameRequired,
+    OrganizationSsoDisplayNameTooLong,
+    OrganizationSsoJitDefaultRoleNotAllowed,
+    OrganizationSsoRequiredLoginPolicyUnsupported,
 )
 from proliferate.server.organizations.sso.models import (
     OrganizationSsoConnectionRequest,
@@ -188,7 +195,7 @@ async def enable_organization_sso_connection(
         connection_id=connection_id,
     )
     if tested.protocol != "oidc":
-        raise HTTPException(status_code=400, detail="Only OIDC SSO can be enabled right now.")
+        raise OrganizationSsoConnectionEnableProtocolUnsupported()
     enabled = await sso_store.set_sso_connection_status(
         db,
         connection_id=connection_id,
@@ -264,9 +271,9 @@ def organization_sso_urls(request: Request, connection_id: UUID) -> tuple[str, s
 def _clean_display_name(value: str | None) -> str:
     cleaned = (value or "").strip()
     if not cleaned:
-        raise HTTPException(status_code=400, detail="SSO display name is required.")
+        raise OrganizationSsoDisplayNameRequired()
     if len(cleaned) > 255:
-        raise HTTPException(status_code=400, detail="SSO display name is too long.")
+        raise OrganizationSsoDisplayNameTooLong()
     return cleaned
 
 
@@ -279,17 +286,11 @@ def _clean_optional(value: str | None) -> str | None:
 
 def _clean_default_role(value: str) -> str:
     if value == "owner":
-        raise HTTPException(
-            status_code=400,
-            detail="SSO JIT default role cannot be owner.",
-        )
+        raise OrganizationSsoJitDefaultRoleNotAllowed()
     return value
 
 
 def _clean_login_policy(value: str) -> str:
     if value == "required":
-        raise HTTPException(
-            status_code=400,
-            detail="Required SSO login policy is not supported yet.",
-        )
+        raise OrganizationSsoRequiredLoginPolicyUnsupported()
     return value
