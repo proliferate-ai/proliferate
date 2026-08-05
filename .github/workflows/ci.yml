@@ -24,6 +24,8 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@v7
+
       - name: Check max source file length
         run: python3 scripts/check_max_lines.py
 
@@ -58,6 +60,12 @@ jobs:
 
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
+
+      - name: Test server boundary checker
+        run: >-
+          uv run --python 3.12 --with pytest==9.1.1
+          pytest --noconftest -p no:cacheprovider -c /dev/null -q
+          server/tests/unit/test_server_boundary_checker.py
 
       - name: Check server layer boundaries
         run: python3 scripts/check_server_boundaries.py
