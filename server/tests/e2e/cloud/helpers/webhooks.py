@@ -66,7 +66,7 @@ async def create_seeded_workspace_and_sandbox(
     runtime_url = "https://example-runtime.invalid" if with_runtime_metadata else None
     anyharness_workspace_id = "workspace-123" if with_runtime_metadata else None
 
-    from proliferate.utils.crypto import encrypt_text
+    from proliferate.lib.infra.encryption.fernet import encrypt_text
 
     user_uuid = uuid.UUID(user_id)
     await ensure_personal_billing_subject(db_session, user_uuid)

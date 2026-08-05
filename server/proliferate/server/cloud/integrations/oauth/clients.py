@@ -25,7 +25,7 @@ from proliferate.integrations.integration_oauth import (
     discover_authorization_server_metadata,
     register_client,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 
 # Static-client auth methods this deployment can drive.
 # Static-client auth methods this deployment can drive.

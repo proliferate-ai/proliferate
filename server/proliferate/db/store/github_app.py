@@ -18,7 +18,7 @@ from proliferate.db.models.cloud.github_app import (
     GitHubAppInstallation,
     GitHubAppInstallationRepository,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
 
 _CACHE_FRESHNESS_SECONDS = 600

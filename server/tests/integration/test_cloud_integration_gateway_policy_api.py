@@ -12,7 +12,7 @@ from proliferate.config import settings
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.db.store.integrations import policies as policies_store
-from proliferate.utils.crypto import encrypt_json
+from proliferate.lib.infra.encryption.json import encrypt_json
 from tests.integration.test_cloud_integration_gateway_api import (
     _authed_user,
     _create_org_with_member,

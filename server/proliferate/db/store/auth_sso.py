@@ -22,7 +22,7 @@ from proliferate.db.store.auth_sso_records import (
     sso_identity_record,
 )
 from proliferate.db.store.organization_records import MembershipRecord, membership_record
-from proliferate.utils.crypto import encrypt_text
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 
 
 def _now() -> datetime:

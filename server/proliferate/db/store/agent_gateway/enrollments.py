@@ -23,7 +23,7 @@ from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.agent_gateway.enrollment_keys import revoke_enrollment_keys
 from proliferate.db.store.agent_gateway.mappers import enrollment_record
 from proliferate.db.store.agent_gateway.records import AgentGatewayEnrollmentRecord
-from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
 
 # The per-(org, member) LiteLLM user id prefix. A pre-migration row whose

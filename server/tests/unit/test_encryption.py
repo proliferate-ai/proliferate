@@ -11,7 +11,8 @@ from types import ModuleType
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
 
-from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
 
 _LEGACY_SECRET = "legacy-test-secret"
 _LEGACY_TEXT_CIPHERTEXT = (

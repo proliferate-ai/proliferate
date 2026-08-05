@@ -9,7 +9,7 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.db.models.auth import SsoChallenge, SsoConnection, SsoIdentity
-from proliferate.utils.crypto import decrypt_text
+from proliferate.lib.infra.encryption.fernet import decrypt_text
 
 
 @dataclass(frozen=True)

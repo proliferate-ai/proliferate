@@ -31,7 +31,7 @@ from proliferate.db.store import instance_organizations as instance_organization
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers import service
 from proliferate.server.cloud.runtime_workers.service import create_cloud_sandbox_enrollment
-from proliferate.utils.crypto import encrypt_text
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 
 

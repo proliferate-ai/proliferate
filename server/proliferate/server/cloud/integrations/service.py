@@ -41,6 +41,7 @@ from proliferate.integrations.integration_oauth.discovery import (
     discover_protected_resource_metadata,
 )
 from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
+from proliferate.lib.infra.encryption.json import encrypt_json
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import (
     HeaderTemplate,
@@ -69,7 +70,6 @@ from proliferate.server.cloud.integrations.oauth import (
     start_oauth_flow,
 )
 from proliferate.server.organizations.domain.policy import organization_admin_roles
-from proliferate.utils.crypto import encrypt_json
 
 _DEFAULT_SECRET_FIELD_ID = "api_key"
 
