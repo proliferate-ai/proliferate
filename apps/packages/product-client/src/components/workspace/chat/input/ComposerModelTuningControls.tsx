@@ -13,6 +13,7 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 interface ComposerModelTuningControlsProps {
   reasoningControl: LiveSessionControlDescriptor | null;
   fastModeControl: LiveSessionControlDescriptor | null;
+  onEscapeKeyDown: () => void;
 }
 
 interface TuningOption {
@@ -24,6 +25,7 @@ interface TuningOption {
 export function ComposerModelTuningControls({
   reasoningControl,
   fastModeControl,
+  onEscapeKeyDown,
 }: ComposerModelTuningControlsProps) {
   const reasoningOptions = reasoningControl?.options.map((option) => ({
     value: option.value,
@@ -48,6 +50,7 @@ export function ComposerModelTuningControls({
           label="Effort"
           control={reasoningControl}
           options={reasoningOptions}
+          onEscapeKeyDown={onEscapeKeyDown}
         />
       )}
       {fastModeControl && (
@@ -55,6 +58,7 @@ export function ComposerModelTuningControls({
           label="Speed"
           control={fastModeControl}
           options={speedOptions}
+          onEscapeKeyDown={onEscapeKeyDown}
         />
       )}
     </>
@@ -65,10 +69,12 @@ function TuningSubmenu({
   label,
   control,
   options,
+  onEscapeKeyDown,
 }: {
   label: "Effort" | "Speed";
   control: LiveSessionControlDescriptor;
   options: TuningOption[];
+  onEscapeKeyDown: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const selectedOption = options.find((option) => option.selected) ?? null;
@@ -86,7 +92,12 @@ function TuningSubmenu({
           {selectedOption?.label ?? control.detail}
         </span>
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent sideOffset={4} alignOffset={-4} className="w-56">
+      <DropdownMenuSubContent
+        sideOffset={4}
+        alignOffset={-4}
+        className="w-56"
+        onEscapeKeyDown={onEscapeKeyDown}
+      >
         {options.map((option) => (
           <DropdownMenuItem
             key={option.value}

@@ -26,11 +26,13 @@ export function ComposerModelOptionsSubmenu({
   groups,
   currentModel,
   currentModelLabel,
+  onEscapeKeyDown,
   onSelect,
 }: {
   groups: ModelSelectorGroup[];
   currentModel: ModelSelectorProps["currentModel"];
   currentModelLabel: string;
+  onEscapeKeyDown: () => void;
   onSelect: (selection: ModelSelectorSelection) => void;
 }) {
   const currentKind = currentModel?.kind ?? null;
@@ -79,6 +81,7 @@ export function ComposerModelOptionsSubmenu({
         sideOffset={4}
         alignOffset={-4}
         className="flex max-h-96 w-72 flex-col overflow-hidden p-0"
+        onEscapeKeyDown={onEscapeKeyDown}
       >
         <div className="shrink-0 border-b border-border">
           <PopoverSearchField

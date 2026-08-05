@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
@@ -34,6 +34,25 @@ function openModelOptions(container: HTMLElement) {
     ctrlKey: false,
   });
   fireEvent.click(document.querySelector<HTMLElement>("[data-composer-model-menu]")!);
+}
+
+function createKeyboardModelSelectorProps(): ModelSelectorProps {
+  return {
+    connectionState: "healthy",
+    currentModel: { kind: "claude", displayName: "Haiku 4.5", pendingState: null },
+    groups: [
+      {
+        kind: "claude",
+        providerDisplayName: "Claude Code",
+        models: [
+          { kind: "claude", modelId: "haiku", displayName: "Haiku 4.5", actionKind: "select", isSelected: true, isUnsupported: false },
+        ],
+      },
+    ],
+    hasAgents: true,
+    isLoading: false,
+    onSelect: vi.fn(),
+  };
 }
 
 it("identifies model rows by both harness kind and model id", () => {
@@ -255,24 +274,9 @@ it("opens the picker when a refusal asks for it, and again on the next refusal",
   expect(menuState()).toBe("open");
 });
 
-it("toggles model options from the active macOS workspace, not a background route", () => {
+it("toggles model options from the active macOS workspace and restores composer focus", async () => {
   vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
-  const props: ModelSelectorProps = {
-    connectionState: "healthy",
-    currentModel: { kind: "claude", displayName: "Haiku 4.5", pendingState: null },
-    groups: [
-      {
-        kind: "claude",
-        providerDisplayName: "Claude Code",
-        models: [
-          { kind: "claude", modelId: "haiku", displayName: "Haiku 4.5", actionKind: "select", isSelected: true, isUnsupported: false },
-        ],
-      },
-    ],
-    hasAgents: true,
-    isLoading: false,
-    onSelect: vi.fn(),
-  };
+  const props = createKeyboardModelSelectorProps();
   const reasoningControl: LiveSessionControlDescriptor = {
     key: "effort",
     label: "Reasoning effort",
@@ -291,15 +295,19 @@ it("toggles model options from the active macOS workspace, not a background rout
   const { container, unmount } = render(
     <MemoryRouter>
       <ShortcutDispatcher />
-      <ComposerModelSelectorControl
-        modelSelectorProps={props}
-        reasoningControl={reasoningControl}
-        keyboardShortcutEnabled
-      />
+      <div data-focus-zone="chat">
+        <textarea data-chat-composer-editor defaultValue="Keep typing" />
+        <ComposerModelSelectorControl
+          modelSelectorProps={props}
+          reasoningControl={reasoningControl}
+          keyboardShortcutEnabled
+        />
+      </div>
     </MemoryRouter>,
   );
-  const prompt = document.createElement("textarea");
-  document.body.append(prompt);
+  const prompt = container.querySelector<HTMLTextAreaElement>("[data-chat-composer-editor]")!;
+  prompt.focus();
+  prompt.setSelectionRange(4, 4);
   const shortcut = new KeyboardEvent("keydown", {
     key: "M",
     code: "KeyM",
@@ -334,7 +342,11 @@ it("toggles model options from the active macOS workspace, not a background rout
   expect(
     container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
   ).toBe("closed");
-  prompt.remove();
+  await waitFor(() => {
+    expect(document.activeElement).toBe(prompt);
+  });
+  expect(prompt.selectionStart).toBe(4);
+  expect(prompt.selectionEnd).toBe(4);
 
   unmount();
   const hidden = render(
@@ -367,4 +379,71 @@ it("toggles model options from the active macOS workspace, not a background rout
     hidden.container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
   ).toBe("closed");
   settingsPrompt.remove();
+});
+
+it("restores composer focus when Escape closes the model menu", async () => {
+  vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+  const props = createKeyboardModelSelectorProps();
+
+  const { container } = render(
+    <MemoryRouter>
+      <ShortcutDispatcher />
+      <div data-focus-zone="chat">
+        <textarea data-chat-composer-editor defaultValue="Keep typing" />
+        <ComposerModelSelectorControl
+          modelSelectorProps={props}
+          keyboardShortcutEnabled
+        />
+      </div>
+    </MemoryRouter>,
+  );
+  const prompt = container.querySelector<HTMLTextAreaElement>("[data-chat-composer-editor]")!;
+  prompt.focus();
+  prompt.setSelectionRange(4, 4);
+
+  openModelOptions(container);
+  expect(
+    container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+  ).toBe("open");
+  expect(document.querySelector("[data-model-option]")).not.toBeNull();
+
+  fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+
+  await waitFor(() => {
+    expect(
+      container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+    ).toBe("closed");
+    expect(document.activeElement).toBe(prompt);
+  });
+  expect(prompt.selectionStart).toBe(4);
+  expect(prompt.selectionEnd).toBe(4);
+});
+
+it("does not restore Escape focus to a composer hidden behind another route", async () => {
+  const props = createKeyboardModelSelectorProps();
+  const { container } = render(
+    <MemoryRouter initialEntries={["/settings"]}>
+      <div aria-hidden="true">
+        <div data-focus-zone="chat">
+          <textarea data-chat-composer-editor defaultValue="Hidden draft" />
+          <ComposerModelSelectorControl
+            modelSelectorProps={props}
+            keyboardShortcutEnabled
+          />
+        </div>
+      </div>
+    </MemoryRouter>,
+  );
+  const prompt = container.querySelector<HTMLTextAreaElement>("[data-chat-composer-editor]")!;
+  prompt.focus();
+
+  openModelOptions(container);
+  fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+
+  await waitFor(() => {
+    expect(
+      container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+    ).toBe("closed");
+  });
+  expect(document.activeElement).not.toBe(prompt);
 });
