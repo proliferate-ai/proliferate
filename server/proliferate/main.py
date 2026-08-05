@@ -36,6 +36,7 @@ from proliferate.lib.product.telemetry.mode import (
     get_server_telemetry_mode,
     is_vendor_telemetry_enabled,
 )
+from proliferate.middleware.logging import configure_server_logging
 from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.ai_magic.api import router as ai_magic_router
@@ -87,7 +88,6 @@ from proliferate.server.version import server_version
 from proliferate.server.web_app import mount_web_app
 from proliferate.server.workflows.api import invocations_router as workflow_invocations_router
 from proliferate.server.workflows.api import router as workflows_router
-from proliferate.utils.logging import configure_server_logging
 
 
 def _normalize_api_prefix(raw_prefix: str) -> str:

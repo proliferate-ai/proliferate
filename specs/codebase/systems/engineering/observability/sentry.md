@@ -22,7 +22,7 @@ Source owners:
 ```text
 server/proliferate/integrations/sentry.py
 server/proliferate/middleware/request_telemetry.py
-server/proliferate/utils/logging.py
+server/proliferate/middleware/logging.py
 apps/desktop/src/lib/integrations/telemetry/{client,config,sentry,scrub}.ts
 apps/desktop/src-tauri/src/telemetry.rs
 apps/web/src/browser/telemetry/{install-web-telemetry,sentry-event-filter,web-telemetry}.ts

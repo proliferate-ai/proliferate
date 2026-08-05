@@ -11,13 +11,13 @@ import pytest
 
 from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
+import proliferate.middleware.logging as logging_module
+from proliferate.middleware.logging import JsonLogFormatter, configure_server_logging
 from proliferate.middleware.request_context import (
     bind_background_correlation_context,
     get_correlation_context,
     with_correlation_context,
 )
-from proliferate.utils import logging as logging_module
-from proliferate.utils.logging import JsonLogFormatter, configure_server_logging
 
 
 class TestJsonLogFormatterVersionFields:
