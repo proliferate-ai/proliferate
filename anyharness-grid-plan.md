@@ -234,17 +234,46 @@ live/sessions returns to zero.
 
 **Branch**: `codex/anyharness-mobility-valve` off PR 1 head.
 **The template PR for valve promotions.** Split
-`domains/mobility/service.rs` (~1.5k lines):
+`domains/mobility/service.rs` (1520 lines). Recon 2026-08-05 classified
+every use case — the split is mechanical now:
 
-- `service.rs` keeps durable-only use cases (own store, foreign reads,
-  adapters).
-- new `runtime/` gets: the `TerminalService` field, every use case that
-  touches live or a second domain's facade, cross-domain reach. Runtime
-  wraps the service (`Arc<MobilityService>` field) per the entry rules.
-- `app/` wiring updated: construct service, then runtime, in dependency
-  order; `AppState` exposes the runtime as the facade.
-- api handlers re-point to the runtime for promoted use cases; entry
-  stays per-use-case (durable-only endpoints keep calling the service).
+| Use case | Layer | Why |
+| --- | --- | --- |
+| `export_workspace_archive` :453 | SERVICE | durable-only: own store, session store reads, git adapters, subagent service |
+| `prepare_repo_root_destination` :101 | RUNTIME | workspace_runtime.create_mobility_destination + live terminal list |
+| `preflight_workspace` :159 | RUNTIME | terminal_service.is_setup_running :237 + list :299, workspace_runtime :219 |
+| `install_workspace_archive` :523 | RUNTIME | terminal_service via validate_install_preconditions :793/:810 + session_runtime.forget_live_session… :599 (live via facade) |
+| `destroy_source_workspace` :658 | RUNTIME | close_terminal_blocking :678, workspace_runtime ×2 |
+
+- `service.rs` keeps `export_workspace_archive` + the durable helpers
+  (`collect_workspace_sessions` :707, `load_workspace` :777,
+  `can_relocate_existing_archive_session` :853,
+  `validate_expected_export_runtime_state` :925), the pure free fns +
+  their 5 existing tests (:938-968, :970-1078), and the pure
+  size-accounting tail (:1354-1521).
+- new `runtime/` gets the 4 RUNTIME use cases, the `terminal_service`
+  field, `workspace_runtime`, `session_runtime`, `review_store`, and the
+  live helpers (`validate_install_preconditions`,
+  `validate_prepared_destination_is_empty`, `active_terminals_*`).
+  Runtime wraps the service (`Arc<MobilityService>` field). Direction is
+  already clean: preflight (RUNTIME) calls export (SERVICE), never the
+  reverse.
+- Facade-laundered live counts as live: `session_runtime` wraps
+  `LiveSessionManager`, `access_gate` wraps `TerminalService` — a method
+  is RUNTIME if its call tree reaches live through ANY facade, not just
+  the :32 import. (access_gate's methods used here — `runtime_state`,
+  `assert_can_mutate_for_workspace` — are pure store reads, so the gate
+  itself may stay on the service.)
+- Re-pointing surface is tiny: each pub method has exactly ONE caller —
+  4 handlers in `api/http/mobility.rs` (:65/:199/:239/:301) + 1 in
+  `repo_roots.rs` (:254). `app/mod.rs` constructs at :514, AppState field
+  :164 — construct service then runtime in dependency order; AppState
+  exposes the runtime as the facade (service stays reachable for the
+  export endpoint or via runtime delegation — pick in the diff).
+- The vestigial `workspace_service` field (only `load_workspace` uses
+  it) is PR 8's business (it deletes WorkspaceService and re-points to
+  workspace_runtime) — do not fix it here; note PR 8 conflicts with this
+  file and lands after.
 
 Bodies unchanged — pure relocation; `git diff --color-moved` should show
 mostly moved blocks. Delete the mobility `DOMAIN_LIVE_VALVE` allowlist
@@ -256,6 +285,14 @@ entry. **One cargo build.**
 Restructure `destroy_source_workspace` + `preflight_workspace`: gather all
 facts first (resolve), extract decisions into `runtime/mobility_policy.rs`
 (pure: no store, no clock, no uuid, no `&self`), then execute effects.
+Recon baselines: `destroy_source_workspace` = fetch(workspace) →
+fetch(branch) → fetch(terminals) → act(close ×N) → fetch(sessions) →
+act(delete ×N) → act(destroy materialization) — three fetch/act pairs
+with no re-validation between them. `preflight_workspace` = ~10
+fetch→decide round trips (git/store/live interleaved line-by-line),
+ending with a nested `export_workspace_archive` call as the size-check
+fetch. Note: several "decide" steps already live as pure free fns with
+tests — extend that file rather than inventing a second policy home.
 Policy tests with hand-built facts, no DB — the `launch_policy.rs` 13-test
 pattern. The per-item fetch-act interleaving becomes: resolve the full
 item set → policy returns a plan → execute the plan, compensations inline.
