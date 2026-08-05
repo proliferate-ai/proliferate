@@ -29,6 +29,8 @@ from proliferate.integrations.integration_oauth.models import (
     ProtectedResourceMetadata,
     RegisteredOAuthClient,
 )
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integrations import api as integrations_api
 from proliferate.server.cloud.integrations.config import (
     IntegrationConfig,
     StaticUrl,
@@ -376,6 +378,36 @@ class TestAuthenticateIntegration:
 
         assert response.status_code == 400
         assert response.json()["detail"]["code"] == "oauth_scope_escalation"
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_keeps_browser_safe_error_page(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        raw_code = "must_not_reach_browser"
+        raw_message = "Sensitive provider detail must not reach the browser."
+
+        async def _fail_completion(*_args: object, **_kwargs: object) -> None:
+            raise CloudApiError(raw_code, raw_message, status_code=418)
+
+        monkeypatch.setattr(
+            integrations_api,
+            "complete_integration_oauth_callback",
+            _fail_completion,
+        )
+
+        response = await client.get(
+            "/v1/cloud/integrations/oauth/callback",
+            params={"state": "synthetic-state", "code": "synthetic-code"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert "Authorization failed" in response.text
+        assert "invalid_state" in response.text
+        assert raw_code not in response.text
+        assert raw_message not in response.text
 
 
 class TestRemoveAccount:

@@ -10,7 +10,6 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.permissions import CurrentOrgUser, current_path_org_admin, current_path_org_member
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.github_app.models import (
     GitHubAppInstallationStartResponse,
     GitHubAppInstallationStatusResponse,
@@ -61,14 +60,11 @@ async def start_github_app_user_authorization_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> GitHubAppUserAuthorizationStartResponse:
-    try:
-        return await create_github_app_user_authorization_url(
-            db,
-            user=user,
-            return_to=return_to,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await create_github_app_user_authorization_url(
+        db,
+        user=user,
+        return_to=return_to,
+    )
 
 
 @router.get(
@@ -96,18 +92,15 @@ async def list_github_app_accessible_repositories_endpoint(
     affiliation: str = DEFAULT_REPO_AFFILIATION,
     visibility: str = DEFAULT_REPO_VISIBILITY,
 ) -> CloudGitRepositoriesResponse:
-    try:
-        page = await list_github_app_accessible_repositories(
-            db,
-            user=user,
-            query=query,
-            cursor=cursor,
-            limit=limit,
-            affiliation=affiliation,
-            visibility=visibility,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    page = await list_github_app_accessible_repositories(
+        db,
+        user=user,
+        query=query,
+        cursor=cursor,
+        limit=limit,
+        affiliation=affiliation,
+        visibility=visibility,
+    )
     return cloud_git_repositories_payload(page)
 
 
@@ -138,14 +131,11 @@ async def start_github_app_installation_endpoint(
     db: AsyncSession = Depends(get_async_session),
     org_user: CurrentOrgUser = Depends(current_path_org_admin),
 ) -> GitHubAppInstallationStartResponse:
-    try:
-        return await create_github_app_installation_url(
-            db,
-            org_user=org_user,
-            return_to=return_to,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await create_github_app_installation_url(
+        db,
+        org_user=org_user,
+        return_to=return_to,
+    )
 
 
 @organization_router.get(
@@ -165,14 +155,11 @@ async def github_app_user_authorization_callback_endpoint(
     state: str = Query(...),
     db: AsyncSession = Depends(get_async_session),
 ) -> RedirectResponse:
-    try:
-        redirect_url = await complete_github_app_user_authorization_callback(
-            db,
-            code=code,
-            state=state,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    redirect_url = await complete_github_app_user_authorization_callback(
+        db,
+        code=code,
+        state=state,
+    )
     return RedirectResponse(redirect_url, status_code=302)
 
 
@@ -186,15 +173,12 @@ async def github_app_installation_callback_endpoint(
     state: str | None = Query(default=None),
     db: AsyncSession = Depends(get_async_session),
 ) -> RedirectResponse:
-    try:
-        redirect_url = await complete_github_app_installation_redirect(
-            db,
-            installation_id=installation_id,
-            setup_action=setup_action,
-            state=state,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    redirect_url = await complete_github_app_installation_redirect(
+        db,
+        installation_id=installation_id,
+        setup_action=setup_action,
+        state=state,
+    )
     return RedirectResponse(redirect_url, status_code=302)
 
 
@@ -211,15 +195,12 @@ async def github_app_setup_callback_endpoint(
     state: str | None = Query(default=None),
     db: AsyncSession = Depends(get_async_session),
 ) -> RedirectResponse:
-    try:
-        redirect_url = await complete_github_app_installation_redirect(
-            db,
-            installation_id=installation_id,
-            setup_action=setup_action,
-            state=state,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    redirect_url = await complete_github_app_installation_redirect(
+        db,
+        installation_id=installation_id,
+        setup_action=setup_action,
+        state=state,
+    )
     return RedirectResponse(redirect_url, status_code=302)
 
 

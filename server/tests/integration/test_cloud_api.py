@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
 from proliferate.integrations.github import (
+    GitHubRateLimited,
     GitHubRepositoryPage,
     GitHubRepositorySummary,
     GitHubRepoBranches,
@@ -151,6 +152,50 @@ class TestCloudRepoBranches:
 
 
 class TestCloudRepoCatalog:
+    @pytest.mark.asyncio
+    async def test_repository_rate_limit_preserves_product_error_response(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _github_repositories(
+            *_args: object,
+            **_kwargs: object,
+        ) -> GitHubRepositoryPage:
+            raise GitHubRateLimited(
+                "GitHub rate limit reached.",
+                retry_after_seconds=30,
+            )
+
+        monkeypatch.setattr(
+            repos_service,
+            "list_github_repositories",
+            _github_repositories,
+        )
+
+        session = await register_and_login(client, "cloud-repo-rate-limit@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await link_github_account(db_session, session["user_id"])
+        await seed_github_app_repo_authority(
+            db_session,
+            monkeypatch,
+            user_id=session["user_id"],
+            git_owner="acme",
+        )
+
+        response = await client.get("/v1/cloud/repos", headers=headers)
+
+        assert response.status_code == 429
+        assert response.json() == {
+            "detail": {
+                "code": "github_rate_limited",
+                "message": "GitHub is rate limiting repository browsing. Try again later.",
+                "retryAfterSeconds": 30,
+            }
+        }
+        assert response.headers["retry-after"] == "30"
+
     @pytest.mark.asyncio
     async def test_list_cloud_repositories_marks_repo_config_state(
         self,
