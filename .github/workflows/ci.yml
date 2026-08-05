@@ -33,6 +33,11 @@ jobs:
       - name: Check AnyHarness old flat paths
         run: python3 scripts/check_anyharness_old_paths.py
 
+      - name: Check Proliferate server old paths
+        run: |
+          python3 -m unittest scripts/test_check_server_old_paths.py
+          python3 scripts/check_server_old_paths.py
+
       - name: Check Proliferate Worker structure
         run: python3 scripts/check_proliferate_worker_structure.py
 

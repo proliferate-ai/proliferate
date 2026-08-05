@@ -115,7 +115,7 @@ Use this as a routing map. The focused guides own the detailed rules.
 
 | Area | Path | Owns | Canon |
 | --- | --- | --- | --- |
-| App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle. | This doc |
+| App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle, and application logging setup that attaches request correlation context and stamps release identity. | This doc |
 | Settings and constants | `config.py`, `constants/<area>.py` | Env-derived runtime settings and shared hardcoded product/protocol values. | [guides/config.md](guides/config.md) |
 | Reusable cross-domain logic | `lib/infra/**`, `lib/product/**`, `lib/capabilities/**` | Generic machinery, cross-domain pure product logic, and reusable orchestration over integrations — owned by no single domain. | [guides/lib.md](guides/lib.md) |
 | Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication deps (user + worker), org-authorization factory deps and verdict types, resource-access deps, pure product-policy verdicts. | [guides/auth.md](guides/auth.md) |
