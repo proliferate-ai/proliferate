@@ -51,8 +51,8 @@ background task is also logged without failing auth.
 
 Current owners:
 
-- `server/proliferate/auth/identity/service.py`
-- `server/proliferate/auth/desktop/service.py`
+- `server/proliferate/server/accounts/identity/service.py`
+- `server/proliferate/server/accounts/desktop/service.py`
 - `server/proliferate/integrations/customerio.py`
 
 ## Nightly Profile Sync

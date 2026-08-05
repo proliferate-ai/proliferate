@@ -34,7 +34,6 @@ from proliferate.db.store.auth_passwords import (
     update_user_password_hash,
 )
 from proliferate.db.store.users import bump_user_token_generation
-from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 
 PASSWORD_BAD_CREDENTIALS_MESSAGE = "Email or password is incorrect."
 PASSWORD_RATE_LIMIT_MESSAGE = "Too many attempts. Wait a moment, then try again."
@@ -121,26 +120,7 @@ def password_login_buckets(
     return tuple(buckets)
 
 
-async def authenticate_password_login(
-    db: AsyncSession,
-    *,
-    email: str,
-    password: str,
-    client_ip: str | None,
-) -> AuthSession:
-    """Authenticate email+password and mint a web/mobile auth session."""
-    user = await authenticate_password_user(
-        db,
-        email=email,
-        password=password,
-        client_ip=client_ip,
-    )
-    from proliferate.auth.identity.sessions import mint_auth_session
-
-    return await mint_auth_session(db, user=user)
-
-
-async def authenticate_password_user(
+async def verify_password_user(
     db: AsyncSession,
     *,
     email: str,
@@ -149,10 +129,8 @@ async def authenticate_password_user(
 ) -> User:
     """Verify email+password and return the user, without minting any session.
 
-    Owns the full password-login policy: kill switch, rate-limit buckets,
-    constant-shape failure behavior, hash upgrades, and the ADMIN_EMAILS floor.
-    Surface transports (web, mobile, desktop) wrap this and mint their own
-    session shapes.
+    Owns the full password-verification policy: kill switch, rate-limit buckets,
+    constant-shape failure behavior, hash upgrades, and failure-counter clearing.
     """
     ensure_password_auth_enabled()
     normalized_email = normalize_password_email(email)
@@ -197,8 +175,6 @@ async def authenticate_password_user(
         db,
         buckets=password_login_buckets(email=normalized_email, client_ip=None),
     )
-    # ADMIN_EMAILS floor: asserted at every login, not just account creation.
-    await ensure_admin_email_role(db, user)
     return user
 
 

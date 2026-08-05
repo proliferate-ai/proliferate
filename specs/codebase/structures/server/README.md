@@ -62,10 +62,11 @@ server/proliferate/
   auth/
     dependencies.py
     users.py
-    viewer_api/
-    desktop_api/
-    identity_api/
-    utils/
+    api.py
+    profile_api.py
+    desktop/                 # leaf models and callback pages
+    identity/                # credential, session, provider-protocol, and persistence leaf
+    sso/
 
   db/
     engine.py
@@ -88,6 +89,9 @@ server/proliferate/
   middleware/
 
   server/
+    accounts/
+      desktop/               # Desktop account-entry API and orchestration
+      identity/              # web/mobile account-entry API and orchestration
     <domain>/
       api.py
       service.py
@@ -118,7 +122,8 @@ Use this as a routing map. The focused guides own the detailed rules.
 | App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle. | This doc |
 | Settings and constants | `config.py`, `constants/<area>.py` | Env-derived runtime settings and shared hardcoded product/protocol values. | [guides/config.md](guides/config.md) |
 | Reusable cross-domain logic | `lib/infra/**`, `lib/product/**`, `lib/capabilities/**` | Generic machinery, cross-domain pure product logic, and reusable orchestration over integrations — owned by no single domain. | [guides/lib.md](guides/lib.md) |
-| Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication deps (user + worker), org-authorization factory deps and verdict types, resource-access deps, pure product-policy verdicts. | [guides/auth.md](guides/auth.md) |
+| Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication primitives (credentials, sessions, provider protocol, identity persistence, and transport-neutral failures), org-authorization factory deps and verdict types, resource-access deps, pure product-policy verdicts. | [guides/auth.md](guides/auth.md) |
+| Accounts | `server/accounts/**` | Product account-entry routes and orchestration: user resolution/creation, identity placement, admin-email enforcement, and product side effects. | [guides/auth.md](guides/auth.md) |
 | Database | `db/models/**`, `db/store/**` | ORM schema, query execution, transactions, row locks, ORM -> dataclass type boundary. | [guides/database.md](guides/database.md) |
 | Domain transport | `server/<domain>/api.py`, `server/<domain>/models.py` | HTTP route handling and Pydantic request/response schemas. | [guides/domains.md](guides/domains.md) |
 | Domain logic | `server/<domain>/service.py`, `server/<domain>/domain/**`, `server/<domain>/<subdomain>/` | Business orchestration, pure product rules, and promoted product concepts. | [guides/domains.md](guides/domains.md) |

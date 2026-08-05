@@ -21,6 +21,7 @@ async def create_user_and_login(
     email_prefix: str,
 ) -> AuthSession:
     from proliferate.auth.users import get_user_db
+    from proliferate.server.organizations.membership_policy import place_new_identity
 
     user_id: str | None = None
     async for user_db in get_user_db(db_session):
@@ -32,6 +33,7 @@ async def create_user_and_login(
                 display_name="Cloud E2E",
             )
         )
+        await place_new_identity(db_session, user)
         db_session.add(
             OAuthAccount(
                 user_id=user.id,

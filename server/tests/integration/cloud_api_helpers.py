@@ -34,6 +34,7 @@ async def register_and_login(
     from proliferate.auth.users import UserManager
     from proliferate.db.engine import get_async_session
     from proliferate.auth.users import get_user_db
+    from proliferate.server.organizations.membership_policy import place_new_identity
 
     user_id: str | None = None
     async for session in get_async_session():
@@ -42,6 +43,7 @@ async def register_and_login(
             user = await manager.create(
                 UserCreate(email=email, password="unused-oauth-only", display_name="Cloud Tester"),
             )
+            await place_new_identity(session, user)
             if link_github:
                 session.add(
                     OAuthAccount(

@@ -8,7 +8,7 @@ Route handlers are kept thin and delegate to ``service`` for orchestration,
 ``templates`` for HTML rendering, and ``models`` for request/response shapes.
 """
 
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
@@ -18,6 +18,7 @@ from fastapi_users.router.oauth import (
     generate_csrf_token,
     generate_state_token,
 )
+from httpx_oauth.clients.github import GitHubOAuth2AuthorizeParams
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.desktop.models import (
@@ -31,28 +32,9 @@ from proliferate.auth.desktop.models import (
     TokenRequest,
     TokenResponse,
 )
-from proliferate.auth.desktop.service import (
-    build_github_callback_url,
-    exchange_desktop_token,
-    finish_github_desktop_callback,
-    github_csrf_cookie_secure,
-    github_oauth_enabled,
-    mint_desktop_tokens,
-    refresh_desktop_access_token,
-    validate_desktop_redirect_uri,
-)
-from proliferate.auth.desktop.service import (
-    create_desktop_auth_code as create_desktop_auth_code_service,
-)
-from proliferate.auth.desktop.service import (
-    poll_desktop_auth as poll_desktop_auth_service,
-)
 from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.models import PasswordLoginRequest
-from proliferate.auth.identity.password import (
-    authenticate_password_user,
-    request_client_ip,
-)
+from proliferate.auth.identity.password import request_client_ip
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.auth.users import UserManager, get_user_manager
 from proliferate.config import settings
@@ -62,6 +44,25 @@ from proliferate.constants.auth import (
     SUPPORTED_CODE_CHALLENGE_METHODS,
 )
 from proliferate.db.engine import get_async_session
+from proliferate.server.accounts.desktop.service import (
+    build_github_callback_url,
+    exchange_desktop_token,
+    finish_github_desktop_callback,
+    github_csrf_cookie_secure,
+    github_oauth_enabled,
+    mint_desktop_tokens,
+    refresh_desktop_access_token,
+    validate_desktop_redirect_uri,
+)
+from proliferate.server.accounts.desktop.service import (
+    create_desktop_auth_code as create_desktop_auth_code_service,
+)
+from proliferate.server.accounts.desktop.service import (
+    poll_desktop_auth as poll_desktop_auth_service,
+)
+from proliferate.server.accounts.identity.service import (
+    authenticate_password_user,
+)
 
 router = APIRouter(prefix="/desktop", tags=["desktop-auth"])
 
@@ -178,7 +179,9 @@ async def authorize_github_desktop(
         settings.jwt_secret,
     )
     callback_url = build_github_callback_url(request)
-    extra_params = {"prompt": params.prompt} if params.prompt else None
+    extra_params = (
+        cast(GitHubOAuth2AuthorizeParams, {"prompt": params.prompt}) if params.prompt else None
+    )
     authorization_url = await github_oauth_client.get_authorization_url(
         callback_url,
         oauth_state,

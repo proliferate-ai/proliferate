@@ -32,16 +32,9 @@ from proliferate.auth.identity.models import (
     StartAuthRequest,
     StartAuthResponse,
 )
-from proliferate.auth.identity.password import (
-    authenticate_password_login,
-    request_client_ip,
-    set_password_credential,
-)
+from proliferate.auth.identity.password import request_client_ip, set_password_credential
 from proliferate.auth.identity.routing import auth_route_path
 from proliferate.auth.identity.service import (
-    complete_apple_mobile_login,
-    complete_apple_web_callback,
-    complete_oauth_provider_callback,
     complete_oauth_provider_error_callback,
     hash_secret,
     start_provider_auth,
@@ -64,6 +57,12 @@ from proliferate.config import settings
 from proliferate.constants.auth import REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.accounts.identity.service import (
+    authenticate_password_login,
+    complete_apple_mobile_login,
+    complete_apple_web_callback,
+    complete_oauth_provider_callback,
+)
 
 router = APIRouter(tags=["auth"])
 

@@ -13,8 +13,7 @@ from proliferate.config import settings
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey
 from proliferate.db.models.organizations import Organization, OrganizationMembership
-from proliferate.db.store import agent_gateway as store
-from proliferate.db.store import organizations as organization_store
+from proliferate.db.store import agent_gateway as store, organizations as organization_store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -25,6 +24,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
     from proliferate.auth.models import UserCreate
     from proliferate.auth.users import UserManager, get_user_db
     from proliferate.db.engine import get_async_session
+    from proliferate.server.organizations.membership_policy import place_new_identity
 
     user_id: str | None = None
     async for session in get_async_session():
@@ -37,6 +37,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
                     display_name="Gateway Tester",
                 ),
             )
+            await place_new_identity(session, user)
             session.add(
                 OAuthAccount(
                     user_id=user.id,
@@ -48,7 +49,6 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
             )
             await session.commit()
             user_id = str(user.id)
-
     assert user_id is not None
     token_data = await mint_desktop_token_payload(
         client,
