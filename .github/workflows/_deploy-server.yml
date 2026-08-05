@@ -262,28 +262,22 @@ jobs:
           echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
 
       # Version pins stamped into the image and reported by /health and /meta.
-      # The canonical hosted release version is the root VERSION file, which must
-      # agree with anyharness/sdk/package.json. Server, runtime, and worker pins
-      # all use that canonical value: the worker/supervisor Cargo package version
-      # is a stale `0.1.0` and must never become a hosted `/meta` pin. Desktop
-      # keeps its own tracked package version.
+      # Server uses the public product version while AnyHarness, worker, and
+      # supervisor use the independently released Runtime version. The
+      # worker/supervisor Cargo package version is a stale `0.1.0` and must never
+      # become a hosted `/meta` pin. Desktop keeps its own tracked package version.
       - name: Resolve version pins
         id: pins
         run: |
           set -euo pipefail
           server_version="$(cat VERSION)"
           runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
-          if [ "$server_version" != "$runtime_version" ]; then
-            echo "Canonical version mismatch: VERSION=${server_version} but anyharness/sdk/package.json=${runtime_version}. They must agree for hosted release pins." >&2
-            exit 1
-          fi
-          canonical_version="$server_version"
           desktop_version="$(jq -r '.version' apps/desktop/package.json)"
           {
-            echo "server_version=${canonical_version}"
+            echo "server_version=${server_version}"
             echo "desktop_version=${desktop_version}"
-            echo "runtime_version=${canonical_version}"
-            echo "worker_version=${canonical_version}"
+            echo "runtime_version=${runtime_version}"
+            echo "worker_version=${runtime_version}"
             echo "min_desktop_version=${desktop_version}"
           } >> "$GITHUB_OUTPUT"
 

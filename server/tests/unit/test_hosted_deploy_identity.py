@@ -1,4 +1,4 @@
-"""Account-identity and log-redaction contracts for hosted server deploys."""
+"""Identity, version-pin, and redaction contracts for hosted server deploys."""
 
 from __future__ import annotations
 
@@ -55,6 +55,37 @@ def test_deploy_masks_account_and_external_aws_identifiers() -> None:
     assert "SUPPORT_FEED_SECRET_ARN" in mask_run
     assert "::add-mask::" in mask_run
     assert configure["with"]["mask-aws-account-id"] is True
+
+
+def test_deploy_preserves_independent_server_and_runtime_version_pins(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "anyharness" / "sdk").mkdir(parents=True)
+    (tmp_path / "apps" / "desktop").mkdir(parents=True)
+    (tmp_path / "VERSION").write_text("0.4.2\n")
+    (tmp_path / "anyharness" / "sdk" / "package.json").write_text(json.dumps({"version": "0.4.1"}))
+    (tmp_path / "apps" / "desktop" / "package.json").write_text(json.dumps({"version": "0.4.2"}))
+    output_path = tmp_path / "github-output"
+    script_path = tmp_path / "resolve-version-pins.sh"
+    script_path.write_text(str(_deploy_steps()["Resolve version pins"]["run"]))
+
+    result = subprocess.run(
+        ["bash", str(script_path)],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={**os.environ, "GITHUB_OUTPUT": str(output_path)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    pins = dict(line.split("=", 1) for line in output_path.read_text().splitlines() if line)
+    assert pins == {
+        "server_version": "0.4.2",
+        "desktop_version": "0.4.2",
+        "runtime_version": "0.4.1",
+        "worker_version": "0.4.1",
+        "min_desktop_version": "0.4.2",
+    }
 
 
 def test_workflow_and_terraform_consume_one_hosted_contract() -> None:
