@@ -8,6 +8,76 @@ from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("Bearer abc.DEF-123_=", "[redacted-token]"),
+        (
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl",
+            "[redacted-jwt]",
+        ),
+        ("/Users/pablo/proliferate/server/file.py", "[redacted-path]"),
+        ("/home/user/proliferate/server/file.py", "[redacted-path]"),
+        (r"C:\Users\pablo\proliferate\server.py", "[redacted-path]"),
+        ("first\r\nsecond\rthird", "first\nsecond\nthird"),
+    ],
+)
+def test_scrub_text_preserves_string_pattern_behavior(value: str, expected: str) -> None:
+    assert sentry_integration.scrub_text(value) == expected
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "authorization",
+        "cookie",
+        "token",
+        "secret",
+        "password",
+        "api_key",
+        "api-key",
+        "credential",
+        "prompt",
+        "content",
+        "stdout",
+        "stderr",
+        "request_body",
+        "body",
+        "env",
+        "file_path",
+        "path",
+    ],
+)
+def test_scrub_mapping_redacts_sensitive_key_values(key: str) -> None:
+    assert sentry_integration.scrub_mapping({key: {"nested": "value"}}) == {key: "[redacted]"}
+
+
+def test_scrub_mapping_recurses_and_preserves_container_shapes() -> None:
+    scrubbed = sentry_integration.scrub_mapping(
+        {
+            "metadata": {
+                "list": ["Bearer secret-token", 7, True, None],
+                "tuple": (
+                    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl",
+                    {"message": "/home/user/private/file.txt"},
+                ),
+            },
+            "password": {"nested": "value"},
+        }
+    )
+
+    assert scrubbed == {
+        "metadata": {
+            "list": ["[redacted-token]", 7, True, None],
+            "tuple": (
+                "[redacted-jwt]",
+                {"message": "[redacted-path]"},
+            ),
+        },
+        "password": "[redacted]",
+    }
+
+
 class _FakeScope:
     def __init__(self) -> None:
         self.level: str | None = None
