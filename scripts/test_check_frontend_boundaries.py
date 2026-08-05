@@ -646,6 +646,52 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 self.assertEqual(len(statements), 1)
                 self.assertTrue(statements[0].type_only)
 
+    def test_shared_parser_stops_generic_return_types_at_runtime_bodies(self) -> None:
+        runtime_sources = [
+            'async function load(): Promise<unknown> { return import("function") }',
+            (
+                'class Loader { load(): Record<string, unknown> '
+                '{ return import("class-method") } }'
+            ),
+            (
+                'const loader = { load(): Promise<Result<Value>> '
+                '{ return import("object-method") } };'
+            ),
+            'const load = (): Promise<unknown> => import("arrow")',
+        ]
+        for runtime_source in runtime_sources:
+            with self.subTest(runtime_source=runtime_source):
+                statements = collect_imports(Path("Sample.ts"), runtime_source)
+                self.assertEqual(len(statements), 1)
+                self.assertFalse(statements[0].type_only)
+
+        paired_source = (
+            'function load(): Promise<Result<Array<import("contract").Shape>>> {\n'
+            '  return import("runtime");\n'
+            '}\n'
+        )
+        paired = collect_imports(Path("Sample.ts"), paired_source)
+        self.assertEqual(
+            [(statement.source, statement.type_only) for statement in paired],
+            [("contract", True), ("runtime", False)],
+        )
+
+        function_type_sources = [
+            (
+                'function read(): () => { value: import("function-type").Thing } '
+                '{ throw failure }'
+            ),
+            (
+                'const read = (): () => { value: import("arrow-type").Thing } '
+                '=> value;'
+            ),
+        ]
+        for type_source in function_type_sources:
+            with self.subTest(type_source=type_source):
+                statements = collect_imports(Path("Sample.ts"), type_source)
+                self.assertEqual(len(statements), 1)
+                self.assertTrue(statements[0].type_only)
+
     def test_shared_parser_preserves_semantic_static_and_dynamic_import_facts(self) -> None:
         source = (
             'import defaultName, { useQuery as query, type Shape, '
@@ -1313,6 +1359,47 @@ class ProductClientBoundaryTest(unittest.TestCase):
         }
         self.assertEqual(runtime_paths, {"mixed.ts", "type-named-runtime.ts"})
 
+    def test_generic_return_types_do_not_hide_store_runtime_imports(self) -> None:
+        files = {
+            "apps/packages/product-client/src/stores/chat/function.ts": (
+                "export async function load(): Promise<unknown> {\n"
+                "  return import('@tanstack/react-query');\n"
+                "}\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/class-method.ts": (
+                "class Loader {\n"
+                "  load(): Record<string, unknown> {\n"
+                "    return import('@proliferate/cloud-sdk-react');\n"
+                "  }\n"
+                "}\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/object-method.ts": (
+                "const loader = {\n"
+                "  load(): Promise<Result<Value>> {\n"
+                "    return import('@anyharness/sdk-react');\n"
+                "  },\n"
+                "};\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/type-only.ts": (
+                "export function contract(): "
+                "Promise<import('@proliferate/cloud-sdk-react').UseHook> {\n"
+                "  throw new Error('not implemented');\n"
+                "}\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        runtime_paths = {
+            violation.path.name
+            for violation in violations
+            if violation.rule_id == "STORE_RUNTIME_ACCESS"
+        }
+        self.assertEqual(
+            runtime_paths,
+            {"function.ts", "class-method.ts", "object-method.ts"},
+        )
+
     def test_internal_store_access_has_exactly_one_rule_owner(self) -> None:
         files = {
             "apps/packages/product-client/src/stores/chat/internal-access.ts": (
@@ -1781,6 +1868,44 @@ class ProductClientBoundaryTest(unittest.TestCase):
 
         self.assertEqual(len(violations), 1)
         self.assertEqual(violations[0].path.name, "utils.ts")
+
+    def test_generic_return_types_do_not_hide_domain_runtime_imports(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            paths = self.write_files(
+                root,
+                {
+                    "apps/packages/product-domain/src/runtime.ts": (
+                        "export async function load(): Promise<void> {\n"
+                        "  const { createProliferateClient } = "
+                        "await import('@proliferate/cloud-sdk');\n"
+                        "  return createProliferateClient({});\n"
+                        "}\n"
+                    ),
+                    "apps/packages/product-domain/src/type-only.ts": (
+                        "export function contract(): "
+                        "Promise<Result<Array<"
+                        "import('@proliferate/cloud-sdk').CloudWorkspace>>> {\n"
+                        "  throw new Error('not implemented');\n"
+                        "}\n"
+                    ),
+                },
+            )
+            package_root = root / "apps/packages/product-domain/src"
+            with patch.multiple(
+                structure_module,
+                REPO_ROOT=root,
+                PACKAGE_ROOTS={"product-domain": package_root},
+            ):
+                violations = structure_module.find_forbidden_shared_package_imports(paths)
+
+        self.assertEqual(
+            [
+                (violation.path.name, violation.rule_id, violation.lineno)
+                for violation in violations
+            ],
+            [("runtime.ts", "FORBIDDEN_SHARED_PACKAGE_IMPORT", 2)],
+        )
 
     def test_allowlist_overage_and_stale_count_both_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -1271,7 +1271,6 @@ def _type_annotation_prefix_reaches_import(
         "&",
         "|",
         "=",
-        ">",
         "(",
         "[",
         "{",
@@ -1291,6 +1290,11 @@ def _type_annotation_prefix_reaches_import(
                 and not nesting
                 and saw_complete_type
                 and tokens[cursor - 1].value not in type_literal_prefixes
+                and not (
+                    tokens[cursor - 1].value == ">"
+                    and cursor >= 2
+                    and tokens[cursor - 2].value == "="
+                )
             ):
                 return False
             nesting.append(value)
