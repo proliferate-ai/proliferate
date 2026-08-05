@@ -16,8 +16,8 @@ from proliferate.db.models.cloud.secrets import (
     CloudSecretFile,
     CloudSecretSet,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.utils.crypto import decrypt_text, encrypt_text
-from proliferate.utils.time import utcnow
 
 
 @dataclass(frozen=True)

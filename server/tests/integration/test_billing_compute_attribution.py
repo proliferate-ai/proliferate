@@ -62,7 +62,7 @@ from proliferate.server.billing.authorization import (
     assert_cloud_sandbox_resume_allowed,
 )
 from proliferate.server.organizations.usage.service import get_usage_by_user
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 from tests.integration.billing_accounting_helpers import patch_global_session_factory
 
 

@@ -32,10 +32,10 @@ from proliferate.db.store.billing_runtime_usage import (
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.errors import ProliferateError
 from proliferate.integrations.sentry import report_critical
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.billing.domain.plans import authorization_message
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject_in_session
-from proliferate.utils.time import utcnow
 
 # Block reasons that mean "you are out of included/managed cloud hours" — the
 # client keys off these to show upgrade-your-plan copy. Everything else is a

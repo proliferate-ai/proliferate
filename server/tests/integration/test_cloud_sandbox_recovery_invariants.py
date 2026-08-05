@@ -33,7 +33,7 @@ from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
 )
 from proliferate.server.cloud.webhooks import service as webhook_service
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.materialization.sandbox_io import connect as connect_module
 from tests.integration.test_cloud_sandbox_recovery import (
     _FakeProvider,

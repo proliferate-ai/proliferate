@@ -38,7 +38,7 @@ from proliferate.db.store.organizations import (
     acquire_membership_activation_lock,
     get_organization_with_membership,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def _load_organization(db: AsyncSession, organization_id: UUID) -> Organization | None:

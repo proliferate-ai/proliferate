@@ -25,7 +25,7 @@ from proliferate.db.models.organizations import Organization, OrganizationMember
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.server.organizations.membership_policy import place_new_identity
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def _seed_instance_org(db: AsyncSession, *, owner_id) -> Organization:  # type: ignore[no-untyped-def]

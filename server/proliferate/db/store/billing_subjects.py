@@ -29,7 +29,7 @@ from proliferate.db.models.billing import (
     FreeCloudAllocation,
     UsageSegment,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 def coerce_utc(value: datetime | None) -> datetime | None:

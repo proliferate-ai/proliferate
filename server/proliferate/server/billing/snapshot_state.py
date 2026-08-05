@@ -31,7 +31,7 @@ from proliferate.db.store.billing_subjects import (
     get_billing_subject_by_id,
 )
 from proliferate.db.store.billing_subscriptions import list_active_holds, list_subscriptions
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)

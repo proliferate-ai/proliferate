@@ -19,7 +19,7 @@ from proliferate.db.models.cloud.workspaces import (
     CLOUD_WORKSPACE_SCRATCH,
     CloudWorkspace,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 CloudWorkspaceLifecycle = Literal["active", "archived", "all"]
 CloudWorkspaceKind = Literal["repository_worktree", "scratch"]

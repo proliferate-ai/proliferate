@@ -32,7 +32,7 @@ from proliferate.db.store.organizations import (
     acquire_organization_membership_lock,
     allocate_organization_slug,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def get_instance_organization(db: AsyncSession) -> OrganizationRecord | None:

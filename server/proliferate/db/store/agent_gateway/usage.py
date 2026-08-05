@@ -16,7 +16,7 @@ from proliferate.db.models.cloud.agent_gateway import (
 )
 from proliferate.db.store.agent_gateway.mappers import usage_import_cursor_record
 from proliferate.db.store.agent_gateway.records import AgentLlmUsageImportCursorRecord
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def insert_usage_event_once(

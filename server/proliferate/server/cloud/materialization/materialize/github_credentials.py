@@ -11,11 +11,11 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.github_app.repo_authority import (
     ensure_fresh_github_app_authorization,
 )
 from proliferate.server.cloud.materialization import operation, paths, sandbox_io
-from proliferate.utils.time import utcnow
 
 
 @dataclass(frozen=True)

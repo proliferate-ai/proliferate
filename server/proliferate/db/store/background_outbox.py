@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.background import BackgroundOutboxTask
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 OUTBOX_STATUS_PENDING = "pending"
 OUTBOX_STATUS_PUBLISHING = "publishing"

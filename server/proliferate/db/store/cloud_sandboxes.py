@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 _UNSET: Final = object()
 _LAST_ERROR_MAX_LENGTH = 2000

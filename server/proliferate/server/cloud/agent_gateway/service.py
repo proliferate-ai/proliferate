@@ -38,6 +38,7 @@ from proliferate.db.store.agent_gateway import (
 from proliferate.db.store.billing import list_entitlements
 from proliferate.db.store.billing_subscriptions import list_subscriptions
 from proliferate.db.store.organizations import list_organizations_for_user
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.domain.plans import (
     active_unlimited_cloud_entitlement,
     latest_healthy_cloud_subscription,
@@ -56,7 +57,6 @@ from proliferate.server.cloud.materialization import service as materialization_
 from proliferate.server.cloud.materialization.materialize.agent_auth import (
     build_agent_auth_state,
 )
-from proliferate.utils.time import utcnow
 
 _ENROLLMENT_STATUS_NONE = "none"
 _MAX_TITLE_LENGTH = 255

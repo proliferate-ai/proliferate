@@ -54,7 +54,7 @@ from proliferate.server.cloud.agent_gateway.migration import migrate_legacy_enro
 from proliferate.server.cloud.materialization.materialize.agent_auth import (
     build_agent_auth_state,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 # Two harness kinds keep the mint/revoke ledgers legible; the mechanism is
 # per-harness and identical for the full four-kind tuple.

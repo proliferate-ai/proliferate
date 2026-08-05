@@ -37,7 +37,7 @@ from proliferate.server.cloud.gateway import service as gateway_service
 from proliferate.server.cloud.materialization import operation, runner
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.utils.crypto import encrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @pytest.fixture(autouse=True)

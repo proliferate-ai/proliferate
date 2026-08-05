@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.workflows import WorkflowManagedExecution
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 _TERMINAL_EXECUTION = ("completed", "failed", "cancelled", "interrupted")
 

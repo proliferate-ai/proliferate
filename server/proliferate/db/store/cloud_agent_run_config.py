@@ -21,7 +21,7 @@ from proliferate.db.models.cloud.agent_run_config import (
     CloudAgentRunConfig,
     CloudAgentRunConfigDefault,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)

@@ -69,10 +69,6 @@ class BillingServiceError(RuntimeError):
         self.status_code = status_code
 
 
-def utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
 def coerce_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None

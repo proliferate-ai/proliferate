@@ -97,7 +97,7 @@ from proliferate.server.cloud.materialization.materialize.sandbox import (  # no
     materialize_sandbox,
 )
 from proliferate.utils.crypto import decrypt_text  # noqa: E402
-from proliferate.utils.time import utcnow  # noqa: E402
+from proliferate.lib.infra.time.wall_clock import utcnow  # noqa: E402
 
 _DEFAULT_STATE_PATH = (
     Path.home() / ".proliferate-local" / "dev" / "release-e2e-github-seed.json"

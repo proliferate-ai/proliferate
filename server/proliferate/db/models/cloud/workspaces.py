@@ -6,7 +6,8 @@ from datetime import datetime
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from proliferate.db.models.base import Base, utcnow
+from proliferate.db.models.base import Base
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 # Placement-neutral backing kind for a lightweight cloud workspace row. A
 # ``repository_worktree`` is bound to a real cloud repo environment and keeps the

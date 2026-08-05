@@ -50,8 +50,8 @@ from proliferate.db.store.organization_records import (
     membership_record,
     organization_record,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.utils.slug import slugify
-from proliferate.utils.time import utcnow
 
 # Bound the numeric-suffix search before falling back to a random token so a
 # pathological name never spins; the partial unique index is the backstop.
