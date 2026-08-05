@@ -59,7 +59,6 @@ from proliferate.constants.auth import (
     REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.store.auth import (
     consume_auth_code,
     consume_auth_code_for_state,
@@ -86,9 +85,10 @@ from proliferate.server.notifications import (
     schedule_signup_slack_notification,
 )
 from proliferate.server.organizations.admin_emails import ensure_admin_email_role
+from proliferate.server.organizations.membership_policy import place_new_identity
 
 if TYPE_CHECKING:
-    from proliferate.auth.users import UserManager
+    from proliferate.auth.users import User, UserManager
 
 
 logger = logging.getLogger(__name__)
@@ -361,7 +361,7 @@ async def finish_github_desktop_callback(
     )
 
     try:
-        user = await user_manager.oauth_callback(
+        oauth_result = await user_manager.oauth_callback_with_result(
             github_oauth_client.name,
             token["access_token"],
             account_id,
@@ -377,6 +377,10 @@ async def finish_github_desktop_callback(
             title="GitHub sign-in failed",
             message="This email is already registered and could not be linked to GitHub.",
         )
+
+    user = oauth_result.user
+    if oauth_result.created:
+        await place_new_identity(db, user)
 
     if not user.is_active:
         return make_browser_flow_page(

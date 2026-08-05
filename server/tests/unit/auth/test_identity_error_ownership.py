@@ -21,6 +21,7 @@ from proliferate.auth.oauth import github_oauth_client, google_oauth_client
 from proliferate.config import settings
 from proliferate.errors import ProliferateError
 from proliferate.integrations.github import GitHubIntegrationError
+from proliferate.server.accounts.identity import service as accounts_service
 
 
 def _assert_provider_error(
@@ -480,8 +481,8 @@ async def test_google_id_token_nonclassified_error_propagates(
 
 def _install_challenge(monkeypatch: pytest.MonkeyPatch, challenge: AuthChallengeSnapshot) -> None:
     monkeypatch.setattr(
-        service,
-        "_consume_challenge_for_callback",
+        accounts_service,
+        "consume_provider_challenge",
         AsyncMock(return_value=challenge),
     )
 
@@ -505,9 +506,8 @@ async def test_oauth_service_translates_provider_verification_error(
         "verify_oauth_callback",
         AsyncMock(side_effect=source_error),
     )
-
     with pytest.raises(AuthFlowError) as exc_info:
-        await service.complete_oauth_provider_callback(
+        await accounts_service.complete_oauth_provider_callback(
             cast(AsyncSession, object()),
             cast(Request, object()),
             provider="google",
@@ -545,7 +545,7 @@ async def test_apple_services_translate_provider_verification_error(
 
     with pytest.raises(AuthFlowError) as exc_info:
         if callback == "mobile":
-            await service.complete_apple_mobile_login(
+            await accounts_service.complete_apple_mobile_login(
                 cast(AsyncSession, object()),
                 state="state",
                 identity_token="token",
@@ -553,7 +553,7 @@ async def test_apple_services_translate_provider_verification_error(
                 display_name=None,
             )
         else:
-            await service.complete_apple_web_callback(
+            await accounts_service.complete_apple_web_callback(
                 cast(AsyncSession, object()),
                 state="state",
                 identity_token="token",
@@ -586,7 +586,7 @@ async def test_oauth_provider_token_rejection_keeps_redirect_path(
         AsyncMock(side_effect=providers.OAuthProviderTokenRejectedError()),
     )
 
-    redirect = await service.complete_oauth_provider_callback(
+    redirect = await accounts_service.complete_oauth_provider_callback(
         cast(AsyncSession, object()),
         cast(Request, object()),
         provider="google",

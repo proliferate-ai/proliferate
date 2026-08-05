@@ -11,7 +11,8 @@ from fastapi_users.jwt import generate_jwt
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from proliferate.auth.desktop import service as desktop_service
+from proliferate.server.accounts.desktop import service as desktop_service
+from proliferate.server.accounts.identity import service as accounts_identity_service
 from proliferate.auth.desktop.models import AuthorizeParams
 from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity import providers as identity_providers
@@ -260,8 +261,7 @@ class TestPasswordAuthFlow:
         assert protected.status_code == 403
         assert protected.json()["detail"]["code"] == "github_link_required"
 
-        # /v1/cloud/sandbox-profiles/* was removed from the cloud API by the
-        # #803/#809 cutover; re-add coverage when the router is remounted.
+        # Sandbox-profile coverage follows the cloud API remount.
         ai_magic = await client.post(
             "/v1/ai_magic/session-titles/generate",
             headers={"Authorization": f"Bearer {payload['accessToken']}"},
@@ -1147,13 +1147,13 @@ class TestWebMobileProductAuthFlow:
         self._enable_identity_github(monkeypatch, "desktop-shared-github@example.com")
         schedule_mock = Mock()
         monkeypatch.setattr(
-            desktop_service,
+            accounts_identity_service,
             "schedule_customerio_desktop_authenticated_user_sync",
             schedule_mock,
         )
         schedule_signup_mock = Mock()
         monkeypatch.setattr(
-            desktop_service,
+            accounts_identity_service,
             "schedule_signup_slack_notification",
             schedule_signup_mock,
         )
@@ -1222,13 +1222,13 @@ class TestWebMobileProductAuthFlow:
         self._enable_identity_github(monkeypatch, "desktop-existing-github@example.com")
         schedule_mock = Mock()
         monkeypatch.setattr(
-            desktop_service,
+            accounts_identity_service,
             "schedule_customerio_desktop_authenticated_user_sync",
             schedule_mock,
         )
         schedule_signup_mock = Mock()
         monkeypatch.setattr(
-            desktop_service,
+            accounts_identity_service,
             "schedule_signup_slack_notification",
             schedule_signup_mock,
         )

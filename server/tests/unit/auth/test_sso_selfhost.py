@@ -178,7 +178,7 @@ def test_github_oauth_availability_requires_both_id_and_secret(
     # The desktop /methods probe advertises GitHub only when the OAuth app is
     # FULLY configured — a client id without a secret is a button that only
     # fails at the provider.
-    from proliferate.auth.desktop.service import github_oauth_enabled
+    from proliferate.server.accounts.desktop.service import github_oauth_enabled
 
     monkeypatch.setattr(settings, "github_oauth_client_id", "")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "")

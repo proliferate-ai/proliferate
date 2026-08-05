@@ -7,8 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
@@ -66,10 +65,10 @@ from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
     from proliferate.auth.models import UserCreate
-    from proliferate.auth.users import UserManager
+    from proliferate.auth.users import UserManager, get_user_db
     from proliferate.db.engine import get_async_session
     from proliferate.db.models.auth import OAuthAccount
-    from proliferate.auth.users import get_user_db
+    from proliferate.server.organizations.membership_policy import place_new_identity
 
     user_id: str | None = None
     async for session in get_async_session():
@@ -82,6 +81,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
                     display_name="Billing Tester",
                 ),
             )
+            await place_new_identity(session, user)
             session.add(
                 OAuthAccount(
                     user_id=user.id,

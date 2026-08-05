@@ -14,6 +14,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
     from proliferate.db.engine import get_async_session
     from proliferate.db.models.auth import OAuthAccount
     from proliferate.auth.users import get_user_db
+    from proliferate.server.organizations.membership_policy import place_new_identity
 
     user_id: str | None = None
     async for session in get_async_session():
@@ -26,6 +27,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
                     display_name="AI Magic Tester",
                 ),
             )
+            await place_new_identity(session, user)
             session.add(
                 OAuthAccount(
                     user_id=user.id,

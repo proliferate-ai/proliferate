@@ -9,9 +9,10 @@ from fastapi import Request
 from httpx_oauth.exceptions import GetIdEmailError, GetProfileError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity import providers, service
+from proliferate.auth.identity import providers
 from proliferate.auth.identity.types import AuthChallengeSnapshot
 from proliferate.auth.oauth import github_oauth_client
+from proliferate.server.accounts.identity import service as accounts_service
 
 
 def _provider_response(status_code: int) -> httpx.Response:
@@ -77,7 +78,7 @@ async def test_github_profile_401_returns_to_originating_surface(
         assert surface is None
         return challenge
 
-    monkeypatch.setattr(service, "_consume_challenge_for_callback", consume_challenge)
+    monkeypatch.setattr(accounts_service, "consume_provider_challenge", consume_challenge)
     monkeypatch.setattr(
         providers,
         "provider_callback_url",
@@ -85,7 +86,7 @@ async def test_github_profile_401_returns_to_originating_surface(
     )
     _install_github_profile_failure(monkeypatch, status_code=401)
 
-    redirect_url = await service.complete_oauth_provider_callback(
+    redirect_url = await accounts_service.complete_oauth_provider_callback(
         cast(AsyncSession, object()),
         cast(Request, object()),
         provider="github",

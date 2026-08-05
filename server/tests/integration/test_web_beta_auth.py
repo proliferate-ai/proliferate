@@ -10,7 +10,7 @@ import pytest
 from httpx import AsyncClient
 
 from proliferate.auth.desktop.models import AuthorizeParams
-from proliferate.auth.desktop import service as desktop_service
+from proliferate.server.accounts.desktop import service as desktop_service
 from proliferate.auth.identity import providers as identity_providers
 from proliferate.auth.identity.web_beta import WEB_BETA_EMAIL_NOT_ALLOWED_CODE
 from proliferate.auth.oauth import github_oauth_client

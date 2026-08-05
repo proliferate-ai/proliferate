@@ -207,9 +207,10 @@ outbox row and let a worker do the call.
   root) = org-authorization factory deps (`require_org_role(org_id, roles)`,
   `require_org_membership`) returning `OwnerContext`, plus `PolicyVerdict`. It is
   a leaf importing neither `auth/**` nor `server/<domain>/**`; cross-domain authz
-  always comes from `proliferate.permissions`, never another service. `auth/` also
-  owns the `viewer_api/`, `desktop_api/`, `identity_api/` surfaces and `utils/`
-  crypto primitives.
+  always comes from `proliferate.permissions`, never another service. `auth/` is
+  the authentication leaf for actor dependencies, credentials, sessions, provider
+  protocol, identity persistence, and crypto primitives. `server/accounts/**`
+  owns the Desktop and Identity account-entry surfaces and orchestration.
 
 ### `background/**` / `server/<domain>/worker/service.py`
 - One background model: a Celery task. **Beat** fires periodic ones (scheduler
