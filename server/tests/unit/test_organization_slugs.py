@@ -32,6 +32,24 @@ def test_slugify_organization_preserves_frozen_normalization(
     assert organization_store._slugify_organization(value) == expected
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("A" * 48 + "-2", "a" * 48 + "-2"),
+        ("A" * 48 + "-abcdef", "a" * 48 + "-abcdef"),
+        ("A" * 46 + "-20", "a" * 46 + "-20"),
+        ("  Acme, Inc.  ", "acme-inc"),
+        ("!!!", "org"),
+        ("A" * 72, "a" * 72),
+    ],
+)
+def test_slugify_organization_preserves_complete_lookup_identity(
+    value: str,
+    expected: str,
+) -> None:
+    assert organization_store._slugify_organization(value, truncate_base=False) == expected
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("taken", "expected"),
@@ -87,3 +105,33 @@ async def test_allocate_organization_slug_uses_random_suffix_after_numeric_limit
         *(f"acme-{suffix}" for suffix in range(2, 51)),
         "acme-abcdef",
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exhaust_numeric", [False, True])
+async def test_allocate_long_organization_slug_preserves_suffix_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+    exhaust_numeric: bool,
+) -> None:
+    base = "a" * 48
+    taken = {base}
+    if exhaust_numeric:
+        taken.update(f"{base}-{suffix}" for suffix in range(2, 51))
+
+    async def fake_slug_taken(_db: AsyncSession, slug: str) -> bool:
+        return slug in taken
+
+    def fake_token_hex(byte_count: int) -> str:
+        assert byte_count == 3
+        return "abcdef"
+
+    monkeypatch.setattr(organization_store, "_slug_taken", fake_slug_taken)
+    monkeypatch.setattr(organization_store.secrets, "token_hex", fake_token_hex)
+
+    actual = await organization_store.allocate_organization_slug(
+        cast(AsyncSession, object()),
+        "A" * 49,
+    )
+
+    expected = f"{base}-abcdef" if exhaust_numeric else f"{base}-2"
+    assert actual == expected
