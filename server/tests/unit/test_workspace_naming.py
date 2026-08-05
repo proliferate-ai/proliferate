@@ -1,10 +1,10 @@
-from proliferate.lib.product.workspace_naming import (
+from proliferate.server.cloud.workspaces.domain.animal_names_generated import (
+    WORKSPACE_ANIMAL_NAMES,
+)
+from proliferate.server.cloud.workspaces.domain.naming import (
     pick_generated_workspace_name,
     resolve_generated_branch_name,
     suffix_branch_leaf,
-)
-from proliferate.lib.product.workspace_naming.animal_names_generated import (
-    WORKSPACE_ANIMAL_NAMES,
 )
 
 BLOCKED_WORKSPACE_NAMES = {
