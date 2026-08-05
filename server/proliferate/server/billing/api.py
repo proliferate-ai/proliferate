@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import OwnerSelection
@@ -19,7 +19,6 @@ from proliferate.server.billing.checkout import (
 from proliferate.server.billing.models import (
     BillingOverview,
     BillingOwnerSelection,
-    BillingServiceError,
     BillingUrlResponse,
     CloudPlanInfo,
     LlmBalance,
@@ -52,13 +51,7 @@ async def get_plan(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> PlanInfo:
-    try:
-        return await get_current_plan(db, user.id)
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await get_current_plan(db, user.id)
 
 
 @router.get("/cloud-plan", response_model=CloudPlanInfo)
@@ -66,13 +59,7 @@ async def get_cloud_plan_endpoint(
     owner_context: OwnerContext = Depends(current_owner_context),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudPlanInfo:
-    try:
-        return await get_cloud_plan_for_context(db, owner_context)
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await get_cloud_plan_for_context(db, owner_context)
 
 
 @router.get("/overview", response_model=BillingOverview)
@@ -80,13 +67,7 @@ async def get_overview(
     owner_context: OwnerContext = Depends(current_owner_context),
     db: AsyncSession = Depends(get_async_session),
 ) -> BillingOverview:
-    try:
-        return await get_billing_overview_for_context(db, owner_context)
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await get_billing_overview_for_context(db, owner_context)
 
 
 @router.get("/usage/summary", response_model=UsageSummary)
@@ -95,13 +76,7 @@ async def get_usage_summary_endpoint(
     owner_context: OwnerContext = Depends(current_owner_context),
     db: AsyncSession = Depends(get_async_session),
 ) -> UsageSummary:
-    try:
-        return await get_usage_summary(db, owner_context, user_id=user.id)
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await get_usage_summary(db, owner_context, user_id=user.id)
 
 
 @router.get("/usage/timeseries", response_model=UsageTimeseries)
@@ -112,19 +87,13 @@ async def get_usage_timeseries_endpoint(
     owner_context: OwnerContext = Depends(current_owner_context),
     db: AsyncSession = Depends(get_async_session),
 ) -> UsageTimeseries:
-    try:
-        return await get_usage_timeseries(
-            db,
-            billing_subject_id=owner_context.billing_subject_id,
-            granularity=granularity,
-            days=days,
-            kind=kind,
-        )
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await get_usage_timeseries(
+        db,
+        billing_subject_id=owner_context.billing_subject_id,
+        granularity=granularity,
+        days=days,
+        kind=kind,
+    )
 
 
 @router.get("/llm-balance", response_model=LlmBalance)
@@ -132,13 +101,7 @@ async def get_llm_balance_endpoint(
     owner_context: OwnerContext = Depends(current_owner_context),
     db: AsyncSession = Depends(get_async_session),
 ) -> LlmBalance:
-    try:
-        return await get_llm_balance(db, owner_context)
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await get_llm_balance(db, owner_context)
 
 
 @router.post("/cloud-checkout", response_model=BillingUrlResponse)
@@ -147,18 +110,12 @@ async def create_cloud_checkout(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
-    try:
-        return await create_cloud_checkout_session(
-            db,
-            user,
-            _owner_selection_from_body(request),
-            return_surface=request.return_surface if request else "web",
-        )
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await create_cloud_checkout_session(
+        db,
+        user,
+        _owner_selection_from_body(request),
+        return_surface=request.return_surface if request else "web",
+    )
 
 
 @router.post("/customer-portal", response_model=BillingUrlResponse)
@@ -167,18 +124,12 @@ async def create_customer_portal(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
-    try:
-        return await create_customer_portal_session(
-            db,
-            user,
-            _owner_selection_from_body(request),
-            return_surface=request.return_surface if request else "web",
-        )
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await create_customer_portal_session(
+        db,
+        user,
+        _owner_selection_from_body(request),
+        return_surface=request.return_surface if request else "web",
+    )
 
 
 @router.post("/refill-checkout", response_model=BillingUrlResponse)
@@ -187,18 +138,12 @@ async def create_refill_checkout(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
-    try:
-        return await create_refill_checkout_session(
-            db,
-            user,
-            _owner_selection_from_body(request),
-            return_surface=request.return_surface if request else "web",
-        )
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await create_refill_checkout_session(
+        db,
+        user,
+        _owner_selection_from_body(request),
+        return_surface=request.return_surface if request else "web",
+    )
 
 
 @router.post("/overage-settings", response_model=OverageSettingsResponse)
@@ -207,22 +152,16 @@ async def update_overage_settings_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OverageSettingsResponse:
-    try:
-        return await update_overage_settings(
-            db,
-            user,
-            enabled=request.enabled,
-            cap_cents_per_seat=request.cap_cents_per_seat,
-            owner_selection=OwnerSelection(
-                owner_scope=request.owner_scope,
-                organization_id=request.organization_id,
-            ),
-        )
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await update_overage_settings(
+        db,
+        user,
+        enabled=request.enabled,
+        cap_cents_per_seat=request.cap_cents_per_seat,
+        owner_selection=OwnerSelection(
+            owner_scope=request.owner_scope,
+            organization_id=request.organization_id,
+        ),
+    )
 
 
 @router.post("/webhooks/stripe", response_model=StripeWebhookAck)
@@ -230,16 +169,10 @@ async def stripe_webhook_endpoint(
     request: Request,
     stripe_signature: str | None = Header(default=None, alias="Stripe-Signature"),
 ) -> StripeWebhookAck:
-    try:
-        return await handle_stripe_webhook(
-            payload=await request.body(),
-            signature_header=stripe_signature,
-        )
-    except BillingServiceError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail={"code": error.code, "message": error.message},
-        ) from error
+    return await handle_stripe_webhook(
+        payload=await request.body(),
+        signature_header=stripe_signature,
+    )
 
 
 def _owner_selection_from_body(request: BillingOwnerSelection | None) -> OwnerSelection:

@@ -33,9 +33,9 @@ from proliferate.db.store.billing_subjects import (
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )
-from proliferate.server.billing import stripe_webhooks
 from proliferate.server import notifications as slack_notifications
-from proliferate.server.billing.models import BillingServiceError
+from proliferate.server.billing import stripe_webhooks
+from proliferate.server.billing.errors import BillingServiceError
 
 
 def _stripe_signature(payload: bytes, *, secret: str, timestamp: int | None = None) -> str:
@@ -160,7 +160,12 @@ async def test_stripe_webhook_rejects_bad_signature(
     )
 
     assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "stripe_webhook_invalid_signature"
+    assert response.json() == {
+        "detail": {
+            "code": "stripe_webhook_invalid_signature",
+            "message": "Stripe webhook signature is invalid.",
+        }
+    }
 
 
 @pytest.mark.asyncio
@@ -177,7 +182,12 @@ async def test_stripe_webhook_requires_configuration(
     )
 
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "stripe_webhook_unconfigured"
+    assert response.json() == {
+        "detail": {
+            "code": "stripe_webhook_unconfigured",
+            "message": "Stripe webhook secret is not configured.",
+        }
+    }
 
 
 @pytest.mark.asyncio

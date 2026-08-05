@@ -45,7 +45,8 @@ from proliferate.server.billing.domain.webhooks import (
 from proliferate.server.billing.domain.webhooks import (
     subscription_period as _stripe_subscription_period,
 )
-from proliferate.server.billing.models import BillingServiceError, coerce_utc, utcnow
+from proliferate.server.billing.errors import BillingServiceError
+from proliferate.server.billing.models import coerce_utc, utcnow
 from proliferate.server.billing.pricing import billing_price_ids_from_settings
 from proliferate.server.cloud.agent_gateway.signup_hook import (
     schedule_agent_gateway_org_enrollment,

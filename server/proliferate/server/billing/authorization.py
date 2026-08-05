@@ -34,6 +34,7 @@ from proliferate.errors import ProliferateError
 from proliferate.integrations.sentry import report_critical
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.billing.domain.plans import authorization_message
+from proliferate.server.billing.errors import BillingServiceError
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject_in_session
 from proliferate.utils.time import utcnow
 
@@ -400,9 +401,15 @@ async def resolve_cloud_sandbox_billing_block(
                 )
                 if decision_type is not None:
                     reason = "compute budget limit reached"
+    except BillingServiceError as error:
+        await _deny_unreadable_billing_state(
+            error,
+            billing_subject_id=billing_subject_id,
+            owner_user_id=owner_user_id,
+        )
     except ProliferateError:
-        # A typed billing/product error is already a decision; do not relabel it
-        # as an unreadable read.
+        # Other typed product errors are already decisions; do not relabel them
+        # as unreadable reads.
         raise
     except Exception as error:
         await _deny_unreadable_billing_state(
@@ -516,6 +523,12 @@ async def assert_cloud_sandbox_resume_allowed_for_owner(
         # layer before ensure_personal_cloud_sandbox_exists stages a row INSERT), so
         # no other writes are staged on this session yet.
         await db.commit()
+    except BillingServiceError as error:
+        await _deny_unreadable_billing_state(
+            error,
+            billing_subject_id=block.billing_subject_id,
+            owner_user_id=owner_user_id,
+        )
     except ProliferateError:
         raise
     except Exception as error:

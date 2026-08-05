@@ -28,9 +28,9 @@ from proliferate.db.store.organizations import (
     get_current_team_checkout_intent,
 )
 from proliferate.integrations import stripe as stripe_billing
+from proliferate.server.billing.errors import BillingServiceError
 from proliferate.server.billing.models import (
     BillingReturnSurface,
-    BillingServiceError,
     utcnow,
 )
 from proliferate.server.billing.pricing import (

@@ -35,11 +35,10 @@ from proliferate.db.store.organizations import (
     get_organization_with_membership,
     load_organization_by_billing_subject,
 )
-from proliferate.errors import ProliferateError
 from proliferate.integrations import stripe as stripe_billing
+from proliferate.server.billing.errors import BillingServiceError
 from proliferate.server.billing.models import (
     BillingReturnSurface,
-    BillingServiceError,
     BillingUrlResponse,
     OverageSettingsResponse,
 )
@@ -177,14 +176,7 @@ async def _ensure_stripe_customer_for_owner(
     async with db.begin():
         context = owner_context or await resolve_billing_owner_context(db, user, owner_selection)
         if context.owner_scope == "organization":
-            try:
-                require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-            except ProliferateError as error:
-                raise BillingServiceError(
-                    error.code,
-                    error.message,
-                    status_code=error.status_code,
-                ) from error
+            require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
             if context.organization_id is None:
                 raise BillingServiceError(
                     "organization_not_found",
@@ -269,14 +261,7 @@ async def create_cloud_checkout_session(
     if selection.owner_scope == "organization":
         async with db.begin():
             org_context = await resolve_billing_owner_context(db, user, selection)
-            try:
-                require_org_role(org_context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-            except ProliferateError as error:
-                raise BillingServiceError(
-                    error.code,
-                    error.message,
-                    status_code=error.status_code,
-                ) from error
+            require_org_role(org_context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
         if not settings.pro_billing_enabled:
             raise BillingServiceError(
                 "org_pro_billing_disabled",
@@ -505,14 +490,7 @@ async def update_overage_settings(
         )
     else:
         context = await resolve_billing_owner_context(db, user, selection)
-        try:
-            require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-        except ProliferateError as error:
-            raise BillingServiceError(
-                error.code,
-                error.message,
-                status_code=error.status_code,
-            ) from error
+        require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
         subject = await set_overage_policy_for_subject(
             db,
             billing_subject_id=context.billing_subject_id,
