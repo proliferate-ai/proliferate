@@ -15,12 +15,12 @@ except ImportError:  # pragma: no cover - optional dependency in local/test envs
     StarletteIntegration = None
 
 from proliferate.config import settings
-from proliferate.server.release import is_canonical_release_id, server_release_id
-from proliferate.utils.telemetry_mode import (
+from proliferate.lib.product.telemetry.mode import (
     get_server_telemetry_mode,
     is_vendor_telemetry_enabled,
 )
-from proliferate.utils.telemetry_scrub import scrub_mapping, scrub_text
+from proliferate.lib.product.telemetry.scrubbing import scrub_mapping, scrub_text
+from proliferate.server.release import is_canonical_release_id, server_release_id
 
 _sentry_initialized = False
 
