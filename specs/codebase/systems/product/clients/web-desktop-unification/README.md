@@ -594,8 +594,9 @@ The migration is complete when:
   gateway, and AnyHarness behavior.
 - ProductClient contains no raw Tauri access, browser auth transport, or
   vendor-specific host implementation.
-- Product-surfaces remains a separate package unless deliberately consolidated
-  in a later change.
+- Connected Cloud billing, organization SSO, cloud-environment, and workflow
+  surfaces live in ProductClient's component, access, workflow, and domain
+  owners rather than a separate package.
 - The old Web product implementation and embedded browser are gone.
 - Both hosts build, test, and deploy cleanly with the shared CSS and assets.
 
