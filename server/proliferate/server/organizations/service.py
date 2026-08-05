@@ -291,6 +291,82 @@ async def cancel_team_checkout_intent(
     )
 
 
+async def load_team_checkout_activation(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+) -> CheckoutIntentWithOrganizationRecord | None:
+    return await organization_store.load_team_checkout_activation_for_update(db, intent_id)
+
+
+async def fail_team_checkout_activation(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+    activation_status: str,
+    error_code: str,
+    error_message: str,
+    webhook_event_id: str | None,
+) -> CheckoutIntentRecord | None:
+    return await organization_store.mark_team_checkout_failed_by_id(
+        db,
+        intent_id=intent_id,
+        activation_status=activation_status,
+        error_code=error_code,
+        error_message=error_message,
+        webhook_event_id=webhook_event_id,
+    )
+
+
+async def begin_team_checkout_activation(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+    created_by_user_id: UUID,
+    stripe_subscription_id: str,
+) -> None:
+    await organization_store.acquire_membership_activation_lock(db, created_by_user_id)
+    await organization_store.mark_team_checkout_activating_by_id(
+        db,
+        intent_id=intent_id,
+        stripe_subscription_id=stripe_subscription_id,
+    )
+
+
+async def complete_team_checkout_activation(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+    stripe_subscription_id: str,
+    stripe_customer_id: str,
+    webhook_event_id: str | None,
+) -> OrganizationWithMembershipRecord:
+    return await organization_store.complete_team_checkout_activation_by_id(
+        db,
+        intent_id=intent_id,
+        stripe_subscription_id=stripe_subscription_id,
+        stripe_customer_id=stripe_customer_id,
+        webhook_event_id=webhook_event_id,
+    )
+
+
+async def send_staged_team_checkout_invitations(
+    *,
+    organization_id: UUID,
+    organization_name: str,
+    invited_by_user_id: UUID,
+    inviter_email: str,
+    invite_emails_json: str | None,
+) -> None:
+    await invitation_delivery.send_staged_team_checkout_invitations(
+        organization_id=organization_id,
+        organization_name=organization_name,
+        invited_by_user_id=invited_by_user_id,
+        inviter_email=inviter_email,
+        invite_emails_json=invite_emails_json,
+    )
+
+
 async def get_organization(
     db: AsyncSession,
     org_user: CurrentOrgUser,

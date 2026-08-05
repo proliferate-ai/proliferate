@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from proliferate.config import settings
+from proliferate.constants.organizations import (
+    ORGANIZATION_INVITE_EXPIRES_DAYS,
+    ORGANIZATION_ROLE_MEMBER,
+)
 from proliferate.db import engine as db_engine
+from proliferate.db import session_ops as db_session
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store.organization_records import InvitationRecord
 from proliferate.integrations import resend
@@ -15,6 +22,9 @@ from proliferate.server.organizations.join_links import (
     invitation_registration_url,
     organization_join_url,
 )
+from proliferate.utils.time import utcnow
+
+team_checkout_logger = logging.getLogger("proliferate.billing.team_checkout.activation")
 
 
 @dataclass(frozen=True)
@@ -139,3 +149,104 @@ async def rotate_and_send_invitation(
         organization_name=record.organization.name,
         inviter_email=inviter_email,
     )
+
+
+async def _send_staged_team_checkout_invitation(
+    *,
+    organization_id: UUID,
+    organization_name: str,
+    invited_by_user_id: UUID,
+    inviter_email: str,
+    email: str,
+) -> None:
+    async with db_session.open_async_transaction() as db:
+        record = await invitation_store.create_or_rotate_organization_invitation(
+            db,
+            organization_id=organization_id,
+            email=email,
+            role=ORGANIZATION_ROLE_MEMBER,
+            invited_by_user_id=invited_by_user_id,
+            expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
+        )
+    if record is None:
+        team_checkout_logger.warning(
+            "Skipping staged team checkout invitation because organization was not found",
+            extra={"organization_id": str(organization_id), "email": email},
+        )
+        return
+    try:
+        result = await resend.send_organization_invitation_email(
+            to_email=record.invitation.email,
+            organization_name=organization_name,
+            inviter_email=inviter_email,
+            invite_url=organization_join_url(organization_id),
+        )
+    except resend.ResendEmailError as error:
+        async with db_session.open_async_transaction() as db:
+            await invitation_store.mark_invitation_delivery(
+                db,
+                invitation_id=record.invitation.id,
+                sent=False,
+                skipped=False,
+                error=error.message,
+            )
+        team_checkout_logger.warning(
+            "Failed to deliver staged team checkout invitation",
+            extra={
+                "organization_id": str(organization_id),
+                "invitation_id": str(record.invitation.id),
+                "email": record.invitation.email,
+                "error_code": error.code,
+            },
+        )
+        return
+    async with db_session.open_async_transaction() as db:
+        await invitation_store.mark_invitation_delivery(
+            db,
+            invitation_id=record.invitation.id,
+            sent=not result.skipped,
+            skipped=result.skipped,
+        )
+
+
+async def send_staged_team_checkout_invitations(
+    *,
+    organization_id: UUID,
+    organization_name: str,
+    invited_by_user_id: UUID,
+    inviter_email: str,
+    invite_emails_json: str | None,
+) -> None:
+    if not invite_emails_json:
+        return
+    try:
+        raw_invites = json.loads(invite_emails_json)
+    except ValueError:
+        team_checkout_logger.warning(
+            "Skipping staged team checkout invitations because invite JSON is invalid",
+            extra={"organization_id": str(organization_id)},
+        )
+        return
+    if not isinstance(raw_invites, list):
+        return
+    invite_emails = sorted(
+        {
+            email.strip().lower()
+            for email in raw_invites
+            if isinstance(email, str) and email.strip()
+        }
+    )
+    for email in invite_emails:
+        try:
+            await _send_staged_team_checkout_invitation(
+                organization_id=organization_id,
+                organization_name=organization_name,
+                invited_by_user_id=invited_by_user_id,
+                inviter_email=inviter_email,
+                email=email,
+            )
+        except Exception:
+            team_checkout_logger.exception(
+                "Unexpected failure while creating staged team checkout invitation",
+                extra={"organization_id": str(organization_id), "email": email},
+            )

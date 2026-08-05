@@ -345,6 +345,14 @@ async def get_active_membership(
     return membership_record(membership) if membership is not None else None
 
 
+def _checkout_intent_with_organization_record(
+    intent: OrganizationCheckoutIntent, organization: Organization
+) -> CheckoutIntentWithOrganizationRecord:
+    return CheckoutIntentWithOrganizationRecord(
+        checkout_intent_record(intent), organization_record(organization)
+    )
+
+
 async def create_pending_team_checkout_intent(
     db: AsyncSession,
     *,
@@ -393,10 +401,7 @@ async def create_pending_team_checkout_intent(
     )
     db.add(intent)
     await db.flush()
-    return CheckoutIntentWithOrganizationRecord(
-        intent=checkout_intent_record(intent),
-        organization=organization_record(organization),
-    )
+    return _checkout_intent_with_organization_record(intent, organization)
 
 
 async def get_current_team_checkout_intent(
@@ -421,19 +426,14 @@ async def get_current_team_checkout_intent(
     intent, organization = row
     now = utcnow()
     if intent.status == ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING and intent.expires_at <= now:
-        intent.status = ORGANIZATION_CHECKOUT_INTENT_STATUS_EXPIRED
-        intent.updated_at = now
-        organization.status = ORGANIZATION_STATUS_ARCHIVED
-        organization.updated_at = now
+        intent.status, intent.updated_at = ORGANIZATION_CHECKOUT_INTENT_STATUS_EXPIRED, now
+        organization.status, organization.updated_at = ORGANIZATION_STATUS_ARCHIVED, now
         await db.flush()
         return None
-    return CheckoutIntentWithOrganizationRecord(
-        intent=checkout_intent_record(intent),
-        organization=organization_record(organization),
-    )
+    return _checkout_intent_with_organization_record(intent, organization)
 
 
-async def load_team_checkout_intent_for_update(
+async def _load_team_checkout_intent_for_update(
     db: AsyncSession,
     intent_id: UUID,
 ) -> tuple[OrganizationCheckoutIntent, Organization] | None:
@@ -445,10 +445,15 @@ async def load_team_checkout_intent_for_update(
             .with_for_update(of=(OrganizationCheckoutIntent, Organization))
         )
     ).one_or_none()
-    if row is None:
-        return None
-    intent, organization = row
-    return intent, organization
+    return (row[0], row[1]) if row is not None else None
+
+
+async def load_team_checkout_activation_for_update(
+    db: AsyncSession,
+    intent_id: UUID,
+) -> CheckoutIntentWithOrganizationRecord | None:
+    row = await _load_team_checkout_intent_for_update(db, intent_id)
+    return _checkout_intent_with_organization_record(*row) if row is not None else None
 
 
 async def bind_team_checkout_session(
@@ -476,7 +481,7 @@ async def cancel_team_checkout_intent(
     intent_id: UUID,
     created_by_user_id: UUID,
 ) -> CheckoutIntentWithOrganizationRecord | None:
-    row = await load_team_checkout_intent_for_update(db, intent_id)
+    row = await _load_team_checkout_intent_for_update(db, intent_id)
     if row is None:
         return None
     intent, organization = row
@@ -485,63 +490,61 @@ async def cancel_team_checkout_intent(
     if intent.status == ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING:
         now = utcnow()
         intent.status = ORGANIZATION_CHECKOUT_INTENT_STATUS_CANCELLED
-        intent.cancelled_at = now
-        intent.updated_at = now
-        organization.status = ORGANIZATION_STATUS_ARCHIVED
-        organization.updated_at = now
+        intent.cancelled_at = intent.updated_at = now
+        organization.status, organization.updated_at = ORGANIZATION_STATUS_ARCHIVED, now
         await db.flush()
-    return CheckoutIntentWithOrganizationRecord(
-        intent=checkout_intent_record(intent),
-        organization=organization_record(organization),
-    )
+    return _checkout_intent_with_organization_record(intent, organization)
 
 
-async def mark_team_checkout_activating(
+async def mark_team_checkout_activating_by_id(
     db: AsyncSession,
-    intent: OrganizationCheckoutIntent,
     *,
-    stripe_subscription_id: str | None,
+    intent_id: UUID,
+    stripe_subscription_id: str,
 ) -> None:
+    intent = await db.get(OrganizationCheckoutIntent, intent_id)
+    assert intent is not None, "Checkout intent disappeared during activation."
     intent.activation_status = ORGANIZATION_CHECKOUT_ACTIVATION_ACTIVATING
-    if stripe_subscription_id:
-        intent.stripe_subscription_id = stripe_subscription_id
+    intent.stripe_subscription_id = stripe_subscription_id
     intent.updated_at = utcnow()
     await db.flush()
 
 
-async def mark_team_checkout_failed(
+async def mark_team_checkout_failed_by_id(
     db: AsyncSession,
-    intent: OrganizationCheckoutIntent,
     *,
+    intent_id: UUID,
     activation_status: str,
     error_code: str,
     error_message: str,
     webhook_event_id: str | None,
-) -> CheckoutIntentRecord:
+) -> CheckoutIntentRecord | None:
+    if (row := await _load_team_checkout_intent_for_update(db, intent_id)) is None:
+        return None
+    intent, _ = row
     now = utcnow()
     intent.status = ORGANIZATION_CHECKOUT_INTENT_STATUS_FAILED
     intent.activation_status = activation_status
-    intent.activation_error_code = error_code
-    intent.activation_error_message = error_message
+    intent.activation_error_code, intent.activation_error_message = error_code, error_message
     intent.last_webhook_event_id = webhook_event_id
-    intent.failed_at = now
-    intent.updated_at = now
+    intent.failed_at = intent.updated_at = now
     await db.flush()
     return checkout_intent_record(intent)
 
 
-async def complete_team_checkout_activation(
+async def complete_team_checkout_activation_by_id(
     db: AsyncSession,
     *,
-    intent: OrganizationCheckoutIntent,
-    organization: Organization,
+    intent_id: UUID,
     stripe_subscription_id: str,
     stripe_customer_id: str,
     webhook_event_id: str | None,
 ) -> OrganizationWithMembershipRecord:
+    row = await _load_team_checkout_intent_for_update(db, intent_id)
+    assert row is not None, "Checkout intent disappeared during activation."
+    intent, organization = row
     now = utcnow()
-    organization.status = ORGANIZATION_STATUS_ACTIVE
-    organization.updated_at = now
+    organization.status, organization.updated_at = ORGANIZATION_STATUS_ACTIVE, now
     result = await db.execute(
         pg_insert(OrganizationMembership)
         .values(
@@ -572,14 +575,11 @@ async def complete_team_checkout_activation(
     intent.status = ORGANIZATION_CHECKOUT_INTENT_STATUS_COMPLETED
     intent.activation_status = ORGANIZATION_CHECKOUT_ACTIVATION_ACTIVATED
     intent.stripe_subscription_id = stripe_subscription_id
-    intent.stripe_customer_id = stripe_customer_id
-    intent.last_webhook_event_id = webhook_event_id
-    intent.completed_at = now
-    intent.updated_at = now
+    intent.stripe_customer_id, intent.last_webhook_event_id = stripe_customer_id, webhook_event_id
+    intent.completed_at = intent.updated_at = now
     await db.flush()
     return OrganizationWithMembershipRecord(
-        organization=organization_record(organization),
-        membership=membership_record(membership),
+        organization_record(organization), membership_record(membership)
     )
 
 
