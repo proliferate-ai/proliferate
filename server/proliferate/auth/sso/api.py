@@ -108,7 +108,7 @@ async def oidc_sso_callback(
                 redirect_url = await complete_sso_error_callback(db, state=state, error=error)
                 await db.commit()
                 return _auth_redirect_response(redirect_url)
-            except HTTPException:
+            except AuthFlowError:
                 await db.rollback()
         return RedirectResponse(
             _auth_error_url("provider_error"), status_code=status.HTTP_302_FOUND
@@ -120,7 +120,7 @@ async def oidc_sso_callback(
     except WebBetaAccessDenied as exc:
         await db.rollback()
         return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
-    except HTTPException as exc:
+    except AuthFlowError as exc:
         await db.rollback()
         return RedirectResponse(
             _auth_error_url(_sso_callback_error_code(exc)), status_code=status.HTTP_302_FOUND
@@ -143,8 +143,8 @@ def _auth_error_url(code: str) -> str:
     return f"{base}/auth/error?{urlencode({'code': code})}"
 
 
-def _sso_callback_error_code(exc: HTTPException) -> str:
-    detail = exc.detail if isinstance(exc.detail, str) else None
+def _sso_callback_error_code(exc: AuthFlowError) -> str:
+    detail = exc.message if isinstance(exc.message, str) else None
     if detail is None:
         return "sso_callback_failed"
     return _SSO_CALLBACK_ERROR_CODES.get(detail, "sso_callback_failed")

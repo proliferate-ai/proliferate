@@ -4,9 +4,10 @@ from dataclasses import replace
 from typing import cast
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.sso import api as sso_api
 from proliferate.auth.sso import service as sso_service
 from proliferate.auth.sso.branding import (
@@ -273,7 +274,11 @@ async def test_oidc_sso_callback_redirects_known_processing_http_errors(
     monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
 
     async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
-        raise HTTPException(status_code=400, detail="Invalid or expired SSO state.")
+        raise AuthFlowError(
+            "sso_state_invalid",
+            "Invalid or expired SSO state.",
+            status_code=400,
+        )
 
     monkeypatch.setattr(
         sso_api,
@@ -305,7 +310,11 @@ async def test_oidc_sso_callback_redirects_email_domain_errors(
     monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
 
     async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
-        raise HTTPException(status_code=403, detail="Email domain is not allowed for this SSO.")
+        raise AuthFlowError(
+            "sso_email_domain_not_allowed",
+            "Email domain is not allowed for this SSO.",
+            status_code=403,
+        )
 
     monkeypatch.setattr(
         sso_api,
@@ -337,7 +346,11 @@ async def test_oidc_sso_callback_redirects_org_membership_errors(
     monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
 
     async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
-        raise HTTPException(status_code=403, detail="SSO user is not a team member.")
+        raise AuthFlowError(
+            "sso_user_not_team_member",
+            "SSO user is not a team member.",
+            status_code=403,
+        )
 
     monkeypatch.setattr(
         sso_api,
@@ -369,7 +382,7 @@ async def test_oidc_sso_callback_keeps_generic_code_for_unknown_http_errors(
     monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
 
     async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
-        raise HTTPException(status_code=400, detail="Unexpected SSO failure.")
+        raise AuthFlowError("sso_unexpected", "Unexpected SSO failure.", status_code=400)
 
     monkeypatch.setattr(
         sso_api,
@@ -411,7 +424,7 @@ async def test_resolve_sso_user_rejects_unverified_email_before_identity_lookup(
         fake_get_sso_identity_by_connection_subject,
     )
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(AuthFlowError) as exc_info:
         await sso_service.resolve_sso_user(
             cast(AsyncSession, object()),
             connection=_connection(allowed_domains=("example.com",)),
@@ -425,7 +438,9 @@ async def test_resolve_sso_user_rejects_unverified_email_before_identity_lookup(
             ),
         )
 
+    assert exc_info.value.code == "sso_email_unverified"
     assert exc_info.value.status_code == 403
+    assert exc_info.value.message == "SSO email address is not verified."
     assert identity_lookup_called is False
 
 
@@ -446,7 +461,7 @@ async def test_resolve_sso_user_rechecks_allowed_domain_before_identity_lookup(
         fake_get_sso_identity_by_connection_subject,
     )
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(AuthFlowError) as exc_info:
         await sso_service.resolve_sso_user(
             cast(AsyncSession, object()),
             connection=_connection(allowed_domains=("example.com",)),
@@ -460,7 +475,9 @@ async def test_resolve_sso_user_rechecks_allowed_domain_before_identity_lookup(
             ),
         )
 
+    assert exc_info.value.code == "sso_email_domain_not_allowed"
     assert exc_info.value.status_code == 403
+    assert exc_info.value.message == "Email domain is not allowed for this SSO."
     assert identity_lookup_called is False
 
 

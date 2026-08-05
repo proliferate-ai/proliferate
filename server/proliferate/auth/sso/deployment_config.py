@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException
-
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.sso.policy import normalize_domains, oidc_configuration_error
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
@@ -88,9 +87,10 @@ def _deployment_login_policy() -> SsoLoginPolicy:
         SsoLoginPolicy.OPTIONAL,
     )
     if policy == SsoLoginPolicy.REQUIRED:
-        raise HTTPException(
+        raise AuthFlowError(
+            "sso_required_login_policy_unsupported",
+            "Required SSO login policy is not supported yet.",
             status_code=400,
-            detail="Required SSO login policy is not supported yet.",
         )
     return policy
 

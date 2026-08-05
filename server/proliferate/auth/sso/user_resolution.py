@@ -9,15 +9,15 @@ admin-removed instance membership; asserting the ADMIN_EMAILS floor at login).
 
 from __future__ import annotations
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.store import (
     create_auth_user,
     get_user_by_email,
     get_user_by_id,
 )
-from proliferate.auth.sso.policy import require_email_domain_allowed
+from proliferate.auth.sso.policy import SsoPolicyError, require_email_domain_allowed
 from proliferate.auth.sso.types import (
     SsoConnectionSnapshot,
     SsoJitPolicy,
@@ -70,7 +70,11 @@ async def _resolve_sso_user(
     if existing_identity is not None:
         user = await get_user_by_id(db, existing_identity.user_id)
         if user is None:
-            raise HTTPException(status_code=400, detail="Linked SSO user not found.")
+            raise AuthFlowError(
+                "sso_linked_user_not_found",
+                "Linked SSO user not found.",
+                status_code=400,
+            )
         _ensure_active_user(user)
         if connection.scope == SsoScope.ORGANIZATION:
             user = await _resolve_organization_sso_user(
@@ -85,7 +89,11 @@ async def _resolve_sso_user(
     user = await get_user_by_email(db, verified.email)
     if connection.scope == SsoScope.ORGANIZATION:
         if connection.organization_id is None:
-            raise HTTPException(status_code=400, detail="SSO organization is missing.")
+            raise AuthFlowError(
+                "sso_organization_missing",
+                "SSO organization is missing.",
+                status_code=400,
+            )
         user = await _resolve_organization_sso_user(
             db,
             connection=connection,
@@ -95,7 +103,11 @@ async def _resolve_sso_user(
     else:
         if user is None:
             if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
-                raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
+                raise AuthFlowError(
+                    "sso_jit_disabled",
+                    "SSO user provisioning is disabled.",
+                    status_code=403,
+                )
             user = await create_auth_user(
                 db,
                 email=verified.email,
@@ -103,7 +115,11 @@ async def _resolve_sso_user(
                 avatar_url=verified.avatar_url,
             )
         elif connection.jit_policy == SsoJitPolicy.DISABLED:
-            raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
+            raise AuthFlowError(
+                "sso_jit_disabled",
+                "SSO user provisioning is disabled.",
+                status_code=403,
+            )
         _ensure_active_user(user)
         # Single-org mode honors the connection's default role for JIT
         # placement; hosted mode ignores it (personal org owner as always).
@@ -123,10 +139,21 @@ def _require_verified_allowed_email(
     verified: VerifiedSsoIdentity,
 ) -> None:
     if not verified.email:
-        raise HTTPException(status_code=400, detail="SSO did not return an email address.")
+        raise AuthFlowError(
+            "sso_email_missing",
+            "SSO did not return an email address.",
+            status_code=400,
+        )
     if not verified.email_verified:
-        raise HTTPException(status_code=403, detail="SSO email address is not verified.")
-    require_email_domain_allowed(verified.email, connection.allowed_domains)
+        raise AuthFlowError(
+            "sso_email_unverified",
+            "SSO email address is not verified.",
+            status_code=403,
+        )
+    try:
+        require_email_domain_allowed(verified.email, connection.allowed_domains)
+    except SsoPolicyError as exc:
+        raise AuthFlowError(exc.code, exc.message, status_code=403) from exc
 
 
 async def _resolve_organization_sso_user(
@@ -137,7 +164,11 @@ async def _resolve_organization_sso_user(
     user: User | None,
 ) -> User:
     if connection.organization_id is None:
-        raise HTTPException(status_code=400, detail="SSO organization is missing.")
+        raise AuthFlowError(
+            "sso_organization_missing",
+            "SSO organization is missing.",
+            status_code=400,
+        )
     has_pending_invitation = (
         await invitation_store.has_live_pending_invitation_for_organization_email(
             db,
@@ -147,7 +178,11 @@ async def _resolve_organization_sso_user(
     )
     if user is None:
         if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER and not has_pending_invitation:
-            raise HTTPException(status_code=403, detail="SSO user is not a team member.")
+            raise AuthFlowError(
+                "sso_user_not_team_member",
+                "SSO user is not a team member.",
+                status_code=403,
+            )
         user = await create_auth_user(
             db,
             email=verified.email or "",
@@ -173,7 +208,11 @@ async def _resolve_organization_sso_user(
         if accepted is not None:
             return user
     if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
-        raise HTTPException(status_code=403, detail="SSO user is not a team member.")
+        raise AuthFlowError(
+            "sso_user_not_team_member",
+            "SSO user is not a team member.",
+            status_code=403,
+        )
     # Single-org mode only (no-op in hosted mode): JIT must not silently
     # reactivate an instance-org membership an admin removed. ADMIN_EMAILS
     # listed emails are excepted; that floor is the documented
@@ -227,4 +266,4 @@ async def _attach_sso_identity(
 
 def _ensure_active_user(user: User) -> None:
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="User is inactive.")
+        raise AuthFlowError("sso_user_inactive", "User is inactive.", status_code=403)
