@@ -164,6 +164,9 @@ async def _resolve_organization_sso_user(
     if membership is not None:
         return user
     if has_pending_invitation:
+        # Invitation acceptance mutates Organization-owned records, so Auth calls
+        # its public service: it owns locking, membership, billing, and enrollment.
+        # The dependency remains Auth -> Organizations; the owner never imports this resolver.
         accepted = await organization_service.try_accept_invitation(
             db,
             user,
