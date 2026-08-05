@@ -14,10 +14,9 @@ from proliferate.db.models.auth import User
 from proliferate.server.cloud.github_app.transactions import (
     commit_github_app_reauthorization_on_error,
 )
-from proliferate.server.cloud.workspaces.materializations.service import (
-    create_local_materialization_intent,
-    report_materialization,
-    unlink_materialization,
+from proliferate.server.cloud.workspaces.materializations import access as materializations_access
+from proliferate.server.cloud.workspaces.materializations import (
+    service as materializations_service,
 )
 from proliferate.server.cloud.workspaces.models import (
     CloudWorkspaceRuntimeStatusResponse,
@@ -100,14 +99,16 @@ async def get_cloud_workspace_endpoint(
 async def create_workspace_materialization_intent_endpoint(
     workspace_id: UUID,
     body: CreateMaterializationIntentRequest,
-    user: User = Depends(current_product_user),
+    access: materializations_access.CreateLocalMaterializationAccess = Depends(
+        materializations_access.create_local_materialization_access
+    ),
     db: AsyncSession = Depends(get_async_session),
 ) -> MaterializationIntentResponse:
-    return await create_local_materialization_intent(
+    return await materializations_service.create_local_materialization_intent(
         db,
-        user_id=user.id,
-        workspace_id=workspace_id,
-        body=body,
+        user_id=access.actor_user_id,
+        workspace=access.workspace,
+        desktop_install_id=access.desktop_install_id,
     )
 
 
@@ -119,14 +120,14 @@ async def report_workspace_materialization_endpoint(
     workspace_id: UUID,
     materialization_id: UUID,
     body: ReportMaterializationRequest,
-    user: User = Depends(current_product_user),
+    access: materializations_access.ExistingLocalMaterializationAccess = Depends(
+        materializations_access.report_local_materialization_access
+    ),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceMaterializationSummary:
-    return await report_materialization(
+    return await materializations_service.report_materialization(
         db,
-        user_id=user.id,
-        workspace_id=workspace_id,
-        materialization_id=materialization_id,
+        materialization=access.materialization,
         body=body,
     )
 
@@ -138,14 +139,14 @@ async def report_workspace_materialization_endpoint(
 async def unlink_workspace_materialization_endpoint(
     workspace_id: UUID,
     materialization_id: UUID,
-    user: User = Depends(current_product_user),
+    access: materializations_access.ExistingLocalMaterializationAccess = Depends(
+        materializations_access.unlink_local_materialization_access
+    ),
     db: AsyncSession = Depends(get_async_session),
 ) -> None:
-    await unlink_materialization(
+    await materializations_service.unlink_materialization(
         db,
-        user_id=user.id,
-        workspace_id=workspace_id,
-        materialization_id=materialization_id,
+        materialization=access.materialization,
     )
 
 
