@@ -82,10 +82,14 @@ warn_return_any = false
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-# cloud/runtime operates on untyped E2B sandbox objects; recursive JSON encryption
-# requires Any at its data boundary.
+# cloud/runtime operates on untyped E2B sandbox objects.
+module = ["proliferate.server.cloud.runtime.*"]
+disallow_any_explicit = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+# Recursive JSON encryption accepts untyped JSON values at its data boundary.
 module = [
-    "proliferate.server.cloud.runtime.*",
     "proliferate.lib.infra.encryption.json",
 ]
 disallow_any_explicit = false
