@@ -22,7 +22,16 @@ class ImportStatement:
     imported_names: frozenset[str] = frozenset()
     local_bindings: frozenset[str] = frozenset()
     namespace_bindings: frozenset[str] = frozenset()
+    scoped_bindings: tuple[ScopedBinding, ...] = ()
     start: int = -1
+
+
+@dataclass(frozen=True)
+class ScopedBinding:
+    name: str
+    start: int
+    end: int
+    namespace: bool = False
 
 
 def _is_identifier_start(char: str) -> bool:
@@ -636,13 +645,29 @@ def tokenize_typescript(text: str, *, jsx: bool = True) -> list[Token]:
     return _TypeScriptLexer(text, jsx=jsx).scan()
 
 
-def _statement_end(text: str, tokens: list[Token], source_index: int) -> int:
-    for token in tokens[source_index + 1 :]:
-        if token.value == ";":
-            return token.end
-        if token.lineno > tokens[source_index].lineno and token.value in {"import", "export"}:
-            break
-    return tokens[source_index].end
+def _statement_end(
+    tokens: list[Token], source_index: int, *, import_equals: bool
+) -> int:
+    """Return the grammar end of one static import/re-export statement."""
+
+    cursor = source_index + 1
+    end = tokens[source_index].end
+    if import_equals and cursor < len(tokens) and tokens[cursor].value == ")":
+        end = tokens[cursor].end
+        cursor += 1
+
+    if cursor < len(tokens) and tokens[cursor].value in {"assert", "with"}:
+        end = tokens[cursor].end
+        cursor += 1
+        if cursor < len(tokens) and tokens[cursor].value == "{":
+            attribute_close = _matching_pairs(tokens, "{", "}").get(cursor)
+            if attribute_close is not None:
+                end = tokens[attribute_close].end
+                cursor = attribute_close + 1
+
+    if cursor < len(tokens) and tokens[cursor].value == ";":
+        return tokens[cursor].end
+    return end
 
 
 def _all_named_bindings_are_types(tokens: list[Token]) -> bool:
@@ -1332,10 +1357,6 @@ def _generic_argument_contains_import(
                 not in {"catch", "default", "finally", "then"}
                 for index, token in enumerate(import_type_tail)
             )
-            nested_type_owner = any(
-                token.kind == "identifier"
-                for token in tokens[open_index + 1 : import_index]
-            )
             adjacent_owner = (
                 owner is not None
                 and tokens[open_index].start == owner.end
@@ -1343,7 +1364,6 @@ def _generic_argument_contains_import(
             if not runtime_member_call and (
                 optional_call
                 or qualified_import_type
-                or nested_type_owner
                 or adjacent_owner
             ):
                 return True
@@ -1462,13 +1482,18 @@ def _is_import_type_expression(tokens: list[Token], import_index: int) -> bool:
 
 def _dynamic_import_binding_facts(
     tokens: list[Token], import_index: int
-) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+) -> tuple[
+    frozenset[str],
+    frozenset[str],
+    frozenset[str],
+    tuple[ScopedBinding, ...],
+]:
     """Return original export names, locals, and namespace locals."""
 
     parens = _matching_pairs(tokens, "(", ")")
     close_index = parens.get(import_index + 1)
     if close_index is None:
-        return frozenset(), frozenset(), frozenset()
+        return frozenset(), frozenset(), frozenset(), ()
 
     imported: set[str] = set()
     local: set[str] = set()
@@ -1499,9 +1524,16 @@ def _dynamic_import_binding_facts(
     # Promise-style dynamic imports expose callback destructuring just as an
     # awaited destructure does. These names are deliberately not added to the
     # global local-binding set because their scope is only the callback.
-    then_imported = _then_callback_imported_names(tokens, close_index)
+    then_imported, scoped_bindings = _then_callback_import_facts(
+        tokens, import_index, close_index
+    )
     imported.update(then_imported)
-    return frozenset(imported), frozenset(local), frozenset(namespaces)
+    return (
+        frozenset(imported),
+        frozenset(local),
+        frozenset(namespaces),
+        scoped_bindings,
+    )
 
 
 def _split_top_level_entries(tokens: list[Token]) -> list[list[Token]]:
@@ -1673,27 +1705,152 @@ def _assignment_pattern(tokens: list[Token], equals_index: int) -> list[Token]:
     return pattern
 
 
-def _then_callback_imported_names(
-    tokens: list[Token], import_close_index: int
-) -> set[str]:
+def _then_callback_import_facts(
+    tokens: list[Token], import_index: int, import_close_index: int
+) -> tuple[set[str], tuple[ScopedBinding, ...]]:
     cursor = import_close_index + 1
+    grouping_count = 0
+    prefix = import_index - 1
+    if prefix >= 0 and tokens[prefix].value == "await":
+        prefix -= 1
+    while prefix >= 0 and tokens[prefix].value == "(":
+        previous = tokens[prefix - 1] if prefix else None
+        if previous is not None and previous.kind == "identifier" and previous.value not in {
+            "await",
+            "case",
+            "delete",
+            "return",
+            "throw",
+            "typeof",
+            "void",
+            "yield",
+        }:
+            break
+        grouping_count += 1
+        prefix -= 1
+    while grouping_count and cursor < len(tokens) and tokens[cursor].value == ")":
+        cursor += 1
+        grouping_count -= 1
     if (
         cursor + 2 >= len(tokens)
         or tokens[cursor].value != "."
         or tokens[cursor + 1].value != "then"
         or tokens[cursor + 2].value != "("
     ):
-        return set()
-    cursor += 3
-    while cursor < len(tokens) and tokens[cursor].value == "(":
+        return set(), ()
+
+    then_open = cursor + 2
+    then_close = _matching_pairs(tokens, "(", ")").get(then_open)
+    if then_close is None:
+        return set(), ()
+    cursor = then_open + 1
+    if cursor < then_close and tokens[cursor].value == "async":
         cursor += 1
-    if cursor >= len(tokens) or tokens[cursor].value != "{":
-        return set()
-    brace_close = _matching_pairs(tokens, "{", "}").get(cursor)
-    if brace_close is None:
-        return set()
-    imported, _, _ = _destructuring_import_facts(tokens[cursor : brace_close + 1])
-    return imported
+
+    function_callback = cursor < then_close and tokens[cursor].value == "function"
+    if function_callback:
+        cursor += 1
+        if cursor < then_close and tokens[cursor].kind == "identifier":
+            cursor += 1
+
+    parameter_tokens: list[Token]
+    if cursor < then_close and tokens[cursor].value == "(":
+        parameter_close = _matching_pairs(tokens, "(", ")").get(cursor)
+        if parameter_close is None or parameter_close >= then_close:
+            return set(), ()
+        parameter_tokens = tokens[cursor + 1 : parameter_close]
+        cursor = parameter_close + 1
+    elif cursor < then_close and tokens[cursor].kind == "identifier":
+        parameter_tokens = [tokens[cursor]]
+        cursor += 1
+    else:
+        return set(), ()
+
+    if function_callback:
+        while cursor < then_close and tokens[cursor].value != "{":
+            cursor += 1
+        if cursor >= then_close:
+            return set(), ()
+        body_close = _matching_pairs(tokens, "{", "}").get(cursor)
+        if body_close is None:
+            return set(), ()
+        scope_start = tokens[cursor].end
+        scope_end = tokens[body_close].start
+    else:
+        nesting: list[str] = []
+        matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+        arrow_index: int | None = None
+        while cursor + 1 < then_close:
+            value = tokens[cursor].value
+            if value in {"(", "[", "{", "<"}:
+                nesting.append(value)
+            elif value in matching and nesting and nesting[-1] == matching[value]:
+                nesting.pop()
+            elif (
+                not nesting
+                and value == "="
+                and tokens[cursor + 1].value == ">"
+            ):
+                arrow_index = cursor
+                break
+            cursor += 1
+        if arrow_index is None or arrow_index + 2 >= then_close:
+            return set(), ()
+        body_start = arrow_index + 2
+        if tokens[body_start].value == "{":
+            body_close = _matching_pairs(tokens, "{", "}").get(body_start)
+            if body_close is None:
+                return set(), ()
+            scope_start = tokens[body_start].end
+            scope_end = tokens[body_close].start
+        else:
+            scope_start = tokens[body_start].start
+            scope_end = tokens[then_close].start
+            expression_nesting: list[str] = []
+            matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+            for expression_token in tokens[body_start:then_close]:
+                if expression_token.value in {"(", "[", "{", "<"}:
+                    expression_nesting.append(expression_token.value)
+                elif (
+                    expression_token.value in matching
+                    and expression_nesting
+                    and expression_nesting[-1]
+                    == matching[expression_token.value]
+                ):
+                    expression_nesting.pop()
+                elif expression_token.value == "," and not expression_nesting:
+                    scope_end = expression_token.start
+                    break
+
+    parameters = _split_top_level_entries(parameter_tokens)
+    if not parameters:
+        return set(), ()
+    first_parameter = parameters[0]
+    imported: set[str] = set()
+    local: set[str] = set()
+    namespaces: set[str] = set()
+    if first_parameter and first_parameter[0].value == "{":
+        close_brace = _matching_pairs(first_parameter, "{", "}").get(0)
+        if close_brace is None:
+            return set(), ()
+        imported, local, namespaces = _destructuring_import_facts(
+            first_parameter[: close_brace + 1]
+        )
+    elif first_parameter and first_parameter[0].kind == "identifier":
+        local.add(first_parameter[0].value)
+        namespaces.add(first_parameter[0].value)
+        imported.add("*")
+
+    scoped = tuple(
+        ScopedBinding(
+            name=name,
+            start=scope_start,
+            end=scope_end,
+            namespace=name in namespaces,
+        )
+        for name in sorted(local)
+    )
+    return imported, scoped
 
 
 def _static_import_facts(
@@ -1849,7 +2006,12 @@ def collect_imports(path: Path, text: str) -> list[ImportStatement]:
             )
             if source_token is not None and close_index is not None:
                 type_only = _is_import_type_expression(tokens, index)
-                imported_names, local_bindings, namespace_bindings = (
+                (
+                    imported_names,
+                    local_bindings,
+                    namespace_bindings,
+                    scoped_bindings,
+                ) = (
                     _dynamic_import_binding_facts(tokens, index)
                 )
                 if type_only:
@@ -1865,6 +2027,7 @@ def collect_imports(path: Path, text: str) -> list[ImportStatement]:
                         imported_names=imported_names,
                         local_bindings=local_bindings,
                         namespace_bindings=namespace_bindings,
+                        scoped_bindings=scoped_bindings,
                         start=token.start,
                     )
                 )
@@ -1934,7 +2097,9 @@ def collect_imports(path: Path, text: str) -> list[ImportStatement]:
             index += 1
             continue
 
-        end = _statement_end(text, tokens, source_index)
+        end = _statement_end(
+            tokens, source_index, import_equals=import_equals
+        )
         statement_tokens = tokens[index : source_index + 1]
         imported_names, local_bindings, namespace_bindings = _static_import_facts(
             statement_tokens,

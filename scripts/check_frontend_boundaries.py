@@ -117,6 +117,15 @@ class Violation:
 
 
 @dataclass(frozen=True)
+class ScopedLocalBinding:
+    name: str
+    start: int
+    end: int
+    namespace: bool = False
+    tracked_import_start: int | None = None
+
+
+@dataclass(frozen=True)
 class AllowlistEntry:
     rule_id: str
     relative_path: str
@@ -477,6 +486,22 @@ def namespace_bindings(statement: ImportStatement) -> set[str]:
     return set(statement.namespace_bindings)
 
 
+def scoped_import_bindings(statement: ImportStatement) -> list[ScopedLocalBinding]:
+    return [
+        ScopedLocalBinding(
+            name=binding.name,
+            start=binding.start,
+            end=binding.end,
+            namespace=binding.namespace,
+        )
+        for binding in statement.scoped_bindings
+    ]
+
+
+def is_package_source(source: str, package: str) -> bool:
+    return source == package or source.startswith(f"{package}/")
+
+
 def namespace_member_identifiers(
     text: str,
     bindings: set[str],
@@ -532,6 +557,56 @@ def _matching_token_pairs(
             forward[open_index] = index
             reverse[index] = open_index
     return forward, reverse
+
+
+def _statement_binding_scope(
+    text: str,
+    tokens: list[Token],
+    statement: ImportStatement,
+) -> tuple[int, int]:
+    import_index = next(
+        (
+            index
+            for index, token in enumerate(tokens)
+            if token.start == statement.start and token.value == "import"
+        ),
+        None,
+    )
+    if (
+        import_index is None
+        or import_index + 1 >= len(tokens)
+        or tokens[import_index + 1].value != "("
+    ):
+        return 0, len(text)
+
+    braces, _ = _matching_token_pairs(tokens, "{", "}")
+    containers = [
+        (open_index, close_index)
+        for open_index, close_index in braces.items()
+        if open_index < import_index < close_index
+    ]
+    if not containers:
+        return 0, len(text)
+    open_index, close_index = max(containers)
+    return tokens[open_index].end, tokens[close_index].start
+
+
+def _is_dynamic_import_statement(
+    tokens: list[Token], statement: ImportStatement
+) -> bool:
+    import_index = next(
+        (
+            index
+            for index, token in enumerate(tokens)
+            if token.start == statement.start and token.value == "import"
+        ),
+        None,
+    )
+    return (
+        import_index is not None
+        and import_index + 1 < len(tokens)
+        and tokens[import_index + 1].value == "("
+    )
 
 
 def _top_level_token_index(tokens: list[Token], value: str) -> int | None:
@@ -1050,28 +1125,73 @@ def _member_name_after(
     return None
 
 
-def _namespace_destructure_names(tokens: list[Token], index: int) -> set[str]:
-    """Return exports selected from an imported namespace at this occurrence."""
-
+def _namespace_destructure_pattern(
+    tokens: list[Token], index: int
+) -> tuple[int, int, int] | None:
     after = index + 1
     while after < len(tokens) and tokens[after].value in {"!", ")"}:
         after += 1
     if after < len(tokens) and tokens[after].value != ";":
-        # `const { useMutation } = Query.options` destructures a property value,
-        # not the imported namespace itself.
-        return set()
+        next_token = tokens[after]
+        previous_token = tokens[after - 1]
+        continuation_starters = {
+            ".",
+            "?",
+            "[",
+            "(",
+            "`",
+            ",",
+            ":",
+            "+",
+            "-",
+            "*",
+            "/",
+            "%",
+            "&",
+            "|",
+            "^",
+            "<",
+            ">",
+            "=",
+            "as",
+            "satisfies",
+            "instanceof",
+            "in",
+        }
+        has_asi_boundary = (
+            next_token.value == "}"
+            or (
+                next_token.lineno > previous_token.lineno
+                and next_token.value not in continuation_starters
+            )
+        )
+        if not has_asi_boundary:
+            # `const { useMutation } = Query.options` destructures a property
+            # value, not the imported namespace itself. A line continuation
+            # such as `Query\n.options` is likewise still the same expression.
+            return None
 
     cursor = index - 1
     while cursor >= 0 and tokens[cursor].value == "(":
         cursor -= 1
     if cursor < 1 or tokens[cursor].value != "=" or tokens[cursor - 1].value != "}":
-        return set()
+        return None
 
     _, reverse = _matching_token_pairs(tokens, "{", "}")
     close_index = cursor - 1
     open_index = reverse.get(close_index)
     if open_index is None:
+        return None
+    return open_index, close_index, after
+
+
+def _namespace_destructure_names(tokens: list[Token], index: int) -> set[str]:
+    """Return exports selected from an imported namespace at this occurrence."""
+
+    pattern = _namespace_destructure_pattern(tokens, index)
+    if pattern is None:
         return set()
+    open_index, close_index, _ = pattern
 
     names: set[str] = set()
     for entry in _split_top_level_tokens(tokens[open_index + 1 : close_index], ","):
@@ -1093,6 +1213,91 @@ def _namespace_destructure_names(tokens: list[Token], index: int) -> set[str]:
         ):
             names.add(key[1].value)
     return names
+
+
+def _namespace_destructure_local_bindings(
+    tokens: list[Token], open_index: int, close_index: int
+) -> set[tuple[str, bool]]:
+    bindings: set[tuple[str, bool]] = set()
+    for entry in _split_top_level_tokens(tokens[open_index + 1 : close_index], ","):
+        if not entry:
+            continue
+        is_namespace = len(entry) >= 3 and all(
+            token.value == "." for token in entry[:3]
+        )
+        if is_namespace:
+            binding_part = entry[3:]
+        else:
+            equals_index = _top_level_token_index(entry, "=")
+            binding_part = entry[:equals_index] if equals_index is not None else entry
+            colon_index = _top_level_token_index(binding_part, ":")
+            if colon_index is not None:
+                binding_part = binding_part[colon_index + 1 :]
+        candidates = {
+            token.value for token in binding_part if token.kind == "identifier"
+        }
+        for name in _binding_names_in_pattern(binding_part, candidates):
+            bindings.add((name, is_namespace))
+    return bindings
+
+
+def namespace_destructured_bindings(
+    text: str,
+    bindings: set[str],
+    *,
+    jsx: bool,
+    tracked_import_starts: dict[str, set[int]] | None = None,
+) -> list[ScopedLocalBinding]:
+    if not bindings:
+        return []
+    tokens = tokenize_typescript(text, jsx=jsx)
+    _, brace_reverse = _matching_token_pairs(tokens, "{", "}")
+    shadow_ranges = _function_shadow_ranges(tokens, bindings)
+    derived: set[ScopedLocalBinding] = set()
+    for index, token in enumerate(tokens):
+        if token.kind != "identifier" or token.value not in bindings:
+            continue
+        if not _is_imported_binding_occurrence(
+            tokens,
+            index,
+            shadow_ranges,
+            brace_reverse,
+            (tracked_import_starts or {}).get(token.value, set()),
+        ):
+            continue
+        pattern = _namespace_destructure_pattern(tokens, index)
+        if pattern is None:
+            continue
+        open_index, close_index, after_index = pattern
+        range_start = (
+            tokens[after_index].end
+            if after_index < len(tokens) and tokens[after_index].value == ";"
+            else token.end
+        )
+        containers = [
+            (brace_open, brace_close)
+            for brace_close, brace_open in brace_reverse.items()
+            if brace_open < index < brace_close
+        ]
+        range_end = (
+            tokens[max(containers)[1]].start if containers else len(text)
+        )
+        if range_start >= range_end:
+            continue
+        for name, namespace in _namespace_destructure_local_bindings(
+            tokens, open_index, close_index
+        ):
+            derived.add(
+                ScopedLocalBinding(
+                    name=name,
+                    start=range_start,
+                    end=range_end,
+                    namespace=namespace,
+                )
+            )
+    return sorted(
+        derived, key=lambda binding: (binding.start, binding.end, binding.name)
+    )
 
 
 def _parenthesis_is_grouping(tokens: list[Token], open_index: int) -> bool:
@@ -1256,6 +1461,40 @@ def member_call_lines(
     return lines
 
 
+def scoped_member_call_lines(
+    text: str,
+    binding: ScopedLocalBinding,
+    member: str,
+    *,
+    jsx: bool,
+) -> list[int]:
+    start = max(0, min(len(text), binding.start))
+    end = max(start, min(len(text), binding.end))
+    segment = text[start:end]
+    line_offset = text.count("\n", 0, start)
+    tracked_import_starts = (
+        {
+            binding.name: {
+                binding.tracked_import_start - start,
+            }
+        }
+        if binding.tracked_import_start is not None
+        and start <= binding.tracked_import_start < end
+        else None
+    )
+    return [
+        line_offset + lineno
+        for lineno in member_call_lines(
+            segment,
+            {binding.name},
+            member,
+            jsx=jsx,
+            namespace_bindings={binding.name} if binding.namespace else set(),
+            tracked_import_starts=tracked_import_starts,
+        )
+    ]
+
+
 def direct_call_lines(text: str, binding: str, *, jsx: bool) -> list[int]:
     tokens = tokenize_typescript(text, jsx=jsx)
     return [
@@ -1294,6 +1533,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
     text = path.read_text()
     statements = collect_imports(path, text)
     jsx = path.suffix == ".tsx"
+    source_tokens = tokenize_typescript(text, jsx=jsx)
     source_layer = product_client_layer(product_client_relative(path))
     lib_area = (
         product_client_relative(path).split("/", 2)[1]
@@ -1303,22 +1543,73 @@ def find_product_client_violations(path: Path) -> list[Violation]:
     imported_store_bindings: set[str] = set()
     imported_store_namespace_bindings: set[str] = set()
     imported_store_binding_starts: dict[str, set[int]] = defaultdict(set)
-    namespace_binding_starts: dict[str, set[int]] = defaultdict(set)
-
-    for statement in statements:
-        for binding in namespace_bindings(statement):
-            namespace_binding_starts[binding].add(statement.start)
+    scoped_store_bindings: set[ScopedLocalBinding] = set()
 
     for statement in statements:
         identifiers = statement_identifiers(statement)
-        identifiers.update(
-            namespace_member_identifiers(
-                text,
-                namespace_bindings(statement),
-                jsx=jsx,
-                tracked_import_starts=namespace_binding_starts,
-            )
+        statement_is_dynamic = _is_dynamic_import_statement(
+            source_tokens, statement
         )
+        statement_namespaces = namespace_bindings(statement)
+        statement_namespace_aliases: list[ScopedLocalBinding] = []
+        if statement_namespaces:
+            scope_start, scope_end = _statement_binding_scope(
+                text, source_tokens, statement
+            )
+            scope_text = text[scope_start:scope_end]
+            relative_import_start = statement.start - scope_start
+            tracked_starts = {
+                binding: {relative_import_start} for binding in statement_namespaces
+            }
+            identifiers.update(
+                namespace_member_identifiers(
+                    scope_text,
+                    statement_namespaces,
+                    jsx=jsx,
+                    tracked_import_starts=tracked_starts,
+                )
+            )
+            statement_namespace_aliases = [
+                ScopedLocalBinding(
+                    name=binding.name,
+                    start=scope_start + binding.start,
+                    end=scope_start + binding.end,
+                    namespace=binding.namespace,
+                )
+                for binding in namespace_destructured_bindings(
+                    scope_text,
+                    statement_namespaces,
+                    jsx=jsx,
+                    tracked_import_starts=tracked_starts,
+                )
+            ]
+
+        statement_scoped_bindings = scoped_import_bindings(statement)
+        scoped_namespace_aliases: list[ScopedLocalBinding] = []
+        for binding in statement_scoped_bindings:
+            if not binding.namespace:
+                continue
+            scoped_text = text[binding.start : binding.end]
+            identifiers.update(
+                namespace_member_identifiers(
+                    scoped_text,
+                    {binding.name},
+                    jsx=jsx,
+                )
+            )
+            scoped_namespace_aliases.extend(
+                ScopedLocalBinding(
+                    name=alias.name,
+                    start=binding.start + alias.start,
+                    end=binding.start + alias.end,
+                    namespace=alias.namespace,
+                )
+                for alias in namespace_destructured_bindings(
+                    scoped_text,
+                    {binding.name},
+                    jsx=jsx,
+                )
+            )
         if is_product_client_forbidden_import(path, statement.source):
             violations.append(
                 Violation(
@@ -1351,9 +1642,27 @@ def find_product_client_violations(path: Path) -> list[Violation]:
 
         if target_layer == "stores":
             statement_bindings = imported_bindings(statement)
-            imported_store_bindings.update(statement_bindings)
-            imported_store_namespace_bindings.update(namespace_bindings(statement))
-            if statement.local_bindings:
+            if statement_is_dynamic:
+                scope_start, scope_end = _statement_binding_scope(
+                    text, source_tokens, statement
+                )
+                scoped_store_bindings.update(
+                    ScopedLocalBinding(
+                        name=binding,
+                        start=scope_start,
+                        end=scope_end,
+                        namespace=binding in statement_namespaces,
+                        tracked_import_start=statement.start,
+                    )
+                    for binding in statement_bindings
+                )
+            else:
+                imported_store_bindings.update(statement_bindings)
+                imported_store_namespace_bindings.update(statement_namespaces)
+            scoped_store_bindings.update(statement_scoped_bindings)
+            scoped_store_bindings.update(statement_namespace_aliases)
+            scoped_store_bindings.update(scoped_namespace_aliases)
+            if statement.local_bindings and not statement_is_dynamic:
                 for binding in statement_bindings:
                     imported_store_binding_starts[binding].add(statement.start)
 
@@ -1362,7 +1671,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         )
         if (
             not query_hook_has_specific_owner
-            and statement.source == "@tanstack/react-query"
+            and is_package_source(statement.source, "@tanstack/react-query")
             and identifiers.intersection(QUERY_HOOK_NAMES)
             and not is_product_client_query_hook_owner(path)
         ):
@@ -1423,9 +1732,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
             and source_layer == "stores"
             and not internal_store_access
             and (
-                statement.source == "@tanstack/react-query"
-                or statement.source.startswith("@proliferate/cloud-sdk-react")
-                or statement.source.startswith("@anyharness/sdk-react")
+                is_package_source(statement.source, "@tanstack/react-query")
+                or is_package_source(
+                    statement.source, "@proliferate/cloud-sdk-react"
+                )
+                or is_package_source(statement.source, "@anyharness/sdk-react")
                 or bool(identifiers.intersection(RAW_CLIENT_BINDINGS))
             )
         )
@@ -1448,7 +1759,10 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                 else None
             )
             forbidden_lib_import = (
-                statement.source in {"react", "react-dom", "@tanstack/react-query"}
+                any(
+                    is_package_source(statement.source, package)
+                    for package in {"react", "react-dom", "@tanstack/react-query"}
+                )
                 or (target is not None and target.startswith("lib/access/"))
             )
             if rule_id is not None and forbidden_lib_import:
@@ -1477,6 +1791,31 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                 "call an action owned by the store instead of mutating imported store state directly",
             )
         )
+
+    for binding in sorted(
+        scoped_store_bindings,
+        key=lambda item: (
+            item.start,
+            item.end,
+            item.name,
+            item.namespace,
+            item.tracked_import_start if item.tracked_import_start is not None else -1,
+        ),
+    ):
+        for lineno in scoped_member_call_lines(
+            text,
+            binding,
+            "setState",
+            jsx=jsx,
+        ):
+            violations.append(
+                Violation(
+                    "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER",
+                    path,
+                    lineno,
+                    "call an action owned by the store instead of mutating imported store state directly",
+                )
+            )
 
     if source_layer == "stores":
         for lineno in direct_call_lines(text, "fetch", jsx=jsx):

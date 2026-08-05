@@ -469,6 +469,10 @@ class ProductClientBoundaryTest(unittest.TestCase):
             'object.as(import("pkg"))',
             'left < import("pkg") > (right)',
             'left < import("pkg").then(load) > (right)',
+            (
+                'left < (ready ? import("pkg") : fallback).default '
+                '> (right)'
+            ),
             'import type, { Value } from "pkg"',
         ]
         for runtime_source in runtime_expressions:
@@ -516,7 +520,9 @@ class ProductClientBoundaryTest(unittest.TestCase):
             'await import("pkg-f");\n'
             'const dynamicNamespace: Module = await import("pkg-g");\n'
             'const client = (await import("pkg-h")).getAnyHarnessClient;\n'
-            'import("pkg-i").then(({ useInfiniteQuery: query }) => query());\n'
+            'import("pkg-i").then(async '
+            '({ useInfiniteQuery: query }) => query());\n'
+            'import("pkg-j").then((Query) => Query.useQuery());\n'
         )
 
         statements = {
@@ -580,6 +586,21 @@ class ProductClientBoundaryTest(unittest.TestCase):
             statements["pkg-i"].imported_names,
             frozenset({"useInfiniteQuery"}),
         )
+        self.assertEqual(
+            [
+                (binding.name, binding.namespace)
+                for binding in statements["pkg-i"].scoped_bindings
+            ],
+            [("query", False)],
+        )
+        self.assertEqual(statements["pkg-j"].imported_names, frozenset({"*"}))
+        self.assertEqual(
+            [
+                (binding.name, binding.namespace)
+                for binding in statements["pkg-j"].scoped_bindings
+            ],
+            [("Query", True)],
+        )
 
     def test_shared_parser_skips_regex_after_declaration_and_catch_blocks(self) -> None:
         source = (
@@ -613,6 +634,27 @@ class ProductClientBoundaryTest(unittest.TestCase):
         self.assertEqual(
             [statement.source for statement in statements],
             ["outer-a", "inner-a", "outer-b", "inner-b", "grouped"],
+        )
+
+    def test_shared_parser_ends_semicolonless_static_statements_at_their_grammar_end(self) -> None:
+        source = (
+            'import { value } from "pkg-a"\n'
+            "const unrelatedA = 1;\n"
+            'import data from "pkg-b" with { type: "json" }\n'
+            "const unrelatedB = 2;\n"
+            'import Equals = require("pkg-c")\n'
+            "const unrelatedC = 3;\n"
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.statement for statement in statements],
+            [
+                'import { value } from "pkg-a"',
+                'import data from "pkg-b" with { type: "json" }',
+                'import Equals = require("pkg-c")',
+            ],
         )
 
     def test_every_forbidden_layer_pair_fails_for_alias_and_relative_imports(self) -> None:
@@ -1161,6 +1203,119 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 ("raw-dynamic-member.ts", "ANYHARNESS_CLIENT_OUTSIDE_ACCESS"),
                 ("raw-dynamic-member.ts", "STORE_RUNTIME_ACCESS"),
             },
+        )
+
+    def test_dynamic_then_bindings_are_checked_only_inside_their_callbacks(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/async-query.ts": (
+                "import('@tanstack/react-query').then(async "
+                "({ useQuery: query }) => query());\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/namespace-query.ts": (
+                "import('@tanstack/react-query').then("
+                "Query => Query.useInfiniteQuery());\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/sibling-safe.ts": (
+                "import('@tanstack/react-query').then("
+                "Query => void Query.QueryClient, "
+                "Query => Query.useMutation());\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/block-sibling-safe.ts": (
+                "async function inspect() {\n"
+                "  if (ready) {\n"
+                "    const Query = await import('@tanstack/react-query');\n"
+                "    void Query.QueryClient;\n"
+                "  }\n"
+                "  if (other) {\n"
+                "    const Query = fixture.query;\n"
+                "    Query.useQuery();\n"
+                "  }\n"
+                "}\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        query_paths = {
+            violation.path.name
+            for violation in violations
+            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+        }
+        self.assertEqual(query_paths, {"async-query.ts", "namespace-query.ts"})
+
+    def test_dynamic_and_static_namespace_store_aliases_cannot_mutate_state(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/dynamic-destructure.ts": (
+                "import('#product/stores/chat/chat-store').then("
+                "({ useChatStore: chat }) => chat.setState({ ready: true }));\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/dynamic-namespace.ts": (
+                "import('#product/stores/chat/chat-store').then(Stores => {\n"
+                "  const { useChatStore: chat } = Stores\n"
+                "  chat.setState({ ready: true });\n"
+                "});\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/static-namespace.ts": (
+                "import * as Stores from '#product/stores/chat/chat-store';\n"
+                "const { useChatStore: chat } = Stores\n"
+                "chat.setState({ ready: true });\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/block-sibling-safe.ts": (
+                "async function inspect() {\n"
+                "  if (ready) {\n"
+                "    const Stores = await "
+                "import('#product/stores/chat/chat-store');\n"
+                "    void Stores.useChatStore;\n"
+                "  }\n"
+                "  if (other) {\n"
+                "    const Stores = fixture.stores;\n"
+                "    Stores.useChatStore.setState({ local: true });\n"
+                "  }\n"
+                "}\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        set_state_paths = {
+            violation.path.name
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+        }
+        self.assertEqual(
+            set_state_paths,
+            {"dynamic-destructure.ts", "dynamic-namespace.ts", "static-namespace.ts"},
+        )
+
+    def test_domain_and_workflow_purity_covers_react_package_subpaths(self) -> None:
+        files = {
+            "apps/packages/product-client/src/lib/domain/chat/react.ts": (
+                "import { jsx } from 'react/jsx-runtime';\n"
+                "import type { UseQueryResult } "
+                "from '@tanstack/react-query/build/legacy';\n"
+            ),
+            "apps/packages/product-client/src/lib/workflows/chat/react.ts": (
+                "import { createRoot } from 'react-dom/client';\n"
+                "import { useQuery } from '@tanstack/react-query/experimental';\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        purity_rules = [
+            violation.rule_id
+            for violation in violations
+            if violation.rule_id
+            in {"DOMAIN_FORBIDDEN_IMPORT", "WORKFLOW_FORBIDDEN_IMPORT"}
+        ]
+        self.assertEqual(
+            purity_rules,
+            [
+                "DOMAIN_FORBIDDEN_IMPORT",
+                "DOMAIN_FORBIDDEN_IMPORT",
+                "WORKFLOW_FORBIDDEN_IMPORT",
+                "WORKFLOW_FORBIDDEN_IMPORT",
+            ],
         )
 
     def test_executable_template_and_jsx_code_is_checked_but_display_text_and_regex_pass(self) -> None:
