@@ -9,6 +9,7 @@ ORM stack.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -117,6 +118,91 @@ async def ensure_personal_cloud_sandbox_exists(
             e2b_template_ref="e2b",
         )
     return sandbox
+
+
+async def observe_cloud_sandbox_provider_running(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observed_at: datetime,
+) -> CloudSandboxValue | None:
+    return await sandbox_store.advance_cloud_sandbox_provider_observation_floor(
+        db,
+        sandbox_id,
+        expected_provider_sandbox_id=expected_provider_sandbox_id,
+        expected_materialization_attempt=expected_materialization_attempt,
+        observed_at=observed_at,
+    )
+
+
+async def observe_cloud_sandbox_provider_stopped(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observed_at: datetime,
+) -> CloudSandboxValue | None:
+    updated = await sandbox_store.apply_cloud_sandbox_provider_observation(
+        db,
+        sandbox_id,
+        status="paused",
+        expected_provider_sandbox_id=expected_provider_sandbox_id,
+        expected_materialization_attempt=expected_materialization_attempt,
+        observed_at=observed_at,
+    )
+    if updated is not None:
+        return updated
+    return await sandbox_store.accept_destroyed_cloud_sandbox_provider_observation(
+        db,
+        sandbox_id,
+        expected_provider_sandbox_id=expected_provider_sandbox_id,
+        expected_materialization_attempt=expected_materialization_attempt,
+        observed_at=observed_at,
+    )
+
+
+async def observe_cloud_sandbox_provider_missing(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observed_at: datetime,
+) -> CloudSandboxValue | None:
+    # Imported lazily because materialization failures invalidate gateway
+    # access, while the gateway service imports this module.
+    from proliferate.server.cloud.materialization.failures import (
+        PROVIDER_SANDBOX_MISSING_RECEIPT,
+    )
+
+    updated = await sandbox_store.mark_cloud_sandbox_provider_missing(
+        db,
+        sandbox_id,
+        expected_provider_sandbox_id=expected_provider_sandbox_id,
+        expected_materialization_attempt=expected_materialization_attempt,
+        observed_at=observed_at,
+        last_error=PROVIDER_SANDBOX_MISSING_RECEIPT,
+    )
+    if updated is not None:
+        if updated.owner_user_id is not None:
+            # Imported lazily to avoid the gateway -> cloud-sandbox service
+            # dependency becoming a module cycle.
+            from proliferate.server.cloud.gateway.service import (
+                invalidate_cloud_sandbox_gateway_access_for_user,
+            )
+
+            invalidate_cloud_sandbox_gateway_access_for_user(updated.owner_user_id)
+        return updated
+    return await sandbox_store.accept_destroyed_cloud_sandbox_provider_observation(
+        db,
+        sandbox_id,
+        expected_provider_sandbox_id=expected_provider_sandbox_id,
+        expected_materialization_attempt=expected_materialization_attempt,
+        observed_at=observed_at,
+    )
 
 
 async def destroy_cloud_sandbox(
