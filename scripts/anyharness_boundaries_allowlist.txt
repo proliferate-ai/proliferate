@@ -40,7 +40,7 @@ LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/man
 
 # Rule: api/** calls domain facades, never stores.
 # 1 files, 9 occurrences.
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 9 cfg(test)-mod Store wiring; engine cannot see cfg boundaries
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 9 cfg(test)-mod Store wiring; engine cannot see cfg boundaries; target = none, engine-invisible cfg boundary
 
 # Rule: *_policy.rs files are pure.
 # 1 files, 2 occurrences.

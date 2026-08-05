@@ -17,7 +17,7 @@ impl WorkspaceRuntime {
     /// The distinct active branches checked out across a repo root's
     /// non-retired workspaces — what hosting's "which branches have PRs"
     /// query needs, without handing the API layer the workspace store.
-    pub fn active_branches_by_repo_root_id(
+    pub fn list_repo_root_active_branches(
         &self,
         repo_root_id: &str,
     ) -> anyhow::Result<Vec<String>> {
