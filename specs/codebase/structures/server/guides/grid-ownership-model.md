@@ -66,8 +66,10 @@ entry; foreign writes go through the owner's public service.
 strings, and cryptography. Every layer may import it because it knows nothing
 about products, vendors, or persistence.
 
-**`lib/product`** contains cross-domain pure product logic. Only domain rows may
-import it; product policy never leaks into stores or integrations.
+**`lib/product`** contains cross-domain pure product logic. Its audience is the
+product-domain service, domain, and models coordinates, plus a domain's
+`worker/service.py`; API handlers, background task shims, stores, integrations,
+and other infrastructure do not import it.
 
 **`lib/capabilities`** contains reusable orchestration over integrations. Each
 capability has an explicit domain-consumer map. A concern enters `lib/**` only
@@ -119,8 +121,9 @@ and independently testable.
 pulls single-domain policy out of its owner prematurely.
 
 **Rule:** Infra is universal and product-blind; Product is pure and restricted
-to domain rows; Capabilities are consumer-mapped. Reuse requires at least two
-real consumers.
+to product-domain `service.py`, `domain/**`, `models.py`, and
+`worker/service.py`; Capabilities are consumer-mapped. Reuse requires at least
+two real consumers.
 
 **Result:** a library's import audience and allowed knowledge are obvious from
 its coordinate.
@@ -256,6 +259,19 @@ If every answer is yes or not applicable, the change aligns with the grid.
   [lib tree](../../../../../server/proliferate/lib) contains only a Product
   workspace-naming concern; `lib/infra` and `lib/capabilities` do not exist, and
   the server checker does not scan `lib/**` for audience or purity rules.
+- [ ] **Integration and raw-transport placement retain two exact exceptions.**
+  [integrations/sentry.py](../../../../../server/proliferate/integrations/sentry.py)
+  imports product-owned
+  [server/release.py](../../../../../server/proliferate/server/release.py) for
+  release tagging. The checker count-locks that debt as
+  `INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sentry.py 1` in
+  [server_boundaries_allowlist.txt](../../../../../scripts/server_boundaries_allowlist.txt).
+  [cloud/gateway/proxy.py](../../../../../server/proliferate/server/cloud/gateway/proxy.py)
+  owns raw HTTP and WebSocket proxy transport inside a product domain; its
+  `httpx` import is count-locked as
+  `PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/gateway/proxy.py 1`
+  in the same allowlist. Both exceptions require ownership moves before the
+  integration-leaf and package-audience target can be enforced without debt.
 - [ ] **Service topology and package audiences are not gated.** Cloud Sandbox
   imports Gateway service in
   [cloud_sandboxes/service.py](../../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py),
