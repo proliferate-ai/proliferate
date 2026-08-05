@@ -1875,14 +1875,14 @@ class ProductClientBoundaryTest(unittest.TestCase):
             paths = self.write_files(
                 root,
                 {
-                    "apps/packages/product-domain/src/runtime.ts": (
+                    "apps/packages/product-client/src/domain/runtime.ts": (
                         "export async function load(): Promise<void> {\n"
                         "  const { createProliferateClient } = "
                         "await import('@proliferate/cloud-sdk');\n"
                         "  return createProliferateClient({});\n"
                         "}\n"
                     ),
-                    "apps/packages/product-domain/src/type-only.ts": (
+                    "apps/packages/product-client/src/domain/type-only.ts": (
                         "export function contract(): "
                         "Promise<Result<Array<"
                         "import('@proliferate/cloud-sdk').CloudWorkspace>>> {\n"
@@ -1891,11 +1891,11 @@ class ProductClientBoundaryTest(unittest.TestCase):
                     ),
                 },
             )
-            package_root = root / "apps/packages/product-domain/src"
+            package_root = root / "apps/packages/product-client/src/domain"
             with patch.multiple(
                 structure_module,
                 REPO_ROOT=root,
-                PACKAGE_ROOTS={"product-domain": package_root},
+                PACKAGE_ROOTS={"product-client-domain": package_root},
             ):
                 violations = structure_module.find_forbidden_shared_package_imports(paths)
 
