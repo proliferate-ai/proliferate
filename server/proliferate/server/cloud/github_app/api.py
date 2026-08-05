@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.lib.product.redirect_callbacks.page import render_redirect_callback_page
 from proliferate.permissions import CurrentOrgUser, current_path_org_admin, current_path_org_member
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.github_app.models import (
@@ -39,7 +40,6 @@ from proliferate.server.cloud.repos.service import (
     DEFAULT_REPO_AFFILIATION,
     DEFAULT_REPO_VISIBILITY,
 )
-from proliferate.utils.redirect_callback_pages import make_redirect_callback_response
 
 _REAUTH_TRANSACTION_DEPENDENCIES = [Depends(commit_github_app_reauthorization_on_error)]
 
@@ -229,12 +229,14 @@ async def github_app_connected_page_endpoint() -> HTMLResponse:
     # return to. Served by the API itself, so it never 404s on an API-only
     # deployment. Desktop/web deployments redirect to their own settings pages
     # instead (see `_default_return_after_callback`).
-    return make_redirect_callback_response(
-        title="GitHub App connected",
-        status_label="Connected",
-        message=(
-            "The Proliferate GitHub App is connected. You can close this tab and "
-            "return to Proliferate."
-        ),
-        tone="success",
+    return HTMLResponse(
+        render_redirect_callback_page(
+            title="GitHub App connected",
+            status_label="Connected",
+            message=(
+                "The Proliferate GitHub App is connected. You can close this tab and "
+                "return to Proliferate."
+            ),
+            tone="success",
+        )
     )
