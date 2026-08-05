@@ -4,62 +4,77 @@ Server auth has four boundaries: **authentication** identifies the caller,
 **org authorization** decides whether that caller has the right standing in an
 organization, **resource access** checks whether the caller can touch a specific
 resource, and **product policy** decides whether the current resource state
-allows an action. Every one of them is enforced at the endpoint via `Depends()`.
-Services receive a resolved, pre-authorized context and contain **no auth
-checks** — they are never a hidden permission layer.
+allows an action. New and refactored paths enforce these boundaries at the
+endpoint via `Depends()`: services receive resolved context rather than becoming
+a hidden permission layer. Existing inline checks are migration work, not a
+second recommended pattern.
 
 ## Ownership
 
 | Boundary | Question | Lives in | Returns |
 |---|---|---|---|
 | **Authentication** | Who is the caller? | `auth/dependencies.py` for users; `server/cloud/runtime_workers/auth.py` for Workers | the actor (`User` / `WorkerAuthContext`) |
-| **Org authorization** | Does the caller have the right org standing? | `permissions.py` (factory deps) | `OwnerContext` |
+| **Org authorization** | Does the caller have the right org standing? | `permissions.py` (request deps and factories) | `OwnerContext` or `CurrentOrgUser` |
 | **Resource access** | Can this caller touch *this* resource? | `server/<domain>/access.py` | the resource snapshot, or raises 403/404 |
 | **Product rule** | Given this state, is the action permitted now? | `server/<domain>/domain/policy.py` | `PolicyVerdict` |
 
-Authorization currency — `OwnerContext`, `PolicyVerdict`, `require_org_role`,
-`require_org_membership` — lives in `server/proliferate/permissions.py`, not in
-`auth/`. It is product-wide vocabulary imported by ~every domain and has no
-auth-specific logic, so it sits at the server root next to `config.py` and
-`errors.py`. `auth/` owns only authentication and the OAuth/identity surfaces.
-In this guide, `auth/dependencies.py` centralizes **actor dependencies**, not
-every FastAPI dependency used by a route. Resource-specific dependencies stay in
-the domain that owns the resource.
+Dependency-free authorization currency — `OwnerContext`, `OwnerSelection`,
+`PolicyVerdict`, and the pure `require_org_role` check — is defined in
+`auth/authorization.py`. `permissions.py` re-exports that vocabulary as the
+public domain-facing seam and owns request-time organization selection,
+membership resolution, request/RLS context, and FastAPI dependencies. Domain
+code imports the public names from `proliferate.permissions`; it does not reach
+into `auth.authorization` for convenience.
+
+`auth/dependencies.py` centralizes **actor dependencies**, not every FastAPI
+dependency used by a route. Resource-specific dependencies stay in the domain
+that owns the resource. This split describes the current implementation; it
+does not make `permissions.py` an import-free leaf.
 
 ## The actor dependency hierarchy
 
 Authorization is a chain of `Depends()`, each one composing the one above it. An
-endpoint declares the *lowest actor it requires* and gets everything below it for
-free; nothing downstream re-checks.
+endpoint declares the lowest actor or organization context it requires.
 
 ```text
 anonymous
 └── current_active_user                    active user
-    └── current_product_user               + GitHub connected (hosted) / single-org bypass — default for product/cloud surfaces
-        ├── require_org_membership(org_id)  org member  -> OwnerContext
-        └── require_org_role(org_id, roles) org standing -> OwnerContext
+    └── current_limited_user               compatibility actor seam; currently no extra gate
+        ├── current_product_user           product readiness with the current single-org/SSO rules
+        └── current_organization_actor     organization-surface readiness
+
+current_product_user
+└── current_owner_context                  selected/default payer -> OwnerContext
+    ├── require_owner_role(*roles)          dependency factory -> OwnerContext
+    └── current_org_member/admin/owner      selected-owner -> CurrentOrgUser
+
+current_organization_actor
+└── current_path_org_member                path organization -> CurrentOrgUser
+    ├── current_path_org_admin
+    └── current_path_org_owner
 
 authenticate_worker                       opaque worker bearer token -> WorkerAuthContext
 optional_current_active_user               maybe authenticated (public-with-extras)
 ```
 
-`require_org_membership` and `require_org_role` are **dependency factories**:
-called with the path's `org_id` (and, for role, the allowed roles), they return a
-`Depends` that resolves and returns an `OwnerContext`. Org standing is checked at
-the endpoint boundary — never inside a service. This is the whole centralized
-model: identity actors in `auth/dependencies.py`, org-authorization factories in
-`permissions.py`, both wired in at the route via `Depends()`.
+`require_owner_role(*roles)` is a dependency factory over the selected
+`OwnerContext`. `require_org_role(context, roles)` is instead a synchronous pure
+check over an already-resolved context. Path organization routes use the
+`current_path_org_*` dependencies. There is no separate organization-membership
+factory. Org standing is resolved at the endpoint boundary for new and
+refactored paths rather than hidden inside a service.
 
 ## Shape
 
 ```text
 server/proliferate/
-  permissions.py             # OwnerContext, PolicyVerdict, require_org_role, require_org_membership
+  permissions.py             # request organization deps + public authorization re-exports
 
   auth/
     __init__.py
     dependencies.py          # user actor deps: current_active_user, current_product_user,
-                             #   optional_current_active_user
+                             #   current_organization_actor, optional_current_active_user
+    authorization.py         # dependency-free owner/policy vocabulary + pure role check
     users.py                 # UserManager (fastapi-users lifecycle plumbing)
     viewer_api/              # /auth/viewer + /users/me surface: api.py, profile_api.py, service.py, models.py
     desktop_api/             # desktop OAuth flow (authorize, callback, PKCE, pages)
@@ -85,7 +100,8 @@ resources or carry product rules.
 Use the question the code answers to decide where it lives:
 
 - "Who is calling?" belongs in `auth/dependencies.py`.
-- "What organization standing does the caller have?" belongs in `permissions.py`.
+- "What organization standing does the caller have?" is resolved by
+  `permissions.py` using vocabulary from `auth/authorization.py`.
 - "Can this caller touch this concrete route resource?" belongs in
   `server/<domain>/access.py`.
 - "Does the current product state allow this action?" belongs in
@@ -148,8 +164,8 @@ async def workspace_user_can_archive(
     )
     if isinstance(verdict, PolicyDenied):
         if verdict.code == "workspace_not_found":
-            raise HTTPException(status_code=404, detail=verdict.reason)
-        raise HTTPException(status_code=403, detail=verdict.reason)
+            raise HTTPException(status_code=404, detail=verdict.message)
+        raise HTTPException(status_code=403, detail=verdict.message)
     return workspace
 ```
 
@@ -170,13 +186,13 @@ def can_archive_workspace(
             return PolicyAllowed()
         return PolicyDenied(
             code="workspace_not_found",
-            reason="Workspace not found.",
+            message="Workspace not found.",
         )
 
     if workspace.organization_id is None:
         return PolicyDenied(
             code="workspace_not_found",
-            reason="Workspace not found.",
+            message="Workspace not found.",
         )
 
     if membership_role in {"owner", "admin"}:
@@ -184,7 +200,7 @@ def can_archive_workspace(
 
     return PolicyDenied(
         code="workspace_permission_denied",
-        reason="You do not have permission to archive this workspace.",
+        message="You do not have permission to archive this workspace.",
     )
 ```
 
@@ -197,11 +213,15 @@ token is part of that domain's enrollment lifecycle.
 | Dep | Gates |
 |---|---|
 | `current_active_user` | active user, no GitHub requirement |
-| `current_product_user` | active user **+ GitHub connected** — the default for product/cloud surfaces. Single-org (self-hosted) instances bypass the GitHub check for password-only accounts; hosted keeps it unconditionally. |
+| `current_limited_user` | compatibility actor seam over `current_active_user`; currently adds no gate |
+| `current_product_user` | active user plus current product readiness — the default for product/cloud surfaces. Single-org instances bypass the GitHub check; hosted users with an active organization SSO membership also pass, while other hosted users require account readiness. |
+| `current_organization_actor` | actor for organization-membership surfaces; applies the current hosted readiness gate and single-org bypass |
 | `optional_current_active_user` | maybe authenticated (public route with extra behavior when signed in) |
 
-There is no `current_limited_user`: it was a no-op wrapper over
-`current_active_user` and does not exist in this model.
+`current_limited_user` is live compatibility vocabulary used by actor and
+identity routes. It currently returns `current_active_user` unchanged. Do not
+create more no-op actor wrappers; removing or bypassing this one is a separate
+code migration, not an assumption a caller should make from this guide.
 
 ### Allowed
 
@@ -213,7 +233,7 @@ There is no `current_limited_user`: it was a no-op wrapper over
 ### Banned
 
 - Org-standing or resource-scoped checks. Org standing belongs in
-  `permissions.py` factory deps; resource checks belong in
+  `permissions.py` request deps; resource checks belong in
   `server/<domain>/access.py`.
 - Business logic.
 - ORM access beyond the actor lookup.
@@ -227,12 +247,20 @@ async def current_active_user(
 ) -> User:
     return user
 
-async def current_product_user(
+async def current_limited_user(
     user: User = Depends(current_active_user),
 ) -> User:
-    if not user.github_connected:
-        raise HTTPException(status_code=403, detail="GitHub connection required")
     return user
+
+async def current_product_user(
+    user: User = Depends(current_limited_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> User:
+    if settings.single_org_mode:
+        return user
+    if await user_has_active_organization_sso_membership(db, user_id=user.id):
+        return user
+    return await _require_product_ready(db, user)
 ```
 
 ### OAuth and identity surfaces
@@ -304,55 +332,73 @@ no mounted Worker control, command lease/result, or applied-revision endpoint.
 
 ## Org Authorization
 
-`server/proliferate/permissions.py` owns org-standing authorization and the
-shared verdict vocabulary, used by route deps, resource-access deps, and policy
-functions across every domain.
+`server/proliferate/auth/authorization.py` owns the dependency-free owner and
+policy vocabulary. `server/proliferate/permissions.py` re-exports it as the
+public domain-facing seam and owns request-time org-standing resolution.
 
 ### Allowed
 
-- `require_org_membership(org_id)` and `require_org_role(org_id, roles)` —
-  dependency factories that resolve and return an `OwnerContext`.
-- `OwnerContext` (and `OwnerSelection`) describing a caller's relationship to an
-  organization.
-- `PolicyVerdict` tagged union (`PolicyAllowed | PolicyDenied`).
+- `current_owner_context` and `require_owner_role(*roles)` for selected-owner
+  routes that receive an `OwnerContext`.
+- `current_path_org_member/admin/owner` for organization ids carried by the
+  path, and `current_org_member/admin/owner` for a selected owner. These return
+  `CurrentOrgUser`.
+- Re-exporting `OwnerContext`, `OwnerSelection`, `PolicyVerdict`, and the pure
+  `require_org_role(context, roles)` check from `auth/authorization.py`.
+- Applying request and RLS organization context after membership resolution.
 
 ### Banned
 
 - Resource lookups. Those happen in `server/<domain>/access.py`.
-- Auth-flow logic. `permissions.py` is product authorization, not authentication.
-- Imports from `auth/**` or `server/<domain>/**`. It stays a leaf so every layer
-  can import it.
+- OAuth, session, or identity-flow logic. `permissions.py` composes actor
+  dependencies but does not own authentication.
+- Resource-specific product policy. The request seam resolves owner standing;
+  the owning domain resolves access to its concrete resource.
 
 ### Standard shapes
 
 ```python
-# server/proliferate/permissions.py
+# server/proliferate/auth/authorization.py
 @dataclass(frozen=True)
 class OwnerContext:
-    user_id: UUID
+    owner_scope: OwnerScope
+    actor_user_id: UUID
+    owner_user_id: UUID | None
     organization_id: UUID | None
-    role: str | None
+    membership_id: UUID | None
+    membership_role: str | None
+    billing_subject_id: UUID
 
-def require_org_role(org_id: UUID, roles: Iterable[str]):
-    async def _dep(
-        user: User = Depends(current_product_user),
-        db: AsyncSession = Depends(get_async_session),
-    ) -> OwnerContext:
-        context = await resolve_owner_context(db, org_id, user.id)
-        if context.role not in roles:
-            raise HTTPException(status_code=403, detail="Insufficient org role")
-        return context
-    return _dep
+def require_org_role(context: OwnerContext, roles: Iterable[str]) -> None:
+    if context.owner_scope != "organization" or context.membership_role is None:
+        raise NotFoundError("Organization not found.", code="organization_not_found")
+    if context.membership_role not in set(roles):
+        raise PermissionDenied(
+            "You do not have permission to manage this organization.",
+            code="organization_permission_denied",
+        )
 
 @dataclass(frozen=True)
-class PolicyAllowed: ...
+class PolicyAllowed:
+    allowed: Literal[True] = True
 
 @dataclass(frozen=True)
 class PolicyDenied:
     code: str
-    reason: str
+    message: str
+    status_code: int = 403
+    allowed: Literal[False] = False
 
 PolicyVerdict = PolicyAllowed | PolicyDenied
+
+# server/proliferate/permissions.py
+def require_owner_role(*roles: str):
+    async def dependency(
+        context: OwnerContext = Depends(current_owner_context),
+    ) -> OwnerContext:
+        require_org_role(context, roles)
+        return context
+    return dependency
 ```
 
 ## Resource-Access Route Deps
@@ -369,7 +415,8 @@ they may read stores and raise HTTP-shaped permission results, while
 - `async def` functions taking an actor + path/query params and returning a
   resource snapshot.
 - Calls to `db/store/**` for the lookup.
-- Composing `require_org_role`/`require_org_membership` from `permissions.py`.
+- Composing `current_path_org_member/admin/owner`, `current_owner_context`, or
+  `require_owner_role` from `permissions.py`.
 - Calls to `domain/policy.py` for state-based access checks.
 - Raising 404 for missing resources, 403 for forbidden.
 
@@ -377,7 +424,8 @@ they may read stores and raise HTTP-shaped permission results, while
 
 - Mutating writes. Access deps are read-only.
 - Business logic beyond access.
-- Inline org-authorization logic (compose the `permissions.py` factory).
+- Inline org-authorization logic (compose the applicable `permissions.py`
+  dependency).
 - Returning Pydantic. Return the dataclass snapshot.
 
 ### Standard shape
@@ -386,13 +434,13 @@ they may read stores and raise HTTP-shaped permission results, while
 # server/cloud/workspaces/access.py
 async def workspace_user_can_admin(
     workspace_id: UUID,
-    owner: OwnerContext = Depends(require_org_role(... , roles={OWNER, ADMIN})),
+    org_user: CurrentOrgUser = Depends(current_path_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceSnapshot:
     snapshot = await store.cloud_workspaces.get_workspace_snapshot(db, workspace_id)
     if snapshot is None:
         raise HTTPException(404, "Workspace not found")
-    if snapshot.owner_id != owner.organization_id:
+    if snapshot.organization_id != org_user.organization_id:
         raise HTTPException(403, "Workspace not in organization")
     return snapshot
 ```
@@ -405,9 +453,11 @@ the resource snapshot when access is granted.
 
 ### Resource-scoped vs platform admin
 
-When "admin" means "admin of *this* resource", compose `require_org_role` in
-`<domain>/access.py`. When it means "platform admin" (Proliferate staff,
-system-wide), use the platform-admin actor from `auth/dependencies.py`.
+When "admin" means "admin of *this* path organization", compose
+`current_path_org_admin` in `<domain>/access.py`; selected-owner routes can use
+`require_owner_role("owner", "admin")`. When it means "platform admin"
+(Proliferate staff, system-wide), use the platform-admin actor from
+`auth/dependencies.py`.
 
 ## Product Policy Rules
 
@@ -432,9 +482,9 @@ from proliferate.permissions import PolicyAllowed, PolicyDenied, PolicyVerdict
 
 def can_delete_workspace(workspace: WorkspaceSnapshot) -> PolicyVerdict:
     if workspace.status == WorkspaceStatus.DELETING:
-        return PolicyDenied(code="ALREADY_DELETING", reason="Already being deleted")
+        return PolicyDenied(code="ALREADY_DELETING", message="Already being deleted")
     if workspace.has_active_sessions:
-        return PolicyDenied(code="HAS_ACTIVE_SESSIONS", reason="Cancel sessions first")
+        return PolicyDenied(code="HAS_ACTIVE_SESSIONS", message="Cancel sessions first")
     return PolicyAllowed()
 ```
 
@@ -445,13 +495,13 @@ def can_delete_workspace(workspace: WorkspaceSnapshot) -> PolicyVerdict:
 async def delete_workspace(db: AsyncSession, *, workspace: WorkspaceSnapshot) -> None:
     verdict = policy.can_delete_workspace(workspace)
     if isinstance(verdict, PolicyDenied):
-        raise WorkspaceConflict(code=verdict.code, reason=verdict.reason)
+        raise WorkspaceConflict(verdict.message, code=verdict.code)
     await store.cloud_workspaces.mark_deleting(db, workspace.id)
 ```
 
 The service raises a domain error; the global handler maps it to an HTTP
-response. The service runs **no auth check** — admin standing was resolved by the
-endpoint's deps before `delete_workspace` was ever called.
+response. In this target shape, admin standing was resolved by the endpoint's
+dependencies before `delete_workspace` was called.
 
 ## End-to-End Example
 
@@ -469,7 +519,8 @@ async def delete_cloud_workspace(
 Each layer does one job, all before the service body runs:
 
 1. **`auth/dependencies.py`** — `current_product_user` (authentication).
-2. **`permissions.py`** — `require_org_role` (org standing → `OwnerContext`).
+2. **`permissions.py`** — the applicable path or selected-owner dependency
+   (org standing → `CurrentOrgUser` or `OwnerContext`).
 3. **`cloud/workspaces/access.py`** — `workspace_user_can_admin` (resource lookup
    + return snapshot).
 4. **`cloud/workspaces/domain/policy.py`** — `can_delete_workspace` (pure rule).
@@ -480,8 +531,8 @@ The handler is three lines and the service has no inline auth.
 ## Forbidden Patterns
 
 - Authorization checks inline in `api.py` route bodies. Use deps.
-- Org-standing checks buried in `service.py`. Resolve `OwnerContext` at the
-  endpoint via the `permissions.py` factory and pass it in.
+- Org-standing checks buried in `service.py`. Resolve `CurrentOrgUser` or
+  `OwnerContext` at the endpoint through `permissions.py` and pass it in.
 - Product rules buried as `if not condition: raise HTTPException(403)` in
   `service.py`. Extract to pure verdicts in `domain/policy.py`.
 - Inline Worker bearer parsing in handlers or services. Authenticate once via
@@ -491,6 +542,7 @@ The handler is three lines and the service has no inline auth.
   import `OwnerContext`, `PolicyVerdict`, and the factories from
   `proliferate.permissions`.
 - Returning Pydantic from access deps. Return the dataclass snapshot.
-- A `current_limited_user`-style no-op wrapper. Use `current_active_user`.
+- New no-op actor wrappers. The existing `current_limited_user` compatibility
+  seam is not precedent for adding another.
 - Mixing authentication and authorization in one dep. Each does one job; compose
   via `Depends(... = Depends(...))`.
