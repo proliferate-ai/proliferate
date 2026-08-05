@@ -380,7 +380,7 @@ export function CloudRepoActionDialogHost() {
   // A continuation failure (env save / workspace create) surfaces its own
   // retryable blocker in the continue state, where the readiness blocker is
   // null. Earlier completed steps are preserved (spec §Failure).
-  const continuationBlocker: CloudRepoPickerBlockerView | null = continuationError
+  const continuationBlocker: ReturnType<typeof describeReadinessBlocker> = continuationError
     ? {
         title: intent.kind === "clone_from_github"
           ? "Couldn't clone repository"
@@ -391,7 +391,7 @@ export function CloudRepoActionDialogHost() {
       }
     : null;
 
-  const blocker = readinessBlocker ?? continuationBlocker;
+  const blocker: CloudRepoPickerBlockerView | null = readinessBlocker ?? continuationBlocker;
 
   const closeDialog = () => {
     if (intent.kind === "add_cloud_repository" || intent.kind === "clone_from_github") {

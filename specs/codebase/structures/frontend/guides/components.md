@@ -71,7 +71,7 @@ New primitive definitions are forbidden in:
 - `apps/desktop/src/**`
 - `apps/web/src/**`
 - `apps/packages/product-ui/**`
-- `apps/packages/product-surfaces/**`
+- `apps/packages/product-client/**`
 
 Primitive definitions outside `apps/packages/ui/**` violate this standard. Do
 not add them, copy them, or create local variants beside them. Put the
@@ -90,7 +90,7 @@ update callsites to import it.
 - Is the only place in DOM frontend code that should define the base visual
   contract for raw controls.
 
-### Desktop, Web, `product-ui`, and `product-surfaces`
+### Desktop, Web, `product-ui`, and `product-client`
 
 - Must use primitives from `apps/packages/ui/**` for base controls.
 - Must not define or redefine primitive components, even with different names.
@@ -112,21 +112,21 @@ update callsites to import it.
 - Must not import SDK clients, SDK React hooks, access helpers, app stores,
   routes, Tauri, AnyHarness runtime wiring, or React Native.
 
-### `apps/packages/product-surfaces`
+### `apps/packages/product-client`
 
-- Owns shared connected Desktop/Web Cloud surfaces under
-  `apps/packages/product-surfaces/src/<domain>/<surface>/**`.
-- May use shared Cloud SDK React hooks and render `product-ui`.
+- Owns shared connected Desktop/Web surfaces under its standard component,
+  hook, and library roots.
+- Components render `product-ui` and call ProductClient hooks; Cloud SDK React
+  access belongs under `hooks/access/cloud/**`, never in components.
 - Must still use `apps/packages/ui/**` for base controls.
-- Must not import Desktop/Web app internals, Tauri, local AnyHarness runtime
-  wiring, app stores, app routes, or React Native.
+- Must not import Desktop/Web host internals, Tauri, or React Native.
 
 ### Mobile
 
 - Renders native components under `apps/mobile/src/components/**`.
 - May share `apps/packages/product-domain/**` view models and
   `apps/packages/design/src/react-native.ts` tokens.
-- Must not import DOM packages: `ui`, `product-ui`, or `product-surfaces`.
+- Must not import DOM packages: `ui`, `product-ui`, or `product-client`.
 
 Use concrete package subpaths such as `@proliferate/ui/primitives/Button` or
 `@proliferate/product-ui/settings/account/AccountPane`; do not add barrels.

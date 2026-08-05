@@ -1,10 +1,4 @@
-import { useEffect, useState } from "react";
 import type { BillingReturnSurface } from "@proliferate/cloud-sdk";
-import {
-  useCloudBilling,
-  useCloudBillingActions,
-  useLlmBalance,
-} from "@proliferate/cloud-sdk-react";
 import { BillingSettingsPane } from "@proliferate/product-ui/billing/BillingSettingsPane";
 import {
   BillingBalanceNotice,
@@ -16,22 +10,16 @@ import {
   BillingAutoTopUpCard,
   BillingPlanCard,
   BillingPortalCard,
-} from "./BillingManagementCards";
-import { BillingUsageUnitsSection } from "./BillingUsageUnitsSection";
+} from "#product/components/settings/panes/billing/BillingManagementCards";
+import { BillingUsageUnitsSection } from "#product/components/settings/panes/billing/BillingUsageUnitsSection";
+import { useBillingSettingsWorkflow } from "#product/hooks/settings/workflows/use-billing-settings-workflow";
 import {
   billingUnitBalances,
   planKeyForBilling,
   planSummary,
-} from "./billing-settings-presentation";
-
-export type BillingCheckoutReturnState = "success" | "cancel" | null;
-
-export interface BillingSettingsOrganization {
-  id: string;
-  name: string;
-  canManageBilling: boolean;
-  loading: boolean;
-}
+  type BillingCheckoutReturnState,
+  type BillingSettingsOrganization,
+} from "#product/lib/domain/settings/billing-settings-presentation";
 
 export interface BillingSettingsSurfaceProps {
   organization: BillingSettingsOrganization | null;
@@ -54,75 +42,20 @@ export function BillingSettingsSurface({
   onOpenPricingPage,
   onOpenOrganizationSettings,
 }: BillingSettingsSurfaceProps) {
-  const billingReturnOptions = { returnSurface: billingReturnSurface };
-  const comparisonOwner = organization
-    ? { ownerScope: "organization" as const, organizationId: organization.id }
-    : undefined;
-  const comparisonBilling = useCloudBilling(comparisonOwner, enabled);
-  const llmBalance = useLlmBalance(comparisonOwner, enabled);
-  const comparisonActions = useCloudBillingActions(comparisonOwner, billingReturnOptions);
-  const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
-  const [planManagementOpen, setPlanManagementOpen] = useState(false);
-
-  useEffect(() => {
-    if (checkoutReturnState !== "success") {
-      return;
-    }
-    void comparisonBilling.refetch();
-  }, [checkoutReturnState, comparisonBilling.refetch]);
-
-  function openPlanManagement() {
-    setComparisonActionError(null);
-    if (!organization) {
-      onOpenOrganizationSettings();
-      return;
-    }
-    if (!organization.canManageBilling) {
-      setComparisonActionError("Organization billing is managed by owners and admins.");
-      return;
-    }
-    setPlanManagementOpen(true);
-  }
-
-  async function openComparisonBillingAction(action: "checkout" | "portal" | "refill") {
-    setComparisonActionError(null);
-    try {
-      const response = action === "portal"
-        ? await comparisonActions.createBillingPortal()
-        : action === "refill"
-          ? await comparisonActions.createRefillCheckout()
-          : await comparisonActions.createCloudCheckout();
-      await onOpenUrl(response.url);
-    } catch (error) {
-      setComparisonActionError(
-        error instanceof Error ? error.message : "Billing action could not start.",
-      );
-    }
-  }
-
-  async function updateComparisonTopUp(nextEnabled: boolean) {
-    setComparisonActionError(null);
-    try {
-      await comparisonActions.updateOverageEnabled({ enabled: nextEnabled });
-    } catch (error) {
-      setComparisonActionError(
-        error instanceof Error ? error.message : "Top up setting could not be updated.",
-      );
-    }
-  }
-
-  function openPricingPage() {
-    if (!onOpenPricingPage) {
-      return;
-    }
-    void onOpenPricingPage();
-  }
-
-  const billingPlan = comparisonBilling.data;
+  const workflow = useBillingSettingsWorkflow({
+    organization,
+    enabled,
+    billingReturnSurface,
+    checkoutReturnState,
+    onOpenUrl,
+    onOpenPricingPage,
+    onOpenOrganizationSettings,
+  });
+  const billingPlan = workflow.billingPlan;
   const currentPlanKey = planKeyForBilling(billingPlan);
   const plan = billingPlan ? planSummary(currentPlanKey, billingPlan) : null;
-  const billingLoading = enabled && comparisonBilling.isLoading && !billingPlan;
-  const billingErrorMessage = enabled && comparisonBilling.isError
+  const billingLoading = enabled && workflow.billingPlanLoading && !billingPlan;
+  const billingErrorMessage = enabled && workflow.billingPlanError
     ? "Could not load the billing plan. Retry to refresh it from Proliferate Cloud."
     : null;
   const billingUnavailableMessage = !enabled
@@ -133,16 +66,12 @@ export function BillingSettingsSurface({
   const unitBalances = billingUnitBalances({
     plan: billingPlan,
     planLoading: billingLoading,
-    planError: comparisonBilling.isError,
-    onRetryPlan: () => {
-      void comparisonBilling.refetch();
-    },
-    llmBalance: llmBalance.data,
-    llmBalanceLoading: enabled && llmBalance.isLoading && !llmBalance.data,
-    llmBalanceError: llmBalance.isError,
-    onRetryLlmBalance: () => {
-      void llmBalance.refetch();
-    },
+    planError: workflow.billingPlanError,
+    onRetryPlan: workflow.retryBillingPlan,
+    llmBalance: workflow.llmBalance,
+    llmBalanceLoading: enabled && workflow.llmBalanceLoading && !workflow.llmBalance,
+    llmBalanceError: workflow.llmBalanceError,
+    onRetryLlmBalance: workflow.retryLlmBalance,
     enabled,
   });
   const topUpEnabled = Boolean(
@@ -152,13 +81,13 @@ export function BillingSettingsSurface({
   const paidPlan = billingPlan?.isPaidCloud === true;
   const comparisonActionDisabled = !enabled
     || organizationLoading
-    || comparisonBilling.isLoading
-    || comparisonBilling.isError
+    || workflow.billingPlanLoading
+    || workflow.billingPlanError
     || !billingPlan;
   const billingActionDisabled = comparisonActionDisabled || !canManage || !paidPlan;
   const coreActionLoading = billingPlan?.isPaidCloud
-    ? comparisonActions.creatingBillingPortal
-    : comparisonActions.creatingCloudCheckout;
+    ? workflow.creatingBillingPortal
+    : workflow.creatingCloudCheckout;
   // T2: a paused plan explains itself — reason + repair action, not just a
   // "Paused" badge. Repairs stay on this page, so no "Billing settings" CTA.
   const startBlockedGate = billingPlan?.startBlocked && billingPlan.billingMode === "enforce"
@@ -166,13 +95,12 @@ export function BillingSettingsSurface({
         isPaidPlan: paidPlan,
         canManageBilling: organization ? canManage : true,
         onUpgrade: () => {
-          void openComparisonBillingAction("checkout");
+          void workflow.openComparisonBillingAction("checkout");
         },
         onRefill: () => {
-          void openComparisonBillingAction("refill");
+          void workflow.openComparisonBillingAction("refill");
         },
-        actionLoading: comparisonActions.creatingCloudCheckout
-          || comparisonActions.creatingRefillCheckout,
+        actionLoading: workflow.creatingCloudCheckout || workflow.creatingRefillCheckout,
         actionDisabled: comparisonActionDisabled,
       })
     : null;
@@ -186,7 +114,7 @@ export function BillingSettingsSurface({
       {startBlockedGate ? (
         <BillingBalanceNotice
           view={startBlockedGate}
-          errorMessage={comparisonActionError}
+          errorMessage={workflow.comparisonActionError}
         />
       ) : null}
       <BillingSettingsPane
@@ -195,17 +123,15 @@ export function BillingSettingsSurface({
         planComparisonAction={{
           label: !organization ? "Create organization" : "Manage plan",
           disabled: comparisonActionDisabled,
-          onClick: openPlanManagement,
+          onClick: workflow.openPlanManagement,
         }}
         enterprisePlanAction={onOpenPricingPage ? {
           label: "Request trial",
-          onClick: openPricingPage,
+          onClick: workflow.openPricingPage,
         } : undefined}
         planManagementDialog={canManage && organization ? {
-          open: planManagementOpen,
-          onClose: () => {
-            setPlanManagementOpen(false);
-          },
+          open: workflow.planManagementOpen,
+          onClose: workflow.closePlanManagement,
           currentPlanKey,
           organizationName: organization.name,
           coreAction: {
@@ -213,7 +139,7 @@ export function BillingSettingsSurface({
             loading: coreActionLoading,
             disabled: comparisonActionDisabled,
             onClick: () => {
-              void openComparisonBillingAction(
+              void workflow.openComparisonBillingAction(
                 billingPlan?.isPaidCloud ? "portal" : "checkout",
               );
             },
@@ -221,22 +147,22 @@ export function BillingSettingsSurface({
           portalAction: billingPlan?.isPaidCloud
             ? {
                 label: "Billing portal",
-                loading: comparisonActions.creatingBillingPortal,
+                loading: workflow.creatingBillingPortal,
                 disabled: comparisonActionDisabled,
                 onClick: () => {
-                  void openComparisonBillingAction("portal");
+                  void workflow.openComparisonBillingAction("portal");
                 },
               }
             : undefined,
           enterpriseAction: onOpenPricingPage ? {
             label: "Request trial",
-            onClick: openPricingPage,
+            onClick: workflow.openPricingPage,
           } : undefined,
           pricingAction: onOpenPricingPage ? {
             label: "Learn more about pricing",
-            onClick: openPricingPage,
+            onClick: workflow.openPricingPage,
           } : undefined,
-          actionErrorMessage: comparisonActionError,
+          actionErrorMessage: workflow.comparisonActionError,
         } : undefined}
       >
         <BillingPlanCard
@@ -246,11 +172,9 @@ export function BillingSettingsSurface({
           loading={billingLoading}
           errorMessage={billingErrorMessage}
           unavailableMessage={billingUnavailableMessage}
-          actionError={comparisonActionError}
-          onRetry={() => {
-            void comparisonBilling.refetch();
-          }}
-          onManage={openPlanManagement}
+          actionError={workflow.comparisonActionError}
+          onRetry={workflow.retryBillingPlan}
+          onManage={workflow.openPlanManagement}
         />
 
         <BillingUsageUnitsSection
@@ -263,18 +187,18 @@ export function BillingSettingsSurface({
           <>
             <BillingAutoTopUpCard
               enabled={topUpEnabled}
-              disabled={billingActionDisabled || comparisonActions.updatingOverage}
-              saving={comparisonActions.updatingOverage}
+              disabled={billingActionDisabled || workflow.updatingOverage}
+              saving={workflow.updatingOverage}
               onEnabledChange={(value) => {
-                void updateComparisonTopUp(value);
+                void workflow.updateComparisonTopUp(value);
               }}
             />
 
             <BillingPortalCard
-              loading={comparisonActions.creatingBillingPortal}
+              loading={workflow.creatingBillingPortal}
               disabled={billingActionDisabled}
               onOpenPortal={() => {
-                void openComparisonBillingAction("portal");
+                void workflow.openComparisonBillingAction("portal");
               }}
             />
           </>

@@ -44,8 +44,8 @@ At the end:
 - Host differences are passed through one typed `ProductHost`.
 - Raw Tauri and browser-specific authentication code stay in the apps.
 - The old Web pages, chat client, polling, stores, and controllers are gone.
-- `@proliferate/product-surfaces` remains a separate package. ProductClient may
-  consume it; absorbing it is an optional later cleanup.
+- Shared connected Cloud surfaces follow ProductClient's standard component,
+  access-hook, workflow-hook, and domain ownership layers.
 
 ## What ProductClient owns
 
@@ -96,9 +96,6 @@ apps/packages/product-client/
       desktop-bridge.ts
       ProductHostProvider.tsx
 
-apps/packages/product-surfaces/
-  src/                         # remains a separate connected-surfaces package
-
 apps/desktop/src/
   main.tsx
   desktop-host.ts
@@ -128,7 +125,7 @@ ProductClient is a normal compiled workspace package.
   runtime instances as the hosts; they are not bundled twice.
 - Desktop and Web build, typecheck, and test ProductClient before bundling.
 - CI and frontend structure checks scan the package root.
-- ProductClient may import `product-surfaces`, `product-ui`, `product-domain`,
+- ProductClient may import `product-ui`, `product-domain`,
   `ui`, `design`, and the Cloud/AnyHarness SDKs in the allowed direction.
 - ProductClient never imports `apps/desktop`, `apps/web`, `@tauri-apps/**`, raw
   Tauri `invoke`, or a Desktop-relative `@/` path.
@@ -423,12 +420,11 @@ The Tailwind entry explicitly scans every DOM package that emits classes:
 ```css
 @source "../../../ui/src";
 @source "../../../product-ui/src";
-@source "../../../product-surfaces/src";
 @source "../../../product-client/src";
 ```
 
-The ProductClient source line is required before JSX moves. Without it, both
-apps can compile while Tailwind silently omits classes from the moved product.
+The ProductClient source line covers all connected product JSX. Without it,
+both apps can compile while Tailwind silently omits product classes.
 
 Each host sets its surface before React renders:
 

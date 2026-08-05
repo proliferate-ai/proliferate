@@ -5,14 +5,10 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SkeletonBlock } from "@proliferate/ui/primitives/Skeleton";
 import { Switch } from "@proliferate/ui/primitives/Switch";
-import type { BillingSettingsOrganization } from "./BillingSettingsSurface";
-
-export interface BillingPlanPresentation {
-  name: string;
-  price: string;
-  badge: string;
-  badgeTone: "neutral" | "success" | "info" | "warning" | "destructive";
-}
+import type {
+  BillingPlanPresentation,
+  BillingSettingsOrganization,
+} from "#product/lib/domain/settings/billing-settings-presentation";
 
 export function BillingPlanCard({
   plan,

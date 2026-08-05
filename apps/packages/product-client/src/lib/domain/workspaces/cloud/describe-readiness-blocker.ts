@@ -2,8 +2,8 @@ import type {
   RepositoryCapabilityRequirement,
   RepositoryReadiness,
 } from "@proliferate/product-domain/repos/repo-readiness";
-import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
 import type { CloudRepoIdentity } from "#product/lib/domain/workspaces/cloud/cloud-repository-intent";
+import type { CloudRepoPickerBlockerModel } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
 
 export interface ReadinessBlockerInputs {
   readiness: RepositoryReadiness;
@@ -41,7 +41,7 @@ export interface ReadinessBlockerInputs {
  */
 export function describeReadinessBlocker(
   input: ReadinessBlockerInputs,
-): CloudRepoPickerBlockerView | null {
+): CloudRepoPickerBlockerModel | null {
   const { readiness } = input;
   const operation = input.requirement === "github_repository_access"
     ? "clone this repository"
@@ -115,7 +115,7 @@ export function describeReadinessBlocker(
 function operatorOrHumanBlocker(
   gate: number,
   input: ReadinessBlockerInputs,
-): CloudRepoPickerBlockerView | null {
+): CloudRepoPickerBlockerModel | null {
   // Gates 9 and 10 are the in-progress / ready continuation states: the held
   // intent continues automatically, so surface progress, not operator copy.
   if (gate === 9 || gate === 10) {

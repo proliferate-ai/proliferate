@@ -135,17 +135,16 @@ read + capabilities cause actions (workflow).
   styles/ · index.css
 ```
 
-### Shared packages — two foundations + a three-layer DOM stack
+### Shared packages — connected app, presentation, and foundations
 
 ```text
-DOM stack (Desktop/Web):        Foundations (everyone):
-  product-surfaces  connected     product-domain   pure shared rules (Mobile's sharing point)
+Desktop/Web:                    Foundations (everyone):
+  product-client    connected     product-domain   pure shared rules (Mobile's sharing point)
   product-ui        presentation  design           tokens + css (the look)
   ui                primitives
-  design            css/tokens
 ```
 
-`apps → product-surfaces → product-ui → ui → design`; everyone → `product-domain`.
+`apps → product-client → product-ui → ui → design`; everyone → `product-domain`.
 Mobile uses only `design/react-native` + `product-domain` + SDK — never the DOM
 packages.
 
@@ -310,9 +309,10 @@ Never put disk I/O or subscriptions in the store file.
 - **`product-ui`** — presentational product components: **data in, callbacks
   out**; composes `ui` + `product-domain`. No SDK, access, stores, routes, Tauri,
   React Native.
-- **`product-surfaces`** — the *connected* sibling: product presentation wired to
-  **Cloud** (SDK React hooks + mutations). No app stores/routes/Tauri/local
-  AnyHarness — pass those in as callbacks. Small by design.
+- **`product-client`** — the connected Desktop/Web product: components render,
+  access hooks own SDK/query state, workflow hooks sequence actions, and pure
+  projections live in `lib/domain`. Native host capabilities arrive through
+  the typed host contract.
 - **`product-domain`** — pure shared decisions; the **Mobile sharing point**. No
   React/DOM/SDK clients/stores.
 

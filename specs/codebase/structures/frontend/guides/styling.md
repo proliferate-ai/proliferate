@@ -6,7 +6,7 @@ Scope:
 - `apps/web/src/**`
 - `apps/mobile/src/**`
 - shared styling under `apps/packages/design/**`, `apps/packages/ui/**`,
-  `apps/packages/product-ui/**`, and `apps/packages/product-surfaces/**`
+  `apps/packages/product-ui/**`, and `apps/packages/product-client/**`
 
 This file covers styling-only rules. Read
 [README.md](../README.md) for structure, ownership, and data-flow guidance.
@@ -213,8 +213,8 @@ spacing, and sizing; primitives own color, border, radius, typography, focus,
 hover, disabled, and loading states.
 
 When using primitives from `apps/packages/ui/**`, shared product components
-from `apps/packages/product-ui/**`, or connected surfaces from
-`apps/packages/product-surfaces/**`, import `@proliferate/design/product.css`;
+from `apps/packages/product-ui/**`, or connected ProductClient components,
+import `@proliferate/design/product.css`;
 that shared entrypoint owns the Tailwind package source scanning.
 
 Reusable icons belong in app/package primitive icon modules, not inline inside

@@ -158,15 +158,14 @@ usages. Always ask: is this decision made anywhere else?
 
 ## Shared Packages
 
-Two foundations plus a three-layer DOM stack. See
+One connected app over the presentation stack and two foundations. See
 [../packages/README.md](../packages/README.md) for the authoritative table.
 
 ```text
-DOM stack (Desktop/Web):        Foundations (consumed by everyone):
-  product-surfaces   connected    product-domain   pure shared rules
+Desktop/Web:                    Foundations (consumed by everyone):
+  product-client     connected     product-domain   pure shared rules
   product-ui         presentation                   (the Mobile sharing point)
   ui                 primitives    design           tokens + css (the look)
-  design             css/tokens
 ```
 
 - **design** - shared design *values*, not just css: tokens, DOM css, and
@@ -176,14 +175,13 @@ DOM stack (Desktop/Web):        Foundations (consumed by everyone):
   wrapper. Need a variant? Add it to `ui`.
 - **product-ui** - presentational product components: data in, callbacks out.
   Composes `ui` + `product-domain`. No SDK, access, stores, or routes.
-- **product-surfaces** - the *connected* sibling of `product-ui`: product
-  presentation wired to **Cloud** (SDK React hooks + mutations). No app stores,
-  routes, Tauri, or local AnyHarness runtime - those are passed in as callbacks.
-  It is small by design; most surfaces need local runtime and stay app-local.
+- **product-client** - the connected Desktop/Web product. Components render,
+  access hooks own SDK/query state, workflow hooks sequence actions, and native
+  capability enters through the typed host contract.
 - **product-domain** - pure shared decisions, the twin of app `lib/domain`, and
   the primary sharing point for Mobile. No React, DOM, SDK clients, or stores.
 
-Platform matrix: Desktop/Web use all five; Mobile uses only `design`
+Platform matrix: Desktop/Web use all four; Mobile uses only `design`
 (react-native tokens), `product-domain`, and SDK packages - never the DOM
 packages.
 

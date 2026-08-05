@@ -33,20 +33,14 @@ const cloud = vi.hoisted(() => ({
   useWorkflowRunHistory: vi.fn(),
 }));
 
-vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useWorkflowDefinitions: cloud.useWorkflowDefinitions,
-  useWorkflowDefinition: cloud.useWorkflowDefinition,
-  useCloudAgentCatalog: cloud.useCloudAgentCatalog,
-  useRepositories: cloud.useRepositories,
-  useWorkflowRunEligibility: cloud.useWorkflowRunEligibility,
-  useWorkflowRunHistory: cloud.useWorkflowRunHistory,
-  useWorkflowRunActions: () => ({
-    putWorkflowInvocation: vi.fn(),
-    deliverWorkflowInvocation: vi.fn(),
-    cancelWorkflowInvocation: vi.fn(),
-    checkWorkflowInvocation: vi.fn(),
+vi.mock("#product/hooks/access/cloud/workflows/use-workflow-definition-access", () => ({
+  useWorkflowDefinitionsAccess: cloud.useWorkflowDefinitions,
+  useWorkflowDefinitionAccess: cloud.useWorkflowDefinition,
+  useWorkflowAuthoringResourcesAccess: (authCacheScope: string) => ({
+    catalogQuery: cloud.useCloudAgentCatalog(),
+    repositoriesQuery: cloud.useRepositories(true, authCacheScope),
   }),
-  useWorkflowDefinitionActions: () => ({
+  useWorkflowDefinitionMutationsAccess: () => ({
     createWorkflowDefinition: cloud.create,
     creatingWorkflowDefinition: false,
     updateWorkflowDefinition: cloud.update,
@@ -54,6 +48,28 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
     deleteWorkflowDefinition: cloud.remove,
     deletingWorkflowDefinition: false,
   }),
+}));
+
+vi.mock("#product/hooks/access/cloud/workflows/use-workflow-run-access", () => ({
+  useWorkflowRunLaunchAccess: (
+    workflowDefinitionId: string,
+    definitionRevision: number,
+    authCacheScope: string,
+  ) => ({
+    eligibility: cloud.useWorkflowRunEligibility(
+      workflowDefinitionId,
+      definitionRevision,
+      authCacheScope,
+    ),
+    history: cloud.useWorkflowRunHistory(workflowDefinitionId, authCacheScope),
+    actions: {
+      putWorkflowInvocation: vi.fn(),
+      deliverWorkflowInvocation: vi.fn(),
+      cancelWorkflowInvocation: vi.fn(),
+      checkWorkflowInvocation: vi.fn(),
+    },
+  }),
+  useWorkflowRunDetailAccess: vi.fn(),
 }));
 
 const catalog = {

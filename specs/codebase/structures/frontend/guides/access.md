@@ -123,9 +123,9 @@ Do not create ad hoc `openapi-fetch` clients outside the Cloud access layer.
 Do not call raw `client.GET`, `client.POST`, `client.PUT`, or `client.DELETE`
 from product hooks or components.
 
-`apps/packages/product-surfaces/**` may call `@proliferate/cloud-sdk-react`
-directly for shared Desktop/Web connected surfaces. It must not import app
-access folders or app-specific clients.
+Connected ProductClient code calls `@proliferate/cloud-sdk-react` only from
+`apps/packages/product-client/src/hooks/access/cloud/**`. Components and
+product workflow hooks consume those access-owned seams.
 
 ## AnyHarness
 

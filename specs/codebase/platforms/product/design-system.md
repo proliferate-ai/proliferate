@@ -27,7 +27,7 @@ index, and the change-control model for moving a value or adding a component.
   This document names the rules that shape the value system; that document is
   the gate's specification.
 - Package dependency direction between
-  `design`/`ui`/`product-domain`/`product-ui`/`product-surfaces`/`product-client` —
+  `design`/`ui`/`product-domain`/`product-ui`/`product-client` —
   [structures/frontend/packages/README.md](../../structures/frontend/packages/README.md).
 - Per-surface product behavior (what a screen does, its flows and copy) — the
   owning [systems/product/**](../../systems/README.md) document.
@@ -758,7 +758,7 @@ role.
 ### Governance rule
 
 Feature code (pages, panes, screens under `product-client`, `product-ui` outside
-`patterns/`, `product-surfaces`, `apps/desktop`, `apps/web`) composes library
+`patterns/`, `apps/desktop`, `apps/web`) composes library
 components and `design` tokens. It does not invent new visual vocabulary:
 
 - **No raw Radix imports outside the library.** Every `@radix-ui/*` import must

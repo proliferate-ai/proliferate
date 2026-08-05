@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BillingSettingsSurface } from "./BillingSettingsSurface";
+import { BillingSettingsSurface } from "#product/components/settings/panes/billing/BillingSettingsSurface";
 
 const cloudHooks = vi.hoisted(() => ({
   useCloudBilling: vi.fn(),

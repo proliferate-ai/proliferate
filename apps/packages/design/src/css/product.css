@@ -10,7 +10,6 @@
 
 @source "../../../ui/src";
 @source "../../../product-ui/src";
-@source "../../../product-surfaces/src";
 @source "../../../product-client/src";
 
 /* -- Geist font loading (kept for fallback / mono) --

@@ -9,7 +9,6 @@ packages:
   - "apps/packages/design"
   - "apps/packages/product-client"
   - "apps/packages/product-domain"
-  - "apps/packages/product-surfaces"
   - "apps/packages/product-ui"
   - "apps/packages/ui"
   - "server/artifact-runtime"

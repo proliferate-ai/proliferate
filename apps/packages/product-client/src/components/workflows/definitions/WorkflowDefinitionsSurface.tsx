@@ -1,27 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  useCloudAgentCatalog,
-  useRepositories,
-  useWorkflowDefinition,
-  useWorkflowDefinitionActions,
-  useWorkflowDefinitions,
-} from "@proliferate/cloud-sdk-react";
-import {
-  createWorkflowDefinitionDraft,
-  workflowDefinitionFromResponse,
-  workflowDraftToCreateRequest,
-  workflowWriteErrorMessage,
-  type WorkflowAgentCatalog,
-} from "@proliferate/product-domain/workflows/definition";
-import { validateWorkflowDefinitionDraft } from "@proliferate/product-domain/workflows/validation";
+import type { WorkflowAgentCatalog } from "@proliferate/product-domain/workflows/definition";
 import {
   WorkflowDefinitionEditor,
   type WorkflowRepositoryOption,
 } from "@proliferate/product-ui/workflows/WorkflowDefinitionEditor";
 import { WorkflowDefinitionList } from "@proliferate/product-ui/workflows/WorkflowDefinitionList";
+import {
+  useWorkflowAuthoringResourcesAccess,
+  useWorkflowDefinitionAccess,
+  useWorkflowDefinitionsAccess,
+} from "#product/hooks/access/cloud/workflows/use-workflow-definition-access";
+import { useCreateWorkflowDefinitionActions } from "#product/hooks/workflows/workflows/use-workflow-definition-actions";
+import {
+  workflowCreateAuthoringWarning,
+  workflowDefinitionModel,
+  workflowDefinitionModels,
+  workflowRepositoryOptions,
+} from "#product/lib/domain/workflows/workflow-definition-authoring";
+import { WorkflowResourceState } from "../WorkflowResourceState";
+import { WorkflowDefinitionRunsPanel } from "../runs/WorkflowRunsSurface";
 import { PersistedWorkflowEditor } from "./PersistedWorkflowEditor";
-import { WorkflowResourceState } from "./WorkflowResourceState";
-import { WorkflowDefinitionRunsPanel } from "./WorkflowRunsSurface";
 
 export interface WorkflowDefinitionsSurfaceProps {
   authCacheScope: string;
@@ -46,15 +44,16 @@ export function WorkflowDefinitionsSurface({
       setCreating(false);
     }
   }, [selectedWorkflowId]);
-  const definitionsQuery = useWorkflowDefinitions(
+  const definitionsQuery = useWorkflowDefinitionsAccess(
     authCacheScope,
     selectedWorkflowId === null && !creating,
   );
-  const catalogQuery = useCloudAgentCatalog();
-  const repositoriesQuery = useRepositories(true, authCacheScope);
+  const { catalogQuery, repositoriesQuery } = useWorkflowAuthoringResourcesAccess(
+    authCacheScope,
+  );
   const catalog = catalogQuery.data as WorkflowAgentCatalog | undefined;
-  const repositories = useMemo(
-    () => repositoryOptions(repositoriesQuery.data?.repositories ?? []),
+  const repositories = useMemo<WorkflowRepositoryOption[]>(
+    () => workflowRepositoryOptions(repositoriesQuery.data?.repositories ?? []),
     [repositoriesQuery.data?.repositories],
   );
 
@@ -105,7 +104,7 @@ export function WorkflowDefinitionsSurface({
     );
   }
 
-  const definitions = (definitionsQuery.data?.workflows ?? []).map(workflowDefinitionFromResponse);
+  const definitions = workflowDefinitionModels(definitionsQuery.data?.workflows ?? []);
   const catalogFailedWithoutData = catalogQuery.isError && !catalog;
   return (
     <WorkflowDefinitionList
@@ -147,48 +146,28 @@ function CreateWorkflowDefinitionEditor({
   onCreated: (workflowId: string) => void;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = useState(() => createWorkflowDefinitionDraft(catalog));
-  const [showValidation, setShowValidation] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-  const actions = useWorkflowDefinitionActions(authCacheScope);
-  const issues = showValidation ? validateWorkflowDefinitionDraft(draft, catalog) : [];
-
-  const save = async () => {
-    setShowValidation(true);
-    const nextIssues = validateWorkflowDefinitionDraft(draft, catalog);
-    if (nextIssues.length > 0) {
-      return;
-    }
-    setServerError(null);
-    try {
-      const created = await actions.createWorkflowDefinition(
-        workflowDraftToCreateRequest(draft, catalog),
-      );
-      onCreated(created.id);
-    } catch (error) {
-      setServerError(workflowWriteErrorMessage(error));
-    }
-  };
+  const actions = useCreateWorkflowDefinitionActions({
+    authCacheScope,
+    catalog,
+    onCreated,
+  });
 
   return (
     <WorkflowDefinitionEditor
       mode="create"
-      draft={draft}
+      draft={actions.draft}
       catalog={catalog}
       repositories={repositories}
-      issues={issues}
-      serverError={serverError}
-      catalogWarning={
-        catalogError
-          ? "Catalog refresh failed; editing uses the last loaded catalog."
-          : repositoriesError
-            ? "Repositories could not be loaded. You can still save with no repository."
-            : null
-      }
-      saving={actions.creatingWorkflowDefinition}
+      issues={actions.issues}
+      serverError={actions.serverError}
+      catalogWarning={workflowCreateAuthoringWarning({
+        catalogError,
+        repositoriesError,
+      })}
+      saving={actions.saving}
       loadingRepositories={repositoriesLoading}
-      onChange={setDraft}
-      onSave={() => void save()}
+      onChange={actions.onChange}
+      onSave={actions.onSave}
       onCancel={onCancel}
     />
   );
@@ -219,7 +198,7 @@ function ExistingWorkflowDefinitionEditor({
   managedRunsEnabled: boolean;
   onOpenRun: (runId: string) => void;
 }) {
-  const definitionQuery = useWorkflowDefinition(workflowId, authCacheScope);
+  const definitionQuery = useWorkflowDefinitionAccess(workflowId, authCacheScope);
 
   if (definitionQuery.isLoading || catalogLoading) {
     return (
@@ -232,8 +211,7 @@ function ExistingWorkflowDefinitionEditor({
     );
   }
   // A failed passive refetch reports isError while cached data remains; only
-  // a missing definition is fatal, otherwise the mounted editor (and any
-  // unsaved draft) must survive the background failure.
+  // a missing definition is fatal. The mounted editor keeps its local draft.
   if (!definitionQuery.data) {
     return (
       <WorkflowResourceState
@@ -254,7 +232,7 @@ function ExistingWorkflowDefinitionEditor({
     );
   }
 
-  const definition = workflowDefinitionFromResponse(definitionQuery.data);
+  const definition = workflowDefinitionModel(definitionQuery.data);
   return (
     <PersistedWorkflowEditor
       authCacheScope={authCacheScope}
@@ -265,15 +243,7 @@ function ExistingWorkflowDefinitionEditor({
       definitionRefreshFailed={definitionQuery.isError}
       repositories={repositories}
       repositoriesLoading={repositoriesLoading}
-      reloadDefinition={async () => {
-        // A failed refetch still resolves with the stale cached data; treat
-        // it as a failure instead of adopting the old value into the draft.
-        const result = await definitionQuery.refetch();
-        if (result.isError || !result.data) {
-          throw result.error ?? new Error("Workflow could not be reloaded.");
-        }
-        return workflowDefinitionFromResponse(result.data);
-      }}
+      refetchDefinition={definitionQuery.refetch}
       onSaved={onSaved}
       onBack={onBack}
       supplementalContent={(
@@ -286,17 +256,4 @@ function ExistingWorkflowDefinitionEditor({
       )}
     />
   );
-}
-
-function repositoryOptions(
-  repositories: ReadonlyArray<{
-    id: string;
-    gitOwner: string;
-    gitRepoName: string;
-  }>,
-): WorkflowRepositoryOption[] {
-  return repositories.map((repository) => ({
-    id: repository.id,
-    label: `${repository.gitOwner}/${repository.gitRepoName}`,
-  }));
 }
