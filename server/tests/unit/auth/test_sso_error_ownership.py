@@ -67,6 +67,60 @@ def test_sso_policy_error_is_local_and_framework_free() -> None:
     )
 
 
+def test_sso_policy_error_callers_are_explicit_translation_boundaries() -> None:
+    production_root = Path(cast(str, user_resolution.__file__)).parents[2]
+    named_paths = {
+        path.relative_to(production_root).as_posix()
+        for path in production_root.rglob("*.py")
+        if "SsoPolicyError" in path.read_text()
+    }
+    assert named_paths == {
+        "auth/sso/policy.py",
+        "auth/sso/user_resolution.py",
+        "integrations/sso/oidc.py",
+    }
+
+    expected = {
+        user_resolution: (
+            "_require_verified_allowed_email",
+            "require_email_domain_allowed",
+        ),
+        oidc: ("resolve_oidc_metadata", "oidc_discovery_url"),
+    }
+    for module, (function_name, policy_call) in expected.items():
+        tree = _module_tree(module)
+        matching_calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == policy_call
+        ]
+        assert len(matching_calls) == 1
+
+        translation_tries = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Try) and any(call in ast.walk(node) for call in matching_calls)
+        ]
+        assert len(translation_tries) == 1
+        handler_names = {
+            handler.type.id
+            for handler in translation_tries[0].handlers
+            if isinstance(handler.type, ast.Name)
+        }
+        assert handler_names == {"SsoPolicyError"}
+
+        parent_functions = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == function_name
+        ]
+        assert len(parent_functions) == 1
+        assert matching_calls[0] in ast.walk(parent_functions[0])
+
+
 @pytest.mark.asyncio
 async def test_email_policy_translates_before_identity_lookup(
     monkeypatch: pytest.MonkeyPatch,

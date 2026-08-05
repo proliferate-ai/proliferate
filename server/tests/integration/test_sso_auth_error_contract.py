@@ -222,6 +222,25 @@ async def test_invalid_callback_state_preserves_redirect_mapping(
 
 
 @pytest.mark.asyncio
+async def test_provider_error_with_invalid_state_uses_static_redirect(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test")
+
+    response = await client.get(
+        "/auth/sso/oidc/callback",
+        params={"state": "missing-state", "error": "access_denied"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert (
+        response.headers["location"] == "https://app.example.test/auth/error?code=provider_error"
+    )
+
+
+@pytest.mark.asyncio
 async def test_valid_provider_error_consumes_state_and_keeps_client_redirect(
     client: AsyncClient,
     db_session: AsyncSession,
