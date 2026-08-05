@@ -123,7 +123,7 @@ Use this as a routing map. The focused guides own the detailed rules.
 | App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle, and application logging setup that attaches request correlation context and stamps release identity. | This doc |
 | Settings and constants | `config.py`, `constants/<area>.py` | Env-derived runtime settings and shared hardcoded product/protocol values. | [guides/config.md](guides/config.md) |
 | Reusable cross-domain logic | `lib/infra/**`, `lib/product/**`, `lib/capabilities/**` | Generic machinery, cross-domain pure product logic, and reusable orchestration over integrations — owned by no single domain. | [guides/lib.md](guides/lib.md) |
-| Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication primitives (credentials, sessions, provider protocol, identity persistence, and transport-neutral failures), org-authorization factory deps and verdict types, resource-access deps, pure product-policy verdicts. | [guides/auth.md](guides/auth.md) |
+| Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication primitives, dependency-free authorization vocabulary, request-time owner/org resolution, resource-access deps, and pure product-policy verdicts. | [guides/auth.md](guides/auth.md) |
 | Accounts | `server/accounts/**` | Product account-entry routes and orchestration: user resolution/creation, identity placement, admin-email enforcement, SSO coordination, and product side effects. | [guides/auth.md](guides/auth.md) |
 | Database | `db/models/**`, `db/store/**` | ORM schema, query execution, transactions, row locks, ORM -> dataclass type boundary. | [guides/database.md](guides/database.md) |
 | Domain transport | `server/<domain>/api.py`, `server/<domain>/models.py` | HTTP route handling and Pydantic request/response schemas. | [guides/domains.md](guides/domains.md) |
@@ -176,14 +176,22 @@ Persistence rule:
   `integrations/`), and `lib/capabilities/` orchestrates integrations. No
   `lib/**` file imports `db/store` or `server/<domain>/**`. A concern enters
   `lib/` only at its second domain consumer.
-- Authorization is enforced at the endpoint via `Depends()`; services receive a
-  pre-authorized context and run no auth checks. All actor deps
-  (`current_active_user`, `current_product_user`) live in
-  `auth/dependencies.py`; the runtime-worker bearer dependency lives with the
-  Cloud runtime-worker domain; org-authorization factory deps and verdict types
-  (`require_org_role`, `require_org_membership`, `OwnerContext`, `PolicyVerdict`)
-  live in `permissions.py` at the server root; resource-access deps live in
-  `server/<domain>/access.py`; and product policy verdicts live in
+- New and refactored authorization paths enforce standing and resource access at
+  the endpoint via `Depends()`; services receive resolved context rather than
+  becoming a hidden permission layer. Existing inline checks are migration
+  debt, not a second recommended pattern. User actor deps
+  (`current_active_user`, `current_limited_user`, `current_product_user`, and
+  `current_organization_actor`) live in
+  [auth/dependencies.py](../../../../server/proliferate/auth/dependencies.py),
+  while the runtime-worker bearer dependency lives with the Cloud
+  runtime-worker domain. Dependency-free authorization vocabulary and the pure
+  `require_org_role(context, roles)` check live in
+  [auth/authorization.py](../../../../server/proliferate/auth/authorization.py).
+  [permissions.py](../../../../server/proliferate/permissions.py) re-exports that
+  vocabulary and owns request-time owner/org selection, membership resolution,
+  RLS context, `require_owner_role(*roles)`, and the `current_org_*` and
+  `current_path_org_*` dependencies. Resource-access deps live in
+  `server/<domain>/access.py`; product-policy verdicts live in
   `server/<domain>/domain/policy.py`.
 - Services raise product/domain errors. A global FastAPI exception handler
   translates `ProliferateError` subclasses to HTTP responses.
@@ -219,6 +227,8 @@ Persistence rule:
 Always start with this file. Then read the focused guide for the layer you are
 changing:
 
+- [guides/grid-ownership-model.md](guides/grid-ownership-model.md) — target
+  cross-layer ownership model and its explicit current gaps
 - [guides/domains.md](guides/domains.md)
 - [guides/database.md](guides/database.md)
 - [guides/auth.md](guides/auth.md)
@@ -257,11 +267,16 @@ only layer that imports SQLAlchemy query APIs. `integrations/**` is a leaf and
 does not import server domain code. `lib/**` is a leaf below the domains: it
 never imports `server/<domain>/**` or `db/store`, `lib/product/` never imports
 `integrations/`, and a concern enters `lib/` only at its second domain consumer.
-`auth/**` may be imported by every layer for authentication, and cross-domain
-authorization always comes from `proliferate.permissions` (a leaf importing
-neither `auth/**` nor `server/<domain>/**`). Background tasks call domain
-services; the relay is the only `background/**` module that touches a store, and
-only the outbox store.
+The dependency-free authorization types in
+[auth/authorization.py](../../../../server/proliferate/auth/authorization.py)
+sit below request composition. Domain code imports the public authorization
+seam from [permissions.py](../../../../server/proliferate/permissions.py), which
+is not an import-free leaf: it composes actor deps, stores, billing services,
+and request/RLS context. The rest of `auth/**` remains below product domains;
+product account-entry orchestration belongs to
+[server/accounts/**](../../../../server/proliferate/server/accounts). Background
+tasks call domain services; the relay is the only `background/**` module that
+touches a store, and only the outbox store.
 
 ## CI-Enforced Repo Shape
 

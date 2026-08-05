@@ -21,22 +21,24 @@ second recommended pattern.
 Dependency-free authorization currency — `ActorIdentity`, `AuthenticatedUser`,
 `OwnerScope`, `OwnerSelection`, `OwnerContext`, `PolicyAllowed`, `PolicyDenied`,
 `PolicyVerdict`, and the pure `require_org_role` check — is defined in
-`auth/authorization.py`. `permissions.py` re-exports that vocabulary as the
-public domain-facing seam and owns request-time organization selection,
-membership resolution, request/RLS context, and FastAPI dependencies. New and
-refactored domain code should import the public names from
-`proliferate.permissions` rather than reach into `auth.authorization` for
-convenience. Existing direct imports are migration work, not another public
-seam.
+[auth/authorization.py](../../../../../server/proliferate/auth/authorization.py).
+[permissions.py](../../../../../server/proliferate/permissions.py) re-exports
+that vocabulary as the public domain-facing seam and owns request-time
+organization selection, membership resolution, request/RLS context, and
+FastAPI dependencies. New and refactored domain code imports public names from
+`proliferate.permissions`; direct imports from `auth.authorization` are
+migration work, not a second public seam.
 
-`auth/dependencies.py` centralizes **actor dependencies**, not every FastAPI
-dependency used by a route. Resource-specific dependencies stay in the domain
-that owns the resource. This split describes the current implementation; it
-does not make `permissions.py` an import-free leaf.
-
-`auth/` is the importable leaf for credentials, sessions, provider protocols,
-identity persistence, and transport-neutral Auth failures. Product account-entry
-routes and orchestration live in `server/accounts/**`.
+[auth/dependencies.py](../../../../../server/proliferate/auth/dependencies.py)
+centralizes **actor dependencies**, not every FastAPI dependency used by a
+route. Resource-specific dependencies stay in the domain that owns the
+resource. [auth/**](../../../../../server/proliferate/auth) remains below product
+domains for credentials, sessions, provider protocols, identity persistence,
+and transport-neutral Auth failures. Product account-entry routes and
+orchestration live in
+[server/accounts/**](../../../../../server/proliferate/server/accounts). This
+split describes the current implementation; it does not make `permissions.py`
+an import-free leaf.
 
 ## The actor dependency hierarchy
 
@@ -52,8 +54,8 @@ anonymous
 
 current_product_user
 └── current_owner_context                  selected/default payer -> OwnerContext
-    ├── require_owner_role(*roles)          dependency factory -> OwnerContext
-    └── current_org_member/admin/owner      selected-owner -> CurrentOrgUser
+    ├── require_owner_role(*roles)         dependency factory -> OwnerContext
+    └── current_org_member/admin/owner     selected owner -> CurrentOrgUser
 
 current_organization_actor
 └── current_path_org_member                path organization -> CurrentOrgUser
@@ -66,22 +68,22 @@ optional_current_active_user               maybe authenticated (public-with-extr
 
 `require_owner_role(*roles)` is a dependency factory over the selected
 `OwnerContext`. `require_org_role(context, roles)` is instead a synchronous pure
-check over an already-resolved context. Path organization routes use the
+check over an already-resolved context. Path-organization routes use the
 `current_path_org_*` dependencies. There is no separate organization-membership
-factory. Org standing is resolved at the endpoint boundary for new and
-refactored paths rather than hidden inside a service.
+factory. New and refactored paths resolve org standing at the endpoint boundary
+rather than hiding it inside a service.
 
 ## Shape
 
 ```text
 server/proliferate/
-  permissions.py             # request organization deps + public authorization re-exports
+  permissions.py             # request org deps + public authorization re-exports
 
   auth/
     __init__.py
-    dependencies.py          # user actor deps: current_active_user, current_limited_user,
-                             #   current_product_user, current_organization_actor,
-                             #   optional_current_active_user
+    dependencies.py          # current_active_user, current_limited_user,
+                             # current_product_user, current_organization_actor,
+                             # optional_current_active_user
     authorization.py         # dependency-free owner/policy vocabulary + pure role check
     users.py                 # UserManager (fastapi-users lifecycle plumbing)
     desktop/                 # leaf models and callback pages
@@ -347,17 +349,19 @@ no mounted Worker control, command lease/result, or applied-revision endpoint.
 
 ## Org Authorization
 
-`server/proliferate/auth/authorization.py` owns the dependency-free vocabulary:
-`ActorIdentity`, `AuthenticatedUser`, `OwnerScope`, `OwnerSelection`,
-`OwnerContext`, `PolicyAllowed`, `PolicyDenied`, `PolicyVerdict`, and
-`require_org_role`. `server/proliferate/permissions.py` re-exports those names
-as the public domain-facing seam and owns request-time org-standing resolution.
+[auth/authorization.py](../../../../../server/proliferate/auth/authorization.py)
+owns the dependency-free vocabulary: `ActorIdentity`, `AuthenticatedUser`,
+`OwnerScope`, `OwnerSelection`, `OwnerContext`, `PolicyAllowed`, `PolicyDenied`,
+`PolicyVerdict`, and `require_org_role`.
+[permissions.py](../../../../../server/proliferate/permissions.py) re-exports
+those names as the public domain-facing seam and owns request-time org-standing
+resolution.
 
 ### Allowed
 
 - `current_owner_context` and `require_owner_role(*roles)` for selected-owner
   routes that receive an `OwnerContext`.
-- `current_path_org_member/admin/owner` for organization ids carried by the
+- `current_path_org_member/admin/owner` for organization IDs carried by the
   path, and `current_org_member/admin/owner` for a selected owner. These return
   `CurrentOrgUser`.
 - Re-exporting `ActorIdentity`, `AuthenticatedUser`, `OwnerScope`,
@@ -520,8 +524,9 @@ async def delete_workspace(db: AsyncSession, *, workspace: WorkspaceSnapshot) ->
 ```
 
 The service raises a domain error; the global handler maps it to an HTTP
-response. In this target shape, admin standing was resolved by the endpoint's
-dependencies before `delete_workspace` was called.
+response. In the endpoint-composed shape, admin standing is resolved before
+`delete_workspace` is called. Existing services that still resolve standing
+inline are migration debt.
 
 ## End-to-End Example
 
@@ -551,18 +556,18 @@ The handler is three lines and the service has no inline auth.
 ## Forbidden Patterns
 
 - Authorization checks inline in `api.py` route bodies. Use deps.
-- Org-standing checks buried in `service.py`. Resolve `CurrentOrgUser` or
-  `OwnerContext` at the endpoint through `permissions.py` and pass it in.
+- Org-standing checks buried in `service.py`. New and refactored paths resolve
+  `CurrentOrgUser` or `OwnerContext` at the endpoint through `permissions.py`
+  and pass it in.
 - Product rules buried as `if not condition: raise HTTPException(403)` in
   `service.py`. Extract to pure verdicts in `domain/policy.py`.
 - Inline Worker bearer parsing in handlers or services. Authenticate once via
   the domain-owned `authenticate_worker` dependency.
-- Importing authorization helpers from a domain service
-  (`from organizations.service import require_org_role`) or from `auth/`. Always
-  import `OwnerContext`, `PolicyVerdict`, and the factories from
-  `proliferate.permissions`.
+- Importing authorization helpers from a domain service. Domain code imports
+  `OwnerContext`, `PolicyVerdict`, request dependencies, and factories from the
+  public `proliferate.permissions` seam.
 - Returning Pydantic from access deps. Return the dataclass snapshot.
 - New no-op actor wrappers. The existing `current_limited_user` compatibility
-  seam is not precedent for adding another.
+  seam is not precedent for another.
 - Mixing authentication and authorization in one dep. Each does one job; compose
   via `Depends(... = Depends(...))`.
