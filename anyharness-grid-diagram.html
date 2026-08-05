@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>anyharness — dependency grid</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #111113;
+    --panel2: #16161a;
+    --border: #26262c;
+    --text: #d4d4d8;
+    --dim: #71717a;
+    --faint: #3f3f46;
+    --law: #4ade80;
+    --holds: #60a5fa;
+    --leaks: #f59e0b;
+    --forbid: #ef4444;
+    --accent: #e4e4e7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  #root { max-width: 1180px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+// ---------------------------------------------------------------------------
+// Data: the grid as measured (session of 2026-08-05, scouts over anyharness-lib)
+// ---------------------------------------------------------------------------
+
+const LAYERS = [
+  {
+    id: "contract", name: "anyharness-contract", col: 0, row: 0,
+    sub: "wire types (separate crate)",
+    desc: "Request/response shapes for the HTTP API. A separate crate: it CANNOT import anything from the lib — that direction is compiler law, not convention.",
+    files: "anyharness-contract/src/v1/**",
+  },
+  {
+    id: "api", name: "api/http", col: 0, row: 1,
+    sub: "handlers · edge",
+    desc: "One file per resource. A handler = auth assert → parse wire types → ONE facade call → map typed error to HTTP. Zero business logic. Sibling files carry the edge ceremony: access.rs (auth assertions), <r>_errors.rs (From<DomainError> for ApiError), <r>_contract.rs (domain→wire mappers).",
+    files: "api/http/sessions_prompt.rs · access.rs · sessions_errors.rs",
+  },
+  {
+    id: "runtime", name: "domains/<d>/runtime", col: 1, row: 1,
+    sub: "facade · live + cross-domain use cases",
+    desc: "THE file where each endpoint's story is told. Owns the pipeline: preconditions → idempotency → repairs → resolve (gather facts) → decide (pure policy) → execute → compensate. The ONLY domain layer licensed to touch live/ — the valve.",
+    files: "sessions/runtime/{prompt,startup,fork,creation}.rs",
+  },
+  {
+    id: "service", name: "domains/<d>/service", col: 1, row: 2,
+    sub: "durable-only use cases",
+    desc: "Use cases that need no live truth: create the record, launch options, history. Holds its own store + foreign stores (reads only — convention!). Never sees live/.",
+    files: "sessions/service/{create,launch_options}.rs",
+  },
+  {
+    id: "concerns", name: "domains/<d>/<concern>", col: 1, row: 3,
+    sub: "named sub-concerns · pure policy",
+    desc: "Nameable reusable steps: prompt/prepare.rs, mcp_bindings/, launch_policy.rs. Policy files are data-in/data-out: no store, no clock, no uuid, no &self. This is where the hard logic gets its cheap tests.",
+    files: "sessions/prompt/ · runtime/launch_policy.rs",
+  },
+  {
+    id: "store", name: "domains/<d>/store", col: 1, row: 4,
+    sub: "durable truth · rows never escape",
+    desc: "Owns SQL and row structs. Two-tier: row fns take &Connection, surface fns compose in one tx. Returns domain models — the row type never leaves the folder.",
+    files: "sessions/store/ · workspaces/store/",
+  },
+  {
+    id: "live", name: "live/<area>", col: 2, row: 1,
+    sub: "actors · handles · NEVER fetches",
+    desc: "One actor task per session owns ALL mutable live state; reached only by mailing SessionCommand through a handle (mpsc + oneshot). Gets its whole world at birth (SessionLaunch bundle) + 7 capability traits (ActorCapabilities). Zero store/service imports — measured.",
+    files: "live/sessions/{handle,actor/,model}.rs",
+  },
+  {
+    id: "adapters", name: "adapters/", col: 2, row: 3,
+    sub: "local machine skills · 4 toolboxes",
+    desc: "Four skills, one grammar each: a Service struct (the entry), types.rs (typed inputs/outputs + typed errors), operations/ (one file per verb). git/ is the biggest (~20 operation files: clone, diff, worktrees, status, push...); files/ (create/read/write/rename/delete + safety.rs path-escape guards); processes/ (spawn + run); hosting/ (gh CLI: create_pr, list_prs, + pr_status_cache). Knows HOW, never WHAT-FOR — zero domain imports (measured). Semantic leaks: scratch.rs hardcodes a product identity string; pr_status_cache.rs grew a 399-line policy engine.",
+    files: "adapters/<skill>/{service,types,operations/<verb>}.rs",
+  },
+  {
+    id: "integrations", name: "integrations/ (incl. acp)", col: 2, row: 4,
+    sub: "foreign vocabulary · 3 protocols",
+    desc: "Code judged against an EXTERNAL spec, not product intent. acp/: the ACP protocol doorstep — dep-less permission mappers, typed provider errors (agreed migration: acp/ → integrations/acp, shown here at its target home). mcp/: JSON-RPC framing, capability tokens, and the product MCP server endpoint. agent_cli/: how to find + launch harness executables and discover models. Zero domain imports (measured).",
+    files: "acp/** · integrations/mcp/** · integrations/agent_cli/**",
+  },
+  {
+    id: "persistence", name: "persistence/", col: 1, row: 5,
+    sub: "db plumbing · knows tables, not meaning",
+    desc: "sqlite.rs (connection + pragmas + pool), migrations.rs (ordered schema history), custom_migrations.rs + registry (data-shape migrations too complex for SQL, e.g. workflow_runs_v2 with its own tests + schema snapshot tests). Knows every table's SHAPE, nothing about what rows mean — domains' store/ folders own meaning. Drift: 2 SQL files sit in workspaces outside store/.",
+    files: "persistence/{sqlite,migrations,custom_migrations}.rs",
+  },
+  {
+    id: "app", name: "app/", col: 0, row: 5,
+    sub: "wiring floor · composition only",
+    desc: "6 files, ~2k lines, zero behavior. mod.rs: AppState + the one build fn — every ::new() in dependency order (stores → services → live manager → runtimes → AppState). Wiring families split out when a knot is big: sessions.rs (wraps SessionStore in the ActorCapabilities traits, registers the 5 product observers IN DISPATCH ORDER — plans before reviews is load-bearing), product_mcp.rs (the deps-struct + build-fn exemplar), workflows.rs (two-phase: pre- and post-SessionRuntime).",
+    files: "app/{mod,sessions,product_mcp,workflows}.rs",
+  },
+  {
+    id: "observability", name: "observability/", col: 0, row: 4,
+    sub: "tracing spine",
+    desc: "4 files. latency.rs: FlowHeaders — pulls flow/prompt ids from HTTP headers into a span, so [workspace-latency] events correlate across api → runtime → actor without threading a context struct through 13 signatures (that threading existed; the spans migration deleted it). resource_pressure.rs + transcript_phase.rs: sampled gauges and phase markers. The rule it enforces: one #[tracing::instrument] per use-case entry; everything inside inherits the fields.",
+    files: "observability/{latency,resource_pressure,transcript_phase}.rs",
+  },
+];
+
+// status: law (compiler), holds (convention, zero violations), leaks (named debt)
+const EDGES = [
+  { from: "api", to: "runtime", status: "holds", label: "facade calls via AppState",
+    note: "Handlers reach domain facades + models only. Leak: state.session_service.store() at 4 sites, WorkspaceStore::new in hosting.rs.", leak: true },
+  { from: "api", to: "service", status: "holds", label: "facade calls via AppState" },
+  { from: "api", to: "contract", status: "holds", label: "wire types (edge only)",
+    note: "Contract types never travel below api/ — except ~81 grandfathered import lines in domains/** (named migration debt)." },
+  { from: "runtime", to: "service", status: "holds", label: "wraps the durable layer" },
+  { from: "runtime", to: "live", status: "holds", label: "THE VALVE — manager + handle",
+    note: "crate::live in domains/** appears only in runtime.rs / runtime/** / live_ports.rs (~35 of 37 files clean). Deviants: mobility/service.rs + materialization/service.rs touch live directly." },
+  { from: "runtime", to: "runtime2", status: "holds", label: "other domains' facades" },
+  { from: "runtime", to: "concerns", status: "holds", label: "policy + prep calls" },
+  { from: "runtime", to: "store", status: "holds", label: "own store" },
+  { from: "service", to: "store", status: "holds", label: "own store" },
+  { from: "service", to: "store2", status: "leaks", label: "foreign stores: READS only",
+    note: "Doctrine, not compiler: WorkspaceStore write methods are plain pub. Sessions' 3 call sites are all find_* — holds by review. Grid candidate #1." },
+  { from: "service", to: "adapters", status: "holds", label: "machine skills" },
+  { from: "concerns", to: "concerns2", status: "holds", label: "pure → pure only" },
+  { from: "store", to: "persistence", status: "holds", label: "connection + rows" },
+  { from: "app", to: "everything", status: "holds", label: "wires ALL layers, once",
+    note: "app/ may import everything; what's banned is behavior. All ::new() calls live here, in dependency order." },
+  { from: "live", to: "concerns", status: "holds", label: "domain SHAPES only",
+    note: "live imports model.rs / pure prompt types. Zero non-test store or service imports — measured. Durable powers arrive as ActorCapabilities traits wired in app/." },
+];
+
+const FORBIDDEN = [
+  { from: "live", to: "store", label: "live never fetches", note: "If live needs a fact: add a field to the launch bundle. If it needs a durable power: add a capability trait, wire in app/. Zero violations (non-test)." },
+  { from: "live", to: "service", label: "live never calls domains", note: "Inverted: product domains implement observer/hook traits live defines." },
+  { from: "service", to: "live", label: "services don't touch live", note: "LEAKING: mobility/service.rs holds live::terminals::TerminalService as a field. The named deviant." },
+  { from: "adapters", to: "runtime", label: "adapters know no product", note: "Zero import violations; semantic leaks only (scratch.rs product string)." },
+  { from: "integrations", to: "runtime", label: "protocol code knows no product", note: "Zero violations. acp/ shown at its agreed target home (integrations/acp); on disk it still sits at src root." },
+  { from: "observability", to: "runtime", label: "the spine imports no product", note: "Spans carry context downward; nothing threads context structs upward through signatures." },
+  { from: "concerns", to: "store", label: "policy never fetches", note: "launch_policy.rs: 'no store, no clock, no uuid, no &self'. Facts are handed in as a Context struct, pub(super)." },
+  { from: "runtime", to: "api", label: "nothing imports upward", note: "domains → api: ZERO (measured)." },
+  { from: "contract", to: "api", label: "crate boundary", note: "The only edge that is already COMPILER LAW: contract is a separate crate with no path back to the lib." },
+];
+
+const FLOW = [
+  { layer: "api", title: "1 · handler", code: "api/http/sessions_prompt.rs:38",
+    text: "assert_session_auth_scope → admission permit → parse prompt_id → state.session_runtime.send_prompt(...) → map_send_prompt_error. Five moves, zero logic." },
+  { layer: "runtime", title: "2 · THE use case", code: "domains/sessions/runtime/prompt.rs:19",
+    text: "The whole story in one file: access gate (precondition) → get record (resolve durable) → ensure_live_session_handle (resolve/repair live — may cold-boot the actor) → live_config snapshot → prepare_prompt (decide) → persist attachments (record) → handle.send_prompt (execute) → cleanup on enqueue-fail (compensate)." },
+  { layer: "concerns", title: "3 · named sub-concern", code: "domains/sessions/prompt/prepare.rs",
+    text: "blocks + attachments + plan refs + capabilities → PromptPayload. A nameable step shared by 3 entry points, so it earned a folder." },
+  { layer: "live", title: "4 · the bridge", code: "live/sessions/handle.rs:225",
+    text: "send_request: build SessionCommand::Prompt{payload, respond_to: tx} → mail to actor's mpsc → await oneshot rx. Every one of the 21 command variants crosses here. No locks anywhere — you can't race state you can't reach." },
+  { layer: "live", title: "5 · the owner", code: "live/sessions/actor/run.rs:29",
+    text: "tokio::select! { biased; command / queue-drain / ACP notification / background }. Sole writer of busy + queue: decides Started{turn_id} vs Queued{seq}, replies through the oneshot, THEN writes to the agent subprocess. HTTP 200 leaves now; the turn streams on for minutes via EventPersist → sink → SSE." },
+];
+
+const STATUS_META = {
+  law:   { color: "var(--law)",   label: "compiler law", desc: "crate boundary — unwritable" },
+  holds: { color: "var(--holds)", label: "holds", desc: "convention, measured ~zero violations" },
+  leaks: { color: "var(--leaks)", label: "leaks", desc: "convention with named debt" },
+  forbid:{ color: "var(--forbid)",label: "forbidden", desc: "the walls" },
+};
+
+// which edges light up when a layer is selected
+function edgesFor(id) {
+  const out = EDGES.filter(e => e.from === id || e.to === id || (e.from === id.replace(/2$/,"")));
+  const forb = FORBIDDEN.filter(e => e.from === id || e.to === id);
+  return { out, forb };
+}
+
+function Chip({ color, children }) {
+  return <span style={{
+    display: "inline-block", padding: "1px 8px", borderRadius: 3,
+    border: `1px solid ${color}`, color, fontSize: 11, marginRight: 6,
+  }}>{children}</span>;
+}
+
+function LayerCard({ layer, selected, dimmed, flowActive, onClick }) {
+  const border = flowActive ? "var(--accent)" : selected ? "var(--holds)" : "var(--border)";
+  return (
+    <div onClick={onClick} style={{
+      background: selected || flowActive ? "var(--panel2)" : "var(--panel)",
+      border: `1px solid ${border}`,
+      borderRadius: 6, padding: "10px 12px", cursor: "pointer",
+      opacity: dimmed ? 0.35 : 1, transition: "all .15s ease",
+      boxShadow: flowActive ? "0 0 0 1px var(--accent)" : "none",
+    }}>
+      <div style={{ color: "var(--accent)", fontWeight: 600, fontSize: 13 }}>{layer.name}</div>
+      <div style={{ color: "var(--dim)", fontSize: 11, marginTop: 2 }}>{layer.sub}</div>
+    </div>
+  );
+}
+
+function App() {
+  const [sel, setSel] = useState(null);        // selected layer id
+  const [mode, setMode] = useState("grid");    // grid | flow
+  const [flowStep, setFlowStep] = useState(0);
+
+  const selLayer = LAYERS.find(l => l.id === sel);
+  const rel = sel ? edgesFor(sel) : null;
+  const relatedIds = useMemo(() => {
+    if (!sel) return null;
+    const s = new Set([sel]);
+    rel.out.forEach(e => { s.add(e.from.replace(/2$/,"")); s.add(e.to.replace(/2$/,"")); });
+    return s;
+  }, [sel]);
+
+  const flowLayerId = mode === "flow" ? FLOW[flowStep].layer : null;
+
+  // layout: 3 columns
+  const cols = [[],[],[]];
+  LAYERS.forEach(l => cols[l.col].push(l));
+  cols.forEach(c => c.sort((a,b) => a.row - b.row));
+  const colTitles = ["edge + wiring + spine", "domains (product truth)", "live + machine + foreign"];
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 18, color: "var(--accent)", fontWeight: 700 }}>anyharness — the dependency grid</div>
+        <div style={{ color: "var(--dim)", marginTop: 4 }}>
+          handler → facade → wired deps → (other facades | live-via-handle). Click a layer for its licenses; trace a real request with the flow.
+        </div>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={() => { setMode("grid"); setSel(null); }} style={btnStyle(mode==="grid")}>grid</button>
+          <button onClick={() => { setMode("flow"); setSel(null); setFlowStep(0); }} style={btnStyle(mode==="flow")}>trace send_prompt</button>
+          <span style={{ width: 16 }} />
+          <Chip color="var(--law)">law — compiler-enforced (crate edge)</Chip>
+          <Chip color="var(--holds)">holds — convention, ~zero violations</Chip>
+          <Chip color="var(--leaks)">leaks — named debt</Chip>
+          <Chip color="var(--forbid)">forbidden</Chip>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        {cols.map((col, i) => (
+          <div key={i}>
+            <div style={{ color: "var(--faint)", fontSize: 11, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{colTitles[i]}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {col.map(l => (
+                <LayerCard key={l.id} layer={l}
+                  selected={sel === l.id}
+                  dimmed={(sel && relatedIds && !relatedIds.has(l.id)) || (mode==="flow" && flowLayerId !== l.id)}
+                  flowActive={mode==="flow" && flowLayerId === l.id}
+                  onClick={() => { setMode("grid"); setSel(sel === l.id ? null : l.id); }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* detail panel */}
+      <div style={{ marginTop: 20, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 6, padding: 16, minHeight: 180 }}>
+        {mode === "flow" ? (
+          <div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+              {FLOW.map((s, i) => (
+                <button key={i} onClick={() => setFlowStep(i)} style={btnStyle(flowStep === i)}>{s.title}</button>
+              ))}
+            </div>
+            <div style={{ color: "var(--accent)", fontWeight: 600 }}>{FLOW[flowStep].title}</div>
+            <div style={{ color: "var(--law)", fontSize: 12, margin: "4px 0 8px" }}>{FLOW[flowStep].code}</div>
+            <div style={{ maxWidth: 860 }}>{FLOW[flowStep].text}</div>
+            <div style={{ marginTop: 14, color: "var(--dim)", fontSize: 12 }}>
+              POST /v1/sessions/:id/prompt · the plumbing (1, 4, 5) is stereotyped — identical for every endpoint/command. The decisions live in exactly one file: step 2.
+            </div>
+          </div>
+        ) : selLayer ? (
+          <div>
+            <div style={{ color: "var(--accent)", fontWeight: 600, fontSize: 15 }}>{selLayer.name}</div>
+            <div style={{ color: "var(--law)", fontSize: 12, margin: "2px 0 10px" }}>{selLayer.files}</div>
+            <div style={{ maxWidth: 900, marginBottom: 14 }}>{selLayer.desc}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div>
+                <div style={{ color: "var(--dim)", fontSize: 11, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>allowed edges</div>
+                {rel.out.length === 0 && <div style={{ color: "var(--faint)" }}>—</div>}
+                {rel.out.map((e, i) => (
+                  <div key={i} style={{ marginBottom: 8 }}>
+                    <span style={{ color: STATUS_META[e.status].color }}>● </span>
+                    <span style={{ color: "var(--text)" }}>{e.from.replace(/2$/," (other domain)")} → {e.to.replace(/2$/," (other domain)").replace("everything","* (all layers)")}</span>
+                    <span style={{ color: "var(--dim)" }}> — {e.label}</span>
+                    {e.note && <div style={{ color: "var(--dim)", fontSize: 12, marginLeft: 14 }}>{e.note}</div>}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{ color: "var(--dim)", fontSize: 11, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>walls</div>
+                {rel.forb.length === 0 && <div style={{ color: "var(--faint)" }}>—</div>}
+                {rel.forb.map((e, i) => (
+                  <div key={i} style={{ marginBottom: 8 }}>
+                    <span style={{ color: "var(--forbid)" }}>✕ </span>
+                    <span>{e.from} ↛ {e.to}</span>
+                    <span style={{ color: "var(--dim)" }}> — {e.label}</span>
+                    {e.note && <div style={{ color: "var(--dim)", fontSize: 12, marginLeft: 14 }}>{e.note}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ color: "var(--dim)" }}>
+            <div style={{ marginBottom: 10, color: "var(--text)" }}>The three load-bearing ideas:</div>
+            <div style={{ marginBottom: 6 }}><span style={{ color: "var(--holds)" }}>1.</span> A layer = a struct; its <span style={{ color: "var(--accent)" }}>field list is its license</span> — granted exactly once, in app/, at boot. No fields, no access.</div>
+            <div style={{ marginBottom: 6 }}><span style={{ color: "var(--holds)" }}>2.</span> Two worlds, one bridge: stateless request-tasks (plain async fns over the frozen graph) and <span style={{ color: "var(--accent)" }}>one actor task per session</span> owning all mutable live state — reached only by mailing typed commands (mpsc + oneshot). No locks, because no shared state.</div>
+            <div><span style={{ color: "var(--holds)" }}>3.</span> Per endpoint, decisions concentrate in <span style={{ color: "var(--accent)" }}>one runtime/service file</span> that reads as the pipeline: preconditions → idempotency → repairs → resolve → decide (pure) → execute → compensate. Everything else is stereotyped plumbing.</div>
+            <div style={{ marginTop: 12, fontSize: 12 }}>Click any layer above, or hit “trace send_prompt”.</div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 14, color: "var(--faint)", fontSize: 11 }}>
+        measured 2026-08-05 against anyharness-lib (~172k lines) · deviants on record: mobility/service.rs + materialization/service.rs (live without a valve) · 4× state.session_service.store() in api/ · ~81 contract imports in domains/** · foreign-store writes unguarded (convention only)
+      </div>
+    </div>
+  );
+}
+
+function btnStyle(active) {
+  return {
+    background: active ? "var(--panel2)" : "transparent",
+    color: active ? "var(--accent)" : "var(--dim)",
+    border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+    borderRadius: 4, padding: "4px 12px", fontFamily: "inherit",
+    fontSize: 12, cursor: "pointer",
+  };
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

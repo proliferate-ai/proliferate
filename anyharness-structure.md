@@ -1,0 +1,295 @@
+# AnyHarness Structure
+
+Working draft, styled after `specs/codebase/structures/frontend/README.md`.
+Candidate replacement/companion for
+`specs/codebase/structures/anyharness/README.md`. Enforcement grades and
+baselines were measured 2026-08-05 against `anyharness-lib` (~172k lines).
+
+## Scope
+
+These standards apply to the Rust runtime workspace:
+
+- `anyharness/crates/anyharness-lib/**` — the runtime library (the subject of
+  this doc)
+- `anyharness/crates/anyharness-contract/**` — wire types (separate crate)
+- `anyharness/crates/anyharness/**` — the binary shell
+- `anyharness/crates/anyharness-credential-discovery/**` — credential probing
+
+`proliferate-supervisor`, `proliferate-worker`, and the update protocol crate
+are separate programs with their own shapes and are out of scope here.
+
+## Goal
+
+The runtime is organized so that a path tells you what a file may do before
+you open it, and so that each endpoint's logic concentrates in exactly one
+readable file instead of smearing across layers.
+
+The explicit goals are:
+
+- make it predictable where translation, orchestration, decisions, effects,
+  state, and wiring live
+- make every use case read as one pipeline in one file: preconditions →
+  idempotency → repairs → resolve → decide → execute → compensate
+- make the hardest logic (launch strategies, fork recovery) pure and cheaply
+  testable with hand-built facts, no DB, no actors
+- make live state unreachable except by message — no locks, no shared mutable
+  state, one owner per session
+
+The three generative rules (see `guides/mental-model.md` for the full model):
+every function does exactly one of eight jobs; a path states its license; and
+exactly one layer per use case may see across concerns.
+
+## Target Shape
+
+```text
+anyharness-lib/src/
+  api/
+    http/
+      <resource>.rs            # handlers: auth → parse → ONE facade call → map error
+      <resource>_contract.rs   # wire <-> domain mappers (dep-less, sync)
+      <resource>_errors.rs     # one From<DomainError> for ApiError per domain
+      access.rs                # named auth assertions (the only auth layer)
+      error.rs                 # the single ApiError
+
+  domains/
+    <domain>/
+      mod.rs                   # exports only — a table of contents
+      model.rs                 # the domain vocabulary; everyone may import
+      service.rs | service/    # durable-only use cases (one file per use case)
+      runtime.rs | runtime/    # live/cross-domain use cases — earned, not default
+        <usecase>.rs           #   split impl blocks on one struct
+        <usecase>_policy.rs    #   pure decisions: no store, no clock, no uuid, no &self
+      store.rs | store/        # SQL + row structs; rows never escape
+      <concern>/               # named reusable sub-steps (prompt/, mcp_bindings/, ...)
+      live_ports.rs            # impls of live capability traits (when the domain feeds actors)
+
+  live/
+    <area>/                    # sessions, terminals
+      model.rs                 # doorstep vocabulary: SessionLaunch, commands, capability traits
+      handle.rs                # the phone: send_request (mpsc command + oneshot reply)
+      manager/                 # registry: start, dedupe, look up, inject
+      actor/                   # one task per session; select loop; sole owner of live state
+      sink/                    # event persistence + subscriber fan-out
+
+  adapters/                    # machine skills, product-blind — one grammar per skill:
+    <skill>/                   #   git, files, processes, hosting
+      service.rs               #   the entry struct
+      types.rs                 #   typed inputs/outputs + typed errors
+      operations/<verb>.rs     #   one file per verb (clone.rs, diff.rs, create_pr.rs, ...)
+  integrations/                # foreign-vocabulary protocol code, product-blind
+    acp/                       #   ACP doorstep (target home; on disk still src/acp/)
+    mcp/                       #   JSON-RPC framing, capability tokens, product MCP server
+    agent_cli/                 #   find/launch harness executables, model discovery
+  persistence/                 # sqlite pool + pragmas, ordered migrations, custom data migrations
+  app/                         # the wiring floor: every ::new(), in dependency order;
+                               #   per-knot wiring families (sessions.rs, product_mcp.rs)
+  observability/               # tracing spine: FlowHeaders→spans, resource gauges, phase markers
+```
+
+## What Goes Where
+
+Use the lowest layer that can own the use case.
+
+| Area | Path | Owns | Must Not Own |
+| --- | --- | --- | --- |
+| Wire shapes | `anyharness-contract/src/v1/**` | Request/response types, serde only. | Anything from the lib (compiler-enforced: separate crate, no path back). |
+| Handlers | `api/http/<resource>.rs` | Auth assertion, admission permits, wire parsing, one facade call, error mapping, wire response. | Business logic, store access, live internals, try-catch-everything. |
+| Edge mapping | `api/http/<resource>_contract.rs` | Dep-less, sync, decisionless wire↔domain mappers. | Fetches, clocks, `&state` — a mapper that fetches means the use case returned too little. |
+| Edge errors | `api/http/<resource>_errors.rs` | One `From<SurfaceError> for ApiError` per domain — the only place HTTP learns failures. | A second error mechanism (named debt: `agents_model_registry.rs` ProblemResponse). |
+| Domain vocabulary | `domains/<d>/model.rs` | Records, inputs, views, plans — domain models with role names. | Wire types, row types, 1:1 internal mirrors. |
+| Durable use cases | `domains/<d>/service*` | Orchestration over durable truth: own store, foreign stores (reads), adapters, pure concerns. | `live/**` (the named deviants: mobility, materialization), `api/**`, foreign-store writes. |
+| Live/cross-domain use cases | `domains/<d>/runtime*` | The facade. The pipeline per use case. The ONLY domain code importing `live/` (the valve). Other domains' facades. Wraps its own service. | Inline policy (extract `*_policy.rs`), contract types, duplicated service bodies (named debt: WorkspaceService/WorkspaceRuntime). |
+| Pure decisions | `*_policy.rs`, pure fns in concerns | Data-in/data-out rules; the Context and Plan pattern; the cheap tests. | IO, `&self`, `Utc::now()`, `Uuid::new_v4()`, store handles. |
+| Named concerns | `domains/<d>/<concern>/` | Reusable sub-steps two or more use cases need (prompt assembly, MCP bindings, route auth). | Loose junk-drawer files; a helper that serves one path stays inline. |
+| Durable state | `domains/<d>/store*` | SQL, row structs, two-tier composition (row fns take `&Connection`; surface fns own the tx). Returns domain models. | Row types escaping; business decisions. |
+| Live state | `live/<area>/**` | Managers, handles, actors, sinks. Actor state is task-local — reached only via typed commands. | Fetching. Domain services/stores (measured: zero non-test imports). If live needs a fact: add a launch-bundle field. If it needs a durable power: add a capability trait, wire in `app/`. |
+| Machine skills | `adapters/**` | How to run git, spawn processes, call `gh` — with typed errors. | What-for. Product knowledge (named debt: scratch.rs identity string, pr_status_cache policy engine). |
+| Foreign vocabulary | `integrations/**`, `acp/**` | Code judged against an external spec; protocol mechanics; foreign-wire↔our-shapes translation. | Product knowledge (measured: zero domain imports). |
+| Wiring | `app/**` | Every `::new()` on layer structs, in dependency order; capability-trait knots (store → ActorCapabilities); AppState. | Behavior. "Composition only" is the law and currently holds. |
+| Observability | one span per use-case entry | `#[tracing::instrument]` at the entry; phase timings as events. | Context threading through signatures; repeated field blocks. |
+
+## Entry Rules
+
+- **Per use case, not per domain.** A domain with a runtime still serves
+  durable-only endpoints straight from its service (sessions history and
+  launch options enter at `SessionService`; prompt and fork enter at
+  `SessionRuntime`).
+- **Runtime is earned** when a use case needs live truth or a second domain;
+  otherwise the service is the entry (textbook: `domains/repo_roots` has no
+  runtime at all).
+- **One use case, one entry.** Never half in runtime, half in the handler.
+  The failure mode is on record: WorkspaceService/WorkspaceRuntime duplicated
+  bodies (migration debt, target: one entry surface).
+- **The runtime wraps the service** (`SessionRuntime` holds
+  `Arc<SessionService>`); requests enter at the highest layer the use case
+  needs and delegate down.
+
+## Hard Rules
+
+- A layer is a struct; its field list is its access license, granted exactly
+  once in `app/`. No service locators, no globals, no construction outside
+  `app/`.
+- Anything pure is reachable by `use`; anything live (stores, gates, handles,
+  ciphers, clocks) is handed in as a dependency.
+- Live is reached only via handle mail (`send_request`: mpsc command +
+  oneshot reply). Nobody holds actor internals. The actor is the sole writer
+  of its state (busy, queue, pending interactions).
+- Live never fetches. Its whole world arrives at birth (`SessionLaunch`) and
+  its durable powers are the fields of `ActorCapabilities`, wired in `app/`.
+- Contexts are private: `pub(super)` at most, never exported, never stored.
+  Two use cases with overlapping Contexts keep separate Contexts.
+- Plans are data only; capabilities travel beside plans, never inside.
+- Policy files take facts, return decisions: no store, no clock, no uuid, no
+  `&self`. Minting (ids, timestamps) happens in execute, not decide.
+- Errors: one enum per surface, absorbed via `#[from]`; one `From` impl at
+  the edge; never typed → `anyhow`/string; expected outcomes are data
+  (`Option`, structured variants, empty plans), never strings.
+- Authorization at the edge (`api/http/access.rs` named assertions);
+  preconditions in the domain (gates, closed-state checks) — two questions,
+  never conflated.
+- Effects that change facts force a re-resolve (fork re-fetches the parent
+  after `ensure_live_session_handle`); never decide on stale data.
+- Compensation lives inline in the use-case body next to the success path,
+  never buried in `map_err`.
+- Roots hold ~5–9 entries; shrink by naming a concern folder, never by
+  merging files, never `helpers.rs`/`util.rs`.
+- Ceremony is earned (input struct >3 args; Context >2 truths; policy file >1
+  nontrivial rule; runtime layer only when crossing concerns). The four
+  invariants never disappear: auth assertion, no contract types past the
+  edge, errors via `From`, rows inside the store.
+
+## Dependency Direction
+
+Rows are "code living in X"; grades: **law** (compiler-enforced, unwritable),
+**holds** (convention, measured ~zero violations), **leaks** (convention with
+named debt).
+
+```text
+contract  -> (nothing in lib)                                LAW (crate edge)
+api       -> domain facades + models, contract, edge siblings HOLDS  (leak: 4× state.session_service.store(), WorkspaceStore::new in hosting.rs)
+runtime   -> own service/store, other facades, live/<area>    HOLDS  (valve rule: crate::live in domains/** only from runtime.rs / runtime/** / live_ports.rs; ~35/37 files clean)
+service   -> own store, foreign stores (READS), adapters      LEAKS  (mobility + materialization services hold live handles; foreign-store writes unguarded — pub methods, convention only)
+concerns  -> model.rs, other pure concerns                    HOLDS
+store     -> persistence                                      HOLDS  (drift: 2 SQL files in workspaces outside store/)
+live      -> domain SHAPES only (model.rs, pure prompt types) HOLDS AT ZERO (non-test)
+adapters  -> std, vendor libs                                 HOLDS AT ZERO (semantic leaks only)
+integrations -> the foreign spec                              HOLDS AT ZERO
+core domains -> product domains (cowork/reviews/goals/...)    HOLDS  (5 test-only imports; inverted via SessionExtension/observer traits)
+app       -> everything (wiring only)                         HOLDS
+nothing   -> api (upward)                                     HOLDS AT ZERO
+```
+
+Forbidden edges and their remedies:
+
+- `live ↛ stores/services` — add a launch-bundle field (facts) or a
+  capability trait wired in `app/` (powers).
+- `service ↛ live` — promote the use case to a runtime (the valve).
+- `policy ↛ anything effectful` — hand facts in via the Context.
+- `adapters/integrations ↛ domains` — invert: pass data or a callback in.
+- `core ↛ product domains` — implement a core-defined trait, wire in `app/`.
+
+## Automated Checks (enforced in CI today)
+
+All of these run in the `repo-shape` job of `.github/workflows/ci.yml` and
+fail the build. Run locally with `python3 scripts/<name>.py`.
+
+### `scripts/check_anyharness_boundaries.py`
+
+The import/usage checker over `anyharness-lib/src/**` (tests skipped).
+Currently **passing** with a 2-entry ratcheted allowlist
+(`scripts/anyharness_boundaries_allowlist.txt`, format:
+`RULE_ID path count reason`; counts may only go down — stale counts fail).
+
+| Rule ID | What it forbids |
+| --- | --- |
+| `API_LIVE_RUNTIME_IMPORT` | `api/**` importing `crate::live` or `crate::acp` |
+| `DOMAINS_API_IMPORT` | `domains/**` importing `crate::api` (no upward edges) |
+| `CORE_DOMAIN_PRODUCT_IMPORT` | core domains (`agents`, `repo_roots`, `sessions`, `workspaces`) importing product-surface domains (`cowork`, `mobility`, `plans`, `plugins`, `reviews`) |
+| `ADAPTERS_PRODUCT_DOMAIN_IMPORT` / `ADAPTERS_LIVE_RUNTIME_IMPORT` / `ADAPTERS_API_IMPORT` | `adapters/**` importing domains, live/acp, `crate::api`, or HTTP transport crates (`axum`, `http`, `tower`, `utoipa`, ...) |
+| `INTEGRATIONS_PRODUCT_IMPORT` / `INTEGRATIONS_API_IMPORT` | `integrations/**` importing domains, `crate::api`, or HTTP transport crates |
+| `PERSISTENCE_PRODUCT_IMPORT` / `PERSISTENCE_RUNTIME_IMPORT` / `PERSISTENCE_API_IMPORT` | `persistence/**` importing domains, live/acp, api, or HTTP transport crates |
+| `SESSION_STORE_API_IMPORT` / `SESSION_STORE_LIVE_IMPORT` | `domains/sessions/store/**` importing api or live |
+| `EVENT_SINK_API_IMPORT` / `EVENT_SINK_HTTP_TRANSPORT_IMPORT` | `live/sessions/event_sink/**` importing api or HTTP transport crates |
+| `LIVE_SESSION_PRIVATE_IMPORT` | importing `live/sessions/{actor,driver,event_sink,interactions,replay,background_work}` from outside `live/sessions/**` |
+| `SESSION_COMMAND_IMPORT` / `SESSION_COMMAND_USE` | importing or constructing `SessionCommand` outside `live/sessions/**` — the handle is the only door |
+| `LIVE_SESSION_COMMAND_TX_ACCESS` | touching `.command_tx` anywhere but `handle.rs` and `actor/**` |
+| `APP_STATE_IMPORT` | `AppState` referenced outside `api/**` and `app/**` |
+| `DOMAIN_CONTRACT_REQUEST_RESPONSE` | contract `*Request`/`*Response` types used in `domains/**` (2 allowlisted: goals + loops runtimes drive sidecar ext methods) |
+
+### Other CI checks covering this crate
+
+- `scripts/check_max_lines.py` — file-length ceiling; 38 anyharness paths
+  grandfathered in `scripts/max_lines_allowlist.txt` (ratcheted).
+- `scripts/check_anyharness_old_paths.py` — bans re-introducing the
+  pre-migration flat layout paths.
+- `scripts/check_session_mutation_admission.py` — session-mutating api
+  handlers must take an admission permit.
+
+### Rules NOT yet automated (checker gaps)
+
+Each fits the existing engine as roughly one function + allowlist seed:
+
+1. **The valve rule** — `crate::live` in `domains/**` legal only from
+   `runtime.rs`/`runtime/**`/`live_ports.rs`. Would flag exactly the two
+   known deviants (mobility, materialization).
+2. **`live ↛ domain stores/services`** — measured at zero non-test imports
+   today; adding the rule is a free ratchet that locks the doctrine in.
+3. **The api store-escape ban** — line pattern for `.store()` /
+   `*Store::new` under `api/`; seed the allowlist with the 5 known sites.
+4. **Policy purity** — `Utc::now`, `Uuid::new_v4`, `&self`, or store types
+   inside `*_policy.rs`.
+5. **Generalize the sessions-store rule** to every domain's `store/`
+   (api/live imports forbidden from any store module).
+6. **Broaden the contract ban** beyond `*Request`/`*Response` — any
+   `anyharness_contract` import in `domains/**`, seeded with the ~81
+   existing lines as allowlist, ratcheted down.
+
+Beyond the checker: leaves-first **crate splits** (`observability`,
+`persistence`, `adapters`, `integrations` are at zero violations, so
+extraction is free and upgrades those rows to compiler law — stop before
+per-domain crates), and a **visibility ratchet** (`pub(crate)`/`pub(super)`
+on Contexts, row types, and store mutation methods; a foreign-store-write
+ban becomes law once mutations are scoped to the owning domain).
+Judgment-only rules stay prose + review: proportionality, one entry per use
+case, Context privacy, no second doctrine.
+
+## Known Violations (the cleanup backlog)
+
+Everything we know breaks the rules above, worst first. "Caught?" says
+whether an automated check flags it today.
+
+| # | Violation | Rule broken | Caught? | Target |
+| --- | --- | --- | --- | --- |
+| 1 | `domains/mobility/service.rs` (~1.5k lines) holds `live::terminals::TerminalService` directly; interleaves fetch/effect per item in `destroy_source_workspace`, `preflight_workspace` | service ↛ live (the valve); resolve-then-execute | No (gap 1) | a mobility runtime valve |
+| 2 | `domains/materialization/service.rs` — live access without a runtime layer | service ↛ live | No (gap 1) | same promotion |
+| 3 | ~81 `anyharness_contract` import lines in `domains/**` (worst: `runtime_config` persists wire types as rows; `agents/auth` uses contract structs as its domain model) | no wire types past the edge | Partially — only `*Request`/`*Response` (2 allowlisted) | domain twins at the seams |
+| 4 | `state.session_service.store()` at 4 api sites + `WorkspaceStore::new` in `api/http/hosting.rs` | handlers call facades, never stores | No (gap 3) | facade methods |
+| 5 | `api/http/workspaces_lifecycle.rs` — retire state machine written in the handler (three copies) | no business logic in handlers | No (judgment) | lifecycle service in `domains/workspaces` |
+| 6 | `WorkspaceService`/`WorkspaceRuntime` — duplicated, diverged use-case bodies | one entry per use case | No (judgment) | one entry surface |
+| 7 | Foreign-store mutation methods are plain `pub`; cross-domain reads-only holds by review, not law | foreign stores are READS only | No (visibility ratchet) | `pub(crate)` scoping after crate split |
+| 8 | 2 SQL files in `domains/workspaces` outside `store/` | rows/SQL stay in the store | No (gap 5) | fold into `store/` |
+| 9 | `agents/` — undocumented federation of 8 subdomains, absent from the migration ledger | ledger truth | No | ledger truth-up, then promotion decisions |
+| 10 | Provider branches (`agent_kind` matches) in ~30 shared files (worst: `session_lifecycle.rs` 30, `user_input.rs` 21, `process.rs` 20) | branching begs for a capability trait | No (judgment) | harness-capabilities trait for the worst files only — proportionality, not a blanket rewrite |
+| 11 | `acp/` homeless at src root | filing grammar | No | move to `integrations/acp` |
+| 12 | `agents_model_registry.rs` ProblemResponse — a second error mechanism at the edge | one error doctrine per surface | No (judgment) | fold into `ApiError` |
+
+Deliberately retained, not debt: `live/terminals` uses the older
+lock-shared-registry doctrine rather than actors — proportionality says do
+not "fix" it.
+
+## Change Discipline
+
+- Reviewing existing code is "Building A New Use Case" (mental-model.md) run
+  in reverse: any deviation is either a named migration exception or a
+  finding — never silent.
+- New files are earned by the proportionality table, never speculative. No
+  empty folder trees, no one-file concern folders.
+- When splitting a file, preserve behavior first; improve behavior
+  separately.
+- Policy extractions come with policy tests (hand-built facts, no DB).
+- Never add a second doctrine where one exists (one error mechanism, one
+  entry surface per use case, one mapper per type pair).
+- Cite the in-repo exemplars in review: `api/http/sessions_errors.rs`,
+  `api/http/git_task.rs`, `acp/**`, `domains/artifacts` plan fns,
+  `domains/sessions/store`, `domains/sessions/deletion.rs`,
+  `app/product_mcp.rs`, `domains/repo_roots`.
