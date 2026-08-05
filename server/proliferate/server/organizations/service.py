@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
@@ -22,6 +22,8 @@ from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organization_member_auth_methods as member_auth_method_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.organization_records import (
+    CheckoutIntentRecord,
+    CheckoutIntentWithOrganizationRecord,
     InvitationRecord,
     MemberRecord,
     MembershipRecord,
@@ -225,6 +227,67 @@ async def list_organizations(
         user_id=actor_user.id,
         name=_default_organization_name(actor_user),
         logo_domain=derive_logo_domain_from_email(actor_user.email),
+    )
+
+
+async def ensure_pending_team_checkout_intent(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    *,
+    team_name: str,
+    logo_domain: str | None,
+    idempotency_key: str,
+    invite_emails: list[str],
+    expires_at: datetime,
+) -> CheckoutIntentWithOrganizationRecord:
+    await organization_store.acquire_membership_activation_lock(db, actor_user.id)
+    current = await organization_store.get_current_team_checkout_intent(db, actor_user.id)
+    if current is not None:
+        return current
+    return await organization_store.create_pending_team_checkout_intent(
+        db,
+        created_by_user_id=actor_user.id,
+        team_name=team_name,
+        logo_domain=logo_domain,
+        idempotency_key=idempotency_key,
+        invite_emails=invite_emails,
+        expires_at=expires_at,
+    )
+
+
+async def get_current_team_checkout_intent(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+) -> CheckoutIntentWithOrganizationRecord | None:
+    return await organization_store.get_current_team_checkout_intent(db, actor_user.id)
+
+
+async def bind_team_checkout_session(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+    stripe_checkout_session_id: str,
+    stripe_customer_id: str,
+    checkout_url: str,
+) -> CheckoutIntentRecord | None:
+    return await organization_store.bind_team_checkout_session(
+        db,
+        intent_id=intent_id,
+        stripe_checkout_session_id=stripe_checkout_session_id,
+        stripe_customer_id=stripe_customer_id,
+        checkout_url=checkout_url,
+    )
+
+
+async def cancel_team_checkout_intent(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    intent_id: UUID,
+) -> CheckoutIntentWithOrganizationRecord | None:
+    return await organization_store.cancel_team_checkout_intent(
+        db,
+        intent_id=intent_id,
+        created_by_user_id=actor_user.id,
     )
 
 
