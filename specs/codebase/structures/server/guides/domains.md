@@ -4,6 +4,10 @@ Backend product domains keep transport, orchestration, wire models, pure rules,
 authorization deps, errors, and non-HTTP entry points in predictable homes. A
 domain folder answers "what product area owns this?"
 
+The placements below are the rule for new and refactored code. Remaining
+inline authorization and boundary exceptions are migration debt, not alternate
+patterns that new code may copy.
+
 ## Ownership
 
 A `server/<domain>/` folder is one product area's home. It owns:
@@ -201,7 +205,10 @@ Allowed:
   any path/query params.
 - `db: AsyncSession = Depends(get_async_session)` for the lookup.
 - Calls to `db/store/**` for the resource lookup.
-- Composing `proliferate.permissions` factory deps (`require_org_role`, etc.).
+- Composing request dependencies from
+  [permissions.py](../../../../../server/proliferate/permissions.py), such as
+  `current_path_org_admin`, `current_owner_context`, or
+  `require_owner_role("owner", "admin")`.
 - Calls to `domain/policy.py` for state-based access checks.
 - Returning the resource as a frozen dataclass.
 
@@ -209,7 +216,8 @@ Banned:
 
 - Mutating writes. Access deps are read-only.
 - Business logic beyond access.
-- Inline authorization helpers (compose the `proliferate.permissions` factories).
+- Inline org-standing helpers (compose the applicable dependency from the
+  public `proliferate.permissions` seam).
 
 ### `errors.py`
 
@@ -374,8 +382,11 @@ The owning service runs its own policy, invariants, and audit.
 - A service calling another domain's store *write* function directly.
 - Importing a service's private helpers (`from cloud.workspaces.service
   import _internal`). Public functions only.
-- Cross-domain imports for auth infrastructure. Always use
-  `proliferate.permissions`.
+- Cross-domain imports for authorization infrastructure. Domain code uses the
+  public names re-exported by
+  [permissions.py](../../../../../server/proliferate/permissions.py), while
+  [auth/authorization.py](../../../../../server/proliferate/auth/authorization.py)
+  remains the dependency-free definition owner.
 - Two domains both writing the same ORM resource. The resource has one
   owning domain whose service is the write boundary.
 

@@ -33,8 +33,8 @@ server/proliferate/
   main.py · config.py · errors.py
   constants/<area>.py        # hardcoded policy values
   middleware/                # cross-cutting HTTP lifecycle
-  permissions.py             # org-authz factory deps + verdict types (leaf, imported everywhere)
-  auth/                      # actor authn deps + viewer/desktop/identity APIs + crypto utils
+  permissions.py             # request-time owner/org deps + public authorization seam
+  auth/                      # actor authn, dependency-free authz, identity/session/protocol leaf
   lib/                       # reusable cross-domain logic (leaf below domains)
     infra/ product/ capabilities/
   background/                # Celery substrate: app, config, beat, relay, tasks
@@ -91,7 +91,8 @@ ORM (db/models)  ──store returns──►  @dataclass(frozen=True)  ──mo
 api → service → store → models → SQLAlchemy        (nothing else imports SQLAlchemy)
 service → integrations / domain / other domains' public services (writes) or stores (reads)
 domain → pure (no FastAPI/SQLAlchemy/store/integrations/HTTP)
-auth/** → importable by every layer
+auth/authorization.py → dependency-free authorization vocabulary
+permissions.py → auth deps + stores/services needed for request owner/org context
 workers → call services, not stores; own the transaction at the entry
 ```
 
@@ -103,7 +104,8 @@ workers → call services, not stores; own the transaction at the entry
 ```text
 request → middleware → api handler
    Depends(current_product_user)        # authn (actor dep)
-   Depends(require_org_role(org_id, …)) # permissions.py: org standing → OwnerContext
+   Depends(current_path_org_admin)       # path org standing → CurrentOrgUser
+   Depends(require_owner_role("admin")) # selected owner standing → OwnerContext
    Depends(<domain>_user_can_<action>)  # access.py: lookup + check → resource or 403/404
    db = Depends(get_async_session)
    → service(db, …)
@@ -165,8 +167,8 @@ outbox row and let a worker do the call.
 ### `server/<domain>/access.py`
 - Resource-access route deps: look up the resource, check the user can touch it,
   return it (or raise 403/404). Read-only.
-- **Never:** mutating writes, business logic, inline authz helpers (compose the
-  `proliferate.permissions` factories).
+- **Never:** mutating writes, business logic, inline org-standing helpers
+  (compose the applicable dependency from `proliferate.permissions`).
 
 ### `server/<domain>/errors.py`
 - Domain error types subclassing the shared base, with a `code`. Types only.
@@ -190,17 +192,22 @@ outbox row and let a worker do the call.
   here; product domains orchestrate results.
 
 ### `auth/**` / `permissions.py`
-- Authorization is enforced at the endpoint via `Depends()`; services get a
-  pre-authorized context and run no auth checks. `auth/dependencies.py` owns
-  user actor deps (`current_active_user`, `current_product_user`); the Cloud
+- New and refactored paths enforce org standing and resource access at the
+  endpoint via `Depends()`; existing inline service checks remain migration
+  debt. [auth/dependencies.py](../../../../server/proliferate/auth/dependencies.py)
+  owns the user actor deps (`current_active_user`, `current_limited_user`,
+  `current_product_user`, and `current_organization_actor`); the Cloud
   runtime-worker domain owns its opaque-bearer `WorkerAuthContext` dependency.
-  `permissions.py` (server
-  root) = org-authorization factory deps (`require_org_role(org_id, roles)`,
-  `require_org_membership`) returning `OwnerContext`, plus `PolicyVerdict`. It is
-  a leaf importing neither `auth/**` nor `server/<domain>/**`; cross-domain authz
-  always comes from `proliferate.permissions`, never another service. `auth/` is
-  the authentication leaf for actor dependencies, credentials, sessions, provider
-  protocol, identity persistence, and crypto primitives. `server/accounts/**`
+  [auth/authorization.py](../../../../server/proliferate/auth/authorization.py)
+  owns dependency-free owner/policy vocabulary and the pure
+  `require_org_role(context, roles)` check.
+  [permissions.py](../../../../server/proliferate/permissions.py) re-exports that
+  vocabulary and owns request-time owner selection, membership resolution,
+  request/RLS context, `require_owner_role(*roles)`, and the `current_org_*` and
+  `current_path_org_*` dependencies. It is request composition, not an
+  import-free leaf. `auth/` remains below product domains for credentials,
+  sessions, provider protocol, identity persistence, and transport-neutral Auth
+  failures. [server/accounts/**](../../../../server/proliferate/server/accounts)
   owns the Desktop, Identity, and SSO account-entry surfaces and orchestration.
 
 ### `background/**` / `server/<domain>/worker/service.py`
