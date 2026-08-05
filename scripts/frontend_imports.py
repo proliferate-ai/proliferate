@@ -85,9 +85,10 @@ def _decode_javascript_string(raw: str) -> str:
 
 
 class _TypeScriptLexer:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, *, jsx: bool) -> None:
         self.text = text
         self.length = len(text)
+        self.jsx = jsx
         self.tokens: list[Token] = []
 
     def scan(self) -> list[Token]:
@@ -145,16 +146,39 @@ class _TypeScriptLexer:
             "throw",
             "case",
             "delete",
+            "do",
+            "else",
             "void",
             "yield",
             "await",
         }:
             return True
-        return (
+        if (
             len(self.tokens) >= 2
             and self.tokens[-2].value == "="
             and previous == ">"
-        )
+        ):
+            return True
+        if previous != ")":
+            return False
+
+        # A regex may begin the statement controlled by `if (...)`, `while
+        # (...)`, and similar constructs. A close parenthesis in an ordinary
+        # expression still leaves `/` as division.
+        depth = 0
+        for cursor in range(len(self.tokens) - 1, segment_token_start - 1, -1):
+            value = self.tokens[cursor].value
+            if value == ")":
+                depth += 1
+            elif value == "(":
+                depth -= 1
+                if depth == 0:
+                    return (
+                        cursor > segment_token_start
+                        and self.tokens[cursor - 1].value
+                        in {"for", "if", "switch", "while", "with"}
+                    )
+        return False
 
     def _scan_regex(self, index: int, lineno: int) -> tuple[int, int]:
         index += 1
@@ -376,7 +400,7 @@ class _TypeScriptLexer:
             if char == "/" and self._expression_can_start(segment_token_start):
                 index, lineno = self._scan_regex(index, lineno)
                 continue
-            if char == "<" and self._looks_like_jsx(index, segment_token_start):
+            if self.jsx and char == "<" and self._looks_like_jsx(index, segment_token_start):
                 index, lineno = self._scan_jsx(index, lineno)
                 continue
 
@@ -402,14 +426,14 @@ class _TypeScriptLexer:
         return index, lineno
 
 
-def tokenize_typescript(text: str) -> list[Token]:
+def tokenize_typescript(text: str, *, jsx: bool = True) -> list[Token]:
     """Return executable TypeScript tokens plus cooked string literals.
 
     Comments, regular-expression bodies, JSX display text, and template prose
     are skipped. Executable JSX and template interpolations are scanned.
     """
 
-    return _TypeScriptLexer(text).scan()
+    return _TypeScriptLexer(text, jsx=jsx).scan()
 
 
 def _statement_end(text: str, tokens: list[Token], source_index: int) -> int:
@@ -478,8 +502,72 @@ def _is_import_type_expression(tokens: list[Token], import_index: int) -> bool:
         equals_index = next(index for index, token in enumerate(prefix) if token.value == "=")
     except StopIteration:
         return False
+
+    # Type aliases may omit their semicolon. At top level, a newline ends the
+    # alias once the preceding type is complete; only explicit type-continuation
+    # syntax or an open delimiter carries the alias onto the next line.
+    continuation_after = {
+        "(",
+        "[",
+        "{",
+        "<",
+        "&",
+        "|",
+        "=",
+        ",",
+        ":",
+        "?",
+        "extends",
+        "infer",
+        "keyof",
+        "new",
+        "readonly",
+        "typeof",
+    }
+    continuation_before = {".", "[", "&", "|", ":", "?", "extends"}
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    alias_tokens = prefix[equals_index + 1 :]
+    for index, token in enumerate(alias_tokens):
+        if index:
+            previous = alias_tokens[index - 1]
+            if (
+                token.lineno > previous.lineno
+                and not nesting
+                and previous.value not in continuation_after
+                and token.value not in continuation_before
+            ):
+                return False
+        if token.value in {"(", "[", "{", "<"}:
+            nesting.append(token.value)
+        elif token.value in matching and nesting and nesting[-1] == matching[token.value]:
+            nesting.pop()
+
+    if alias_tokens:
+        previous = alias_tokens[-1]
+        import_token = tokens[import_index]
+        if (
+            import_token.lineno > previous.lineno
+            and not nesting
+            and previous.value not in continuation_after
+            and import_token.value not in continuation_before
+        ):
+            return False
     return not any(
-        token.value in {"class", "const", "enum", "function", "interface", "let", "var"}
+        token.value
+        in {
+            "class",
+            "const",
+            "default",
+            "enum",
+            "export",
+            "function",
+            "interface",
+            "let",
+            "return",
+            "throw",
+            "var",
+        }
         for token in prefix[equals_index + 1 :]
     )
 
@@ -487,8 +575,7 @@ def _is_import_type_expression(tokens: list[Token], import_index: int) -> bool:
 def collect_imports(path: Path, text: str) -> list[ImportStatement]:
     """Collect static imports, re-exports, and quoted dynamic imports."""
 
-    del path  # Kept in the API because callers naturally have the source path.
-    tokens = tokenize_typescript(text)
+    tokens = tokenize_typescript(text, jsx=path.suffix == ".tsx")
     imports: list[ImportStatement] = []
     index = 0
 

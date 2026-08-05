@@ -322,6 +322,61 @@ class ProductClientBoundaryTest(unittest.TestCase):
             [False, False, True, False, False, False, False],
         )
 
+    def test_shared_parser_distinguishes_control_flow_regex_from_division(self) -> None:
+        source = (
+            "if (ready) /import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
+            "while (ready) /import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
+            "for (; ready;) /import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
+            "do /import('apps\\/desktop\\/src\\/not-code')/.test(value); while (ready);\n"
+            "const divided = total / import('#product/components/Divided').default;\n"
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [(statement.source, statement.lineno) for statement in statements],
+            [("#product/components/Divided", 5)],
+        )
+
+    def test_shared_parser_keeps_ts_assertions_and_semicolonless_runtime_imports(self) -> None:
+        source = (
+            "const lazy = <unknown>import('#product/components/Lazy');\n"
+            "type TypeOnly =\n"
+            "  import('@proliferate/cloud-sdk-react').UseHook\n"
+            "type Previous = unknown\n"
+            "export default import('@proliferate/cloud-sdk-react')\n"
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in statements],
+            [
+                "#product/components/Lazy",
+                "@proliferate/cloud-sdk-react",
+                "@proliferate/cloud-sdk-react",
+            ],
+        )
+        self.assertEqual(
+            [statement.type_only for statement in statements],
+            [False, True, False],
+        )
+
+        runtime_expressions = [
+            "consume(import('@proliferate/cloud-sdk-react'))",
+            "runtime = import('@proliferate/cloud-sdk-react')",
+            "void [import('@proliferate/cloud-sdk-react')]",
+            "ready ? import('@proliferate/cloud-sdk-react') : fallback",
+        ]
+        for expression in runtime_expressions:
+            with self.subTest(expression=expression):
+                statements = collect_imports(
+                    Path("Sample.ts"),
+                    f"type Previous = unknown\n{expression}\n",
+                )
+                self.assertEqual(len(statements), 1)
+                self.assertFalse(statements[0].type_only)
+
     def test_every_forbidden_layer_pair_fails_for_alias_and_relative_imports(self) -> None:
         forbidden_pairs = sorted(check_module.PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES)
         files: dict[str, str] = {}
@@ -482,6 +537,32 @@ class ProductClientBoundaryTest(unittest.TestCase):
             [violation.lineno for violation in set_state],
             [2, 18, 21, 24, 29],
         )
+
+    def test_named_function_and_class_expressions_do_not_shadow_the_outer_import(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/expressions.ts": (
+                "import { useChatStore } from '#product/stores/chat/chat-store';\n"
+                "const functionExpression = function useChatStore() {\n"
+                "  useChatStore.setState({ innerFunctionName: true });\n"
+                "};\n"
+                "useChatStore.setState({ afterFunctionExpression: true });\n"
+                "const classExpression = class useChatStore {\n"
+                "  static update() {\n"
+                "    useChatStore.setState({ innerClassName: true });\n"
+                "  }\n"
+                "};\n"
+                "useChatStore.setState({ afterClassExpression: true });\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        set_state = [
+            violation
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+        ]
+        self.assertEqual([violation.lineno for violation in set_state], [5, 11])
 
     def test_query_hooks_pass_in_access_and_cache_but_fail_in_workflow_and_facade(self) -> None:
         files = {

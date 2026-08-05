@@ -248,9 +248,9 @@ def is_product_client_query_hook_owner(path: Path) -> bool:
     )
 
 
-def code_only_text(text: str) -> str:
+def code_only_text(text: str, *, jsx: bool) -> str:
     masked = ["\n" if char == "\n" else " " for char in text]
-    for token in tokenize_typescript(text):
+    for token in tokenize_typescript(text, jsx=jsx):
         if token.kind == "string":
             continue
         masked[token.start : token.end] = text[token.start : token.end]
@@ -322,7 +322,7 @@ def check_file(path: Path) -> list[Violation]:
     in_product_client = is_under(rel, "apps/packages/product-client/src/")
     text = path.read_text()
     scan_lines = (
-        code_only_text(text).splitlines()
+        code_only_text(text, jsx=path.suffix == ".tsx").splitlines()
         if in_product_client
         else text.splitlines()
     )
@@ -606,6 +606,34 @@ def _binding_names_in_parameter_tokens(
     return rebound
 
 
+def _is_named_expression(tokens: list[Token], keyword_index: int) -> bool:
+    """Whether `function`/`class Name` introduces an inner-only name."""
+
+    cursor = keyword_index - 1
+    if cursor >= 0 and tokens[cursor].value == "async":
+        cursor -= 1
+    if cursor < 0:
+        return False
+    if (
+        tokens[cursor].value == ">"
+        and cursor > 0
+        and tokens[cursor - 1].value == "="
+    ):
+        return True
+    return tokens[cursor].value in {
+        "(",
+        ",",
+        ":",
+        "=",
+        "[",
+        "?",
+        "await",
+        "new",
+        "return",
+        "yield",
+    }
+
+
 def _function_shadow_ranges(
     tokens: list[Token], bindings: set[str]
 ) -> list[tuple[int, int, set[str]]]:
@@ -613,10 +641,17 @@ def _function_shadow_ranges(
     braces, _ = _matching_token_pairs(tokens, "{", "}")
     ranges: list[tuple[int, int, set[str]]] = []
 
-    def add_range(param_start: int, param_end: int, body_start: int, body_end: int) -> None:
+    def add_range(
+        param_start: int,
+        param_end: int,
+        body_start: int,
+        body_end: int,
+        extra_rebound: set[str] | None = None,
+    ) -> None:
         rebound = _binding_names_in_parameter_tokens(
             tokens[param_start:param_end], bindings
         )
+        rebound.update(extra_rebound or set())
         if rebound:
             ranges.append((body_start, body_end, rebound))
 
@@ -635,7 +670,46 @@ def _function_shadow_ranges(
         body_open = close_index + 1
         if tokens[body_open].value != "{" or body_open not in braces:
             continue
-        add_range(open_index + 1, close_index, body_open + 1, braces[body_open])
+        inner_name = (
+            tokens[index + 1].value
+            if token.value == "function"
+            and index + 1 < open_index
+            and tokens[index + 1].kind == "identifier"
+            and tokens[index + 1].value in bindings
+            and _is_named_expression(tokens, index)
+            else None
+        )
+        add_range(
+            open_index + 1,
+            close_index,
+            body_open + 1,
+            braces[body_open],
+            {inner_name} if inner_name is not None else None,
+        )
+
+    # A named class expression binds its name only inside the class body.
+    for index, token in enumerate(tokens):
+        if (
+            token.value != "class"
+            or index + 1 >= len(tokens)
+            or tokens[index + 1].kind != "identifier"
+            or tokens[index + 1].value not in bindings
+            or not _is_named_expression(tokens, index)
+        ):
+            continue
+        body_open = index + 2
+        while body_open < len(tokens) and tokens[body_open].value != "{":
+            if tokens[body_open].value == ";":
+                break
+            body_open += 1
+        if body_open in braces:
+            ranges.append(
+                (
+                    body_open + 1,
+                    braces[body_open],
+                    {tokens[index + 1].value},
+                )
+            )
 
     # Arrow functions, including a single bare parameter.
     for arrow_index, token in enumerate(tokens):
@@ -757,6 +831,7 @@ def _declares_binding_in_scope(
                 index + 1 < len(tokens)
                 and tokens[index + 1].kind == "identifier"
                 and tokens[index + 1].value == binding
+                and not _is_named_expression(tokens, index)
             ):
                 return True
             continue
@@ -787,10 +862,12 @@ def _declares_binding_in_scope(
     return False
 
 
-def member_call_lines(text: str, bindings: set[str], member: str) -> list[int]:
+def member_call_lines(
+    text: str, bindings: set[str], member: str, *, jsx: bool
+) -> list[int]:
     if not bindings:
         return []
-    tokens = tokenize_typescript(text)
+    tokens = tokenize_typescript(text, jsx=jsx)
     _, brace_reverse = _matching_token_pairs(tokens, "{", "}")
     shadow_ranges = _function_shadow_ranges(tokens, bindings)
     lines: list[int] = []
@@ -821,8 +898,8 @@ def member_call_lines(text: str, bindings: set[str], member: str) -> list[int]:
     return lines
 
 
-def direct_call_lines(text: str, binding: str) -> list[int]:
-    tokens = tokenize_typescript(text)
+def direct_call_lines(text: str, binding: str, *, jsx: bool) -> list[int]:
+    tokens = tokenize_typescript(text, jsx=jsx)
     return [
         token.lineno
         for index, token in enumerate(tokens[:-1])
@@ -1005,7 +1082,10 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                     )
                 )
 
-    for lineno in member_call_lines(text, imported_store_bindings, "setState"):
+    jsx = path.suffix == ".tsx"
+    for lineno in member_call_lines(
+        text, imported_store_bindings, "setState", jsx=jsx
+    ):
         violations.append(
             Violation(
                 "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER",
@@ -1016,7 +1096,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         )
 
     if source_layer == "stores":
-        for lineno in direct_call_lines(text, "fetch"):
+        for lineno in direct_call_lines(text, "fetch", jsx=jsx):
             violations.append(
                 Violation(
                     "STORE_RUNTIME_ACCESS",
@@ -1026,7 +1106,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                 )
             )
 
-    for token in tokenize_typescript(text):
+    for token in tokenize_typescript(text, jsx=jsx):
         if token.kind == "identifier" and token.value.startswith("__TAURI"):
             violations.append(
                 Violation(
