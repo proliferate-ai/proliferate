@@ -458,104 +458,61 @@ def check_file(path: Path) -> list[Violation]:
 
 
 def statement_identifiers(statement: ImportStatement) -> set[str]:
-    return set(statement.imported_names) | {
-        token.value
-        for token in tokenize_typescript(statement.statement)
-        if token.kind == "identifier"
-    }
+    """Return the module's exported names, not their local aliases.
+
+    Identifier-sensitive rules describe external capabilities.  A local alias
+    with the same spelling as a forbidden export is not that capability, while
+    renaming the real export must not hide it.  The shared import parser owns
+    that distinction for static, re-export, and dynamic forms.
+    """
+
+    return set(statement.imported_names)
 
 
 def imported_bindings(statement: ImportStatement) -> set[str]:
-    tokens = tokenize_typescript(statement.statement)
-    bindings = set(statement.local_bindings)
-    if not tokens or tokens[0].value != "import":
-        return bindings
-    try:
-        from_index = next(
-            index
-            for index, token in enumerate(tokens[:-1])
-            if token.value == "from" and tokens[index + 1].kind == "string"
-        )
-    except StopIteration:
-        return bindings
-
-    clause = tokens[1:from_index]
-    if clause and clause[0].value == "type":
-        clause = clause[1:]
-    if clause and clause[0].kind == "identifier":
-        bindings.add(clause[0].value)
-
-    for index, token in enumerate(clause):
-        if token.value == "*" and index + 2 < len(clause) and clause[index + 1].value == "as":
-            bindings.add(clause[index + 2].value)
-
-    try:
-        open_index = next(index for index, token in enumerate(clause) if token.value == "{")
-        close_index = max(index for index, token in enumerate(clause) if token.value == "}")
-    except (StopIteration, ValueError):
-        return bindings
-
-    current: list = []
-    entries: list[list] = []
-    for token in clause[open_index + 1 : close_index]:
-        if token.value == ",":
-            if current:
-                entries.append(current)
-            current = []
-        else:
-            current.append(token)
-    if current:
-        entries.append(current)
-
-    for entry in entries:
-        if entry and entry[0].value == "type":
-            entry = entry[1:]
-        if not entry:
-            continue
-        alias_index = next(
-            (index for index, token in enumerate(entry) if token.value == "as"),
-            None,
-        )
-        if alias_index is not None and alias_index + 1 < len(entry):
-            bindings.add(entry[alias_index + 1].value)
-        elif entry[0].kind == "identifier":
-            bindings.add(entry[0].value)
-    return bindings
+    return set(statement.local_bindings)
 
 
 def namespace_bindings(statement: ImportStatement) -> set[str]:
-    bindings = set(statement.namespace_bindings)
-    tokens = tokenize_typescript(statement.statement)
-    for index, token in enumerate(tokens):
-        if (
-            token.value == "*"
-            and index + 2 < len(tokens)
-            and tokens[index + 1].value == "as"
-            and tokens[index + 2].kind == "identifier"
-        ):
-            bindings.add(tokens[index + 2].value)
-    return bindings
+    return set(statement.namespace_bindings)
 
 
 def namespace_member_identifiers(
-    text: str, bindings: set[str], *, jsx: bool
+    text: str,
+    bindings: set[str],
+    *,
+    jsx: bool,
+    tracked_import_starts: dict[str, set[int]] | None = None,
 ) -> set[str]:
     if not bindings:
         return set()
     tokens = tokenize_typescript(text, jsx=jsx)
+    _, brace_reverse = _matching_token_pairs(tokens, "{", "}")
+    _, closing_parens = _matching_token_pairs(tokens, "(", ")")
+    shadow_ranges = _function_shadow_ranges(tokens, bindings)
     members: set[str] = set()
-    for index, token in enumerate(tokens[:-2]):
+    for index, token in enumerate(tokens):
         if token.kind != "identifier" or token.value not in bindings:
             continue
-        cursor = index + 1
-        if tokens[cursor].value == "?" and cursor + 1 < len(tokens):
-            cursor += 1
-        if (
-            cursor + 1 < len(tokens)
-            and tokens[cursor].value == "."
-            and tokens[cursor + 1].kind == "identifier"
+        if not _is_imported_binding_occurrence(
+            tokens,
+            index,
+            shadow_ranges,
+            brace_reverse,
+            (tracked_import_starts or {}).get(token.value, set()),
         ):
-            members.add(tokens[cursor + 1].value)
+            continue
+        member_cursor = _transparent_receiver_end(
+            tokens, index + 1, index, closing_parens
+        )
+        member = (
+            _member_name_after(tokens, member_cursor)
+            if member_cursor is not None
+            else None
+        )
+        if member is not None:
+            members.add(member[0])
+        members.update(_namespace_destructure_names(tokens, index))
     return members
 
 
@@ -575,6 +532,38 @@ def _matching_token_pairs(
             forward[open_index] = index
             reverse[index] = open_index
     return forward, reverse
+
+
+def _top_level_token_index(tokens: list[Token], value: str) -> int | None:
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    for index, token in enumerate(tokens):
+        if token.value in {"(", "[", "{", "<"}:
+            nesting.append(token.value)
+        elif token.value in matching and nesting and nesting[-1] == matching[token.value]:
+            nesting.pop()
+        elif not nesting and token.value == value:
+            return index
+    return None
+
+
+def _split_top_level_tokens(tokens: list[Token], delimiter: str) -> list[list[Token]]:
+    entries: list[list[Token]] = []
+    current: list[Token] = []
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    for token in tokens:
+        if token.value in {"(", "[", "{", "<"}:
+            nesting.append(token.value)
+        elif token.value in matching and nesting and nesting[-1] == matching[token.value]:
+            nesting.pop()
+        if token.value == delimiter and not nesting:
+            entries.append(current)
+            current = []
+        else:
+            current.append(token)
+    entries.append(current)
+    return entries
 
 
 def _binding_names_in_pattern(tokens: list[Token], bindings: set[str]) -> set[str]:
@@ -601,20 +590,34 @@ def _binding_names_in_pattern(tokens: list[Token], bindings: set[str]) -> set[st
     opener = first.value
     closer = "}" if opener == "{" else "]"
     depth = 1
-    end = cursor + 1
-    rebound: set[str] = set()
-    while end < len(tokens) and depth:
-        token = tokens[end]
+    close_index = cursor + 1
+    while close_index < len(tokens) and depth:
+        token = tokens[close_index]
         if token.value == opener:
             depth += 1
         elif token.value == closer:
             depth -= 1
-        elif token.kind == "identifier" and token.value in bindings:
-            next_value = tokens[end + 1].value if end + 1 < len(tokens) else None
-            # `{ sourceName: localName }` does not bind the property key.
-            if not (opener == "{" and next_value == ":"):
-                rebound.add(token.value)
-        end += 1
+        close_index += 1
+    if depth:
+        return set()
+
+    entries = _split_top_level_tokens(tokens[cursor + 1 : close_index - 1], ",")
+    rebound: set[str] = set()
+    for entry in entries:
+        while entry and entry[0].value == ".":
+            entry = entry[1:]
+        if not entry:
+            continue
+
+        equals_index = _top_level_token_index(entry, "=")
+        binding_part = entry[:equals_index] if equals_index is not None else entry
+        if opener == "{":
+            colon_index = _top_level_token_index(binding_part, ":")
+            if colon_index is not None:
+                # Object property keys—including computed keys—are reads, not
+                # bindings.  Only the pattern to the right of `:` can shadow.
+                binding_part = binding_part[colon_index + 1 :]
+        rebound.update(_binding_names_in_pattern(binding_part, bindings))
     return rebound
 
 
@@ -982,87 +985,274 @@ def _declares_binding_in_scope(
     return False
 
 
+def _is_property_identifier(tokens: list[Token], index: int) -> bool:
+    return (index > 0 and tokens[index - 1].value == ".") or (
+        index > 1
+        and tokens[index - 2].value == "?"
+        and tokens[index - 1].value == "."
+    )
+
+
+def _is_imported_binding_occurrence(
+    tokens: list[Token],
+    index: int,
+    shadow_ranges: list[tuple[int, int, set[str]]],
+    brace_reverse: dict[int, int],
+    tracked_import_starts: set[int],
+) -> bool:
+    token = tokens[index]
+    if token.kind != "identifier" or _is_property_identifier(tokens, index):
+        return False
+    if any(
+        start <= index < end and token.value in rebound
+        for start, end, rebound in shadow_ranges
+    ):
+        return False
+    return not _declares_binding_in_scope(
+        tokens,
+        token.value,
+        index,
+        brace_reverse,
+        tracked_import_starts,
+    )
+
+
+def _member_name_after(
+    tokens: list[Token], cursor: int
+) -> tuple[str, int] | None:
+    """Return a statically named member and the token after its access."""
+
+    if cursor < len(tokens) and tokens[cursor].value == "!":
+        cursor += 1
+    optional = (
+        cursor + 1 < len(tokens)
+        and tokens[cursor].value == "?"
+        and tokens[cursor + 1].value == "."
+    )
+    if optional:
+        cursor += 2
+    elif cursor < len(tokens) and tokens[cursor].value == ".":
+        cursor += 1
+
+    if cursor < len(tokens) and tokens[cursor].kind == "identifier":
+        # An identifier member requires a preceding dot/optional-chain dot.
+        if optional or (cursor > 0 and tokens[cursor - 1].value == "."):
+            return tokens[cursor].value, cursor + 1
+        return None
+    if cursor + 1 < len(tokens) and tokens[cursor].value == "[":
+        name = tokens[cursor + 1]
+        if (
+            name.kind == "string"
+            and cursor + 2 < len(tokens)
+            and tokens[cursor + 2].value == "]"
+        ):
+            return name.value, cursor + 3
+    return None
+
+
+def _namespace_destructure_names(tokens: list[Token], index: int) -> set[str]:
+    """Return exports selected from an imported namespace at this occurrence."""
+
+    after = index + 1
+    while after < len(tokens) and tokens[after].value in {"!", ")"}:
+        after += 1
+    if after < len(tokens) and tokens[after].value != ";":
+        # `const { useMutation } = Query.options` destructures a property value,
+        # not the imported namespace itself.
+        return set()
+
+    cursor = index - 1
+    while cursor >= 0 and tokens[cursor].value == "(":
+        cursor -= 1
+    if cursor < 1 or tokens[cursor].value != "=" or tokens[cursor - 1].value != "}":
+        return set()
+
+    _, reverse = _matching_token_pairs(tokens, "{", "}")
+    close_index = cursor - 1
+    open_index = reverse.get(close_index)
+    if open_index is None:
+        return set()
+
+    names: set[str] = set()
+    for entry in _split_top_level_tokens(tokens[open_index + 1 : close_index], ","):
+        while entry and entry[0].value == ".":
+            entry = entry[1:]
+        if not entry:
+            continue
+        equals_index = _top_level_token_index(entry, "=")
+        binding_part = entry[:equals_index] if equals_index is not None else entry
+        colon_index = _top_level_token_index(binding_part, ":")
+        key = binding_part[:colon_index] if colon_index is not None else binding_part
+        if key and key[0].kind in {"identifier", "string"}:
+            names.add(key[0].value)
+        elif (
+            len(key) == 3
+            and key[0].value == "["
+            and key[1].kind == "string"
+            and key[2].value == "]"
+        ):
+            names.add(key[1].value)
+    return names
+
+
+def _parenthesis_is_grouping(tokens: list[Token], open_index: int) -> bool:
+    if open_index == 0:
+        return True
+    previous = tokens[open_index - 1]
+    if previous.kind == "identifier":
+        return previous.value in {
+            "await",
+            "case",
+            "delete",
+            "do",
+            "else",
+            "return",
+            "throw",
+            "typeof",
+            "void",
+            "yield",
+        }
+    return previous.value not in {")", "]", "}", "."}
+
+
+def _skip_type_assertion(
+    tokens: list[Token],
+    cursor: int,
+    receiver_index: int,
+    closing_parens: dict[int, int],
+) -> int | None:
+    """Skip an `as`/`satisfies` type up to its receiver's grouping close."""
+
+    if cursor >= len(tokens) or tokens[cursor].value not in {"as", "satisfies"}:
+        return cursor
+    cursor += 1
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    saw_conditional_extends = False
+    while cursor < len(tokens):
+        value = tokens[cursor].value
+        if value == ")" and not nesting:
+            open_index = closing_parens.get(cursor)
+            if open_index is not None and open_index < receiver_index:
+                return cursor
+            return None
+        if value in {",", ";"} and not nesting:
+            return None
+        if not nesting:
+            if value == "extends":
+                saw_conditional_extends = True
+            elif value in {"instanceof", "in", "+", "-", "*", "/", "%", "^"}:
+                return None
+            elif value in {"?", ":"} and not saw_conditional_extends:
+                return None
+            elif (
+                value in {"&", "|"}
+                and cursor + 1 < len(tokens)
+                and tokens[cursor + 1].value == value
+            ):
+                return None
+            elif value == "=" and (
+                cursor + 1 >= len(tokens) or tokens[cursor + 1].value != ">"
+            ):
+                return None
+        if value in {"(", "[", "{", "<"}:
+            nesting.append(value)
+        elif value in matching and nesting and nesting[-1] == matching[value]:
+            nesting.pop()
+        cursor += 1
+    return None
+
+
+def _transparent_receiver_end(
+    tokens: list[Token],
+    cursor: int,
+    receiver_index: int,
+    closing_parens: dict[int, int],
+) -> int | None:
+    """Consume wrappers that preserve the value of a binding expression."""
+
+    while cursor < len(tokens):
+        while cursor < len(tokens) and tokens[cursor].value == "!":
+            cursor += 1
+        if cursor < len(tokens) and tokens[cursor].value in {"as", "satisfies"}:
+            cursor = _skip_type_assertion(
+                tokens, cursor, receiver_index, closing_parens
+            )
+            if cursor is None:
+                return None
+            continue
+        if cursor < len(tokens) and tokens[cursor].value == ")":
+            open_index = closing_parens.get(cursor)
+            if open_index is None or not _parenthesis_is_grouping(tokens, open_index):
+                return None
+            cursor += 1
+            continue
+        break
+    return cursor
+
+
+def _member_call_after(
+    tokens: list[Token], cursor: int, member: str
+) -> bool:
+    access = _member_name_after(tokens, cursor)
+    if access is None or access[0] != member:
+        return False
+    call_cursor = access[1]
+    while call_cursor < len(tokens) and tokens[call_cursor].value == "!":
+        call_cursor += 1
+    if (
+        call_cursor + 1 < len(tokens)
+        and tokens[call_cursor].value == "?"
+        and tokens[call_cursor + 1].value == "."
+    ):
+        call_cursor += 2
+    return call_cursor < len(tokens) and tokens[call_cursor].value == "("
+
+
 def member_call_lines(
     text: str,
     bindings: set[str],
     member: str,
     *,
     jsx: bool,
+    namespace_bindings: set[str] | None = None,
     tracked_import_starts: dict[str, set[int]] | None = None,
 ) -> list[int]:
     if not bindings:
         return []
     tokens = tokenize_typescript(text, jsx=jsx)
     _, brace_reverse = _matching_token_pairs(tokens, "{", "}")
+    _, closing_parens = _matching_token_pairs(tokens, "(", ")")
     shadow_ranges = _function_shadow_ranges(tokens, bindings)
     lines: list[int] = []
     for index, token in enumerate(tokens):
         if token.kind != "identifier" or token.value not in bindings:
             continue
-        # `fixture.store.setState()` and `fixture?.store.setState()` are calls
-        # on a property, not on the imported binding with the same spelling.
-        if index > 0 and tokens[index - 1].value == ".":
-            continue
-        if index > 1 and tokens[index - 2].value == "?" and tokens[index - 1].value == ".":
-            continue
-
-        # Parentheses and optional/non-null chaining do not change the receiver
-        # binding: `(store).setState`, `store?.setState`, and
-        # `(store)!.setState` all still target the imported store.
-        preceding_parens = 0
-        cursor = index - 1
-        while cursor >= 0 and tokens[cursor].value == "(":
-            preceding_parens += 1
-            cursor -= 1
-        if (
-            preceding_parens
-            and cursor >= 0
-            and (
-                tokens[cursor].kind == "identifier"
-                or tokens[cursor].value in {")", "]"}
-            )
-        ):
-            continue
-        cursor = index + 1
-        closed_parens = 0
-        while cursor < len(tokens) and tokens[cursor].value == ")":
-            closed_parens += 1
-            cursor += 1
-        if closed_parens != preceding_parens:
-            continue
-        if cursor < len(tokens) and tokens[cursor].value == "!":
-            cursor += 1
-        if cursor < len(tokens) and tokens[cursor].value == "?":
-            cursor += 1
-        if (
-            cursor + 2 >= len(tokens)
-            or tokens[cursor].value != "."
-            or tokens[cursor + 1].value != member
-        ):
-            continue
-        call_cursor = cursor + 2
-        if (
-            call_cursor + 1 < len(tokens)
-            and tokens[call_cursor].value == "?"
-            and tokens[call_cursor + 1].value == "."
-        ):
-            call_cursor += 2
-        if call_cursor >= len(tokens) or tokens[call_cursor].value != "(":
-            continue
-        if any(
-            start <= index < end and token.value in rebound
-            for start, end, rebound in shadow_ranges
-        ):
-            continue
-        if _declares_binding_in_scope(
+        if not _is_imported_binding_occurrence(
             tokens,
-            token.value,
             index,
+            shadow_ranges,
             brace_reverse,
             (tracked_import_starts or {}).get(token.value, set()),
         ):
             continue
-        lines.append(token.lineno)
+        cursor = _transparent_receiver_end(
+            tokens, index + 1, index, closing_parens
+        )
+        if cursor is not None and _member_call_after(tokens, cursor, member):
+            lines.append(token.lineno)
+            continue
+
+        if token.value not in (namespace_bindings or set()):
+            continue
+        namespace_member = _member_name_after(tokens, index + 1)
+        if namespace_member is None:
+            continue
+        cursor = _transparent_receiver_end(
+            tokens, namespace_member[1], index, closing_parens
+        )
+        if cursor is not None and _member_call_after(tokens, cursor, member):
+            lines.append(token.lineno)
     return lines
 
 
@@ -1111,7 +1301,13 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         else None
     )
     imported_store_bindings: set[str] = set()
+    imported_store_namespace_bindings: set[str] = set()
     imported_store_binding_starts: dict[str, set[int]] = defaultdict(set)
+    namespace_binding_starts: dict[str, set[int]] = defaultdict(set)
+
+    for statement in statements:
+        for binding in namespace_bindings(statement):
+            namespace_binding_starts[binding].add(statement.start)
 
     for statement in statements:
         identifiers = statement_identifiers(statement)
@@ -1120,6 +1316,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                 text,
                 namespace_bindings(statement),
                 jsx=jsx,
+                tracked_import_starts=namespace_binding_starts,
             )
         )
         if is_product_client_forbidden_import(path, statement.source):
@@ -1155,6 +1352,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         if target_layer == "stores":
             statement_bindings = imported_bindings(statement)
             imported_store_bindings.update(statement_bindings)
+            imported_store_namespace_bindings.update(namespace_bindings(statement))
             if statement.local_bindings:
                 for binding in statement_bindings:
                     imported_store_binding_starts[binding].add(statement.start)
@@ -1268,6 +1466,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         imported_store_bindings,
         "setState",
         jsx=jsx,
+        namespace_bindings=imported_store_namespace_bindings,
         tracked_import_starts=imported_store_binding_starts,
     ):
         violations.append(

@@ -460,6 +460,16 @@ class ProductClientBoundaryTest(unittest.TestCase):
             'left < (await import("pkg")).default > (right)',
             'function f(): Result { return import("pkg") }',
             'const f = (): Result => import("pkg")',
+            'consume(ready ? current : import("pkg"))\nconst later = () => value',
+            'consume(ready ? current : import("pkg"))\nfunction later() {}',
+            'const x = (value as Shape) ? current : import("pkg")',
+            'const x = value satisfies Shape ? current : import("pkg")',
+            'const x = { as: import("pkg") }',
+            'const x = { satisfies: import("pkg") }',
+            'object.as(import("pkg"))',
+            'left < import("pkg") > (right)',
+            'left < import("pkg").then(load) > (right)',
+            'import type, { Value } from "pkg"',
         ]
         for runtime_source in runtime_expressions:
             with self.subTest(runtime_source=runtime_source):
@@ -479,12 +489,131 @@ class ProductClientBoundaryTest(unittest.TestCase):
             'const a = 1, b: import("pkg").Thing = value',
             'const value = source satisfies Readonly<import("pkg").Thing>',
             'const value = source as { load: import("pkg").Thing }',
+            'function read(): { value: import("pkg").Thing } {}',
+            'const read = (): { value: import("pkg").Thing } => value',
+            'function read(cb: (value: string) => import("pkg").Thing) {}',
+            'class Child extends Base<import("pkg").Thing> {}',
+            'tag<import("pkg").Thing>`value`',
+            'type Fn = (value: string)\n=> import("pkg").Thing',
+            'type Fn = (value: string) =>\nimport("pkg").Thing',
         ]
         for type_source in type_expressions:
             with self.subTest(type_source=type_source):
                 statements = collect_imports(Path("Sample.ts"), type_source)
                 self.assertEqual(len(statements), 1)
                 self.assertTrue(statements[0].type_only)
+
+    def test_shared_parser_preserves_semantic_static_and_dynamic_import_facts(self) -> None:
+        source = (
+            'import defaultName, { useQuery as query, type Shape, '
+            'mutationOptions as useMutation, "getAnyHarnessClient" as make } '
+            'from "pkg-a";\n'
+            'import * as Namespace from "pkg-b";\n'
+            'export { useMutation as mutation } from "pkg-c";\n'
+            'export * from "pkg-d";\n'
+            'import Equals = require("pkg-e");\n'
+            'const { useQuery: dynamicQuery, other = fallback, ...rest } = '
+            'await import("pkg-f");\n'
+            'const dynamicNamespace: Module = await import("pkg-g");\n'
+            'const client = (await import("pkg-h")).getAnyHarnessClient;\n'
+            'import("pkg-i").then(({ useInfiniteQuery: query }) => query());\n'
+        )
+
+        statements = {
+            statement.source: statement
+            for statement in collect_imports(Path("Sample.ts"), source)
+        }
+
+        self.assertEqual(
+            statements["pkg-a"].imported_names,
+            frozenset(
+                {
+                    "default",
+                    "useQuery",
+                    "Shape",
+                    "mutationOptions",
+                    "getAnyHarnessClient",
+                }
+            ),
+        )
+        self.assertEqual(
+            statements["pkg-a"].local_bindings,
+            frozenset({"defaultName", "query", "Shape", "useMutation", "make"}),
+        )
+        self.assertEqual(statements["pkg-b"].imported_names, frozenset({"*"}))
+        self.assertEqual(
+            statements["pkg-b"].namespace_bindings,
+            frozenset({"Namespace"}),
+        )
+        self.assertEqual(statements["pkg-c"].imported_names, frozenset({"useMutation"}))
+        self.assertFalse(statements["pkg-c"].local_bindings)
+        self.assertEqual(statements["pkg-d"].imported_names, frozenset({"*"}))
+        self.assertEqual(
+            statements["pkg-e"].namespace_bindings,
+            frozenset({"Equals"}),
+        )
+        self.assertEqual(
+            statements["pkg-f"].imported_names,
+            frozenset({"*", "useQuery", "other"}),
+        )
+        self.assertEqual(
+            statements["pkg-f"].local_bindings,
+            frozenset({"dynamicQuery", "other", "rest"}),
+        )
+        self.assertEqual(
+            statements["pkg-f"].namespace_bindings,
+            frozenset({"rest"}),
+        )
+        self.assertEqual(
+            statements["pkg-g"].namespace_bindings,
+            frozenset({"dynamicNamespace"}),
+        )
+        self.assertEqual(
+            statements["pkg-h"].imported_names,
+            frozenset({"getAnyHarnessClient"}),
+        )
+        self.assertEqual(
+            statements["pkg-h"].local_bindings,
+            frozenset({"client"}),
+        )
+        self.assertEqual(
+            statements["pkg-i"].imported_names,
+            frozenset({"useInfiniteQuery"}),
+        )
+
+    def test_shared_parser_skips_regex_after_declaration_and_catch_blocks(self) -> None:
+        source = (
+            "function read(): Result {}\n"
+            "/import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
+            "class Reader extends mixin(Base) {}\n"
+            "/import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
+            "try {} catch (error) {}\n"
+            "/import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
+            'const functionValue = function() {} / import("pkg-function");\n'
+            'const classValue = class {} / import("pkg-class");\n'
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in statements],
+            ["pkg-function", "pkg-class"],
+        )
+
+    def test_shared_parser_recurses_dynamic_options_and_requires_a_literal_argument(self) -> None:
+        source = (
+            'import("outer-a", import("inner-a"));\n'
+            'import("outer-b", { with: make(import("inner-b")) });\n'
+            'import((("grouped")));\n'
+            'import("prefix/" + name);\n'
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in statements],
+            ["outer-a", "inner-a", "outer-b", "inner-b", "grouped"],
+        )
 
     def test_every_forbidden_layer_pair_fails_for_alias_and_relative_imports(self) -> None:
         forbidden_pairs = sorted(check_module.PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES)
@@ -742,6 +871,51 @@ class ProductClientBoundaryTest(unittest.TestCase):
             [2, 3, 7, 11, 15],
         )
 
+    def test_store_set_state_tracks_assertions_brackets_commas_and_namespaces(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/direct.ts": (
+                "import { useChatStore } from '#product/stores/chat/chat-store';\n"
+                "(useChatStore as StoreApi<State>).setState({ asserted: true });\n"
+                "(<StoreApi<State>>useChatStore).setState({ angled: true });\n"
+                "useChatStore['setState']({ bracketed: true });\n"
+                "(0, useChatStore).setState({ comma: true });\n"
+                "factory(useChatStore).setState({ callResult: true });\n"
+                "fixture.useChatStore.setState({ property: true });\n"
+                "function shadowed(useChatStore: Other) { useChatStore.setState({}); }\n"
+                "function defaultRead({ other = useChatStore }: Other) {\n"
+                "  useChatStore.setState({ imported: true });\n"
+                "}\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/static-namespace.ts": (
+                "import * as Stores from '#product/stores/chat/chat-store';\n"
+                "Stores.useChatStore.setState({ staticNamespace: true });\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/dynamic-namespace.ts": (
+                "const Stores = await import('#product/stores/chat/chat-store');\n"
+                "Stores['useChatStore'].setState({ dynamicNamespace: true });\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        set_state = [
+            (violation.path.name, violation.lineno)
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+        ]
+        self.assertEqual(
+            set_state,
+            [
+                ("direct.ts", 2),
+                ("direct.ts", 3),
+                ("direct.ts", 4),
+                ("direct.ts", 5),
+                ("direct.ts", 10),
+                ("static-namespace.ts", 2),
+                ("dynamic-namespace.ts", 2),
+            ],
+        )
+
     def test_query_hooks_pass_in_access_and_cache_but_fail_in_workflow_and_facade(self) -> None:
         files = {
             "apps/packages/product-client/src/hooks/access/cloud/query.ts": (
@@ -924,6 +1098,69 @@ class ProductClientBoundaryTest(unittest.TestCase):
         self.assertIn(
             "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER",
             dynamic_store_rules,
+        )
+
+    def test_identifier_sensitive_rules_preserve_export_identity_and_namespace_scope(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/alias-safe.ts": (
+                "import { mutationOptions as useMutation } "
+                "from '@tanstack/react-query';\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/alias-real.ts": (
+                "import { useMutation as mutate } from '@tanstack/react-query';\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/namespace-shadow.ts": (
+                "import * as Query from '@tanstack/react-query';\n"
+                "function local(Query: Other) { Query.useQuery(); }\n"
+                "fixture.Query.useMutation();\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/namespace-used.ts": (
+                "import * as Query from '@tanstack/react-query';\n"
+                "Query['useInfiniteQuery']();\n"
+                "const { useMutation: mutate } = Query;\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/dynamic-then.ts": (
+                "import('@tanstack/react-query').then("
+                "({ useQuery: query }) => query());\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/raw-alias-safe.ts": (
+                "import { createTranscriptState as getAnyHarnessClient } "
+                "from '@anyharness/sdk';\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/raw-string-name.ts": (
+                "import { 'getAnyHarnessClient' as makeClient } "
+                "from '@anyharness/sdk';\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/raw-dynamic-member.ts": (
+                "const makeClient = (await import('@anyharness/sdk'))"
+                ".getAnyHarnessClient;\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        query_paths = {
+            violation.path.name
+            for violation in violations
+            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+        }
+        self.assertEqual(
+            query_paths,
+            {"alias-real.ts", "namespace-used.ts", "dynamic-then.ts"},
+        )
+        raw_rules = {
+            (violation.path.name, violation.rule_id)
+            for violation in violations
+            if violation.path.name.startswith("raw-")
+        }
+        self.assertEqual(
+            raw_rules,
+            {
+                ("raw-string-name.ts", "ANYHARNESS_CLIENT_OUTSIDE_ACCESS"),
+                ("raw-string-name.ts", "STORE_RUNTIME_ACCESS"),
+                ("raw-dynamic-member.ts", "ANYHARNESS_CLIENT_OUTSIDE_ACCESS"),
+                ("raw-dynamic-member.ts", "STORE_RUNTIME_ACCESS"),
+            },
         )
 
     def test_executable_template_and_jsx_code_is_checked_but_display_text_and_regex_pass(self) -> None:
