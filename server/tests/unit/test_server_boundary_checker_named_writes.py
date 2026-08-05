@@ -154,12 +154,15 @@ def test_foreign_direct_import_rejects_every_protected_symbol(
         "write = organization_store.bind_team_checkout_session\n",
         "import proliferate.db.store.organizations as organization_store\n"
         "write = organization_store.bind_team_checkout_session\n",
+        "from proliferate.db.store import organizations as organization_store\n"
+        "organization_store.bind_team_checkout_session()\n",
+        "from proliferate.db.store import organizations as organization_store\n"
+        'write = getattr(organization_store, "bind_team_checkout_session")\n',
+        "import proliferate.db.store.organizations as organization_store\n"
+        'write = getattr(organization_store, "bind_team_checkout_session")\n',
     ],
 )
-def test_foreign_module_alias_access_is_rejected(
-    tmp_path: Path,
-    source: str,
-) -> None:
+def test_module_alias_access_is_rejected(tmp_path: Path, source: str) -> None:
     _, violations = _check_named_source(
         tmp_path,
         "server/proliferate/server/billing/foreign.py",
@@ -171,15 +174,17 @@ def test_foreign_module_alias_access_is_rejected(
     assert "proliferate.db.store.organizations.bind_team_checkout_session" in violations[0].message
 
 
-def test_foreign_fully_qualified_reference_is_rejected_before_call(
-    tmp_path: Path,
-) -> None:
+@pytest.mark.parametrize("literal_getattr", [False, True])
+def test_qualified_reference_is_rejected(tmp_path: Path, literal_getattr: bool) -> None:
     store_module = "proliferate.db.store.cloud_sandboxes"
     symbol = "apply_cloud_sandbox_provider_observation"
+    reference = (
+        f'getattr({store_module}, "{symbol}")' if literal_getattr else f"{store_module}.{symbol}"
+    )
     _, violations = _check_named_source(
         tmp_path,
         "server/proliferate/server/billing/foreign.py",
-        f"import {store_module}\nwrite = {store_module}.{symbol}\nwrite()\n",
+        f"import {store_module}\nwrite = {reference}\nwrite()\n",
     )
 
     assert len(violations) == 1
@@ -187,9 +192,7 @@ def test_foreign_fully_qualified_reference_is_rejected_before_call(
     assert f"{store_module}.{symbol}" in violations[0].message
 
 
-def test_foreign_star_import_rejects_each_protected_store_symbol(
-    tmp_path: Path,
-) -> None:
+def test_star_import_rejects_each_protected_store_symbol(tmp_path: Path) -> None:
     store_module = "proliferate.db.store.cloud_sandboxes"
     _, violations = _check_named_source(
         tmp_path,
@@ -320,9 +323,13 @@ def test_same_named_owner_service_calls_are_legal(tmp_path: Path) -> None:
         (
             "server/proliferate/server/billing/team_checkout/activation.py",
             "from proliferate.db.store import billing_subscriptions as subscriptions\n"
+            "from proliferate.db.store import organizations as organizations\n"
             "from proliferate.db.store import users as users\n"
             "users.get_user_by_id()\n"
             "subscriptions.upsert_billing_subscription()\n"
+            'symbol_name = "bind_team_checkout_session"\n'
+            "getattr(organizations, symbol_name)\n"
+            'getattr(organizations, "get_active_membership")\n'
             "unrelated.bind_team_checkout_session()\n",
         ),
     ],
@@ -356,4 +363,3 @@ def test_named_rule_scans_root_production_and_skips_migrations(
     assert targets == [root_source]
     assert len(violations) == 1
     assert violations[0].path == root_source
-
