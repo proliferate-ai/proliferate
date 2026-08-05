@@ -22,7 +22,6 @@ import proliferate.db.models.workflows  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
 from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.profile_api import router as user_profile_router
-from proliferate.auth.sso.api import router as sso_auth_router
 from proliferate.config import get_cors_allow_origins, settings
 from proliferate.constants.app import APP_NAME
 from proliferate.db import engine as db_engine
@@ -33,6 +32,7 @@ from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.accounts.desktop.api import router as desktop_router
 from proliferate.server.accounts.identity.api import router as identity_auth_router
+from proliferate.server.accounts.sso.api import router as sso_auth_router
 from proliferate.server.ai_magic.api import router as ai_magic_router
 from proliferate.server.analytics.api import router as analytics_router
 from proliferate.server.anonymous_telemetry.api import router as anonymous_telemetry_router

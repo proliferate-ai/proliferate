@@ -4,15 +4,15 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.errors import AuthFlowError
-from proliferate.auth.sso import service as sso_service
-from proliferate.auth.sso import user_resolution as sso_user_resolution
+from proliferate.server.accounts.sso import service as sso_service
+from proliferate.server.accounts.sso import user_resolution as sso_user_resolution
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
     SsoConnectionSnapshot,
@@ -414,7 +414,7 @@ async def test_resolve_sso_user_falls_back_to_jit_after_invitation_acceptance_ra
     user = _user(user_id=uuid4(), email="person@example.com")
     db = cast(AsyncSession, object())
     try_accept = AsyncMock(return_value=None)
-    ensure_membership = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+    provision_jit_membership = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
 
     monkeypatch.setattr(
         sso_service.sso_store,
@@ -438,24 +438,9 @@ async def test_resolve_sso_user_falls_back_to_jit_after_invitation_acceptance_ra
         try_accept,
     )
     monkeypatch.setattr(
-        sso_user_resolution,
-        "ensure_instance_membership_not_removed",
-        AsyncMock(),
-    )
-    monkeypatch.setattr(
-        sso_user_resolution.sso_store,
-        "ensure_sso_organization_membership",
-        ensure_membership,
-    )
-    monkeypatch.setattr(
-        sso_user_resolution,
-        "maybe_create_organization_seat_adjustment",
-        AsyncMock(),
-    )
-    monkeypatch.setattr(
-        sso_user_resolution.signup_hook,
-        "schedule_agent_gateway_org_enrollment",
-        Mock(),
+        sso_user_resolution.organization_service,
+        "provision_sso_jit_membership",
+        provision_jit_membership,
     )
     monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", AsyncMock())
 
@@ -483,10 +468,11 @@ async def test_resolve_sso_user_falls_back_to_jit_after_invitation_acceptance_ra
         organization_id=target_organization_id,
         authenticated_email=user.email,
     )
-    ensure_membership.assert_awaited_once_with(
+    provision_jit_membership.assert_awaited_once_with(
         db,
+        user,
         organization_id=target_organization_id,
-        user_id=user.id,
+        authenticated_email=user.email,
         role="member",
     )
 

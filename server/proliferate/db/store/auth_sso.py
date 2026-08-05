@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
@@ -20,7 +20,6 @@ from proliferate.db.store.auth_sso_records import (
     sso_connection_record,
     sso_identity_record,
 )
-from proliferate.db.store.organization_records import MembershipRecord, membership_record
 from proliferate.utils.crypto import encrypt_text
 
 
@@ -528,48 +527,3 @@ async def upsert_sso_identity_for_user(
         identity.updated_at = now
     await db.flush()
     return sso_identity_record(identity)
-
-
-async def ensure_sso_organization_membership(
-    db: AsyncSession,
-    *,
-    organization_id: UUID,
-    user_id: UUID,
-    role: str,
-) -> MembershipRecord:
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
-        {"lock_key": f"organization-membership-active-user:{user_id}"},
-    )
-    now = _now()
-    membership = (
-        await db.execute(
-            select(OrganizationMembership)
-            .where(
-                OrganizationMembership.organization_id == organization_id,
-                OrganizationMembership.user_id == user_id,
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    if membership is None:
-        membership = OrganizationMembership(
-            organization_id=organization_id,
-            user_id=user_id,
-            role=role,
-            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-            joined_at=now,
-            removed_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(membership)
-    else:
-        membership.role = role
-        membership.status = ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
-        membership.removed_at = None
-        if membership.joined_at is None:
-            membership.joined_at = now
-        membership.updated_at = now
-    await db.flush()
-    return membership_record(membership)

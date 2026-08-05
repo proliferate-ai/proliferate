@@ -13,13 +13,14 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.errors import AuthFlowError
-from proliferate.auth.sso import deployment_config, policy, service, user_resolution
+from proliferate.auth.sso import deployment_config, policy
 from proliferate.auth.sso.types import VerifiedSsoIdentity
 from proliferate.config import settings
 from proliferate.db.models.auth import User
 from proliferate.errors import ProliferateError
 from proliferate.integrations.sso import oidc
 from proliferate.integrations.sso.errors import SsoIntegrationError
+from proliferate.server.accounts.sso import service, user_resolution
 from tests.unit.auth.test_sso import _connection
 
 
@@ -57,7 +58,7 @@ def test_sso_policy_error_is_local_and_framework_free() -> None:
         "fastapi",
         "starlette",
         "proliferate.auth.errors",
-        "proliferate.auth.sso.service",
+        "proliferate.server.accounts.sso.service",
         "proliferate.config",
         "proliferate.db",
         "proliferate.integrations",

@@ -15,10 +15,11 @@ Scope:
 
 `auth/**` is the importable authentication leaf: credentials, sessions,
 provider protocols, identity persistence, and transport-neutral Auth failures.
-`server/accounts/**` owns product account entry: the Desktop and Identity
-routes, product-user resolution/creation, identity placement, admin-email
-enforcement, and coordinated product side effects. The public routes remain
-under `/auth/**`.
+`server/accounts/**` owns product account entry: the Desktop, Identity, and SSO
+routes; product-user resolution/creation; identity placement; admin-email
+enforcement; and coordinated product side effects. The public routes remain
+under `/auth/**`. Organizations owns OrganizationMembership mutations, including
+the SSO JIT membership operation and its billing/enrollment follow-ups.
 
 Proliferate has two related but distinct auth concepts:
 

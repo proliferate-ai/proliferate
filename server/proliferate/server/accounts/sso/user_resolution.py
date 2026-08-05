@@ -9,6 +9,8 @@ admin-removed instance membership; asserting the ADMIN_EMAILS floor at login).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.errors import AuthFlowError
@@ -25,20 +27,17 @@ from proliferate.auth.sso.types import (
     VerifiedSsoIdentity,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_MEMBER
-from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
-from proliferate.server.billing.seat_reconciliation import (
-    maybe_create_organization_seat_adjustment,
-)
-from proliferate.server.cloud.agent_gateway import signup_hook
 from proliferate.server.organizations import service as organization_service
 from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 from proliferate.server.organizations.membership_policy import (
-    ensure_instance_membership_not_removed,
     place_new_identity,
 )
+
+if TYPE_CHECKING:
+    from proliferate.auth.users import User
 
 
 async def resolve_sso_user(
@@ -213,28 +212,13 @@ async def _resolve_organization_sso_user(
             "SSO user is not a team member.",
             status_code=403,
         )
-    # Single-org mode only (no-op in hosted mode): JIT must not silently
-    # reactivate an instance-org membership an admin removed. ADMIN_EMAILS
-    # listed emails are excepted; that floor is the documented
-    # lockout-recovery path.
-    await ensure_instance_membership_not_removed(
+    await organization_service.provision_sso_jit_membership(
         db,
+        user,
         organization_id=connection.organization_id,
-        user_id=user.id,
-        email=verified.email,
-    )
-    membership = await sso_store.ensure_sso_organization_membership(
-        db,
-        organization_id=connection.organization_id,
-        user_id=user.id,
+        authenticated_email=verified.email or "",
         role=connection.default_role or ORGANIZATION_ROLE_MEMBER,
     )
-    await maybe_create_organization_seat_adjustment(
-        db,
-        organization_id=connection.organization_id,
-        membership_id=membership.id,
-    )
-    signup_hook.schedule_agent_gateway_org_enrollment(connection.organization_id, user.id, db=db)
     return user
 
 

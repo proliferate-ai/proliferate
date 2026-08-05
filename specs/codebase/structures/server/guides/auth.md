@@ -65,12 +65,13 @@ server/proliferate/
     users.py                 # UserManager (fastapi-users lifecycle plumbing)
     desktop/                 # leaf models and callback pages
     identity/                # provider protocol, stores, sessions, and credential primitives
-    sso/                     # SSO protocol and deferred SSO orchestration
+    sso/                     # SSO protocol vocabulary, policy, and configuration
     utils/                   # auth crypto primitives only: jwt, oauth, passwords, pkce
 
   server/accounts/
     desktop/                 # /auth/desktop routes and Desktop account-entry orchestration
     identity/                # /auth web/mobile routes and account-entry orchestration
+    sso/                     # /auth/sso routes and SSO account-entry orchestration
 
   server/<domain>/
     access.py                # resource-access route deps (per domain)
@@ -244,8 +245,9 @@ async def current_product_user(
 ### OAuth and account-entry surfaces
 
 Product account entry lives under `server/accounts/identity/**`; the Desktop
-account-entry boundary lives under `server/accounts/desktop/**`. GitHub uses the
-shared `/auth/github/callback` provider callback for desktop, web, and mobile.
+account-entry boundary lives under `server/accounts/desktop/**`; and SSO account
+entry lives under `server/accounts/sso/**`. GitHub uses the shared
+`/auth/github/callback` provider callback for desktop, web, and mobile.
 The surface is recovered from the stored auth challenge, so the GitHub OAuth app
 needs only one callback URL:
 

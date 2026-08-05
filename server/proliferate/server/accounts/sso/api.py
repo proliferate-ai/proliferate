@@ -18,15 +18,15 @@ from proliferate.auth.sso.models import (
     StartSsoAuthRequest,
     StartSsoAuthResponse,
 )
-from proliferate.auth.sso.service import (
+from proliferate.config import settings
+from proliferate.db.engine import get_async_session
+from proliferate.db.models.auth import User
+from proliferate.server.accounts.sso.service import (
     complete_oidc_sso_callback,
     complete_sso_error_callback,
     discover_sso,
     start_sso_auth,
 )
-from proliferate.config import settings
-from proliferate.db.engine import get_async_session
-from proliferate.db.models.auth import User
 
 router = APIRouter(tags=["auth"])
 
