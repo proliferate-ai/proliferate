@@ -26,8 +26,8 @@ index, and the change-control model for moving a value or adding a component.
   [systems/product/settings/appearance-scaling.md](../../systems/product/settings/appearance-scaling.md).
   This document names the rules that shape the value system; that document is
   the gate's specification.
-- Package dependency direction between `design`, `product-domain`, and
-  `product-client` —
+- Package dependency direction between `design` and ProductClient's nested
+  domain, primitives, and connected tiers —
   [structures/frontend/packages/README.md](../../structures/frontend/packages/README.md).
 - Per-surface product behavior (what a screen does, its flows and copy) — the
   owning [systems/product/**](../../systems/README.md) document.
@@ -54,7 +54,7 @@ apps/packages/product-client/src/primitives/           the component library
 
 apps/packages/product-client/src/components/patterns/
                                 domain-aware patterns: same composition rule as primitives/patterns,
-                                but this tier may import product-domain view models/vocabulary
+                                but this tier may import #product/domain/<file> view models/vocabulary
 
 scripts/check_appearance_scaling.py   class-level gate: banned class shapes at every call site
 scripts/check_frontend_boundaries.py  Radix containment + primitives top-level closure/layer law
@@ -745,7 +745,7 @@ not a different role:
 
 - **`product-client/src/components/patterns/`** — domain-aware patterns. Same composition rule
   as `product-client/src/primitives/patterns/` (built from primitives/patterns + tokens), but this tier
-  is allowed to import `product-domain` view models and vocabulary, which
+  is allowed to import concrete `#product/domain/<file>` view models and vocabulary, which
   `product-client/src/primitives/patterns/` must not (per the package boundary in
   [packages/README.md](../../structures/frontend/packages/README.md)). The
   settings family (`SettingsRow`, `SettingsSection`, `SettingsPageHeader`, and
@@ -926,7 +926,7 @@ grandfathered.
 2. **Place it in the right tier**, by role, not by the feature that needed it: a
    raw Radix/vendor wrapper or single-purpose atom goes in `product-client/src/primitives/`;
    a generic composition of those goes in `product-client/src/primitives/patterns/`; a domain-aware
-   pattern that needs `product-domain` goes in
+   pattern that needs a `#product/domain/<file>` rule goes in
    `product-client/src/components/patterns/`; an icon set goes in
    `product-client/src/primitives/icons/`.
 3. **Give it one real ProductClient-internal subpath.** Root components use

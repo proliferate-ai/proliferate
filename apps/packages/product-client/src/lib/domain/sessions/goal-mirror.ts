@@ -1,5 +1,5 @@
 import type { Goal, SessionActionCapabilities } from "@anyharness/sdk";
-import type { GoalCapabilities, GoalWire } from "@proliferate/product-domain/activity/goal";
+import type { GoalCapabilities, GoalWire } from "#product/domain/activity/goal";
 
 /**
  * Native pause support per harness. The GoalPort capability advertisement

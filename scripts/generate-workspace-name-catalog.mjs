@@ -9,7 +9,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const catalogPath = path.join(repoRoot, "catalogs/workspace-names/v1/animals.json");
 const typeScriptOutputPath = path.join(
   repoRoot,
-  "apps/packages/product-domain/src/workspaces/workspace-name-catalog.generated.ts",
+  "apps/packages/product-client/src/domain/workspaces/workspace-name-catalog.generated.ts",
 );
 const serverOutputPath = path.join(
   repoRoot,

@@ -1,4 +1,4 @@
-import type { PendingPromptQueueEntry } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+import type { PendingPromptQueueEntry } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 
 export const PENDING_PROMPTS_SINGLE: PendingPromptQueueEntry[] = [
   {

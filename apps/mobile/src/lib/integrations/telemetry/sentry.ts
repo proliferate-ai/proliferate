@@ -9,7 +9,7 @@ import {
   scrubTelemetryData,
   scrubTelemetryEvent,
   scrubTelemetryText,
-} from "@proliferate/product-domain/telemetry/scrub";
+} from "@proliferate/product-client/internal/domain/telemetry/scrub";
 
 import type { MobileTelemetryConfig } from "./config";
 

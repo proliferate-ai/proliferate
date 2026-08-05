@@ -1,5 +1,5 @@
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
-import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 
 export interface CreateSessionWithResolvedConfigOptions {

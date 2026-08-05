@@ -134,9 +134,6 @@ importers:
       '@proliferate/product-client':
         specifier: workspace:*
         version: link:../packages/product-client
-      '@proliferate/product-domain':
-        specifier: workspace:*
-        version: link:../packages/product-domain
       '@sentry/react':
         specifier: ^10.67.0
         version: 10.67.0(react@19.2.8)
@@ -181,7 +178,7 @@ importers:
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       geist:
         specifier: ^1.7.2
-        version: 1.7.2(next@16.2.1(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
+        version: 1.7.2(next@16.2.1(@babel/core@7.29.0)(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
       lucide-react:
         specifier: 0.577.0
         version: 0.577.0(react@19.2.8)
@@ -279,9 +276,9 @@ importers:
       '@proliferate/design':
         specifier: workspace:*
         version: link:../packages/design
-      '@proliferate/product-domain':
+      '@proliferate/product-client':
         specifier: workspace:*
-        version: link:../packages/product-domain
+        version: link:../packages/product-client
       '@sentry/react-native':
         specifier: ^8.19.0
         version: 8.19.0(@expo/env@2.0.11)(dotenv@17.4.2)(expo@54.0.34(@babel/core@7.29.7)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.8))(react@19.2.8)(typescript@5.9.3))(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.8))(react@19.2.8)
@@ -372,7 +369,7 @@ importers:
         version: 5.3.0
       geist:
         specifier: ^1.7.2
-        version: 1.7.2(next@16.2.1(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
+        version: 1.7.2(next@16.2.1(@babel/core@7.29.0)(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
       tailwindcss:
         specifier: ^4
         version: 4.3.3
@@ -446,9 +443,6 @@ importers:
       '@proliferate/design':
         specifier: workspace:*
         version: link:../design
-      '@proliferate/product-domain':
-        specifier: workspace:*
-        version: link:../product-domain
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.19
         version: 1.1.19(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -493,7 +487,7 @@ importers:
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       geist:
         specifier: ^1.7.2
-        version: 1.7.2(next@16.2.1(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
+        version: 1.7.2(next@16.2.1(@babel/core@7.29.0)(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
       lexical:
         specifier: ^0.48.0
         version: 0.48.0(typescript@5.9.3)
@@ -559,22 +553,6 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.23.1)(yaml@2.9.0)
 
-  apps/packages/product-domain:
-    dependencies:
-      '@anyharness/sdk':
-        specifier: workspace:*
-        version: link:../../../anyharness/sdk
-      '@proliferate/cloud-sdk':
-        specifier: workspace:*
-        version: link:../../../cloud/sdk
-    devDependencies:
-      typescript:
-        specifier: ^5.7
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.7
-        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.23.1)(yaml@2.9.0)
-
   apps/web:
     dependencies:
       '@proliferate/cloud-sdk':
@@ -589,9 +567,6 @@ importers:
       '@proliferate/product-client':
         specifier: workspace:*
         version: link:../packages/product-client
-      '@proliferate/product-domain':
-        specifier: workspace:*
-        version: link:../packages/product-domain
       '@sentry/react':
         specifier: ^10.67.0
         version: 10.67.0(react@19.2.8)
@@ -11069,7 +11044,7 @@ snapshots:
 
   function-bind@1.1.2: {}
 
-  geist@1.7.2(next@16.2.1(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)):
+  geist@1.7.2(next@16.2.1(@babel/core@7.29.0)(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)):
     dependencies:
       next: 16.2.1(@babel/core@7.29.0)(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
 

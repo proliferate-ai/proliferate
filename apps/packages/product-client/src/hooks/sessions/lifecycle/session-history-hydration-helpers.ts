@@ -2,7 +2,7 @@ import type {
   SessionEventEnvelope,
   TranscriptState,
 } from "@anyharness/sdk";
-import { resolveSessionStatus } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionStatus } from "#product/domain/sessions/activity";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,

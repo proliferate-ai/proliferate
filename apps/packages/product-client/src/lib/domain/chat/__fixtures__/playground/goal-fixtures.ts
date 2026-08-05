@@ -1,4 +1,4 @@
-import type { GoalCapabilities, GoalWire } from "@proliferate/product-domain/activity/goal";
+import type { GoalCapabilities, GoalWire } from "#product/domain/activity/goal";
 
 const GOAL_FIXTURE_UPDATED_AT_MS = 1_751_450_000_000;
 

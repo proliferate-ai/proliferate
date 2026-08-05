@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   thoughtItem,
   toolItem,
-} from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
+} from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import { ProposedPlanToolCallIdsProvider } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
 import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";
 

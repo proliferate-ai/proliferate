@@ -2,9 +2,9 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WorkflowRun } from "@proliferate/product-domain/workflows/run-presentation";
-import { workflowRunPresentation } from "@proliferate/product-domain/workflows/run-presentation";
-import { createWorkflowArgumentDraft } from "@proliferate/product-domain/workflows/arguments";
+import type { WorkflowRun } from "#product/domain/workflows/run-presentation";
+import { workflowRunPresentation } from "#product/domain/workflows/run-presentation";
+import { createWorkflowArgumentDraft } from "#product/domain/workflows/arguments";
 import { WorkflowRunDetail } from "./WorkflowRunDetail";
 import { WorkflowRunForm } from "./WorkflowRunForm";
 

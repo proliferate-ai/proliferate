@@ -3,7 +3,7 @@ import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type {
   SessionIntent,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
+} from "#product/domain/sessions/intents/session-intent-model";
 import {
   getSessionClientAndWorkspace,
 } from "#product/lib/access/anyharness/session-runtime";

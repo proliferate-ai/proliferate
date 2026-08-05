@@ -13,7 +13,7 @@ import {
   resolveSelectionChangeAction,
   type TranscriptSelectionClampEdge,
   type TranscriptTargetFacts,
-} from "@proliferate/product-domain/chats/transcript/transcript-selection";
+} from "#product/domain/chats/transcript/transcript-selection";
 
 interface UseChatTranscriptSelectionArgs {
   rootRef: RefObject<HTMLElement | null>;

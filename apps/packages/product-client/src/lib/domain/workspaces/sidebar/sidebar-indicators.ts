@@ -1,8 +1,8 @@
 import type { Workspace } from "@anyharness/sdk";
 import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
 import { isMainThreadMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
-import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
-import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
+import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
+import { resolveWorkspaceExecutionSidebarActivityState } from "#product/domain/sessions/activity";
 import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { isCloudWorkspacePending } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";

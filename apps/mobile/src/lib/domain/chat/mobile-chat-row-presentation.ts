@@ -1,4 +1,4 @@
-import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-client/internal/domain/chats/cloud/transcript-view";
 
 export function toolSummary(row: CloudChatTranscriptRowView): string {
   if (isWorkHistoryRow(row)) {

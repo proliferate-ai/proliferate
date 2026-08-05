@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { connectFeed, type FeedStreamHandle } from "@anyharness/sdk";
-import type { FeedRefWire } from "@proliferate/product-domain/activity/process";
+import type { FeedRefWire } from "#product/domain/activity/process";
 import { useTerminalWorkspaceConnection } from "#product/hooks/terminals/workflows/use-terminal-workspace-connection";
 import { appendCappedFeedContent } from "#product/hooks/activity/derived/feed-content-buffer";
 

@@ -6,7 +6,7 @@ import {
 import type { GitHubRepoAuthorityResponse, RepoConfigResponse } from "@proliferate/cloud-sdk";
 import type { AuthUser } from "#product/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "#product/lib/domain/preferences/user/model";
-import type { RepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
+import type { RepositoryReadiness } from "#product/domain/repos/repo-readiness";
 import { generateWorkspaceSlug } from "#product/lib/domain/workspaces/creation/workspace-slug";
 import {
   buildBranchName,

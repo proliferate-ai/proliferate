@@ -14,18 +14,25 @@ try:
         ImportStatement,
         Token,
         collect_imports,
+        collect_module_specifiers,
         tokenize_typescript,
     )
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
-    from frontend_imports import ImportStatement, Token, collect_imports, tokenize_typescript
+    from frontend_imports import (
+        ImportStatement,
+        Token,
+        collect_imports,
+        collect_module_specifiers,
+        tokenize_typescript,
+    )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
 WEB_SRC = REPO_ROOT / "apps" / "web" / "src"
 MOBILE_SRC = REPO_ROOT / "apps" / "mobile" / "src"
 DESIGN_SRC = REPO_ROOT / "apps" / "packages" / "design" / "src"
-PRODUCT_DOMAIN_SRC = REPO_ROOT / "apps" / "packages" / "product-domain" / "src"
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
+PRODUCT_CLIENT_DOMAIN_SRC = PRODUCT_CLIENT_SRC / "domain"
 PRODUCT_CLIENT_PRIMITIVES_SRC = PRODUCT_CLIENT_SRC / "primitives"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
@@ -98,6 +105,67 @@ PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES = {
     ("stores", "providers"),
 }
 
+PRODUCT_CLIENT_DOMAIN_ALLOWED_ANYHARNESS_RUNTIME_IMPORTS = {
+    "createTranscriptState",
+    "deriveCanonicalPlan",
+    "parseToolBackgroundWork",
+    "reduceEvents",
+}
+PRODUCT_CLIENT_DOMAIN_RAW_CLOUD_CLIENT_IMPORTS = {
+    "CreateProliferateClientOptions",
+    "ProliferateCloudClient",
+    "ProliferateOpenApiClient",
+}
+PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS = {
+    "AnyHarnessClient",
+    "AnyHarnessClientOptions",
+    "AnyHarnessError",
+    "AnyHarnessMeasurementOperationId",
+    "AnyHarnessRequestOptions",
+    "AnyHarnessRequestStartEvent",
+    "AnyHarnessRequestTimingLifecycle",
+    "AnyHarnessTimingCategory",
+    "AnyHarnessTimingEvent",
+    "AnyHarnessTimingObserver",
+    "AnyHarnessTimingScope",
+    "AnyHarnessTransport",
+}
+MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX = (
+    "@proliferate/product-client/internal/domain/"
+)
+PRODUCT_CLIENT_DOMAIN_STYLE_SUFFIXES = {
+    ".css",
+    ".less",
+    ".sass",
+    ".scss",
+    ".styl",
+}
+PRODUCT_CLIENT_DOMAIN_FORBIDDEN_GLOBALS = {
+    "document",
+    "localStorage",
+    "navigator",
+    "sessionStorage",
+    "window",
+}
+PRODUCT_CLIENT_DOMAIN_FIXTURE_IMPORTS = {
+    (
+        "workflows/definition.test.ts",
+        "../../../../../../fixtures/contracts/workflow-definition/full.json",
+    ): "fixtures/contracts/workflow-definition/full.json",
+    (
+        "workflows/definition.test.ts",
+        "../../../../../../fixtures/contracts/workflow-definition/minimal.json",
+    ): "fixtures/contracts/workflow-definition/minimal.json",
+    (
+        "chats/transcript/transcript-presentation.test.ts",
+        "../../../../../../../fixtures/contracts/native-subagent-transcript/claude.json",
+    ): "fixtures/contracts/native-subagent-transcript/claude.json",
+    (
+        "chats/transcript/transcript-presentation.test.ts",
+        "../../../../../../../fixtures/contracts/native-subagent-transcript/codex.json",
+    ): "fixtures/contracts/native-subagent-transcript/codex.json",
+}
+
 
 @dataclass(frozen=True)
 class Violation:
@@ -155,9 +223,15 @@ def should_skip(path: Path, *, include_tests: bool = False) -> bool:
         return True
     if include_tests:
         return False
-    if ".test." in name or ".spec." in name:
-        return True
-    return any(part in {"__tests__", "__mocks__"} for part in path.parts)
+    return is_test_path(path)
+
+
+def is_test_path(path: Path) -> bool:
+    return (
+        ".test." in path.name
+        or ".spec." in path.name
+        or any(part in {"__tests__", "__mocks__"} for part in path.parts)
+    )
 
 
 ALL_FRONTEND_SRC_ROOTS = [
@@ -165,7 +239,6 @@ ALL_FRONTEND_SRC_ROOTS = [
     WEB_SRC,
     MOBILE_SRC,
     DESIGN_SRC,
-    PRODUCT_DOMAIN_SRC,
     PRODUCT_CLIENT_SRC,
 ]
 
@@ -501,6 +574,271 @@ def scoped_import_bindings(statement: ImportStatement) -> list[ScopedLocalBindin
 
 def is_package_source(source: str, package: str) -> bool:
     return source == package or source.startswith(f"{package}/")
+
+
+def is_product_client_domain_path(path: Path) -> bool:
+    try:
+        path.relative_to(PRODUCT_CLIENT_DOMAIN_SRC)
+    except ValueError:
+        return False
+    return True
+
+
+def product_client_domain_relative(path: Path) -> str:
+    return path.relative_to(PRODUCT_CLIENT_DOMAIN_SRC).as_posix()
+
+
+def clean_module_source(source: str) -> str:
+    return source.split("?", 1)[0].split("#", 1)[0]
+
+
+def product_client_domain_raw_capability_names(
+    source: str, statement: ImportStatement
+) -> set[str]:
+    """Return SDK client-plumbing names forbidden even as type imports."""
+
+    imported_names = set(statement.imported_names)
+    if "*" in imported_names:
+        return {"*"}
+    if source == "@proliferate/cloud-sdk":
+        return imported_names & PRODUCT_CLIENT_DOMAIN_RAW_CLOUD_CLIENT_IMPORTS
+    if source == "@anyharness/sdk":
+        return (
+            imported_names
+            & PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS
+        )
+    return set()
+
+
+def permitted_product_client_domain_fixture(
+    path: Path, source: str, resolved: Path
+) -> bool:
+    if not is_test_path(path):
+        return False
+    expected_relative = PRODUCT_CLIENT_DOMAIN_FIXTURE_IMPORTS.get(
+        (product_client_domain_relative(path), source)
+    )
+    if expected_relative is None:
+        return False
+    expected = (REPO_ROOT / expected_relative).resolve()
+    return resolved == expected and expected.is_file()
+
+
+def find_product_client_domain_violations(path: Path) -> list[Violation]:
+    """Enforce the nested, Mobile-safe ProductClient domain boundary."""
+
+    if not is_product_client_domain_path(path):
+        return []
+
+    violations: list[Violation] = []
+    text = path.read_text()
+    if path.suffix == ".tsx":
+        violations.append(
+            Violation(
+                "PRODUCT_CLIENT_DOMAIN_TSX",
+                path,
+                1,
+                "ProductClient domain is plain TypeScript; JSX/TSX belongs outside src/domain",
+            )
+        )
+
+    for statement in collect_module_specifiers(path, text):
+        source = statement.source
+        clean_source = clean_module_source(source)
+        if Path(clean_source).suffix.lower() in PRODUCT_CLIENT_DOMAIN_STYLE_SUFFIXES:
+            violations.append(
+                Violation(
+                    "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                    path,
+                    statement.lineno,
+                    f"ProductClient domain must not import style asset {source!r}",
+                )
+            )
+            continue
+
+        if source.startswith("."):
+            resolved = (path.parent / clean_source).resolve()
+            try:
+                resolved.relative_to(PRODUCT_CLIENT_DOMAIN_SRC.resolve())
+            except ValueError:
+                if permitted_product_client_domain_fixture(path, source, resolved):
+                    continue
+                violations.append(
+                    Violation(
+                        "PRODUCT_CLIENT_DOMAIN_RELATIVE_ESCAPE",
+                        path,
+                        statement.lineno,
+                        (
+                            "ProductClient domain relative imports must stay within "
+                            "src/domain; only the four named contract fixtures may escape"
+                        ),
+                    )
+                )
+            continue
+
+        if source == "vitest" and is_test_path(path):
+            continue
+
+        if source in {"@proliferate/cloud-sdk", "@anyharness/sdk"}:
+            raw_capabilities = product_client_domain_raw_capability_names(
+                source, statement
+            )
+            if raw_capabilities:
+                violations.append(
+                    Violation(
+                        "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                        path,
+                        statement.lineno,
+                        (
+                            "ProductClient domain may import SDK data contracts, not "
+                            "raw client, request, timing, or transport plumbing; "
+                            "forbidden imports: "
+                            f"{', '.join(sorted(raw_capabilities))}"
+                        ),
+                    )
+                )
+                continue
+
+        if source == "@proliferate/cloud-sdk":
+            if statement.runtime_imported_names:
+                violations.append(
+                    Violation(
+                        "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                        path,
+                        statement.lineno,
+                        "ProductClient domain may import Cloud SDK contract types, not runtime values",
+                    )
+                )
+            continue
+
+        if source == "@anyharness/sdk":
+            forbidden_runtime = (
+                set(statement.runtime_imported_names)
+                - PRODUCT_CLIENT_DOMAIN_ALLOWED_ANYHARNESS_RUNTIME_IMPORTS
+            )
+            if forbidden_runtime:
+                violations.append(
+                    Violation(
+                        "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                        path,
+                        statement.lineno,
+                        (
+                            "ProductClient domain may import AnyHarness contract types and "
+                            "the four approved pure helpers only; forbidden runtime imports: "
+                            f"{', '.join(sorted(forbidden_runtime))}"
+                        ),
+                    )
+                )
+            continue
+
+        violations.append(
+            Violation(
+                "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT",
+                path,
+                statement.lineno,
+                (
+                    "ProductClient domain external imports are limited to Cloud SDK types, "
+                    "AnyHarness contract types/approved pure helpers, and test-only vitest; "
+                    f"found {source!r}"
+                ),
+            )
+        )
+
+    tokens = tokenize_typescript(text, jsx=path.suffix == ".tsx")
+    for token in tokens:
+        if token.kind != "identifier":
+            continue
+        if token.value in PRODUCT_CLIENT_DOMAIN_FORBIDDEN_GLOBALS or token.value.startswith(
+            "__TAURI"
+        ):
+            violations.append(
+                Violation(
+                    "PRODUCT_CLIENT_DOMAIN_FORBIDDEN_API",
+                    path,
+                    token.lineno,
+                    f"ProductClient domain must not use browser/Tauri API {token.value!r}",
+                )
+            )
+
+    return violations
+
+
+def mobile_relative_import_targets_product_client(path: Path, source: str) -> bool:
+    if not source.startswith("."):
+        return False
+    resolved = (path.parent / clean_module_source(source)).resolve()
+    try:
+        resolved.relative_to(PRODUCT_CLIENT_SRC.parent.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def find_mobile_product_client_import_violations(path: Path) -> list[Violation]:
+    """Allow Mobile to consume only concrete nested domain modules."""
+
+    try:
+        path.relative_to(MOBILE_SRC)
+    except ValueError:
+        return []
+
+    violations: list[Violation] = []
+    for statement in collect_module_specifiers(path, path.read_text()):
+        source = statement.source
+        if mobile_relative_import_targets_product_client(path, source):
+            violations.append(
+                Violation(
+                    "MOBILE_PRODUCT_CLIENT_DOMAIN_ONLY",
+                    path,
+                    statement.lineno,
+                    (
+                        "Mobile must reach ProductClient through its package export, "
+                        f"not a relative source path; found {source!r}"
+                    ),
+                )
+            )
+            continue
+        if not is_package_source(source, "@proliferate/product-client"):
+            continue
+        if not source.startswith(MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX):
+            violations.append(
+                Violation(
+                    "MOBILE_PRODUCT_CLIENT_DOMAIN_ONLY",
+                    path,
+                    statement.lineno,
+                    (
+                        "Mobile may import ProductClient only through "
+                        f"{MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX}<concrete-file>; found {source!r}"
+                    ),
+                )
+            )
+            continue
+
+        target = source.removeprefix(MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX)
+        segments = target.split("/")
+        concrete = (
+            bool(target)
+            and not target.endswith("/")
+            and all(segment not in {"", ".", ".."} for segment in segments)
+            and "?" not in target
+            and "#" not in target
+            and "\\" not in target
+            and (PRODUCT_CLIENT_DOMAIN_SRC / f"{target}.ts").is_file()
+        )
+        if not concrete:
+            violations.append(
+                Violation(
+                    "MOBILE_PRODUCT_CLIENT_DOMAIN_ONLY",
+                    path,
+                    statement.lineno,
+                    (
+                        "Mobile ProductClient domain imports must name an existing concrete "
+                        f"src/domain TypeScript file; found {source!r}"
+                    ),
+                )
+            )
+
+    return violations
 
 
 def namespace_member_identifiers(
@@ -2535,6 +2873,12 @@ def collect_violations() -> list[Violation]:
     for path in iter_frontend_files():
         violations.extend(check_file(path))
         violations.extend(find_product_client_violations(path))
+    for path in iter_files_in_roots(
+        [PRODUCT_CLIENT_DOMAIN_SRC], include_tests=True
+    ):
+        violations.extend(find_product_client_domain_violations(path))
+    for path in iter_files_in_roots([MOBILE_SRC], include_tests=True):
+        violations.extend(find_mobile_product_client_import_violations(path))
     violations.extend(find_radix_import_violations())
     violations.extend(find_primitives_top_level_violations())
     violations.extend(find_warning_ink_violations())

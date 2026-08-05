@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
+import type { TranscriptVirtualizationMode } from "#product/domain/chats/transcript/transcript-virtualization-config";
 import {
   buildRenderableRows,
   estimateRenderableRowHeight,

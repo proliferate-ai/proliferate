@@ -6,7 +6,7 @@ import {
   cloudTranscriptHasAgentProgressAfterPrompt,
   cloudTranscriptHasUserPrompt,
   type CloudChatTranscriptRowView,
-} from "@proliferate/product-domain/chats/cloud/transcript-view";
+} from "@proliferate/product-client/internal/domain/chats/cloud/transcript-view";
 
 export type OptimisticPromptStatus = "sending" | "queued" | "failed";
 

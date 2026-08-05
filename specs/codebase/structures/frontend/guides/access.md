@@ -40,25 +40,28 @@ hooks/access/cloud/automations/query-keys.ts
 hooks/access/cloud/automations/use-automations.ts
 hooks/access/cloud/automations/use-automation-mutations.ts
 
-hooks/access/cloud/billing/query-keys.ts
-hooks/access/cloud/billing/use-cloud-billing.ts
-hooks/access/cloud/billing/use-cloud-billing-mutations.ts
+hooks/access/cloud/billing/use-billing-plan.ts
+hooks/access/cloud/billing/use-llm-balance.ts
+hooks/access/cloud/billing/use-team-checkout.ts
 
-hooks/access/tauri/updater/query-keys.ts
-hooks/access/tauri/updater/use-updater.ts
+hooks/access/tauri/app/query-keys.ts
+hooks/access/tauri/app/use-app-version.ts
+hooks/access/tauri/use-updater.ts
 
-hooks/access/mcp/connectors/query-keys.ts
-hooks/access/mcp/connectors/use-connectors.ts
-hooks/access/mcp/connectors/use-connector-mutations.ts
+hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache.ts
+hooks/access/anyharness/sessions/use-workspace-session-cache.ts
 ```
 
-Do not create access folders just to mirror another app. Each app only has the
-external systems it actually uses:
+Do not create access folders just to mirror another client. Each owner keeps
+only the systems it actually uses:
 
-- Desktop may use `cloud`, `anyharness`, `tauri`, `browser`, and capability
-  folders such as `mcp`.
-- Web usually uses `cloud` and browser auth/storage helpers.
-- Mobile usually uses `cloud` and native auth/storage helpers.
+- ProductClient owns connected Desktop/Web `cloud` and `anyharness` hooks. It
+  may own `tauri` capability hooks only when they call the typed Desktop bridge
+  and never import Tauri directly.
+- Desktop owns raw Tauri/local-runtime implementation plus host authentication
+  and vendor adapters. Web owns browser authentication, storage, links,
+  telemetry, and Cloud-client construction.
+- Mobile owns its `cloud` and native authentication/storage helpers.
 
 ## Query Key Ownership
 
@@ -94,18 +97,15 @@ cross-boundary product projections.
 Cloud resources. App code imports reusable SDK helpers directly instead of
 adding app-local re-export wrappers.
 
-`lib/access/cloud/**` owns app-specific Cloud setup and platform bridges the
-shared SDK cannot know:
+ProductClient `lib/access/cloud/**` owns connected helpers the shared SDK cannot
+know: auth probes and transport contracts, gateway access, owner-context
+headers, health/capability checks, request timing, and connection retry rules.
+Each host retains authenticated client construction, auth/session bootstrap,
+base-url resolution, storage integration, and environment-specific credential
+or vendor adapters.
 
-- app-specific auth/session storage integration
-- base-url resolution
-- token refresh or pending prompt persistence when platform-specific
-- Desktop-only agent-auth sync/recovery helpers
-- control-plane health checks used during Desktop startup
-- request timing or telemetry integration
-
-`hooks/access/cloud/**` owns app-local React-facing access that is not already
-generic enough for `@proliferate/cloud-sdk-react`:
+ProductClient `hooks/access/cloud/**` owns connected React-facing access that is
+not already generic enough for `@proliferate/cloud-sdk-react`:
 
 - query keys
 - `useQuery` and `useMutation`
@@ -125,7 +125,10 @@ from product hooks or components.
 
 Connected ProductClient code calls `@proliferate/cloud-sdk-react` only from
 `apps/packages/product-client/src/hooks/access/cloud/**`. Components and
-product workflow hooks consume those access-owned seams.
+product workflow hooks consume those access-owned seams. Pure cross-client
+rules under `apps/packages/product-client/src/domain/**` may accept generated or
+SDK contract types as data, but they never import SDK clients, access hooks,
+query clients, providers, or raw transports.
 
 ## AnyHarness
 
@@ -139,31 +142,34 @@ Prefer direct SDK React imports for generic resources:
 import { useAnyHarnessRuntimeWorkspaces } from "@anyharness/sdk-react";
 ```
 
-Create a Desktop AnyHarness access hook only when Desktop adds
-connection/runtime selection, local/cloud bridging, or cache behavior the SDK
-cannot provide.
+Create a ProductClient AnyHarness access hook only when the connected product
+adds connection/runtime selection, local/cloud bridging, or cache behavior the
+SDK cannot provide. Desktop-specific capability reaches that hook through
+`ProductHost.desktop`; the hook does not import the host.
 
 Low-level framework-agnostic primitives, such as streams, transcript reducers,
 and terminal connections, belong in `@anyharness/sdk`.
 
-Desktop-specific AnyHarness access is only for product runtime wiring that the
-generic SDK cannot know:
+Desktop-capable AnyHarness access in ProductClient is only for product runtime
+wiring that the generic SDK cannot know:
 
 - resolving the selected workspace to the correct runtime target
 - local/cloud runtime connection mapping
 - runtime bootstrap and credentials
 - Desktop-specific compatibility adapters
 
-Do not add a parallel generic AnyHarness request layer in Desktop. If the
-operation is a normal AnyHarness resource operation, prefer the SDK or SDK
-React hook.
+Do not add a parallel AnyHarness request/controller layer in either host. If the
+operation is a normal AnyHarness resource operation, ProductClient prefers the
+SDK or SDK React hook; Desktop supplies only the raw local-runtime capability
+required by the typed bridge.
 
 ## Tauri
 
-Raw Tauri access belongs behind the Tauri access boundary.
-`lib/access/tauri/**` is the only desktop frontend path that should import
-`@tauri-apps/api` or call native `invoke` directly. `hooks/access/tauri/**` is
-the React-facing access boundary.
+Raw Tauri access belongs behind the Desktop host boundary.
+`apps/desktop/src/lib/access/tauri/**` is the only frontend path that should
+import `@tauri-apps/api` or call native `invoke` directly. ProductClient
+`hooks/access/tauri/**` is the React-facing capability boundary and calls the
+typed `DesktopBridge`; it never imports Tauri.
 
 Use wrappers for native capabilities such as:
 
@@ -174,9 +180,10 @@ Use wrappers for native capabilities such as:
 - native window operations
 - shell/open-in-editor operations
 
-React-facing Tauri behavior belongs in `hooks/access/tauri/**` or a product
-workflow hook that calls the wrapper. Components should not call raw Tauri APIs
-directly.
+React-facing Tauri behavior belongs in ProductClient
+`hooks/access/tauri/**` or a product workflow hook that calls the bridge-backed
+wrapper. Raw native implementation stays in Desktop. Components should not
+call raw Tauri APIs directly.
 
 ## Product Usage Pattern
 
@@ -190,9 +197,11 @@ Component
     -> lib/workflows function receives access callbacks as dependencies
 ```
 
-Business rules live in `lib/domain/**` or `lib/workflows/**`. Transport
-details live in access. Rendering lives in components. Plain `lib/**`
-functions do not call React hooks.
+App-local or connected-client business rules live in `lib/domain/**` or
+`lib/workflows/**`. Rules shared with Mobile live in
+`apps/packages/product-client/src/domain/**` and remain equally isolated from
+access. Transport details live in access. Rendering lives in components. Plain
+`lib/**` and nested-domain functions do not call React hooks.
 
 Access hooks own query keys, cache object shape, invalidation, and
 `setQueryData` for remote resources. Product workflow hooks request refresh or

@@ -2,9 +2,9 @@ import { useLayoutEffect, useState } from "react";
 import type {
   PendingPromptEntry,
   TurnRecord,
-} from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
-import { resolveOptimisticPromptHandoff } from "@proliferate/product-domain/chats/pending-prompts/pending-prompts";
-import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/chats/transcript/chat-transcript-state";
+import { resolveOptimisticPromptHandoff } from "#product/domain/chats/pending-prompts/pending-prompts";
+import type { SessionViewState } from "#product/domain/sessions/activity";
 
 interface RetainedPromptState {
   sessionId: string;

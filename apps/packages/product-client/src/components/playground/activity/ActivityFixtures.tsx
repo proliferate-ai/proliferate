@@ -4,10 +4,10 @@ import { ActivityChips } from "#product/components/workspace/activity/ActivityCh
 import { LoopsPanel } from "#product/components/workspace/activity/LoopsPanel";
 import { TerminalsRosterPanel } from "#product/components/workspace/activity/TerminalsRosterPanel";
 import { AgentsRosterPanel } from "#product/components/workspace/activity/AgentsRosterPanel";
-import { deriveActivityChips } from "@proliferate/product-domain/activity/chips";
-import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/activity/loop";
-import type { ActivityProcessWire } from "@proliferate/product-domain/activity/process";
-import type { ActivitySubagentWire } from "@proliferate/product-domain/activity/subagent";
+import { deriveActivityChips } from "#product/domain/activity/chips";
+import type { LoopCapabilities, LoopWire } from "#product/domain/activity/loop";
+import type { ActivityProcessWire } from "#product/domain/activity/process";
+import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
 import type { ScenarioKey } from "#product/config/playground";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import {

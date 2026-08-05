@@ -11,7 +11,7 @@ import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows
 import { useProposedPlanCache } from "#product/hooks/plans/cache/use-proposed-plan-cache";
 import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
 import { useSessionPromptActions } from "#product/hooks/sessions/workflows/use-session-prompt-actions";
-import { type PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import { type PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import { type PlanImplementationHarnessState } from "#product/lib/domain/plans/implementation-target";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import {

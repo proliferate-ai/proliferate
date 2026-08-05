@@ -15,7 +15,7 @@ import {
   goalStatusLabel,
   type GoalCapabilities,
   type GoalWire,
-} from "@proliferate/product-domain/activity/goal";
+} from "#product/domain/activity/goal";
 import { Button } from "#product/primitives/Button";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { Tooltip } from "#product/primitives/Tooltip";

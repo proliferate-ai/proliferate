@@ -4,7 +4,7 @@ import {
   buildCoreCloudEnvironmentSaveRequest,
   cloudEnvironmentStatusPresentation,
   type CloudEnvironmentStatusPresentation,
-} from "@proliferate/product-domain/environments/cloud-environments";
+} from "#product/domain/environments/cloud-environments";
 import {
   useCloudEnvironmentDraft,
   type CloudEnvironmentDraft,

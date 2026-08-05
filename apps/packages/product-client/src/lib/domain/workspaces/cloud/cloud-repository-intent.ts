@@ -1,4 +1,4 @@
-import type { RepositoryCapabilityRequirement } from "@proliferate/product-domain/repos/repo-readiness";
+import type { RepositoryCapabilityRequirement } from "#product/domain/repos/repo-readiness";
 
 /**
  * A minimal, serializable GitHub repository identity. Only owner/name/provider

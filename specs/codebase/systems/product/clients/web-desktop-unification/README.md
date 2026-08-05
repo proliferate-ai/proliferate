@@ -6,7 +6,8 @@ billing, chat, workspace, workflow, or other feature behavior; the focused
 feature specs remain authoritative for those behaviors.
 
 Scope: `apps/desktop`, `apps/web`, and the shared DOM package/design owners under
-`apps/packages/**`. Mobile is outside this migration and must remain DOM-free.
+`apps/packages/**`. Mobile is outside this DOM migration and remains native; it
+may consume only concrete ProductClient `internal/domain/<file>` modules.
 
 ## Goal
 
@@ -79,6 +80,7 @@ store.
 apps/packages/product-client/
   src/
     ProductClient.tsx
+    domain/                      # pure shared rules; Mobile-safe
     primitives/
       patterns/
       icons/
@@ -104,12 +106,13 @@ apps/packages/product-client/
 
 apps/desktop/src/
   main.tsx
-  desktop-host.ts
-  index.css
-  native/                      # raw Tauri/native implementation
+  providers/                    # Desktop host construction and mounting
+  lib/access/tauri/             # raw Tauri/native implementation
+  lib/integrations/             # Desktop vendor/auth adapters
 
 apps/web/src/
   main.tsx
+  WebHostApp.tsx
   web-host.ts
   index.css
   browser/                     # browser auth/callback implementation
@@ -131,15 +134,25 @@ ProductClient is a normal compiled workspace package.
   runtime instances as the hosts; they are not bundled twice.
 - Desktop and Web build, typecheck, and test ProductClient before bundling.
 - CI and frontend structure checks scan the package root.
-- ProductClient may import `product-domain`, `design`, and the
-  Cloud/AnyHarness SDKs in the allowed direction.
+- ProductClient's connected tier may import concrete `#product/domain/<file>`
+  modules, `design`, and the Cloud/AnyHarness SDKs in the allowed direction.
 - ProductClient's nested `primitives/**` owner is a lower layer: it may import
-  `design`, React/DOM-safe libraries, and itself, but not product-domain,
+  `design`, React/DOM-safe libraries, and itself, but not `#product/domain/*`,
   SDK/query clients, host code, or higher ProductClient layers.
+- ProductClient's nested `domain/**` owner is pure and may not import React,
+  DOM/RN code, SDK clients, access/query/store code, primitives, or higher
+  ProductClient layers.
 - ProductClient never imports `apps/desktop`, `apps/web`, `@tauri-apps/**`, raw
   Tauri `invoke`, or a Desktop-relative `@/` path.
-- Hosts import public `@proliferate/product-client/<entrypoint>` subpaths and do
-  not reach into the package's internal hooks, stores, or primitives.
+- Hosts mount the product through public
+  `@proliferate/product-client/<entrypoint>` subpaths and do not reach into
+  internal primitives. Desktop and Web retain explicitly named `internal/*`
+  seams where host assembly, authentication, or native/browser adapters depend
+  on connected ProductClient owners; this contract does not broaden or narrow
+  those established paths. A host adapter may also import a concrete
+  `@proliferate/product-client/internal/domain/<file>` rule. Mobile is different:
+  it may import only those concrete domain modules, never another internal
+  subtree, the package root, or a domain barrel.
 
 When the Desktop source moves, internal package imports use one package-local
 mapping, `#product/*`, configured in ProductClient's package, TypeScript,
@@ -600,6 +613,8 @@ The migration is complete when:
   local capability.
 - ProductClient owns the product pages, routes, UI, hooks, stores, Cloud,
   gateway, and AnyHarness behavior.
+- ProductClient's nested `src/domain/**` owns pure rules shared with Mobile;
+  connected Desktop/Web-only rules remain in `src/lib/domain/**`.
 - ProductClient contains no raw Tauri access, browser auth transport, or
   vendor-specific host implementation.
 - Connected Cloud billing, organization SSO, cloud-environment, and workflow

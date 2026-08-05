@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:built": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/product-client build && vite",
-    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/product-client build && tsc && vite build",
+    "dev:built": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-client build && vite",
+    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-client build && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "pretest": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/product-client build && bash scripts/check-design-system.sh",
+    "pretest": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-client build && bash scripts/check-design-system.sh",
     "test": "vitest run",
     "check:design": "bash scripts/check-design-system.sh",
     "test:watch": "vitest"
@@ -32,7 +32,6 @@
     "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
     "@proliferate/product-client": "workspace:*",
-    "@proliferate/product-domain": "workspace:*",
     "@sentry/react": "^10.67.0",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-virtual": "3.14.8",

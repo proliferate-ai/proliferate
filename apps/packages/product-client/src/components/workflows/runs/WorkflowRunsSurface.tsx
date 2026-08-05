@@ -1,5 +1,5 @@
 import type { ManagedWorkflowOpenTarget } from "@proliferate/cloud-sdk";
-import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
+import type { WorkflowDefinition } from "#product/domain/workflows/definition";
 import { WorkflowRunDetail } from "#product/components/workflows/WorkflowRunDetail";
 import { WorkflowRunForm } from "#product/components/workflows/WorkflowRunForm";
 import { WorkflowRunList } from "#product/components/workflows/WorkflowRunList";

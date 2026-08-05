@@ -3,8 +3,8 @@ import { useState } from "react";
 // same three glyphs from lucide-react directly — Target/CircleCheck aren't
 // in the curated ProductClient icon set).
 import { CircleAlert, CircleCheck, Target } from "lucide-react";
-import { truncateGoalObjective } from "@proliferate/product-domain/activity/goal";
-import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
+import { truncateGoalObjective } from "#product/domain/activity/goal";
+import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import { Button } from "#product/primitives/Button";
 
 // Compact row preview cap — the row also CSS-truncates to one line, but this

@@ -12,11 +12,11 @@ import {
   githubAppRootKey,
   repositoriesKey,
 } from "@proliferate/cloud-sdk-react";
-import { buildMinimalCloudEnvironmentConfigRequest } from "@proliferate/product-domain/environments/cloud-environments";
+import { buildMinimalCloudEnvironmentConfigRequest } from "#product/domain/environments/cloud-environments";
 import {
   resolveRepositoryReadiness,
   type RepositoryReadiness,
-} from "@proliferate/product-domain/repos/repo-readiness";
+} from "#product/domain/repos/repo-readiness";
 import {
   Dialog,
   DialogContent,
@@ -52,7 +52,7 @@ import {
 } from "#product/hooks/workspaces/workflows/use-clone-repo";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import { formatGitRepoId } from "#product/domain/repos/repo-id";
 
 const USER_AUTHORIZATION_RETURN_TO_SOURCE = "github_app_callback";
 

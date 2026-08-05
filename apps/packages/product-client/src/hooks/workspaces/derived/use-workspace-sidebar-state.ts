@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   type SidebarSessionActivityState,
-} from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/sessions/activity";
 import {
   buildSidebarGroupStates,
   resolveSidebarEmptyState,

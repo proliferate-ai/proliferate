@@ -25,14 +25,14 @@ import {
   resolveSubagentLaunchDisplay,
   isSubagentExecutionStateRunning,
   isSubagentWorkComplete,
-} from "@proliferate/product-domain/chats/subagents/subagent-launch";
+} from "#product/domain/chats/subagents/subagent-launch";
 import {
   formatSubagentHeaderVerb,
   isSubagentProvisioningAction,
-} from "@proliferate/product-domain/chats/subagents/subagent-tool-presentation";
+} from "#product/domain/chats/subagents/subagent-tool-presentation";
 import {
   buildTranscriptDisplayBlocks,
-} from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+} from "#product/domain/chats/transcript/transcript-presentation";
 import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import {
   collectDescendantItems,

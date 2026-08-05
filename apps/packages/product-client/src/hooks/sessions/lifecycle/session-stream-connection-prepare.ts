@@ -1,4 +1,4 @@
-import { shouldSkipColdIdleSessionStream } from "@proliferate/product-domain/sessions/activity";
+import { shouldSkipColdIdleSessionStream } from "#product/domain/sessions/activity";
 import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,

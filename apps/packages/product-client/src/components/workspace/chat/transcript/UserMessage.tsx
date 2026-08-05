@@ -9,7 +9,7 @@ import { isPlanImplementationPromptMessage } from "#product/lib/domain/plans/imp
 import {
   normalizeContentParts,
   type PromptDisplayPlanPart,
-} from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+} from "#product/domain/chats/composer/prompt-display-parts";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 
 export interface UserMessageProps {

@@ -3,7 +3,7 @@
 import { createRef } from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import { VirtualizedTranscriptRowList } from "./VirtualizedTranscriptRowList";
 
 const ROWS: TranscriptVirtualRow[] = [

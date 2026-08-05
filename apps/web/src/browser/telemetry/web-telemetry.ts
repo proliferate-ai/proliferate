@@ -4,7 +4,7 @@ import { Routes } from "react-router-dom";
 import {
   scrubTelemetryData,
   scrubTelemetryText,
-} from "@proliferate/product-domain/telemetry/scrub";
+} from "@proliferate/product-client/internal/domain/telemetry/scrub";
 import type {
   ErrorContext,
   ProductAuthUser,

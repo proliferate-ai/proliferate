@@ -10,7 +10,7 @@ import {
   resolveCurrentCollapsedAction,
   resolveCollapsedActionsLeadingKind,
   summarizeCollapsedActions,
-} from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
+} from "#product/domain/chats/transcript/transcript-collapsed-actions";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { CollapsedActionRows } from "#product/components/workspace/chat/tool-calls/CollapsedActionRows";

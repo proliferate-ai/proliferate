@@ -14,9 +14,9 @@ import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/ch
 import {
   resolveTranscriptOpenSessionWorkspaceId,
   type TranscriptOpenSessionRole,
-} from "@proliferate/product-domain/chats/transcript/transcript-open-target";
+} from "#product/domain/chats/transcript/transcript-open-target";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
+import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   ensureSessionTranscriptEntry,

@@ -5,7 +5,7 @@ import {
   formatSubagentHeaderVerb,
   formatSubagentMcpActionLabel,
   isSubagentProvisioningAction,
-} from "@proliferate/product-domain/chats/subagents/subagent-tool-presentation";
+} from "#product/domain/chats/subagents/subagent-tool-presentation";
 
 describe("subagent tool presentation", () => {
   it("formats MCP action labels outside transcript components", () => {

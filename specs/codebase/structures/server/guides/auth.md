@@ -103,7 +103,7 @@ required.
 
 Use `auth/dependencies.py` for actor-only checks. This file may verify a session,
 load the actor, and enforce account readiness, but it does not consume resource
-IDs or import product-domain stores.
+IDs or import resource-owned stores.
 
 ```python
 # auth/dependencies.py

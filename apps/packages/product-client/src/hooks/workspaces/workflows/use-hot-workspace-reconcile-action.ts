@@ -1,7 +1,7 @@
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import { useCallback } from "react";
-import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";

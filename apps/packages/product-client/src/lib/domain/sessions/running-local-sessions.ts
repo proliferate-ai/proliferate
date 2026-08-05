@@ -1,4 +1,4 @@
-import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionViewState } from "#product/domain/sessions/activity";
 import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 

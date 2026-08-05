@@ -2,7 +2,7 @@ import { useState } from "react";
 import type {
   ManagedWorkflowOpenTarget,
 } from "@proliferate/cloud-sdk";
-import { workflowRunPresentation } from "@proliferate/product-domain/workflows/run-presentation";
+import { workflowRunPresentation } from "#product/domain/workflows/run-presentation";
 import { useWorkflowRunDetailAccess } from "#product/hooks/access/cloud/workflows/use-workflow-run-access";
 import {
   inspectWorkflowCloudError,

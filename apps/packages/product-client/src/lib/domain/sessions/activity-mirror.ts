@@ -9,17 +9,17 @@ import type {
   SessionActivity,
   SubagentStatus,
 } from "@anyharness/sdk";
-import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/activity/loop";
+import type { LoopCapabilities, LoopWire } from "#product/domain/activity/loop";
 import type {
   ActivityProcessWire,
   FeedRefWire,
   ProcessStatus as ProcessStatusWire,
-} from "@proliferate/product-domain/activity/process";
+} from "#product/domain/activity/process";
 import type {
   ActivitySubagentWire,
   ActivityUsageWire,
   SubagentStatus as SubagentStatusWire,
-} from "@proliferate/product-domain/activity/subagent";
+} from "#product/domain/activity/subagent";
 
 /**
  * Per-session loop capability, projected from the runtime's action

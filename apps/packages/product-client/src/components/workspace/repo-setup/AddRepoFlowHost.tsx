@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   resolveRepositoryReadiness,
   type RepositoryCapabilityRequirement,
-} from "@proliferate/product-domain/repos/repo-readiness";
+} from "#product/domain/repos/repo-readiness";
 import {
   AddRepoFlow,
   type AddRepoFlowOption,

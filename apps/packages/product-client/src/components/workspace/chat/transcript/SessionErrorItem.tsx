@@ -5,7 +5,7 @@ import { CircleAlert } from "#product/primitives/icons/status";
 import { CircleQuestion } from "#product/primitives/icons/core";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { useSessionModelFallbackAction } from "#product/hooks/sessions/workflows/use-session-model-fallback-action";
-import { presentSessionError } from "@proliferate/product-domain/chats/transcript/session-error-presentation";
+import { presentSessionError } from "#product/domain/chats/transcript/session-error-presentation";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { getSessionRecord } from "#product/stores/sessions/session-records";

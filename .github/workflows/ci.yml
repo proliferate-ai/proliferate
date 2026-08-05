@@ -40,6 +40,7 @@ jobs:
         run: |
           python3 -m unittest scripts/test_check_frontend_boundaries.py
           python3 scripts/check_frontend_boundaries.py
+          python3 -m unittest scripts/test_check_mobile_product_client_export.py
 
       - name: Check appearance scaling ownership
         run: |
@@ -403,13 +404,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Check Mobile ProductClient export resolution
+        run: python3 scripts/check_mobile_product_client_export.py --preflight
+
       - name: Check theme contrast floors
         run: |
           python3 -m unittest scripts/test_check_theme_contrast.py
           python3 scripts/check_theme_contrast.py --table
 
-      - name: Test product domain
-        run: pnpm --filter @proliferate/product-domain test
+      - name: Test ProductClient domain
+        run: pnpm --filter @proliferate/product-client exec vitest run src/domain
 
       - name: Test product client
         run: pnpm --filter @proliferate/product-client test

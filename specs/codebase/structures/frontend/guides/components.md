@@ -11,7 +11,7 @@ and access layers own external systems.
   Tauri/Cloud/AnyHarness helpers, coordinate multi-step workflows, or own
   reusable product rules.
 - Product conditions reused across components belong in `lib/domain/**` or
-  `apps/packages/product-domain/**`.
+  `apps/packages/product-client/src/domain/**` when shared with Mobile.
 - A component callback that coordinates stores, queries, navigation, or remote
   mutations belongs in a workflow hook.
 
@@ -114,15 +114,21 @@ there, and update callsites to import it.
   standard component, hook, and library roots.
 - Components render and call ProductClient hooks; Cloud SDK React access
   belongs under `hooks/access/cloud/**`, never in components.
+- Feature components may consume pure shared models through concrete
+  `#product/domain/<file>` imports.
 - Must use its nested `primitives/**` owner for base controls.
 - Must not import Desktop/Web host internals, Tauri, or React Native.
 
 ### Mobile
 
 - Renders native components under `apps/mobile/src/components/**`.
-- May share `apps/packages/product-domain/**` view models and
+- May share concrete
+  `@proliferate/product-client/internal/domain/<file>` view models and
   `apps/packages/design/src/react-native.ts` tokens.
-- Must not import the DOM ProductClient package.
+- Must not import the ProductClient root, another internal subtree, or any DOM
+  ProductClient component.
 
-Use concrete subpaths such as `#product/primitives/Button` or
-`#product/components/settings/panes/account/AccountSettingsPane`; do not add barrels.
+Within ProductClient, use concrete subpaths such as
+`#product/primitives/Button` or
+`#product/components/settings/panes/account/AccountSettingsPane`; do not add
+barrels.

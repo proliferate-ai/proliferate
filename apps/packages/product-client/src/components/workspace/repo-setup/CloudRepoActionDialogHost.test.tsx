@@ -95,7 +95,7 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock("@proliferate/product-domain/environments/cloud-environments", () => ({
+vi.mock("#product/domain/environments/cloud-environments", () => ({
   buildMinimalCloudEnvironmentConfigRequest: (branch: string) => ({ defaultBranch: branch }),
 }));
 

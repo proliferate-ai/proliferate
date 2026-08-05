@@ -10,6 +10,9 @@ Scope:
 
 This file covers styling-only rules. Read
 [README.md](../README.md) for structure, ownership, and data-flow guidance.
+ProductClient's `src/domain/**` subtree is included in the package path above
+but is headless: it imports no CSS, Tailwind vocabulary, Design package, DOM
+primitive, or visual component.
 
 ## Semantic Tokens
 
@@ -193,6 +196,8 @@ the tokens.
 In DOM package code,
 `apps/packages/product-client/src/primitives/**` owns the primitive visual
 contract. Do not define primitive components outside that subtree.
+The sibling `product-client/src/domain/**` subtree is not a styling or primitive
+owner and cannot depend on this DOM layer.
 
 Forbidden outside `apps/packages/product-client/src/primitives/**`:
 

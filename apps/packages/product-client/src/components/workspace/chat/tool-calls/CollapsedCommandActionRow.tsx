@@ -2,12 +2,12 @@ import { useState } from "react";
 import type { ToolCallItem } from "@anyharness/sdk";
 import { CommandWindow } from "#product/primitives/icons/workspace";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import {
   deriveCommand,
   deriveCommandOutput,
   formatCommandExecutionLabel,
-} from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
+} from "#product/domain/chats/tools/collapsed-action-labels";
 import { ActionDisclosureRow } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 
 export function CommandActionRow({ item }: { item: ToolCallItem }) {

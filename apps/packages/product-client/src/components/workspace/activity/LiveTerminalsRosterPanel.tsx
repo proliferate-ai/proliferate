@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import {
   sortProcessesForDisplay,
   type ActivityProcessWire,
-} from "@proliferate/product-domain/activity/process";
+} from "#product/domain/activity/process";
 import { TerminalRosterRow } from "#product/components/workspace/activity/TerminalRosterRow";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";

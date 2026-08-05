@@ -9,10 +9,10 @@ import type {
   SessionControlDeps,
 } from "#product/hooks/sessions/workflows/session-control-contract";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
-import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import {
   sessionSlotBelongsToWorkspace,
-} from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/sessions/activity";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { selectSessionWithShellIntentRollback } from "#product/hooks/sessions/workflows/session-shell-selection";

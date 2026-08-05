@@ -7,8 +7,8 @@ import {
   workflowDraftToUpdateRequest,
   type WorkflowAgentCatalog,
   type WorkflowDefinition,
-} from "@proliferate/product-domain/workflows/definition";
-import { validateWorkflowDefinitionDraft } from "@proliferate/product-domain/workflows/validation";
+} from "#product/domain/workflows/definition";
+import { validateWorkflowDefinitionDraft } from "#product/domain/workflows/validation";
 import { useWorkflowDefinitionMutationsAccess } from "#product/hooks/access/cloud/workflows/use-workflow-definition-access";
 import {
   isWorkflowDefinitionRevisionConflict,

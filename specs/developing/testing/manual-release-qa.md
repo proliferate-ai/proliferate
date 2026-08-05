@@ -125,7 +125,7 @@ Common commands:
 
 ```bash
 cargo test --workspace
-pnpm --filter @proliferate/product-domain test
+pnpm --filter @proliferate/product-client exec vitest run src/domain
 pnpm --filter @proliferate/web typecheck
 pnpm --filter @proliferate/mobile typecheck
 pnpm --filter @proliferate/product-client typecheck
@@ -188,8 +188,8 @@ the change crosses a shared contract.
 - For composer-adjacent Desktop changes, load the dev playground and verify the
   affected scenario set from
   [../../codebase/systems/product/chat/composer.md](../../codebase/systems/product/chat/composer.md).
-- For shared product-domain changes, run the product-domain tests and at least
-  one consuming surface smoke.
+- For shared ProductClient domain changes, run the focused `src/domain` tests
+  and at least one consuming surface smoke.
 - For migrations, verify both forward application and the user-facing workflow
   backed by the migrated rows.
 - For analytics changes, verify the no-env/no-op local path and the vendor or

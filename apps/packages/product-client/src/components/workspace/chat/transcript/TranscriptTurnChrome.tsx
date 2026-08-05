@@ -12,7 +12,7 @@ import { CopyMessageButton } from "#product/components/workspace/chat/transcript
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { useActivePendingInteractionState } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
-import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+import type { SessionViewState } from "#product/domain/sessions/activity";
 
 /**
  * The two interaction shapes that get a distinct transcript marker while the

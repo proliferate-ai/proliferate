@@ -7,7 +7,7 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import {
   createExpectedControlPlaneProbeTimeoutError,
-} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
+} from "#product/domain/telemetry/control-plane-probe-timeout";
 
 let lastKnownControlPlaneReachable: boolean | null = null;
 const CONTROL_PLANE_HEALTH_TIMEOUT_MS = 2_500;

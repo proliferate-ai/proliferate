@@ -1,5 +1,5 @@
-import type { StreamBatchScheduler } from "@proliferate/product-domain/chats/transcript/stream-batcher";
-import type { PendingSessionConfigChange } from "@proliferate/product-domain/sessions/pending-config";
+import type { StreamBatchScheduler } from "#product/domain/chats/transcript/stream-batcher";
+import type { PendingSessionConfigChange } from "#product/domain/sessions/pending-config";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import type { ReconciledStreamConfigIntent } from "#product/lib/domain/sessions/stream/stream-side-effect-plan";
 import type { SessionStreamCache } from "#product/hooks/sessions/cache/use-session-stream-cache";
@@ -67,7 +67,7 @@ export interface SessionStreamFlushControllerOptions {
 }
 
 export interface BatchConfigReconcileResult {
-  pendingConfigChanges: import("@proliferate/product-domain/sessions/pending-config").PendingSessionConfigChanges;
+  pendingConfigChanges: import("#product/domain/sessions/pending-config").PendingSessionConfigChanges;
   reconciledIntents: ReconciledStreamConfigIntent[];
 }
 

@@ -4,7 +4,7 @@ import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icon
 import { FileText } from "#product/primitives/icons/workspace";
 import { Spinner } from "#product/primitives/Spinner";
 import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
-import { deriveCoworkArtifactToolPresentation } from "@proliferate/product-domain/chats/tools/cowork-artifact-tool-presentation";
+import { deriveCoworkArtifactToolPresentation } from "#product/domain/chats/tools/cowork-artifact-tool-presentation";
 
 interface CoworkArtifactToolActionRowProps {
   item: ToolCallItem;

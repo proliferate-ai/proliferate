@@ -5,7 +5,7 @@ import type {
 import {
   useCreateCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
-import type { CloudLaunchComposerSelection } from "@proliferate/product-domain/chats/cloud/composer-controls";
+import type { CloudLaunchComposerSelection } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import {
   buildBranchName,

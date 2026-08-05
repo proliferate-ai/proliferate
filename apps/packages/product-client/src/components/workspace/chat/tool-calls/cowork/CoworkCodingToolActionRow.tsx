@@ -14,8 +14,8 @@ import {
 import {
   deriveCoworkCodingToolPresentation,
   type CoworkCodingAction,
-} from "@proliferate/product-domain/chats/tools/cowork-coding-tool-presentation";
-import { normalizeToolResultText } from "@proliferate/product-domain/chats/tools/tool-result-text";
+} from "#product/domain/chats/tools/cowork-coding-tool-presentation";
+import { normalizeToolResultText } from "#product/domain/chats/tools/tool-result-text";
 
 interface CoworkCodingToolActionRowProps {
   item: ToolCallItem;

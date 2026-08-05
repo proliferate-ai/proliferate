@@ -8,7 +8,7 @@ import {
   type WorkflowAgentPromptStep,
   type WorkflowDefinitionStage,
   type WorkflowValidationIssue,
-} from "@proliferate/product-domain/workflows/definition";
+} from "#product/domain/workflows/definition";
 import { Button } from "#product/primitives/Button";
 import { Label } from "#product/primitives/Label";
 import { Select } from "#product/primitives/Select";

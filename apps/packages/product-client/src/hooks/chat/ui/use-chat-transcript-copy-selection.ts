@@ -2,9 +2,9 @@ import { useCallback, type RefObject } from "react";
 import type {
   PendingPromptEntry,
   TranscriptState,
-} from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
-import { collectToolCallIdsWithProposedPlan } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
-import { buildTranscriptCopyText } from "@proliferate/product-domain/chats/transcript/transcript-copy";
+} from "#product/domain/chats/transcript/chat-transcript-state";
+import { collectToolCallIdsWithProposedPlan } from "#product/domain/chats/transcript/transcript-rendering";
+import { buildTranscriptCopyText } from "#product/domain/chats/transcript/transcript-copy";
 import { useChatTranscriptSelection } from "./chat-transcript-selection";
 
 export function useChatTranscriptCopySelection({

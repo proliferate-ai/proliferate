@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { renderHook } from "@testing-library/react";
-import type { TurnRecord } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
-import { createOptimisticPendingPrompt } from "@proliferate/product-domain/chats/pending-prompts/pending-prompts";
+import type { TurnRecord } from "#product/domain/chats/transcript/chat-transcript-state";
+import { createOptimisticPendingPrompt } from "#product/domain/chats/pending-prompts/pending-prompts";
 import { describe, expect, it } from "vitest";
 import { useOptimisticPromptHandoff } from "./use-optimistic-prompt-handoff";
 

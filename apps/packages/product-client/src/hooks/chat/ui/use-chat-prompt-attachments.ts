@@ -1,9 +1,9 @@
 import { useCallback, useMemo } from "react";
 import type { PromptCapabilities } from "@anyharness/sdk";
-import { canAttachPromptContent } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
+import { canAttachPromptContent } from "#product/domain/chats/composer/prompt-attachment-rules";
 import { usePromptAttachments } from "#product/hooks/chat/ui/use-prompt-attachments";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
-import type { PromptAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
+import type { PromptAttachmentDescriptor } from "#product/domain/chats/composer/prompt-attachment-rules";
 
 export type PromptAttachmentController = ReturnType<typeof usePromptAttachments> & {
   canAttachFiles: boolean;

@@ -10,7 +10,7 @@ import {
   renderTranscriptLink,
 } from "#product/components/workspace/chat/transcript/transcript-markdown";
 import { PlanReferencePreviewDialog } from "#product/components/workspace/chat/plans/PlanReferencePreviewDialog";
-import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import type { PromptDisplayPlanPart } from "#product/domain/chats/composer/prompt-display-parts";
 
 type PlanReferenceAttachmentCardVariant = "draft" | "compact" | "transcript";
 

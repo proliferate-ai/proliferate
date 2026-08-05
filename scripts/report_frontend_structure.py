@@ -11,14 +11,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 try:
-    from scripts.frontend_imports import ImportStatement, collect_imports
+    from scripts.frontend_imports import ImportStatement, collect_module_specifiers
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
-    from frontend_imports import ImportStatement, collect_imports
+    from frontend_imports import ImportStatement, collect_module_specifiers
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MAX_LINES_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "max_lines_allowlist.txt"
 FRONTEND_STRUCTURE_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_structure_allowlist.txt"
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
+PRODUCT_CLIENT_DOMAIN_SRC = PRODUCT_CLIENT_SRC / "domain"
 PRODUCT_CLIENT_PRIMITIVES_SRC = PRODUCT_CLIENT_SRC / "primitives"
 
 FRONTEND_ROOTS = [
@@ -26,7 +27,6 @@ FRONTEND_ROOTS = [
     REPO_ROOT / "apps" / "web" / "src",
     REPO_ROOT / "apps" / "mobile" / "src",
     REPO_ROOT / "apps" / "packages" / "design" / "src",
-    REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
     PRODUCT_CLIENT_SRC,
 ]
 
@@ -47,11 +47,46 @@ DOM_APP_AND_PACKAGE_ROOTS = [
 
 PACKAGE_ROOTS = {
     "design": REPO_ROOT / "apps" / "packages" / "design" / "src",
-    "product-domain": REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
+    # Classify both nested logical packages before the connected ProductClient
+    # fallback so their stricter dependency contracts remain independent.
+    "product-client-domain": PRODUCT_CLIENT_DOMAIN_SRC,
     # Classify the nested component library before the general ProductClient
     # fallback so it retains the former primitive-package dependency boundary.
     "product-client-primitives": PRODUCT_CLIENT_PRIMITIVES_SRC,
     "product-client": PRODUCT_CLIENT_SRC,
+}
+
+PRODUCT_CLIENT_DOMAIN_ALLOWED_ANYHARNESS_RUNTIME_IMPORTS = {
+    "createTranscriptState",
+    "deriveCanonicalPlan",
+    "parseToolBackgroundWork",
+    "reduceEvents",
+}
+PRODUCT_CLIENT_DOMAIN_RAW_CLOUD_CLIENT_IMPORTS = {
+    "CreateProliferateClientOptions",
+    "ProliferateCloudClient",
+    "ProliferateOpenApiClient",
+}
+PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS = {
+    "AnyHarnessClient",
+    "AnyHarnessClientOptions",
+    "AnyHarnessError",
+    "AnyHarnessMeasurementOperationId",
+    "AnyHarnessRequestOptions",
+    "AnyHarnessRequestStartEvent",
+    "AnyHarnessRequestTimingLifecycle",
+    "AnyHarnessTimingCategory",
+    "AnyHarnessTimingEvent",
+    "AnyHarnessTimingObserver",
+    "AnyHarnessTimingScope",
+    "AnyHarnessTransport",
+}
+PRODUCT_CLIENT_DOMAIN_STYLE_SUFFIXES = {
+    ".css",
+    ".less",
+    ".sass",
+    ".scss",
+    ".styl",
 }
 
 EXTENSIONS = {".ts", ".tsx"}
@@ -479,9 +514,24 @@ def resolved_relative_import_leaves_package(path: Path, package_root: Path, sour
     return False
 
 
+def product_client_domain_raw_capability_names(
+    source: str, statement: ImportStatement
+) -> set[str]:
+    imported_names = set(statement.imported_names)
+    if "*" in imported_names:
+        return {"*"}
+    if source == "@proliferate/cloud-sdk":
+        return imported_names & PRODUCT_CLIENT_DOMAIN_RAW_CLOUD_CLIENT_IMPORTS
+    if source == "@anyharness/sdk":
+        return (
+            imported_names
+            & PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS
+        )
+    return set()
+
+
 def forbidden_import_reason(package_name: str, statement: ImportStatement) -> str | None:
     source = statement.source
-    type_only = statement.type_only
 
     if source.startswith("@/"):
         return "shared packages must not import app-root aliases"
@@ -520,8 +570,6 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
             return "ProductClient primitives must not import higher ProductClient layers"
         if source.startswith("@proliferate/product-client"):
             return "ProductClient primitives must not import the connected ProductClient surface"
-        if source.startswith("@proliferate/product-domain"):
-            return "ProductClient primitives must not import product-domain code"
         if source.startswith("@proliferate/cloud-sdk") or source.startswith(
             "@anyharness/sdk"
         ):
@@ -530,20 +578,42 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
             return "ProductClient primitives must not import query clients"
         return None
 
-    if package_name == "product-domain":
-        if source in {"react", "react-dom"} or source.startswith("react-dom/"):
-            return "product-domain must stay pure and must not import React or DOM components"
-        if source.startswith("@proliferate/product-client"):
-            return "product-domain must not import ProductClient UI"
-        if source.startswith("@proliferate/cloud-sdk-react") or source.startswith(
-            "@anyharness/sdk-react"
-        ):
-            return "product-domain must not import SDK React hooks"
-        if source == "@tanstack/react-query":
-            return "product-domain must not import query clients"
-        if source.startswith("@proliferate/cloud-sdk") and not type_only:
-            return "product-domain may import Cloud SDK contract types, not value clients"
-        return None
+    if package_name == "product-client-domain":
+        clean_source = source.split("?", 1)[0].split("#", 1)[0]
+        if Path(clean_source).suffix.lower() in PRODUCT_CLIENT_DOMAIN_STYLE_SUFFIXES:
+            return "ProductClient domain must not import CSS or style assets"
+        if source.startswith("."):
+            return None
+        if source in {"@proliferate/cloud-sdk", "@anyharness/sdk"}:
+            raw_capabilities = product_client_domain_raw_capability_names(
+                source, statement
+            )
+            if raw_capabilities:
+                return (
+                    "ProductClient domain may import SDK data contracts, not raw "
+                    "client, request, timing, or transport plumbing; forbidden "
+                    f"imports: {', '.join(sorted(raw_capabilities))}"
+                )
+        if source == "@proliferate/cloud-sdk":
+            if statement.runtime_imported_names:
+                return "ProductClient domain may import Cloud SDK contract types, not runtime values"
+            return None
+        if source == "@anyharness/sdk":
+            forbidden_runtime = (
+                set(statement.runtime_imported_names)
+                - PRODUCT_CLIENT_DOMAIN_ALLOWED_ANYHARNESS_RUNTIME_IMPORTS
+            )
+            if forbidden_runtime:
+                return (
+                    "ProductClient domain may import AnyHarness contract types and the four "
+                    "approved pure helpers only; forbidden runtime imports: "
+                    f"{', '.join(sorted(forbidden_runtime))}"
+                )
+            return None
+        return (
+            "ProductClient domain external imports are limited to Cloud SDK types and "
+            "AnyHarness contract types/approved pure helpers"
+        )
 
     if package_name == "product-client":
         # product-client is the shared connected product. It may depend in the
@@ -567,7 +637,7 @@ def find_forbidden_shared_package_imports(files: Iterable[Path]) -> list[Violati
             continue
         package_root = PACKAGE_ROOTS[package_name]
         text = path.read_text()
-        for statement in collect_imports(path, text):
+        for statement in collect_module_specifiers(path, text):
             reason = forbidden_import_reason(package_name, statement)
             if reason is None and resolved_relative_import_leaves_package(
                 path, package_root, statement.source

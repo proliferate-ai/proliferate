@@ -2,10 +2,10 @@ import type {
   PendingPromptEntry,
   TranscriptState,
   TurnRecord,
-} from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
-import { outboxEntryToPendingPromptEntry } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
-import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
-import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+} from "#product/domain/chats/transcript/chat-transcript-state";
+import { outboxEntryToPendingPromptEntry } from "#product/domain/sessions/intents/session-intent-selectors";
+import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
+import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 
 type PendingPromptVirtualRow =
   Extract<TranscriptVirtualRow, { kind: "pending_prompt" | "outbox_prompt" }>;

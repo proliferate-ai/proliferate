@@ -113,7 +113,7 @@ not set collaboration mode. Choosing `full-access` for an unattended launch
 does not authorize the product to invent a collaboration-mode override.
 
 Product labels, descriptions, icons, and safe interactive defaults live in
-`apps/packages/product-domain/src/chats/session-controls/presentation.ts`.
+`apps/packages/product-client/src/domain/chats/session-controls/presentation.ts`.
 Presentation enriches catalog values for UI; it does not own unattended launch
 policy.
 

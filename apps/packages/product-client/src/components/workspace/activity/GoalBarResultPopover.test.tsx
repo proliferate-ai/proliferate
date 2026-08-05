@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GoalBarState, GoalWire } from "@proliferate/product-domain/activity/goal";
+import type { GoalBarState, GoalWire } from "#product/domain/activity/goal";
 import { GoalBarResultPopover } from "./GoalBarResultPopover";
 
 afterEach(() => {

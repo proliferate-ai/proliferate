@@ -4,7 +4,7 @@ import {
   deriveGoalBarState,
   type GoalCapabilities,
   type GoalWire,
-} from "@proliferate/product-domain/activity/goal";
+} from "#product/domain/activity/goal";
 import { resolveGoalFixture } from "#product/lib/domain/chat/__fixtures__/playground/goal-fixtures";
 import {
   goalCapabilitiesForSession,

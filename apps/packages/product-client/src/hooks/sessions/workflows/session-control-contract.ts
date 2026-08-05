@@ -3,7 +3,7 @@ import type {
   PromptInputBlock,
 } from "@anyharness/sdk";
 import type { SessionActivationGuard, SessionActivationOutcome } from "#product/hooks/sessions/workflows/session-activation-guard";
-import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 
 export interface SessionLatencyFlowOptions {

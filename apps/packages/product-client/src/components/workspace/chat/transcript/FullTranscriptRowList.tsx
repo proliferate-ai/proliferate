@@ -10,7 +10,7 @@ import {
 } from "react";
 import { ChatTranscriptRowProvider } from "./ChatContentSearchContext";
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
+import type { TranscriptVirtualizationMode } from "#product/domain/chats/transcript/transcript-virtualization-config";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
@@ -30,7 +30,7 @@ import {
   TranscriptHistoryLoadingRow,
 } from "./TranscriptRowListShared";
 import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom";
-import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 
 type TranscriptRowRenderer = (
   row: TranscriptVirtualRow,

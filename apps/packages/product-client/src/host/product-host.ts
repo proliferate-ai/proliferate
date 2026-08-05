@@ -1,5 +1,5 @@
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
-import type { AuthMethod } from "@proliferate/product-domain/auth/model";
+import type { AuthMethod } from "#product/domain/auth/model";
 
 import type { DesktopBridge } from "./desktop-bridge";
 
@@ -67,7 +67,7 @@ export interface ProductDeploymentHost {
 }
 
 /**
- * The authenticated product identity. Richer than `product-domain`'s minimal
+ * The authenticated product identity. Richer than the nested domain model's minimal
  * chat `ProductUser`: it carries the account fields Desktop already surfaces
  * (email, avatar, GitHub login) so account/settings/telemetry consumers do not
  * lose data through the host boundary.

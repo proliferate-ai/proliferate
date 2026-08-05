@@ -1,4 +1,4 @@
-import { sortSubagentsForDisplay, type ActivitySubagentWire } from "@proliferate/product-domain/activity/subagent";
+import { sortSubagentsForDisplay, type ActivitySubagentWire } from "#product/domain/activity/subagent";
 import { SubagentRosterRow } from "./SubagentRosterRow";
 
 export interface AgentsRosterPanelProps {

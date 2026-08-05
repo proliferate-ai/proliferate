@@ -9,11 +9,11 @@ import type {
 import {
   getLiveConfigControlValue,
   type PendingConfigChange,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 import {
   cloudTranscriptHasAgentProgressAfterPrompt,
   type CloudChatTranscriptRowView,
-} from "@proliferate/product-domain/chats/cloud/transcript-view";
+} from "@proliferate/product-client/internal/domain/chats/cloud/transcript-view";
 
 import type {
   MobileCloudChat,

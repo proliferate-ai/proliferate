@@ -8,7 +8,7 @@ import {
 } from "#product/primitives/icons/workspace";
 import { Settings } from "#product/primitives/icons/core";
 import { ProliferateIcon } from "#product/primitives/icons/proliferate-icons";
-import type { ToolDisplayIconKey } from "@proliferate/product-domain/chats/tools/tool-call-display";
+import type { ToolDisplayIconKey } from "#product/domain/chats/tools/tool-call-display";
 
 export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {
   const className = "icon-paired text-current";

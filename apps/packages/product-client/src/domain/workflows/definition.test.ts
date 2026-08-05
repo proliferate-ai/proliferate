@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import fullFixture from "../../../../../fixtures/contracts/workflow-definition/full.json";
-import minimalFixture from "../../../../../fixtures/contracts/workflow-definition/minimal.json";
+import fullFixture from "../../../../../../fixtures/contracts/workflow-definition/full.json";
+import minimalFixture from "../../../../../../fixtures/contracts/workflow-definition/minimal.json";
 import {
   createWorkflowDefinitionDraft,
   resolveCanonicalWorkflowModelId,

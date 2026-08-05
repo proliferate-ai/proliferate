@@ -4,7 +4,7 @@ import {
   cloudComposerControlTitle,
   formatCloudComposerControlValueLabel,
   type CloudChatComposerControlView,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import { formatMobileWorkspaceActionSessionCount } from "../../../lib/domain/chat/mobile-workspace-action-session";
 import { spacing } from "../../../styles/tokens";

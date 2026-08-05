@@ -13,7 +13,7 @@ import {
   resolveDisplayedSessionControlState,
   type PendingSessionConfigChangeStatus,
   type PendingSessionConfigChanges,
-} from "@proliferate/product-domain/sessions/pending-config";
+} from "#product/domain/sessions/pending-config";
 
 export type { SupportedLiveControlKey } from "#product/config/session-controls";
 

@@ -12,8 +12,8 @@ import {
   pendingConfigChangeKey,
   type CloudLaunchComposerSelection,
   type PendingConfigChange,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
-import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-client/internal/domain/chats/cloud/transcript-view";
 
 import type {
   MobilePendingPrompt,

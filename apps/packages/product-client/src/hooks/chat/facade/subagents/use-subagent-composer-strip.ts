@@ -9,7 +9,7 @@ import { recordSubagentChildRelationshipHint } from "#product/hooks/sessions/wor
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { isPendingSessionId } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import { formatSubagentLabel } from "@proliferate/product-domain/chats/subagents/provenance";
+import { formatSubagentLabel } from "#product/domain/chats/subagents/provenance";
 import type {
   DelegatedAgentIdentity,
   DelegatedWorkStatusCategory,

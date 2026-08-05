@@ -1,4 +1,4 @@
-import { mobileCloudSettingsSections } from "@proliferate/product-domain/settings/cloud-settings";
+import { mobileCloudSettingsSections } from "@proliferate/product-client/internal/domain/settings/cloud-settings";
 
 export interface MobileSettingsAccountSummary {
   initials: string;

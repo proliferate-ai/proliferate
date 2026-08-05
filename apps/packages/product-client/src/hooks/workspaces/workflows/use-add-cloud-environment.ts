@@ -4,12 +4,12 @@ import {
   blockedCloudRepositoryBranchReason,
   blockedCloudRepositoryReason,
   buildMinimalCloudEnvironmentConfigRequest,
-} from "@proliferate/product-domain/environments/cloud-environments";
+} from "#product/domain/environments/cloud-environments";
 import {
   formatGitRepoId,
   parseGitRepoId,
   type GitRepoIdentity,
-} from "@proliferate/product-domain/repos/repo-id";
+} from "#product/domain/repos/repo-id";
 
 import { useCloudEnvironmentAccess } from "#product/hooks/access/cloud/use-cloud-environment-access";
 import { useGitHubRepositoryPickerAccess } from "#product/hooks/access/cloud/use-github-repository-picker-access";

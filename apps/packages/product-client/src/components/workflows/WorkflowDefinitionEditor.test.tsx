@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   WorkflowAgentCatalog,
   WorkflowDefinitionDraft,
-} from "@proliferate/product-domain/workflows/definition";
+} from "#product/domain/workflows/definition";
 import { WorkflowDefinitionEditor } from "./WorkflowDefinitionEditor";
 
 class TestIntersectionObserver {

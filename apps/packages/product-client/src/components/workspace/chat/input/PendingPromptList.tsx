@@ -6,7 +6,7 @@ import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { usePendingPromptQueue } from "#product/hooks/chat/ui/use-pending-prompt-queue";
 import { useVerticalReorder } from "#product/hooks/chat/ui/use-vertical-reorder";
-import type { PendingPromptQueueRow } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+import type { PendingPromptQueueRow } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 
 export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];

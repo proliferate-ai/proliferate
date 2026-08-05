@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createTranscriptState, reduceEvents } from "@anyharness/sdk";
 import type { SessionEventEnvelope, ToolCallItem } from "@anyharness/sdk";
-import claudeNativeSubagentFixture from "../../../../../../fixtures/contracts/native-subagent-transcript/claude.json";
-import codexNativeSubagentFixture from "../../../../../../fixtures/contracts/native-subagent-transcript/codex.json";
+import claudeNativeSubagentFixture from "../../../../../../../fixtures/contracts/native-subagent-transcript/claude.json";
+import codexNativeSubagentFixture from "../../../../../../../fixtures/contracts/native-subagent-transcript/codex.json";
 import {
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
@@ -723,7 +723,7 @@ describe("buildTurnPresentation", () => {
 
     transcript.itemsById.command = {
       ...transcript.itemsById.command as ToolCallItem,
-      rawInput: { command: "rg buildTranscriptDisplayBlocks apps/packages/product-domain/src" },
+      rawInput: { command: "rg buildTranscriptDisplayBlocks apps/packages/product-client/src/domain" },
     };
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([

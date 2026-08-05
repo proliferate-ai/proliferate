@@ -18,7 +18,7 @@ import type { SessionActivationOutcome } from "#product/hooks/sessions/workflows
 import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import { buildPlanHandoffPrompt } from "#product/lib/domain/plans/handoff-prompt";
 import {
   listPlanHandoffModeOptions,

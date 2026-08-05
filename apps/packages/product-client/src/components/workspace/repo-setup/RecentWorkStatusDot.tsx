@@ -1,4 +1,4 @@
-import type { RecentWorkStatusIndicatorView } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+import type { RecentWorkStatusIndicatorView } from "#product/domain/workspaces/cloud-work-inventory";
 
 export interface RecentWorkStatusDotProps {
   indicator: RecentWorkStatusIndicatorView;

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import {
   type WorkflowAgentCatalog,
   type WorkflowDefinition,
-} from "@proliferate/product-domain/workflows/definition";
+} from "#product/domain/workflows/definition";
 import {
   WorkflowDefinitionEditor,
   type WorkflowRepositoryOption,

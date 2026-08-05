@@ -1,5 +1,5 @@
 import { memo, useMemo, type ReactNode } from "react";
-import type { TranscriptVirtualRow as TranscriptVirtualRowModel } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import type { TranscriptVirtualRow as TranscriptVirtualRowModel } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import { ChatTranscriptRowProvider } from "./ChatContentSearchContext";
 
 export type TranscriptVirtualRowRenderer = (
