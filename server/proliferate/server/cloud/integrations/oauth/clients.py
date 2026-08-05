@@ -96,13 +96,18 @@ async def _get_or_register_dcr_client(
         resource=resource,
         client_id=registered.client_id,
         client_secret_ciphertext=(
-            encrypt_text(registered.client_secret) if registered.client_secret else None
+            encrypt_text(registered.client_secret, secret=app_settings.cloud_secret_key)
+            if registered.client_secret
+            else None
         ),
         client_secret_expires_at=registered.client_secret_expires_at,
         token_endpoint_auth_method=registered.token_endpoint_auth_method,
         registration_client_uri=registered.registration_client_uri,
         registration_access_token_ciphertext=(
-            encrypt_text(registered.registration_access_token)
+            encrypt_text(
+                registered.registration_access_token,
+                secret=app_settings.cloud_secret_key,
+            )
             if registered.registration_access_token
             else None
         ),
@@ -131,7 +136,7 @@ async def _get_static_client(
     )
     if cached is not None:
         cached_secret = (
-            decrypt_text(cached.client_secret_ciphertext)
+            decrypt_text(cached.client_secret_ciphertext, secret=app_settings.cloud_secret_key)
             if cached.client_secret_ciphertext
             else None
         )
@@ -152,7 +157,9 @@ async def _get_static_client(
         resource=resource,
         client_id=config.client_id,
         client_secret_ciphertext=(
-            encrypt_text(config.client_secret) if config.client_secret else None
+            encrypt_text(config.client_secret, secret=app_settings.cloud_secret_key)
+            if config.client_secret
+            else None
         ),
         client_secret_expires_at=None,
         token_endpoint_auth_method=config.token_endpoint_auth_method,

@@ -46,6 +46,7 @@ from proliferate.server.cloud.cloud_sandboxes.service import (  # noqa: E402
 from proliferate.server.cloud.materialization.materialize.sandbox import (  # noqa: E402
     materialize_sandbox,
 )
+from proliferate.config import settings  # noqa: E402
 from proliferate.utils.crypto import decrypt_text  # noqa: E402
 
 
@@ -105,7 +106,10 @@ async def main(email: str, poll_timeout_seconds: int) -> dict:
     try:
         import httpx
 
-        bearer_token = decrypt_text(ready_sandbox.anyharness_bearer_token_ciphertext)
+        bearer_token = decrypt_text(
+            ready_sandbox.anyharness_bearer_token_ciphertext,
+            secret=settings.cloud_secret_key,
+        )
         async with httpx.AsyncClient(timeout=15) as http_client:
             response = await http_client.get(
                 f"{ready_sandbox.anyharness_base_url}/v1/agents",

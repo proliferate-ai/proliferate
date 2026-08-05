@@ -190,8 +190,8 @@ async def load_cloud_sandbox_runtime_access(
         )
     return (
         sandbox.anyharness_base_url,
-        decrypt_text(sandbox.anyharness_bearer_token_ciphertext),
-        decrypt_text(sandbox.anyharness_data_key_ciphertext),
+        decrypt_text(sandbox.anyharness_bearer_token_ciphertext, secret=settings.cloud_secret_key),
+        decrypt_text(sandbox.anyharness_data_key_ciphertext, secret=settings.cloud_secret_key),
     )
 
 

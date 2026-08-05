@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db import session_ops
 from proliferate.db.store.integrations.accounts import set_account_credentials
 from proliferate.db.store.integrations.oauth_clients import get_oauth_client
@@ -181,7 +182,7 @@ def _decode_bundle(account: IntegrationAccountRecord) -> dict[str, Any]:
             status_code=400,
         )
     try:
-        return decrypt_json(account.credential_ciphertext)
+        return decrypt_json(account.credential_ciphertext, secret=settings.cloud_secret_key)
     except Exception as exc:  # noqa: BLE001 - crypto/JSON failures collapse to one error
         raise CloudApiError(
             "integration_credentials_unreadable",
@@ -267,7 +268,9 @@ async def _refresh_oauth_bundle(
         if oauth_client is not None:
             token_endpoint_auth_method = oauth_client.token_endpoint_auth_method
             if oauth_client.client_secret_ciphertext:
-                client_secret = decrypt_text(oauth_client.client_secret_ciphertext)
+                client_secret = decrypt_text(
+                    oauth_client.client_secret_ciphertext, secret=settings.cloud_secret_key
+                )
 
     try:
         token = await refresh_token(
@@ -320,7 +323,7 @@ async def _refresh_oauth_bundle(
         await set_account_credentials(
             write_db,
             account_id=account.id,
-            credential_ciphertext=encrypt_json(new_bundle),
+            credential_ciphertext=encrypt_json(new_bundle, secret=settings.cloud_secret_key),
             credential_format="oauth-bundle-v1",
             auth_status="ready",
             token_expires_at=expires_at,

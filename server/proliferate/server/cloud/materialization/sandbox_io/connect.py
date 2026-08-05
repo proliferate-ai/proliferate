@@ -11,6 +11,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_RESUME,
@@ -68,13 +69,15 @@ class _ProviderResumeObservedActiveError(RuntimeError):
 def _runtime_token(sandbox: CloudSandboxValue) -> str | None:
     if not sandbox.anyharness_bearer_token_ciphertext:
         return None
-    return decrypt_text(sandbox.anyharness_bearer_token_ciphertext)
+    return decrypt_text(
+        sandbox.anyharness_bearer_token_ciphertext, secret=settings.cloud_secret_key
+    )
 
 
 def _runtime_data_key(sandbox: CloudSandboxValue) -> str | None:
     if not sandbox.anyharness_data_key_ciphertext:
         return None
-    return decrypt_text(sandbox.anyharness_data_key_ciphertext)
+    return decrypt_text(sandbox.anyharness_data_key_ciphertext, secret=settings.cloud_secret_key)
 
 
 async def _destroy_unrecorded_candidate(
@@ -447,7 +450,6 @@ async def connect_ready_sandbox(
                 )
                 if resume_interrupted is not None:
                     raise resume_interrupted
-
         if (
             provider_sandbox is None
             or provider_sandbox_id is None
@@ -456,7 +458,6 @@ async def connect_ready_sandbox(
             raise CloudMaterializationCommandError(
                 "Cloud sandbox provider did not return a running sandbox."
             )
-
         # Resolve overlapping provider evidence, then ensure exact resume usage.
         try:
             active = await accept_resumed_provider(
@@ -519,12 +520,10 @@ async def connect_ready_sandbox(
             event_id=f"provider-resume-start:{sandbox.id}:{provider_sandbox_id}",
         )
         await db.commit()
-
         endpoint = await provider.resolve_runtime_endpoint(provider_sandbox)
         runtime_context = await provider.resolve_runtime_context(provider_sandbox)
         runtime_token = _runtime_token(sandbox)
         data_key = _runtime_data_key(sandbox)
-
         if runtime_token is not None and data_key is not None:
             try:
                 await wait_for_runtime_health(
@@ -566,7 +565,6 @@ async def connect_ready_sandbox(
                 runtime_token=runtime_token,
                 anyharness_data_key=data_key,
             )
-
         # Always finish the attempt with an exact-binding CAS. This clears a
         # previous receipt even when the runtime URL and credentials were reused.
         ready = await cloud_sandboxes_store.mark_cloud_sandbox_ready(
@@ -576,10 +574,12 @@ async def connect_ready_sandbox(
             e2b_template_ref=provider.template_version,
             anyharness_base_url=endpoint.runtime_url,
             anyharness_bearer_token_ciphertext=(
-                sandbox.anyharness_bearer_token_ciphertext or encrypt_text(runtime_token)
+                sandbox.anyharness_bearer_token_ciphertext
+                or encrypt_text(runtime_token, secret=settings.cloud_secret_key)
             ),
             anyharness_data_key_ciphertext=(
-                sandbox.anyharness_data_key_ciphertext or encrypt_text(data_key)
+                sandbox.anyharness_data_key_ciphertext
+                or encrypt_text(data_key, secret=settings.cloud_secret_key)
             ),
             expected_materialization_attempt=failure_expected_materialization_attempt,
         )

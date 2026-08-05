@@ -93,7 +93,8 @@ async def _seed_ready_slack_account(
                 "scopes": [],
                 "tokenEndpoint": "https://slack.com/api/oauth.v2.user.access",
                 "redirectUri": ("https://api.example.com/v1/cloud/integrations/oauth/callback"),
-            }
+            },
+            secret=settings.cloud_secret_key,
         ),
         credential_format="oauth-bundle-v1",
         auth_status="ready",

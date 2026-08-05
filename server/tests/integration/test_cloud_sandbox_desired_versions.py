@@ -468,8 +468,12 @@ class TestSupervisorBridgeDelivery:
             provider_sandbox_id=f"e2b-{uuid.uuid4().hex[:8]}",
             status=CloudSandboxStatus.ready,
             anyharness_base_url="https://runtime.example.invalid",
-            runtime_token_ciphertext=encrypt_text("runtime-token"),
-            anyharness_data_key_ciphertext=encrypt_text("data-key"),
+            runtime_token_ciphertext=encrypt_text(
+                "runtime-token", secret=settings.cloud_secret_key
+            ),
+            anyharness_data_key_ciphertext=encrypt_text(
+                "data-key", secret=settings.cloud_secret_key
+            ),
         )
         db_session.add(sandbox)
         await db_session.commit()

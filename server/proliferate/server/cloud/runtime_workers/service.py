@@ -376,8 +376,12 @@ def _build_supervisor_bridge_inputs(
             runtime_binary_path=provider.runtime_binary_path,
             base_env={"HOME": provider.user_home},
         )
-        runtime_token = decrypt_text(sandbox.anyharness_bearer_token_ciphertext)
-        anyharness_data_key = decrypt_text(sandbox.anyharness_data_key_ciphertext)
+        runtime_token = decrypt_text(
+            sandbox.anyharness_bearer_token_ciphertext, secret=settings.cloud_secret_key
+        )
+        anyharness_data_key = decrypt_text(
+            sandbox.anyharness_data_key_ciphertext, secret=settings.cloud_secret_key
+        )
         anyharness_env = build_runtime_env(
             runtime_token,
             anyharness_data_key=anyharness_data_key,
