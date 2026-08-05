@@ -1205,13 +1205,13 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--scratch-font-size": {
-    dark: "var(--text-message, var(--text-composer, 16px))",
-    light: "var(--text-message, var(--text-composer, 16px))",
+    dark: "var(--text-message, var(--text-composer, 13px))",
+    light: "var(--text-message, var(--text-composer, 13px))",
     provenance: "[SHIPPED]",
   },
   "--scratch-line-height": {
-    dark: "var(--text-message--line-height, var(--text-composer--line-height, 24px))",
-    light: "var(--text-message--line-height, var(--text-composer--line-height, 24px))",
+    dark: "var(--text-message--line-height, var(--text-composer--line-height, 21px))",
+    light: "var(--text-message--line-height, var(--text-composer--line-height, 21px))",
     provenance: "[SHIPPED]",
   },
   "--scratch-list-marker-leading-space": {
@@ -1322,9 +1322,9 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat": {
-    dark: "16px",
-    light: "16px",
-    provenance: "[RETUNE:type/chat-content-split]",
+    dark: "13px",
+    light: "13px",
+    provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat--letter-spacing": {
     dark: "0",
@@ -1332,19 +1332,19 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat--line-height": {
-    dark: "24px",
-    light: "24px",
-    provenance: "[RETUNE:type/chat-content-split]",
+    dark: "20px",
+    light: "20px",
+    provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat-meta": {
-    dark: "calc(var(--text-chat, 16px) - 2px)",
-    light: "calc(var(--text-chat, 16px) - 2px)",
+    dark: "calc(var(--text-chat, 13px) - 2px)",
+    light: "calc(var(--text-chat, 13px) - 2px)",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-composer": {
-    dark: "16px",
-    light: "16px",
-    provenance: "[RETUNE:type/chat-content-split]",
+    dark: "13px",
+    light: "13px",
+    provenance: "[SHIPPED]",
   },
   "--text-composer--letter-spacing": {
     dark: "0",
@@ -1352,9 +1352,9 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-composer--line-height": {
-    dark: "24px",
-    light: "24px",
-    provenance: "[RETUNE:type/chat-content-split]",
+    dark: "20px",
+    light: "20px",
+    provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-heading": {
     dark: "16px",

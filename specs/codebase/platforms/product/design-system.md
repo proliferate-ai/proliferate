@@ -82,11 +82,11 @@ to ask for "13px" in the abstract.
 | `ui` | 12px | 17px | `+0.005em` | Compact controls: buttons, menu rows, tabs, inputs. |
 | `sidebar-nav` | 12px | 17px | `+0.005em` | Sidebar navigation rows. |
 | `sidebar-row` | 12px | 17px | `+0.005em` | Sidebar content rows (workspaces, sessions). |
-| `chat` | 16px | 24px | `0` | Transcript prose — the dedicated chat-content reading role. |
-| `composer` | 16px | 24px | `0` | Composer input text; matched to transcript prose. |
+| `chat` | 13px | 20px | `0` | Transcript prose — the reading role. |
+| `composer` | 13px | 20px | `0` | Composer input text. |
 | `body` | 13px | 20px | `0` | General product prose outside the transcript. |
 | `message` | = `composer` | = `composer` | = `composer` | Message body; a pure alias so message and composer can never drift. |
-| `chat-meta` | `calc(chat − 2px)` = 14px | inherited | inherited | Timestamps and per-turn meta, derived from `chat` rather than pinned. |
+| `chat-meta` | `calc(chat − 2px)` = 11px | inherited | inherited | Timestamps and per-turn meta, derived from `chat` rather than pinned. |
 | `body-emphasis` | 14px | 21px | `−0.005em` | Emphasized prose, section leads. |
 | `workspace-title` | 14px | 21px | `−0.005em` | Workspace/tab titles. |
 | `heading` | 16px | 23px | `−0.01em` (`--tracking-heading`) | In-page headings. |
@@ -97,13 +97,13 @@ to ask for "13px" in the abstract.
 
 Two properties are visible in that table and are the ramp's actual design:
 
-- **Tighter as larger.** Tracking runs positive at the small end
-  (`+0.01em` at 11px, `+0.005em` at 12px), lands at zero for body and chat
-  content, and goes negative for emphasized and display roles. Small controls
-  need air between letters; prose stays neutral; display text pulls together.
-- **Ratios shift with role.** Control roles sit near 1.4 (11/15, 12/17), body
-  prose at 1.54 (13/20), chat content at 1.5 (16/24), and display roles compress
-  toward 1.26 (19/24) and 1.31
+- **Tighter as larger.** Tracking runs positive at the small end (`+0.01em` at
+  11px, `+0.005em` at 12px), lands at zero for the 13px reading roles, and goes
+  negative as size grows (`−0.005em` at 14px, `−0.01em` at 16px, `−0.025em` at
+  19px and 26px). Small text needs air between letters to stay legible; display
+  text needs the letters pulled together to stop reading as loose.
+- **Ratios shift with role.** Control roles sit near 1.4 (11/15, 12/17), reading
+  roles at 1.54 (13/20), display roles compress toward 1.26 (19/24) and 1.31
   (26/34). The tighter the leading, the more the type reads as an object rather
   than a paragraph.
 
@@ -122,7 +122,7 @@ all fail `FIXED_TEXT_PATTERNS` in
 
 > **The chat/composer pair is CI-locked.**
 > [check-theme.mjs](../../../../apps/packages/design/scripts/check-theme.mjs)
-> asserts `typography.lineHeight.chat === typography.size.composer + 8`. The
+> asserts `typography.lineHeight.chat === typography.size.composer + 7`. The
 > transcript and the input it feeds are the same measure by construction: text
 > the user types keeps its rhythm when it becomes text the user reads. Retuning
 > one without the other fails the design build.

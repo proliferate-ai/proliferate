@@ -341,10 +341,10 @@ for (const metric of ["size", "lineHeight", "letterSpacing"]) {
     `typography.${metric} drifted from the closed semantic ramp`,
   );
 }
-// Chat prose and the composer share a dedicated content rhythm: +8px leading.
+// Closed-ramp invariant: chat prose leads the composer by exactly 7px.
 assert(
-  typography.lineHeight.chat === typography.size.composer + 8,
-  "chat line-height must stay composer font-size + 8",
+  typography.lineHeight.chat === typography.size.composer + 7,
+  "chat line-height must stay composer font-size + 7",
 );
 
 /* ------------------------------------------------------------------ *

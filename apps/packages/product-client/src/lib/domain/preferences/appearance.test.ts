@@ -72,15 +72,15 @@ describe("appearance preferences", () => {
   it("pins the small and default semantic type scales", () => {
     expect(UI_FONT_SCALES.small).toMatchObject({
       ui: { fontSize: "11px", lineHeight: "16px", letterSpacing: "0.005em" },
-      chat: { fontSize: "15px", lineHeight: "23px", letterSpacing: "0" },
-      composer: { fontSize: "15px", lineHeight: "23px", letterSpacing: "0" },
+      chat: { fontSize: "12px", lineHeight: "19px", letterSpacing: "0" },
+      composer: { fontSize: "12px", lineHeight: "19px", letterSpacing: "0" },
       title: { fontSize: "18px", lineHeight: "23px", letterSpacing: "-0.025em" },
     });
     expect(UI_FONT_SCALES.default).toEqual({
       uiSm: { fontSize: "11px", lineHeight: "15px", letterSpacing: "0.01em" },
       ui: { fontSize: "12px", lineHeight: "17px", letterSpacing: "0.005em" },
-      chat: { fontSize: "16px", lineHeight: "24px", letterSpacing: "0" },
-      composer: { fontSize: "16px", lineHeight: "24px", letterSpacing: "0" },
+      chat: { fontSize: "13px", lineHeight: "20px", letterSpacing: "0" },
+      composer: { fontSize: "13px", lineHeight: "20px", letterSpacing: "0" },
       body: { fontSize: "13px", lineHeight: "20px", letterSpacing: "0" },
       bodyEmphasis: { fontSize: "14px", lineHeight: "21px", letterSpacing: "-0.005em" },
       workspaceTitle: { fontSize: "14px", lineHeight: "21px", letterSpacing: "-0.005em" },
@@ -114,16 +114,16 @@ describe("appearance preferences", () => {
   it("extends the upper rung instead of duplicating it", () => {
     expect(cssLengthToPx(UI_FONT_SCALES.xxxlarge.ui.fontSize))
       .toBeGreaterThan(cssLengthToPx(UI_FONT_SCALES.xxlarge.ui.fontSize));
-    expect(UI_FONT_SCALES.xxxlarge.composer.fontSize).toBe("20px");
+    expect(UI_FONT_SCALES.xxxlarge.composer.fontSize).toBe("17px");
     expect(READABLE_CODE_FONT_SCALES.xxxlarge.monacoFontSize).toBe(17);
   });
 
-  it("keeps workspace titles exactly one step above body text at every preset", () => {
+  it("keeps workspace titles exactly one step above message text at every preset", () => {
     for (const id of APPEARANCE_SIZE_IDS) {
       expect(cssLengthToPx(UI_FONT_SCALES[id].workspaceTitle.fontSize))
-        .toBe(cssLengthToPx(UI_FONT_SCALES[id].body.fontSize) + 1);
+        .toBe(cssLengthToPx(UI_FONT_SCALES[id].composer.fontSize) + 1);
       expect(cssLengthToPx(UI_FONT_SCALES[id].workspaceTitle.lineHeight))
-        .toBe(cssLengthToPx(UI_FONT_SCALES[id].body.lineHeight) + 1);
+        .toBe(cssLengthToPx(UI_FONT_SCALES[id].composer.lineHeight) + 1);
     }
   });
 
@@ -140,17 +140,16 @@ describe("appearance preferences", () => {
     });
   });
 
-  it("keeps readable code aligned with the compact body ramp, independently of chat", () => {
+  it("keeps same-named readable code bodies aligned with visible message size", () => {
     for (const id of APPEARANCE_SIZE_IDS) {
-      const bodyPx = cssLengthToPx(UI_FONT_SCALES[id].body.fontSize);
+      const messagePx = cssLengthToPx(UI_FONT_SCALES[id].composer.fontSize);
       const readable = READABLE_CODE_FONT_SCALES[id];
-      expect(readable.monacoFontSize).toBe(bodyPx);
-      expect(readable.monacoLineHeight).toBe(bodyPx + 8);
-      expect(cssLengthToPx(readable.diffsFontSize)).toBe(bodyPx);
+      expect(readable.monacoFontSize).toBe(messagePx);
+      expect(readable.monacoLineHeight).toBe(messagePx + 8);
+      expect(cssLengthToPx(readable.diffsFontSize)).toBe(messagePx);
       expect(readable.diffsLineHeight).toBe("calc(var(--diffs-font-size) * 1.8)");
-      expect(cssLengthToPx(readable.codeFontSize)).toBe(bodyPx);
+      expect(cssLengthToPx(readable.codeFontSize)).toBe(messagePx);
       expect(readable.codeLineHeight).toBe("1.625");
-      expect(cssLengthToPx(UI_FONT_SCALES[id].composer.fontSize)).toBe(bodyPx + 3);
     }
   });
 
@@ -179,16 +178,17 @@ describe("appearance preferences", () => {
   it("uses the readable chat line-height ladder and preserves a usable lower bound", () => {
     for (const id of APPEARANCE_SIZE_IDS) {
       expect(cssLengthToPx(UI_FONT_SCALES[id].chat.lineHeight))
-        .toBe(cssLengthToPx(UI_FONT_SCALES[id].composer.fontSize) + 8);
+        .toBe(cssLengthToPx(UI_FONT_SCALES[id].composer.fontSize) + 7);
     }
     expect(UI_FONT_SCALES.xxsmall.uiSm.fontSize).toBe("9px");
-    expect(UI_FONT_SCALES.xxsmall.chat.fontSize).toBe("14px");
-    expect(UI_FONT_SCALES.xxsmall.chat.lineHeight).toBe("22px");
+    expect(UI_FONT_SCALES.xxsmall.chat.fontSize).toBe("11px");
+    expect(UI_FONT_SCALES.xxsmall.chat.lineHeight).toBe("18px");
     expect(READABLE_CODE_FONT_SCALES.xxsmall.monacoFontSize).toBe(11);
   });
 
   it("keeps every semantic alias on its owning ramp step", () => {
     for (const id of APPEARANCE_SIZE_IDS) {
+      expect(UI_FONT_SCALES[id].body).toEqual(UI_FONT_SCALES[id].chat);
       expect(UI_FONT_SCALES[id].composer).toEqual(UI_FONT_SCALES[id].chat);
       expect(UI_FONT_SCALES[id].bodyEmphasis).toEqual(UI_FONT_SCALES[id].workspaceTitle);
       expect(UI_FONT_SCALES[id].sidebarNav).toEqual(UI_FONT_SCALES[id].ui);
