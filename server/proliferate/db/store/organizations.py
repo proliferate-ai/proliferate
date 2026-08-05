@@ -57,6 +57,9 @@ from proliferate.utils.time import utcnow
 
 _SLUG_ALLOWED = re.compile(r"[^a-z0-9]+")
 _SLUG_TRIM_CHAR = "-"
+
+# Bound the numeric-suffix search before falling back to a random token so a
+# pathological name never spins; the partial unique index is the backstop.
 _SLUG_NUMERIC_ATTEMPTS = 50
 
 
@@ -71,7 +74,11 @@ async def _slug_taken(db: AsyncSession, slug: str) -> bool:
 
 
 async def allocate_organization_slug(db: AsyncSession, name: str) -> str:
-    """Pick a unique, human-friendly slug derived from the organization name."""
+    """Pick a unique, human-friendly slug derived from the org name.
+
+    Tries the bare slug first, then bounded numeric suffixes, then a short
+    random token. The partial unique index remains the ultimate race guard.
+    """
     base = _slugify_organization(name)
     if not await _slug_taken(db, base):
         return base

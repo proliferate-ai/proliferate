@@ -357,6 +357,18 @@ def test_integration_rejects_database_import(tmp_path: Path) -> None:
     assert any(item.rule_id == "INTEGRATION_DB_IMPORT" for item in violations)
 
 
+def test_migration_rejects_application_import(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    module.REPO_ROOT = tmp_path
+    path = tmp_path / "server" / "alembic" / "versions" / "revision.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("from proliferate.constants.organizations import STATUS\n")
+
+    violations = module.check_paths([path])
+
+    assert any(item.rule_id == "MIGRATION_APP_IMPORT" for item in violations)
+
+
 def test_allowlist_counts_do_not_hide_new_debt(tmp_path: Path) -> None:
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
