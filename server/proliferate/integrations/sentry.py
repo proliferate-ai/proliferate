@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
 
 try:
@@ -16,7 +17,6 @@ except ImportError:  # pragma: no cover - optional dependency in local/test envs
     StarletteIntegration = None
 
 from proliferate.config import settings
-from proliferate.server.release import is_canonical_release_id, server_release_id
 
 _sentry_initialized = False
 
@@ -139,7 +139,12 @@ def _scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]
     return scrubbed
 
 
-def init_server_sentry(*, enabled: bool, telemetry_mode: str) -> None:
+def init_server_sentry(
+    *,
+    enabled: bool,
+    telemetry_mode: str,
+    release_resolver: Callable[[], str],
+) -> None:
     global _sentry_initialized
 
     if _sentry_initialized or not enabled or not settings.sentry_dsn or sentry_sdk is None:
@@ -151,17 +156,7 @@ def init_server_sentry(*, enabled: bool, telemetry_mode: str) -> None:
         level=logging.INFO,
         event_level=None,
     )
-
-    # Prefer a CI-stamped release only when it canonically names this component;
-    # otherwise fall back to the code-built `proliferate-server@<version>+<sha>`
-    # so a misconfigured `SENTRY_RELEASE` can never stamp the server's Sentry
-    # events with another component's (or a malformed) release.
-    configured_release = settings.sentry_release
-    release = (
-        configured_release
-        if is_canonical_release_id(configured_release, component="proliferate-server")
-        else server_release_id()
-    )
+    release = release_resolver()
 
     sentry_sdk.init(
         dsn=settings.sentry_dsn,

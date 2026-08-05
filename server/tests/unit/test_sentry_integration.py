@@ -1,33 +1,34 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
+from proliferate import main as server_main
 from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
 
 
-def test_sentry_integration_does_not_import_product_policy() -> None:
+def test_sentry_integration_does_not_import_product_layers() -> None:
     source_path = Path(__file__).parents[2] / "proliferate/integrations/sentry.py"
     tree = ast.parse(source_path.read_text())
 
-    product_imports = []
+    forbidden_imports = []
+    forbidden_prefixes = ("proliferate.lib.product", "proliferate.server")
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
-            "proliferate.lib.product"
-        ):
-            product_imports.append((node.lineno, node.module))
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(forbidden_prefixes):
+            forbidden_imports.append((node.lineno, node.module))
         elif isinstance(node, ast.Import):
-            product_imports.extend(
+            forbidden_imports.extend(
                 (node.lineno, alias.name)
                 for alias in node.names
-                if alias.name.startswith("proliferate.lib.product")
+                if alias.name.startswith(forbidden_prefixes)
             )
 
-    assert product_imports == []
+    assert forbidden_imports == []
 
 
 @pytest.mark.parametrize(
@@ -248,6 +249,7 @@ def test_init_server_sentry_disables_logging_event_capture(
     sentry_integration.init_server_sentry(
         enabled=True,
         telemetry_mode="hosted_product",
+        release_resolver=lambda: "proliferate-server@0.3.27+3c2bbf20e215",
     )
 
     integrations = init_kwargs["integrations"]
@@ -264,6 +266,7 @@ def test_init_server_sentry_respects_injected_disabled_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     init_calls: list[dict[str, object]] = []
+    release_calls = 0
 
     class _FakeInitSentrySdk:
         def init(self, **kwargs: object) -> None:
@@ -273,16 +276,23 @@ def test_init_server_sentry_respects_injected_disabled_verdict(
     monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
     monkeypatch.setattr(sentry_integration, "sentry_sdk", _FakeInitSentrySdk())
 
+    def resolve_release() -> str:
+        nonlocal release_calls
+        release_calls += 1
+        return "proliferate-server@0.3.27+3c2bbf20e215"
+
     sentry_integration.init_server_sentry(
         enabled=False,
         telemetry_mode="self_managed",
+        release_resolver=resolve_release,
     )
 
     assert init_calls == []
+    assert release_calls == 0
     assert sentry_integration._sentry_initialized is False
 
 
-def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch) -> str:
+def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch, release: str) -> str:
     init_kwargs: dict[str, object] = {}
 
     class _FakeInitSentrySdk:
@@ -302,10 +312,11 @@ def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch) -> str:
     sentry_integration.init_server_sentry(
         enabled=True,
         telemetry_mode="hosted_product",
+        release_resolver=lambda: release,
     )
-    release = init_kwargs["release"]
-    assert isinstance(release, str)
-    return release
+    captured_release = init_kwargs["release"]
+    assert isinstance(captured_release, str)
+    return captured_release
 
 
 def test_scrub_event_preserves_top_level_deployment_environment() -> None:
@@ -337,20 +348,46 @@ def test_scrub_event_scrubs_preserved_environment_as_text() -> None:
     assert scrubbed["environment"] == "[redacted-token] [redacted-path]"
 
 
-def test_init_prefers_configured_canonical_server_release(
+def test_init_uses_exact_injected_server_release(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "sentry_release", "proliferate-server@0.3.27+3c2bbf20e215")
-    assert _init_and_capture_release(monkeypatch) == "proliferate-server@0.3.27+3c2bbf20e215"
+    release = "proliferate-server@0.3.27+3c2bbf20e215"
+    assert _init_and_capture_release(monkeypatch, release) == release
 
 
-def test_init_ignores_noncanonical_release_and_builds_server_release(
+def test_api_composition_injects_lazy_release_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A misconfigured SENTRY_RELEASE (wrong component / malformed) must not
-    # stamp the server's events; fall back to the code-built server release.
-    monkeypatch.setattr(settings, "sentry_release", "anyharness@0.3.27+3c2bbf20e215")
-    monkeypatch.setenv("SERVER_VERSION", "0.3.27")
-    monkeypatch.setenv("SERVER_GIT_SHA", "3c2bbf20e21599aa11bb22cc33dd44ee55ff6600")
-    monkeypatch.delenv("PROLIFERATE_REQUIRE_RELEASE_IDENTITY", raising=False)
-    assert _init_and_capture_release(monkeypatch) == "proliferate-server@0.3.27+3c2bbf20e215"
+    captured: dict[str, object] = {}
+    configured = "proliferate-server@0.3.27+3c2bbf20e215"
+
+    def fake_init_server_sentry(
+        *,
+        enabled: bool,
+        telemetry_mode: str,
+        release_resolver: Callable[[], str],
+    ) -> None:
+        captured.update(
+            enabled=enabled,
+            telemetry_mode=telemetry_mode,
+            release=release_resolver(),
+        )
+
+    monkeypatch.setattr(server_main, "configure_server_logging", lambda: None)
+    monkeypatch.setattr(server_main, "is_vendor_telemetry_enabled", lambda: True)
+    monkeypatch.setattr(server_main, "get_server_telemetry_mode", lambda: "hosted_product")
+    monkeypatch.setattr(
+        server_main,
+        "resolve_server_release_id",
+        lambda value: f"resolved:{value}",
+    )
+    monkeypatch.setattr(server_main, "init_server_sentry", fake_init_server_sentry)
+    monkeypatch.setattr(settings, "sentry_release", configured)
+
+    server_main.create_app()
+
+    assert captured == {
+        "enabled": True,
+        "telemetry_mode": "hosted_product",
+        "release": f"resolved:{configured}",
+    }

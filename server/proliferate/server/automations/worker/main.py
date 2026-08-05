@@ -7,6 +7,7 @@ import asyncio
 import signal
 from collections.abc import Sequence
 
+from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db.migrations import validate_database_schema
 from proliferate.integrations.sentry import (
@@ -19,6 +20,7 @@ from proliferate.lib.product.telemetry.mode import (
 )
 from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.automations.worker.scheduler import run_scheduler_loop
+from proliferate.server.release import resolve_server_release_id
 from proliferate.utils.logging import configure_server_logging
 
 
@@ -46,6 +48,7 @@ async def _amain(args: argparse.Namespace) -> None:
     init_server_sentry(
         enabled=is_vendor_telemetry_enabled(),
         telemetry_mode=get_server_telemetry_mode(),
+        release_resolver=lambda: resolve_server_release_id(settings.sentry_release),
     )
     stop_event = asyncio.Event()
     _install_signal_handlers(stop_event)
