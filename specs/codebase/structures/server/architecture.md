@@ -210,7 +210,7 @@ outbox row and let a worker do the call.
   always comes from `proliferate.permissions`, never another service. `auth/` is
   the authentication leaf for actor dependencies, credentials, sessions, provider
   protocol, identity persistence, and crypto primitives. `server/accounts/**`
-  owns the Desktop and Identity account-entry surfaces and orchestration.
+  owns the Desktop, Identity, and SSO account-entry surfaces and orchestration.
 
 ### `background/**` / `server/<domain>/worker/service.py`
 - One background model: a Celery task. **Beat** fires periodic ones (scheduler

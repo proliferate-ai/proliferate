@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
 from uuid import UUID
 
 from fastapi import Request
@@ -37,10 +37,8 @@ from proliferate.auth.sso.types import (
     SsoStatus,
     sso_connection_key,
 )
-from proliferate.auth.sso.user_resolution import resolve_sso_user
 from proliferate.config import settings
 from proliferate.constants.auth import SUPPORTED_CODE_CHALLENGE_METHODS
-from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.auth import create_auth_code
@@ -51,7 +49,11 @@ from proliferate.integrations.sso.oidc import (
     resolve_oidc_metadata,
     verify_oidc_identity,
 )
+from proliferate.server.accounts.sso.user_resolution import resolve_sso_user
 from proliferate.server.cloud.agent_gateway import signup_hook
+
+if TYPE_CHECKING:
+    from proliferate.auth.users import User
 
 
 @dataclass(frozen=True)

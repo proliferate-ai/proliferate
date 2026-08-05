@@ -12,3 +12,4 @@ MIGRATION_APP_IMPORT server/alembic/versions/f8a9b0c1d2e3_auth_identity_multiple
 PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/gateway/proxy.py 1 managed sandbox gateway owns temporary HTTP/WS proxy transport until gateway access moves below product service layer
 API_DB_METHOD_CALL server/proliferate/server/accounts/desktop/api.py 2 inherited Auth transaction and error-persistence semantics retained during the route move
 API_DB_METHOD_CALL server/proliferate/server/accounts/identity/api.py 22 inherited Auth transaction and error-persistence semantics retained during the route move
+API_DB_METHOD_CALL server/proliferate/server/accounts/sso/api.py 6 inherited Auth transaction and error-persistence semantics retained during the route move

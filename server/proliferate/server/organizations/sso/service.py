@@ -10,14 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.sso.policy import normalize_domains
-from proliferate.auth.sso.service import (
+from proliferate.config import settings
+from proliferate.db.store import auth_sso as sso_store
+from proliferate.errors import NotFoundError
+from proliferate.server.accounts.sso.service import (
     oidc_callback_url,
     snapshot_from_sso_connection_record,
     test_oidc_connection,
 )
-from proliferate.config import settings
-from proliferate.db.store import auth_sso as sso_store
-from proliferate.errors import NotFoundError
 from proliferate.server.organizations.sso.models import (
     OrganizationSsoConnectionRequest,
     OrganizationSsoConnectionUpdateRequest,

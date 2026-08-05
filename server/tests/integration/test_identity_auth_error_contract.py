@@ -14,7 +14,7 @@ from proliferate.auth.identity.password import hash_password_login_bucket
 from proliferate.auth.identity.types import VerifiedProviderIdentity
 from proliferate.auth.oauth import google_oauth_client
 from proliferate.auth.passwords import hash_password
-from proliferate.auth.sso.api import _validated_auth_redirect_url
+from proliferate.server.accounts.sso.api import _validated_auth_redirect_url
 from proliferate.auth.tokens import REFRESH_TOKEN_AUDIENCE
 from proliferate.config import settings
 from proliferate.constants.auth import (

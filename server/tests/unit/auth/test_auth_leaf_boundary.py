@@ -1,4 +1,4 @@
-"""Structural contract for the Auth leaf's allowed intermediate dependencies."""
+"""Structural contract for the Auth leaf's zero product-domain imports."""
 
 from __future__ import annotations
 
@@ -6,33 +6,41 @@ import ast
 from pathlib import Path
 
 
-def _server_domains_imported_by_auth(path: Path) -> set[str]:
+def _server_imports(path: Path) -> tuple[str, ...]:
     tree = ast.parse(path.read_text())
-    domains: set[str] = set()
+    imports: list[str] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom) or not node.module:
-            continue
-        parts = node.module.split(".")
-        if parts[:2] == ["proliferate", "server"] and len(parts) > 2:
-            domains.add(parts[2])
-    return domains
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module == "proliferate.server" or module.startswith("proliferate.server."):
+                imports.append(module)
+            elif module == "proliferate" and any(alias.name == "server" for alias in node.names):
+                imports.append("proliferate.server")
+        elif isinstance(node, ast.Import):
+            imports.extend(
+                alias.name
+                for alias in node.names
+                if alias.name == "proliferate.server"
+                or alias.name.startswith("proliferate.server.")
+            )
+    return tuple(imports)
 
 
-def test_auth_leaf_has_only_the_deferred_sso_product_imports() -> None:
+def test_auth_leaf_has_no_product_domain_imports() -> None:
     server_root = Path(__file__).parents[3]
     auth_root = server_root / "proliferate" / "auth"
     offenders = {
-        path.relative_to(auth_root).as_posix(): _server_domains_imported_by_auth(path)
+        path.relative_to(auth_root).as_posix(): _server_imports(path)
         for path in auth_root.rglob("*.py")
-        if _server_domains_imported_by_auth(path)
+        if _server_imports(path)
     }
 
-    assert offenders == {
-        "sso/service.py": {"cloud"},
-        "sso/user_resolution.py": {"billing", "cloud", "organizations"},
-    }
+    assert offenders == {}
     auth_files = auth_root.rglob("*.py")
     assert not any("proliferate.server.accounts" in path.read_text() for path in auth_files)
     assert not (auth_root / "desktop" / "api.py").exists()
     assert not (auth_root / "desktop" / "service.py").exists()
     assert not (auth_root / "identity" / "api.py").exists()
+    assert not (auth_root / "sso" / "api.py").exists()
+    assert not (auth_root / "sso" / "service.py").exists()
+    assert not (auth_root / "sso" / "user_resolution.py").exists()

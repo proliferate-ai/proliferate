@@ -360,6 +360,51 @@ def _checkout_intent_with_organization_record(
     )
 
 
+async def ensure_sso_jit_membership(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+    role: str,
+) -> MembershipRecord:
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": f"organization-membership-active-user:{user_id}"},
+    )
+    now = utcnow()
+    membership = (
+        await db.execute(
+            select(OrganizationMembership)
+            .where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.user_id == user_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        membership = OrganizationMembership(
+            organization_id=organization_id,
+            user_id=user_id,
+            role=role,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            removed_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(membership)
+    else:
+        membership.role = role
+        membership.status = ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+        membership.removed_at = None
+        if membership.joined_at is None:
+            membership.joined_at = now
+        membership.updated_at = now
+    await db.flush()
+    return membership_record(membership)
+
+
 async def create_pending_team_checkout_intent(
     db: AsyncSession,
     *,

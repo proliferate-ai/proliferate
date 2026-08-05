@@ -14,8 +14,8 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.errors import AuthFlowError
-from proliferate.auth.sso import api as sso_api
-from proliferate.auth.sso import service as sso_service
+from proliferate.server.accounts.sso import api as sso_api
+from proliferate.server.accounts.sso import service as sso_service
 from proliferate.auth.sso.types import SsoScope
 from proliferate.config import settings
 
