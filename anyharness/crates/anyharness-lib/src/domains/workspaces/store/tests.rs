@@ -1,10 +1,11 @@
-use super::WorkspaceStore;
+use super::{WorkspaceStore, WorktreeRetentionPolicyStore};
 use crate::domains::repo_roots::test_support::seed_repo_root_1;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{
     WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
     WorkspaceRecord, WorkspaceSurface,
 };
+use crate::domains::workspaces::retention_policy::DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 
@@ -376,4 +377,68 @@ fn delete_workspace_removes_workspace_row() {
         .find_by_id(&workspace.id)
         .expect("find deleted workspace")
         .is_none());
+}
+
+// ── worktree retention policy store ──
+//
+// Row-level proofs for `store/retention.rs`. Bounds and the clock are the
+// pure policy's business (`workspaces/retention_policy.rs` unit tests); these
+// only cover read / recreate / upsert against a real DB.
+
+const POLICY_NOW: &str = "2026-01-01T00:00:00Z";
+
+#[test]
+fn reads_default_retention_policy_from_migration() {
+    let store = WorktreeRetentionPolicyStore::new(Db::open_in_memory().expect("open db"));
+
+    let policy = store.get_policy(POLICY_NOW).expect("policy");
+
+    assert_eq!(
+        policy.max_materialized_worktrees_per_repo,
+        DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO
+    );
+    assert!(!policy.updated_at.is_empty());
+}
+
+#[test]
+fn recreates_missing_retention_policy_singleton_row() {
+    let db = Db::open_in_memory().expect("open db");
+    db.with_conn(|conn| {
+        conn.execute("DELETE FROM worktree_retention_policy WHERE id = 1", [])?;
+        Ok(())
+    })
+    .expect("delete row");
+    let store = WorktreeRetentionPolicyStore::new(db);
+
+    let policy = store.get_policy(POLICY_NOW).expect("policy");
+
+    assert_eq!(
+        policy.max_materialized_worktrees_per_repo,
+        DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO
+    );
+    // The recreate path stamps the caller's clock reading, not one of its own.
+    assert_eq!(policy.updated_at, POLICY_NOW);
+}
+
+#[test]
+fn upserts_retention_policy_row() {
+    let store = WorktreeRetentionPolicyStore::new(Db::open_in_memory().expect("open db"));
+
+    let updated = store.upsert_policy(10, POLICY_NOW).expect("upsert policy");
+    assert_eq!(updated.max_materialized_worktrees_per_repo, 10);
+    assert_eq!(updated.updated_at, POLICY_NOW);
+
+    let reread = store.get_policy(POLICY_NOW).expect("policy");
+    assert_eq!(reread.max_materialized_worktrees_per_repo, 10);
+    assert_eq!(reread.updated_at, POLICY_NOW);
+
+    // Upsert is idempotent on the singleton id: a second write replaces, never
+    // duplicates.
+    let replaced = store
+        .upsert_policy(30, "2026-02-02T00:00:00Z")
+        .expect("replace policy");
+    assert_eq!(replaced.max_materialized_worktrees_per_repo, 30);
+    let reread = store.get_policy(POLICY_NOW).expect("policy");
+    assert_eq!(reread.max_materialized_worktrees_per_repo, 30);
+    assert_eq!(reread.updated_at, "2026-02-02T00:00:00Z");
 }

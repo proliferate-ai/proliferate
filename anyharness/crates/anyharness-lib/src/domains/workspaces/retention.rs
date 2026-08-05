@@ -20,11 +20,11 @@ use crate::domains::workspaces::model::{
 };
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::retention_policy::{
-    WorktreeRetentionPolicyRecord, WorktreeRetentionPolicyStore,
+    decide_policy_update, keep_count, WorktreeRetentionPolicyRecord,
 };
 use crate::domains::workspaces::retire_preflight::{RetirePreflightChecker, RetirePreflightMode};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
-use crate::domains::workspaces::store::WorkspaceStore;
+use crate::domains::workspaces::store::{WorkspaceStore, WorktreeRetentionPolicyStore};
 
 const RETENTION_MAX_REMOVALS_PER_PASS: usize = 20;
 const RETENTION_MAX_CONSIDERED_PER_PASS: usize = 200;
@@ -147,22 +147,22 @@ impl WorkspaceRetentionService {
     }
 
     pub fn get_policy(&self) -> anyhow::Result<WorktreeRetentionPolicyRecord> {
-        self.policy_store.get_policy()
+        let now = chrono::Utc::now().to_rfc3339();
+        self.policy_store.get_policy(&now)
     }
 
-    pub fn update_policy(
-        &self,
-        max_materialized_worktrees_per_repo: u32,
-    ) -> anyhow::Result<WorktreeRetentionPolicyRecord> {
-        self.policy_store
-            .update_policy(max_materialized_worktrees_per_repo)
+    /// Decide first (`repo_cap` bounds are policy), then persist the decision.
+    pub fn update_policy(&self, repo_cap: u32) -> anyhow::Result<WorktreeRetentionPolicyRecord> {
+        let decided = decide_policy_update(repo_cap, &chrono::Utc::now().to_rfc3339())?;
+        let cap = decided.max_materialized_worktrees_per_repo;
+        self.policy_store.upsert_policy(cap, &decided.updated_at)
     }
 
     pub async fn run_pass(
         &self,
         excluded_workspace_id: Option<String>,
     ) -> anyhow::Result<WorktreeRetentionRunResult> {
-        let policy = self.policy_store.get_policy()?;
+        let policy = self.get_policy()?;
         if self.running.swap(true, Ordering::SeqCst) {
             return Ok(WorktreeRetentionRunResult::already_running(policy));
         }
@@ -219,7 +219,7 @@ impl WorkspaceRetentionService {
                 .push(workspace);
         }
 
-        let keep_per_repo = policy.max_materialized_worktrees_per_repo as usize;
+        let keep_per_repo = keep_count(&policy);
         let mut considered_count = 0usize;
         let mut attempted_count = 0usize;
         let mut retired_count = 0usize;

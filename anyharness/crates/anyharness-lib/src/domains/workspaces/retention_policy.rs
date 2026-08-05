@@ -1,6 +1,12 @@
-use rusqlite::{params, OptionalExtension};
-
-use crate::persistence::Db;
+//! Pure worktree-retention policy: the per-repo materialized-worktree cap.
+//!
+//! Everything here is data-in / data-out: no store, no clock, no uuid, no
+//! `&self`. `retention.rs` (`WorkspaceRetentionService`) reads the clock and
+//! calls the store; this module owns the decisions — whether a requested cap is
+//! in bounds, what the resulting policy row should look like, and how many of a
+//! repo's activity-ordered workspaces are kept.
+//!
+//! The row shape and its SQL live in `store/retention.rs`.
 
 pub const DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO: u32 = 20;
 pub const MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO: u32 = 10;
@@ -12,74 +18,18 @@ pub struct WorktreeRetentionPolicyRecord {
     pub updated_at: String,
 }
 
-#[derive(Clone)]
-pub struct WorktreeRetentionPolicyStore {
-    db: Db,
-}
-
-impl WorktreeRetentionPolicyStore {
-    pub fn new(db: Db) -> Self {
-        Self { db }
-    }
-
-    pub fn get_policy(&self) -> anyhow::Result<WorktreeRetentionPolicyRecord> {
-        self.db.with_tx(|conn| {
-            let policy = conn
-                .query_row(
-                    "SELECT max_materialized_worktrees_per_repo, updated_at
-                       FROM worktree_retention_policy
-                      WHERE id = 1",
-                    [],
-                    |row| {
-                        Ok(WorktreeRetentionPolicyRecord {
-                            max_materialized_worktrees_per_repo: row.get::<_, u32>(0)?,
-                            updated_at: row.get(1)?,
-                        })
-                    },
-                )
-                .optional()?;
-            match policy {
-                Some(policy) => Ok(policy),
-                None => {
-                    let updated_at = chrono::Utc::now().to_rfc3339();
-                    conn.execute(
-                        "INSERT INTO worktree_retention_policy (
-                            id, max_materialized_worktrees_per_repo, updated_at
-                         ) VALUES (1, ?1, ?2)",
-                        params![DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO, updated_at],
-                    )?;
-                    Ok(WorktreeRetentionPolicyRecord {
-                        max_materialized_worktrees_per_repo:
-                            DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
-                        updated_at,
-                    })
-                }
-            }
-        })
-    }
-
-    pub fn update_policy(
-        &self,
-        max_materialized_worktrees_per_repo: u32,
-    ) -> anyhow::Result<WorktreeRetentionPolicyRecord> {
-        validate_max_materialized_worktrees_per_repo(max_materialized_worktrees_per_repo)?;
-        let updated_at = chrono::Utc::now().to_rfc3339();
-        self.db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO worktree_retention_policy (
-                    id, max_materialized_worktrees_per_repo, updated_at
-                 ) VALUES (1, ?1, ?2)
-                 ON CONFLICT(id) DO UPDATE SET
-                    max_materialized_worktrees_per_repo = excluded.max_materialized_worktrees_per_repo,
-                    updated_at = excluded.updated_at",
-                params![max_materialized_worktrees_per_repo, updated_at],
-            )?;
-            Ok(WorktreeRetentionPolicyRecord {
-                max_materialized_worktrees_per_repo,
-                updated_at,
-            })
-        })
-    }
+/// The policy decision behind a cap-update request: reject out-of-bounds values,
+/// otherwise return the row the caller should persist. `now` is the caller's
+/// clock reading (the service mints it), keeping this fn pure.
+pub fn decide_policy_update(
+    max_materialized_worktrees_per_repo: u32,
+    now: &str,
+) -> anyhow::Result<WorktreeRetentionPolicyRecord> {
+    validate_max_materialized_worktrees_per_repo(max_materialized_worktrees_per_repo)?;
+    Ok(WorktreeRetentionPolicyRecord {
+        max_materialized_worktrees_per_repo,
+        updated_at: now.to_string(),
+    })
 }
 
 pub fn validate_max_materialized_worktrees_per_repo(value: u32) -> anyhow::Result<()> {
@@ -95,63 +45,118 @@ pub fn validate_max_materialized_worktrees_per_repo(value: u32) -> anyhow::Resul
     Ok(())
 }
 
+/// How many of a repo's activity-ordered workspaces the policy keeps. The
+/// retention pass considers only the tail past this count; everything at or
+/// before it is never a retirement candidate.
+pub fn keep_count(policy: &WorktreeRetentionPolicyRecord) -> usize {
+    policy.max_materialized_worktrees_per_repo as usize
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{
-        WorktreeRetentionPolicyStore, DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
-        MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO,
-    };
-    use crate::persistence::Db;
+    use super::*;
 
-    #[test]
-    fn reads_default_policy_from_migration() {
-        let store = WorktreeRetentionPolicyStore::new(Db::open_in_memory().expect("open db"));
-        let policy = store.get_policy().expect("policy");
+    const NOW: &str = "2026-01-01T00:00:00Z";
 
-        assert_eq!(
-            policy.max_materialized_worktrees_per_repo,
-            DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO
-        );
-        assert!(!policy.updated_at.is_empty());
+    fn policy(max: u32) -> WorktreeRetentionPolicyRecord {
+        WorktreeRetentionPolicyRecord {
+            max_materialized_worktrees_per_repo: max,
+            updated_at: NOW.to_string(),
+        }
     }
 
     #[test]
-    fn recreates_missing_singleton_row() {
-        let db = Db::open_in_memory().expect("open db");
-        db.with_conn(|conn| {
-            conn.execute("DELETE FROM worktree_retention_policy WHERE id = 1", [])?;
-            Ok(())
-        })
-        .expect("delete row");
-        let store = WorktreeRetentionPolicyStore::new(db);
+    fn accepts_a_cap_inside_the_bounds() {
+        let decided = decide_policy_update(20, NOW).expect("in-bounds cap");
+        assert_eq!(decided, policy(20));
+    }
 
-        let policy = store.get_policy().expect("policy");
+    #[test]
+    fn stamps_the_callers_clock_reading_rather_than_reading_one() {
+        let decided = decide_policy_update(20, "2030-06-07T08:09:10Z").expect("in-bounds cap");
+        assert_eq!(decided.updated_at, "2030-06-07T08:09:10Z");
+    }
 
+    #[test]
+    fn accepts_the_minimum_boundary() {
+        let decided = decide_policy_update(MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO, NOW)
+            .expect("minimum is in bounds");
         assert_eq!(
-            policy.max_materialized_worktrees_per_repo,
-            DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO
+            decided.max_materialized_worktrees_per_repo,
+            MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO
         );
     }
 
     #[test]
-    fn updates_policy_with_upsert_and_bounds() {
-        let db = Db::open_in_memory().expect("open db");
-        let store = WorktreeRetentionPolicyStore::new(db);
-
-        let updated = store.update_policy(10).expect("update policy");
-        assert_eq!(updated.max_materialized_worktrees_per_repo, 10);
+    fn accepts_the_maximum_boundary() {
+        let decided = decide_policy_update(MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO, NOW)
+            .expect("maximum is in bounds");
         assert_eq!(
-            store
-                .get_policy()
-                .expect("policy")
-                .max_materialized_worktrees_per_repo,
-            10
+            decided.max_materialized_worktrees_per_repo,
+            MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO
         );
+    }
 
-        assert!(store.update_policy(9).is_err());
-        assert!(store.update_policy(0).is_err());
-        assert!(store
-            .update_policy(MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO + 1)
-            .is_err());
+    #[test]
+    fn rejects_one_below_the_minimum_boundary() {
+        let error = decide_policy_update(MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO - 1, NOW)
+            .expect_err("below minimum");
+        assert_eq!(
+            error.to_string(),
+            "maxMaterializedWorktreesPerRepo must be between 10 and 100"
+        );
+    }
+
+    #[test]
+    fn rejects_one_above_the_maximum_boundary() {
+        let error = decide_policy_update(MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO + 1, NOW)
+            .expect_err("above maximum");
+        assert_eq!(
+            error.to_string(),
+            "maxMaterializedWorktreesPerRepo must be between 10 and 100"
+        );
+    }
+
+    #[test]
+    fn rejects_zero() {
+        assert!(decide_policy_update(0, NOW).is_err());
+    }
+
+    #[test]
+    fn validation_matches_the_decision_at_every_boundary() {
+        assert!(validate_max_materialized_worktrees_per_repo(
+            MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO
+        )
+        .is_ok());
+        assert!(validate_max_materialized_worktrees_per_repo(
+            MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO
+        )
+        .is_ok());
+        assert!(validate_max_materialized_worktrees_per_repo(
+            MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO - 1
+        )
+        .is_err());
+        assert!(validate_max_materialized_worktrees_per_repo(
+            MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO + 1
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn keep_count_is_the_cap() {
+        assert_eq!(keep_count(&policy(10)), 10);
+        assert_eq!(
+            keep_count(&policy(DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO)),
+            DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO as usize
+        );
+        assert_eq!(keep_count(&policy(100)), 100);
+    }
+
+    #[test]
+    fn default_cap_sits_inside_the_bounds() {
+        assert!(validate_max_materialized_worktrees_per_repo(
+            DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO
+        )
+        .is_ok());
     }
 }
