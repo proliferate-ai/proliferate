@@ -265,6 +265,13 @@ def github_comparison_ref_from_environment() -> str:
 def shrink_command(compare_ref: str) -> str:
     return shlex.join(
         [
+            "uv",
+            "run",
+            "--python",
+            "3.12",
+            "--frozen",
+            "--extra",
+            "dev",
             "python",
             "scripts/check_mypy_baseline.py",
             "--compare-ref",

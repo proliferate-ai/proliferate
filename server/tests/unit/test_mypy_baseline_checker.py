@@ -171,7 +171,8 @@ def test_shrink_command_includes_active_comparison_ref() -> None:
     module = _load_checker_module()
 
     assert module.shrink_command("origin/main") == (
-        "python scripts/check_mypy_baseline.py --compare-ref origin/main --write-baseline"
+        "uv run --python 3.12 --frozen --extra dev python "
+        "scripts/check_mypy_baseline.py --compare-ref origin/main --write-baseline"
     )
 
 
