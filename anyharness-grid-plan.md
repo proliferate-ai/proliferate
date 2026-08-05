@@ -419,6 +419,18 @@ files only (`session_lifecycle.rs`, `user_input.rs`, `process.rs`);
 explicitly stops there. Brief goes to Pablo for a ruling; implementation
 PR follows the ruling. **One cargo build.**
 
+## Ride-along cleanups (noted by PR 3's review, no PR of their own)
+
+- `WorkspaceRuntime::list_repo_root_workspaces` (repo_metadata.rs:10) has
+  zero callers repo-wide — pre-existing dead code; delete in whichever PR
+  next touches that file (likely PR 8).
+- `SessionService::store()` (sessions/service/mod.rs:150) still exists
+  with ~30 callers across `domains/**` (mobility, reviews, plans, loops,
+  goals, cowork). Legal today — the escape rule governs `api/**` only —
+  but it is the accessor the doctrine dislikes; deleting it is the
+  domain-side sequel to PR 3 once those callers get facade methods.
+  Candidate for a PR 3b or fold into the 10.x cadence.
+
 ## PR 13 — Crate splits + visibility ratchet (violation #7, capstone)
 
 After valve rules hit zero: extract `observability`, `persistence`,
