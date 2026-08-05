@@ -67,8 +67,13 @@ Every rule names its enforcement mode: `compiler | lint | test | review`. Mechan
         - Enforcement grades live in the lint data as fields (`status = law | holds | leaks`, measured date, exact exception fingerprints - never counts) - a rule is falsifiable or it's named debt on a ratchet. "Status: target" ceases to exist as a category.
     - `TESTING/` - the depth behind `TESTING.md`: core release validation, release worlds, tier-3/tier-4 contracts
 
-- `guides/` - specific non-building workflows in / at Proliferate. Human / agent consumed (both). Task-shaped: safety contract first, steps with expected output, symptom → meaning → action failure table, rollback.
-    - What belongs here: running the profile itself, releasing, prod runbooks (provisioning failures, webhook failures, template ops, alerts), debugging (issue triage, support reports), local setup, PR process
+- `guides/` - specific non-building workflows in / at Proliferate. Human / agent consumed (both). Task-shaped: safety contract first, steps with expected output, symptom → meaning → action failure table, rollback. Everything below exists today under `specs/developing/` and moves 1:1 - nothing invented; delivery-artifact stragglers (the WDU rollout plan, frozen testing contracts) do NOT come along.
+    - `local/` - getting a working machine: `dev-profiles` (running the profile itself), `feature-worktree-auth`, `stripe-local-testing`, `github-app-manual-qa`, `mobile`
+    - `debugging/` - working an incident or report: `issue-triage`, `support-reports`, `performance-profiling`
+    - `deploying/` - shipping: `releases` (THE runbook - read before any prod deploy), `ci-cd`, `hosted`, `self-hosted-aws`, `self-hosted-deploy`
+    - `operating/` - prod runbooks and operator tasks. Failure runbooks: `cloud-provisioning-failure`, `stripe-webhook-failure`, `worker-enrollment-failure`, `production-alerts`. Operator tasks: `e2b-template-operations`, `agent-catalog-update`, `catalog-probe`, `gateway-models`, `billing-pro-promo-codes`, `operator-security-posture`. Plus `analytics/` (posthog, metabase, customerio, sentry)
+    - `process/` - `pull-requests` (labels, review flow, agent review)
+    - NOT guides: `developing/testing/*` depth → `specs/TESTING/`; the two `reference/` tables are reference, not task-shaped - `environment-sources` folds into `dev-profiles`' config section, `workspace-command-environment` belongs to the ANYHARNESS owner docs
 
 - `programs/` - multi-PR program plans in flight. OUTSIDE the canonical read path: nothing routes here, agents doing normal work never read it
     - One dir per program: immutable revisioned slice specs (spec ID, base SHA, approval state) plus a program outline carrying the slice dependency graph - so slice N+1 reconciles against what slice N actually shipped, not against a stale plan
