@@ -223,6 +223,200 @@ class ApiStoreEscapeTest(BoundaryRuleTestCase):
 
         self.assertEqual(self.for_rule(violations, "API_STORE_ESCAPE"), [])
 
+    def test_app_state_store_field_access_fails(self) -> None:
+        # No store type is named on the line, so neither the import pass nor the
+        # ctor/accessor patterns see it — the field name is the only signal.
+        violations = self.run_rules(
+            {
+                "api/http/health.rs": (
+                    "async fn health(state: AppState) -> Json<HealthResponse> {\n"
+                    "    Json(HealthResponse {\n"
+                    "        agent_seed: state.agent_seed_store.health(),\n"
+                    "    })\n"
+                    "}\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "API_STORE_ESCAPE")
+        self.assertEqual([violation.lineno for violation in matches], [3])
+        self.assertIn("facade", matches[0].message)
+
+    def test_non_store_app_state_fields_pass(self) -> None:
+        violations = self.run_rules(
+            {
+                "api/http/workspaces.rs": (
+                    "async fn handler(state: AppState) {\n"
+                    "    state.foo.list();\n"
+                    "    state.db.execution_store_id();\n"
+                    "    state.workspace_runtime.start().await;\n"
+                    "    state.runtime_home.display();\n"
+                    "    state.storefront.render();\n"
+                    "}\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "API_STORE_ESCAPE"), [])
+
+    def test_app_state_store_field_outside_api_passes(self) -> None:
+        # The rule is about handlers reaching past the facade; app/ wires the
+        # store into AppState in the first place.
+        violations = self.run_rules(
+            {"app/mod.rs": "    let health = state.agent_seed_store.health();\n"}
+        )
+
+        self.assertEqual(self.for_rule(violations, "API_STORE_ESCAPE"), [])
+
+
+class LiveDomainStoreLinePassTest(BoundaryRuleTestCase):
+    """live/** can reach a store inline, with no import to catch."""
+
+    def test_inline_store_constructor_in_live_fails(self) -> None:
+        violations = self.run_rules(
+            {
+                "live/sessions/background_work/mod.rs": (
+                    "fn seeded() -> SessionStore {\n"
+                    "    let store = SessionStore::new(db);\n"
+                    "    store\n"
+                    "}\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "LIVE_DOMAIN_STORE_IMPORT")
+        self.assertEqual([violation.lineno for violation in matches], [2])
+        self.assertIn("never fetches", matches[0].message)
+
+    def test_inline_store_accessor_in_live_fails(self) -> None:
+        violations = self.run_rules(
+            {"live/terminals/manager.rs": "    let rows = self.ports.store().list()?;\n"}
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "LIVE_DOMAIN_STORE_IMPORT")), 1)
+
+    def test_live_use_line_is_not_double_counted(self) -> None:
+        # The import pass already counts this statement; the line pass must not.
+        violations = self.run_rules(
+            {
+                "live/sessions/probe.rs": (
+                    "use crate::domains::sessions::store::SessionStore;\n"
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "LIVE_DOMAIN_STORE_IMPORT")), 1)
+
+    def test_clean_live_file_passes(self) -> None:
+        violations = self.run_rules(
+            {
+                "live/sessions/driver/mod.rs": (
+                    "fn drive(facts: LaunchBundle) {\n"
+                    "    facts.apply();\n"
+                    "}\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "LIVE_DOMAIN_STORE_IMPORT"), [])
+
+    def test_inline_store_outside_live_passes(self) -> None:
+        violations = self.run_rules(
+            {"domains/sessions/service.rs": "    let store = SessionStore::new(db);\n"}
+        )
+
+        self.assertEqual(self.for_rule(violations, "LIVE_DOMAIN_STORE_IMPORT"), [])
+
+
+class DomainValveLiveReexportTest(BoundaryRuleTestCase):
+    """A valve may hold live powers; re-exporting one republishes it domain-wide."""
+
+    def test_valve_reexporting_live_power_fails(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/sessions/runtime.rs": (
+                    "pub use crate::live::sessions::LiveSessionManager;\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].lineno, 1)
+        self.assertIn("re-export", matches[0].message)
+
+    def test_valve_reexporting_live_model_shape_passes(self) -> None:
+        # The observer-trait inversion: model shapes are sanctioned everywhere the
+        # valve rule allows them, so re-exporting one is not laundering a power.
+        violations = self.run_rules(
+            {
+                "domains/sessions/runtime.rs": (
+                    "pub use crate::live::sessions::model::LiveSessionSnapshot;\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT"), [])
+
+    def test_private_use_in_valve_passes(self) -> None:
+        # Holding the power is the valve's whole job; only republishing is banned.
+        violations = self.run_rules(
+            {
+                "domains/sessions/runtime.rs": (
+                    "use crate::live::sessions::LiveSessionManager;\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT"), [])
+
+    def test_rule_covers_every_valve_shape(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/goals/runtime.rs": (
+                    "pub use crate::live::sessions::LiveSessionManager;\n"
+                ),
+                "domains/sessions/live_ports.rs": (
+                    "pub use crate::live::sessions::handle::LiveSessionHandle;\n"
+                ),
+                "domains/workspaces/runtime/mod.rs": (
+                    "pub use crate::live::terminals::TerminalService;\n"
+                ),
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT")), 3)
+
+    def test_group_reexport_counts_once(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/sessions/runtime.rs": (
+                    "pub use crate::live::sessions::{\n"
+                    "    LiveSessionHandle,\n"
+                    "    LiveSessionManager,\n"
+                    "};\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].lineno, 1)
+
+    def test_non_valve_domain_file_is_not_checked_by_this_rule(self) -> None:
+        # A non-valve file re-exporting live is already a DOMAIN_LIVE_VALVE hit;
+        # this rule exists for the files that rule cannot see.
+        violations = self.run_rules(
+            {
+                "domains/sessions/hooks.rs": (
+                    "pub use crate::live::sessions::LiveSessionManager;\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT"), [])
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_LIVE_VALVE")), 1)
+
 
 class PolicyPurityTest(BoundaryRuleTestCase):
     def test_clock_in_policy_fails(self) -> None:
@@ -299,6 +493,52 @@ class PolicyPurityTest(BoundaryRuleTestCase):
         )
 
         self.assertEqual(self.for_rule(violations, "POLICY_PURITY"), [])
+
+    def test_bare_policy_rs_is_a_policy_file(self) -> None:
+        # `policy.rs` is the same thing as `*_policy.rs` by role and by name; the
+        # suffix test alone missed it.
+        violations = self.run_rules(
+            {
+                "domains/workflows/control/policy.rs": (
+                    "use crate::domains::workflows::store::WorkflowRunStore;\n"
+                    "pub struct WorkflowSessionControllerPolicy {\n"
+                    "    store: WorkflowRunStore,\n"
+                    "}\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "POLICY_PURITY")
+        self.assertEqual([violation.lineno for violation in matches], [1])
+        self.assertIn("no store", matches[0].message)
+
+    def test_suffix_policy_files_still_matched(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/workspaces/retention_policy.rs": (
+                    "let now = chrono::Utc::now();\n"
+                ),
+                "domains/agents/installer/install_policy.rs": (
+                    "let id = Uuid::new_v4();\n"
+                ),
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "POLICY_PURITY")), 2)
+
+    def test_policy_rs_outside_domains_is_not_checked(self) -> None:
+        violations = self.run_rules(
+            {"adapters/git/policy.rs": "let now = chrono::Utc::now();\n"}
+        )
+
+        self.assertEqual(self.for_rule(violations, "POLICY_PURITY"), [])
+
+    def test_bare_policy_rs_purity_patterns_fire(self) -> None:
+        violations = self.run_rules(
+            {"domains/workflows/control/policy.rs": "let now = Utc::now();\n"}
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "POLICY_PURITY")), 1)
 
 
 class DomainStoreImportTest(BoundaryRuleTestCase):
@@ -418,6 +658,97 @@ class DomainContractImportTest(BoundaryRuleTestCase):
 
         self.assertEqual(violations, [])
 
+    def test_inline_contract_path_fails(self) -> None:
+        # No use statement declares these, so the import-only pass saw nothing.
+        violations = self.run_rules(
+            {
+                "domains/sessions/store/events.rs": (
+                    "fn append(\n"
+                    "    event: anyharness_contract::v1::SessionEvent,\n"
+                    ") -> Result<anyharness_contract::v1::SessionEventEnvelope> {\n"
+                    "    todo!()\n"
+                    "}\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")
+        self.assertEqual([violation.lineno for violation in matches], [2, 3])
+        self.assertIn("domain twin", matches[0].message)
+
+    def test_inline_contract_turbofish_fails(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/sessions/store/events.rs": (
+                    "    let event ="
+                    " serde_json::from_str::<anyharness_contract::v1::SessionEvent>(json);\n"
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")), 1)
+
+    def test_use_line_is_not_double_counted_by_the_line_pass(self) -> None:
+        # The use-statement pass already counts this; the inline pass must skip it.
+        violations = self.run_rules(
+            {
+                "domains/goals/model.rs": (
+                    "use anyharness_contract::v1::GoalRecord;\n"
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")), 1)
+
+    def test_pub_use_contract_reexport_is_not_double_counted(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/goals/wire.rs": (
+                    "pub use anyharness_contract::v1::GoalRecord;\n"
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")), 1)
+
+    def test_multi_line_use_statement_counts_once_with_inline_pass_active(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/goals/model.rs": (
+                    "use anyharness_contract::v1::{\n"
+                    "    GoalRecord,\n"
+                    "    GoalStatus,\n"
+                    "};\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].lineno, 1)
+
+    def test_commented_inline_contract_path_is_ignored(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/goals/service.rs": (
+                    "    // was: anyharness_contract::v1::GoalRecord, now a twin\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT"), [])
+
+    def test_inline_contract_path_outside_domains_passes(self) -> None:
+        violations = self.run_rules(
+            {
+                "api/http/goals.rs": (
+                    "fn map(record: anyharness_contract::v1::GoalRecord) {}\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT"), [])
+
 
 class DomainSqlOutsideStoreTest(BoundaryRuleTestCase):
     def test_insert_outside_store_fails(self) -> None:
@@ -482,6 +813,102 @@ class DomainSqlOutsideStoreTest(BoundaryRuleTestCase):
             {
                 "persistence/migrations.rs": (
                     '    conn.execute("CREATE TABLE plans (id TEXT)", []);\n'
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE"), [])
+
+    def test_multi_line_update_is_caught(self) -> None:
+        # The dominant real shape: rustfmt puts the verb, the SET and the WHERE on
+        # separate lines, so no line carries two keywords.
+        violations = self.run_rules(
+            {
+                "domains/sessions/links/completions.rs": (
+                    "fn bump(tx: &Transaction) {\n"
+                    "    tx.execute(\n"
+                    '        "UPDATE sessions\n'
+                    "         SET pending_prompt_seq_cursor = pending_prompt_seq_cursor + 1\n"
+                    '         WHERE id = ?1",\n'
+                    "    )\n"
+                    "}\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE")
+        # The verb head and the SET clause; the bare WHERE line is not a keyword we
+        # anchor on, because it never heads a statement.
+        self.assertEqual([violation.lineno for violation in matches], [3, 4])
+
+    def test_multi_line_select_head_is_caught(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/workspaces/retention_policy.rs": (
+                    "fn get(conn: &Connection) {\n"
+                    "    conn.query_row(\n"
+                    '        "SELECT max_materialized_worktrees_per_repo, updated_at\n'
+                    "           FROM worktree_retention_policy\n"
+                    '          WHERE id = 1",\n'
+                    "    )\n"
+                    "}\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE")
+        self.assertEqual([violation.lineno for violation in matches], [3])
+
+    def test_single_line_sql_still_caught(self) -> None:
+        # The one-line shapes the original patterns covered must keep firing, and
+        # must not double-count now that keyword-anchored patterns exist too.
+        violations = self.run_rules(
+            {
+                "domains/plans/service.rs": (
+                    '    conn.execute("UPDATE plans SET name = ?2 WHERE id = ?1", []);\n'
+                    '    conn.query_row("SELECT * FROM plans WHERE id = ?1", [], f);\n'
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE")
+        self.assertEqual([violation.lineno for violation in matches], [1, 2])
+
+    def test_conflict_resolving_insert_and_drop_are_caught(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/sessions/links/completions.rs": (
+                    '    "INSERT OR IGNORE INTO session_link_wake_schedules (id)\n'
+                    '    conn.execute("DROP TABLE workspace_access_modes", [])?;\n'
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE")), 2)
+
+    def test_lowercase_prose_keywords_are_not_sql(self) -> None:
+        # The keyword-anchored patterns are uppercase-only precisely so English
+        # prose and log strings cannot trip them.
+        violations = self.run_rules(
+            {
+                "domains/workspaces/service.rs": (
+                    '    tracing::info!("select the agent for this workspace");\n'
+                    '    let msg = "update the retention setting";\n'
+                    "    let set = compute_set();\n"
+                    '    tracing::warn!("could not update policy");\n'
+                    "    let selected = pick_from(&candidates);\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE"), [])
+
+    def test_uppercase_prose_and_do_update_fragments_are_not_double_counted(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/workflows/service.rs": (
+                    "    // run UPDATE both stamps the intent and increments the counter\n"
+                    "    let mode = Method::UPDATE;\n"
                 )
             }
         )
@@ -601,6 +1028,55 @@ class ShippedAllowlistTest(unittest.TestCase):
 
         self.assertIn(
             "anyharness/crates/anyharness-lib/src/domains/mobility/service.rs", flagged
+        )
+
+    def test_known_truths_the_hardened_rules_must_see(self) -> None:
+        """Calibration anchors for the four rules widened after review.
+
+        Each entry is a real offender the pre-hardening rule was blind to, so a
+        regression that narrows a pattern back fails here and not just as a count.
+        """
+        violations = check_module.collect_violations()
+        flagged = {
+            (violation.rule_id, violation.relative_path, violation.lineno)
+            for violation in violations
+        }
+        prefix = "anyharness/crates/anyharness-lib/src"
+
+        for rule_id, path, lineno, why in [
+            # Multi-line embedded SQL: the SELECT head with FROM on the next line.
+            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 128,
+             "split SELECT head"),
+            # A split UPDATE and its SET clause.
+            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 117,
+             "split UPDATE head"),
+            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 118,
+             "SET clause line"),
+            # A `state.*_store` field access, which carries no store type on the
+            # line for the import pass to see. This particular one is benign (an
+            # in-memory health snapshot), but the shape is what the rule watches.
+            ("API_STORE_ESCAPE", "api/http/health.rs", 37, "AppState store field"),
+            # An inline contract path with no use statement to declare it.
+            ("DOMAIN_CONTRACT_IMPORT", "domains/sessions/store/events.rs", 53,
+             "inline contract path"),
+            # A store-holding file named exactly policy.rs.
+            ("POLICY_PURITY", "domains/workflows/control/policy.rs", 8,
+             "bare policy.rs"),
+        ]:
+            with self.subTest(rule=rule_id, path=path, why=why):
+                self.assertIn((rule_id, f"{prefix}/{path}", lineno), flagged)
+
+    def test_valve_live_reexport_rule_has_no_debt(self) -> None:
+        """DOMAIN_VALVE_LIVE_REEXPORT landed clean; it must stay at zero."""
+        violations = check_module.collect_violations()
+
+        self.assertEqual(
+            [
+                violation.format()
+                for violation in violations
+                if violation.rule_id == "DOMAIN_VALVE_LIVE_REEXPORT"
+            ],
+            [],
         )
 
 

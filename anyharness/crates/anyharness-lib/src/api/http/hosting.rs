@@ -198,8 +198,8 @@ pub async fn get_repo_pull_request_statuses(
     // The daemon derives the branch set itself: distinct current branches
     // over the repo root's non-retired workspaces (clients send nothing).
     let workspace_runtime = state.workspace_runtime.clone();
-    let active_branches = run_blocking("list active repo root workspaces", move || {
-        workspace_runtime.active_branches_by_repo_root_id(&repo_root_id)
+    let active_branches = run_blocking("derive active repo root branches", move || {
+        workspace_runtime.list_repo_root_active_branches(&repo_root_id)
     })
     .await?
     .map_err(|error| ApiError::internal(error.to_string()))?;
