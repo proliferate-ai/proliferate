@@ -102,6 +102,10 @@ Allowed:
 
 - `db: AsyncSession` as a parameter (passed by the handler or the worker
   entry point). Service functions take this and thread it to stores.
+- In `worker/service.py` only, a task-created
+  `async_sessionmaker[AsyncSession]` when the orchestration must alternate
+  bounded store-only phases with foreign I/O. Each session closes before the
+  external call.
 - Composing multiple store function calls within a single transaction
   (the request session by default; `db.begin_nested()` for narrower
   atomicity).
@@ -113,9 +117,12 @@ Allowed:
 
 Banned:
 
-- `async_session_factory` imports. Services don't open sessions; they
-  receive them.
-- SQLAlchemy direct imports (`from sqlalchemy import ...`).
+- Global `async_session_factory` and engine-helper imports. Ordinary services
+  don't open sessions. The narrow worker exception receives a factory from its
+  task but cannot import settings, create an engine, or reach a global factory.
+- SQLAlchemy query/building imports. The narrow worker exception may import
+  only the `AsyncSession` and `async_sessionmaker` types from
+  `sqlalchemy.ext.asyncio`.
 - `select()`, `insert()`, `update()`, `delete()`, `db.execute()`. All DB
   access goes through stores.
 - `db.commit()` or `db.rollback()`. Transactions are owned by the caller
@@ -292,8 +299,10 @@ uses it."
 
 `worker/service.py` for background work a Celery task calls. See
 [background.md](background.md). Same layer law: no ORM imports, calls service or
-store functions. The task itself is substrate in `background/**`, not a file in
-the domain.
+store functions. It normally receives `db`; when foreign I/O separates bounded
+database phases, it may receive a task-created session factory and must close
+each store-only session before the external call. The task itself is substrate
+in `background/**`, not a file in the domain.
 
 ### Forbidden
 
@@ -408,13 +417,16 @@ an outside process claims, heartbeats, or reports against a Postgres lease — a
 APIs, not worker code, and stay near `api.py`/`service.py`. See
 [background.md](background.md) for the full background-work organization.
 
+A `worker/` folder containing only its canonical `service.py` is the narrow
+worker exception to the single-file-folder rule.
+
 ## Patterns
 
 - A domain folder either has subfolder children consistently or is flat.
   Mixed shapes (some subfolders, some flat sibling files belonging to a
-  subdomain) are forbidden. `domain/` is the narrow exception to the
-  single-file-folder rule: one meaningful pure-domain file is allowed when
-  the domain only has one extracted rule module.
+  subdomain) are forbidden. `domain/` may contain one meaningful pure-domain
+  file, and `worker/` may contain only its canonical `service.py`; these are the
+  narrow exceptions to the single-file-folder rule.
 - Service composes; domain decides; store persists. If you find a service
   computing a complex rule inline, the rule belongs in `domain/`. If you find
   a domain function calling a store, it's not domain.

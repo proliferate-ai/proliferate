@@ -1,5 +1,6 @@
 """DB adapter for fastapi-users and user lookup store helpers."""
 
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -7,6 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from proliferate.db.models.auth import OAuthAccount, User
+
+
+@dataclass(frozen=True)
+class EngagementSyncUserValue:
+    id: UUID
+    email: str | None
+
+
+async def list_engagement_sync_users_page(
+    db: AsyncSession,
+    *,
+    after_id: UUID | None,
+    limit: int,
+) -> tuple[EngagementSyncUserValue, ...]:
+    statement = select(User.id, User.email).order_by(User.id).limit(limit)
+    if after_id is not None:
+        statement = statement.where(User.id > after_id)
+    rows = (await db.execute(statement)).all()
+    return tuple(EngagementSyncUserValue(id=row.id, email=row.email) for row in rows)
 
 
 async def get_user_by_id(
