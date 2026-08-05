@@ -1,3 +1,5 @@
+Status: target
+
 # Background Work
 
 Background work is everything the product does outside the request lifecycle:
@@ -17,8 +19,8 @@ background work is the same unit — a **task** — and only the trigger differs
 | **Beat** (periodic) | on a clock, via `redbeat` | scheduler polls, surviving reconciler passes, batched telemetry |
 | **Outbox relay** (on-demand) | when a committed state change demands follow-up work | execution jobs that must not be lost |
 
-There are no bespoke `while True` loops and no per-domain worker processes in
-the target. A scheduler is a Beat-fired task that polls due work and writes run
+There are no bespoke `while True` loops and no per-domain worker processes. A
+scheduler is a Beat-fired task that polls due work and writes run
 rows plus outbox rows; it does not execute. A reconciler is a Beat-fired task
 that survives only for **external-truth drift** and enqueues heavy corrective
 work as on-demand tasks. A durable job is a task delivered by the relay,
@@ -263,3 +265,102 @@ share `domain/` and the stores.
   promote the worker-facing one into `worker/service.py`
 - a `background/` module reaching into a domain's internals → route by task kind;
   the domain's public service owns the work
+
+## Current gaps
+
+Each unchecked item is a concrete difference from the target, and the
+`Status: target` label remains until every item is removed.
+
+- [ ] **Billing reconciliation.**
+      [`_billing_reconciler_loop`](../../../../../server/proliferate/server/billing/reconciler.py)
+      is started by `start_billing_reconciler` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) when
+      `cloud_billing_mode` is `observe` or `enforce`;
+      `run_background_workers` makes the starter a no-op. Each pass runs
+      immediately, reports unexpected failures through `report_critical` and
+      continues, then sleeps
+      `max(BILLING_RECONCILE_INTERVAL_SECONDS, 30)` seconds. The
+      [Billing contract](../../../platforms/product/billing.md) describes the
+      normal interval as fifteen minutes. Conversion is parked because ordinary
+      self-host deployment does not run the Celery worker, Beat, or broker
+      plane; moving this pass to Beat first would silently stop enforcement and
+      reconciliation there.
+- [ ] **Anonymous Server version telemetry.**
+      [`_sender_loop`](../../../../../server/proliferate/server/anonymous_telemetry/worker.py)
+      is started by `start_server_anonymous_telemetry_sender` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) whenever
+      anonymous telemetry is enabled. It is not gated by
+      `run_background_workers`; it emits once immediately and then every 24
+      hours, while failures are captured and logged and the loop continues.
+      Conversion is parked for the same deployment-parity reason: self-host API
+      installations currently emit this heartbeat without a Celery worker or
+      Beat process, so a Beat-only move would silently remove it.
+- [ ] **Agent Gateway enrollment backfill.**
+      [`_backfill_loop`](../../../../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      is started by `start_agent_gateway_enrollment_backfill` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) when both
+      Agent Gateway and `run_background_workers` are enabled. It runs
+      immediately, catches unexpected failures, reports them through
+      `report_critical`, and continues, then sleeps
+      `agent_gateway_backfill_interval_seconds`. Conversion remains
+      analysis-only until deployment parity, singleton and overlap behavior,
+      the existing feature and worker gates, immediate-first-run cadence, and
+      retry and replay behavior are characterized for a Beat-fired task.
+- [ ] **Agent Gateway usage import.**
+      [`_usage_import_loop`](../../../../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      is started by `start_agent_gateway_usage_import` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) under the
+      same Agent Gateway and `run_background_workers` gates. It runs
+      immediately, catches unexpected failures, reports them through
+      `report_critical`, and continues, then sleeps
+      `agent_gateway_usage_import_interval_seconds`. Conversion remains
+      analysis-only until deployment parity, singleton and overlap behavior,
+      the existing gates, immediate-first-run cadence, and retry and replay
+      behavior are characterized for a Beat-fired task, including safe replay
+      of LiteLLM spend-log paging and credit-exhaustion effects.
+- [ ] **Agent Gateway LLM top-up.**
+      [`_topup_loop`](../../../../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      is started by `start_agent_gateway_llm_topups` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) only when
+      Agent Gateway, top-up configuration, and `run_background_workers` enable
+      it. It runs immediately, catches unexpected failures, reports them
+      through `report_critical`, and continues, then sleeps
+      `agent_gateway_topup_interval_seconds`. Conversion remains analysis-only
+      until deployment parity, singleton and overlap behavior, the existing
+      gates, immediate-first-run cadence, retry and replay behavior for charge
+      and top-up effects, and exact configuration parity are characterized for
+      a Beat-fired task.
+- [ ] **Customer.io task thinness.** The real Beat-fired Celery task in
+      [`customerio_sync.py`](../../../../../server/proliferate/background/tasks/customerio_sync.py)
+      currently contains SQLAlchemy and ORM reads, keyset pagination, profile
+      assembly, and Customer.io calls instead of being a thin wrapper around an
+      owning domain service. Its internal `while True` is finite keyset
+      pagination, not a sixth periodic lifespan loop. This remains a gap until
+      the task has the thin shape asserted by the target body.
+- [ ] **Parked Automations worker tree.** The current
+      [Automations process entry point](../../../../../server/proliferate/server/automations/worker/main.py)
+      and [scheduler loop](../../../../../server/proliferate/server/automations/worker/scheduler.py)
+      remain even though the Automations router is parked and unmounted in
+      [`main.py`](../../../../../server/proliferate/main.py), so the tree is not
+      a live product surface. This conflicts with the target's
+      no-per-domain-process shape and remains a gap until a separately approved
+      behavior slice removes or otherwise reconciles the parked tree; this
+      documentation change does not make it importable.
+- [ ] **One-off health enqueue store client.**
+      [`enqueue_health.py`](../../../../../server/proliferate/background/enqueue_health.py)
+      is a one-off deployment proof command, not a task or loop, but it writes
+      directly through the background-outbox store. This is a concrete
+      exception to the target body's rule that `relay.py` is the only
+      `background/**` store client. It remains a placement and law gap; this
+      documentation slice does not decide whether the utility moves or the
+      target law later gains a narrow deployment exception.
+
+Deployment evidence: the ordinary production self-host
+[`docker-compose.production.yml`](../../../../../server/deploy/docker-compose.production.yml)
+defines the base API stack but no RabbitMQ, Celery worker, or Beat service. The
+development [`docker-compose.yml`](../../../../../server/docker-compose.yml)
+makes `worker` and `beat` opt-in through the `background` profile.
+[`run_background_workers`](../../../../../server/proliferate/config.py) defaults
+to true, and the current [`main.py` lifespan](../../../../../server/proliferate/main.py)
+keeps periodic work in the API process unless each starter's own gates disable
+it.
