@@ -1052,7 +1052,9 @@ class ShippedAllowlistTest(unittest.TestCase):
              "split UPDATE head"),
             ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 118,
              "SET clause line"),
-            # A domain store reached through an AppState field.
+            # A `state.*_store` field access, which carries no store type on the
+            # line for the import pass to see. This particular one is benign (an
+            # in-memory health snapshot), but the shape is what the rule watches.
             ("API_STORE_ESCAPE", "api/http/health.rs", 37, "AppState store field"),
             # An inline contract path with no use statement to declare it.
             ("DOMAIN_CONTRACT_IMPORT", "domains/sessions/store/events.rs", 53,

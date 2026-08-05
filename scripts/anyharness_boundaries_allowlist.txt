@@ -64,7 +64,7 @@ LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/man
 
 # Rule: api/** calls domain facades, never stores.
 # 6 files, 16 occurrences.
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/health.rs 1 health handler reads a domain store reached via the AppState.agent_seed_store field, so no store type appears on the line; target = facade method (grid plan PR 3)
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/health.rs 1 in-memory health snapshot named like a store (Arc<RwLock<AgentSeedHealth>>, not SQL); matches the state.*_store pattern; benign - seeded rather than special-cased to keep the pattern simple
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/hosting.rs 2 1 handler constructs WorkspaceStore directly (1 import + 1 ctor); target = facade method (grid plan PR 3)
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/mobility.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/sessions_pending.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)

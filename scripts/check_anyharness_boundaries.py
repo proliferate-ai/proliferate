@@ -116,9 +116,12 @@ STORE_CONSTRUCTOR_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*Store::new\b")
 # A handler can also reach a domain store without naming a store type at all, by
 # reading a store field off AppState (`state.agent_seed_store.health()`). Neither
 # the import pass nor the two patterns above see that, because no store type is
-# mentioned on the line. AppState carries exactly one `*_store` field today
-# (`agent_seed_store`), and it is a real domain store, so the field-name shape is
-# a clean signal; any future `*_store` field is a store by the same naming law.
+# mentioned on the line. AppState carries exactly one `*_store` field today,
+# `agent_seed_store`, and it is NOT a DB store -- it is an in-memory
+# `Arc<RwLock<AgentSeedHealth>>` snapshot that merely follows the naming law. So
+# today's single match is a benign false positive, seeded in the allowlist rather
+# than special-cased: the field-name shape is the durable signal we want to hold,
+# and a real `*_store` field added later would be caught for the right reason.
 APP_STATE_STORE_FIELD_RE = re.compile(r"\bstate\.[a-z_]*_store\b")
 # Inline `anyharness_contract::` path uses (fn signatures, struct literals,
 # turbofish) that no use-statement declares. Mirrors DOMAIN_LIVE_VALVE's
