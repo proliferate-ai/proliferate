@@ -4,11 +4,11 @@ import type {
   WorkflowInputType,
   WorkflowValidationIssue,
 } from "@proliferate/product-domain/workflows/definition";
-import { Checkbox } from "@proliferate/ui/primitives/checkbox-primitive";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { Checkbox } from "#product/primitives/checkbox-primitive";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
 
 export function WorkflowInputEditor({
   inputs,

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, Copy } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Check, Copy } from "#product/primitives/icons/core";
 
 /**
  * Code block card: bordered rounded shell with a header carrying

@@ -11,7 +11,8 @@ import {
   useStartGitHubAppUserAuthorization,
 } from "@proliferate/cloud-sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
+import { ExternalLink } from "#product/primitives/icons/core";
+import { RefreshCw } from "#product/primitives/icons/platform";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { CurrentUserInvitationsSection } from "#product/components/settings/panes/organization/CurrentUserInvitationsSection";

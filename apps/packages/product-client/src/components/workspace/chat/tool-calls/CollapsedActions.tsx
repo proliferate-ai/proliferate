@@ -2,16 +2,16 @@ import { useState, type CSSProperties } from "react";
 import type {
   TranscriptState,
 } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
-import { ChevronRightActivity } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
+import { ChevronRightActivity } from "#product/primitives/icons/core";
 import {
   formatCollapsedActionsSummary,
   resolveCurrentCollapsedAction,
   resolveCollapsedActionsLeadingKind,
   summarizeCollapsedActions,
 } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { CollapsedActionRows } from "#product/components/workspace/chat/tool-calls/CollapsedActionRows";
 

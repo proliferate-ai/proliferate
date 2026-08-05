@@ -1,6 +1,7 @@
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Copy, Fork, Undo, FileIcon } from "@proliferate/ui/icons";
+import { IconButton } from "#product/primitives/IconButton";
+import { Button } from "#product/primitives/Button";
+import { Copy, Fork, Undo } from "#product/primitives/icons/core";
+import { FileIcon } from "#product/primitives/icons/workspace";
 
 interface FileBadge {
   filename: string;

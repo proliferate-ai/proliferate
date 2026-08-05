@@ -1,12 +1,12 @@
 import type { ChangeEvent } from "react";
 
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 import {
   EnvironmentSearchSelect,
   type EnvironmentSearchSelectOption,
-} from "@proliferate/ui/patterns/EnvironmentSearchSelect";
-import { Input } from "@proliferate/ui/primitives/Input";
+} from "#product/primitives/patterns/EnvironmentSearchSelect";
+import { Input } from "#product/primitives/Input";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { ScriptBlock } from "#product/components/settings/panes/repo/ScriptBlock";

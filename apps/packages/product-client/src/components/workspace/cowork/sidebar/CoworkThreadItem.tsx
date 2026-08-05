@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { CoworkThread } from "@anyharness/sdk";
-import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { SessionTitleRenamePopover } from "#product/components/workspace/shell/tabs/SessionTitleRenamePopover";
 import { useCoworkManagedWorkspaces } from "#product/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
 import { useCoworkSessionNativeContextMenu } from "#product/hooks/cowork/ui/use-cowork-session-native-context-menu";

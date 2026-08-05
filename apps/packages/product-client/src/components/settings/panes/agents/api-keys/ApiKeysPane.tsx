@@ -6,11 +6,11 @@ import {
   useCreateAgentApiKey,
   useRevokeAgentApiKey,
 } from "@proliferate/cloud-sdk-react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
+import { Button } from "#product/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";

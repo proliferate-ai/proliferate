@@ -8,7 +8,6 @@ These standards apply to all frontend app logic and shared frontend packages:
 - `apps/web/src/**`
 - `apps/mobile/src/**`
 - `apps/packages/design/**`
-- `apps/packages/ui/**`
 - `apps/packages/product-domain/**`
 - `apps/packages/product-client/**`
 
@@ -102,19 +101,17 @@ apps/packages/
       css/product.css
       react-native.ts
 
-  ui/
-    src/
-      primitives/
-      patterns/
-      icons/
-      lib/, utils/, overlays/
-
   product-domain/
     src/
       <domain>/
 
   product-client/
     src/
+      primitives/
+        patterns/
+        icons/
+        utils/
+        overlays/
       components/
       hooks/
       lib/
@@ -131,8 +128,8 @@ Platform notes:
 - Web uses Cloud/browser access and shared DOM packages. It should not rebuild
   Desktop/Web product presentation locally when ProductClient can own it.
 - Mobile uses Cloud/native access, native navigation, React Native components,
-  `design/react-native`, and `product-domain`. It does not import DOM packages:
-  `ui` or `product-client`.
+  `design/react-native`, and `product-domain`. It does not import ProductClient
+  or its DOM primitives.
 
 ## What Goes Where
 
@@ -163,9 +160,8 @@ Use the lowest layer that can own the logic cleanly.
 | Styling | `<app>/src/styles/**`, `<app>/src/index.css` | App-local style entrypoints, native token bridge, app-specific third-party CSS. | Shared tokens or reusable DOM primitives. | [guides/styling.md](guides/styling.md) |
 | Telemetry | `<app>/src/hooks/**`, `<app>/src/lib/**`, `<app>/src/providers/**` | Product event wiring and replay/privacy boundaries at the owning app layer. | Hidden tracking inside shared product UI. | [guides/telemetry.md](guides/telemetry.md) |
 | Design package | `apps/packages/design/**` | Shared tokens, DOM CSS entrypoint, React Native-safe token values. | Product concepts, app code, SDK clients. | [packages/README.md](packages/README.md) |
-| UI package | `apps/packages/ui/**` | Canonical Desktop/Web DOM primitives and compositions (`primitives/` base tier + `patterns/` compositions). | Product concepts, app code, SDK clients, stores, React Native. | [packages/README.md](packages/README.md) |
 | Product domain package | `apps/packages/product-domain/**` | Pure shared product rules, vocabulary, validation, projections, view models. | React, DOM, React Native components, SDK clients, query clients, stores, access. | [packages/README.md](packages/README.md) |
-| Product client package | `apps/packages/product-client/src/**` | Shared Desktop/Web product presentation plus the connected application: routes, components, layered access/workflow/domain hooks and logic, stores, providers, Cloud/gateway/AnyHarness orchestration, and the typed host boundary. | Either host (`apps/desktop/**`, `apps/web/**`), `@tauri-apps/**`, raw Tauri `invoke`, Desktop-relative `@/` aliases, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md), [web-desktop-unification/README.md](../../systems/product/clients/web-desktop-unification/README.md) |
+| Product client package | `apps/packages/product-client/src/**` | Canonical Desktop/Web DOM primitives under `primitives/**`, shared product presentation, and the connected application: routes, components, layered access/workflow/domain hooks and logic, stores, providers, Cloud/gateway/AnyHarness orchestration, and the typed host boundary. | Either host (`apps/desktop/**`, `apps/web/**`), `@tauri-apps/**`, raw Tauri `invoke`, Desktop-relative `@/` aliases, React Native, or product/SDK/query dependencies from the nested primitives subtree. | [packages/README.md](packages/README.md), [web-desktop-unification/README.md](../../systems/product/clients/web-desktop-unification/README.md) |
 
 ## Read Order
 
@@ -197,9 +193,11 @@ layer you are changing:
   directly under `hooks/<domain>/`.
 - Components render. Hooks own React behavior. Stores hold shared client-only
   state. `lib/domain` and `product-domain` hold pure product rules.
-- Desktop, Web, and `product-client` use
-  `apps/packages/ui/**` for DOM primitives.
-- Do not define DOM primitive components outside `apps/packages/ui/**`. This
+- ProductClient code uses `apps/packages/product-client/src/primitives/**` for
+  DOM primitives. Desktop and Web consume product UI through ProductClient's
+  public host boundary; they do not import its internal primitives directly.
+- Do not define DOM primitive components outside
+  `apps/packages/product-client/src/primitives/**`. This
   includes differently named local wrappers around buttons, inputs, dialogs,
   menus, tabs, tooltips, badges, layout shells, or similar reusable controls.
 - Desktop and Web share presentational product components through
@@ -238,7 +236,6 @@ Shared package dependency direction:
 ```text
 apps
   -> product-client
-  -> ui
   -> design
 
 apps
@@ -251,6 +248,11 @@ clients, access helpers, stores, or query clients. ProductClient owns both
 presentational DOM UI and connected behavior, but Cloud SDK React hooks belong
 under `hooks/access/cloud/**`; components and product workflow hooks consume
 those access seams rather than importing query hooks directly.
+
+Within ProductClient, `primitives/**` remains a lower, DOM-safe component
+library. It may import `design`, React, DOM-safe libraries, and other files in
+the same primitives subtree; it must not import product-domain, SDK/query
+clients, host code, or any higher ProductClient layer.
 
 ## CI-Enforced Repo Shape
 

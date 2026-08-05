@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 /**
  * Popover-row anatomy for composer option lists: full-width rows with

@@ -1,5 +1,5 @@
 import type { PendingSessionConfigChangeStatus } from "@proliferate/product-domain/sessions/pending-config";
-import { Clock } from "@proliferate/ui/icons";
+import { Clock } from "#product/primitives/icons/core";
 
 interface PendingConfigIndicatorProps {
   pendingState: PendingSessionConfigChangeStatus | null;

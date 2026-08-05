@@ -3,8 +3,8 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { ToastHost } from "@proliferate/ui/patterns/ToastHost";
-import { dismissToast } from "@proliferate/ui/utils/show-toast";
+import { ToastHost } from "#product/primitives/patterns/ToastHost";
+import { dismissToast } from "#product/primitives/utils/show-toast";
 import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter";
 
 /**

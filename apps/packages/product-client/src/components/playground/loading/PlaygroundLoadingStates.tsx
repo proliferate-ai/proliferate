@@ -1,6 +1,6 @@
 import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen";
-import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { LoadingState } from "#product/components/feedback/LoadingIllustration";
 import { ChatLoadingHero } from "#product/components/workspace/chat/surface/ChatLoadingHero";
 import { ChatPreMessageCanvas } from "#product/components/workspace/chat/surface/ChatPreMessageCanvas";

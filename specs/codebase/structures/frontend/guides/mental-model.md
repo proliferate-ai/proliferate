@@ -164,24 +164,23 @@ One connected app over the presentation stack and two foundations. See
 ```text
 Desktop/Web:                    Foundations (consumed by everyone):
   product-client     connected     product-domain   pure shared rules
-                     presentation                   (the Mobile sharing point)
-  ui                 primitives    design           tokens + css (the look)
+  ├─ components      presentation                   (the Mobile sharing point)
+  └─ primitives      DOM library    design           tokens + css (the look)
 ```
 
 - **design** - shared design *values*, not just css: tokens, DOM css, and
   React-Native-safe token values. Mobile consumes the tokens, not the css.
-- **ui** - the single DOM primitive system (Button, Dialog, Input, layout).
-  Hard invariant: no DOM primitive is defined anywhere else, even a renamed
-  wrapper. Need a variant? Add it to `ui`.
 - **product-client** - the shared Desktop/Web product. Components own product
   presentation, access hooks own SDK/query state, workflow hooks sequence
-  actions, and native capability enters through the typed host contract.
+  actions, native capability enters through the typed host contract, and its
+  nested `primitives/**` subtree owns the single DOM primitive system. That
+  subtree may depend only on `design`, React/DOM-safe libraries, and itself.
 - **product-domain** - pure shared decisions, the twin of app `lib/domain`, and
   the primary sharing point for Mobile. No React, DOM, SDK clients, or stores.
 
-Platform matrix: Desktop/Web use all three; Mobile uses only `design`
-(react-native tokens), `product-domain`, and SDK packages - never the DOM
-packages.
+Platform matrix: Desktop/Web mount ProductClient; Mobile uses only `design`
+(react-native tokens), `product-domain`, and SDK packages - never ProductClient
+or its DOM primitives.
 
 ## The Placement Algorithm
 

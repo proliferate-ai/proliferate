@@ -56,7 +56,8 @@ Rules:
 
 ## Shared UI
 
-`apps/packages/ui/**` is the only DOM primitive layer.
+`apps/packages/product-client/src/primitives/**` is the only DOM primitive
+layer.
 
 Hard invariant: do not define DOM primitive components anywhere else.
 
@@ -70,36 +71,42 @@ New primitive definitions are forbidden in:
 
 - `apps/desktop/src/**`
 - `apps/web/src/**`
-- `apps/packages/product-client/**`
+- `apps/packages/product-client/src/**` outside `primitives/**`
 
-Primitive definitions outside `apps/packages/ui/**` violate this standard. Do
+Primitive definitions outside
+`apps/packages/product-client/src/primitives/**` violate this standard. Do
 not add them, copy them, or create local variants beside them. Put the
-primitive in `apps/packages/ui/**`, add the needed variant/prop there, and
-update callsites to import it.
+primitive in ProductClient's primitives subtree, add the needed variant/prop
+there, and update callsites to import it.
 
-### `apps/packages/ui`
+### `apps/packages/product-client/src/primitives`
 
 - Owns base DOM controls and layout primitives: buttons, icon buttons, inputs,
   textareas, labels, selects, checkboxes, switches, tabs, menus, popovers,
   dialogs, tooltips, badges, separators, scroll areas, and layout shells.
 - Must not import app code, SDK clients, stores, product hooks, access helpers,
   Tauri APIs, React Native, routes, or product concepts.
+- May import `design`, React/DOM-safe libraries, and sibling owners that resolve
+  inside the same primitives subtree. `patterns/**` may compose root primitives.
 - Must expose variants/props for repeated visual treatments. Do not create a
   one-off restyled button/input/dialog at the callsite.
 - Is the only place in DOM frontend code that should define the base visual
   contract for raw controls.
 
-### Desktop, Web, and `product-client`
+### ProductClient feature code, Desktop, and Web
 
-- Must use primitives from `apps/packages/ui/**` for base controls.
+- ProductClient feature code must use exact `#product/primitives/...` imports
+  for base controls. Desktop and Web consume the public ProductClient surface
+  and must not reach into internal primitive subpaths.
 - Must not define or redefine primitive components, even with different names.
 - Must not render raw `<button>`, `<input>`, `<label>`, `<select>`, or
-  `<textarea>` outside `apps/packages/ui/**`.
+  `<textarea>` outside ProductClient's primitives subtree.
 - May pass layout/sizing classes when the primitive API allows it, but must not
   rebuild color, border, radius, typography, focus, disabled, or hover behavior
   at the callsite.
 - If a needed primitive variant does not exist, add it to
-  `apps/packages/ui/**` and then consume it everywhere.
+  `apps/packages/product-client/src/primitives/**` and then consume it
+  everywhere.
 
 ### `apps/packages/product-client`
 
@@ -107,7 +114,7 @@ update callsites to import it.
   standard component, hook, and library roots.
 - Components render and call ProductClient hooks; Cloud SDK React access
   belongs under `hooks/access/cloud/**`, never in components.
-- Must still use `apps/packages/ui/**` for base controls.
+- Must use its nested `primitives/**` owner for base controls.
 - Must not import Desktop/Web host internals, Tauri, or React Native.
 
 ### Mobile
@@ -115,7 +122,7 @@ update callsites to import it.
 - Renders native components under `apps/mobile/src/components/**`.
 - May share `apps/packages/product-domain/**` view models and
   `apps/packages/design/src/react-native.ts` tokens.
-- Must not import DOM packages: `ui` or `product-client`.
+- Must not import the DOM ProductClient package.
 
-Use concrete subpaths such as `@proliferate/ui/primitives/Button` or
+Use concrete subpaths such as `#product/primitives/Button` or
 `#product/components/settings/panes/account/AccountSettingsPane`; do not add barrels.

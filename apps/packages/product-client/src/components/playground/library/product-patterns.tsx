@@ -15,7 +15,7 @@ import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFoo
 import { SettingsScopeTabs } from "#product/components/patterns/SettingsScopeTabs";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
-import { Switch } from "@proliferate/ui/primitives/Switch";
+import { Switch } from "#product/primitives/Switch";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
 

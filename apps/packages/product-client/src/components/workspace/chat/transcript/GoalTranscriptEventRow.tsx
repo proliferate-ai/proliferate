@@ -1,11 +1,11 @@
 import { useState } from "react";
 // Matches the goal bar's own iconography exactly (GoalBar.tsx sources the
 // same three glyphs from lucide-react directly — Target/CircleCheck aren't
-// in the curated @proliferate/ui/icons set).
+// in the curated ProductClient icon set).
 import { CircleAlert, CircleCheck, Target } from "lucide-react";
 import { truncateGoalObjective } from "@proliferate/product-domain/activity/goal";
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 // Compact row preview cap — the row also CSS-truncates to one line, but this
 // keeps the label text itself short for the disclosure toggle's threshold.

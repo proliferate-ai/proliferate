@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { Switch } from "@proliferate/ui/primitives/Switch";
+import { Switch } from "#product/primitives/Switch";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import {
   usePutAuthSelections,

@@ -10,7 +10,7 @@ import {
   type PlanImplementationHarnessState,
 } from "#product/lib/domain/plans/implementation-target";
 import type { StartLatencyFlowInput } from "#product/lib/infra/measurement/measurement-port";
-import type { ToastErrorInput } from "@proliferate/ui/utils/toast-model";
+import type { ToastErrorInput } from "#product/primitives/utils/toast-model";
 
 interface PromptActiveSessionOptions {
   latencyFlowId?: string | null;

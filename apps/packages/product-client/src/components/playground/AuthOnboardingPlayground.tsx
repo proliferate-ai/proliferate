@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { AuthScreenLayout } from "#product/components/auth/AuthScreenLayout";
 import { LoginScreen } from "#product/components/auth/LoginScreen";
 import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen";

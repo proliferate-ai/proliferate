@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Button } from "#product/primitives/Button";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { Input } from "#product/primitives/Input";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";

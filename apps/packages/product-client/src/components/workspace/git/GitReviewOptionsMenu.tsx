@@ -2,10 +2,10 @@ import {
   CollapseAll,
   Columns2,
   ExpandAll,
-  RefreshCw,
-  WrapText,
-} from "@proliferate/ui/icons";
-import { PaneOptionsMenuItem } from "@proliferate/ui/patterns/PaneOptionsMenuItem";
+} from "#product/primitives/icons/workspace";
+import { RefreshCw } from "#product/primitives/icons/platform";
+import { WrapText } from "#product/primitives/icons/core";
+import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
 import { PaneOptionsMenu } from "#product/components/workspace/pane/PaneOptionsMenu";
 
 export function GitReviewOptionsMenu({

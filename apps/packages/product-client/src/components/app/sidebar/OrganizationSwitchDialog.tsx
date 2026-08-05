@@ -1,4 +1,4 @@
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { useOrganizationSwitchAction } from "#product/hooks/organizations/workflows/use-organization-switch-action";
 import type { OrganizationRecord } from "#product/lib/domain/organizations/organization-records";
 import { useToastStore } from "#product/stores/toast/toast-store";

@@ -4,8 +4,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useGitHubAppInstallationStatus,

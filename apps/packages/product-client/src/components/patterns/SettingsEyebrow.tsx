@@ -1,5 +1,5 @@
 import { type ElementType, type ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 export const SETTINGS_EYEBROW_CLASS =
   "font-mono text-ui-sm font-medium uppercase tracking-[0.06em] text-muted-foreground";

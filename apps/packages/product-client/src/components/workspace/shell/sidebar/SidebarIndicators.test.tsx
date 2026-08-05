@@ -3,8 +3,9 @@
 import { isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { CircleAlert, Clock } from "@proliferate/ui/icons";
-import { DotCellLoader } from "@proliferate/ui/primitives/DotCellLoader";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { Clock } from "#product/primitives/icons/core";
+import { DotCellLoader } from "#product/primitives/DotCellLoader";
 import type { SidebarStatusIndicator } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { SidebarStatusGlyph } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";

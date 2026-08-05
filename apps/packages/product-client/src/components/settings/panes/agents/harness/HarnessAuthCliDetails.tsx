@@ -1,4 +1,4 @@
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { AgentLoginTerminalPanel } from "#product/components/agents/AgentLoginTerminalPanel";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";

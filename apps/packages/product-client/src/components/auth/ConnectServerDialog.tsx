@@ -1,6 +1,6 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { CONNECT_SERVER_LABELS } from "#product/copy/auth/auth-copy";
 import type { UseConnectServerResult } from "#product/hooks/auth/workflows/use-connect-server";
 

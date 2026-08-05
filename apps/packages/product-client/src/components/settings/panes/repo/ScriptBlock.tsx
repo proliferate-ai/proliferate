@@ -1,7 +1,7 @@
 import type { ChangeEvent, ReactNode } from "react";
 
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Textarea } from "#product/primitives/Textarea";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 export interface ScriptBlockProps {
   ariaLabel: string;

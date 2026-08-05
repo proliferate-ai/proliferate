@@ -1,4 +1,4 @@
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import {
   MarkdownBody,
   type MarkdownCodeBlockRenderer,

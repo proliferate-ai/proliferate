@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
-import { Check } from "@proliferate/ui/icons";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { Check } from "#product/primitives/icons/core";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 
 import type { BillingPlanColumn } from "#product/lib/domain/billing/billing-plan-ladder";
 import {

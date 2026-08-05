@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { RenderErrorReport } from "@proliferate/product-client/host/desktop-bridge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 import type { RenderErrorReportStatus } from "#product/lib/domain/app/render-error-recovery";
 

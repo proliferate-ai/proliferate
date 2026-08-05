@@ -1,14 +1,14 @@
 import { type ClipboardEvent, type FormEvent, useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
-import { CloudUpload } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { CloudUpload } from "#product/primitives/icons/platform";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
+import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
+import { Textarea } from "#product/primitives/Textarea";
 
 import {
   FILE_CONTENT_SOURCE_LABELS,

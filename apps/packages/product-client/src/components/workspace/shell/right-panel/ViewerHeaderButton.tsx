@@ -1,7 +1,7 @@
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { AppShellReviewIcon, AppShellTabCloseIcon } from "@proliferate/ui/icons";
+import { IconButton } from "#product/primitives/IconButton";
+import { AppShellReviewIcon, AppShellTabCloseIcon } from "#product/primitives/icons/app-shell";
 import {
   viewerTargetDisplayPath,
   viewerTargetLabel,

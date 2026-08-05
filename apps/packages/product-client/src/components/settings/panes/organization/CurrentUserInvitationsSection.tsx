@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Check } from "@proliferate/ui/icons";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { Button } from "#product/primitives/Button";
+import { Check } from "#product/primitives/icons/core";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import type { OrganizationInvitationRecord } from "#product/lib/domain/organizations/organization-records";

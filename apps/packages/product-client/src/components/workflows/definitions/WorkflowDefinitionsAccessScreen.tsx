@@ -1,6 +1,6 @@
 import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
-import { EmptyState } from "@proliferate/ui/patterns/EmptyState";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { EmptyState } from "#product/primitives/patterns/EmptyState";
+import { Button } from "#product/primitives/Button";
 import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
 
 interface WorkflowDefinitionsAccessScreenProps {

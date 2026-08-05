@@ -1,15 +1,17 @@
 import type { ReactNode } from "react";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { Button } from "#product/primitives/Button";
 import {
   ArrowUp,
-  CircleAlert,
   Copy,
+} from "#product/primitives/icons/core";
+import { CircleAlert } from "#product/primitives/icons/status";
+import {
   GitBranchIcon,
   GitCommit,
   GitPullRequest,
-  StackedFiles,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/workspace-git";
+import { StackedFiles } from "#product/primitives/icons/workspace";
 import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { useComposerWorkspaceActivityModel } from "#product/hooks/workspaces/derived/use-composer-workspace-activity-model";

@@ -24,22 +24,21 @@ DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
 WEB_SRC = REPO_ROOT / "apps" / "web" / "src"
 MOBILE_SRC = REPO_ROOT / "apps" / "mobile" / "src"
 DESIGN_SRC = REPO_ROOT / "apps" / "packages" / "design" / "src"
-UI_SRC = REPO_ROOT / "apps" / "packages" / "ui" / "src"
 PRODUCT_DOMAIN_SRC = REPO_ROOT / "apps" / "packages" / "product-domain" / "src"
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
+PRODUCT_CLIENT_PRIMITIVES_SRC = PRODUCT_CLIENT_SRC / "primitives"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
 GENERATED_PREFIXES: set[str] = set()
 
 # Component-library taxonomy (specs/codebase/platforms/product/design-system.md):
-# apps/packages/ui/src is base primitives + one-level-up compositions only.
-UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES = {
-    "primitives",
-    "patterns",
+# ProductClient owns root primitive files plus these support directories.
+PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES = {
     "icons",
-    "lib",
+    "patterns",
     "utils",
     "overlays",
+    "__tests__",
 }
 
 QUERY_CACHE_METHODS = {
@@ -147,12 +146,16 @@ def is_block_comment_line(line: str) -> bool:
     return stripped.startswith("/*") or stripped.startswith("*")
 
 
-def should_skip(path: Path) -> bool:
+def should_skip(path: Path, *, include_tests: bool = False) -> bool:
     relative = path.relative_to(REPO_ROOT).as_posix()
     if any(relative.startswith(prefix) for prefix in GENERATED_PREFIXES):
         return True
     name = path.name
-    if ".test." in name or ".spec." in name or name.endswith(".d.ts"):
+    if name.endswith(".d.ts"):
+        return True
+    if include_tests:
+        return False
+    if ".test." in name or ".spec." in name:
         return True
     return any(part in {"__tests__", "__mocks__"} for part in path.parts)
 
@@ -162,13 +165,12 @@ ALL_FRONTEND_SRC_ROOTS = [
     WEB_SRC,
     MOBILE_SRC,
     DESIGN_SRC,
-    UI_SRC,
     PRODUCT_DOMAIN_SRC,
     PRODUCT_CLIENT_SRC,
 ]
 
 
-def iter_files_in_roots(roots: list[Path]) -> list[Path]:
+def iter_files_in_roots(roots: list[Path], *, include_tests: bool = False) -> list[Path]:
     files: list[Path] = []
     for root in roots:
         if not root.exists():
@@ -178,7 +180,7 @@ def iter_files_in_roots(roots: list[Path]) -> list[Path]:
             for path in sorted(root.rglob("*"))
             if path.is_file()
             and path.suffix in EXTENSIONS
-            and not should_skip(path)
+            and not should_skip(path, include_tests=include_tests)
         )
     return files
 
@@ -283,9 +285,11 @@ def is_cloud_access_path(relative_path: str) -> bool:
 
 
 def is_ui_component_library_path(relative_path: str) -> bool:
-    return is_under(relative_path, "apps/packages/ui/src/primitives/") or is_under(
-        relative_path, "apps/packages/ui/src/patterns/"
-    )
+    prefix = "apps/packages/product-client/src/primitives/"
+    if not is_under(relative_path, prefix):
+        return False
+    primitive_relative = relative_path.removeprefix(prefix)
+    return "/" not in primitive_relative or primitive_relative.startswith("patterns/")
 
 
 def is_query_cache_owner_path(relative_path: str) -> bool:
@@ -2127,7 +2131,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
 
         target = resolve_product_client_import(path, statement.source)
         target_layer = product_client_layer(target) if target is not None else None
-        if target_layer is not None and (source_layer, target_layer) in PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES:
+        forbidden_layer_edge = target_layer is not None and (
+            (source_layer, target_layer) in PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES
+            or (source_layer == "primitives" and target_layer != "primitives")
+        )
+        if forbidden_layer_edge:
             edge_kind = "type-only" if statement.type_only else "runtime"
             violations.append(
                 Violation(
@@ -2363,12 +2371,12 @@ def find_product_client_violations(path: Path) -> list[Violation]:
 
 
 def find_radix_import_violations() -> list[Violation]:
-    """Rule: `@radix-ui/*` imports are legal only under the ui component
-    library's base tiers (`primitives/`, `patterns/`) per the component-library
-    taxonomy in specs/codebase/platforms/product/design-system.md.
+    """Rule: `@radix-ui/*` imports are legal only in root primitive files and
+    the nested `patterns/` tier per the component-library taxonomy in
+    specs/codebase/platforms/product/design-system.md.
     """
     violations: list[Violation] = []
-    for path in iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS):
+    for path in iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS, include_tests=True):
         rel = relative(path)
         if is_ui_component_library_path(rel):
             continue
@@ -2386,8 +2394,8 @@ def find_radix_import_violations() -> list[Violation]:
                         lineno,
                         (
                             "@radix-ui/* imports must stay under "
-                            "apps/packages/ui/src/primitives/** or "
-                            "apps/packages/ui/src/patterns/**"
+                            "root apps/packages/product-client/src/primitives/* "
+                            "files or its patterns/** tier"
                         ),
                     )
                 )
@@ -2419,7 +2427,7 @@ def find_warning_ink_violations() -> list[Violation]:
     """
     violations: list[Violation] = []
     for path in iter_files_in_roots(
-        [UI_SRC, PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC]
+        [PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC]
     ):
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
             for match in WARNING_INK_RE.finditer(strip_line_comment(line)):
@@ -2449,31 +2457,37 @@ def find_warning_ink_violations() -> list[Violation]:
     return violations
 
 
-def find_ui_src_top_level_violations() -> list[Violation]:
-    """Rule: apps/packages/ui/src may only contain the top-level entries named
-    in the component-library taxonomy (specs/codebase/platforms/product/design-system.md):
-    primitives/, patterns/, icons/, lib/, utils/, overlays/.
+def find_primitives_top_level_violations() -> list[Violation]:
+    """Rule: ProductClient primitives owns root source files plus the support
+    directories named by the component-library taxonomy.
     """
     violations: list[Violation] = []
-    if not UI_SRC.exists():
+    if not PRODUCT_CLIENT_PRIMITIVES_SRC.exists():
         return violations
-    for entry in sorted(UI_SRC.iterdir()):
-        if entry.name in UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES:
-            continue
+    for entry in sorted(PRODUCT_CLIENT_PRIMITIVES_SRC.iterdir()):
         if entry.name.startswith("."):
             # Dotfiles (.DS_Store and similar OS/editor artifacts) are not
             # library taxonomy entries at all — nothing to flag.
             continue
+        if entry.is_file() and entry.suffix in EXTENSIONS:
+            continue
+        if (
+            entry.is_dir()
+            and entry.name in PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES
+        ):
+            continue
         violations.append(
             Violation(
-                "UI_SRC_TOP_LEVEL_ENTRY",
+                "PRODUCT_CLIENT_PRIMITIVES_TOP_LEVEL_ENTRY",
                 entry,
                 1,
                 (
-                    f"apps/packages/ui/src/{entry.name} is not an allowed top-level "
-                    "entry per the component-library taxonomy in "
+                    f"apps/packages/product-client/src/primitives/{entry.name} is not "
+                    "an allowed root source file or support directory per the "
+                    "component-library taxonomy in "
                     "specs/codebase/platforms/product/design-system.md "
-                    f"(allowed: {', '.join(sorted(UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES))})"
+                    "(support directories: "
+                    f"{', '.join(sorted(PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES))})"
                 ),
             )
         )
@@ -2522,7 +2536,7 @@ def collect_violations() -> list[Violation]:
         violations.extend(check_file(path))
         violations.extend(find_product_client_violations(path))
     violations.extend(find_radix_import_violations())
-    violations.extend(find_ui_src_top_level_violations())
+    violations.extend(find_primitives_top_level_violations())
     violations.extend(find_warning_ink_violations())
     return violations
 

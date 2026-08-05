@@ -9,11 +9,12 @@ import {
   useModelSnapshotStatusQuery,
   useRefreshModelSnapshotMutation,
 } from "@anyharness/sdk-react";
-import { ChevronRight, RefreshCw, Search, X } from "@proliferate/ui/icons";
-import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { ChevronRight, Search, X } from "#product/primitives/icons/core";
+import { RefreshCw } from "#product/primitives/icons/platform";
+import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
+import { Button } from "#product/primitives/Button";
+import { IconButton } from "#product/primitives/IconButton";
+import { Input } from "#product/primitives/Input";
 import { ModelTable, type ModelTableRow } from "#product/components/patterns/ModelTable";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { HarnessSection } from "#product/components/settings/panes/agents/harness/HarnessSection";

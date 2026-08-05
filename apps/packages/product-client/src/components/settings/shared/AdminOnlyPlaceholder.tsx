@@ -1,4 +1,4 @@
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 
 interface AdminOnlyPlaceholderProps {

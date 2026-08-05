@@ -1,6 +1,7 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { ClipboardList, Spinner } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { ClipboardList } from "#product/primitives/icons/product";
+import { Spinner } from "#product/primitives/Spinner";
 import { usePlanPicker } from "#product/hooks/plans/ui/use-plan-picker";
 import {
   formatPlanAgentKindLabel,

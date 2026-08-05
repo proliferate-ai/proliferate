@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
-import { FileText, X } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
+import { FileText } from "#product/primitives/icons/workspace";
+import { X } from "#product/primitives/icons/core";
 import { CollapsiblePlanCard } from "#product/components/workspace/chat/transcript/CollapsiblePlanCard";
 import {
   renderTranscriptCodeBlock,

@@ -1,4 +1,4 @@
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Input } from "#product/primitives/Input";
 import { ComposerCardFooter } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { McpElicitationInlineError } from "#product/components/workspace/chat/input/McpElicitationInlineError";
 

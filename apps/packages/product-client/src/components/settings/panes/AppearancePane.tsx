@@ -1,13 +1,14 @@
 import type { FC } from "react";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
+import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
+import { Button } from "#product/primitives/Button";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { AppearanceSampleBlock } from "#product/components/settings/panes/AppearanceSampleBlock";
-import { Minus, Monitor, Moon, Plus, Sun } from "@proliferate/ui/icons";
-import { Switch } from "@proliferate/ui/primitives/Switch";
+import { Minus, Plus } from "#product/primitives/icons/core";
+import { Monitor, Moon, Sun } from "#product/primitives/icons/platform";
+import { Switch } from "#product/primitives/Switch";
 import {
   READABLE_CODE_FONT_SIZE_LABELS,
   READABLE_CODE_FONT_SIZE_OPTIONS,

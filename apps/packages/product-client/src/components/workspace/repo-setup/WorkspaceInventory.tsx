@@ -1,7 +1,7 @@
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
-import { EmptyState } from "@proliferate/ui/patterns/EmptyState";
-import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
+import { EmptyState } from "#product/primitives/patterns/EmptyState";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 
 import type { WorkspaceInventoryGroupView } from "@proliferate/product-domain/workspaces/inventory";
 

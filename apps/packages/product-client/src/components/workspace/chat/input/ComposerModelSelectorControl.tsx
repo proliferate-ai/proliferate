@@ -12,9 +12,10 @@ import type {
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
-import { ChevronDown, Plus, Settings, Zap } from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ChevronDown, Plus, Settings } from "#product/primitives/icons/core";
+import { Zap } from "#product/primitives/icons/product";
+import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +25,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@proliferate/ui/primitives/DropdownMenu";
+} from "#product/primitives/DropdownMenu";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { ComposerFieldInlineError } from "#product/components/workspace/chat/input/ComposerFieldInlineError";
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";

@@ -1,8 +1,8 @@
 import { useId } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import { ChevronRight } from "lucide-react";
 
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import type { WorkspaceInventoryGroupView } from "@proliferate/product-domain/workspaces/inventory";
 
 import { InventoryRow } from "./WorkspaceInventoryRow";

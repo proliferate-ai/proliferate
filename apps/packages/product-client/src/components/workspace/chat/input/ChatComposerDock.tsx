@@ -1,5 +1,5 @@
 import { forwardRef, memo, type HTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import {
   CHAT_COLUMN_CLASSNAME,

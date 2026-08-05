@@ -1,5 +1,5 @@
-import { PrBranchGlyph, PrMergedGlyph } from "@proliferate/ui/icons";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { PrBranchGlyph, PrMergedGlyph } from "#product/primitives/icons/workspace-git";
+import { Tooltip } from "#product/primitives/Tooltip";
 import type { SidebarGitGlyph } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 import type { PrStatusView } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 

@@ -1,6 +1,6 @@
 import { Edit3, Trash2 } from "lucide-react";
 
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 export interface SecretRowProps {
   label: string;

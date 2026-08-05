@@ -1,6 +1,6 @@
 import { useChatLoadingSubstep } from "#product/hooks/chat/derived/use-chat-loading-substep";
-import { SkeletonBlock } from "#product/components/feedback/Skeleton";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 

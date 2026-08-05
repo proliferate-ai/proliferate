@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ToastErrorInput } from "@proliferate/ui/utils/toast-model";
+import type { ToastErrorInput } from "#product/primitives/utils/toast-model";
 import {
   showProductErrorToast,
   showProductToast,

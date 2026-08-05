@@ -3,11 +3,11 @@ import type {
   WorkflowArgumentDraft,
   WorkflowArgumentIssue,
 } from "@proliferate/product-domain/workflows/arguments";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { Button } from "#product/primitives/Button";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
 
 export interface WorkflowRunFormProps {
   inputs: readonly WorkflowDefinitionInput[];

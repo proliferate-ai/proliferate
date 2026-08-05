@@ -1,7 +1,7 @@
 import type { SessionControlIconKey } from "@proliferate/product-domain/chats/session-controls/presentation";
-import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import type { ComponentType, SVGProps } from "react";
-import { GitBranchIcon } from "@proliferate/ui/icons";
+import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
 
 type IconProps = SVGProps<SVGSVGElement>;
 

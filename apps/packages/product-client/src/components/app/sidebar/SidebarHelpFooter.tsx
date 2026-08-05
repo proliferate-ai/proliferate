@@ -1,10 +1,10 @@
-import { CircleQuestion } from "@proliferate/ui/icons";
+import { CircleQuestion } from "#product/primitives/icons/core";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { IconButton } from "#product/primitives/IconButton";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
-} from "@proliferate/ui/primitives/PopoverButton";
+} from "#product/primitives/PopoverButton";
 import { SidebarAppVersionRow } from "#product/components/app/sidebar/SidebarAppVersionRow";
 import { SidebarHelpSection } from "#product/components/app/sidebar/SidebarHelpSection";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";

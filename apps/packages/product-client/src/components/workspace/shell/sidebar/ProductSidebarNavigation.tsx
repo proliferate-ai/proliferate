@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { SidebarNavRow } from "@proliferate/ui/patterns/SidebarNavRow";
+import { SidebarNavRow } from "#product/primitives/patterns/SidebarNavRow";
 
 export interface SidebarNavItemView {
   id: string;

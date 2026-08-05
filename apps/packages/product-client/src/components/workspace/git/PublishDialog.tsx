@@ -1,14 +1,17 @@
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
-import { Switch } from "@proliferate/ui/primitives/Switch";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { ArrowUp, GitCommit, GitHub, GitPullRequest, Spinner } from "@proliferate/ui/icons";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { Button } from "#product/primitives/Button";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { Switch } from "#product/primitives/Switch";
+import { Textarea } from "#product/primitives/Textarea";
+import { ArrowUp } from "#product/primitives/icons/core";
+import { GitCommit, GitPullRequest } from "#product/primitives/icons/workspace-git";
+import { GitHub } from "#product/primitives/icons/platform";
+import { Spinner } from "#product/primitives/Spinner";
 import { useWorkspacePublishWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-publish-workflow";
 import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 

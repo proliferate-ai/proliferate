@@ -6,8 +6,8 @@ import {
   type ActivityProcessWire,
   type ProcessTone,
 } from "@proliferate/product-domain/activity/process";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 const TONE_CLASSNAME: Record<ProcessTone, string> = {
   default: "text-muted-foreground",

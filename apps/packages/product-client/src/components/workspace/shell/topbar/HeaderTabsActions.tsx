@@ -1,6 +1,6 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { History, Plus } from "@proliferate/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { Button } from "#product/primitives/Button";
+import { History, Plus } from "#product/primitives/icons/core";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { ClosedChatTabsMenu } from "#product/components/workspace/shell/tabs/ClosedChatTabsMenu";
 import {
   renderChatTabIcon,

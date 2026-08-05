@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import type { GitBranchRef } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 import {
   Check,
   ChevronDown,
-  GitBranchIcon,
   Search,
-} from "@proliferate/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+} from "#product/primitives/icons/core";
+import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 const GIT_REVIEW_TARGET_TRIGGER_CLASS =

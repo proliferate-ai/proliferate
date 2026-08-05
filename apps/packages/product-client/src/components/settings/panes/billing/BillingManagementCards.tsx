@@ -1,10 +1,10 @@
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { ExternalLink } from "@proliferate/ui/icons";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { SkeletonBlock } from "@proliferate/ui/primitives/Skeleton";
-import { Switch } from "@proliferate/ui/primitives/Switch";
+import { ExternalLink } from "#product/primitives/icons/core";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
+import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { Switch } from "#product/primitives/Switch";
 import type {
   BillingPlanPresentation,
   BillingSettingsOrganization,

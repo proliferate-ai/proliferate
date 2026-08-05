@@ -1,6 +1,6 @@
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
 
 interface SupportCreditFieldProps {
   label: string;

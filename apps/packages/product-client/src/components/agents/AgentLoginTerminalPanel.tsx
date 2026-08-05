@@ -1,7 +1,7 @@
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import type { AgentLoginTerminalSession } from "#product/hooks/agents/workflows/use-agent-login-terminal-workflow";
 import { useCallback } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { TerminalErrorBoundary } from "#product/components/workspace/terminals/TerminalErrorBoundary";
 import { useAgentLoginTerminalViewport } from "#product/hooks/agents/lifecycle/use-agent-login-terminal-viewport";
 

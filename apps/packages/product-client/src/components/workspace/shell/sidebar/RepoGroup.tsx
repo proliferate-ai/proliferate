@@ -1,10 +1,12 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { ChevronRight, CloudIcon, FolderClosed, FolderFilled, FolderRemote, MoreHorizontal, Plus, Settings, Trash } from "@proliferate/ui/icons";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
+import { ChevronRight, MoreHorizontal, Plus, Settings, Trash } from "#product/primitives/icons/core";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { FolderClosed, FolderFilled, FolderRemote } from "#product/primitives/icons/workspace";
+import { Tooltip } from "#product/primitives/Tooltip";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
 import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
@@ -22,7 +24,7 @@ import {
 } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
 import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
-import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
+import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
 
 interface RepoGroupProps {

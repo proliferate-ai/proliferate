@@ -48,7 +48,7 @@ import { ChatInputControlRow } from "./ChatInputControlRow";
 import { ConnectedWorkspaceStatusComposerControl } from "./workspace-status/ConnectedWorkspaceStatusComposerControl";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Input } from "#product/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 import { handlePromptAttachmentPaste } from "#product/lib/domain/chat/composer/prompt-attachment-paste";

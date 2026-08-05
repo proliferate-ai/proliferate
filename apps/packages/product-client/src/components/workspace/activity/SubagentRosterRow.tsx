@@ -7,8 +7,8 @@ import {
   type ActivitySubagentWire,
   type SubagentTone,
 } from "@proliferate/product-domain/activity/subagent";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 const TONE_CLASSNAME: Record<SubagentTone, string> = {
   default: "text-muted-foreground",

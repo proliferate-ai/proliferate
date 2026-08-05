@@ -18,7 +18,7 @@
  * color). Cross-app tokens, so the component works on desktop and web.
  */
 import type { ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import type { PrStatusKind, PrStatusView } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 
 const PR_STATUS_TONE: Record<PrStatusKind, string> = {

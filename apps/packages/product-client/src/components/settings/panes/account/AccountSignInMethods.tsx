@@ -1,5 +1,5 @@
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import type { AccountProviderView } from "#product/lib/domain/auth/account-profile-presentation";

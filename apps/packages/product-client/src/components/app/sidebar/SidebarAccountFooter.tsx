@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditCard, Keyboard, LogOut, Settings } from "lucide-react";
-import { Check, Mail } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
+import { Check } from "#product/primitives/icons/core";
+import { Mail } from "#product/primitives/icons/platform";
+import { Button } from "#product/primitives/Button";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
-} from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { UserAvatar } from "@proliferate/ui/primitives/UserAvatar";
+} from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { UserAvatar } from "#product/primitives/UserAvatar";
 import { OrganizationAvatar } from "#product/components/organizations/OrganizationAvatar";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";

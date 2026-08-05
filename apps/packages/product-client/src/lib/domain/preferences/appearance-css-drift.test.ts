@@ -7,7 +7,7 @@ import {
   ICON_BUTTON_SIZE_TOKEN_IDS,
   TEXT_SIZE_TOKEN_IDS,
   twMerge,
-} from "@proliferate/ui/utils/tw-merge";
+} from "#product/primitives/utils/tw-merge";
 import { typography } from "@proliferate/design/tokens";
 import {
   APPEARANCE_SIZE_IDS,

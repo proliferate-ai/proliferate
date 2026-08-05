@@ -5,7 +5,7 @@ import {
   useWorkspaceFilesQuery,
 } from "@anyharness/sdk-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import { FileTreeRow } from "#product/components/workspace/files/tree/FileTreeRow";
 import { resolveWorkspaceStatPathKind } from "#product/lib/domain/files/path-references";
 import { useFileTreeStore } from "#product/stores/editor/file-tree-store";

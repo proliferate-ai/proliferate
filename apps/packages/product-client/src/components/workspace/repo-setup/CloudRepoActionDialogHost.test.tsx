@@ -162,7 +162,7 @@ vi.mock("#product/lib/domain/settings/github-app-copy", () => ({
 }));
 
 // Keep the Dialog kit inline so its body renders in jsdom without a portal.
-vi.mock("@proliferate/ui/primitives/Dialog", () => ({
+vi.mock("#product/primitives/Dialog", () => ({
   Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
     open ? <div data-testid="dialog">{children}</div> : null,
   DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,

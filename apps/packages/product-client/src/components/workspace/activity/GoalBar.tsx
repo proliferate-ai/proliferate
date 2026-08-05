@@ -16,10 +16,10 @@ import {
   type GoalCapabilities,
   type GoalWire,
 } from "@proliferate/product-domain/activity/goal";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { Tooltip } from "#product/primitives/Tooltip";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import { ComposerPopoverSurface } from "../chat/composer/ComposerPopoverSurface";
 import { GoalBarIconAction } from "./GoalBarIconAction";
 import { GoalBarObjectiveEditor } from "./GoalBarObjectiveEditor";

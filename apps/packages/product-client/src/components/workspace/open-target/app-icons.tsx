@@ -1,7 +1,8 @@
 import { useId } from "react";
 import { OPEN_TARGET_ICON_ASSET_PATHS } from "#product/config/open-target-icon-assets";
-import { FileIcon, type IconProps } from "@proliferate/ui/icons";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { FileIcon } from "#product/primitives/icons/workspace";
+import type { IconProps } from "#product/primitives/icons/types";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 export function MailAppIcon({ className, ...props }: IconProps) {
   const gradientId = useId();

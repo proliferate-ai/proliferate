@@ -1,4 +1,4 @@
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { PlanMarkdownBody } from "#product/components/workspace/chat/transcript/PlanMarkdownBody";
 import {
   renderTranscriptCodeBlock,

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { KeyRound, Plus } from "lucide-react";
 
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import type { CloudSecretsPanelModel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";

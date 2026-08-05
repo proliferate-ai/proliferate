@@ -5,8 +5,8 @@ Scope:
 - `apps/desktop/src/**`
 - `apps/web/src/**`
 - `apps/mobile/src/**`
-- shared styling under `apps/packages/design/**`, `apps/packages/ui/**`,
-  and `apps/packages/product-client/**`
+- shared styling under `apps/packages/design/**` and
+  `apps/packages/product-client/**`
 
 This file covers styling-only rules. Read
 [README.md](../README.md) for structure, ownership, and data-flow guidance.
@@ -190,10 +190,11 @@ the tokens.
 
 ## UI Primitives First
 
-In DOM apps/packages, `apps/packages/ui/**` owns the primitive visual contract.
-Do not define primitive components outside that folder.
+In DOM package code,
+`apps/packages/product-client/src/primitives/**` owns the primitive visual
+contract. Do not define primitive components outside that subtree.
 
-Forbidden outside `apps/packages/ui/**`:
+Forbidden outside `apps/packages/product-client/src/primitives/**`:
 
 - defining a local `Button`, `IconButton`, `Input`, `Dialog`, `Menu`, `Select`,
   `Tabs`, `Tooltip`, `Badge`, layout shell, or equivalent lookalike
@@ -208,12 +209,11 @@ Forbidden outside `apps/packages/ui/**`:
 - `<textarea>`
 
 If a visual treatment is missing, extend the primitive API or add a dedicated
-primitive in `apps/packages/ui/**`. Callsite classes may handle layout,
-spacing, and sizing; primitives own color, border, radius, typography, focus,
-hover, disabled, and loading states.
+primitive in `apps/packages/product-client/src/primitives/**`. Callsite classes
+may handle layout, spacing, and sizing; primitives own color, border, radius,
+typography, focus, hover, disabled, and loading states.
 
-When using primitives from `apps/packages/ui/**` or shared ProductClient
-components,
+When using ProductClient primitives or shared ProductClient components,
 import `@proliferate/design/product.css`;
 that shared entrypoint owns the Tailwind package source scanning.
 

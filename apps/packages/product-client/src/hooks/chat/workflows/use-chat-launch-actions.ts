@@ -14,7 +14,7 @@ import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import { ANYHARNESS_UPDATE_DOCS_URL } from "#product/config/capabilities";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
-import type { ToastErrorInput } from "@proliferate/ui/utils/toast-model";
+import type { ToastErrorInput } from "#product/primitives/utils/toast-model";
 import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
 import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";

@@ -1,5 +1,5 @@
 import { Check, ShieldAlert } from "lucide-react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import type { CloudRepoPickerBlockerView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 
 /** Staged prerequisite state with one primary action for the current step. */

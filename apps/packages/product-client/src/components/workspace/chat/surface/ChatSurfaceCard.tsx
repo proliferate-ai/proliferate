@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Badge } from "#product/primitives/Badge";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,

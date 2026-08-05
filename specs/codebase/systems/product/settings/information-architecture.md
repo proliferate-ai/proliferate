@@ -288,11 +288,14 @@ SettingsScopeTabs.tsx     horizontal underline scope switcher
 SettingsEmptyState.tsx
 ```
 
-Desktop-local `apps/desktop/src/components/settings/shared/` keeps
-`AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, `RunCommandHelp`.
-Layout helpers come from `@proliferate/ui` (`AutoHideScrollArea`,
-`SidebarNavRow`) and general primitives from
-`@proliferate/ui/primitives` (`Button`, `Input`, `Switch`, ...).
+ProductClient's `apps/packages/product-client/src/components/settings/shared/`
+keeps `AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, and
+`RunCommandHelp`.
+Layout helpers use concrete ProductClient pattern imports
+(`#product/primitives/patterns/AutoHideScrollArea` and
+`#product/primitives/patterns/SidebarNavRow`); general controls use concrete
+root imports such as `#product/primitives/Button`,
+`#product/primitives/Input`, and `#product/primitives/Switch`.
 
 **Admin gating**: unchanged model. All Org-scope rows are marked
 `adminOnly`; `SettingsSidebar` hides them for non-admins via

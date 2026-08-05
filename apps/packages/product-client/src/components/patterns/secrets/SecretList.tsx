@@ -1,6 +1,6 @@
 import { KeyRound, Plus } from "lucide-react";
 
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { SecretRow } from "#product/components/patterns/secrets/SecretRow";
 
 export interface SecretListItem {

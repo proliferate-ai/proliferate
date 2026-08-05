@@ -522,7 +522,7 @@ Do **not** grow the scroll cap past `max-h-40` — larger caps dominate the comp
 Control-row tone rule — the pills are **monochrome**:
 
 - Every control pill is a `ComposerControlButton`
-  (`apps/packages/ui/src/patterns/ComposerControlButton.tsx`). It has no
+  ([ComposerControlButton.tsx](../../../../../apps/packages/product-client/src/primitives/patterns/ComposerControlButton.tsx)). It has no
   `tone` prop; the tone system was deleted 2026-07-02 along with the plan-mode
   tint (`--color-plan-border` is gone). Do **not** reintroduce mode-based
   tinting on the mode pill or any other control.
@@ -560,8 +560,8 @@ Placeholder variants — strings live in
 
 Rules that apply everywhere in `apps/desktop/src/**` but are easy to violate in this area specifically:
 
-- **No raw `<button>`.** Use `Button` from `components/ui/Button.tsx`. If the existing variants don't fit, add a new size/variant to the primitive table — don't hand-roll.
-- **No inline SVG icons.** Status icons (`Circle`, `CheckCircleFilled`, etc.) live in `components/ui/icons.tsx`. If you need a new one, add it there and import it.
+- **No raw `<button>`.** Use `Button` from `#product/primitives/Button`. If the existing variants don't fit, add a new size/variant to the primitive table — don't hand-roll.
+- **No inline SVG icons.** Import each reusable glyph from its concrete `#product/primitives/icons/<owner>` module (`Circle` from `core`, `CheckCircleFilled` from `status`). If you need a new one, add it to the concrete owner module and import it.
 - **No inline constants in `.tsx` files** for fixture data. Playground fixtures live in `lib/domain/chat/__fixtures__/playground.ts`. Scenario config lives in `config/playground.ts`.
 
 ## 6. Things that are explicitly forbidden

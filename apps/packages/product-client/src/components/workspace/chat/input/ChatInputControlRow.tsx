@@ -9,8 +9,9 @@ import {
   buildComposerSessionControlGroups,
 } from "#product/lib/domain/chat/session-controls/composer-control-groups";
 import { ChatComposerControlRowFrame } from "#product/components/workspace/chat/composer/ChatComposerControlRowFrame";
-import { Plus, Target } from "@proliferate/ui/icons";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
+import { Plus } from "#product/primitives/icons/core";
+import { Target } from "#product/primitives/icons/product";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
 import { deriveGoalBarState } from "@proliferate/product-domain/activity/goal";
 import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
 import { useGoalBarStore } from "#product/stores/activity/goal-bar-store";

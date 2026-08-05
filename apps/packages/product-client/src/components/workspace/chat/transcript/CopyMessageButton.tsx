@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Check, Copy } from "@proliferate/ui/icons";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { Check, Copy } from "#product/primitives/icons/core";
+import { IconButton } from "#product/primitives/IconButton";
 
 export function CopyMessageButton({
   content,

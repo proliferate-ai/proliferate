@@ -4,7 +4,7 @@ import {
   type ReactNode,
 } from "react";
 import type { PendingPromptEntry } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { SubagentWakeBadge } from "#product/components/workspace/chat/transcript/SubagentWakeBadge";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import {

@@ -1,7 +1,7 @@
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import { ExternalLink } from "lucide-react";
 
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import type { WorkspaceInventoryItemView } from "@proliferate/product-domain/workspaces/inventory";
 
 import { SourceGlyph } from "./WorkspaceInventoryGlyphs";

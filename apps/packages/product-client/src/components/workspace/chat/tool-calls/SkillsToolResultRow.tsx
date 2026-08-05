@@ -1,5 +1,5 @@
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { ProliferateIcon } from "@proliferate/ui/icons/proliferate-icons";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { ProliferateIcon } from "#product/primitives/icons/proliferate-icons";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";

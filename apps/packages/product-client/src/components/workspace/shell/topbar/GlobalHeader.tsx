@@ -8,18 +8,16 @@ import { useUserPreferencesStore } from "#product/stores/preferences/user-prefer
 import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
 import { HeaderTabs } from "#product/components/workspace/shell/topbar/HeaderTabs";
 import { WorkspaceActionsMenuContainer } from "#product/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SplitButton } from "#product/components/workspace/open-target/SplitButton";
 import {
   type OpenTarget,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import {
-  FilePen,
-  Play,
-  SplitPanel,
-} from "@proliferate/ui/icons";
+import { FilePen } from "#product/primitives/icons/workspace";
+import { Play } from "#product/primitives/icons/core";
+import { SplitPanel } from "#product/primitives/icons/app-shell";
 import type { Workspace } from "@anyharness/sdk";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { workspaceHeaderTitle } from "#product/lib/domain/workspaces/display/workspace-display";

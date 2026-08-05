@@ -16,9 +16,11 @@
  * navigation actions rather than re-deriving copy per callsite.
  */
 import type { ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { CreditCard, Zap, CircleAlert, Building2 } from "@proliferate/ui/icons";
+import { twMerge } from "#product/primitives/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { CreditCard, Building2 } from "#product/primitives/icons/platform";
+import { Zap } from "#product/primitives/icons/product";
+import { CircleAlert } from "#product/primitives/icons/status";
 
 export type BillingGateKind = "upgrade" | "refill" | "payment" | "admin" | "limit";
 

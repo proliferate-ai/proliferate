@@ -19,11 +19,12 @@
  * list with a ⌘N hint.
  */
 import { ChevronRight, FolderPlus, GitPullRequest } from "lucide-react";
-import { GitBranchIcon, MessageSquare } from "@proliferate/ui/icons";
+import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
+import { MessageSquare } from "#product/primitives/icons/product";
 import type { ReactNode } from "react";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Spinner } from "@proliferate/ui/primitives/Spinner";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Badge } from "#product/primitives/Badge";
+import { Spinner } from "#product/primitives/Spinner";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 import {
   Command,
@@ -32,7 +33,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@proliferate/ui/primitives/Command";
+} from "#product/primitives/Command";
 
 import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
 import type { PrStatusView } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";

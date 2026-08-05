@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronDown } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ChevronDown } from "#product/primitives/icons/core";
 import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { collectTurnFilePatches } from "@proliferate/product-domain/chats/transcript/turn-file-patches";

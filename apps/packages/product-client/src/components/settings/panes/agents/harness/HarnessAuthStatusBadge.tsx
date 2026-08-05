@@ -1,6 +1,6 @@
-import { RefreshCw } from "@proliferate/ui/icons";
-import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { RefreshCw } from "#product/primitives/icons/platform";
+import { Badge, type BadgeTone } from "#product/primitives/Badge";
+import { IconButton } from "#product/primitives/IconButton";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { isReadyAgent } from "#product/lib/domain/agents/status";

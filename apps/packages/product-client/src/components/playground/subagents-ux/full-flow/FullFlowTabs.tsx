@@ -1,5 +1,5 @@
-import { X } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { X } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
 import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 import { AgentGlyph } from "#product/components/playground/subagents-ux/popover-pane/AgentGlyph";
 import type {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Building2, Cloud, CreditCard, Gauge, Server } from "lucide-react";
 
-import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Badge } from "#product/primitives/Badge";
 
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";

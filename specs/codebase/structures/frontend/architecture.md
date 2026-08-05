@@ -140,13 +140,14 @@ read + capabilities cause actions (workflow).
 ```text
 Desktop/Web:                    Foundations (everyone):
   product-client    connected     product-domain   pure shared rules (Mobile's sharing point)
-                    presentation  design           tokens + css (the look)
-  ui                primitives
+  ├─ components     presentation  design           tokens + css (the look)
+  └─ primitives     DOM library
 ```
 
-`apps → product-client → ui → design`; everyone → `product-domain`.
-Mobile uses only `design/react-native` + `product-domain` + SDK — never the DOM
-packages.
+`apps → product-client → design`; ProductClient's nested `primitives/**` owner
+also depends on `design`; everyone → `product-domain`. Mobile uses only
+`design/react-native` + `product-domain` + SDK — never ProductClient or its DOM
+primitives.
 
 ---
 
@@ -298,18 +299,18 @@ Never put disk I/O or subscriptions in the store file.
 
 ### `styles/**` · `index.css`
 - App-local style entrypoints, native token bridge, app-specific third-party CSS.
-  Shared tokens/primitives belong in the `design`/`ui` packages, not here.
+  Shared tokens and primitives belong in `design` and ProductClient's nested
+  `primitives/**` owner, not here.
 
 ### Shared packages
 - **`design`** — tokens + DOM css + React-Native-safe token values. No product
   concepts, no app code, no SDK.
-- **`ui`** — the **single** DOM primitive system (Button, Dialog, Input, layout).
-  *Hard invariant:* no DOM primitive defined anywhere else, even a renamed
-  wrapper. Need a variant? Add it to `ui`.
 - **`product-client`** — the shared Desktop/Web product: components own product
   presentation, access hooks own SDK/query state, workflow hooks sequence
-  actions, and pure projections live in `lib/domain`. Native host capabilities
-  arrive through the typed host contract.
+  actions, pure projections live in `lib/domain`, and `primitives/**` owns the
+  single DOM primitive system. Native host capabilities arrive through the
+  typed host contract. The nested primitives subtree remains DOM-safe and
+  cannot import product or connected-client layers.
 - **`product-domain`** — pure shared decisions; the **Mobile sharing point**. No
   React/DOM/SDK clients/stores.
 

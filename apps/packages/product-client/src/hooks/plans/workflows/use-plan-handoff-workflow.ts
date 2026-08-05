@@ -38,7 +38,7 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import type { ToastErrorInput } from "@proliferate/ui/utils/toast-model";
+import type { ToastErrorInput } from "#product/primitives/utils/toast-model";
 
 // Owns the plan handoff dialog form and submit workflow wiring. Does not own session runtime.
 export function usePlanHandoffWorkflow({

@@ -2,10 +2,10 @@ import {
   Check,
   MoreHorizontal,
   Plus,
-} from "@proliferate/ui/icons";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
+} from "#product/primitives/icons/core";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
 import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { ProductSidebarSectionHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";

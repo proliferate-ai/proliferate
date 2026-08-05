@@ -20,15 +20,15 @@ const coworkState = vi.hoisted(() => ({
   isCreatingThread: false,
 }));
 
-vi.mock("#product/components/feedback/Skeleton", () => ({
+vi.mock("#product/primitives/Skeleton", () => ({
   SkeletonBlock: () => <div data-testid="threads-skeleton" />,
 }));
 
-vi.mock("@proliferate/ui/icons", () => ({
+vi.mock("#product/primitives/icons/core", () => ({
   Plus: () => <span data-testid="plus-icon" />,
 }));
 
-vi.mock("@proliferate/ui/patterns/SidebarActionButton", () => ({
+vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     disabled,

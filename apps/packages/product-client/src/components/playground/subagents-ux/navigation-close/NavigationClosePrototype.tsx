@@ -5,10 +5,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { Button } from "#product/primitives/Button";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
 import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 import {
   buildNavigationCloseScenarios,

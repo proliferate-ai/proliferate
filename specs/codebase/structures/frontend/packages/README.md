@@ -1,6 +1,6 @@
 # Frontend Packages
 
-Scope: `apps/packages/{design,ui,product-domain,product-client}/**`
+Scope: `apps/packages/{design,product-domain,product-client}/**`
 
 **Packages are the shared product tier, not a second frontend taxonomy.** Most
 are 1-1 with an app-local layer. `product-client` is the deliberate exception:
@@ -10,15 +10,14 @@ it is the connected Desktop/Web application shared by two thin hosts.
 |---|---|
 | `design` | app `styles/` + tokens |
 | `product-domain` | `lib/domain` |
-| `product-client` | the shared Desktop/Web product (components + pages + hooks + stores + providers) |
-| `ui` | — *(no app-local analog: the **only** home for DOM primitives)* |
+| `product-client` | the shared Desktop/Web product (primitives + components + pages + hooks + stores + providers) |
 
 ## The two governing rules
 
 Everything else derives from these:
 
 1. **Future-facing.** When adding new code, consider whether multiple apps will need it. Move it to a package **only when ≥2 apps need the same thing.** A package is never the default home.
-2. **Platform — Mobile is DOM-free.** Mobile may import **only `product-domain` + `design/react-native`** (+ SDK packages). It must **never** import the DOM packages: `ui`, `product-client`.
+2. **Platform — Mobile is DOM-free.** Mobile may import **only `product-domain` + `design/react-native`** (+ SDK packages). It must **never** import ProductClient or its DOM primitives.
 
 ProductClient owns shared Desktop/Web components alongside routes, stores,
 hooks, and Cloud/AnyHarness wiring, while raw host implementation such as Tauri,
@@ -29,19 +28,22 @@ browser auth transport, and vendor bootstrap stays in the thin hosts.
 | Package | Shared tier of | Owns | May import | Must NOT import |
 |---|---|---|---|---|
 | `design` | styles/tokens | shared tokens, DOM CSS, RN-safe token values | token/build tooling | product concepts, app code, SDK clients, hooks, stores |
-| `ui` | — (primitives only) | canonical Desktop/Web DOM primitives + layout | `design`, React, DOM-safe libs | product concepts, app code, SDK clients, hooks, stores, Tauri, React Native |
 | `product-domain` | `lib/domain` | pure shared product rules, vocab, validation, projections, view models, planners | generated/SDK **contract types**, pure utils | React, DOM, RN components, SDK clients, query clients, stores, app code, raw access |
-| `product-client` | shared Desktop/Web product | shared product presentation, routes, pages, layered access/workflow/domain hooks and logic, stores, providers, Cloud/gateway/AnyHarness orchestration, and the typed host boundary | `product-domain`, `ui`, `design`, Cloud/AnyHarness SDKs, React/router/query | Desktop/Web app internals, `@tauri-apps/**`, raw `invoke`, host auth transport, vendor telemetry implementations, RN, custom primitives |
+| `product-client` | shared Desktop/Web product | canonical DOM primitives, shared product presentation, routes, pages, layered access/workflow/domain hooks and logic, stores, providers, Cloud/gateway/AnyHarness orchestration, and the typed host boundary | `product-domain`, `design`, Cloud/AnyHarness SDKs, React/router/query | Desktop/Web app internals, `@tauri-apps/**`, raw `invoke`, host auth transport, vendor telemetry implementations, RN, primitives outside `src/primitives/**` |
 
 ## Shape
 
 ```text
 apps/packages/
   design/src/        tokens.ts · css/{product.css,desktop.css} · react-native.ts
-  ui/src/            primitives/ · patterns/ · icons/ · lib/ · utils/ · overlays/
   product-domain/src/<domain>/
   product-client/src/
     ProductClient.tsx
+    primitives/
+      *.tsx              # root DOM primitives
+      patterns/          # generic primitive compositions
+      icons/             # concrete glyph modules; no aggregate barrel
+      utils/ · overlays/ # DOM-safe primitive infrastructure
     app/ · pages/ · components/ · hooks/ · stores/ · providers/ · lib/
     host/                # ProductHost, DesktopBridge, ProductHostProvider
 ```
@@ -49,13 +51,15 @@ apps/packages/
 ## Dependency direction
 
 ```text
-desktop/web -> product-client -> ui -> design
+desktop/web -> product-client -> design
                            \----> product-domain
                            \----> Cloud/AnyHarness SDKs
+
+product-client/primitives -> design + React/DOM-safe libraries
 ```
 
 Mobile: `design/react-native` + `product-domain` + SDK only. **Never**
-`ui`/`product-client`.
+`product-client`.
 
 ## Per package
 
@@ -68,39 +72,45 @@ design/src/tokens.ts · css/{product.css,desktop.css} · react-native.ts · dist
 
 Must not hold product copy, product status colors, route concepts, or component behavior. Imports token source + build tooling only — never React, app code, SDK clients, stores, providers, query clients, or product concepts.
 
-### `ui`
-The **single DOM primitive system** for Desktop, Web, and `product-client`. It
-has no app-local analog — this is the
-*only* place primitives exist.
+### ProductClient `primitives/**`
+
+The **single DOM primitive system** for the shared Desktop/Web product. It is a
+nested lower layer inside ProductClient, not a second package.
 
 ```text
-ui/src/primitives/** · ui/src/patterns/** · ui/src/icons/** · ui/src/{lib,utils,overlays}/
+product-client/src/primitives/*.tsx
+product-client/src/primitives/{patterns,icons,utils,overlays,__tests__}/**
 ```
 
-**Hard invariant: no DOM primitive component may be defined outside `apps/packages/ui/**`.** A primitive is any generic reusable control/shell/low-level building block — *including a differently-named wrapper* around a raw DOM control.
+**Hard invariant: no DOM primitive component may be defined outside `apps/packages/product-client/src/primitives/**`.** A primitive is any generic reusable control/shell/low-level building block — *including a differently-named wrapper* around a raw DOM control.
 
 Primitives that belong here: `Button`/`IconButton`, `Input`/`Textarea`/`Label`/`Select`, `Checkbox`/`Switch`/radio, `Tabs`/segmented controls, `Menu`/`Popover`/`Tooltip`, `Dialog`/modal shells, badges/pills/separators/scroll-areas/layout shells.
 
-#### `primitives/` — the base tier
+#### Root files — the base tier
 
-`primitives/` holds Radix-backed base controls (`Dialog`, `AlertDialog`, `Popover`, `DropdownMenu`, `Sonner`, `Command`, plus the raw `checkbox-primitive`/`tooltip-primitive` pair) alongside legacy overlay wrappers that compose them (`PopoverButton`, low-level icon-button shells, and the `Checkbox`/`Tooltip` re-export shims). The Radix source is shadcn-derived and **we own it** — it is vendored, not a dependency — and every component is styled to the design contract via `design` tokens. `patterns/` holds compositions one level up (`ModalShell`, `ConfirmationDialog`, `CommandPalette`, and other multi-primitive assemblies).
+Root files hold Radix-backed base controls (`Dialog`, `AlertDialog`, `Popover`, `DropdownMenu`, `Sonner`, `Command`, plus the raw `checkbox-primitive`/`tooltip-primitive` pair) alongside low-level wrappers that compose them (`PopoverButton`, icon-button shells, and the `Checkbox`/`Tooltip` re-export shims). Every component is styled to the design contract via `design` tokens. `patterns/` holds compositions one level up (`ModalShell`, `ConfirmationDialog`, `CommandPalette`, and other multi-primitive assemblies).
 
-- Import via export-map subpaths: `@proliferate/ui/primitives/Dialog` (the `./primitives/<Component>` convention; no barrels).
-- `lib/utils.ts` exports `cn()` (tailwind-merge class joiner) at `@proliferate/ui/lib/utils`; primitives use it and callsites may too.
+- ProductClient code imports exact internal subpaths such as `#product/primitives/Dialog`; no barrels.
+- `utils/class-names.ts` owns `cn()` and `utils/tw-merge.ts` owns the configured Tailwind merge wrapper.
 - **New code imports the base primitive directly** when one exists for the need.
 
 Two component families still ship a raw/wrapper pair under the same `primitives/` directory — `Checkbox` (`checkbox-primitive.tsx` + `Checkbox.tsx`) and `Tooltip` (`tooltip-primitive.tsx` + `Tooltip.tsx`) — because the wrapper's public name collided with the base primitive's. This overlap is **transitional, with the raw `-primitive` module as the survivor**: do not extend the wrapper further; add capability to the raw primitive and thin the wrapper.
 
 Rules:
-- Do **not** define primitives in `apps/desktop/src`, `apps/web/src`, or
-  `product-client`.
+- Do **not** define primitives in `apps/desktop/src`, `apps/web/src`, or outside
+  ProductClient's `src/primitives/**` subtree.
 - Do **not** define a second button/input/dialog/menu/select/tabs primitive under another name, or restyle raw DOM controls at callsites to mimic one. *(Transitional exception: the `checkbox-primitive`/`tooltip-primitive` pairs above, resolving toward the raw module. No new pairs.)*
-- Do **not** render raw `<button>`/`<input>`/`<label>`/`<select>`/`<textarea>` outside `ui`.
-- Need a new size/tone/density/icon-position/loading/destructive/layout mode? **Add the API to `ui` first.**
+- Do **not** render raw `<button>`/`<input>`/`<label>`/`<select>`/`<textarea>` outside the primitives subtree.
+- Need a new size/tone/density/icon-position/loading/destructive/layout mode? **Add the API to the owning primitive first.**
 - Callsite classes may handle layout/spacing; the primitive owns color, border, radius, typography, focus, hover, disabled, and loading behavior.
 - Mobile has a separate **native** component layer and does not import DOM primitives.
 
-May import `design`, React, DOM-safe libraries. Must not import product concepts, app code, SDK clients, hooks, stores, Tauri, or React Native.
+May import `design`, React, DOM-safe libraries, and files that resolve inside
+`src/primitives/**`. Must not escape through relative, `#product/*`, or
+internal ProductClient subpaths, or import product-domain, Cloud/AnyHarness
+SDKs, React Query, hooks, stores, host/Tauri code, app aliases, or React Native.
+Patterns may depend on sibling primitive owners inside the same logical
+subtree.
 
 ### `product-domain`
 The shared tier of `lib/domain` — same purity and shape (validation, vocabulary, projections, view models, **pure planners**), promoted for cross-app reuse.
@@ -124,7 +134,7 @@ product-client/src/host/**   # ProductHost + DesktopBridge types, ProductHostPro
 ```
 
 It owns shared Desktop/Web product presentation and may depend in the correct
-direction on `product-domain`, `ui`, `design`, and the Cloud/AnyHarness SDKs.
+direction on `product-domain`, `design`, and the Cloud/AnyHarness SDKs.
 Connected surfaces use one ownership grid: components render, access hooks own
 SDK React/query state, workflow hooks sequence actions, and `lib/domain` owns
 pure projections.
@@ -142,8 +152,10 @@ shared product code reaches native capability only through the optional
 
 ## Package rules
 
-- Use concrete export-map subpaths (`@proliferate/ui/primitives/Dialog`, `@proliferate/ui/primitives/Button`); **no barrels.**
+- Inside ProductClient, use concrete `#product/primitives/...` subpaths; **no barrels.**
 - Package code must not import app code via `@/` or relative paths into an app, nor app stores/providers/routes/Tauri/AnyHarness wiring unless the map above allows it.
-- No `shared`/`common`/`types`/`utils` buckets. Name files for the rule/primitive/component/surface they own.
+- Do not add generic `shared`/`common`/`types`/`utils` buckets outside the
+  explicitly owned `primitives/utils/**` support tier. Name files for the
+  rule, primitive, component, or surface they own.
 - If sharing needs many app-specific branches, keep it app-local and extract only the pure `product-domain` rule.
 - Tests live with shared logic when it's meaningful or risky.

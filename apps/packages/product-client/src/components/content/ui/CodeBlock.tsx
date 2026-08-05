@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, Copy } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Check, Copy } from "#product/primitives/icons/core";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 import { CodeBlockTokenContent } from "./CodeBlockTokenContent";
 import type { RenderTokenFn } from "./CodeTokenLine";

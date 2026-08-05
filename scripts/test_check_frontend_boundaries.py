@@ -19,26 +19,58 @@ class RadixImportBoundaryTest(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
 
-    def test_radix_import_allowed_under_primitives_and_patterns(self) -> None:
+    def test_radix_import_allowed_in_root_primitives_and_nested_patterns(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             self.write_files(
                 root,
                 {
-                    "apps/packages/ui/src/primitives/Dialog.tsx": (
+                    "apps/packages/product-client/src/primitives/Dialog.tsx": (
                         'import * as DialogPrimitive from "@radix-ui/react-dialog";\n'
                     ),
-                    "apps/packages/ui/src/patterns/CommandPalette.tsx": (
+                    "apps/packages/product-client/src/primitives/patterns/nested/CommandPalette.tsx": (
                         'import { Command } from "@radix-ui/react-dialog";\n'
                     ),
                 },
             )
             with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "ALL_FRONTEND_SRC_ROOTS", [root / "apps" / "packages" / "ui" / "src"]
+                check_module,
+                "ALL_FRONTEND_SRC_ROOTS",
+                [root / "apps" / "packages" / "product-client" / "src"],
             ):
                 violations = check_module.find_radix_import_violations()
 
         self.assertEqual(violations, [])
+
+    def test_radix_import_in_primitive_support_tiers_and_tests_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_files(
+                root,
+                {
+                    "apps/packages/product-client/src/primitives/utils/radix.ts": (
+                        'import { Slot } from "@radix-ui/react-slot";\n'
+                    ),
+                    "apps/packages/product-client/src/primitives/icons/radix.tsx": (
+                        'import { Slot } from "@radix-ui/react-slot";\n'
+                    ),
+                    "apps/packages/product-client/src/primitives/__tests__/radix.test.ts": (
+                        'import { Slot } from "@radix-ui/react-slot";\n'
+                    ),
+                },
+            )
+            with patch.object(check_module, "REPO_ROOT", root), patch.object(
+                check_module,
+                "ALL_FRONTEND_SRC_ROOTS",
+                [root / "apps" / "packages" / "product-client" / "src"],
+            ):
+                violations = check_module.find_radix_import_violations()
+
+        self.assertEqual(len(violations), 3)
+        self.assertEqual(
+            {violation.rule_id for violation in violations},
+            {"RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY"},
+        )
 
     def test_radix_import_outside_ui_component_library_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -121,54 +153,69 @@ class RadixImportBoundaryTest(unittest.TestCase):
         self.assertEqual(violations, [])
 
 
-class UiSrcTopLevelShapeTest(unittest.TestCase):
+class ProductClientPrimitivesTopLevelShapeTest(unittest.TestCase):
     def test_only_allowed_top_level_entries_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            ui_src = root / "apps" / "packages" / "ui" / "src"
-            for name in check_module.UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES:
-                (ui_src / name).mkdir(parents=True)
-            with patch.object(check_module, "UI_SRC", ui_src):
-                violations = check_module.find_ui_src_top_level_violations()
+            primitives_src = root / "apps/packages/product-client/src/primitives"
+            for name in check_module.PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES:
+                (primitives_src / name).mkdir(parents=True)
+            (primitives_src / "Button.tsx").write_text("export {};\n", encoding="utf-8")
+            (primitives_src / "popover-surface.ts").write_text(
+                "export {};\n", encoding="utf-8"
+            )
+            with patch.object(
+                check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src
+            ):
+                violations = check_module.find_primitives_top_level_violations()
 
         self.assertEqual(violations, [])
 
     def test_unexpected_top_level_entry_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            ui_src = root / "apps" / "packages" / "ui" / "src"
-            (ui_src / "primitives").mkdir(parents=True)
-            (ui_src / "kit").mkdir(parents=True)
+            primitives_src = root / "apps/packages/product-client/src/primitives"
+            (primitives_src / "patterns").mkdir(parents=True)
+            (primitives_src / "kit").mkdir(parents=True)
             with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "UI_SRC", ui_src
+                check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src
             ):
-                violations = check_module.find_ui_src_top_level_violations()
+                violations = check_module.find_primitives_top_level_violations()
 
                 self.assertEqual(len(violations), 1)
                 violation = violations[0]
-                self.assertEqual(violation.rule_id, "UI_SRC_TOP_LEVEL_ENTRY")
-                self.assertEqual(violation.relative_path, "apps/packages/ui/src/kit")
+                self.assertEqual(
+                    violation.rule_id, "PRODUCT_CLIENT_PRIMITIVES_TOP_LEVEL_ENTRY"
+                )
+                self.assertEqual(
+                    violation.relative_path,
+                    "apps/packages/product-client/src/primitives/kit",
+                )
                 self.assertIn("component-library taxonomy", violation.message)
 
-    def test_missing_ui_src_directory_produces_no_violations(self) -> None:
+    def test_missing_primitives_directory_produces_no_violations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            missing_ui_src = root / "apps" / "packages" / "ui" / "src"
-            with patch.object(check_module, "UI_SRC", missing_ui_src):
-                violations = check_module.find_ui_src_top_level_violations()
+            missing_primitives_src = root / "apps/packages/product-client/src/primitives"
+            with patch.object(
+                check_module,
+                "PRODUCT_CLIENT_PRIMITIVES_SRC",
+                missing_primitives_src,
+            ):
+                violations = check_module.find_primitives_top_level_violations()
 
         self.assertEqual(violations, [])
 
     def test_dotfile_entries_are_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            ui_src = root / "apps" / "packages" / "ui" / "src"
-            (ui_src / "primitives").mkdir(parents=True)
-            (ui_src / ".DS_Store").write_text("", encoding="utf-8")
+            primitives_src = root / "apps/packages/product-client/src/primitives"
+            primitives_src.mkdir(parents=True)
+            (primitives_src / ".DS_Store").write_text("", encoding="utf-8")
             with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "UI_SRC", ui_src
+                check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src
             ):
-                violations = check_module.find_ui_src_top_level_violations()
+                violations = check_module.find_primitives_top_level_violations()
 
         self.assertEqual(violations, [])
 
@@ -177,15 +224,13 @@ class WarningInkBoundaryTest(unittest.TestCase):
     def run_rule(self, source: str) -> list[check_module.Violation]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            ui_src = root / "apps" / "packages" / "ui" / "src"
-            ui_src.mkdir(parents=True)
-            (ui_src / "Sample.tsx").write_text(source, encoding="utf-8")
+            product_client_src = root / "apps/packages/product-client/src"
+            product_client_src.mkdir(parents=True)
+            (product_client_src / "Sample.tsx").write_text(source, encoding="utf-8")
             empty = root / "empty"
-            with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "UI_SRC", ui_src
-            ), patch.multiple(
+            with patch.object(check_module, "REPO_ROOT", root), patch.multiple(
                 check_module,
-                PRODUCT_CLIENT_SRC=empty,
+                PRODUCT_CLIENT_SRC=product_client_src,
                 DESKTOP_SRC=empty,
                 WEB_SRC=empty,
             ):
@@ -223,6 +268,96 @@ class WarningInkBoundaryTest(unittest.TestCase):
         violations = self.run_rule('// historical note: text-warning was wrong\n')
 
         self.assertEqual(violations, [])
+
+
+class ProductClientPrimitiveStructureTest(unittest.TestCase):
+    def write_files(self, root: Path, files: dict[str, str]) -> list[Path]:
+        paths: list[Path] = []
+        for relative_path, content in files.items():
+            path = root / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            paths.append(path)
+        return paths
+
+    def test_raw_dom_and_primitive_definitions_are_owned_by_nested_primitives(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            product_src = root / "apps/packages/product-client/src"
+            primitives_src = product_src / "primitives"
+            files = self.write_files(
+                root,
+                {
+                    "apps/packages/product-client/src/primitives/Button.tsx": (
+                        "export function Button() { return <button />; }\n"
+                    ),
+                    "apps/packages/product-client/src/components/LocalButton.tsx": (
+                        "export function Button() { return <button />; }\n"
+                    ),
+                },
+            )
+            with patch.multiple(
+                structure_module,
+                REPO_ROOT=root,
+                PRODUCT_CLIENT_SRC=product_src,
+                PRODUCT_CLIENT_PRIMITIVES_SRC=primitives_src,
+                DOM_APP_AND_PACKAGE_ROOTS=[product_src],
+            ):
+                violations = structure_module.find_raw_dom_controls(files)
+                violations += structure_module.find_primitive_definitions(files)
+
+        self.assertEqual(len(violations), 2)
+        self.assertEqual(
+            {violation.path.name for violation in violations}, {"LocalButton.tsx"}
+        )
+
+    def test_nested_primitives_preserve_the_former_package_purity_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            product_src = root / "apps/packages/product-client/src"
+            primitives_src = product_src / "primitives"
+            files = self.write_files(
+                root,
+                {
+                    "apps/packages/product-client/src/primitives/AliasEscape.ts": (
+                        'import { View } from "#product/components/View";\n'
+                    ),
+                    "apps/packages/product-client/src/primitives/utils/RelativeEscape.ts": (
+                        'import { model } from "../../lib/domain/model";\n'
+                    ),
+                    "apps/packages/product-client/src/primitives/ForbiddenPackages.ts": (
+                        'import { model } from "@proliferate/product-domain";\n'
+                        'import { cloud } from "@proliferate/cloud-sdk";\n'
+                        'import { runtime } from "@anyharness/sdk";\n'
+                        'import { useQuery } from "@tanstack/react-query";\n'
+                    ),
+                    "apps/packages/product-client/src/primitives/RootPrimitive.ts": (
+                        'import React from "react";\n'
+                        'import { tokens } from "@proliferate/design";\n'
+                        'import { cn } from "#product/primitives/utils/class-names";\n'
+                    ),
+                    "apps/packages/product-client/src/primitives/patterns/Pattern.tsx": (
+                        'import { Button } from "../Button";\n'
+                    ),
+                },
+            )
+            with patch.multiple(
+                structure_module,
+                REPO_ROOT=root,
+                PRODUCT_CLIENT_SRC=product_src,
+                PRODUCT_CLIENT_PRIMITIVES_SRC=primitives_src,
+                PACKAGE_ROOTS={
+                    "product-client-primitives": primitives_src,
+                    "product-client": product_src,
+                },
+            ):
+                violations = structure_module.find_forbidden_shared_package_imports(files)
+
+        self.assertEqual(len(violations), 6)
+        self.assertEqual(
+            {violation.path.name for violation in violations},
+            {"AliasEscape.ts", "RelativeEscape.ts", "ForbiddenPackages.ts"},
+        )
 
 
 class ProductClientBoundaryTest(unittest.TestCase):
@@ -782,6 +917,38 @@ class ProductClientBoundaryTest(unittest.TestCase):
             if violation.rule_id == "PRODUCT_CLIENT_LAYER_DIRECTION"
         ]
         self.assertEqual(len(layer_violations), 2 * len(forbidden_pairs))
+
+    def test_primitives_cannot_escape_to_other_product_client_layers(self) -> None:
+        files = {
+            "apps/packages/product-client/src/primitives/AliasEscape.ts": (
+                'import { View } from "#product/components/View";\n'
+            ),
+            "apps/packages/product-client/src/primitives/utils/RelativeEscape.ts": (
+                'import { model } from "../../lib/domain/model";\n'
+            ),
+            "apps/packages/product-client/src/primitives/patterns/InternalEscape.ts": (
+                "import { useThing } from "
+                '"@proliferate/product-client/internal/hooks/use-thing";\n'
+            ),
+            "apps/packages/product-client/src/primitives/RootPrimitive.ts": (
+                'import { cn } from "#product/primitives/utils/class-names";\n'
+            ),
+            "apps/packages/product-client/src/primitives/patterns/Pattern.tsx": (
+                'import { Button } from "#product/primitives/Button";\n'
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        layer_violations = [
+            violation
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_LAYER_DIRECTION"
+        ]
+        self.assertEqual(
+            {violation.path.name for violation in layer_violations},
+            {"AliasEscape.ts", "RelativeEscape.ts", "InternalEscape.ts"},
+        )
 
     def test_reverse_same_layer_and_lower_store_imports_pass(self) -> None:
         files = {
@@ -1689,7 +1856,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 {
                     "apps/packages/product-client/src/lib/domain/chat/utils.ts": "export {};\n",
                     "apps/packages/product-client/src/lib/domain/chat/session-runtime-helpers.ts": "export {};\n",
-                    "apps/packages/ui/src/lib/utils.ts": "export {};\n",
+                    "apps/packages/design/src/utils.ts": "export {};\n",
                 },
             )
             with patch.multiple(

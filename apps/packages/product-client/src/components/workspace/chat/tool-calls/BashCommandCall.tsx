@@ -1,4 +1,4 @@
-import { CommandWindow } from "@proliferate/ui/icons";
+import { CommandWindow } from "#product/primitives/icons/workspace";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";

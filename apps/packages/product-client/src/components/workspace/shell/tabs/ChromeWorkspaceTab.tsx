@@ -5,10 +5,10 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
-import { TypewriterRevealText } from "@proliferate/ui/primitives/TypewriterRevealText";
-import { X } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { TypewriterRevealText } from "#product/primitives/TypewriterRevealText";
+import { X } from "#product/primitives/icons/core";
 
 interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {
   isActive: boolean;

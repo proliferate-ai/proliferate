@@ -1,6 +1,6 @@
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight } from "@proliferate/ui/icons";
+import { twMerge } from "#product/primitives/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { ChevronRight } from "#product/primitives/icons/core";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { fileTreeIconToneClass } from "#product/lib/domain/files/file-tree-icon-colors";
 

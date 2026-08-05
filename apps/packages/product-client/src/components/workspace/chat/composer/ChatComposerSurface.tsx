@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 interface ChatComposerSurfaceProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;

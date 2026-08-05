@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronDown } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ChevronDown } from "#product/primitives/icons/core";
 import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 import { useTurnCurrentFileDiffs } from "#product/hooks/chat/cache/use-turn-current-file-diffs";
 import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "#product/lib/domain/workspaces/changes/diff-display-policy";

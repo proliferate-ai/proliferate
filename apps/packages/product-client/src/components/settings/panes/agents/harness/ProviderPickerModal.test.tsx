@@ -7,7 +7,7 @@ import { ProviderPickerModal } from "#product/components/settings/panes/agents/h
 
 // ModalShell wraps Radix Dialog (no jsdom polyfills) — stub to a passthrough
 // that renders its body when open.
-vi.mock("@proliferate/ui/patterns/ModalShell", () => ({
+vi.mock("#product/primitives/patterns/ModalShell", () => ({
   ModalShell: ({ open, children }: { open: boolean; children: ReactNode }) =>
     open ? <div>{children}</div> : null,
 }));

@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import type { VirtualItem } from "@tanstack/react-virtual";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,

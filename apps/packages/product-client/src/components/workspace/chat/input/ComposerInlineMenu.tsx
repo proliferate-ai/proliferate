@@ -1,7 +1,7 @@
 import type { ReactNode, RefObject } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
+import { twMerge } from "#product/primitives/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
 
 /**
  * Shared chrome for the composer's inline menus (slash commands, `@` file

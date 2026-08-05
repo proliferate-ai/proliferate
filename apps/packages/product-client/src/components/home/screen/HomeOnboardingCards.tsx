@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
-import { GitHub, Settings, SlidersHorizontal, Spinner, X } from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { Button } from "#product/primitives/Button";
+import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
+import { GitHub } from "#product/primitives/icons/platform";
+import { Settings, SlidersHorizontal, X } from "#product/primitives/icons/core";
+import { Spinner } from "#product/primitives/Spinner";
+import { ProviderIcon } from "#product/primitives/icons/provider-icons";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import type {
   HomeModelProbeCardState,

@@ -24,8 +24,8 @@ import {
   buildContentSearchLineMatchIds,
   normalizeContentSearchQuery,
 } from "#product/lib/domain/content-search/content-search";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
+import { Button } from "#product/primitives/Button";
+import { chainVerticalWheelScroll } from "#product/primitives/utils/scroll-chain";
 import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "#product/lib/domain/files/diff-parser";
 import {
   getChatDiffRows,

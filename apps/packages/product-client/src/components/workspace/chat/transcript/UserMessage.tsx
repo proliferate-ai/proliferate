@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
-import { ChevronDown } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ChevronDown } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
 import { CarryOutPlanRow } from "#product/components/workspace/chat/transcript/CarryOutPlanRow";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
 import { PromptContentRenderer } from "#product/components/workspace/chat/content/PromptContentRenderer";

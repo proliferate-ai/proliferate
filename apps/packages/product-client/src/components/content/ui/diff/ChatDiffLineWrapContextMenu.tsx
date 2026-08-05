@@ -4,12 +4,12 @@ import {
   type ReactElement,
   type Ref,
 } from "react";
-import { WrapText } from "@proliferate/ui/icons";
+import { WrapText } from "#product/primitives/icons/core";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
-} from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+} from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import {
   useChatDiffLineWrapNativeContextMenu,
 } from "#product/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
