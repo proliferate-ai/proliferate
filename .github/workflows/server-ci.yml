@@ -88,6 +88,9 @@ jobs:
       - name: Ruff format check
         run: ruff format --check proliferate/ tests/
 
+      - name: Mypy diagnostic ratchet
+        run: python scripts/check_mypy_baseline.py
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 75

@@ -1444,7 +1444,7 @@ stripe-setup-test:
 	node scripts/stripe-setup-test-mode.mjs --write-env-local
 
 lint-server:
-	cd server && .venv/bin/ruff check proliferate/ tests/ && .venv/bin/ruff format --check proliferate/ tests/ && .venv/bin/mypy proliferate/
+	cd server && .venv/bin/ruff check proliferate/ tests/ && .venv/bin/ruff format --check proliferate/ tests/ && .venv/bin/python scripts/check_mypy_baseline.py --mypy .venv/bin/mypy
 
 # --- Checks ---
 
