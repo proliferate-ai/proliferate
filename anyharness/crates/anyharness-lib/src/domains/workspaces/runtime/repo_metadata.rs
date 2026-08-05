@@ -13,6 +13,24 @@ impl WorkspaceRuntime {
     ) -> anyhow::Result<Vec<WorkspaceRecord>> {
         self.store.list_by_repo_root_id(repo_root_id)
     }
+
+    /// The distinct active branches checked out across a repo root's
+    /// non-retired workspaces — what hosting's "which branches have PRs"
+    /// query needs, without handing the API layer the workspace store.
+    pub fn active_branches_by_repo_root_id(
+        &self,
+        repo_root_id: &str,
+    ) -> anyhow::Result<Vec<String>> {
+        let workspaces = self.store.list_active_by_repo_root_id(repo_root_id)?;
+        Ok(workspaces
+            .into_iter()
+            .filter_map(|workspace| workspace.current_branch)
+            .filter(|branch| !branch.is_empty())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect())
+    }
+
     pub fn resolve_repo_root_default_branch(&self, repo_root_id: &str) -> anyhow::Result<String> {
         let repo_root = self
             .repo_root_service

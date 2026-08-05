@@ -39,12 +39,8 @@ LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/han
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/manager.rs 4 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 
 # Rule: api/** calls domain facades, never stores.
-# 5 files, 15 occurrences.
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/hosting.rs 2 1 handler constructs WorkspaceStore directly (1 import + 1 ctor); target = facade method (grid plan PR 3)
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/mobility.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/sessions_pending.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 10 1 handler reaches store directly at :65; the other 9 are store setup inside the inline cfg(test) mod the engine cannot see; target = facade method (grid plan PR 3)
+# 1 files, 9 occurrences.
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 9 cfg(test)-mod Store wiring; engine cannot see cfg boundaries
 
 # Rule: *_policy.rs files are pure.
 # 1 files, 2 occurrences.

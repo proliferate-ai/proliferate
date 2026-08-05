@@ -445,8 +445,7 @@ async fn reject_retire_if_workflow_controlled(
 ) -> Result<(), ApiError> {
     let session_ids = state
         .session_service
-        .store()
-        .list_with_dismissed_by_workspace(workspace_id)
+        .list_sessions(Some(workspace_id), true)
         .map_err(|error| {
             tracing::error!(workspace_id = %workspace_id, error = %error, "retire re-check session list failed");
             ApiError::internal("session list failed")
