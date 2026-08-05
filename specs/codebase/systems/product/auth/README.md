@@ -7,7 +7,7 @@ Scope:
 - `apps/mobile/src/components/auth/**`
 - `apps/desktop/src/components/settings/panes/AccountPane.tsx`
 - `apps/packages/product-domain/src/auth/**`
-- `apps/packages/product-ui/src/auth/**`
+- `apps/packages/product-client/src/components/auth/**`
 - `cloud/sdk/src/client/auth.ts`
 
 ## Model

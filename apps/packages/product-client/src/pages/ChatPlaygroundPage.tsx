@@ -14,7 +14,7 @@ import {
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@proliferate/product-ui/chat/ChatColumn";
+} from "#product/config/chat-layout";
 import { useChatDockInset } from "#product/hooks/chat/ui/use-chat-dock-inset";
 import { useReplaySession } from "#product/hooks/playground/lifecycle/use-replay-session";
 import { PlaygroundAttachmentPreviewAside } from "#product/components/playground/PlaygroundAttachmentFixtures";

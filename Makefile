@@ -90,7 +90,6 @@ DEV_FRONTEND_ARTIFACTS := \
 	apps/packages/design/dist \
 	apps/packages/product-domain/dist \
 	apps/packages/ui/dist \
-	apps/packages/product-ui/dist \
 	apps/packages/product-client/dist
 PROFILE_DB_READY_COMMAND = make server-db-ready;
 PROFILE_DB_ENSURE_COMMAND = LOCAL_PGHOST="$(LOCAL_PGHOST)" LOCAL_PGPORT="$(LOCAL_PGPORT)" LOCAL_PGUSER="$(LOCAL_PGUSER)" LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME";
@@ -1536,7 +1535,6 @@ shared-build:
 	pnpm --filter @proliferate/design build
 	pnpm --filter @proliferate/product-domain build
 	pnpm --filter @proliferate/ui build
-	pnpm --filter @proliferate/product-ui build
 	pnpm --filter @proliferate/product-client build
 
 # SKIP_RUST=1 skips both cargo builds — for frontend-only worktrees (UI waves)

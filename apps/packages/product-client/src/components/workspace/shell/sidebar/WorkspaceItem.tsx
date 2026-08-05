@@ -36,7 +36,7 @@ import {
 import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
 import { WorkspaceItemMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
-import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
+import { ProductSidebarWorkspaceRow } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
 
 interface WorkspaceItemProps {
   workspaceId?: string;

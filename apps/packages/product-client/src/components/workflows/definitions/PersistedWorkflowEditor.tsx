@@ -6,7 +6,7 @@ import {
 import {
   WorkflowDefinitionEditor,
   type WorkflowRepositoryOption,
-} from "@proliferate/product-ui/workflows/WorkflowDefinitionEditor";
+} from "#product/components/workflows/WorkflowDefinitionEditor";
 import {
   usePersistedWorkflowDefinitionActions,
   type WorkflowDefinitionRefetchResult,

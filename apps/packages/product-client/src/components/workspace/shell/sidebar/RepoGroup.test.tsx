@@ -104,7 +104,7 @@ vi.mock("@proliferate/ui/patterns/SidebarActionButton", () => ({
   ),
 }));
 
-vi.mock("@proliferate/product-ui/sidebar/ProductSidebarRepositories", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/ProductSidebarRepositories", () => ({
   ProductSidebarRepoGroupHeader: ({ action, collapsed, expandedIcon, icon, label }: {
     action: ReactNode;
     collapsed: boolean;

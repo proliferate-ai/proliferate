@@ -5,7 +5,7 @@ import {
 } from "#product/lib/domain/chat/session-controls/session-mode-control";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
-import { SessionControlIcon } from "#product/components/session-controls/SessionControlIcon";
+import { SessionControlIcon } from "#product/components/workspace/chat/session-controls/SessionControlIcon";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { Check } from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";

@@ -23,8 +23,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@proliferate/ui/primitives/Dialog";
-import { CloudRepoPickerBlocker } from "@proliferate/product-ui/repos/CloudRepoPickerBlocker";
-import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
+import { CloudRepoPickerBlocker } from "#product/components/workspace/repo-setup/CloudRepoPickerBlocker";
+import type { CloudRepoPickerBlockerView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";

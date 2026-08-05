@@ -5,7 +5,7 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import {
   ProductSidebarBrandRow,
   ProductSidebarSectionHeader,
-} from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
+} from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
 import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";

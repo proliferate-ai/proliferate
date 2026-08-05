@@ -1,6 +1,6 @@
 import { Cloud, Laptop } from "lucide-react";
 import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
-import { RepoPicker } from "@proliferate/product-ui/settings/RepoPicker";
+import { RepoPicker } from "#product/components/settings/panes/RepoPicker";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { type SettingsFocus } from "#product/lib/domain/settings/navigation";
 import {

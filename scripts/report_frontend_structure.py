@@ -27,7 +27,6 @@ FRONTEND_ROOTS = [
     REPO_ROOT / "apps" / "packages" / "design" / "src",
     REPO_ROOT / "apps" / "packages" / "ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
-    REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     PRODUCT_CLIENT_SRC,
 ]
 
@@ -43,7 +42,6 @@ APP_ROOTS = [
 DOM_APP_AND_PACKAGE_ROOTS = [
     REPO_ROOT / "apps" / "desktop" / "src",
     REPO_ROOT / "apps" / "web" / "src",
-    REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     PRODUCT_CLIENT_SRC,
 ]
 
@@ -51,7 +49,6 @@ PACKAGE_ROOTS = {
     "design": REPO_ROOT / "apps" / "packages" / "design" / "src",
     "ui": REPO_ROOT / "apps" / "packages" / "ui" / "src",
     "product-domain": REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
-    "product-ui": REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     "product-client": PRODUCT_CLIENT_SRC,
 }
 
@@ -518,7 +515,7 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
             return "product-domain must stay pure and must not import React or DOM components"
         if (
             source.startswith("@proliferate/ui")
-            or source.startswith("@proliferate/product-ui")
+            or source.startswith("@proliferate/product-client")
         ):
             return "product-domain must not import UI packages"
         if source.startswith("@proliferate/cloud-sdk-react") or source.startswith(
@@ -529,13 +526,6 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
             return "product-domain must not import query clients"
         if source.startswith("@proliferate/cloud-sdk") and not type_only:
             return "product-domain may import Cloud SDK contract types, not value clients"
-        return None
-
-    if package_name == "product-ui":
-        if source.startswith("@proliferate/cloud-sdk") or source.startswith("@anyharness/sdk"):
-            return "product-ui must not import SDK clients, SDK React hooks, or access contracts"
-        if source == "@tanstack/react-query":
-            return "product-ui must not import query clients"
         return None
 
     if package_name == "product-client":

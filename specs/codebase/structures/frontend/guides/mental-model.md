@@ -164,7 +164,7 @@ One connected app over the presentation stack and two foundations. See
 ```text
 Desktop/Web:                    Foundations (consumed by everyone):
   product-client     connected     product-domain   pure shared rules
-  product-ui         presentation                   (the Mobile sharing point)
+                     presentation                   (the Mobile sharing point)
   ui                 primitives    design           tokens + css (the look)
 ```
 
@@ -173,15 +173,13 @@ Desktop/Web:                    Foundations (consumed by everyone):
 - **ui** - the single DOM primitive system (Button, Dialog, Input, layout).
   Hard invariant: no DOM primitive is defined anywhere else, even a renamed
   wrapper. Need a variant? Add it to `ui`.
-- **product-ui** - presentational product components: data in, callbacks out.
-  Composes `ui` + `product-domain`. No SDK, access, stores, or routes.
-- **product-client** - the connected Desktop/Web product. Components render,
-  access hooks own SDK/query state, workflow hooks sequence actions, and native
-  capability enters through the typed host contract.
+- **product-client** - the shared Desktop/Web product. Components own product
+  presentation, access hooks own SDK/query state, workflow hooks sequence
+  actions, and native capability enters through the typed host contract.
 - **product-domain** - pure shared decisions, the twin of app `lib/domain`, and
   the primary sharing point for Mobile. No React, DOM, SDK clients, or stores.
 
-Platform matrix: Desktop/Web use all four; Mobile uses only `design`
+Platform matrix: Desktop/Web use all three; Mobile uses only `design`
 (react-native tokens), `product-domain`, and SDK packages - never the DOM
 packages.
 

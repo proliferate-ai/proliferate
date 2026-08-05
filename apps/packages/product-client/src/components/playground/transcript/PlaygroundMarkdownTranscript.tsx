@@ -19,7 +19,7 @@ This settled response demonstrates **strong emphasis**, *italic emphasis*, and a
 - Nested structure
   - Second-level item
     - Third-level item
-- File references keep their renderer: [MarkdownBody.tsx](/Users/pablohansen/proliferate/apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx)
+- File references keep their renderer: [MarkdownBody.tsx](/Users/pablohansen/proliferate/apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx)
 
 1. First ordered item
 2. Second ordered item
@@ -42,8 +42,8 @@ export function presentation(value: string): string {
 
 | Surface | Presentation owner | Font contract | Overflow contract | Copy affordance | Link behavior |
 | --- | --- | --- | --- | --- | --- |
-| Assistant transcript | product-ui MarkdownBody | prose-sized inline and fenced code | table scrolls inside the message | code button stays visible | workspace files keep file renderer |
-| Hosted web transcript | shared product-ui renderer | semantic UI-size tokens | chat column never widens | plain highlighted fallback | external links keep provider renderer |
+| Assistant transcript | ProductClient MarkdownBody | prose-sized inline and fenced code | table scrolls inside the message | code button stays visible | workspace files keep file renderer |
+| Hosted web transcript | shared ProductClient renderer | semantic UI-size tokens | chat column never widens | plain highlighted fallback | external links keep provider renderer |
 
 ###### Supporting detail
 

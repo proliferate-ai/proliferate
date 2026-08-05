@@ -53,7 +53,7 @@ truth.
   `contentSearch={{ query }}` prop and publishes it through
   `ChatContentSearchQueryContext`; each transcript row publishes its unit id +
   index through `ChatTranscriptRowContext` (see
-  `apps/packages/product-ui/src/chat/transcript/ChatContentSearchContext.tsx`).
+  `apps/packages/product-client/src/components/workspace/chat/transcript/ChatContentSearchContext.tsx`).
   `MarkdownBody` (assistant prose, opted in via `enableContentSearch`) and the
   desktop `FileLinkedText` (user prose) wrap query matches in
   `<mark class="content-find-match" data-content-search-row={rowUnitId}>` —

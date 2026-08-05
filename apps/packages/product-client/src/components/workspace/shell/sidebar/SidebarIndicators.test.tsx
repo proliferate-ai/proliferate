@@ -8,7 +8,7 @@ import { DotCellLoader } from "@proliferate/ui/primitives/DotCellLoader";
 import type { SidebarStatusIndicator } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { SidebarStatusGlyph } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
-import type { PrStatusView } from "@proliferate/product-ui/patterns/PrStatusBadge";
+import type { PrStatusView } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;

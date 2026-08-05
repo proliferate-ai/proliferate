@@ -12,7 +12,7 @@ import {
   Robot,
   SquareTerminal,
 } from "@proliferate/ui/icons";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import {
   DetailStateGlyph,
   StatusRow,

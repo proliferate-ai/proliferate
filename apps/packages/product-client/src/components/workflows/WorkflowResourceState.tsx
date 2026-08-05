@@ -1,6 +1,6 @@
 import { EmptyState } from "@proliferate/ui/patterns/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ProductPageShell } from "@proliferate/product-ui/patterns/ProductPageShell";
+import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
 
 export function WorkflowResourceState({
   loading = false,

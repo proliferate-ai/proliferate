@@ -647,10 +647,10 @@ const ORBIT_DELAYS = [
         self.assertEqual(
             unsanctioned_growth(
                 previous,
-                {"apps/packages/product-ui/src/repos/AddRepoFlow.tsx|retired-shadow": 1},
+                {"apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|retired-shadow": 1},
                 sanctions,
             ),
-            ["apps/packages/product-ui/src/repos/AddRepoFlow.tsx|retired-shadow: 0 -> 1"],
+            ["apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|retired-shadow: 0 -> 1"],
         )
 
     def test_census_growth_is_refused_for_an_unsanctioned_family(self) -> None:

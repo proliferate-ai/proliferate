@@ -4,7 +4,7 @@ import { isSubagentItem } from "#product/components/workspace/chat/transcript/Tr
 import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
 import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";
 import { TranscriptToolCallGroupBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallGroupBlock";
-import type { AssistantMessageRevealState } from "#product/components/workspace/chat/transcript/AssistantMessage";
+import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 

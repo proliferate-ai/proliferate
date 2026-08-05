@@ -19,7 +19,8 @@
 
 apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 425 workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 946 transcript row model pending row-kind module split
-apps/packages/product-ui/src/chat/transcript/VirtualizedTranscriptRowList.tsx 416 virtualized transcript list pending row-window split (recorded in debt repair)
+apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx 416 virtualized transcript list pending row-window split (recorded in debt repair)
+apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx 525 existing markdown transcript renderer pending split
 # Relocated from apps/desktop/src by the Desktop-product move into product-client
 # (web-desktop-unification slice 04). Same files, same counts/reasons — relocation,
 # not gate-weakening; product-client/src is a structure-report scan root. Counts

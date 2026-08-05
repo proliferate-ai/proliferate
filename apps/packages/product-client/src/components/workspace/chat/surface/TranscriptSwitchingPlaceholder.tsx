@@ -2,7 +2,7 @@ import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@proliferate/product-ui/chat/ChatColumn";
+} from "#product/config/chat-layout";
 
 function AssistantMessageSkeleton() {
   return (

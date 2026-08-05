@@ -18,7 +18,7 @@ vi.mock("#product/components/workspace/shell/sidebar/SidebarIndicators", () => (
   SidebarStatusIndicatorView: () => <span data-testid="activity-indicator" />,
 }));
 
-vi.mock("@proliferate/product-ui/sidebar/ProductSidebarThreads", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/ProductSidebarThreads", () => ({
   ProductSidebarThreadRow: ({
     status,
     trailingStatus,

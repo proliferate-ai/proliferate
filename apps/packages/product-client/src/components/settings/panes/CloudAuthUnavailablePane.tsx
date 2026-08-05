@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { CLOUD_SETUP_DOCS_URL } from "#product/config/capabilities";

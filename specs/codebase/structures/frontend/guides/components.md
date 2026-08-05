@@ -70,7 +70,6 @@ New primitive definitions are forbidden in:
 
 - `apps/desktop/src/**`
 - `apps/web/src/**`
-- `apps/packages/product-ui/**`
 - `apps/packages/product-client/**`
 
 Primitive definitions outside `apps/packages/ui/**` violate this standard. Do
@@ -90,7 +89,7 @@ update callsites to import it.
 - Is the only place in DOM frontend code that should define the base visual
   contract for raw controls.
 
-### Desktop, Web, `product-ui`, and `product-client`
+### Desktop, Web, and `product-client`
 
 - Must use primitives from `apps/packages/ui/**` for base controls.
 - Must not define or redefine primitive components, even with different names.
@@ -102,22 +101,12 @@ update callsites to import it.
 - If a needed primitive variant does not exist, add it to
   `apps/packages/ui/**` and then consume it everywhere.
 
-### `apps/packages/product-ui`
-
-- Owns shared Desktop/Web product presentation under
-  `apps/packages/product-ui/src/<domain>/<surface>/**`.
-- Receives data and callbacks as props.
-- Composes `apps/packages/ui/**` primitives and
-  `apps/packages/product-domain/**` view models.
-- Must not import SDK clients, SDK React hooks, access helpers, app stores,
-  routes, Tauri, AnyHarness runtime wiring, or React Native.
-
 ### `apps/packages/product-client`
 
-- Owns shared connected Desktop/Web surfaces under its standard component,
-  hook, and library roots.
-- Components render `product-ui` and call ProductClient hooks; Cloud SDK React
-  access belongs under `hooks/access/cloud/**`, never in components.
+- Owns shared Desktop/Web presentation and connected surfaces under its
+  standard component, hook, and library roots.
+- Components render and call ProductClient hooks; Cloud SDK React access
+  belongs under `hooks/access/cloud/**`, never in components.
 - Must still use `apps/packages/ui/**` for base controls.
 - Must not import Desktop/Web host internals, Tauri, or React Native.
 
@@ -126,7 +115,7 @@ update callsites to import it.
 - Renders native components under `apps/mobile/src/components/**`.
 - May share `apps/packages/product-domain/**` view models and
   `apps/packages/design/src/react-native.ts` tokens.
-- Must not import DOM packages: `ui`, `product-ui`, or `product-client`.
+- Must not import DOM packages: `ui` or `product-client`.
 
-Use concrete package subpaths such as `@proliferate/ui/primitives/Button` or
-`@proliferate/product-ui/settings/account/AccountPane`; do not add barrels.
+Use concrete subpaths such as `@proliferate/ui/primitives/Button` or
+`#product/components/settings/panes/account/AccountSettingsPane`; do not add barrels.

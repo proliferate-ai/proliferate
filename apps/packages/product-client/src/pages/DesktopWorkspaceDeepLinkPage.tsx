@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
+import { RedirectCallbackScreen } from "#product/components/auth/RedirectCallbackScreen";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";

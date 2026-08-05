@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { CloudRepoPickerProps } from "@proliferate/product-ui/repos/CloudRepoPicker";
 import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
@@ -10,7 +9,7 @@ import {
 import {
   AddRepoFlow,
   type AddRepoFlowOption,
-} from "@proliferate/product-ui/repos/AddRepoFlow";
+} from "#product/components/workspace/repo-setup/AddRepoFlow";
 import { useAddCloudEnvironment } from "#product/hooks/workspaces/workflows/use-add-cloud-environment";
 import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -19,9 +18,9 @@ import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";
 import type {
-  CloudRepoPickerBlockerModel,
-  CloudRepoPickerModel,
-} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
+  CloudRepoPickerBlockerView,
+  CloudRepoPickerProps,
+} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
@@ -61,10 +60,10 @@ export function AddRepoFlowHost() {
   // precede repo selection; once past them the per-repo picker (its authority
   // query) owns gates 3+, so we resolve with the later gates satisfied and
   // surface a blocker only when the resolver stops at gate 1 or 2.
-  const preflightBlockers = useMemo<Record<"cloud" | "clone", CloudRepoPickerBlockerModel | null>>(() => {
+  const preflightBlockers = useMemo<Record<"cloud" | "clone", CloudRepoPickerBlockerView | null>>(() => {
     const resolve = (
       requirement: RepositoryCapabilityRequirement,
-    ): CloudRepoPickerBlockerModel | null => {
+    ): CloudRepoPickerBlockerView | null => {
       const readiness = resolveRepositoryReadiness({
         requirement,
         githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
@@ -210,7 +209,7 @@ export function AddRepoFlowHost() {
     });
   }, [beginCloudIntent, handoffToCloud]);
 
-  const clonePicker = useMemo<CloudRepoPickerModel>(() => ({
+  const clonePicker = useMemo<CloudRepoPickerProps>(() => ({
     ...clonePickerBase,
     onAddRepository: (repo) => beginCloneForRepoId(repo.id),
     // Manual owner/repo entry is the same clone intent as catalog selection;

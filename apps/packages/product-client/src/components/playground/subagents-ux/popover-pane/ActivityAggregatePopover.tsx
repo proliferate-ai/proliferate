@@ -10,7 +10,7 @@ import {
   GitPullRequest,
   StackedFiles,
 } from "@proliferate/ui/icons";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import { AgentGlyphStack } from "#product/components/playground/subagents-ux/popover-pane/AgentGlyph";
 import {
   buildActivityFacts,

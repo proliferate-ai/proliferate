@@ -3,7 +3,7 @@ import {
   sortProcessesForDisplay,
   type ActivityProcessWire,
 } from "@proliferate/product-domain/activity/process";
-import { TerminalRosterRow } from "@proliferate/product-ui/activity/TerminalRosterRow";
+import { TerminalRosterRow } from "#product/components/workspace/activity/TerminalRosterRow";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useFeedStream } from "#product/hooks/activity/derived/use-feed-stream";

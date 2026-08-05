@@ -8,8 +8,8 @@ import { LIBRARY_TIERS } from "#product/components/playground/library/index";
 import { useColorMode } from "#product/hooks/theme/workflows/use-theme-preferences";
 
 /**
- * Component-library spec sheet: every sanctioned `@proliferate/ui` /
- * `@proliferate/product-ui` component, tier by tier, rendered under the real
+ * Component-library spec sheet: every sanctioned `@proliferate/ui` component
+ * and ProductClient domain-aware pattern, tier by tier, rendered under the real
  * theme. The registry (`components/playground/library/*`) is the single
  * source of what's in this sheet; `library-registry.test.ts` fails CI if a
  * sanctioned export drifts out of sync with it.

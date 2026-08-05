@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { setMeasurementSink } from "#product/lib/infra/measurement/measurement-port";
 // Test-lane only reach into the retained Desktop measurement engine (ruling R1).
 // This file lives at the package root — outside `src/`, so the frontend boundary
@@ -12,3 +13,13 @@ import { desktopMeasurementSink } from "../../desktop/src/lib/infra/measurement/
 // so measurement-asserting tests observe real behavior (byte-identical to the
 // pre-move Desktop lane). Idempotent (last writer wins); runs once per test file.
 setMeasurementSink(desktopMeasurementSink);
+
+class TestResizeObserver {
+  observe() {}
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
+vi.stubGlobal("ResizeObserver", TestResizeObserver);

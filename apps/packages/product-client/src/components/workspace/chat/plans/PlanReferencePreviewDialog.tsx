@@ -1,5 +1,5 @@
 import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
-import { PlanMarkdownBody } from "@proliferate/product-ui/chat/transcript/PlanMarkdownBody";
+import { PlanMarkdownBody } from "#product/components/workspace/chat/transcript/PlanMarkdownBody";
 import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,

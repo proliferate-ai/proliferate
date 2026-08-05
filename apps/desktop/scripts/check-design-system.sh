@@ -66,7 +66,7 @@ check 'tracking-\[0.06em\]' "raw eyebrow tracking (use SettingsSection)"
 # Semantic type tokens
 # ---------------------------------------------------------------------------
 
-TYPE_ROOTS=(src ../packages/ui/src ../packages/product-ui/src)
+TYPE_ROOTS=(src ../packages/ui/src ../packages/product-client/src)
 ARBITRARY_TYPE_PATTERN='text-\[[0-9.]+(px|rem|em)\]|leading-\[[0-9.]+(px|rem|em)\]'
 
 TYPE_HITS=$(grep -rEln --exclude='*.test.*' "$ARBITRARY_TYPE_PATTERN" "${TYPE_ROOTS[@]}" 2>/dev/null || true)
@@ -96,7 +96,7 @@ if [[ $FAIL -eq 1 ]]; then
   echo "Design-system check failed. Spell type through the semantic tokens"
   echo "(text-ui / text-ui-sm / text-composer / text-title / text-hero and the"
   echo "base scale), route settings markup through the shared primitives in"
-  echo "@proliferate/product-ui/patterns, or add a justified one-off to the"
+  echo "ProductClient components/patterns, or add a justified one-off to the"
   echo "relevant allowlist in $0."
   exit 1
 fi

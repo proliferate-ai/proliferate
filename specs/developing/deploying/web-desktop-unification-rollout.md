@@ -156,8 +156,8 @@ splitting; the candidate `/login` numbers are the *shell* of the unified shared
 product (the full authenticated app is lazy-split into a separate
 `AuthenticatedProductClient` chunk, ~746 KB gzip, not requested on `/login`).
 
-- **CSS floor probe.** Tailwind v4 emits utilities from `@source` scanning all
-  three shared DOM package trees (`ui`, `product-ui`, `product-client`) into one
+- **CSS floor probe.** Tailwind v4 emits utilities from `@source` scanning both
+  shared DOM package trees (`ui`, `product-client`) into one
   eager stylesheet. Re-scoping `@source` to only the
   login/auth shell sources and rebuilding floors the eager CSS at **35.4 KB
   gzip — still +46% over the 24.2 KB baseline.** The residual is the shared

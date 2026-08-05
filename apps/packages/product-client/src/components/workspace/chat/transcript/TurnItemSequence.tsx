@@ -30,7 +30,7 @@ import {
   formatCollapsedSummary,
 } from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
 import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
-import type { AssistantMessageRevealState } from "#product/components/workspace/chat/transcript/AssistantMessage";
+import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 

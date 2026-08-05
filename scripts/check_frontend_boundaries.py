@@ -26,7 +26,6 @@ MOBILE_SRC = REPO_ROOT / "apps" / "mobile" / "src"
 DESIGN_SRC = REPO_ROOT / "apps" / "packages" / "design" / "src"
 UI_SRC = REPO_ROOT / "apps" / "packages" / "ui" / "src"
 PRODUCT_DOMAIN_SRC = REPO_ROOT / "apps" / "packages" / "product-domain" / "src"
-PRODUCT_UI_SRC = REPO_ROOT / "apps" / "packages" / "product-ui" / "src"
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
@@ -165,7 +164,6 @@ ALL_FRONTEND_SRC_ROOTS = [
     DESIGN_SRC,
     UI_SRC,
     PRODUCT_DOMAIN_SRC,
-    PRODUCT_UI_SRC,
     PRODUCT_CLIENT_SRC,
 ]
 
@@ -2421,7 +2419,7 @@ def find_warning_ink_violations() -> list[Violation]:
     """
     violations: list[Violation] = []
     for path in iter_files_in_roots(
-        [UI_SRC, PRODUCT_UI_SRC, PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC]
+        [UI_SRC, PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC]
     ):
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
             for match in WARNING_INK_RE.finditer(strip_line_comment(line)):

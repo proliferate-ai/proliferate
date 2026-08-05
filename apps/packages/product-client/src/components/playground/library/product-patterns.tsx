@@ -3,18 +3,18 @@ import {
   BillingBalanceNotice,
   BillingGateState,
   billingGateView,
-} from "@proliferate/product-ui/patterns/BillingGateState";
-import { ModelTable } from "@proliferate/product-ui/patterns/ModelTable";
-import { PrStatusDot } from "@proliferate/product-ui/patterns/PrStatusBadge";
-import { ProductPageShell } from "@proliferate/product-ui/patterns/ProductPageShell";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
-import { SettingsEyebrow } from "@proliferate/product-ui/patterns/SettingsEyebrow";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
-import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsSaveFooter } from "@proliferate/product-ui/patterns/SettingsSaveFooter";
-import { SettingsScopeTabs } from "@proliferate/product-ui/patterns/SettingsScopeTabs";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
-import { SecretManagementPanel } from "@proliferate/product-ui/patterns/secrets/SecretManagementPanel";
+} from "#product/components/patterns/BillingGateState";
+import { ModelTable } from "#product/components/patterns/ModelTable";
+import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
+import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
+import { SettingsScopeTabs } from "#product/components/patterns/SettingsScopeTabs";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
@@ -116,28 +116,28 @@ function BillingGateStateDemo() {
 }
 
 export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
-  { name: "BillingGateState", subpath: "@proliferate/product-ui/patterns/BillingGateState", render: BillingGateStateDemo },
-  { name: "ModelTable", subpath: "@proliferate/product-ui/patterns/ModelTable", render: ModelTableDemo },
-  { name: "PrStatusBadge", subpath: "@proliferate/product-ui/patterns/PrStatusBadge", render: () => (
+  { name: "BillingGateState", subpath: "#product/components/patterns/BillingGateState", render: BillingGateStateDemo },
+  { name: "ModelTable", subpath: "#product/components/patterns/ModelTable", render: ModelTableDemo },
+  { name: "PrStatusBadge", subpath: "#product/components/patterns/PrStatusBadge", render: () => (
     <PrStatusDot status={{ kind: "open", number: 42 }} />
   ) },
-  { name: "ProductPageShell", subpath: "@proliferate/product-ui/patterns/ProductPageShell", render: ProductPageShellDemo },
-  { name: "SettingsEmptyState", subpath: "@proliferate/product-ui/patterns/SettingsEmptyState", render: () => (
+  { name: "ProductPageShell", subpath: "#product/components/patterns/ProductPageShell", render: ProductPageShellDemo },
+  { name: "SettingsEmptyState", subpath: "#product/components/patterns/SettingsEmptyState", render: () => (
     <SettingsEmptyState title="No results" description="Nothing to show yet." size="compact" />
   ) },
-  { name: "SettingsEyebrow", subpath: "@proliferate/product-ui/patterns/SettingsEyebrow", render: () => (
+  { name: "SettingsEyebrow", subpath: "#product/components/patterns/SettingsEyebrow", render: () => (
     <SettingsEyebrow>Section</SettingsEyebrow>
   ) },
-  { name: "SettingsPageHeader", subpath: "@proliferate/product-ui/patterns/SettingsPageHeader", render: () => (
+  { name: "SettingsPageHeader", subpath: "#product/components/patterns/SettingsPageHeader", render: () => (
     <SettingsPageHeader title="Settings" description="Page description" />
   ) },
-  { name: "SettingsRow", subpath: "@proliferate/product-ui/patterns/SettingsRow", render: SettingsRowDemo },
-  { name: "SettingsSaveFooter", subpath: "@proliferate/product-ui/patterns/SettingsSaveFooter", render: () => (
+  { name: "SettingsRow", subpath: "#product/components/patterns/SettingsRow", render: SettingsRowDemo },
+  { name: "SettingsSaveFooter", subpath: "#product/components/patterns/SettingsSaveFooter", render: () => (
     <SettingsSaveFooter onSave={noop} onRevert={noop} />
   ) },
-  { name: "SettingsScopeTabs", subpath: "@proliferate/product-ui/patterns/SettingsScopeTabs", render: SettingsScopeTabsDemo },
-  { name: "SettingsSection", subpath: "@proliferate/product-ui/patterns/SettingsSection", render: SettingsSectionDemo },
-  { name: "secrets/SecretManagementPanel", subpath: "@proliferate/product-ui/patterns/secrets/SecretManagementPanel", render: SecretManagementPanelDemo },
+  { name: "SettingsScopeTabs", subpath: "#product/components/patterns/SettingsScopeTabs", render: SettingsScopeTabsDemo },
+  { name: "SettingsSection", subpath: "#product/components/patterns/SettingsSection", render: SettingsSectionDemo },
+  { name: "secrets/SecretManagementPanel", subpath: "#product/components/patterns/secrets/SecretManagementPanel", render: SecretManagementPanelDemo },
 ];
 
 export const PRODUCT_PATTERNS_TIER: LibraryTier = {

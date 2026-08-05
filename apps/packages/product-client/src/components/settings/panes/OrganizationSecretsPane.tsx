@@ -1,6 +1,6 @@
-import { SecretManagementPanel } from "@proliferate/product-ui/patterns/secrets/SecretManagementPanel";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";

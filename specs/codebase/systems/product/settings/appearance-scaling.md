@@ -133,7 +133,7 @@ targets are not glyph icons and do not become font-relative.
 - `apps/packages/ui/src/utils/tw-merge.ts` preserves custom semantic utilities
   where Tailwind merge classification requires registration.
 - Production consumers live under
-  `apps/packages/{ui,product-ui,product-client}`. Component-local aliases must
+  `apps/packages/{ui,product-client}`. Component-local aliases must
   not preserve a fixed-size path.
 - Focused appearance/drift tests and a repository source guard own regression
   enforcement.

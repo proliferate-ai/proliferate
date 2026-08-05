@@ -1,8 +1,8 @@
 import type { FC } from "react";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
-import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "#product/components/patterns/SettingsRow";
 import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { AppearanceSampleBlock } from "#product/components/settings/panes/AppearanceSampleBlock";

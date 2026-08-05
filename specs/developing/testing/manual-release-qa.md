@@ -128,7 +128,7 @@ cargo test --workspace
 pnpm --filter @proliferate/product-domain test
 pnpm --filter @proliferate/web typecheck
 pnpm --filter @proliferate/mobile typecheck
-pnpm --filter @proliferate/product-ui typecheck
+pnpm --filter @proliferate/product-client typecheck
 cd server && uv run pytest -q
 ```
 

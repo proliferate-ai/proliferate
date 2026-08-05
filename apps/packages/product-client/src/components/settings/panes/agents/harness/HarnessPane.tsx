@@ -1,7 +1,7 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowUpRight } from "@proliferate/ui/icons";

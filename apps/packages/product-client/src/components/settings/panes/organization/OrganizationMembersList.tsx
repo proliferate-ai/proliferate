@@ -7,7 +7,7 @@ import {
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { SettingsEyebrow } from "@proliferate/product-ui/patterns/SettingsEyebrow";
+import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Avatar } from "#product/components/settings/panes/organization/OrganizationLogo";
 import { buildProliferateApiUrl } from "#product/lib/infra/proliferate-api";

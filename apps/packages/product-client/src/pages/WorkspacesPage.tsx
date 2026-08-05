@@ -4,7 +4,7 @@ import {
   WorkspacesCommandList,
   type WorkspacesCommandGroupView,
   type WorkspacesCommandItemView,
-} from "@proliferate/product-ui/workspaces/WorkspacesCommandList";
+} from "#product/components/workspace/repo-setup/WorkspacesCommandList";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";

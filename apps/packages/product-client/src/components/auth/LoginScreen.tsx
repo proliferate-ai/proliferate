@@ -1,4 +1,4 @@
-import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
+import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark";
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { PasswordSignInForm } from "#product/components/auth/PasswordSignInForm";
 import { useConnectServer } from "#product/hooks/auth/workflows/use-connect-server";

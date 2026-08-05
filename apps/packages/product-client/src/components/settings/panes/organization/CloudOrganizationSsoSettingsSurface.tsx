@@ -1,4 +1,4 @@
-import { OrganizationSsoSettingsSurface } from "@proliferate/product-ui/settings/OrganizationSsoSettingsSurface";
+import { OrganizationSsoSettingsSurface } from "#product/components/settings/panes/OrganizationSsoSettingsSurface";
 import { useOrganizationSsoSettingsWorkflow } from "#product/hooks/settings/workflows/use-organization-sso-settings-workflow";
 
 interface CloudOrganizationSsoSettingsSurfaceProps {

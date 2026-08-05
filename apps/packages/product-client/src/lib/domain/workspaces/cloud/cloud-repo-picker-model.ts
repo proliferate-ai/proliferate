@@ -1,58 +1,11 @@
 import type { CloudGitRepositorySummary } from "@proliferate/cloud-sdk";
 import { blockedCloudRepositoryReason } from "@proliferate/product-domain/environments/cloud-environments";
 import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
-
-export type CloudRepoConfigState = "missing" | "disabled" | "configured";
-
-export interface CloudRepoPickerRepositoryModel {
-  id: string;
-  fullName: string;
-  defaultBranch: string | null;
-  private: boolean;
-  fork: boolean;
-  archived: boolean;
-  disabled: boolean;
-  permission: string | null;
-  configured: boolean;
-  repoConfigState: CloudRepoConfigState;
-  ownerAvatarUrl?: string | null;
-  pushedAt?: string | null;
-  updatedAt?: string | null;
-  disabledReason?: string | null;
-}
-
-export interface CloudRepoPickerSetupStepModel {
-  label: string;
-  description: string;
-  status: "complete" | "current" | "upcoming";
-}
-
-export interface CloudRepoPickerBlockerModel {
-  title: string;
-  description: string;
-  steps?: readonly CloudRepoPickerSetupStepModel[];
-  actionLabel?: string | null;
-  actionLoading?: boolean;
-  onAction?: (() => void) | null;
-}
-
-export interface CloudRepoPickerModel {
-  query: string;
-  manualValue: string;
-  repositories: readonly CloudRepoPickerRepositoryModel[];
-  blocker?: CloudRepoPickerBlockerModel | null;
-  loading?: boolean;
-  loadingMore?: boolean;
-  addingRepoId?: string | null;
-  error?: string | null;
-  nextCursor?: string | null;
-  onQueryChange: (value: string) => void;
-  onManualValueChange: (value: string) => void;
-  onAddRepository: (repo: CloudRepoPickerRepositoryModel) => void;
-  onAddManual: () => void;
-  onLoadMore: () => void;
-  onRetry?: () => void;
-}
+import type {
+  CloudRepoPickerBlockerView,
+  CloudRepoPickerRepositoryView,
+  CloudRepoPickerSetupStepView,
+} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 
 export function buildGitHubAppPrerequisiteBlocker({
   organizationId,
@@ -82,7 +35,7 @@ export function buildGitHubAppPrerequisiteBlocker({
   onInstallGitHubApp: () => void;
   onCopyAdminRequest: () => void;
   returnSurface: "desktop" | "web";
-}): CloudRepoPickerBlockerModel | null {
+}): CloudRepoPickerBlockerView | null {
   const returnGuidance = returnSurface === "desktop"
     ? "GitHub opens in your browser, then returns you to Proliferate Desktop."
     : "GitHub opens and returns you to Proliferate in this browser.";
@@ -170,7 +123,7 @@ function setupSteps({
   userAuthorized: boolean;
   installationInstalled: boolean;
   returnGuidance: string;
-}): readonly CloudRepoPickerSetupStepModel[] {
+}): readonly CloudRepoPickerSetupStepView[] {
   return [
     setupStep(
       "Authorize your GitHub identity",
@@ -197,8 +150,8 @@ function setupSteps({
 function setupStep(
   label: string,
   description: string,
-  status: CloudRepoPickerSetupStepModel["status"],
-): CloudRepoPickerSetupStepModel {
+  status: CloudRepoPickerSetupStepView["status"],
+): CloudRepoPickerSetupStepView {
   return { label, description, status };
 }
 
@@ -218,7 +171,7 @@ export function mergeRepositories(
 
 export function projectCloudRepoPickerRepositories(
   repositories: readonly CloudGitRepositorySummary[],
-): CloudRepoPickerRepositoryModel[] {
+): CloudRepoPickerRepositoryView[] {
   return repositories.map((repo) => ({
     id: formatGitRepoId(repo),
     fullName: repo.fullName,

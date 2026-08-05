@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { ArrowRight } from "@proliferate/ui/icons";
-import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
+import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import { ChatInputControlRow } from "#product/components/workspace/chat/input/ChatInputControlRow";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerFileMentionSearch } from "#product/components/workspace/chat/input/ComposerFileMentionSearch";

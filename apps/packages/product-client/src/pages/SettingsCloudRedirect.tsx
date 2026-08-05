@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { Navigate, useLocation } from "react-router-dom"
-import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
+import { RedirectCallbackScreen } from "#product/components/auth/RedirectCallbackScreen"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])

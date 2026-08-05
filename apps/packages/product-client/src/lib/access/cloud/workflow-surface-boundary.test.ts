@@ -10,8 +10,8 @@ describe("ProductClient Workflow surface boundary", () => {
       "apps/packages/product-client/src/components/workflows/runs/WorkflowRunsSurface.tsx",
       "apps/packages/product-client/src/hooks/workflows/workflows/use-workflow-run-launch-actions.ts",
       "apps/packages/product-client/src/hooks/workflows/workflows/use-workflow-run-detail-actions.ts",
-      "apps/packages/product-ui/src/workflows/WorkflowRunDetail.tsx",
-      "apps/packages/product-ui/src/workflows/WorkflowRunForm.tsx",
+      "apps/packages/product-client/src/components/workflows/WorkflowRunDetail.tsx",
+      "apps/packages/product-client/src/components/workflows/WorkflowRunForm.tsx",
     ];
     for (const file of files) {
       const source = readFileSync(resolve(root, file), "utf8");

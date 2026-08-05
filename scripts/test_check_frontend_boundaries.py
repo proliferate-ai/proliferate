@@ -46,7 +46,7 @@ class RadixImportBoundaryTest(unittest.TestCase):
             self.write_files(
                 root,
                 {
-                    "apps/packages/product-ui/src/patterns/Fancy.tsx": (
+                    "apps/packages/product-client/src/components/patterns/Fancy.tsx": (
                         'import * as PopoverPrimitive from "@radix-ui/react-popover";\n'
                     ),
                     "apps/desktop/src/components/Fancy.tsx": (
@@ -55,7 +55,7 @@ class RadixImportBoundaryTest(unittest.TestCase):
                 },
             )
             roots = [
-                root / "apps" / "packages" / "product-ui" / "src",
+                root / "apps" / "packages" / "product-client" / "src",
                 root / "apps" / "desktop" / "src",
             ]
             with patch.object(check_module, "REPO_ROOT", root), patch.object(
@@ -72,7 +72,7 @@ class RadixImportBoundaryTest(unittest.TestCase):
                 self.assertEqual(
                     relative_paths,
                     {
-                        "apps/packages/product-ui/src/patterns/Fancy.tsx",
+                        "apps/packages/product-client/src/components/patterns/Fancy.tsx",
                         "apps/desktop/src/components/Fancy.tsx",
                     },
                 )
@@ -185,7 +185,6 @@ class WarningInkBoundaryTest(unittest.TestCase):
                 check_module, "UI_SRC", ui_src
             ), patch.multiple(
                 check_module,
-                PRODUCT_UI_SRC=empty,
                 PRODUCT_CLIENT_SRC=empty,
                 DESKTOP_SRC=empty,
                 WEB_SRC=empty,

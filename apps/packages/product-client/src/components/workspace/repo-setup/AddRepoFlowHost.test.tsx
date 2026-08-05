@@ -5,13 +5,13 @@ import { cleanup, render, screen, act, waitFor } from "@testing-library/react";
 import type {
   AddRepoFlowOption,
   AddRepoFlowProps,
-} from "@proliferate/product-ui/repos/AddRepoFlow";
+} from "#product/components/workspace/repo-setup/AddRepoFlow";
 import type {
   DesktopBridge,
   DirectoryPickerResult,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost";
-import type { CloudRepoPickerModel } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-model";
+import type { CloudRepoPickerProps } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 
@@ -32,7 +32,7 @@ const auth = vi.hoisted(() => ({ status: "authenticated" as string }));
 const cloudHook = vi.hoisted(() => ({
   onRepositorySelected: null as null | ((repo: { gitOwner: string; gitRepoName: string }) => void),
   legacyManual: vi.fn(),
-  clonePicker: null as CloudRepoPickerModel | null,
+  clonePicker: null as CloudRepoPickerProps | null,
 }));
 const productHost = vi.hoisted(() => ({
   desktop: null as DesktopBridge | null,
@@ -66,7 +66,7 @@ vi.mock("#product/hooks/workspaces/workflows/use-add-cloud-environment", () => (
   useAddCloudEnvironment: (input: {
     onRepositorySelected?: (repo: { gitOwner: string; gitRepoName: string }) => void;
     onCopyText: (value: string) => void | Promise<void>;
-  }): CloudRepoPickerModel => {
+  }): CloudRepoPickerProps => {
     if (input.onRepositorySelected) {
       cloudHook.onRepositorySelected = input.onRepositorySelected;
     }
@@ -118,7 +118,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
 vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 
 // Expose the resolved cloudPicker.blocker title the host hands the flow.
-vi.mock("@proliferate/product-ui/repos/AddRepoFlow", () => ({
+vi.mock("#product/components/workspace/repo-setup/AddRepoFlow", () => ({
   AddRepoFlow: ({ step, cloudPicker, clonePicker, error, onPickOption }: AddRepoFlowProps) => {
     const picker = step.kind === "clone" ? clonePicker : cloudPicker;
     cloudHook.clonePicker = clonePicker ?? null;

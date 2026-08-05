@@ -3,13 +3,11 @@
 Scope:
 
 - `apps/desktop/src/components/workspace/chat/input/**`
-- `apps/packages/product-ui/src/chat/composer/**` — the shared composer surface
-  pieces live here, not in Desktop: `ChatComposerSurface`,
+- `apps/packages/product-client/src/components/workspace/chat/composer/**` — the shared composer surface
+  pieces live here: `ChatComposerSurface`,
   `ChatComposerControlRowFrame`, `ComposerPopoverSurface`.
-- `apps/packages/product-ui/src/chat/transcript/ProposedPlanCard.tsx` — the
-  desktop file at
-  `apps/desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
-  is a re-export only.
+- `apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
+  — the single shared implementation.
 - `apps/desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
 - `apps/desktop/src/components/workspace/chat/plans/**`
 - `apps/desktop/src/components/workspace/reviews/**`
@@ -55,9 +53,9 @@ ChatView
 ```
 
 The home screen reuses the same composer: `HomeComposerForm`
-(`apps/desktop/src/components/home/screen/HomeComposerForm.tsx`) renders the
+(`apps/packages/product-client/src/components/home/screen/HomeComposerForm.tsx`) renders the
 same `ChatComposerSurface` + `ChatComposerControlRowFrame` from
-`@proliferate/product-ui`, with slot-based render isolation (controls, trailing
+ProductClient's direct component owners, with slot-based render isolation (controls, trailing
 controls, and actions are passed in as stable slot elements so keystrokes only
 re-render the composer subtree).
 
@@ -503,7 +501,7 @@ Do **not** grow the scroll cap past `max-h-40` — larger caps dominate the comp
 
 ### 4.5 ProposedPlanCard specifics
 
-- `ProposedPlanCard` (product-ui `chat/transcript`) is built on
+- `ProposedPlanCard` (ProductClient `workspace/chat/transcript`) is built on
   `CollapsiblePlanCard`, which owns the shell and collapse behavior.
 - Shell: `rounded-md border border-border/70 bg-card/85 shadow-sm`.
 - Header: bold plan title + optional decision state + icon-only Copy/Collapse
@@ -537,7 +535,7 @@ Control-row tone rule — the pills are **monochrome**:
   detail slot for effort, with a dim chevron. Fast mode is only a small state
   glyph inside that same pill when enabled.
 
-As-built composer surface — `ChatComposerSurface` (product-ui) tags itself with
+As-built composer surface — `ChatComposerSurface` (ProductClient) tags itself with
 the `chat-composer-surface` class, whose paint lives in
 `apps/packages/design/src/css/product.css`:
 
