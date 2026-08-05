@@ -10,18 +10,35 @@ Revises: d10c0a11e5ef
 Create Date: 2026-07-09 00:00:00.000000
 
 """
-from typing import Sequence, Union
+
+from __future__ import annotations
+
+import re
+from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 
-from proliferate.utils.slug import slugify
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e1f2a3b4c5d6"
-down_revision: Union[str, Sequence[str], None] = "d10c0a11e5ef"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "d10c0a11e5ef"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+_SLUG_ALLOWED = re.compile(r"[^a-z0-9]+")
+_SLUG_TRIM = re.compile(r"^-+|-+$")
+_SLUG_MAX_LENGTH = 48
+_SLUG_FALLBACK = "org"
+
+
+def _slugify_organization(value: str | None) -> str:
+    lowered = (value or "").strip().lower()
+    hyphenated = _SLUG_ALLOWED.sub("-", lowered)
+    trimmed = _SLUG_TRIM.sub("", hyphenated)
+    capped = trimmed[:_SLUG_MAX_LENGTH]
+    capped = _SLUG_TRIM.sub("", capped)
+    return capped or _SLUG_FALLBACK
 
 
 def upgrade() -> None:
@@ -34,7 +51,7 @@ def upgrade() -> None:
 
     used: set[str] = set()
     for row in rows:
-        base = slugify(row.name)
+        base = _slugify_organization(row.name)
         candidate = base
         suffix = 2
         while candidate in used:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from datetime import datetime
 from uuid import UUID
@@ -27,6 +28,8 @@ from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_OWNER,
+    ORGANIZATION_SLUG_FALLBACK,
+    ORGANIZATION_SLUG_MAX_LENGTH,
     ORGANIZATION_STATUS_ACTIVE,
     ORGANIZATION_STATUS_ARCHIVED,
     ORGANIZATION_STATUS_PENDING_CHECKOUT,
@@ -50,12 +53,16 @@ from proliferate.db.store.organization_records import (
     membership_record,
     organization_record,
 )
-from proliferate.utils.slug import slugify
 from proliferate.utils.time import utcnow
 
-# Bound the numeric-suffix search before falling back to a random token so a
-# pathological name never spins; the partial unique index is the backstop.
+_SLUG_ALLOWED = re.compile(r"[^a-z0-9]+")
+_SLUG_TRIM = re.compile(r"^-+|-+$")
 _SLUG_NUMERIC_ATTEMPTS = 50
+
+
+def _slugify_organization(value: str | None) -> str:
+    slug = _SLUG_TRIM.sub("", _SLUG_ALLOWED.sub("-", (value or "").strip().lower()))
+    return _SLUG_TRIM.sub("", slug[:ORGANIZATION_SLUG_MAX_LENGTH]) or ORGANIZATION_SLUG_FALLBACK
 
 
 async def _slug_taken(db: AsyncSession, slug: str) -> bool:
@@ -64,13 +71,8 @@ async def _slug_taken(db: AsyncSession, slug: str) -> bool:
 
 
 async def allocate_organization_slug(db: AsyncSession, name: str) -> str:
-    """Pick a unique, human-friendly slug derived from the org name.
-
-    Tries the bare slug first (so a team named "Acme" gets ``acme``), then a
-    numeric suffix, then a short random token. The partial unique index on
-    ``organization.slug`` remains the ultimate guard against the rare race.
-    """
-    base = slugify(name)
+    """Pick a unique, human-friendly slug derived from the organization name."""
+    base = _slugify_organization(name)
     if not await _slug_taken(db, base):
         return base
     for suffix in range(2, _SLUG_NUMERIC_ATTEMPTS + 1):
@@ -84,15 +86,13 @@ async def allocate_organization_slug(db: AsyncSession, name: str) -> str:
 
 
 async def get_organization_by_slug(db: AsyncSession, slug: str) -> OrganizationRecord | None:
-    normalized = slugify(slug)
-    organization = (
-        await db.execute(
-            select(Organization).where(
-                Organization.slug == normalized,
-                Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
-            )
+    result = await db.execute(
+        select(Organization).where(
+            Organization.slug == _slugify_organization(slug),
+            Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
         )
-    ).scalar_one_or_none()
+    )
+    organization = result.scalar_one_or_none()
     return organization_record(organization) if organization is not None else None
 
 
