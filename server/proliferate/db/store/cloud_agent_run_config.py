@@ -10,7 +10,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.automations import (
+from proliferate.constants.cloud_agent_run_config import (
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
