@@ -16,6 +16,15 @@ def _load_checker_module():
     return module
 
 
+def _configure_structure_root(module, tmp_path: Path) -> Path:  # type: ignore[no-untyped-def]
+    root = tmp_path / "server" / "proliferate" / "server"
+    root.mkdir(parents=True)
+    module.REPO_ROOT = tmp_path
+    module.CHECK_ROOTS = [root]
+    module.STRUCTURE_ROOTS = [root]
+    return root
+
+
 def test_api_allows_auth_user_import_only(tmp_path: Path) -> None:
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "server" / "example" / "api.py"
@@ -83,6 +92,92 @@ def test_service_allows_async_session_type_only(tmp_path: Path) -> None:
 
     violations = module.check_paths([path])
     assert violations == []
+
+
+def test_worker_service_allows_task_created_session_factory_type(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "worker" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker\n"
+        "async def run(factory: async_sessionmaker[AsyncSession]) -> None:\n"
+        "    async with factory() as db:\n"
+        "        await read_store(db)\n"
+    )
+
+    violations = module.check_paths([path])
+
+    assert violations == []
+
+
+def test_ordinary_service_rejects_session_factory_type(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("from sqlalchemy.ext.asyncio import async_sessionmaker\n")
+
+    violations = module.check_paths([path])
+
+    assert any(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in violations)
+
+
+def test_worker_service_still_rejects_queries_engines_models_and_session_methods(
+    tmp_path: Path,
+) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "worker" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "from sqlalchemy import select\n"
+        "from sqlalchemy.ext.asyncio import (\n"
+        "    AsyncSession, async_sessionmaker, create_async_engine,\n"
+        ")\n"
+        "from proliferate.db.engine import async_session_factory\n"
+        "from proliferate.db.models.auth import User\n"
+        "async def run(db) -> None:\n"
+        "    await db.execute(select(User))\n"
+        "    await db.commit()\n"
+        "    await db.rollback()\n"
+    )
+
+    violations = module.check_paths([path])
+
+    assert sum(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in violations) == 2
+    assert any(item.rule_id == "SERVICE_DB_ENGINE_IMPORT" for item in violations)
+    assert any(item.rule_id == "SERVICE_ORM_IMPORT" for item in violations)
+    assert sum(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations) == 3
+
+
+def test_canonical_single_file_worker_service_folder_is_allowed(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    root = _configure_structure_root(module, tmp_path)
+    worker = root / "example" / "worker"
+    worker.mkdir(parents=True)
+    (worker / "__init__.py").write_text("")
+    (worker / "service.py").write_text("async def run() -> None:\n    return None\n")
+
+    violations = module.check_structure(tmp_path)
+
+    assert not any(item.path == worker for item in violations)
+
+
+def test_noncanonical_worker_and_arbitrary_single_file_folders_remain_rejected(
+    tmp_path: Path,
+) -> None:
+    module = _load_checker_module()
+    root = _configure_structure_root(module, tmp_path)
+    worker = root / "example" / "worker"
+    worker.mkdir(parents=True)
+    (worker / "jobs.py").write_text("def run() -> None:\n    return None\n")
+    arbitrary = root / "example" / "reports"
+    arbitrary.mkdir()
+    (arbitrary / "snapshot.py").write_text("def read() -> None:\n    return None\n")
+
+    violations = module.check_structure(tmp_path)
+
+    rejected = {item.path for item in violations if item.rule_id == "SINGLE_FILE_FOLDER"}
+    assert worker in rejected
+    assert arbitrary in rejected
 
 
 def test_service_rejects_query_builder_import(tmp_path: Path) -> None:

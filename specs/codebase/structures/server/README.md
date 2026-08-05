@@ -141,9 +141,14 @@ Persistence rule:
 - `api.py` is transport only. It may receive FastAPI deps and pass the request
   session to services; it must not import stores, SQLAlchemy, or run auth
   checks inline.
-- `service.py` owns orchestration and receives `db: AsyncSession` from its
-  caller. It must not open sessions, commit, import SQLAlchemy, or execute
-  queries directly.
+- `service.py` owns orchestration and normally receives `db: AsyncSession` from
+  its caller. It must not commit, import SQLAlchemy query APIs, or execute
+  queries directly. A `worker/service.py` that alternates bounded database
+  phases with foreign I/O may instead receive a task-created
+  `async_sessionmaker[AsyncSession]`, open sessions only around store calls,
+  and release each session before foreign I/O. The task owns current-event-loop
+  engine creation and disposal; the worker service cannot import settings or
+  global engine helpers, construct an engine, or call session database methods.
 - All database access lives in `db/store/**`. Stores take `db: AsyncSession`,
   construct queries, return frozen dataclasses, and never commit or open
   sessions.
@@ -192,7 +197,8 @@ Persistence rule:
   `domain/`, a promoted subdomain, an integration, or the owning service. There
   is no `utils/` bucket.
 - Single-file folders are forbidden, except `server/**/domain/` may contain
-  one meaningful pure-domain module.
+  one meaningful pure-domain module and a canonical `worker/` may contain only
+  `service.py`.
 - A parent folder is either flat or organized into subfolders consistently.
   Mixed shapes are forbidden.
 - Cross-domain reads go through stores. Cross-domain writes go through the

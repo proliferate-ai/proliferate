@@ -71,7 +71,10 @@ Each nonempty page performs exactly:
 ```
 
 The three aggregates are set-based for all user ids on the page, not one query
-per user. For each profile the task writes:
+per user. The task-local engine is created inside the Celery firing's event-loop
+lifecycle. Product Engagement opens one read-only session per page, materializes
+the four store results, closes that session, and only then writes profiles
+sequentially. For each profile the worker service writes:
 
 - `workspace_count`: count of owned `cloud_workspace` rows whose
   `archived_at` is null, defaulting to zero
@@ -90,6 +93,12 @@ Current owners:
 - `server/proliferate/background/beat_schedule.py`
 - `server/proliferate/background/config.py`
 - `server/proliferate/background/tasks/customerio_sync.py`
+- `server/proliferate/server/product_engagement/worker/service.py`
+- `server/proliferate/db/store/users.py`
+- `server/proliferate/db/store/cloud_workspaces.py`
+- `server/proliferate/db/store/analytics.py`
+- `server/proliferate/db/store/auth_identities.py`
+- `server/proliferate/integrations/customerio.py`
 
 ## Provider Boundary
 
@@ -119,7 +128,9 @@ Code-level coverage lives in:
 
 - `server/tests/unit/test_customerio.py`
 - `server/tests/unit/test_customerio_sync.py`
+- `server/tests/unit/test_background_celery.py`
 - `server/tests/unit/auth/test_desktop_customerio.py`
+- `server/tests/integration/test_product_engagement_store.py`
 - `server/tests/integration/test_desktop_auth_customerio.py`
 
 Use the [Customer.io operating procedure](../../../../developing/operating/analytics/customerio.md)

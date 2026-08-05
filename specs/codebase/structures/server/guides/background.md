@@ -40,15 +40,18 @@ Two homes, split by a single boundary: substrate versus product logic.
 
 `background/**` is plumbing. It knows how to run a task, when to fire periodic
 ones, and how to turn a committed outbox row into a dispatched task. It owns no
-business logic. A task module is a thin wrapper: it opens a database session at
-the task boundary, calls the owning domain's public service, and maps failures
-to retries.
+business logic. A task module is a thin wrapper: it owns the database
+engine/session boundary, calls the owning domain's public service, and maps
+failures to retries.
 
 `server/<domain>/**` owns the work itself. A task for a domain calls that
-domain's service exactly as an HTTP handler would. The service follows the same
-layer law as API-facing code: it takes `db: AsyncSession`, never commits, never
-imports SQLAlchemy or constructs vendor clients, and calls store functions for
-data and integrations through their public API.
+domain's service. The service follows the same layer law as API-facing code:
+it never commits, imports SQLAlchemy query APIs, or constructs vendor clients,
+and it calls store functions for data and integrations through their public
+API. It normally takes `db: AsyncSession`. A worker service that alternates
+bounded database phases with foreign I/O may instead take a task-created
+session factory, open sessions only around store calls, and release them before
+the external call.
 
 ## Axes
 
@@ -63,7 +66,7 @@ fires because a committed state change needs follow-up   -> outbox relay task
 And place the work it runs:
 
 ```text
-the task wrapper itself (open session, call service)    -> background/tasks/<area>.py
+the task wrapper itself (own DB boundary, call service) -> background/tasks/<area>.py
 worker-facing orchestration (pick due, dispatch, record) -> server/<domain>/worker/service.py
 pure computation shared with HTTP paths                  -> server/<domain>/domain/
 ```
@@ -81,7 +84,7 @@ server/proliferate/background/
   beat_schedule.py     # periodic registry: every X -> task Y (redbeat entries)
   relay.py             # outbox -> Celery: read committed rows, dispatch, mark relayed
   tasks/
-    <area>.py          # thin @app.task wrappers; open session; call domain service
+    <area>.py          # thin @app.task wrappers; own DB boundary; call domain service
 
 server/<domain>/
   service.py           # API-facing and, when modest, worker-facing orchestration
@@ -176,23 +179,29 @@ metrics contain only the fixed operation and a bounded safe code.
 
 Thin task wrappers — the boundary between the broker and a domain.
 
-- Owns: the `@app.task` function, the database session opened at the task
-  boundary, the call into the owning domain's public service, and the mapping of
-  failures to retries.
-- Imports: `celery_app`, the owning domain's service, the session factory.
+- Owns: the `@app.task` function, the database engine/session boundary, the call
+  into the owning domain's public service, and the mapping of failures to
+  retries. A synchronous task using `asyncio.run()` creates and disposes its
+  engine inside that event-loop lifecycle rather than reusing a module-global
+  async engine across firings.
+- Imports: `celery_app`, the owning domain's service, and the session machinery.
 - Never holds: business logic, SQLAlchemy queries or ORM imports, or raw vendor
   clients. A task that grows logic has put it in the wrong layer — push it into
   the domain's service or `domain/`.
 
 ```python
-# background/tasks/automations.py
-@app.task(bind=True, max_retries=5)
-def execute_automation_run(self, run_id: str) -> None:
-    async def _run() -> None:
-        async with async_session_factory() as db:
-            async with db.begin():
-                await automations_worker_service.execute_run(db, run_id=UUID(run_id))
-    asyncio.run(_run())
+# background/tasks/customerio_sync.py
+async def _run_engagement_sync() -> None:
+    engine = create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        connect_args={"statement_cache_size": 0},
+    )
+    try:
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        await run_customerio_engagement_sync(session_factory)
+    finally:
+        await engine.dispose()
 ```
 
 ## `server/<domain>/worker/service.py`
@@ -203,9 +212,14 @@ substantial and distinct from the API-facing service.
 - Owns: picking due work, dispatching to the right execution, recording results,
   and handling failures, as ordinary service functions.
 - Imports: `db/store`, `domain/`, `integrations` through their public API.
-- Same layer law as any service: takes `db: AsyncSession`, never commits (the
-  task owns the transaction boundary), never imports SQLAlchemy, never
-  constructs vendor clients.
+- Same layer law as any service: normally takes `db: AsyncSession`, never
+  commits, never imports SQLAlchemy query APIs, and never constructs vendor
+  clients. When foreign I/O must alternate with multiple bounded database
+  phases, it may take the task-created `async_sessionmaker[AsyncSession]`, open
+  sessions only around direct store calls, and release each before foreign I/O.
+  The task creates and disposes the engine; the service cannot import settings
+  or global engine helpers, construct an engine, issue SQL, or call session
+  query/commit/rollback methods.
 
 When the worker-facing surface is modest, these functions live in the domain's
 ordinary `service.py` and there is no `worker/` subfolder. Two `service.py`
@@ -231,8 +245,10 @@ share `domain/` and the stores.
 - `background/**` imports no domain service except through a task module, and
   only `relay.py` touches stores (outbox writes plus read-only bounded
   operational snapshots).
-- No task module imports ORM or constructs vendor clients; it opens a session at
-  the boundary and threads `db` through the normal service/store layers.
+- No task module imports ORM or constructs vendor clients. It owns the
+  current-event-loop engine/session-factory lifetime and either opens the
+  session itself or passes the factory to the narrow bounded worker-service
+  pattern.
 
 ## Smells
 

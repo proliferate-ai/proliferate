@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import ast
-from collections import Counter, defaultdict
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import shutil
 import sys
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "server_boundaries_allowlist.txt"
@@ -35,6 +35,10 @@ BANNED_JUNK_DRAWER_SUFFIXES = ("_helper.py", "_helpers.py", "_utils.py")
 ALLOWED_API_ORM_IMPORT = ("proliferate.db.models.auth", "User")
 ALLOWED_API_ENGINE_IMPORTS = {"get_async_session"}
 ALLOWED_SQLALCHEMY_TYPE_IMPORT = ("sqlalchemy.ext.asyncio", "AsyncSession")
+ALLOWED_WORKER_SERVICE_SQLALCHEMY_TYPE_IMPORTS = {
+    "AsyncSession",
+    "async_sessionmaker",
+}
 SERVICE_DB_METHODS = {"execute", "commit", "rollback", "add", "delete", "refresh"}
 SERVICE_DB_SESSION_OPS_METHODS = {
     "open_async_session",
@@ -99,6 +103,7 @@ class AllowlistEntry:
 class SourceKind:
     is_api: bool = False
     is_service: bool = False
+    is_worker_service: bool = False
     is_service_boundary_debt: bool = False
     is_domain: bool = False
     is_product_models: bool = False
@@ -177,6 +182,7 @@ def classify_path(path: Path) -> SourceKind:
         and path.suffix == ".py"
         and name not in AGENT_AUTH_SERVICE_CONCERN_EXCLUDED_FILES
     )
+    is_worker_service = is_product and name == "service.py" and path.parent.name == "worker"
 
     return SourceKind(
         is_api=is_product and name == "api.py",
@@ -188,6 +194,7 @@ def classify_path(path: Path) -> SourceKind:
                 or is_agent_auth_service_concern
             )
         ),
+        is_worker_service=is_worker_service,
         is_service_boundary_debt=relative in SERVICE_BOUNDARY_DEBT_MODULES,
         is_domain=is_product and "domain" in path.parts,
         is_product_models=is_product and name == "models.py",
@@ -227,11 +234,7 @@ def is_dunder_module(path: Path) -> bool:
 
 
 def has_single_underscore_prefix(path: Path) -> bool:
-    return (
-        path.suffix == ".py"
-        and path.name.startswith("_")
-        and not path.name.startswith("__")
-    )
+    return path.suffix == ".py" and path.name.startswith("_") and not path.name.startswith("__")
 
 
 def is_banned_junk_drawer_module(path: Path) -> bool:
@@ -264,6 +267,21 @@ def is_allowed_single_file_domain_folder(
         and len(source_files) == 1
         and not child_folders
         and is_meaningful_domain_module(source_files[0])
+    )
+
+
+def is_allowed_single_file_worker_folder(
+    folder: Path,
+    source_files: list[Path],
+    child_folders: list[Path],
+) -> bool:
+    parts = logical_parts(folder)
+    return (
+        _starts_with(parts, ("server", "proliferate", "server"))
+        and folder.name == "worker"
+        and len(source_files) == 1
+        and source_files[0].name == "service.py"
+        and not child_folders
     )
 
 
@@ -356,9 +374,12 @@ class BoundaryChecker(ast.NodeVisitor):
 
     def _check_service_import(self, node: ast.AST, module: str, names: set[str]) -> None:
         if is_module(module, "sqlalchemy"):
-            allowed = module == ALLOWED_SQLALCHEMY_TYPE_IMPORT[0] and names <= {
-                ALLOWED_SQLALCHEMY_TYPE_IMPORT[1]
-            }
+            allowed_names = (
+                ALLOWED_WORKER_SERVICE_SQLALCHEMY_TYPE_IMPORTS
+                if self.kind.is_worker_service
+                else {ALLOWED_SQLALCHEMY_TYPE_IMPORT[1]}
+            )
+            allowed = module == ALLOWED_SQLALCHEMY_TYPE_IMPORT[0] and names <= allowed_names
             if not allowed:
                 self.add(
                     node,
@@ -593,13 +614,16 @@ class BoundaryChecker(ast.NodeVisitor):
                             "Pydantic response models must not map ORM objects "
                             "with from_attributes",
                         )
-        if isinstance(func, ast.Name) and func.id == "HTTPException":
-            if self.kind.is_domain or self.kind.is_store or self.kind.is_integration:
-                self.add(
-                    node,
-                    "HTTP_EXCEPTION_FORBIDDEN",
-                    "HTTPException is banned outside HTTP boundary code",
-                )
+        if (
+            isinstance(func, ast.Name)
+            and func.id == "HTTPException"
+            and (self.kind.is_domain or self.kind.is_store or self.kind.is_integration)
+        ):
+            self.add(
+                node,
+                "HTTP_EXCEPTION_FORBIDDEN",
+                "HTTPException is banned outside HTTP boundary code",
+            )
 
 
 def parse_source(path: Path) -> ast.Module:
@@ -665,6 +689,8 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
             if path.is_dir() and not should_skip(path) and path.name != "__pycache__"
         ]
         if is_allowed_single_file_domain_folder(folder, source_files, child_folders):
+            continue
+        if is_allowed_single_file_worker_folder(folder, source_files, child_folders):
             continue
         if is_background_tasks_folder(folder):
             continue
@@ -758,9 +784,7 @@ def print_summary(
     violations: list[Violation],
     allowlist: dict[tuple[str, str], AllowlistEntry],
 ) -> None:
-    observed = Counter(
-        (violation.rule_id, violation.relative_path()) for violation in violations
-    )
+    observed = Counter((violation.rule_id, violation.relative_path()) for violation in violations)
     if not observed:
         return
     print("Observed server boundary debt:")
@@ -772,7 +796,7 @@ def print_summary(
 
 
 def reexec_with_python_312() -> None:
-    if sys.version_info >= (3, 12):
+    if sys.version_info >= (3, 12):  # noqa: UP036 - bootstrap may start under older Python
         return
     python_312 = shutil.which("python3.12")
     if python_312 is None:
@@ -784,7 +808,7 @@ def reexec_with_python_312() -> None:
 
 def main() -> int:
     reexec_with_python_312()
-    if sys.version_info < (3, 12):
+    if sys.version_info < (3, 12):  # noqa: UP036 - emit a useful bootstrap failure
         print("Server boundary check requires Python 3.12+ to parse server source.")
         return 2
 

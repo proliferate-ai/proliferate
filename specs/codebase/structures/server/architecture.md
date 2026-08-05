@@ -52,7 +52,7 @@ server/proliferate/
 | Layer | Owns | Never |
 | --- | --- | --- |
 | `api.py` | parse → call service → return | `db/store` import, `AsyncSession` methods, SQLAlchemy, business logic, inline auth, try/except around the handler |
-| `service.py` | business logic, orchestration, invariants, validation | open sessions, SQLAlchemy, `select/insert/db.execute`, `commit`, inline auth |
+| `service.py` | business logic, orchestration, invariants, validation | open sessions except the bounded worker-service exception below, SQLAlchemy query APIs, `select/insert/db.execute`, `commit`, inline auth |
 | `domain/**` | pure rules: validators, state machines, calculators, mappings, **planners** | `async def`, DB/ORM, FastAPI, integrations, I/O — *returns data* |
 | `db/store/**` | query construction + execution; returns **frozen dataclasses** | commit, open sessions; ORM never leaves here |
 | `db/models/**` | ORM table definitions only | imports nothing (leaf) |
@@ -77,8 +77,12 @@ ORM (db/models)  ──store returns──►  @dataclass(frozen=True)  ──mo
   while a transaction is open. They are different things.
 - **Stores take `db: AsyncSession`, never commit, never open sessions.**
 - **HTTP:** the `get_async_session` dep owns the transaction (commit on success,
-  rollback on exception). **Workers:** open a session at the entry point
-  (`async with session_factory() as db: async with db.begin(): …`).
+  rollback on exception). **Workers:** the task normally opens a session at the
+  entry point (`async with session_factory() as db: async with db.begin(): …`).
+  A worker service that must alternate bounded database phases with foreign I/O
+  may receive the task-created session factory and open a fresh session around
+  each store-only phase. The task still owns current-event-loop engine creation
+  and disposal.
 - **Never hold a connection across foreign I/O.** Short transactions only; for
   vendor-interleaving flows, commit → release → call → fresh short transaction.
   This is why the **outbox** exists (commit intent in one txn, do the side effect
@@ -92,7 +96,8 @@ api → service → store → models → SQLAlchemy        (nothing else imports
 service → integrations / domain / other domains' public services (writes) or stores (reads)
 domain → pure (no FastAPI/SQLAlchemy/store/integrations/HTTP)
 auth/** → importable by every layer
-workers → call services, not stores; own the transaction at the entry
+workers → call services, not stores; tasks own the engine/factory lifetime and
+          either open the session or pass the factory for bounded worker phases
 ```
 
 ---
@@ -148,8 +153,12 @@ outbox row and let a worker do the call.
 ### `server/<domain>/service.py`
 - Business logic, orchestration, invariants. Takes `db`, threads it to stores,
   calls integrations + `domain/`, raises domain errors.
-- **Never:** open sessions, import SQLAlchemy, run `select/insert/db.execute`,
+- **Never:** open sessions outside the bounded `worker/service.py` exception,
+  import SQLAlchemy query APIs, run `select/insert/db.execute`,
   `commit/rollback`, inline auth, or call another service's private helpers.
+  The exception accepts only a task-created session factory, surrounds store
+  calls with short session scopes, and releases them before foreign I/O; it
+  never owns an engine or global session entry point.
 
 ### `server/<domain>/models.py`
 - Pydantic request/response schemas; constructor functions take **dataclasses**.
@@ -209,9 +218,12 @@ outbox row and let a worker do the call.
   `celery_app.py`, `config.py`, `beat_schedule.py`, `relay.py`, thin `tasks/`;
   the work a task performs lives in the domain's `worker/service.py` (or
   `service.py`), same layer law (call services/stores, no ORM, no vendor client).
-  The task opens the session at its boundary. There are no per-domain `worker.py`,
-  `reconciler.py`, or `scheduler.py` process or loop files. Request-driven
-  external-process claim/heartbeat/report surfaces are APIs, not background work.
+  The task owns the database engine/session-factory lifetime. It normally opens
+  the session itself, but may pass its task-local factory to a worker service
+  that needs bounded store phases separated from foreign I/O. There are no
+  per-domain `worker.py`, `reconciler.py`, or `scheduler.py` process or loop
+  files. Request-driven external-process claim/heartbeat/report surfaces are
+  APIs, not background work.
 
 ### `lib/**`
 - Reusable cross-domain logic owned by no single domain: `infra/` (generic, no
@@ -232,8 +244,8 @@ outbox row and let a worker do the call.
 
 **Cross-cutting hygiene:** canonical files never prefixed/suffixed; no junk-drawer
 modules (`helpers.py`/`utils.py`/`misc.py`); no single-file folders (except
-`domain/`); a folder is all-subfolders or all-flat; never `datetime.utcnow()`
-(use `datetime.now(timezone.utc)`). Size thresholds are CI-enforced
+`domain/` and canonical `worker/service.py`); a folder is all-subfolders or
+all-flat; never `datetime.utcnow()` (use `datetime.now(timezone.utc)`). Size thresholds are CI-enforced
 (`check_max_lines.py`); boundaries by `check_server_boundaries.py`.
 
 ---

@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Literal, Protocol
 from uuid import UUID
 
-from sqlalchemy import Select, exists, or_, select, update
+from sqlalchemy import Select, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,12 @@ class CloudWorkspaceValue:
     updated_at: datetime
     archived_at: datetime | None
     lost_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class ActiveWorkspaceCountValue:
+    owner_user_id: UUID
+    workspace_count: int
 
 
 class CloudWorkspaceSandboxIdentity(Protocol):
@@ -86,6 +92,35 @@ def _apply_lifecycle_filter(
     if lifecycle == "archived":
         return statement.where(CloudWorkspace.archived_at.is_not(None))
     return statement
+
+
+async def list_active_workspace_counts(
+    db: AsyncSession,
+    *,
+    owner_user_ids: tuple[UUID, ...],
+) -> tuple[ActiveWorkspaceCountValue, ...]:
+    if not owner_user_ids:
+        return ()
+    rows = (
+        await db.execute(
+            select(
+                CloudWorkspace.owner_user_id,
+                func.count(CloudWorkspace.id).label("workspace_count"),
+            )
+            .where(
+                CloudWorkspace.owner_user_id.in_(owner_user_ids),
+                CloudWorkspace.archived_at.is_(None),
+            )
+            .group_by(CloudWorkspace.owner_user_id)
+        )
+    ).all()
+    return tuple(
+        ActiveWorkspaceCountValue(
+            owner_user_id=row.owner_user_id,
+            workspace_count=int(row.workspace_count),
+        )
+        for row in rows
+    )
 
 
 async def list_cloud_workspaces(

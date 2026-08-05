@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from celery import Celery
+from celery.schedules import crontab
 from kombu import Queue
 
 from proliferate.background.config import (
@@ -42,6 +43,7 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
     assert HEALTH_NOOP_TASK in celery_app.tasks
     assert BACKGROUND_RELAY_TASK in celery_app.tasks
     assert CLOUD_SANDBOX_ORPHAN_REAP_TASK in celery_app.tasks
+    assert CUSTOMERIO_ENGAGEMENT_SYNC_TASK in celery_app.tasks
     assert NOTIFICATIONS_SEND_SLACK_TASK in celery_app.tasks
     assert WORKFLOW_DELIVER_TASK in celery_app.tasks
     assert WORKFLOW_OBSERVE_TASK in celery_app.tasks
@@ -96,7 +98,26 @@ def test_beat_schedule_keeps_single_relay_entry_with_customerio_enabled() -> Non
         name for name, entry in schedule.items() if entry["task"] == BACKGROUND_RELAY_TASK
     ]
     assert relay_entries == [RELAY_SCHEDULE_ENTRY]
-    assert "customerio-engagement-sync" in schedule
+    entry = schedule["customerio-engagement-sync"]
+    assert entry["task"] == CUSTOMERIO_ENGAGEMENT_SYNC_TASK
+    customerio_schedule = entry["schedule"]
+    assert isinstance(customerio_schedule, crontab)
+    assert customerio_schedule.minute == {0}
+    assert customerio_schedule.hour == {9}
+    assert customerio_schedule.day_of_week == set(range(7))
+    assert customerio_schedule.day_of_month == set(range(1, 32))
+    assert customerio_schedule.month_of_year == set(range(1, 13))
+
+
+def test_beat_schedule_requires_both_customerio_credentials() -> None:
+    incomplete_settings = (
+        _test_settings(customerio_site_id="site", customerio_api_key=""),
+        _test_settings(customerio_site_id="", customerio_api_key="key"),
+        _test_settings(customerio_site_id="", customerio_api_key=""),
+    )
+
+    for config in incomplete_settings:
+        assert "customerio-engagement-sync" not in build_beat_schedule(config)
 
 
 def test_celery_config_reads_settings_without_result_backend() -> None:
