@@ -22,7 +22,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@proliferate/ui/primitives/Dialog";
+} from "#product/primitives/Dialog";
 import { CloudRepoPickerBlocker } from "#product/components/workspace/repo-setup/CloudRepoPickerBlocker";
 import type { CloudRepoPickerBlockerView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";

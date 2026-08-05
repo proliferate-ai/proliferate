@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Copy, RefreshCw, ShieldCheckFilled, Trash } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { Copy, Trash } from "#product/primitives/icons/core";
+import { RefreshCw } from "#product/primitives/icons/platform";
+import { ShieldCheckFilled } from "#product/primitives/icons/status";
+import { Button } from "#product/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 

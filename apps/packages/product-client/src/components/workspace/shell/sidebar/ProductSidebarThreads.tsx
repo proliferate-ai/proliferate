@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
+import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
 
 export interface ProductSidebarThreadRowProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick" | "onSelect"> {
   active?: boolean;

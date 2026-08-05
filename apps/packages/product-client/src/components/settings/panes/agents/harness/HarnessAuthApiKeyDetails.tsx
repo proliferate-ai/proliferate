@@ -3,15 +3,15 @@ import {
   useCreateAgentApiKey,
   useRevokeAgentApiKey,
 } from "@proliferate/cloud-sdk-react";
-import { KeyRound, Trash } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
+import { KeyRound, Trash } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
+import { IconButton } from "#product/primitives/IconButton";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
 import {
   SegmentedControl,
   type SegmentedControlItem,
-} from "@proliferate/ui/primitives/SegmentedControl";
+} from "#product/primitives/SegmentedControl";
 import {
   getApiKeyBindingLabel,
   getHarnessEnvVarSuggestions,

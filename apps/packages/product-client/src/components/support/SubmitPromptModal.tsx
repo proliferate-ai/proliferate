@@ -1,6 +1,6 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Button } from "#product/primitives/Button";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { Textarea } from "#product/primitives/Textarea";
 import { useSupportModalState } from "#product/hooks/support/facade/use-support-modal-state";
 import { useSupportOutreachEmail } from "#product/hooks/support/facade/use-support-outreach-email";
 import { SupportCreditField } from "#product/components/support/SupportCreditField";

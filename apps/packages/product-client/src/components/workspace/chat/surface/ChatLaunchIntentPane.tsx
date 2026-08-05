@@ -1,6 +1,7 @@
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowLeft, RefreshCw } from "@proliferate/ui/icons";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { Button } from "#product/primitives/Button";
+import { ArrowLeft } from "#product/primitives/icons/core";
+import { RefreshCw } from "#product/primitives/icons/platform";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import {
   TURN_ITEM_GAP_CLASS,

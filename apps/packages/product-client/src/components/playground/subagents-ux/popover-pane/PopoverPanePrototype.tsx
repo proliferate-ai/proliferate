@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
-import { ArrowUp, ChevronDown } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Textarea } from "#product/primitives/Textarea";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ArrowUp, ChevronDown } from "#product/primitives/icons/core";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import {
   ActivityAggregatePopover,

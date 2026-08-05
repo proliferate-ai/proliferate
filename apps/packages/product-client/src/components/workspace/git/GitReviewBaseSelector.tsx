@@ -1,7 +1,7 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, ChevronDown } from "@proliferate/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Button } from "#product/primitives/Button";
+import { Check, ChevronDown } from "#product/primitives/icons/core";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import {
   GIT_PANEL_MODE_OPTIONS,
   type GitPanelMode,

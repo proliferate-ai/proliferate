@@ -1,4 +1,4 @@
-import { Archive } from "@proliferate/ui/icons";
+import { Archive } from "#product/primitives/icons/core";
 import { SubagentCreationReceipt } from "#product/components/playground/subagents-ux/identity-receipts/SubagentCreationReceipt";
 import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 import { ActivityAggregatePopover } from "#product/components/playground/subagents-ux/popover-pane/ActivityAggregatePopover";

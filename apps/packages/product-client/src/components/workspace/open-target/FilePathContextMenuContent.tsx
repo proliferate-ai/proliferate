@@ -1,10 +1,11 @@
 import {
   useState,
 } from "react";
-import { ChevronRight, ExternalLink, FileText } from "@proliferate/ui/icons";
+import { ChevronRight, ExternalLink } from "#product/primitives/icons/core";
+import { FileText } from "#product/primitives/icons/workspace";
 import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
-import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { POPOVER_SURFACE_CLASS } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 import type { FileReferencePathKind } from "#product/lib/domain/files/path-references";
 

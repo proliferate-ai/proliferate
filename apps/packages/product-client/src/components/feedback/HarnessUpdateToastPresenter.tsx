@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
 import type { ReconcileAgentsResponse } from "@anyharness/sdk";
-import { dismissToast, showToast } from "@proliferate/ui/utils/show-toast";
+import { dismissToast, showToast } from "#product/primitives/utils/show-toast";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { formatByteProgress } from "#product/lib/domain/updates/byte-progress";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";

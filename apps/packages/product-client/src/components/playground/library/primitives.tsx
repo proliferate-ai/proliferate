@@ -1,39 +1,39 @@
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@proliferate/ui/primitives/AlertDialog";
-import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
-import { AnimatedSwapText } from "@proliferate/ui/primitives/AnimatedSwapText";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Checkbox as CheckboxPrimitive } from "@proliferate/ui/primitives/checkbox-primitive";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@proliferate/ui/primitives/Command";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@proliferate/ui/primitives/Dialog";
-import { DotCellLoader } from "@proliferate/ui/primitives/DotCellLoader";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@proliferate/ui/primitives/DropdownMenu";
-import { FixedPositionLayer } from "@proliferate/ui/primitives/FixedPositionLayer";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
-import { Popover, PopoverContent, PopoverTrigger } from "@proliferate/ui/primitives/Popover";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
-import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
-import { RadioCardGroup } from "@proliferate/ui/primitives/RadioCardGroup";
-import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
-import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { Select } from "@proliferate/ui/primitives/Select";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
-import { SkeletonBlock } from "@proliferate/ui/primitives/Skeleton";
-import { Spinner } from "@proliferate/ui/primitives/Spinner";
-import { Switch } from "@proliferate/ui/primitives/Switch";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { Tooltip as TooltipPrimitiveRoot, TooltipContent, TooltipProvider, TooltipTrigger } from "@proliferate/ui/primitives/tooltip-primitive";
-import { TypewriterRevealText } from "@proliferate/ui/primitives/TypewriterRevealText";
-import { UserAvatar } from "@proliferate/ui/primitives/UserAvatar";
-import { Trash } from "@proliferate/ui/icons";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "#product/primitives/AlertDialog";
+import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
+import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Checkbox as CheckboxPrimitive } from "#product/primitives/checkbox-primitive";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "#product/primitives/Command";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "#product/primitives/Dialog";
+import { DotCellLoader } from "#product/primitives/DotCellLoader";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "#product/primitives/DropdownMenu";
+import { FixedPositionLayer } from "#product/primitives/FixedPositionLayer";
+import { IconButton } from "#product/primitives/IconButton";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { PaneIconButton } from "#product/primitives/PaneIconButton";
+import { Popover, PopoverContent, PopoverTrigger } from "#product/primitives/Popover";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
+import { ProgressBar } from "#product/primitives/ProgressBar";
+import { RadioCardGroup } from "#product/primitives/RadioCardGroup";
+import { RangeSlider } from "#product/primitives/RangeSlider";
+import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
+import { Select } from "#product/primitives/Select";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { Spinner } from "#product/primitives/Spinner";
+import { Switch } from "#product/primitives/Switch";
+import { Textarea } from "#product/primitives/Textarea";
+import { Tooltip } from "#product/primitives/Tooltip";
+import { Tooltip as TooltipPrimitiveRoot, TooltipContent, TooltipProvider, TooltipTrigger } from "#product/primitives/tooltip-primitive";
+import { TypewriterRevealText } from "#product/primitives/TypewriterRevealText";
+import { UserAvatar } from "#product/primitives/UserAvatar";
+import { Trash } from "#product/primitives/icons/core";
 import { useState } from "react";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
@@ -242,16 +242,16 @@ function TooltipPrimitiveDemo() {
 }
 
 export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
-  { name: "AlertDialog", subpath: "@proliferate/ui/primitives/AlertDialog", render: AlertDialogDemo },
-  { name: "AnimatedCollapsibleContent", subpath: "@proliferate/ui/primitives/AnimatedCollapsibleContent", render: AnimatedCollapsibleContentDemo },
-  { name: "AnimatedSwapText", subpath: "@proliferate/ui/primitives/AnimatedSwapText", render: AnimatedSwapTextDemo },
-  { name: "Badge", subpath: "@proliferate/ui/primitives/Badge", render: () => <Badge tone="info">Badge</Badge> },
-  { name: "Button", subpath: "@proliferate/ui/primitives/Button", render: () => <Button size="sm">Button</Button> },
-  { name: "Checkbox", subpath: "@proliferate/ui/primitives/Checkbox", render: CheckboxDemo },
-  { name: "checkbox-primitive", subpath: "@proliferate/ui/primitives/checkbox-primitive", render: () => <CheckboxPrimitive defaultChecked /> },
-  { name: "Command", subpath: "@proliferate/ui/primitives/Command", render: CommandDemo },
-  { name: "Dialog", subpath: "@proliferate/ui/primitives/Dialog", render: DialogDemo },
-  { name: "DotCellLoader", subpath: "@proliferate/ui/primitives/DotCellLoader", render: () => (
+  { name: "AlertDialog", subpath: "#product/primitives/AlertDialog", render: AlertDialogDemo },
+  { name: "AnimatedCollapsibleContent", subpath: "#product/primitives/AnimatedCollapsibleContent", render: AnimatedCollapsibleContentDemo },
+  { name: "AnimatedSwapText", subpath: "#product/primitives/AnimatedSwapText", render: AnimatedSwapTextDemo },
+  { name: "Badge", subpath: "#product/primitives/Badge", render: () => <Badge tone="info">Badge</Badge> },
+  { name: "Button", subpath: "#product/primitives/Button", render: () => <Button size="sm">Button</Button> },
+  { name: "Checkbox", subpath: "#product/primitives/Checkbox", render: CheckboxDemo },
+  { name: "checkbox-primitive", subpath: "#product/primitives/checkbox-primitive", render: () => <CheckboxPrimitive defaultChecked /> },
+  { name: "Command", subpath: "#product/primitives/Command", render: CommandDemo },
+  { name: "Dialog", subpath: "#product/primitives/Dialog", render: DialogDemo },
+  { name: "DotCellLoader", subpath: "#product/primitives/DotCellLoader", render: () => (
     <span className="flex items-center gap-3 text-foreground">
       <DotCellLoader variant="wave" />
       <DotCellLoader variant="orbit" />
@@ -260,50 +260,50 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
       <DotCellLoader variant="breathe" />
     </span>
   ) },
-  { name: "DropdownMenu", subpath: "@proliferate/ui/primitives/DropdownMenu", render: DropdownMenuDemo },
-  { name: "FixedPositionLayer", subpath: "@proliferate/ui/primitives/FixedPositionLayer", render: () => (
+  { name: "DropdownMenu", subpath: "#product/primitives/DropdownMenu", render: DropdownMenuDemo },
+  { name: "FixedPositionLayer", subpath: "#product/primitives/FixedPositionLayer", render: () => (
     <div className="relative h-16 w-full">
       <FixedPositionLayer position={{ top: 4, left: 4 }} className="text-ui-sm text-foreground">
         Anchored
       </FixedPositionLayer>
     </div>
   ) },
-  { name: "IconButton", subpath: "@proliferate/ui/primitives/IconButton", render: () => (
+  { name: "IconButton", subpath: "#product/primitives/IconButton", render: () => (
     <IconButton title="Delete" onClick={noop}><Trash className="icon-paired" /></IconButton>
   ) },
-  { name: "Input", subpath: "@proliferate/ui/primitives/Input", render: () => <Input placeholder="Input" defaultValue="" /> },
-  { name: "Label", subpath: "@proliferate/ui/primitives/Label", render: () => <Label>Label</Label> },
-  { name: "PaneIconButton", subpath: "@proliferate/ui/primitives/PaneIconButton", render: () => (
+  { name: "Input", subpath: "#product/primitives/Input", render: () => <Input placeholder="Input" defaultValue="" /> },
+  { name: "Label", subpath: "#product/primitives/Label", render: () => <Label>Label</Label> },
+  { name: "PaneIconButton", subpath: "#product/primitives/PaneIconButton", render: () => (
     <PaneIconButton label="Delete" onClick={noop}><Trash className="icon-paired" /></PaneIconButton>
   ) },
-  { name: "Popover", subpath: "@proliferate/ui/primitives/Popover", render: PopoverDemo },
-  { name: "PopoverButton", subpath: "@proliferate/ui/primitives/PopoverButton", render: PopoverButtonDemo },
-  { name: "PopoverMenuItem", subpath: "@proliferate/ui/primitives/PopoverMenuItem", render: PopoverMenuItemDemo },
-  { name: "PopoverSearchField", subpath: "@proliferate/ui/primitives/PopoverSearchField", render: PopoverSearchFieldDemo },
-  { name: "ProgressBar", subpath: "@proliferate/ui/primitives/ProgressBar", render: () => (
+  { name: "Popover", subpath: "#product/primitives/Popover", render: PopoverDemo },
+  { name: "PopoverButton", subpath: "#product/primitives/PopoverButton", render: PopoverButtonDemo },
+  { name: "PopoverMenuItem", subpath: "#product/primitives/PopoverMenuItem", render: PopoverMenuItemDemo },
+  { name: "PopoverSearchField", subpath: "#product/primitives/PopoverSearchField", render: PopoverSearchFieldDemo },
+  { name: "ProgressBar", subpath: "#product/primitives/ProgressBar", render: () => (
     <ProgressBar value={60} className="h-2 w-40 overflow-hidden rounded-full bg-input" indicatorClassName="h-full bg-primary" />
   ) },
-  { name: "RadioCardGroup", subpath: "@proliferate/ui/primitives/RadioCardGroup", render: RadioCardGroupDemo },
-  { name: "RangeSlider", subpath: "@proliferate/ui/primitives/RangeSlider", render: RangeSliderDemo },
-  { name: "RowActionIconButton", subpath: "@proliferate/ui/primitives/RowActionIconButton", render: () => (
+  { name: "RadioCardGroup", subpath: "#product/primitives/RadioCardGroup", render: RadioCardGroupDemo },
+  { name: "RangeSlider", subpath: "#product/primitives/RangeSlider", render: RangeSliderDemo },
+  { name: "RowActionIconButton", subpath: "#product/primitives/RowActionIconButton", render: () => (
     <RowActionIconButton label="Delete" visibility="always" onClick={noop}><Trash /></RowActionIconButton>
   ) },
-  { name: "SegmentedControl", subpath: "@proliferate/ui/primitives/SegmentedControl", render: SegmentedControlDemo },
-  { name: "Select", subpath: "@proliferate/ui/primitives/Select", render: SelectDemo },
-  { name: "ShortcutBadge", subpath: "@proliferate/ui/primitives/ShortcutBadge", render: () => <ShortcutBadge label="⌘K" /> },
-  { name: "Skeleton", subpath: "@proliferate/ui/primitives/Skeleton", render: () => <SkeletonBlock className="h-4 w-24" /> },
-  { name: "Sonner", subpath: "@proliferate/ui/primitives/Sonner", render: () => (
+  { name: "SegmentedControl", subpath: "#product/primitives/SegmentedControl", render: SegmentedControlDemo },
+  { name: "Select", subpath: "#product/primitives/Select", render: SelectDemo },
+  { name: "ShortcutBadge", subpath: "#product/primitives/ShortcutBadge", render: () => <ShortcutBadge label="⌘K" /> },
+  { name: "Skeleton", subpath: "#product/primitives/Skeleton", render: () => <SkeletonBlock className="h-4 w-24" /> },
+  { name: "Sonner", subpath: "#product/primitives/Sonner", render: () => (
     <Button variant="secondary" size="sm" onClick={noop}>Toast trigger (see app toaster)</Button>
   ) },
-  { name: "Spinner", subpath: "@proliferate/ui/primitives/Spinner", render: () => <Spinner className="icon-paired" /> },
-  { name: "Switch", subpath: "@proliferate/ui/primitives/Switch", render: SwitchDemo },
-  { name: "Textarea", subpath: "@proliferate/ui/primitives/Textarea", render: () => <Textarea placeholder="Textarea" defaultValue="" /> },
-  { name: "Tooltip", subpath: "@proliferate/ui/primitives/Tooltip", render: () => (
+  { name: "Spinner", subpath: "#product/primitives/Spinner", render: () => <Spinner className="icon-paired" /> },
+  { name: "Switch", subpath: "#product/primitives/Switch", render: SwitchDemo },
+  { name: "Textarea", subpath: "#product/primitives/Textarea", render: () => <Textarea placeholder="Textarea" defaultValue="" /> },
+  { name: "Tooltip", subpath: "#product/primitives/Tooltip", render: () => (
     <Tooltip content="Tooltip content"><Button variant="secondary" size="sm">Hover me</Button></Tooltip>
   ) },
-  { name: "tooltip-primitive", subpath: "@proliferate/ui/primitives/tooltip-primitive", render: TooltipPrimitiveDemo },
-  { name: "TypewriterRevealText", subpath: "@proliferate/ui/primitives/TypewriterRevealText", render: TypewriterRevealTextDemo },
-  { name: "UserAvatar", subpath: "@proliferate/ui/primitives/UserAvatar", render: () => (
+  { name: "tooltip-primitive", subpath: "#product/primitives/tooltip-primitive", render: TooltipPrimitiveDemo },
+  { name: "TypewriterRevealText", subpath: "#product/primitives/TypewriterRevealText", render: TypewriterRevealTextDemo },
+  { name: "UserAvatar", subpath: "#product/primitives/UserAvatar", render: () => (
     <UserAvatar displayName="Jane Doe" className="size-8" />
   ) },
 ];

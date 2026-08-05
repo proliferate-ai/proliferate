@@ -1,9 +1,9 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { ChevronRight } from "@proliferate/ui/icons";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
-import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { ChevronRight } from "#product/primitives/icons/core";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
+import { Tooltip } from "#product/primitives/Tooltip";
 
 import { PrStatusIconOverlay } from "#product/components/patterns/PrStatusBadge";
 import type { PrStatusView } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";

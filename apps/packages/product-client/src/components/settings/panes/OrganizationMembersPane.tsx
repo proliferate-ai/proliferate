@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { OrganizationInvitationsSection } from "#product/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "#product/components/settings/panes/organization/OrganizationMembersSection";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";

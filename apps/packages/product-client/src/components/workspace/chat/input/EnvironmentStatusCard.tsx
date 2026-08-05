@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import type { WorktreeInventoryRow } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
-import { Check, GitBranch, X } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
+import { Check, X } from "#product/primitives/icons/core";
+import { GitBranch } from "#product/primitives/icons/workspace-git";
 import type {
   RuntimePressureTargetState,
   useRuntimePressureControlState,

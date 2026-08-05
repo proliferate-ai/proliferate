@@ -8,12 +8,12 @@ import {
   type WorkflowDefinitionStage,
   type WorkflowValidationIssue,
 } from "@proliferate/product-domain/workflows/definition";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Button } from "#product/primitives/Button";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
+import { Textarea } from "#product/primitives/Textarea";
 import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
 import { WorkflowInputEditor } from "#product/components/workflows/WorkflowInputEditor";
 import {

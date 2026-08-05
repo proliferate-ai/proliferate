@@ -17,9 +17,9 @@ import {
   FILE_REFERENCE_MENU_CLASS,
   FileReferenceMenuContent,
 } from "#product/components/workspace/file-references/FileReferenceMenu";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowUpRight } from "@proliferate/ui/icons";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { Button } from "#product/primitives/Button";
+import { ArrowUpRight } from "#product/primitives/icons/core";
 
 export function EditRows({ item }: { item: ToolCallItem }) {
   const fileChanges = item.contentParts.filter(

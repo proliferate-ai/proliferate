@@ -15,8 +15,9 @@ Scope:
   changing Desktop behavior
 - `apps/packages/product-client/src/**`
 - `apps/packages/product-domain/src/**`
-- `apps/packages/design/**` and `apps/packages/ui/**` when shared primitives need small
-  extensions
+- `apps/packages/design/**` and
+  `apps/packages/product-client/src/primitives/**` when shared primitives need
+  small extensions
 - cloud command/session/workspace SDK types only when UI parity exposes a
   missing contract
 

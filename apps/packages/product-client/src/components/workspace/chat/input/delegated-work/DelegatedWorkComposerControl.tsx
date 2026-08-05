@@ -1,5 +1,5 @@
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
 import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import type { DelegatedWorkComposerViewModel } from "#product/hooks/chat/facade/use-delegated-work-composer";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";

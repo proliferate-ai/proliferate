@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ArrowRight } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { ArrowRight } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 import { AUTH_LOGIN_LABELS } from "#product/copy/auth/auth-copy";
 
 // Minimal email/password form for the sign-in surface. Shown as the default

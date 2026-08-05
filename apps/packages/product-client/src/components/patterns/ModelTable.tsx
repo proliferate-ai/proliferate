@@ -1,6 +1,6 @@
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Switch } from "@proliferate/ui/primitives/Switch";
+import { twMerge } from "#product/primitives/utils/tw-merge";
+import { Badge } from "#product/primitives/Badge";
+import { Switch } from "#product/primitives/Switch";
 
 export interface ModelTableEffort {
   values: readonly string[];

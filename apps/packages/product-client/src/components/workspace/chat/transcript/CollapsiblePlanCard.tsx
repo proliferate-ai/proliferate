@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, ChevronDown, Copy } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Check, ChevronDown, Copy } from "#product/primitives/icons/core";
 import { PlanMarkdownBody } from "./PlanMarkdownBody";
 import type {
   MarkdownCodeBlockRenderer,

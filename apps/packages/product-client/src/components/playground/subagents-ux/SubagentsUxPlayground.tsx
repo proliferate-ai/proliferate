@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { FullFlowPrototype } from "#product/components/playground/subagents-ux/full-flow/FullFlowPrototype";
 import { IdentityReceiptsPrototype } from "#product/components/playground/subagents-ux/identity-receipts/IdentityReceiptsPrototype";
 import { NavigationClosePrototype } from "#product/components/playground/subagents-ux/navigation-close/NavigationClosePrototype";

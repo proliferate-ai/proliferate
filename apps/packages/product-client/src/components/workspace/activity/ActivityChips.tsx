@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { GitFork, RotateCw, SquareTerminal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import type {
   ActivityChipDescriptor,
   ActivityChipKind,

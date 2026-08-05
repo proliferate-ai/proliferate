@@ -54,7 +54,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # is a hole in the ban, not an omission of taste: the vocabulary would be closed
 # everywhere except the one package nobody was looking at.
 PRODUCTION_ROOTS = (
-    REPO_ROOT / "apps" / "packages" / "ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-client" / "src",
     REPO_ROOT / "apps" / "desktop" / "src",
 )
@@ -80,7 +79,8 @@ GLYPH_SOURCE_EXCEPTIONS: dict[str, str] = {}
 STATUS_DOT_SOURCE_EXCEPTIONS: dict[str, str] = {}
 
 ICON_IMPORT_SOURCES = re.compile(
-    r"(?:lucide-react|@phosphor-icons/react|react-icons(?:/[^\"']+)?|@proliferate/ui/icons)$"
+    r"(?:lucide-react|@phosphor-icons/react|react-icons(?:/[^\"']+)?|"
+    r"#product/primitives/(?:icons/[^\"']+|Spinner))$"
 )
 NAMED_IMPORT_RE = re.compile(
     r"import\s*\{(?P<names>[\s\S]*?)\}\s*from\s*[\"'](?P<source>[^\"']+)[\"']",

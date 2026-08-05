@@ -1,7 +1,8 @@
 import { useId } from "react";
 
 import type { AuthProvider } from "@proliferate/product-domain/auth/model";
-import { Mail, Shield } from "@proliferate/ui/icons";
+import { Mail } from "#product/primitives/icons/platform";
+import { Shield } from "#product/primitives/icons/product";
 
 export type AuthProviderIconKind = AuthProvider | "sso" | "password";
 

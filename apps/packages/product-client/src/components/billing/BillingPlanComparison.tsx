@@ -1,8 +1,8 @@
 import { Check, CheckCircle2 } from "lucide-react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 
 import {
   BILLING_PLAN_COLUMNS,

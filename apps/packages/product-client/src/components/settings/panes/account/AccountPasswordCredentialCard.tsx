@@ -1,9 +1,9 @@
 import { useId, useState, type FormEvent } from "react";
 
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
 
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 

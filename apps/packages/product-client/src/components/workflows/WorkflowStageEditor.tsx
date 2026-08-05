@@ -9,10 +9,10 @@ import {
   type WorkflowDefinitionStage,
   type WorkflowValidationIssue,
 } from "@proliferate/product-domain/workflows/definition";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Button } from "#product/primitives/Button";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
+import { Textarea } from "#product/primitives/Textarea";
 
 export function WorkflowStageEditor({
   stage,

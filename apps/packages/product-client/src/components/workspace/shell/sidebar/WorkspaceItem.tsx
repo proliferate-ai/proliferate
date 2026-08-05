@@ -2,18 +2,20 @@ import { useState } from "react";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   Archive,
-  CloudIcon,
-  Folder,
+  Pencil,
+  Trash,
+} from "#product/primitives/icons/core";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { Folder } from "#product/primitives/icons/workspace";
+import {
   GitBranch,
   GitBranchIcon,
   GitPullRequest,
-  Pencil,
-  Trash,
-} from "@proliferate/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+} from "#product/primitives/icons/workspace-git";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { Tooltip } from "#product/primitives/Tooltip";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {

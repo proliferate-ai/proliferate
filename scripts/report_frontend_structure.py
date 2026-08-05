@@ -19,13 +19,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MAX_LINES_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "max_lines_allowlist.txt"
 FRONTEND_STRUCTURE_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_structure_allowlist.txt"
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
+PRODUCT_CLIENT_PRIMITIVES_SRC = PRODUCT_CLIENT_SRC / "primitives"
 
 FRONTEND_ROOTS = [
     REPO_ROOT / "apps" / "desktop" / "src",
     REPO_ROOT / "apps" / "web" / "src",
     REPO_ROOT / "apps" / "mobile" / "src",
     REPO_ROOT / "apps" / "packages" / "design" / "src",
-    REPO_ROOT / "apps" / "packages" / "ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
     PRODUCT_CLIENT_SRC,
 ]
@@ -47,8 +47,10 @@ DOM_APP_AND_PACKAGE_ROOTS = [
 
 PACKAGE_ROOTS = {
     "design": REPO_ROOT / "apps" / "packages" / "design" / "src",
-    "ui": REPO_ROOT / "apps" / "packages" / "ui" / "src",
     "product-domain": REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
+    # Classify the nested component library before the general ProductClient
+    # fallback so it retains the former primitive-package dependency boundary.
+    "product-client-primitives": PRODUCT_CLIENT_PRIMITIVES_SRC,
     "product-client": PRODUCT_CLIENT_SRC,
 }
 
@@ -161,8 +163,8 @@ RULE_ORDER = [
 ]
 
 RULE_TITLES = {
-    "RAW_DOM_CONTROL": "Raw DOM controls outside apps/packages/ui/**",
-    "PRIMITIVE_DEFINITION_OUTSIDE_UI": "Primitive definitions outside apps/packages/ui/**",
+    "RAW_DOM_CONTROL": "Raw DOM controls outside ProductClient primitives",
+    "PRIMITIVE_DEFINITION_OUTSIDE_UI": "Primitive definitions outside ProductClient primitives",
     "COMPONENT_TS_FILE": ".ts files under components/**",
     "PRODUCT_HOOK_DIRECT_FILE": "Product hooks directly under hooks/<domain>/",
     "NONSTANDARD_HOOK_FOLDER": "Nonstandard product hook responsibility folders",
@@ -333,6 +335,8 @@ def find_raw_dom_controls(files: Iterable[Path]) -> list[Violation]:
             is_under(path, root) for root in DOM_APP_AND_PACKAGE_ROOTS
         ):
             continue
+        if is_under(path, PRODUCT_CLIENT_PRIMITIVES_SRC):
+            continue
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
             if line_is_comment(line):
                 continue
@@ -344,7 +348,7 @@ def find_raw_dom_controls(files: Iterable[Path]) -> list[Violation]:
                         "RAW_DOM_CONTROL",
                         path,
                         lineno,
-                        f"raw <{tag}> should use an apps/packages/ui primitive",
+                        f"raw <{tag}> should use a ProductClient primitive",
                     )
                 )
     return violations
@@ -356,6 +360,8 @@ def find_primitive_definitions(files: Iterable[Path]) -> list[Violation]:
         if path.suffix != ".tsx" or not any(
             is_under(path, root) for root in DOM_APP_AND_PACKAGE_ROOTS
         ):
+            continue
+        if is_under(path, PRODUCT_CLIENT_PRIMITIVES_SRC):
             continue
         text = path.read_text()
         lines = text.splitlines()
@@ -385,7 +391,7 @@ def find_primitive_definitions(files: Iterable[Path]) -> list[Violation]:
                             index + 1,
                             (
                                 f"{name} looks like a DOM primitive definition "
-                                "outside apps/packages/ui/**"
+                                "outside apps/packages/product-client/src/primitives/**"
                             ),
                         )
                     )
@@ -493,31 +499,42 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
     if package_name == "design":
         if source in {"react", "react-dom"} or source.startswith("react-dom/"):
             return "design must not import React or DOM components"
-        if source.startswith("@proliferate/product-") or source.startswith("@proliferate/ui"):
-            return "design must not import product or UI package code"
+        if source.startswith("@proliferate/product-"):
+            return "design must not import product package code"
         if source.startswith("@proliferate/cloud-sdk") or source.startswith("@anyharness/sdk"):
             return "design must not import SDK clients or contracts"
         if source == "@tanstack/react-query":
             return "design must not import query clients"
         return None
 
-    if package_name == "ui":
-        if source.startswith("@proliferate/product-"):
-            return "ui primitives must not import product package code"
-        if source.startswith("@proliferate/cloud-sdk") or source.startswith("@anyharness/sdk"):
-            return "ui primitives must not import SDK clients or contracts"
-        if source == "@tanstack/react-query":
-            return "ui primitives must not import query clients"
+    if package_name == "product-client-primitives":
+        if source.startswith("#product/"):
+            target = source.removeprefix("#product/")
+            if target == "primitives" or target.startswith("primitives/"):
+                return None
+            return "ProductClient primitives must not import higher ProductClient layers"
+        if source.startswith("@proliferate/product-client/internal/"):
+            target = source.removeprefix("@proliferate/product-client/internal/")
+            if target == "primitives" or target.startswith("primitives/"):
+                return None
+            return "ProductClient primitives must not import higher ProductClient layers"
+        if source.startswith("@proliferate/product-client"):
+            return "ProductClient primitives must not import the connected ProductClient surface"
+        if source.startswith("@proliferate/product-domain"):
+            return "ProductClient primitives must not import product-domain code"
+        if source.startswith("@proliferate/cloud-sdk") or source.startswith(
+            "@anyharness/sdk"
+        ):
+            return "ProductClient primitives must not import SDK clients or contracts"
+        if source.startswith("@tanstack/react-query"):
+            return "ProductClient primitives must not import query clients"
         return None
 
     if package_name == "product-domain":
         if source in {"react", "react-dom"} or source.startswith("react-dom/"):
             return "product-domain must stay pure and must not import React or DOM components"
-        if (
-            source.startswith("@proliferate/ui")
-            or source.startswith("@proliferate/product-client")
-        ):
-            return "product-domain must not import UI packages"
+        if source.startswith("@proliferate/product-client"):
+            return "product-domain must not import ProductClient UI"
         if source.startswith("@proliferate/cloud-sdk-react") or source.startswith(
             "@anyharness/sdk-react"
         ):

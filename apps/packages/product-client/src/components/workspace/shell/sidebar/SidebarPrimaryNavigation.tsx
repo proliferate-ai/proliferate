@@ -1,4 +1,6 @@
-import { AppShellNewChatIcon, Fork, Grid, LifeBuoy } from "@proliferate/ui/icons";
+import { AppShellNewChatIcon } from "#product/primitives/icons/app-shell";
+import { Fork, LifeBuoy } from "#product/primitives/icons/core";
+import { Grid } from "#product/primitives/icons/platform";
 import type { SidebarNavItemView } from "#product/components/workspace/shell/sidebar/ProductSidebarNavigation";
 import { ProductSidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/ProductSidebarNavigation";
 

@@ -1,7 +1,7 @@
-import { ArrowRight, X } from "@proliferate/ui/icons";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { ArrowRight, X } from "#product/primitives/icons/core";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
+import { IconButton } from "#product/primitives/IconButton";
 
 export interface ReleaseNoticeCardProps {
   notice: {

@@ -1,4 +1,4 @@
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 
 export interface SecretDeleteDialogState {
   kind: "env" | "file";

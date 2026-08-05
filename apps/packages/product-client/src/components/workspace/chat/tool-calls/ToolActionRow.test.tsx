@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { Brain } from "@proliferate/ui/icons";
+import { Brain } from "#product/primitives/icons/product";
 import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
 
 afterEach(cleanup);

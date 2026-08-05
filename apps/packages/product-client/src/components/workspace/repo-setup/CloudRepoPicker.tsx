@@ -6,7 +6,7 @@ import {
   RotateCw,
   ShieldAlert,
 } from "lucide-react";
-import { GitHub } from "@proliferate/ui/icons";
+import { GitHub } from "#product/primitives/icons/platform";
 
 import {
   Dialog,
@@ -14,11 +14,11 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@proliferate/ui/primitives/Dialog";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
-import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
+} from "#product/primitives/Dialog";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import type {
   CloudRepoPickerDialogProps,
   CloudRepoPickerProps,

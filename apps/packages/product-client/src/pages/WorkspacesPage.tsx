@@ -5,7 +5,7 @@ import {
   type WorkspacesCommandGroupView,
   type WorkspacesCommandItemView,
 } from "#product/components/workspace/repo-setup/WorkspacesCommandList";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { Tooltip } from "#product/primitives/Tooltip";
 import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";

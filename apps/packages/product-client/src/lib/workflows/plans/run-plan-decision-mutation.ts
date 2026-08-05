@@ -4,7 +4,7 @@ import {
   type ProposedPlanDetail,
 } from "@anyharness/sdk";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
-import type { ToastErrorInput } from "@proliferate/ui/utils/toast-model";
+import type { ToastErrorInput } from "#product/primitives/utils/toast-model";
 
 /**
  * Applies an approve/reject decision, reconciling the one conflict the runtime

@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark";
 
 export type RedirectCallbackTone = "neutral" | "success" | "error";

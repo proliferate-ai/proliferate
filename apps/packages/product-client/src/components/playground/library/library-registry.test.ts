@@ -1,39 +1,58 @@
 import { describe, expect, it } from "vitest";
-import uiPackageJson from "../../../../../ui/package.json";
 import { LIBRARY_TIERS } from "./index";
 
 /**
  * Drift gate: the component-library spec sheet must cover exactly the
- * sanctioned component surface. Reads UI's real `package.json` exports and
- * inventories the ProductClient domain-aware pattern owners, then diffs both
- * against the registry that powers `/playground/library`.
+ * renderable ProductClient primitive, pattern, icon, and product-pattern
+ * owners. Physical inventories keep this assertion independent of a package
+ * manifest or an aggregate export barrel.
  */
 
-type ExportsMap = Record<string, unknown>;
+type ModuleInventory = Record<string, unknown>;
 
-function subpathsWithPrefix(exportsMap: ExportsMap, prefixes: string[]): string[] {
-  return Object.keys(exportsMap).filter((subpath) =>
-    prefixes.some((prefix) => subpath.startsWith(prefix)));
+function inventorySubpaths(
+  modules: ModuleInventory,
+  canonicalPrefix: string,
+): Set<string> {
+  return new Set(
+    Object.keys(modules).map((modulePath) => {
+      const match = /\/([^/]+)\.tsx$/.exec(modulePath);
+      if (!match) {
+        throw new Error(`unexpected library inventory path: ${modulePath}`);
+      }
+      return `${canonicalPrefix}/${match[1]}`;
+    }),
+  );
 }
 
-function toPackageSubpath(packageName: string, subpath: string): string {
-  // exports keys are "./primitives/Button" — join with the package name the
-  // registry actually imports through ("@proliferate/ui/primitives/Button").
-  return `${packageName}/${subpath.replace(/^\.\//, "")}`;
-}
-
-const uiExports = (uiPackageJson as { exports: ExportsMap }).exports;
+const primitiveModules = import.meta.glob([
+  "../../../primitives/*.tsx",
+  "!../../../primitives/*.test.tsx",
+]);
+const patternModules = import.meta.glob([
+  "../../../primitives/patterns/*.tsx",
+  "!../../../primitives/patterns/*.test.tsx",
+  "!../../../primitives/patterns/ToastBody.tsx",
+  "!../../../primitives/patterns/ToastDetailsModal.tsx",
+]);
+const iconModules = import.meta.glob("../../../primitives/icons/*.tsx");
 const productPatternModules = import.meta.glob([
   "../../patterns/*.tsx",
   "../../patterns/secrets/SecretManagementPanel.tsx",
   "!../../patterns/*.test.tsx",
 ]);
 
-// Same tiers as the design-system contract: ui/src ships exported
-// primitives/patterns/icons; ProductClient owns the domain-aware fourth tier.
-const EXPECTED_UI_SUBPATHS = new Set(
-  subpathsWithPrefix(uiExports, ["./primitives/", "./patterns/", "./icons"])
-    .map((subpath) => toPackageSubpath("@proliferate/ui", subpath)),
+const EXPECTED_PRIMITIVE_SUBPATHS = inventorySubpaths(
+  primitiveModules,
+  "#product/primitives",
+);
+const EXPECTED_PATTERN_SUBPATHS = inventorySubpaths(
+  patternModules,
+  "#product/primitives/patterns",
+);
+const EXPECTED_ICON_SUBPATHS = inventorySubpaths(
+  iconModules,
+  "#product/primitives/icons",
 );
 const EXPECTED_PRODUCT_PATTERN_SUBPATHS = new Set(
   Object.keys(productPatternModules).map((modulePath) =>
@@ -42,7 +61,9 @@ const EXPECTED_PRODUCT_PATTERN_SUBPATHS = new Set(
       .replace(/\.tsx$/, "")}`),
 );
 const EXPECTED_SUBPATHS = new Set([
-  ...EXPECTED_UI_SUBPATHS,
+  ...EXPECTED_PRIMITIVE_SUBPATHS,
+  ...EXPECTED_PATTERN_SUBPATHS,
+  ...EXPECTED_ICON_SUBPATHS,
   ...EXPECTED_PRODUCT_PATTERN_SUBPATHS,
 ]);
 
@@ -56,7 +77,19 @@ function formatList(subpaths: Iterable<string>): string {
 }
 
 describe("library registry parity", () => {
-  it("covers exactly the sanctioned UI exports and ProductClient pattern owners", () => {
+  it("inventories the expected physical primitive surface", () => {
+    expect({
+      primitives: EXPECTED_PRIMITIVE_SUBPATHS.size,
+      patterns: EXPECTED_PATTERN_SUBPATHS.size,
+      icons: EXPECTED_ICON_SUBPATHS.size,
+      total:
+        EXPECTED_PRIMITIVE_SUBPATHS.size
+        + EXPECTED_PATTERN_SUBPATHS.size
+        + EXPECTED_ICON_SUBPATHS.size,
+    }).toEqual({ primitives: 36, patterns: 23, icons: 10, total: 69 });
+  });
+
+  it("covers exactly the physical primitive surface and ProductClient pattern owners", () => {
     const registered = new Set(registrySubpaths());
 
     const missing = [...EXPECTED_SUBPATHS].filter((subpath) => !registered.has(subpath));
@@ -64,11 +97,11 @@ describe("library registry parity", () => {
 
     expect(
       missing.length === 0,
-      `sanctioned exports with no library-sheet entry:\n${formatList(missing)}`,
+      `physical owners with no library-sheet entry:\n${formatList(missing)}`,
     ).toBe(true);
     expect(
       unknown.length === 0,
-      `library-sheet entries for a subpath that is not a sanctioned export:\n${formatList(unknown)}`,
+      `library-sheet entries without a physical owner:\n${formatList(unknown)}`,
     ).toBe(true);
   });
 
@@ -85,20 +118,11 @@ describe("library registry parity", () => {
     expect(duplicates, `duplicate registry entries:\n${formatList(duplicates)}`).toEqual([]);
   });
 
-  it("keeps every tier's entries scoped to that tier's expected prefix set", () => {
+  it("keeps every tier's entries equal to that tier's physical inventory", () => {
     const tierExpectations: Record<string, Set<string>> = {
-      primitives: new Set(
-        subpathsWithPrefix(uiExports, ["./primitives/"]).map((subpath) =>
-          toPackageSubpath("@proliferate/ui", subpath)),
-      ),
-      patterns: new Set(
-        subpathsWithPrefix(uiExports, ["./patterns/"]).map((subpath) =>
-          toPackageSubpath("@proliferate/ui", subpath)),
-      ),
-      icons: new Set(
-        subpathsWithPrefix(uiExports, ["./icons"]).map((subpath) =>
-          toPackageSubpath("@proliferate/ui", subpath)),
-      ),
+      primitives: EXPECTED_PRIMITIVE_SUBPATHS,
+      patterns: EXPECTED_PATTERN_SUBPATHS,
+      icons: EXPECTED_ICON_SUBPATHS,
       "product-patterns": EXPECTED_PRODUCT_PATTERN_SUBPATHS,
     };
 
@@ -108,7 +132,7 @@ describe("library registry parity", () => {
       const actual = new Set(tier.entries.map((entry) => entry.subpath));
       expect(
         [...actual].sort(),
-        `tier "${tier.id}" entries do not match its expected export subset`,
+        `tier "${tier.id}" entries do not match its physical inventory`,
       ).toEqual([...(expected as Set<string>)].sort());
     }
   });

@@ -6,10 +6,10 @@ import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHea
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import { RunCommandHelp } from "#product/components/settings/shared/RunCommandHelp";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { useRepositorySettings } from "#product/hooks/settings/workflows/use-repository-settings";

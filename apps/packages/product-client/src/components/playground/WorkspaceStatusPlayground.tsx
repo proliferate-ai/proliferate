@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
 import {
   ProductSidebarBrandRow,
   ProductSidebarSectionHeader,

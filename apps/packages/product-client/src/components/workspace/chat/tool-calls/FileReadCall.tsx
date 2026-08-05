@@ -1,4 +1,4 @@
-import { ReadBook } from "@proliferate/ui/icons";
+import { ReadBook } from "#product/primitives/icons/workspace";
 import { HighlightedCodeBlock } from "#product/components/content/ui/HighlightedCodeBlock";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";

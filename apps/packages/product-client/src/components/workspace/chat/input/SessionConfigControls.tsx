@@ -5,11 +5,12 @@ import {
 } from "#product/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
-import { Brain, Check, Zap } from "@proliferate/ui/icons";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
+import { Brain, Zap } from "#product/primitives/icons/product";
+import { Check } from "#product/primitives/icons/core";
+import { Tooltip } from "#product/primitives/Tooltip";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { SessionModeControl } from "#product/components/workspace/chat/input/SessionModeControl";
 

@@ -6,11 +6,11 @@ import {
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "#product/components/workspace/chat/session-controls/SessionControlIcon";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Check } from "@proliferate/ui/icons";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
-import { AnimatedSwapText } from "@proliferate/ui/primitives/AnimatedSwapText";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { Check } from "#product/primitives/icons/core";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 type ModeControlDescriptor = LiveSessionControlDescriptor & {

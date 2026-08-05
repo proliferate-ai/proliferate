@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { UserAvatar } from "@proliferate/ui/primitives/UserAvatar";
+import { UserAvatar } from "#product/primitives/UserAvatar";
 
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import type { AccountProviderView } from "#product/lib/domain/auth/account-profile-presentation";

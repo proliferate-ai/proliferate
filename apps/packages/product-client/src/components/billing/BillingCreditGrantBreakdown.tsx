@@ -1,4 +1,4 @@
-import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Badge } from "#product/primitives/Badge";
 
 import type { BillingPlanView } from "#product/lib/domain/billing/billing-plan";
 import {

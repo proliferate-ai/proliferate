@@ -3,10 +3,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Search, X } from "@proliferate/ui/icons";
+import { twMerge } from "#product/primitives/utils/tw-merge";
+import { Input } from "#product/primitives/Input";
+import { Button } from "#product/primitives/Button";
+import { Search, X } from "#product/primitives/icons/core";
 import { FileSearchResultsTree } from "#product/components/workspace/files/tree/FileSearchResultsTree";
 import { FileTreeDirectory } from "#product/components/workspace/files/tree/FileTreeDirectory";
 import { useTreePanelResize } from "#product/hooks/ui/layout/use-tree-panel-resize";

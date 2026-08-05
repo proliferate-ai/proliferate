@@ -1,5 +1,5 @@
 import { Hand } from "lucide-react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 export type ClaimBannerView =
   | { kind: "hidden" }

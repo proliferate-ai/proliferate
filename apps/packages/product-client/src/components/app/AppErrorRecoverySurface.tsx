@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Spinner } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Spinner } from "#product/primitives/Spinner";
 
 import type { AppErrorBoundaryProps } from "#product/components/app/AppErrorBoundary";
 import {

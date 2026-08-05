@@ -1,7 +1,7 @@
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
-import { ComposerTextarea } from "@proliferate/ui/patterns/ComposerTextarea";
-import { ComposerTextareaFrame } from "@proliferate/ui/patterns/ComposerTextareaFrame";
+import { ComposerTextarea } from "#product/primitives/patterns/ComposerTextarea";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
 import {
   AgentHarnessModelSelector,
   type AgentHarnessModelGroup,

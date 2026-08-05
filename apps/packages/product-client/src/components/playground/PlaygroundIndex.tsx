@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { PageHeader } from "@proliferate/ui/patterns/PageHeader";
-import { ListRow } from "@proliferate/ui/patterns/ListRow";
-import { ArrowRight } from "@proliferate/ui/icons";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { ListRow } from "#product/primitives/patterns/ListRow";
+import { ArrowRight } from "#product/primitives/icons/core";
 
 interface PlaygroundDestination {
   title: string;

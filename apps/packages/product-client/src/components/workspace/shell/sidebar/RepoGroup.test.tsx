@@ -7,23 +7,29 @@ import { RepoGroup } from "#product/components/workspace/shell/sidebar/RepoGroup
 import type { NewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 
-vi.mock("@proliferate/ui/icons", () => ({
+vi.mock("#product/primitives/icons/core", () => ({
   ChevronRight: () => <span data-icon="chevron" />,
-  CloudIcon: () => <span data-icon="cloud" />,
-  FolderClosed: () => <span data-icon="folder-closed" />,
-  FolderFilled: () => <span data-icon="folder-filled" />,
-  FolderRemote: () => <span data-icon="folder-remote" />,
   MoreHorizontal: () => <span data-icon="more" />,
   Plus: () => <span data-icon="plus" />,
   Settings: () => <span data-icon="settings" />,
   Trash: () => <span data-icon="trash" />,
 }));
 
-vi.mock("@proliferate/ui/primitives/Tooltip", () => ({
+vi.mock("#product/primitives/icons/platform", () => ({
+  CloudIcon: () => <span data-icon="cloud" />,
+}));
+
+vi.mock("#product/primitives/icons/workspace", () => ({
+  FolderClosed: () => <span data-icon="folder-closed" />,
+  FolderFilled: () => <span data-icon="folder-filled" />,
+  FolderRemote: () => <span data-icon="folder-remote" />,
+}));
+
+vi.mock("#product/primitives/Tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
+vi.mock("#product/primitives/PopoverButton", () => ({
   POPOVER_SURFACE_CLASS: "popover-surface",
   PopoverButton: ({
     children,
@@ -52,13 +58,13 @@ vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
   },
 }));
 
-vi.mock("@proliferate/ui/primitives/PopoverMenuItem", () => ({
+vi.mock("#product/primitives/PopoverMenuItem", () => ({
   PopoverMenuItem: ({ label, onClick }: { label: string; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{label}</button>
   ),
 }));
 
-vi.mock("@proliferate/ui/patterns/ConfirmationDialog", () => ({
+vi.mock("#product/primitives/patterns/ConfirmationDialog", () => ({
   ConfirmationDialog: ({
     description,
     loading,
@@ -79,7 +85,7 @@ vi.mock("@proliferate/ui/patterns/ConfirmationDialog", () => ({
   ) : null,
 }));
 
-vi.mock("@proliferate/ui/primitives/ShortcutBadge", () => ({
+vi.mock("#product/primitives/ShortcutBadge", () => ({
   ShortcutBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
 
@@ -92,7 +98,7 @@ vi.mock("#product/hooks/workspaces/ui/use-repo-group-native-context-menu", async
   useRepoGroupNativeContextMenu: () => ({ onContextMenuCapture: vi.fn() }),
 }));
 
-vi.mock("@proliferate/ui/patterns/SidebarActionButton", () => ({
+vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     title,

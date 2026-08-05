@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import type {
   RuntimePressureTargetState,
 } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";

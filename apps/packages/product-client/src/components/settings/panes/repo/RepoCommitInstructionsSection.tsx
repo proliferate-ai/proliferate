@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useRepositories, useUpdateRepoConfig } from "@proliferate/cloud-sdk-react";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Button } from "#product/primitives/Button";
+import { Textarea } from "#product/primitives/Textarea";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
 const MAX_INSTRUCTIONS_CHARS = 4000;

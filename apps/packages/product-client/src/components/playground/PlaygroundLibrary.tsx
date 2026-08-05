@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Moon, Sun } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Moon, Sun } from "#product/primitives/icons/platform";
 // Explicit /index: the `#product/*` imports map rewrites to `./dist/*.js`,
 // so a bare directory specifier would resolve to `dist/.../library.js`
 // (nonexistent) instead of the barrel's `dist/.../library/index.js`.
@@ -8,11 +8,11 @@ import { LIBRARY_TIERS } from "#product/components/playground/library/index";
 import { useColorMode } from "#product/hooks/theme/workflows/use-theme-preferences";
 
 /**
- * Component-library spec sheet: every sanctioned `@proliferate/ui` component
- * and ProductClient domain-aware pattern, tier by tier, rendered under the real
- * theme. The registry (`components/playground/library/*`) is the single
- * source of what's in this sheet; `library-registry.test.ts` fails CI if a
- * sanctioned export drifts out of sync with it.
+ * Component-library spec sheet: every sanctioned ProductClient primitive and
+ * domain-aware pattern, tier by tier, rendered under the real theme. The
+ * registry (`components/playground/library/*`) is the single source of what's
+ * in this sheet; `library-registry.test.ts` fails CI if a physical owner
+ * drifts out of sync with it.
  */
 export function PlaygroundLibrary() {
   // Reuses the app's real appearance-preference mechanism (config/theme.ts +

@@ -9,11 +9,11 @@ import {
   type LoopScheduleKind,
   type LoopWire,
 } from "@proliferate/product-domain/activity/loop";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { IconButton } from "#product/primitives/IconButton";
+import { Input } from "#product/primitives/Input";
+import { Textarea } from "#product/primitives/Textarea";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import type { LoopArmInput } from "#product/lib/domain/activity/loop-arm-input";
 
 export interface LoopsPanelProps {

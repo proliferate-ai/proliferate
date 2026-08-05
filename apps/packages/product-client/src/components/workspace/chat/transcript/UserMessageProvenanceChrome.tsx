@@ -1,4 +1,4 @@
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 interface UserMessageProvenanceChromeProps {
   sourceSessionId: string;

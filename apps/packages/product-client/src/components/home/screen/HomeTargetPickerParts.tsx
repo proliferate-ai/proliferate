@@ -1,19 +1,19 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import { ComputeTargetSwatch } from "#product/components/compute/ComputeTargetSwatch";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
+import { Button } from "#product/primitives/Button";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 import {
   POPOVER_SURFACE_CLASS,
-} from "@proliferate/ui/primitives/PopoverButton";
+} from "#product/primitives/PopoverButton";
+import { ChevronDown } from "#product/primitives/icons/core";
 import {
-  ChevronDown,
   CloudIcon,
   Monitor,
-  Terminal,
-  Tree,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/platform";
+import { Terminal } from "#product/primitives/icons/workspace";
+import { Tree } from "#product/primitives/icons/workspace-git";
 import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
 import type { HomeNextRepoLaunchKind } from "#product/lib/domain/home/home-next-launch";
 

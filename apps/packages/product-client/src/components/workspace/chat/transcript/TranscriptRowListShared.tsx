@@ -1,5 +1,6 @@
-import { ChevronDown, Spinner } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ChevronDown } from "#product/primitives/icons/core";
+import { Spinner } from "#product/primitives/Spinner";
+import { Button } from "#product/primitives/Button";
 
 export function TranscriptScrollToBottomButton({
   visible,

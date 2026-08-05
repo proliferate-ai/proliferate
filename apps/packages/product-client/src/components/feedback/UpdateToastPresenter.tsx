@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   dismissToast,
   showToast,
-} from "@proliferate/ui/utils/show-toast";
+} from "#product/primitives/utils/show-toast";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdater, type UpdaterPhase } from "#product/hooks/access/tauri/use-updater";
 import { useAppVersion } from "#product/hooks/access/tauri/app/use-app-version";

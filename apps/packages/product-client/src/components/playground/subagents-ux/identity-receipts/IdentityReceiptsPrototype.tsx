@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
+import { Tooltip } from "#product/primitives/Tooltip";
 import { shortDelegatedWorkId } from "#product/lib/domain/delegated-work/identity";
 import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 import {

@@ -1,18 +1,18 @@
 import type { ComponentType } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@proliferate/ui/primitives/DropdownMenu";
+} from "#product/primitives/DropdownMenu";
 import {
   Check,
-  FileText,
   ArrowRight,
   MoreHorizontal,
   X,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/core";
+import { FileText } from "#product/primitives/icons/workspace";
 import { CollapsiblePlanCard } from "./CollapsiblePlanCard";
 import type {
   MarkdownCodeBlockRenderer,

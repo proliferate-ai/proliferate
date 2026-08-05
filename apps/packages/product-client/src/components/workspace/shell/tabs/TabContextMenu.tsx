@@ -1,15 +1,17 @@
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import {
   ChevronDown,
   ChevronRight,
-  Folder,
-  FolderOpen,
-  FolderPlus,
   Fork,
   Pencil,
   Trash,
   X,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/core";
+import {
+  Folder,
+  FolderOpen,
+  FolderPlus,
+} from "#product/primitives/icons/workspace";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {

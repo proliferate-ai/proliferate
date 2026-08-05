@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { FileIcon, FileText, Spinner } from "@proliferate/ui/icons";
+import { FileIcon, FileText } from "#product/primitives/icons/workspace";
+import { Spinner } from "#product/primitives/Spinner";
 import { formatPromptFileSize } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
 import { usePromptAttachmentUrl } from "#product/hooks/access/anyharness/sessions/use-prompt-attachment-url";
 import {

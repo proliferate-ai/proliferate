@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Trash, RotateCcw } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Trash, RotateCcw } from "#product/primitives/icons/core";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import type {
   HeaderChatMenuEntry,

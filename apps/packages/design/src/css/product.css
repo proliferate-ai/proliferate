@@ -8,7 +8,6 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/manrope";
 
-@source "../../../ui/src";
 @source "../../../product-client/src";
 
 /* -- Geist font loading (kept for fallback / mono) --

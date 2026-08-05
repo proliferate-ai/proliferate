@@ -1,5 +1,5 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { FileText } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { FileText } from "#product/primitives/icons/workspace";
 import type { AssistantMarkdownEndResource } from "#product/lib/domain/chat/assistant-markdown-end-resource";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 

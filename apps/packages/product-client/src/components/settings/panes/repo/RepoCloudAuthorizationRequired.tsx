@@ -1,8 +1,8 @@
 import { Cloud } from "lucide-react";
-import { GitHub } from "@proliferate/ui/icons";
+import { GitHub } from "#product/primitives/icons/platform";
 import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import type { GitHubRepoAuthorityAction } from "@proliferate/cloud-sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";

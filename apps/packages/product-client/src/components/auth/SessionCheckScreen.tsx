@@ -1,6 +1,6 @@
 import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark";
 import { AUTH_GATE_LABELS } from "#product/copy/auth/auth-copy";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 interface SessionCheckScreenProps {
   className?: string;

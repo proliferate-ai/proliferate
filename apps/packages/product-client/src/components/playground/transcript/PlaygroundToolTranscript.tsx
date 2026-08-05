@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Settings } from "@proliferate/ui/icons";
+import { Settings } from "#product/primitives/icons/core";
 import { MessageList } from "#product/components/workspace/chat/transcript/MessageList";
 import { BashCommandCall } from "#product/components/workspace/chat/tool-calls/BashCommandCall";
 import { CoworkArtifactToolActionRow } from "#product/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Check, X } from "lucide-react";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Textarea } from "#product/primitives/Textarea";
 import { GoalBarIconAction } from "./GoalBarIconAction";
 
 interface GoalBarObjectiveEditorProps {

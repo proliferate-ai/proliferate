@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Workspace } from "@anyharness/sdk";
-import { CircleAlert } from "@proliferate/ui/icons";
+import { CircleAlert } from "#product/primitives/icons/status";
 import {
   ComposerAttachedPanel,
   ComposerAttachedPanelRow,

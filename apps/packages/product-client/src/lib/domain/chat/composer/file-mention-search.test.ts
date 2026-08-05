@@ -52,7 +52,7 @@ describe("findFileMentionTrigger", () => {
   });
 
   it("does not open inside a fenced code block", () => {
-    const text = "```\nimport thing from @proliferate/ui;\n```";
+    const text = "```\nimport thing from @proliferate/product-client;\n```";
     expect(findFileMentionTrigger(text, text.indexOf("@proliferate") + "@proliferate".length)).toBeNull();
   });
 

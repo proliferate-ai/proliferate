@@ -1,7 +1,7 @@
 import { Cloud, Laptop } from "lucide-react";
 import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { RepoPicker } from "#product/components/settings/panes/RepoPicker";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { type SettingsFocus } from "#product/lib/domain/settings/navigation";
 import {
   resolveRepoScopeSelection,

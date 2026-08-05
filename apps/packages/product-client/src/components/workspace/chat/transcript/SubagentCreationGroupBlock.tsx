@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Robot } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Robot } from "#product/primitives/icons/product";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";

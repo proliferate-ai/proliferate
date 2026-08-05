@@ -4,10 +4,12 @@ import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
 import { HighlightedCodeBlock } from "#product/components/content/ui/HighlightedCodeBlock";
 import {
   ArrowRight,
+  Minus,
+} from "#product/primitives/icons/core";
+import {
   FilePen,
   FilePlus,
-  Minus,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/workspace";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { resolveDiffDisplayPolicy } from "#product/lib/domain/workspaces/changes/diff-display-policy";

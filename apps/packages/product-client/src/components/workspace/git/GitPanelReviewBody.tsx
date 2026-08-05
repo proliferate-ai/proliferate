@@ -1,5 +1,5 @@
 import type { AnyHarnessQueryTimingOptions } from "@anyharness/sdk-react";
-import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import {
   GitLastTurnUndoAction,
   GitReviewDiffPolicyNotice,

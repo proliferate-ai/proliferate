@@ -1,8 +1,8 @@
-import { showToast, toastError } from "@proliferate/ui/utils/show-toast";
+import { showToast, toastError } from "#product/primitives/utils/show-toast";
 import {
   STATUS_MESSAGE_MAX_CHARS,
   type ToastErrorInput,
-} from "@proliferate/ui/utils/toast-model";
+} from "#product/primitives/utils/toast-model";
 
 export type ProductToastKind = "error" | "info";
 

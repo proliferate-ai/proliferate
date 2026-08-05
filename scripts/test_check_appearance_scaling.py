@@ -88,14 +88,14 @@ export function Example() {
     def test_discovers_only_supported_icon_import_sources(self) -> None:
         source = '''
 import { Check, X as Close } from "lucide-react";
-import { Minus } from "@proliferate/ui/icons";
-import { Settings } from "@proliferate/ui";
+import { Minus } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
 '''
         self.assertEqual(imported_icon_names(source), {"Check", "Close", "Minus"})
 
     def test_rejects_fixed_shared_icon_utility(self) -> None:
         source = '''
-import { Minus } from "@proliferate/ui/icons";
+import { Minus } from "#product/primitives/icons/core";
 export function Control() { return <Minus className="size-3.5" />; }
 '''
         violations = check_source(Path("Control.tsx"), source)
@@ -103,7 +103,7 @@ export function Control() { return <Minus className="size-3.5" />; }
 
     def test_rejects_fixed_icon_nested_inside_component_prop(self) -> None:
         source = '''
-import { Plus } from "@proliferate/ui/icons";
+import { Plus } from "#product/primitives/icons/core";
 export function Control() {
   return <Popover trigger={<Button><Plus className="size-3" /></Button>} />;
 }
@@ -413,7 +413,7 @@ const ORBIT_DELAYS = [
     def test_rejects_numeric_z_and_unvirtualized_long_list_additions(self) -> None:
         sources = [
             (
-                Path("/repo/apps/packages/ui/src/NewList.tsx"),
+                Path("/repo/apps/packages/product-client/src/primitives/NewList.tsx"),
                 'export const List = ({ rows }) => <div className="z-10">{rows.map(renderRow)}</div>;',
             )
         ]
@@ -428,20 +428,20 @@ const ORBIT_DELAYS = [
         )
 
         baseline = {
-            "standardNumericZ": {"apps/packages/ui/src/NewList.tsx|z-10": 1},
-            "unvirtualizedLongLists": {"apps/packages/ui/src/NewList.tsx|rows": 1},
+            "standardNumericZ": {"apps/packages/product-client/src/primitives/NewList.tsx|z-10": 1},
+            "unvirtualizedLongLists": {"apps/packages/product-client/src/primitives/NewList.tsx|rows": 1},
         }
         self.assertEqual(check_census_additions(sources, baseline, Path("/repo")), [])
 
     def test_staged_census_absorbs_frozen_sites_and_rejects_new_ones(self) -> None:
         """The staging contract: pre-migration hits are frozen per file, additions fail."""
-        path = Path("/repo/apps/packages/ui/src/Legacy.tsx")
+        path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
         legacy = [
             Violation("fixed-stock-text-utility", path, 4, "m"),
             Violation("fixed-stock-text-utility", path, 9, "m"),
         ]
         census = staged_census(legacy, Path("/repo"))
-        self.assertEqual(census, {"apps/packages/ui/src/Legacy.tsx|fixed-stock-text-utility": 2})
+        self.assertEqual(census, {"apps/packages/product-client/src/primitives/Legacy.tsx|fixed-stock-text-utility": 2})
         self.assertEqual(apply_staged_baseline(legacy, census, Path("/repo")), [])
 
         regressed = [*legacy, Violation("fixed-stock-text-utility", path, 14, "m")]
@@ -458,8 +458,8 @@ const ORBIT_DELAYS = [
         therefore fail, and the message must point at the one remedy that
         cannot paper over a regression (`--write-baseline` refuses growth).
         """
-        path = Path("/repo/apps/packages/ui/src/Legacy.tsx")
-        census = {"apps/packages/ui/src/Legacy.tsx|fixed-stock-text-utility": 3}
+        path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
+        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|fixed-stock-text-utility": 3}
         remaining = [Violation("fixed-stock-text-utility", path, 4, "m")]
 
         # Bounded from above: the surviving hit is still absorbed.
@@ -473,8 +473,8 @@ const ORBIT_DELAYS = [
     def test_a_fixed_site_cannot_shield_a_new_violation_of_the_same_rule(self) -> None:
         """The exact leak: migrate 2 of 3 sites, add 1 brand-new one, and the
         per-file count is unchanged so the upper bound sees nothing."""
-        path = Path("/repo/apps/packages/ui/src/Legacy.tsx")
-        census = {"apps/packages/ui/src/Legacy.tsx|fixed-stock-text-utility": 3}
+        path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
+        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|fixed-stock-text-utility": 3}
         after = [
             Violation("fixed-stock-text-utility", path, 4, "m"),
             Violation("fixed-stock-text-utility", path, 40, "brand new"),
@@ -488,10 +488,10 @@ const ORBIT_DELAYS = [
     def test_ratcheted_down_census_is_tight_and_then_bans_the_new_site(self) -> None:
         """After --write-baseline the entry equals the surviving hits: no slack,
         and the next new violation in that file fails on the upper bound."""
-        path = Path("/repo/apps/packages/ui/src/Legacy.tsx")
+        path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
         remaining = [Violation("fixed-stock-text-utility", path, 4, "m")]
         ratcheted = staged_census(remaining, Path("/repo"))
-        self.assertEqual(ratcheted, {"apps/packages/ui/src/Legacy.tsx|fixed-stock-text-utility": 1})
+        self.assertEqual(ratcheted, {"apps/packages/product-client/src/primitives/Legacy.tsx|fixed-stock-text-utility": 1})
         self.assertEqual(census_slack(remaining, ratcheted, Path("/repo")), [])
 
         regressed = [*remaining, Violation("fixed-stock-text-utility", path, 40, "new")]
@@ -504,7 +504,7 @@ const ORBIT_DELAYS = [
     def test_a_fully_migrated_file_must_lose_its_census_entry(self) -> None:
         """Zero surviving hits is the strongest slack: the whole entry is dead
         allowance and the file should be back under an absolute ban."""
-        census = {"apps/packages/ui/src/Legacy.tsx|retired-shadow": 2}
+        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|retired-shadow": 2}
         reported = census_slack([], census, Path("/repo"))
         self.assertEqual([violation.rule_id for violation in reported], [CENSUS_SLACK_RULE_ID])
         self.assertIn("frozen at 2 here but the file now has 0", reported[0].message)
@@ -514,12 +514,12 @@ const ORBIT_DELAYS = [
         """The pre-commit hook passes an explicit file list. An unscanned file's
         count is unknown, not zero, so scoping keeps the hook honest instead of
         reporting every censused file in the repository as slack."""
-        path = Path("/repo/apps/packages/ui/src/Touched.tsx")
+        path = Path("/repo/apps/packages/product-client/src/primitives/Touched.tsx")
         census = {
-            "apps/packages/ui/src/Touched.tsx|retired-shadow": 1,
-            "apps/packages/ui/src/Untouched.tsx|retired-shadow": 2,
+            "apps/packages/product-client/src/primitives/Touched.tsx|retired-shadow": 1,
+            "apps/packages/product-client/src/primitives/Untouched.tsx|retired-shadow": 2,
         }
-        touched_only = {"apps/packages/ui/src/Touched.tsx"}
+        touched_only = {"apps/packages/product-client/src/primitives/Touched.tsx"}
         surviving = [Violation("retired-shadow", path, 3, "m")]
 
         self.assertEqual(
@@ -555,7 +555,7 @@ const ORBIT_DELAYS = [
     def test_the_default_ci_path_reports_census_slack(self) -> None:
         """The whole finding was that NOTHING ever failed on slack, so the wiring
         is the assertion: the entry point CI runs must surface it."""
-        census = {"apps/packages/ui/src/Legacy.tsx|retired-shadow": 2}
+        census = {"apps/packages/product-client/src/primitives/Legacy.tsx|retired-shadow": 2}
         with (
             mock.patch.object(check_module, "collect_raw_violations", return_value=[]),
             mock.patch.object(
@@ -584,7 +584,7 @@ const ORBIT_DELAYS = [
 
     def test_emptied_census_family_becomes_an_absolute_ban(self) -> None:
         """A staged rule with no census entries behaves exactly like a hard rule."""
-        path = Path("/repo/apps/packages/ui/src/Clean.tsx")
+        path = Path("/repo/apps/packages/product-client/src/primitives/Clean.tsx")
         violation = Violation("retired-shadow", path, 3, "m")
         self.assertEqual(
             [reported.lineno for reported in apply_staged_baseline([violation], {}, Path("/repo"))],
@@ -622,16 +622,16 @@ const ORBIT_DELAYS = [
         """
         sanctions = {
             "retired-shadow": {
-                SANCTION_FILES_KEY: {"apps/packages/ui/src/kit/Sonner.tsx": 1},
+                SANCTION_FILES_KEY: {"apps/packages/product-client/src/primitives/Sonner.tsx": 1},
                 SANCTION_JUSTIFICATION_KEY: "x" * 81,
             }
         }
-        previous = {"apps/packages/ui/src/kit/Sonner.tsx|retired-shadow": 0}
+        previous = {"apps/packages/product-client/src/primitives/Sonner.tsx|retired-shadow": 0}
 
         self.assertEqual(
             unsanctioned_growth(
                 previous,
-                {"apps/packages/ui/src/kit/Sonner.tsx|retired-shadow": 1},
+                {"apps/packages/product-client/src/primitives/Sonner.tsx|retired-shadow": 1},
                 sanctions,
             ),
             [],
@@ -639,10 +639,10 @@ const ORBIT_DELAYS = [
         self.assertEqual(
             unsanctioned_growth(
                 previous,
-                {"apps/packages/ui/src/kit/Sonner.tsx|retired-shadow": 2},
+                {"apps/packages/product-client/src/primitives/Sonner.tsx|retired-shadow": 2},
                 sanctions,
             ),
-            ["apps/packages/ui/src/kit/Sonner.tsx|retired-shadow: 0 -> 2"],
+            ["apps/packages/product-client/src/primitives/Sonner.tsx|retired-shadow: 0 -> 2"],
         )
         self.assertEqual(
             unsanctioned_growth(
@@ -680,7 +680,7 @@ const ORBIT_DELAYS = [
         """The keystone regression: a removed token's utility must be deleted at
         the call site, never absorbed by the census."""
         census = load_baselines()[STAGED_CENSUS_KEY]
-        button = "apps/packages/ui/src/primitives/Button.tsx|retired-shadow"
+        button = "apps/packages/product-client/src/primitives/Button.tsx|retired-shadow"
         self.assertNotIn(button, census)
 
     def test_scanned_roots_cover_every_root_tailwind_compiles(self) -> None:

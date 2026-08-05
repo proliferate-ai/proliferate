@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { GitHub } from "@proliferate/ui/icons";
+import { GitHub } from "#product/primitives/icons/platform";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
 
 /**

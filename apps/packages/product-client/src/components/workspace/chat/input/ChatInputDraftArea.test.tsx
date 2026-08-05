@@ -12,7 +12,7 @@ vi.mock("#product/hooks/chat/ui/use-chat-draft-state", () => ({
 vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () => ({
   ComposerRichTextEditor: () => <div data-testid="queue-rich-editor" />,
 }));
-vi.mock("@proliferate/ui/patterns/ComposerTextareaFrame", () => ({
+vi.mock("#product/primitives/patterns/ComposerTextareaFrame", () => ({
   ComposerTextareaFrame: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("#product/components/workspace/chat/input/QueuedPromptEditBanner", () => ({

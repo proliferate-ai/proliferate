@@ -1,7 +1,7 @@
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
+import { Button } from "#product/primitives/Button";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import type { BillingUnitBalancePresentation } from "#product/lib/domain/settings/billing-settings-presentation";
 
 export function BillingUsageUnitsSection({

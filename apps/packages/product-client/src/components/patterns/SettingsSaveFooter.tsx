@@ -1,5 +1,5 @@
-import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge, type BadgeTone } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 
 export interface SettingsSaveFooterProps {
   statusLabel?: string | null;

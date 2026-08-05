@@ -2,7 +2,7 @@ import {
   workflowHistoryItemPresentation,
   type WorkflowRunHistoryItem,
 } from "@proliferate/product-domain/workflows/run-presentation";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 export interface WorkflowRunListProps {
   runs: readonly WorkflowRunHistoryItem[];

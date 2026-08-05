@@ -7,15 +7,15 @@ import {
   useOrgUserUsageTimeseries,
   useUsageTimeseries,
 } from "@proliferate/cloud-sdk-react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { Button } from "#product/primitives/Button";
+import { ProgressBar } from "#product/primitives/ProgressBar";
+import { Select } from "#product/primitives/Select";
 import {
   SegmentedControl,
-} from "@proliferate/ui/primitives/SegmentedControl";
+} from "#product/primitives/SegmentedControl";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";

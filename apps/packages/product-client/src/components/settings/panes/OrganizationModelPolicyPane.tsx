@@ -4,8 +4,8 @@ import {
   useOrgAgentPolicyViolations,
   useUpdateOrgAgentPolicy,
 } from "@proliferate/cloud-sdk-react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Switch } from "@proliferate/ui/primitives/Switch";
+import { Button } from "#product/primitives/Button";
+import { Switch } from "#product/primitives/Switch";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";

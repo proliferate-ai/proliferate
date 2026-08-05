@@ -1,7 +1,7 @@
 import { Cloud, Folder, Plus } from "lucide-react";
 
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";

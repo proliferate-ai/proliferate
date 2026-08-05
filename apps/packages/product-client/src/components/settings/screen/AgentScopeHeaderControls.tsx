@@ -1,5 +1,5 @@
 import { Cloud, Laptop } from "lucide-react";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 
 /**

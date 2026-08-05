@@ -5,7 +5,7 @@ acceptance criteria. It intentionally does not redefine authentication,
 billing, chat, workspace, workflow, or other feature behavior; the focused
 feature specs remain authoritative for those behaviors.
 
-Scope: `apps/desktop`, `apps/web`, and the shared DOM packages under
+Scope: `apps/desktop`, `apps/web`, and the shared DOM package/design owners under
 `apps/packages/**`. Mobile is outside this migration and must remain DOM-free.
 
 ## Goal
@@ -53,6 +53,7 @@ At the end:
 
 - Product pages and the authenticated route tree.
 - Components and product UI.
+- The canonical DOM component library under `src/primitives/**`.
 - Hooks, stores, providers, and product lifecycles.
 - Chat, transcript, workspaces, sessions, files, billing, integrations, and
   workflows.
@@ -78,6 +79,11 @@ store.
 apps/packages/product-client/
   src/
     ProductClient.tsx
+    primitives/
+      patterns/
+      icons/
+      utils/
+      overlays/
     app/
     pages/
     components/
@@ -125,12 +131,15 @@ ProductClient is a normal compiled workspace package.
   runtime instances as the hosts; they are not bundled twice.
 - Desktop and Web build, typecheck, and test ProductClient before bundling.
 - CI and frontend structure checks scan the package root.
-- ProductClient may import `product-domain`, `ui`, `design`, and the
+- ProductClient may import `product-domain`, `design`, and the
   Cloud/AnyHarness SDKs in the allowed direction.
+- ProductClient's nested `primitives/**` owner is a lower layer: it may import
+  `design`, React/DOM-safe libraries, and itself, but not product-domain,
+  SDK/query clients, host code, or higher ProductClient layers.
 - ProductClient never imports `apps/desktop`, `apps/web`, `@tauri-apps/**`, raw
   Tauri `invoke`, or a Desktop-relative `@/` path.
 - Hosts import public `@proliferate/product-client/<entrypoint>` subpaths and do
-  not reach into the package's internal hooks or stores.
+  not reach into the package's internal hooks, stores, or primitives.
 
 When the Desktop source moves, internal package imports use one package-local
 mapping, `#product/*`, configured in ProductClient's package, TypeScript,
@@ -415,10 +424,10 @@ apps/web/src/index.css
   imports product.css (import-only; the Web host carries no bespoke CSS)
 ```
 
-The Tailwind entry explicitly scans every DOM package that emits classes:
+The Tailwind entry explicitly scans ProductClient, the single DOM product
+source root:
 
 ```css
-@source "../../../ui/src";
 @source "../../../product-client/src";
 ```
 

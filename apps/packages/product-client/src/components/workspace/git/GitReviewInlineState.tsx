@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { CircleAlert, FileCode } from "@proliferate/ui/icons";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { FileCode } from "#product/primitives/icons/workspace";
 import {
   GitReviewEmptyState,
   GitReviewEmptyStateAction,

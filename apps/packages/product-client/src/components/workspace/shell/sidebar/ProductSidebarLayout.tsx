@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-import { ChevronRight } from "@proliferate/ui/icons";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
+import { ChevronRight } from "#product/primitives/icons/core";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
 
 export function ProductSidebarFrame({
   children,

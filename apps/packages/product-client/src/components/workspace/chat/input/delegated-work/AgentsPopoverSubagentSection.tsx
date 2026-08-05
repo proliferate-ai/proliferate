@@ -1,5 +1,5 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ExternalLink } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ExternalLink } from "#product/primitives/icons/core";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type {
   DelegatedWorkComposerViewModel,

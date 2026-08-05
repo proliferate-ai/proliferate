@@ -1,5 +1,5 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 import type { SupportOutreachEmailState } from "#product/hooks/support/facade/use-support-outreach-email";
 
 interface SupportModalFooterProps {

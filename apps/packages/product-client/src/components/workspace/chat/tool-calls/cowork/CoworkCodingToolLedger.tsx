@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { ExternalLink, MessageSquare } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { ExternalLink } from "#product/primitives/icons/core";
+import { MessageSquare } from "#product/primitives/icons/product";
+import { Button } from "#product/primitives/Button";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";

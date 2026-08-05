@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pencil } from "lucide-react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import {
   goalResultStats,
   goalResultWhyLabel,

@@ -1,9 +1,11 @@
 import { useRef } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { CloudUpload, FileText, X } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { Textarea } from "#product/primitives/Textarea";
+import { CloudUpload } from "#product/primitives/icons/platform";
+import { FileText } from "#product/primitives/icons/workspace";
+import { X } from "#product/primitives/icons/core";
 import { useSupportModalState, type StagedAttachment } from "#product/hooks/support/facade/use-support-modal-state";
 import { useSupportOutreachEmail } from "#product/hooks/support/facade/use-support-outreach-email";
 import { SupportCheckboxRow } from "#product/components/support/SupportCheckboxRow";

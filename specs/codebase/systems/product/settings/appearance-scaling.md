@@ -130,10 +130,11 @@ targets are not glyph icons and do not become font-relative.
   stable `em` glyph ratios resolve from design CSS against those text owners.
 - `apps/packages/design/src/css/product.css` owns Default CSS fallbacks and
   global semantic utilities.
-- `apps/packages/ui/src/utils/tw-merge.ts` preserves custom semantic utilities
-  where Tailwind merge classification requires registration.
-- Production consumers live under
-  `apps/packages/{ui,product-client}`. Component-local aliases must
+- [tw-merge.ts](../../../../../apps/packages/product-client/src/primitives/utils/tw-merge.ts)
+  preserves custom semantic utilities where Tailwind merge classification
+  requires registration.
+- Production consumers live under `apps/packages/product-client/src` and
+  `apps/desktop/src`. Component-local aliases must
   not preserve a fixed-size path.
 - Focused appearance/drift tests and a repository source guard own regression
   enforcement.

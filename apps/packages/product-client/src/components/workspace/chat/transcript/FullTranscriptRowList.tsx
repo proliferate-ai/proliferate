@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { ChatTranscriptRowProvider } from "./ChatContentSearchContext";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import {
   CHAT_COLUMN_CLASSNAME,

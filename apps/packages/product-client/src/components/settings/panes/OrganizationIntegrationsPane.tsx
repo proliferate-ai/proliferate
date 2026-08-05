@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Switch } from "@proliferate/ui/primitives/Switch";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { Switch } from "#product/primitives/Switch";
 import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";

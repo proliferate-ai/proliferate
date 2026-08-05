@@ -1,6 +1,7 @@
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
-import { Settings, SplitPanel } from "@proliferate/ui/icons";
+import { IconButton } from "#product/primitives/IconButton";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { Settings } from "#product/primitives/icons/core";
+import { SplitPanel } from "#product/primitives/icons/app-shell";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 

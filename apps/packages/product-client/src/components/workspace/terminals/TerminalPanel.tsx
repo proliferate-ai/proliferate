@@ -1,6 +1,6 @@
 import type { TerminalRecord } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Terminal as TerminalIcon } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Terminal as TerminalIcon } from "#product/primitives/icons/workspace";
 import { TerminalCommandFloatingAction } from "#product/components/workspace/terminals/TerminalCommandFloatingAction";
 import { TerminalErrorBoundary } from "#product/components/workspace/terminals/TerminalErrorBoundary";
 import { TerminalTopBar } from "#product/components/workspace/terminals/TerminalTopBar";

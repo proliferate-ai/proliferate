@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowLeft, ChevronDown, ChevronRight } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ArrowLeft, ChevronDown, ChevronRight } from "#product/primitives/icons/core";
 import { AgentGlyph, AgentGlyphStack } from "#product/components/playground/subagents-ux/popover-pane/AgentGlyph";
 import {
   buildSubagentAggregate,

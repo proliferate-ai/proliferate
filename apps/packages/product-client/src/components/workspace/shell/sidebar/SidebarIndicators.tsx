@@ -1,11 +1,9 @@
 import type { MouseEvent, ReactNode } from "react";
-import {
-  CircleAlert,
-  Clock,
-} from "@proliferate/ui/icons";
-import { DotCellLoader } from "@proliferate/ui/primitives/DotCellLoader";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { Clock } from "#product/primitives/icons/core";
+import { DotCellLoader } from "#product/primitives/DotCellLoader";
+import { IconButton } from "#product/primitives/IconButton";
+import { Tooltip } from "#product/primitives/Tooltip";
 import type {
   SidebarIndicatorAction,
   SidebarStatusIndicator,

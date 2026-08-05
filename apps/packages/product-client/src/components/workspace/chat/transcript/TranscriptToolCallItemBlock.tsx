@@ -7,7 +7,7 @@ import type {
   ToolCallItem,
   ToolResultTextContentPart,
 } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { BashCommandCall } from "#product/components/workspace/chat/tool-calls/BashCommandCall";
 import { CoworkArtifactToolActionRow } from "#product/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
 import { CoworkCodingToolActionRow } from "#product/components/workspace/chat/tool-calls/cowork/CoworkCodingToolActionRow";
