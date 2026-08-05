@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-display-name-parts";
 import { orderModelGroupsActiveFirst } from "#product/lib/domain/chat/models/order-model-groups";
@@ -27,18 +27,24 @@ export function ComposerModelOptionsSubmenu({
   currentModel,
   currentModelLabel,
   onEscapeKeyDown,
+  onKeyboardSelect,
   onSelect,
 }: {
   groups: ModelSelectorGroup[];
   currentModel: ModelSelectorProps["currentModel"];
   currentModelLabel: string;
   onEscapeKeyDown: () => void;
+  onKeyboardSelect: () => void;
   onSelect: (selection: ModelSelectorSelection) => void;
 }) {
   const currentKind = currentModel?.kind ?? null;
   const orderedGroups = orderModelGroupsActiveFirst(groups, currentKind);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const handleKeyboardSelect = useCallback((selection: ModelSelectorSelection) => {
+    onKeyboardSelect();
+    onSelect(selection);
+  }, [onKeyboardSelect, onSelect]);
 
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -65,7 +71,7 @@ export function ComposerModelOptionsSubmenu({
     setHighlightedKey,
     setRowRef,
     handleSearchKeyDown,
-  } = useModelPickerKeyboardNav(filteredGroups, onSelect);
+  } = useModelPickerKeyboardNav(filteredGroups, handleKeyboardSelect);
 
   return (
     <DropdownMenuSub open={open} onOpenChange={setOpen}>

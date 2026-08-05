@@ -46,6 +46,7 @@ function createKeyboardModelSelectorProps(): ModelSelectorProps {
         providerDisplayName: "Claude Code",
         models: [
           { kind: "claude", modelId: "haiku", displayName: "Haiku 4.5", actionKind: "select", isSelected: true, isUnsupported: false },
+          { kind: "claude", modelId: "sonnet", displayName: "Sonnet 4.5", actionKind: "select", isSelected: false, isUnsupported: false },
         ],
       },
     ],
@@ -409,6 +410,52 @@ it("restores composer focus when Escape closes the model menu", async () => {
 
   fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
 
+  await waitFor(() => {
+    expect(
+      container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+    ).toBe("closed");
+    expect(document.activeElement).toBe(prompt);
+  });
+  expect(prompt.selectionStart).toBe(4);
+  expect(prompt.selectionEnd).toBe(4);
+});
+
+it("restores composer focus after Return selects a model", async () => {
+  vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+  const props = createKeyboardModelSelectorProps();
+  const { container } = render(
+    <MemoryRouter>
+      <ShortcutDispatcher />
+      <div data-focus-zone="chat">
+        <textarea data-chat-composer-editor defaultValue="Keep typing" />
+        <ComposerModelSelectorControl
+          modelSelectorProps={props}
+          keyboardShortcutEnabled
+        />
+      </div>
+    </MemoryRouter>,
+  );
+  const prompt = container.querySelector<HTMLTextAreaElement>("[data-chat-composer-editor]")!;
+  prompt.focus();
+  prompt.setSelectionRange(4, 4);
+
+  fireEvent.keyDown(prompt, {
+    key: "M",
+    code: "KeyM",
+    ctrlKey: true,
+    shiftKey: true,
+  });
+  const modelMenu = document.querySelector<HTMLElement>("[data-composer-model-menu]")!;
+  modelMenu.focus();
+  fireEvent.keyDown(modelMenu, { key: "Enter", code: "Enter" });
+  const search = document.querySelector<HTMLInputElement>('input[placeholder="Search models"]')!;
+  search.focus();
+  expect(document.activeElement).toBe(search);
+
+  fireEvent.keyDown(search, { key: "ArrowDown", code: "ArrowDown" });
+  fireEvent.keyDown(search, { key: "Enter", code: "Enter" });
+
+  expect(props.onSelect).toHaveBeenCalledWith({ kind: "claude", modelId: "sonnet" });
   await waitFor(() => {
     expect(
       container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),

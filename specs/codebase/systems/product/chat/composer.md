@@ -169,10 +169,10 @@ Rules:
 - `Ctrl+Shift+M` toggles the active compact root menu open and closed, including
   while the composer editor is focused. It does nothing while that selector is
   unavailable.
-- Closing the active root menu with `Ctrl+Shift+M` or Escape returns focus to
-  the active composer editor without changing its draft or caret. Pointer
-  dismissal and model selectors outside an active composer keep their own focus
-  behavior.
+- Closing the active root menu with `Ctrl+Shift+M`, Escape, or a keyboard model
+  selection returns focus to the active composer editor without changing its
+  draft or caret. Pointer dismissal and model selectors outside an active
+  composer keep their own focus behavior.
 - Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
   so on); do not rewrite distinct values to internal spellings such as
   `Xhigh`.

@@ -83,7 +83,7 @@ export function ComposerModelSelectorControl({
     enabled: keyboardFocusRestoreEnabled && selectorEnabled,
     priority: "contextual",
   });
-  const handleEscapeKeyDown = useCallback(() => {
+  const handleKeyboardClose = useCallback(() => {
     if (keyboardFocusRestoreEnabled) {
       restoreComposerFocusOnCloseRef.current = true;
     }
@@ -180,7 +180,7 @@ export function ComposerModelSelectorControl({
           align="start"
           sideOffset={2}
           className="w-56 min-w-56"
-          onEscapeKeyDown={handleEscapeKeyDown}
+          onEscapeKeyDown={handleKeyboardClose}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             const shouldRestoreComposerFocus = restoreComposerFocusOnCloseRef.current;
@@ -196,7 +196,8 @@ export function ComposerModelSelectorControl({
             currentModelLabel={triggerLabel}
             reasoningControl={reasoningControl}
             fastModeControl={fastModeControl}
-            onEscapeKeyDown={handleEscapeKeyDown}
+            onEscapeKeyDown={handleKeyboardClose}
+            onKeyboardSelect={handleKeyboardClose}
             onSelect={(selection) => {
               onSelect(selection);
               setPickerOpen(false);
@@ -233,6 +234,7 @@ function ComposerModelPickerMenu({
   reasoningControl,
   fastModeControl,
   onEscapeKeyDown,
+  onKeyboardSelect,
   onSelect,
   onAddProvider,
   onSettings,
@@ -243,6 +245,7 @@ function ComposerModelPickerMenu({
   reasoningControl: LiveSessionControlDescriptor | null;
   fastModeControl: LiveSessionControlDescriptor | null;
   onEscapeKeyDown: () => void;
+  onKeyboardSelect: () => void;
   onSelect: (selection: ModelSelectorSelection) => void;
   onAddProvider: () => void;
   onSettings: () => void;
@@ -254,6 +257,7 @@ function ComposerModelPickerMenu({
         currentModel={currentModel}
         currentModelLabel={currentModelLabel}
         onEscapeKeyDown={onEscapeKeyDown}
+        onKeyboardSelect={onKeyboardSelect}
         onSelect={onSelect}
       />
       <ComposerModelTuningControls
