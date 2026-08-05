@@ -136,7 +136,43 @@ class _TypeScriptLexer:
     def _expression_can_start(self, segment_token_start: int) -> bool:
         if len(self.tokens) == segment_token_start:
             return True
+        previous_index = len(self.tokens) - 1
         previous = self.tokens[-1].value
+
+        # TypeScript's postfix non-null assertion leaves `/` as division,
+        # while prefix logical negation still permits a regular expression.
+        if previous == "!":
+            return not self._is_postfix_non_null(
+                previous_index, segment_token_start
+            )
+
+        # The lexer stores punctuation one character at a time. Reconstitute
+        # an adjacent postfix increment/decrement here so its trailing slash
+        # is not mistaken for a regex. Spaced unary operators remain separate.
+        if (
+            previous in {"+", "-"}
+            and previous_index > segment_token_start
+            and self.tokens[previous_index - 1].value == previous
+            and self.tokens[previous_index - 1].end
+            == self.tokens[previous_index].start
+            and self._token_ends_expression(
+                previous_index - 2, segment_token_start
+            )
+            and self.tokens[previous_index - 2].lineno
+            == self.tokens[previous_index - 1].lineno
+        ):
+            return False
+
+        # `in` and `instanceof` are binary operators and `typeof` is unary,
+        # so each can be followed by a regex operand. The same spellings used
+        # as property names still end an ordinary member expression.
+        if previous in {"in", "instanceof", "typeof"}:
+            return not self._is_property_name(previous_index)
+        if previous == "of" and self._is_contextual_for_of(
+            previous_index, segment_token_start
+        ):
+            return True
+
         if previous in {
             "(",
             "[",
@@ -145,7 +181,6 @@ class _TypeScriptLexer:
             ";",
             ":",
             "=",
-            "!",
             "?",
             "~",
             "+",
@@ -196,6 +231,83 @@ class _TypeScriptLexer:
                         in {"for", "if", "switch", "while", "with"}
                     )
         return False
+
+    def _is_property_name(self, index: int) -> bool:
+        return index > 0 and self.tokens[index - 1].value == "."
+
+    def _token_ends_expression(
+        self, index: int, segment_token_start: int
+    ) -> bool:
+        if index < segment_token_start:
+            return False
+        token = self.tokens[index]
+        if token.kind == "string" or token.value in {")", "]", "}"}:
+            return True
+        if token.value == "!":
+            return self._is_postfix_non_null(index, segment_token_start)
+        if token.kind != "identifier":
+            return token.value.isdigit()
+        return token.value not in {
+            "await",
+            "case",
+            "delete",
+            "do",
+            "else",
+            "in",
+            "instanceof",
+            "new",
+            "return",
+            "throw",
+            "typeof",
+            "void",
+            "yield",
+        }
+
+    def _is_postfix_non_null(
+        self, index: int, segment_token_start: int
+    ) -> bool:
+        return index > segment_token_start and self._token_ends_expression(
+            index - 1, segment_token_start
+        )
+
+    def _is_contextual_for_of(
+        self, of_index: int, segment_token_start: int
+    ) -> bool:
+        if self._is_property_name(of_index):
+            return False
+
+        # Find the still-open parenthesis containing this token. `of` is the
+        # for-of delimiter only at the top level of a `for (...)` header and
+        # only after a left-hand binding/expression.
+        depth = 0
+        open_index: int | None = None
+        for cursor in range(of_index - 1, segment_token_start - 1, -1):
+            value = self.tokens[cursor].value
+            if value == ")":
+                depth += 1
+            elif value == "(":
+                if depth:
+                    depth -= 1
+                else:
+                    open_index = cursor
+                    break
+        if open_index is None or of_index <= open_index + 1:
+            return False
+        owner_index = open_index - 1
+        if owner_index >= 0 and self.tokens[owner_index].value == "await":
+            owner_index -= 1
+        if owner_index < 0 or self.tokens[owner_index].value != "for":
+            return False
+
+        nesting = 0
+        for token in self.tokens[open_index + 1 : of_index]:
+            if token.value in {"(", "[", "{"}:
+                nesting += 1
+            elif token.value in {")", "]", "}"} and nesting:
+                nesting -= 1
+            elif token.value == ";" and not nesting:
+                return False
+        return True
 
     def _closing_brace_ends_block(self, segment_token_start: int) -> bool:
         depth = 0
@@ -656,14 +768,15 @@ def _statement_end(
         end = tokens[cursor].end
         cursor += 1
 
-    if cursor < len(tokens) and tokens[cursor].value in {"assert", "with"}:
-        end = tokens[cursor].end
-        cursor += 1
-        if cursor < len(tokens) and tokens[cursor].value == "{":
-            attribute_close = _matching_pairs(tokens, "{", "}").get(cursor)
-            if attribute_close is not None:
-                end = tokens[attribute_close].end
-                cursor = attribute_close + 1
+    if (
+        cursor + 1 < len(tokens)
+        and tokens[cursor].value in {"assert", "with"}
+        and tokens[cursor + 1].value == "{"
+    ):
+        attribute_close = _matching_pairs(tokens, "{", "}").get(cursor + 1)
+        if attribute_close is not None:
+            end = tokens[attribute_close].end
+            cursor = attribute_close + 1
 
     if cursor < len(tokens) and tokens[cursor].value == ";":
         return tokens[cursor].end
@@ -1267,6 +1380,48 @@ def _declaration_annotation_contains_import(
     )
 
 
+def _generic_call_import_is_type(
+    tokens: list[Token],
+    generic_open: int,
+    generic_close: int,
+    import_index: int,
+) -> bool:
+    """Whether an import has type grammar inside a generic call span."""
+
+    import_open = import_index + 1
+    import_close = _matching_pairs(tokens, "(", ")").get(import_open)
+    if import_close is None or import_close >= generic_close:
+        return False
+
+    # Import types require their literal/options grammar. An asserted module
+    # expression remains a runtime dynamic import even when the literal under
+    # the assertion is statically discoverable.
+    if any(
+        token.value in {"as", "satisfies"}
+        for token in tokens[import_open + 1 : import_close]
+    ):
+        return False
+
+    # A direct `.Name` is an import-type qualifier. Once grouping has closed
+    # around the import, `.Name` is instead a runtime property read and makes
+    # TypeScript fall back to relational-expression parsing. Indexed access
+    # remains legal on a parenthesized type.
+    closed_group = False
+    for cursor in range(import_close + 1, generic_close):
+        value = tokens[cursor].value
+        if value in {"as", "satisfies", "await"}:
+            return False
+        if value == ")":
+            closed_group = True
+        elif value == "." and closed_group:
+            return False
+        elif value == "(":
+            # Calls such as `import("pkg").then(load)` are runtime values,
+            # not type arguments.
+            return False
+    return True
+
+
 def _generic_argument_contains_import(
     tokens: list[Token], import_index: int
 ) -> bool:
@@ -1299,7 +1454,20 @@ def _generic_argument_contains_import(
         header_values = {
             token.value for token in tokens[header_start + 1 : open_index]
         }
-        if header_values & {"as", "implements", "interface", "satisfies", "type"}:
+        if header_values & {"implements", "interface", "type"}:
+            return True
+        type_operator_index = next(
+            (
+                cursor
+                for cursor in range(open_index - 1, header_start, -1)
+                if tokens[cursor].value in {"as", "satisfies"}
+            ),
+            None,
+        )
+        if type_operator_index is not None and not any(
+            token.value in {")", "]", "}"}
+            for token in tokens[type_operator_index + 1 : open_index]
+        ):
             return True
         if "class" in header_values and "extends" in header_values:
             return True
@@ -1335,36 +1503,17 @@ def _generic_argument_contains_import(
         if owner_value in assertion_prefixes:
             return True
 
-        # Optional generic calls are syntactically unambiguous. Ordinary
-        # `value < import("pkg") > (other)` remains a relational expression;
-        # require a qualified/nested import type before treating that spelling
-        # as a generic call.
+        # TypeScript parses a valid type argument followed by `(...)` as a
+        # generic call regardless of whitespace around `<` and `>`. Reject
+        # runtime grouping/assertion shapes rather than relying on adjacency.
         if after == "(":
             optional_call = (
                 open_index >= 2
                 and tokens[open_index - 1].value == "."
                 and tokens[open_index - 2].value == "?"
             )
-            import_type_tail = tokens[import_index + 3 : close_index]
-            runtime_member_call = any(
-                token.value == "(" for token in import_type_tail
-            )
-            qualified_import_type = any(
-                token.value == "."
-                and index + 1 < len(import_type_tail)
-                and import_type_tail[index + 1].kind == "identifier"
-                and import_type_tail[index + 1].value
-                not in {"catch", "default", "finally", "then"}
-                for index, token in enumerate(import_type_tail)
-            )
-            adjacent_owner = (
-                owner is not None
-                and tokens[open_index].start == owner.end
-            )
-            if not runtime_member_call and (
-                optional_call
-                or qualified_import_type
-                or adjacent_owner
+            if optional_call or _generic_call_import_is_type(
+                tokens, open_index, close_index, import_index
             ):
                 return True
             continue
@@ -1649,6 +1798,24 @@ def _destructuring_import_facts(
     return imported, local, namespaces
 
 
+def _call_open_after_member(tokens: list[Token], member_index: int) -> int | None:
+    """Return a direct or generic member call's opening parenthesis."""
+
+    cursor = member_index + 1
+    if cursor < len(tokens) and tokens[cursor].value == "(":
+        return cursor
+    if cursor >= len(tokens) or tokens[cursor].value != "<":
+        return None
+    generic_close = _matching_pairs(tokens, "<", ">").get(cursor)
+    if (
+        generic_close is None
+        or generic_close + 1 >= len(tokens)
+        or tokens[generic_close + 1].value != "("
+    ):
+        return None
+    return generic_close + 1
+
+
 def _member_name_after(tokens: list[Token], close_index: int) -> str | None:
     cursor = close_index + 1
     while cursor < len(tokens) and tokens[cursor].value == ")":
@@ -1662,8 +1829,7 @@ def _member_name_after(tokens: list[Token], close_index: int) -> str | None:
     ):
         if (
             tokens[cursor + 1].value in {"catch", "finally", "then"}
-            and cursor + 2 < len(tokens)
-            and tokens[cursor + 2].value == "("
+            and _call_open_after_member(tokens, cursor + 1) is not None
         ):
             return None
         return tokens[cursor + 1].value
@@ -1732,14 +1898,15 @@ def _then_callback_import_facts(
         cursor += 1
         grouping_count -= 1
     if (
-        cursor + 2 >= len(tokens)
+        cursor + 1 >= len(tokens)
         or tokens[cursor].value != "."
         or tokens[cursor + 1].value != "then"
-        or tokens[cursor + 2].value != "("
     ):
         return set(), ()
 
-    then_open = cursor + 2
+    then_open = _call_open_after_member(tokens, cursor + 1)
+    if then_open is None:
+        return set(), ()
     then_close = _matching_pairs(tokens, "(", ")").get(then_open)
     if then_close is None:
         return set(), ()
@@ -1967,17 +2134,75 @@ def _literal_dynamic_import_source(
         elif token.value in matching and nesting and nesting[-1] == matching[token.value]:
             nesting.pop()
 
+    return _literal_asserted_expression_source(first_argument)
+
+
+def _literal_asserted_expression_source(tokens: list[Token]) -> Token | None:
+    """Return the literal underneath grouping and TS-only assertions."""
+
     while (
-        len(first_argument) >= 2
-        and first_argument[0].value == "("
-        and first_argument[-1].value == ")"
-        and _matching_pairs(first_argument, "(", ")").get(0)
-        == len(first_argument) - 1
+        len(tokens) >= 2
+        and tokens[0].value == "("
+        and tokens[-1].value == ")"
+        and _matching_pairs(tokens, "(", ")").get(0) == len(tokens) - 1
     ):
-        first_argument = first_argument[1:-1]
-    if len(first_argument) == 1 and first_argument[0].kind == "string":
-        return first_argument[0]
+        tokens = tokens[1:-1]
+    if len(tokens) == 1 and tokens[0].kind == "string":
+        return tokens[0]
+
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    for index, token in enumerate(tokens):
+        value = token.value
+        if value in {"(", "[", "{", "<"}:
+            nesting.append(value)
+        elif value in matching and nesting and nesting[-1] == matching[value]:
+            nesting.pop()
+        elif not nesting and value in {"as", "satisfies"}:
+            source = _literal_asserted_expression_source(tokens[:index])
+            if source is not None and _looks_like_assertion_type(tokens[index + 1 :]):
+                return source
+            return None
     return None
+
+
+def _looks_like_assertion_type(tokens: list[Token]) -> bool:
+    """Reject runtime continuations after an otherwise transparent assertion."""
+
+    if not tokens:
+        return False
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    saw_extends = False
+    for index, token in enumerate(tokens):
+        value = token.value
+        if value in {"(", "[", "{", "<"}:
+            nesting.append(value)
+            continue
+        if value in matching and nesting and nesting[-1] == matching[value]:
+            nesting.pop()
+            continue
+        if nesting:
+            continue
+        if value == "extends":
+            saw_extends = True
+        elif value in {",", ";", "+", "-", "*", "/", "%", "instanceof"}:
+            return False
+        elif value == "=" and not (
+            index + 1 < len(tokens) and tokens[index + 1].value == ">"
+        ):
+            return False
+        elif value in {"&", "|", "?"}:
+            if (
+                index + 1 < len(tokens)
+                and tokens[index + 1].value == value
+            ):
+                return False
+            if value == "?" and not saw_extends:
+                return False
+        elif value in {"in", "await", "delete", "throw", "yield"}:
+            return False
+    return not nesting
 
 
 def collect_imports(path: Path, text: str) -> list[ImportStatement]:
