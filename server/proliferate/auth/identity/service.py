@@ -6,9 +6,10 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity import providers
 from proliferate.auth.identity.sessions import mint_auth_session
 from proliferate.auth.identity.store import (
@@ -61,7 +62,11 @@ def append_query(base_url: str, **params: str) -> str:
 def validate_redirect_uri(surface: str, redirect_uri: str) -> None:
     if surface == "mobile":
         if redirect_uri != settings.mobile_redirect_uri:
-            raise HTTPException(status_code=400, detail="Mobile redirect URI is not allowed.")
+            raise AuthFlowError(
+                "identity_mobile_redirect_uri_not_allowed",
+                "Mobile redirect URI is not allowed.",
+                status_code=400,
+            )
         return
     if surface == "desktop":
         parsed = urlparse(redirect_uri)
@@ -70,13 +75,23 @@ def validate_redirect_uri(surface: str, redirect_uri: str) -> None:
             detail = (
                 f"Desktop redirect URI must use a configured desktop scheme: {desktop_schemes}."
             )
-            raise HTTPException(status_code=400, detail=detail)
+            raise AuthFlowError(
+                "identity_desktop_redirect_uri_not_allowed",
+                detail,
+                status_code=400,
+            )
         return
     if surface == "web":
         if not _is_allowed_web_redirect_uri(redirect_uri):
-            raise HTTPException(status_code=400, detail="Web redirect URI origin is not allowed.")
+            raise AuthFlowError(
+                "identity_web_redirect_uri_not_allowed",
+                "Web redirect URI origin is not allowed.",
+                status_code=400,
+            )
         return
-    raise HTTPException(status_code=400, detail="Unsupported auth surface.")
+    raise AuthFlowError(
+        "identity_surface_unsupported", "Unsupported auth surface.", status_code=400
+    )
 
 
 def _is_allowed_web_redirect_uri(redirect_uri: str) -> bool:
@@ -118,7 +133,7 @@ def _loopback_origin_aliases(scheme: str, hostname: str | None, port: int | None
 
 def _ensure_active_user(user: User) -> None:
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="User is inactive.")
+        raise AuthFlowError("identity_user_inactive", "User is inactive.", status_code=403)
 
 
 async def start_provider_auth(
@@ -136,16 +151,29 @@ async def start_provider_auth(
     user: User | None,
 ) -> tuple[str | None, str, str, datetime]:
     if provider not in {"github", "google", "apple"}:
-        raise HTTPException(status_code=404, detail="Unknown auth provider.")
+        raise AuthFlowError(
+            "identity_provider_unknown",
+            "Unknown auth provider.",
+            status_code=404,
+        )
     if not providers.provider_enabled(provider, surface=surface):
-        raise HTTPException(status_code=503, detail=f"{provider} sign-in is not configured.")
+        raise AuthFlowError(
+            "identity_provider_not_configured",
+            f"{provider} sign-in is not configured.",
+            status_code=503,
+        )
     if purpose != "login" and user is None:
-        raise HTTPException(
+        raise AuthFlowError(
+            "identity_provider_link_auth_required",
+            "Authentication is required to link providers.",
             status_code=401,
-            detail="Authentication is required to link providers.",
         )
     if code_challenge_method not in SUPPORTED_CODE_CHALLENGE_METHODS:
-        raise HTTPException(status_code=400, detail="Unsupported code challenge method.")
+        raise AuthFlowError(
+            "identity_code_challenge_method_unsupported",
+            "Unsupported code challenge method.",
+            status_code=400,
+        )
     validate_redirect_uri(surface, redirect_uri)
 
     state = providers.new_secret()
@@ -212,6 +240,8 @@ async def complete_oauth_provider_callback(
             error="provider_error",
             state=challenge.client_state,
         )
+    except providers.ProviderVerificationError as exc:
+        raise AuthFlowError(exc.code, exc.message, status_code=400) from exc
     if callback_surface == "web" and challenge.purpose == "login":
         beta_email = await _beta_email_for_provider_login(db, verified=verified)
         ensure_web_beta_email_allowed(beta_email)
@@ -321,13 +351,16 @@ async def complete_apple_mobile_login(
         provider="apple",
         surface="mobile",
     )
-    verified = await providers.verify_apple_identity_token(
-        identity_token=identity_token,
-        expected_nonce=_nonce_unavailable_marker(challenge),
-        surface=challenge.surface,
-        email_hint=email,
-        display_name_hint=display_name,
-    )
+    try:
+        verified = await providers.verify_apple_identity_token(
+            identity_token=identity_token,
+            expected_nonce=_nonce_unavailable_marker(challenge),
+            surface=challenge.surface,
+            email_hint=email,
+            display_name_hint=display_name,
+        )
+    except providers.ProviderVerificationError as exc:
+        raise AuthFlowError(exc.code, exc.message, status_code=400) from exc
     user = await resolve_provider_user(db, verified=verified, challenge=challenge)
     schedule_agent_gateway_user_enrollment(user.id, db=db)
     return await mint_auth_session(db, user=user)
@@ -347,13 +380,16 @@ async def complete_apple_web_callback(
         provider="apple",
         surface="web",
     )
-    verified = await providers.verify_apple_identity_token(
-        identity_token=identity_token,
-        expected_nonce=_nonce_unavailable_marker(challenge),
-        surface=challenge.surface,
-        email_hint=email,
-        display_name_hint=display_name,
-    )
+    try:
+        verified = await providers.verify_apple_identity_token(
+            identity_token=identity_token,
+            expected_nonce=_nonce_unavailable_marker(challenge),
+            surface=challenge.surface,
+            email_hint=email,
+            display_name_hint=display_name,
+        )
+    except providers.ProviderVerificationError as exc:
+        raise AuthFlowError(exc.code, exc.message, status_code=400) from exc
     if challenge.purpose == "login":
         beta_email = await _beta_email_for_provider_login(db, verified=verified)
         ensure_web_beta_email_allowed(beta_email)
@@ -411,7 +447,11 @@ async def _consume_challenge_for_callback(
         or challenge.provider != provider
         or (surface is not None and challenge.surface != surface)
     ):
-        raise HTTPException(status_code=400, detail="Invalid or expired auth state.")
+        raise AuthFlowError(
+            "identity_auth_state_invalid",
+            "Invalid or expired auth state.",
+            status_code=400,
+        )
     return challenge
 
 
@@ -444,12 +484,20 @@ async def _resolve_provider_user(
 
     if challenge.purpose != "login":
         if challenge.user_id is None:
-            raise HTTPException(status_code=401, detail="Authentication is required.")
+            raise AuthFlowError(
+                "identity_authentication_required",
+                "Authentication is required.",
+                status_code=401,
+            )
         if existing_identity is not None and existing_identity.user_id != challenge.user_id:
             current_user = await get_user_by_id(db, challenge.user_id)
             linked_user = await get_user_by_id(db, existing_identity.user_id)
             if current_user is None or linked_user is None:
-                raise HTTPException(status_code=400, detail="Linked user not found.")
+                raise AuthFlowError(
+                    "identity_linked_user_not_found",
+                    "Linked user not found.",
+                    status_code=400,
+                )
             _ensure_active_user(current_user)
             _ensure_active_user(linked_user)
             current_readiness = await get_account_readiness(db, user_id=current_user.id)
@@ -474,10 +522,18 @@ async def _resolve_provider_user(
                 )
                 await attach_verified_identity(db, user=current_user, verified=verified)
                 return current_user
-            raise HTTPException(status_code=409, detail="Provider identity already linked.")
+            raise AuthFlowError(
+                "identity_provider_already_linked",
+                "Provider identity already linked.",
+                status_code=409,
+            )
         user = await get_user_by_id(db, challenge.user_id)
         if user is None:
-            raise HTTPException(status_code=400, detail="User not found.")
+            raise AuthFlowError(
+                "identity_user_not_found",
+                "User not found.",
+                status_code=400,
+            )
         _ensure_active_user(user)
         await attach_verified_identity(db, user=user, verified=verified)
         return user
@@ -485,7 +541,11 @@ async def _resolve_provider_user(
     if existing_identity is not None:
         user = await get_user_by_id(db, existing_identity.user_id)
         if user is None:
-            raise HTTPException(status_code=400, detail="Linked user not found.")
+            raise AuthFlowError(
+                "identity_linked_user_not_found",
+                "Linked user not found.",
+                status_code=400,
+            )
         _ensure_active_user(user)
         await attach_verified_identity(db, user=user, verified=verified)
         return user
@@ -498,9 +558,10 @@ async def _resolve_provider_user(
             await attach_verified_identity(db, user=existing_email_user, verified=verified)
             return existing_email_user
     if verified.email and await get_user_by_email(db, verified.email) is not None:
-        raise HTTPException(
+        raise AuthFlowError(
+            "identity_email_account_conflict",
+            "An account already exists for this email. Sign in with GitHub to link it.",
             status_code=409,
-            detail="An account already exists for this email. Sign in with GitHub to link it.",
         )
     user = await create_auth_user(
         db,

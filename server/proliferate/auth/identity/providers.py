@@ -6,10 +6,10 @@ import hashlib
 import secrets
 import time
 from datetime import UTC, datetime
+from typing import Protocol
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import HTTPException, Request, status
 from httpx_oauth.exceptions import GetIdEmailError, GetProfileError
 from httpx_oauth.oauth2 import GetAccessTokenError
 from jose import JWTError, jwt
@@ -30,8 +30,20 @@ APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
 
 
+class _RequestWithBaseUrl(Protocol):
+    @property
+    def base_url(self) -> object: ...
+
+
 class OAuthProviderTokenRejectedError(Exception):
     """The provider rejected the callback grant during identity verification."""
+
+
+class ProviderVerificationError(Exception):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
 
 
 def parse_scope_string(value: object) -> frozenset[str]:
@@ -158,9 +170,9 @@ async def verify_oauth_callback(
             # sign-in working; the provider subject is the durable identity.
             account_email = f"{account_id}+{provider_login}@users.noreply.github.com"
         if account_email is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="GitHub did not return an email address.",
+            raise ProviderVerificationError(
+                "identity_github_email_missing",
+                "GitHub did not return an email address.",
             )
         return VerifiedProviderIdentity(
             provider="github",
@@ -191,19 +203,19 @@ async def verify_oauth_callback(
         if isinstance(id_token, str) and id_token:
             try:
                 return await _verified_google_identity_from_id_token(token, id_token)
-            except HTTPException:
+            except ProviderVerificationError:
                 return await _verified_google_identity_from_userinfo(token)
         try:
             account_id, account_email = await google_oauth_client.get_id_email(access_token)
         except GetIdEmailError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Google did not return a usable account profile.",
+            raise ProviderVerificationError(
+                "identity_google_profile_unusable",
+                "Google did not return a usable account profile.",
             ) from exc
         if account_email is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Google did not return an email address.",
+            raise ProviderVerificationError(
+                "identity_google_email_missing",
+                "Google did not return an email address.",
             )
         return VerifiedProviderIdentity(
             provider="google",
@@ -222,9 +234,9 @@ async def verify_oauth_callback(
             scopes=parse_scope_string(token.get("scope")),
         )
 
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Unsupported OAuth provider.",
+    raise ProviderVerificationError(
+        "identity_oauth_provider_unsupported",
+        "Unsupported OAuth provider.",
     )
 
 
@@ -250,15 +262,15 @@ def _verified_google_identity_from_claims(
 ) -> VerifiedProviderIdentity:
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google subject is missing.",
+        raise ProviderVerificationError(
+            "identity_google_subject_missing",
+            "Google subject is missing.",
         )
     email = claims.get("email") if isinstance(claims.get("email"), str) else None
     if not email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google did not return an email address.",
+        raise ProviderVerificationError(
+            "identity_google_email_missing",
+            "Google did not return an email address.",
         )
     email_verified = claims.get("email_verified")
     display_name = claims.get("name") if isinstance(claims.get("name"), str) else None
@@ -292,15 +304,15 @@ async def _fetch_google_userinfo(access_token: str) -> dict[str, object]:
             response.raise_for_status()
             payload = response.json()
     except (ValueError, httpx.HTTPError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google did not return a usable account profile.",
+        raise ProviderVerificationError(
+            "identity_google_profile_unusable",
+            "Google did not return a usable account profile.",
         ) from exc
 
     if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google did not return a usable account profile.",
+        raise ProviderVerificationError(
+            "identity_google_profile_unusable",
+            "Google did not return a usable account profile.",
         )
     return payload
 
@@ -310,9 +322,9 @@ async def _decode_google_id_token(id_token: str) -> dict[str, object]:
         jwks = (await client.get(GOOGLE_JWKS_URL)).json()
     keys = jwks.get("keys")
     if not isinstance(keys, list):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google JWKS is invalid.",
+        raise ProviderVerificationError(
+            "identity_google_jwks_invalid",
+            "Google JWKS is invalid.",
         )
 
     last_error: Exception | None = None
@@ -332,9 +344,9 @@ async def _decode_google_id_token(id_token: str) -> dict[str, object]:
             return dict(claims)
         except JWTError as exc:
             last_error = exc
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Google identity token could not be verified.",
+    raise ProviderVerificationError(
+        "identity_google_identity_token_unverified",
+        "Google identity token could not be verified.",
     ) from last_error
 
 
@@ -353,9 +365,9 @@ async def verify_apple_identity_token(
     )
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apple subject is missing.",
+        raise ProviderVerificationError(
+            "identity_apple_subject_missing",
+            "Apple subject is missing.",
         )
     signed_email = claims.get("email") if isinstance(claims.get("email"), str) else None
     email_verified = claims.get("email_verified")
@@ -385,9 +397,9 @@ async def _decode_apple_identity_token(
         jwks = (await client.get(APPLE_JWKS_URL)).json()
     keys = jwks.get("keys")
     if not isinstance(keys, list):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apple JWKS is invalid.",
+        raise ProviderVerificationError(
+            "identity_apple_jwks_invalid",
+            "Apple JWKS is invalid.",
         )
 
     allowed_audience = apple_client_id_for_surface(surface)
@@ -407,24 +419,24 @@ async def _decode_apple_identity_token(
             return dict(claims)
         except JWTError as exc:
             last_error = exc
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Apple identity token could not be verified.",
+    raise ProviderVerificationError(
+        "identity_apple_identity_token_unverified",
+        "Apple identity token could not be verified.",
     ) from last_error
 
 
 def _validate_apple_nonce(claims: dict[str, object], expected_nonce: str) -> None:
     claim_nonce = claims.get("nonce")
     if not isinstance(claim_nonce, str):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apple nonce is missing.",
+        raise ProviderVerificationError(
+            "identity_apple_nonce_missing",
+            "Apple nonce is missing.",
         )
     expected_hash = hashlib.sha256(expected_nonce.encode("utf-8")).hexdigest()
     if claim_nonce not in {expected_nonce, expected_hash}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apple nonce mismatch.",
+        raise ProviderVerificationError(
+            "identity_apple_nonce_mismatch",
+            "Apple nonce mismatch.",
         )
 
 
@@ -445,7 +457,12 @@ def build_apple_client_secret(*, surface: str) -> str:
     )
 
 
-def provider_callback_url(request: Request, *, provider: AuthProviderName, surface: str) -> str:
+def provider_callback_url(
+    request: _RequestWithBaseUrl,
+    *,
+    provider: AuthProviderName,
+    surface: str,
+) -> str:
     base = settings.api_base_url.strip().rstrip("/")
     if not base:
         base = str(request.base_url).rstrip("/")

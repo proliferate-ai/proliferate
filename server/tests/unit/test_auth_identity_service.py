@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import HTTPException
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.service import validate_redirect_uri
 from proliferate.config import settings
 
@@ -16,8 +16,9 @@ def test_web_redirect_uri_allows_configured_loopback_alias(
     validate_redirect_uri("web", "http://localhost:5175/auth/callback")
     validate_redirect_uri("web", "http://127.0.0.1:5175/auth/callback")
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(AuthFlowError) as exc_info:
         validate_redirect_uri("web", "http://127.0.0.1:5176/auth/callback")
 
+    assert exc_info.value.code == "identity_web_redirect_uri_not_allowed"
     assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == "Web redirect URI origin is not allowed."
+    assert exc_info.value.message == "Web redirect URI origin is not allowed."

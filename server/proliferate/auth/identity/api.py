@@ -20,6 +20,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_limited_user, optional_current_active_user
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.models import (
     AppleMobileCompleteRequest,
     AuthRefreshRequest,
@@ -153,7 +154,7 @@ async def oauth_callback(
                 )
                 await db.commit()
                 return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
-            except HTTPException:
+            except AuthFlowError:
                 await db.rollback()
         return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
     if state is None or code is None:
@@ -197,7 +198,7 @@ async def oauth_shared_provider_callback(
                 )
                 await db.commit()
                 return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
-            except HTTPException:
+            except AuthFlowError:
                 await db.rollback()
         return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
     if state is None or code is None:
@@ -290,7 +291,7 @@ async def web_password_login(
     except WebBetaAccessDenied:
         await db.rollback()
         raise
-    except HTTPException:
+    except AuthFlowError:
         await db.commit()
         raise
     await db.commit()
@@ -311,7 +312,7 @@ async def mobile_password_login(
             password=body.password,
             client_ip=request_client_ip(request),
         )
-    except HTTPException:
+    except AuthFlowError:
         await db.commit()
         raise
     await db.commit()
