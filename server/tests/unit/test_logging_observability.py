@@ -190,9 +190,8 @@ class TestReportCritical:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         fake_sdk = _TrackingSentrySdk()
-        monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-        monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
         monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+        monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
 
         error = RuntimeError("disk full")
         sentry_integration.report_critical(

@@ -1,11 +1,33 @@
 from __future__ import annotations
 
+import ast
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
 from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
+
+
+def test_sentry_integration_does_not_import_product_policy() -> None:
+    source_path = Path(__file__).parents[2] / "proliferate/integrations/sentry.py"
+    tree = ast.parse(source_path.read_text())
+
+    product_imports = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+            "proliferate.lib.product"
+        ):
+            product_imports.append((node.lineno, node.module))
+        elif isinstance(node, ast.Import):
+            product_imports.extend(
+                (node.lineno, alias.name)
+                for alias in node.names
+                if alias.name.startswith("proliferate.lib.product")
+            )
+
+    assert product_imports == []
 
 
 @pytest.mark.parametrize(
@@ -120,9 +142,8 @@ class _FakeSentrySdk:
 def test_set_server_sentry_user_sets_id_only(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_sdk = _FakeSentrySdk()
 
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
 
     sentry_integration.set_server_sentry_user("user-123")
 
@@ -132,9 +153,8 @@ def test_set_server_sentry_user_sets_id_only(monkeypatch: pytest.MonkeyPatch) ->
 def test_clear_server_sentry_user_resets_user(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_sdk = _FakeSentrySdk()
 
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
 
     sentry_integration.set_server_sentry_user("user-123")
     assert fake_sdk.user == {"id": "user-123"}
@@ -146,14 +166,13 @@ def test_clear_server_sentry_user_resets_user(monkeypatch: pytest.MonkeyPatch) -
     assert fake_sdk.set_user_calls == [{"id": "user-123"}, None]
 
 
-def test_capture_server_sentry_exception_noops_when_vendor_disabled(
+def test_capture_server_sentry_exception_noops_when_adapter_not_initialized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_sdk = _FakeSentrySdk()
 
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "self_managed")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
 
     sentry_integration.capture_server_sentry_exception(RuntimeError("boom"))
 
@@ -165,9 +184,8 @@ def test_capture_server_sentry_exception_scrubs_extras_and_sets_scope_fields(
 ) -> None:
     fake_sdk = _FakeSentrySdk()
 
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
 
     sentry_integration.capture_server_sentry_exception(
         RuntimeError("boom"),
@@ -209,7 +227,6 @@ def test_init_server_sentry_disables_logging_event_capture(
             tags[key] = value
 
     monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
     monkeypatch.setattr(sentry_integration, "sentry_sdk", _FakeInitSentrySdk())
     monkeypatch.setattr(
@@ -228,7 +245,10 @@ def test_init_server_sentry_disables_logging_event_capture(
         lambda **kwargs: ("fastapi", kwargs),
     )
 
-    sentry_integration.init_server_sentry()
+    sentry_integration.init_server_sentry(
+        enabled=True,
+        telemetry_mode="hosted_product",
+    )
 
     integrations = init_kwargs["integrations"]
     assert isinstance(integrations, list)
@@ -238,6 +258,28 @@ def test_init_server_sentry_disables_logging_event_capture(
         "surface": "cloud_api",
         "telemetry_mode": "hosted_product",
     }
+
+
+def test_init_server_sentry_respects_injected_disabled_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    init_calls: list[dict[str, object]] = []
+
+    class _FakeInitSentrySdk:
+        def init(self, **kwargs: object) -> None:
+            init_calls.append(dict(kwargs))
+
+    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
+    monkeypatch.setattr(sentry_integration, "sentry_sdk", _FakeInitSentrySdk())
+
+    sentry_integration.init_server_sentry(
+        enabled=False,
+        telemetry_mode="self_managed",
+    )
+
+    assert init_calls == []
+    assert sentry_integration._sentry_initialized is False
 
 
 def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch) -> str:
@@ -251,14 +293,16 @@ def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch) -> str:
             pass
 
     monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
     monkeypatch.setattr(sentry_integration, "sentry_sdk", _FakeInitSentrySdk())
     monkeypatch.setattr(sentry_integration, "LoggingIntegration", lambda **kwargs: kwargs)
     monkeypatch.setattr(sentry_integration, "StarletteIntegration", lambda **kwargs: kwargs)
     monkeypatch.setattr(sentry_integration, "FastApiIntegration", lambda **kwargs: kwargs)
 
-    sentry_integration.init_server_sentry()
+    sentry_integration.init_server_sentry(
+        enabled=True,
+        telemetry_mode="hosted_product",
+    )
     release = init_kwargs["release"]
     assert isinstance(release, str)
     return release

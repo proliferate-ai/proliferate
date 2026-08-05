@@ -13,6 +13,10 @@ from proliferate.integrations.sentry import (
     flush_server_sentry,
     init_server_sentry,
 )
+from proliferate.lib.product.telemetry.mode import (
+    get_server_telemetry_mode,
+    is_vendor_telemetry_enabled,
+)
 from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.automations.worker.scheduler import run_scheduler_loop
 from proliferate.utils.logging import configure_server_logging
@@ -39,7 +43,10 @@ def _install_signal_handlers(stop_event: asyncio.Event) -> None:
 
 async def _amain(args: argparse.Namespace) -> None:
     configure_server_logging()
-    init_server_sentry()
+    init_server_sentry(
+        enabled=is_vendor_telemetry_enabled(),
+        telemetry_mode=get_server_telemetry_mode(),
+    )
     stop_event = asyncio.Event()
     _install_signal_handlers(stop_event)
     with with_correlation_context(worker_id=f"automation-{args.role}"):
