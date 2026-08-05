@@ -200,7 +200,7 @@ The import/usage checker over `anyharness-lib/src/**` (tests skipped).
 Ratcheted allowlist (`scripts/anyharness_boundaries_allowlist.txt`, format:
 `RULE_ID path count reason`; over-count fails AND stale count fails, so
 every cleanup must shrink the file in the same diff). Unit suite:
-`scripts/test_check_anyharness_boundaries.py` (78 tests).
+`scripts/test_check_anyharness_boundaries.py` (90 tests).
 
 Pre-grid rules (on main before PR #1651):
 
