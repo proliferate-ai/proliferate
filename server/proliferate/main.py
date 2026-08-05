@@ -21,6 +21,7 @@ import proliferate.db.models.support  # noqa: F401
 import proliferate.db.models.workflows  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
 from proliferate.auth.desktop.api import router as desktop_router
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.api import router as identity_auth_router
 from proliferate.auth.profile_api import router as user_profile_router
 from proliferate.auth.sso.api import router as sso_auth_router
@@ -195,13 +196,16 @@ async def _proliferate_error_handler(
     _request: Request,
     error: ProliferateError,
 ) -> JSONResponse:
-    detail = {
-        "code": error.code,
-        "message": error.message,
-    }
-    extra_detail = getattr(error, "extra_detail", None)
-    if isinstance(extra_detail, dict):
-        detail.update(extra_detail)
+    if isinstance(error, AuthFlowError):
+        detail: str | dict[str, object] = error.message
+    else:
+        detail = {
+            "code": error.code,
+            "message": error.message,
+        }
+        extra_detail = getattr(error, "extra_detail", None)
+        if isinstance(extra_detail, dict):
+            detail.update(extra_detail)
     return JSONResponse(
         status_code=error.status_code,
         content={"detail": detail},
