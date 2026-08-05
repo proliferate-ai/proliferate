@@ -15,6 +15,11 @@ or error types observed at the pinned base. It accompanies the proposed
 amendment to the [Server Domains guide](domains.md); current `main` remains
 authoritative until a later founder ruling accepts and lands both documents.
 
+`cloud` is a consumer-area label, not a wildcard declaration for
+`server/cloud/**`. Each Cloud subdomain-to-foreign-store read is declared only
+by its exact importing path and symbols in a ledger row; another Cloud
+subdomain, sibling row, or parent label does not cover it.
+
 The code map is intentionally small:
 
 ```text

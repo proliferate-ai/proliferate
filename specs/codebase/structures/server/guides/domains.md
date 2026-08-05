@@ -344,16 +344,24 @@ Domains coordinate via two legal patterns:
 another domain's store read or store-owned value type only when the exact
 consumer, store module, import sites, and symbols are recorded in the
 [foreign-store-read ledger](foreign-store-reads.md). A new unlisted foreign
-read requires a reviewed ledger amendment. The declaration makes the coupling
-reviewable; it does not authorize any mutation from that store.
+read requires a reviewed ledger amendment. This applies inside parent domains:
+a store read from one `server/cloud/<subdomain>/` surface to a foreign store
+requires its exact ledger declaration; a parent `cloud` label, sibling entry,
+or glob does not cover it. The declaration makes the coupling reviewable; it
+does not authorize any mutation from that store.
+
+The following is the current Billing usage read in
+[usage.py](../../../../../server/proliferate/server/billing/usage.py):
 
 ```python
-# billing/service.py
-from db.store.cloud_workspaces import list_workspaces_for_subject
+# server/billing/usage.py
+from proliferate.db.store import agent_gateway as agent_gateway_store
 
-async def compute_subject_usage(db: AsyncSession, subject_id: UUID):
-    workspaces = await list_workspaces_for_subject(db, subject_id)
-    return ...
+async def get_llm_balance(db: AsyncSession, context: OwnerContext) -> LlmBalance:
+    balance = await agent_gateway_store.get_remaining_credit_usd(
+        db, context.billing_subject_id
+    )
+    return LlmBalance(remaining_usd=float(balance.remaining_usd))
 ```
 
 The declaration remains exact to the listed read symbols even when the store
@@ -363,19 +371,20 @@ returns frozen dataclasses.
 domain's public service functions to mutate that domain's resources:
 
 ```python
-# billing/service.py
-from cloud.workspaces.service import suspend_workspace
+# server/organizations/usage/service.py
+from proliferate.server.billing.subjects import ensure_organization_billing_subject_state
 
-async def downgrade_subject(db: AsyncSession, subject_id: UUID):
-    workspaces = await list_workspaces_for_subject(db, subject_id)
-    for ws in workspaces:
-        await suspend_workspace(db, workspace_id=ws.id, reason="downgrade")
+async def _org_billing_subject_id(db: AsyncSession, organization_id: UUID) -> UUID:
+    state = await ensure_organization_billing_subject_state(db, organization_id)
+    return state.billing_subject_id
 ```
 
 The owning service runs its own policy, invariants, and audit.
 
 ### Forbidden cross-domain patterns
 
+- A foreign store read or store-owned value-type import not declared at its
+  exact consumer path and symbol in the foreign-store-read ledger.
 - A service calling another domain's store *write* function directly.
 - Importing a service's private helpers (`from cloud.workspaces.service
   import _internal`). Public functions only.
