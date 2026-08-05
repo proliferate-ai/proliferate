@@ -328,14 +328,34 @@ class ProductClientBoundaryTest(unittest.TestCase):
             "while (ready) /import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
             "for (; ready;) /import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
             "do /import('apps\\/desktop\\/src\\/not-code')/.test(value); while (ready);\n"
+            "if (ready) {}\n"
+            "/import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
+            "const compared = value > /import('apps\\/desktop\\/src\\/not-code')/.test(value);\n"
             "const divided = total / import('#product/components/Divided').default;\n"
+            "const objectDivided = {} / import('#product/components/ObjectDivided').default;\n"
         )
 
         statements = collect_imports(Path("Sample.ts"), source)
 
         self.assertEqual(
             [(statement.source, statement.lineno) for statement in statements],
-            [("#product/components/Divided", 5)],
+            [
+                ("#product/components/Divided", 8),
+                ("#product/components/ObjectDivided", 9),
+            ],
+        )
+
+    def test_shared_parser_accepts_from_as_a_contextual_import_name(self) -> None:
+        source = (
+            "import { from } from '#product/components/Imported';\n"
+            "export { from } from '#product/components/Exported';\n"
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.source for statement in statements],
+            ["#product/components/Imported", "#product/components/Exported"],
         )
 
     def test_shared_parser_keeps_ts_assertions_and_semicolonless_runtime_imports(self) -> None:
@@ -367,6 +387,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             "runtime = import('@proliferate/cloud-sdk-react')",
             "void [import('@proliferate/cloud-sdk-react')]",
             "ready ? import('@proliferate/cloud-sdk-react') : fallback",
+            "const choice = ready ? value : import('@proliferate/cloud-sdk-react')",
         ]
         for expression in runtime_expressions:
             with self.subTest(expression=expression):
@@ -376,6 +397,94 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 )
                 self.assertEqual(len(statements), 1)
                 self.assertFalse(statements[0].type_only)
+
+    def test_shared_parser_recognizes_import_types_in_standard_type_positions(self) -> None:
+        source = (
+            "type First = import('@proliferate/cloud-sdk-react').First\n"
+            "type Second = import('@proliferate/cloud-sdk-react').Second\n"
+            "function take(\n"
+            "  value: import('@proliferate/cloud-sdk-react').Thing,\n"
+            "): void {}\n"
+            "interface Shape {\n"
+            "  value: import('@proliferate/cloud-sdk-react').Thing;\n"
+            "}\n"
+            "const ref = useRef<import('@proliferate/cloud-sdk-react').Thing>();\n"
+            "const annotated: import('@proliferate/cloud-sdk-react').Thing = value;\n"
+            "const runtimeDefault = (\n"
+            "  value: unknown = import('@proliferate/cloud-sdk-react')\n"
+            ") => value;\n"
+            "const runtimeObject = {\n"
+            "  value: import('@proliferate/cloud-sdk-react'),\n"
+            "};\n"
+        )
+
+        statements = collect_imports(Path("Sample.ts"), source)
+
+        self.assertEqual(
+            [statement.lineno for statement in statements],
+            [1, 2, 4, 7, 9, 10, 12, 15],
+        )
+        self.assertEqual(
+            [statement.type_only for statement in statements],
+            [True, True, True, True, True, True, False, False],
+        )
+
+        additional_type_positions = [
+            "function read(): import('@proliferate/cloud-sdk-react').Thing {}",
+            "const read = (): import('@proliferate/cloud-sdk-react').Thing => value;",
+            (
+                "interface Reader { "
+                "read(value: import('@proliferate/cloud-sdk-react').Thing): "
+                "import('@proliferate/cloud-sdk-react').Thing }"
+            ),
+            "class Holder { value: import('@proliferate/cloud-sdk-react').Thing; }",
+            "const asserted = value as import('@proliferate/cloud-sdk-react').Thing;",
+            (
+                "interface Extended extends "
+                "Wrapper<import('@proliferate/cloud-sdk-react').Thing> {}"
+            ),
+        ]
+        for type_source in additional_type_positions:
+            with self.subTest(type_source=type_source):
+                statements = collect_imports(Path("Sample.ts"), type_source)
+                self.assertTrue(statements)
+                self.assertTrue(all(statement.type_only for statement in statements))
+
+    def test_shared_parser_distinguishes_advanced_type_positions_from_runtime(self) -> None:
+        runtime_expressions = [
+            'function f(value = { load: import("pkg") }) {}',
+            'function f(value = ready ? current : import("pkg")) {}',
+            'const x = ready ? current() : import("pkg")',
+            'class X { value = ready ? current : import("pkg") }',
+            'let value: string\nimport("pkg")',
+            'left < (await import("pkg")).default > (right)',
+            'function f(): Result { return import("pkg") }',
+            'const f = (): Result => import("pkg")',
+        ]
+        for runtime_source in runtime_expressions:
+            with self.subTest(runtime_source=runtime_source):
+                statements = collect_imports(Path("Sample.ts"), runtime_source)
+                self.assertEqual(len(statements), 1)
+                self.assertFalse(statements[0].type_only)
+
+        type_expressions = [
+            'type Box<T = import("pkg").Thing> = T',
+            'type Box<T extends import("pkg").Thing> = T',
+            'const fn = <T extends import("pkg").Thing>(x: T) => x',
+            'class Box<T extends import("pkg").Thing> {}',
+            'fn?.<import("pkg").Thing>()',
+            'const C = Factory<import("pkg").Thing>',
+            'const x = <import("pkg").Thing>value',
+            'const { x }: import("pkg").Thing = value',
+            'const a = 1, b: import("pkg").Thing = value',
+            'const value = source satisfies Readonly<import("pkg").Thing>',
+            'const value = source as { load: import("pkg").Thing }',
+        ]
+        for type_source in type_expressions:
+            with self.subTest(type_source=type_source):
+                statements = collect_imports(Path("Sample.ts"), type_source)
+                self.assertEqual(len(statements), 1)
+                self.assertTrue(statements[0].type_only)
 
     def test_every_forbidden_layer_pair_fails_for_alias_and_relative_imports(self) -> None:
         forbidden_pairs = sorted(check_module.PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES)
@@ -564,6 +673,75 @@ class ProductClientBoundaryTest(unittest.TestCase):
         ]
         self.assertEqual([violation.lineno for violation in set_state], [5, 11])
 
+    def test_store_set_state_handles_unary_loop_parenthesized_and_optional_contexts(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/contexts.ts": (
+                "import { useChatStore } from '#product/stores/chat/chat-store';\n"
+                "void function useChatStore() {\n"
+                "  useChatStore.setState({ innerFunctionName: true });\n"
+                "}();\n"
+                "useChatStore.setState({ afterFunction: true });\n"
+                "void class useChatStore {\n"
+                "  static update() {\n"
+                "    useChatStore.setState({ innerClassName: true });\n"
+                "  }\n"
+                "};\n"
+                "useChatStore.setState({ afterClass: true });\n"
+                "for (const useChatStore of stores) {\n"
+                "  useChatStore.setState({ loopLocal: true });\n"
+                "}\n"
+                "useChatStore.setState({ afterLoop: true });\n"
+                "(useChatStore).setState({ parenthesized: true });\n"
+                "useChatStore?.setState({ optional: true });\n"
+                "factory(useChatStore).setState({ returnedObject: true });\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        set_state = [
+            violation
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+        ]
+        self.assertEqual(
+            [violation.lineno for violation in set_state],
+            [5, 11, 15, 16, 17],
+        )
+
+    def test_store_set_state_handles_optional_calls_operators_and_later_loop_bindings(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/contexts.ts": (
+                "import { useChatStore } from '#product/stores/chat/chat-store';\n"
+                "useChatStore.setState?.({ optionalCall: true });\n"
+                "useChatStore?.setState?.({ optionalReceiverAndCall: true });\n"
+                "const ClassExpression = ready && class useChatStore {\n"
+                "  static update() { useChatStore.setState({ innerClass: true }); }\n"
+                "};\n"
+                "useChatStore.setState({ afterClass: true });\n"
+                "const FunctionExpression = ready || function useChatStore() {\n"
+                "  useChatStore.setState({ innerFunction: true });\n"
+                "};\n"
+                "useChatStore.setState({ afterFunction: true });\n"
+                "for (let index = 0, useChatStore = stores[index]; index < 1; index++) {\n"
+                "  useChatStore.setState({ loopLocal: true });\n"
+                "}\n"
+                "useChatStore.setState({ afterLoop: true });\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        set_state = [
+            violation
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+        ]
+        self.assertEqual(
+            [violation.lineno for violation in set_state],
+            [2, 3, 7, 11, 15],
+        )
+
     def test_query_hooks_pass_in_access_and_cache_but_fail_in_workflow_and_facade(self) -> None:
         files = {
             "apps/packages/product-client/src/hooks/access/cloud/query.ts": (
@@ -689,6 +867,63 @@ class ProductClientBoundaryTest(unittest.TestCase):
         self.assertEqual(
             [violation.rule_id for violation in violations],
             ["STORE_FORBIDDEN_ACCESS"],
+        )
+
+    def test_dynamic_and_namespace_imports_preserve_identifier_sensitive_rules(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/dynamic-query.ts": (
+                "export async function load() {\n"
+                "  const { useMutation } = await import('@tanstack/react-query');\n"
+                "  return useMutation;\n"
+                "}\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/namespace-query.ts": (
+                "import * as Query from '@tanstack/react-query';\n"
+                "export const mutation = Query.useMutation;\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/dynamic-client.ts": (
+                "export async function load() {\n"
+                "  const { getAnyHarnessClient } = await import('@anyharness/sdk');\n"
+                "  return getAnyHarnessClient();\n"
+                "}\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/dynamic-store.ts": (
+                "export async function update() {\n"
+                "  const { useChatStore } = "
+                "await import('#product/stores/chat/chat-store');\n"
+                "  useChatStore.setState({ ready: true });\n"
+                "}\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        query_paths = {
+            violation.path.name
+            for violation in violations
+            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+        }
+        self.assertEqual(
+            query_paths,
+            {"dynamic-query.ts", "namespace-query.ts"},
+        )
+        dynamic_client_rules = {
+            violation.rule_id
+            for violation in violations
+            if violation.path.name == "dynamic-client.ts"
+        }
+        self.assertTrue(
+            {"ANYHARNESS_CLIENT_OUTSIDE_ACCESS", "STORE_RUNTIME_ACCESS"}
+            <= dynamic_client_rules
+        )
+        dynamic_store_rules = [
+            violation.rule_id
+            for violation in violations
+            if violation.path.name == "dynamic-store.ts"
+        ]
+        self.assertIn(
+            "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER",
+            dynamic_store_rules,
         )
 
     def test_executable_template_and_jsx_code_is_checked_but_display_text_and_regex_pass(self) -> None:

@@ -19,6 +19,10 @@ class ImportStatement:
     statement: str
     lineno: int
     type_only: bool
+    imported_names: frozenset[str] = frozenset()
+    local_bindings: frozenset[str] = frozenset()
+    namespace_bindings: frozenset[str] = frozenset()
+    start: int = -1
 
 
 def _is_identifier_start(char: str) -> bool:
@@ -139,6 +143,8 @@ class _TypeScriptLexer:
             "-",
             "*",
             "%",
+            "<",
+            ">",
             "&",
             "|",
             "^",
@@ -160,7 +166,9 @@ class _TypeScriptLexer:
         ):
             return True
         if previous != ")":
-            return False
+            return previous == "}" and self._closing_brace_ends_block(
+                segment_token_start
+            )
 
         # A regex may begin the statement controlled by `if (...)`, `while
         # (...)`, and similar constructs. A close parenthesis in an ordinary
@@ -173,6 +181,41 @@ class _TypeScriptLexer:
             elif value == "(":
                 depth -= 1
                 if depth == 0:
+                    return (
+                        cursor > segment_token_start
+                        and self.tokens[cursor - 1].value
+                        in {"for", "if", "switch", "while", "with"}
+                    )
+        return False
+
+    def _closing_brace_ends_block(self, segment_token_start: int) -> bool:
+        depth = 0
+        open_index: int | None = None
+        for cursor in range(len(self.tokens) - 1, segment_token_start - 1, -1):
+            value = self.tokens[cursor].value
+            if value == "}":
+                depth += 1
+            elif value == "{":
+                depth -= 1
+                if depth == 0:
+                    open_index = cursor
+                    break
+        if open_index is None or open_index == segment_token_start:
+            return open_index == segment_token_start
+        previous = self.tokens[open_index - 1].value
+        if previous in {"do", "else", "finally", "try"}:
+            return True
+        if previous != ")":
+            return False
+
+        paren_depth = 0
+        for cursor in range(open_index - 1, segment_token_start - 1, -1):
+            value = self.tokens[cursor].value
+            if value == ")":
+                paren_depth += 1
+            elif value == "(":
+                paren_depth -= 1
+                if paren_depth == 0:
                     return (
                         cursor > segment_token_start
                         and self.tokens[cursor - 1].value
@@ -487,25 +530,24 @@ def _is_type_only_tokens(tokens: list[Token], keyword: str) -> bool:
     return _all_named_bindings_are_types(tokens)
 
 
-def _is_import_type_expression(tokens: list[Token], import_index: int) -> bool:
-    """Recognize a dynamic-import-shaped node in a definite type alias."""
+def _matching_pairs(
+    tokens: list[Token], opener: str, closer: str
+) -> dict[int, int]:
+    stack: list[int] = []
+    pairs: dict[int, int] = {}
+    for index, token in enumerate(tokens):
+        if token.value == opener:
+            stack.append(index)
+        elif token.value == closer and stack:
+            pairs[stack.pop()] = index
+    return pairs
 
-    statement_start = import_index
-    while statement_start > 0 and tokens[statement_start - 1].value != ";":
-        statement_start -= 1
-    prefix = tokens[statement_start:import_index]
-    while prefix and prefix[0].value in {"declare", "export"}:
-        prefix = prefix[1:]
-    if not prefix or prefix[0].value != "type":
-        return False
-    try:
-        equals_index = next(index for index, token in enumerate(prefix) if token.value == "=")
-    except StopIteration:
-        return False
 
-    # Type aliases may omit their semicolon. At top level, a newline ends the
-    # alias once the preceding type is complete; only explicit type-continuation
-    # syntax or an open delimiter carries the alias onto the next line.
+def _type_sequence_reaches_import(
+    tokens: list[Token], start_index: int, import_index: int
+) -> bool:
+    """Whether a multiline type sequence still owns the candidate import."""
+
     continuation_after = {
         "(",
         "[",
@@ -527,10 +569,10 @@ def _is_import_type_expression(tokens: list[Token], import_index: int) -> bool:
     continuation_before = {".", "[", "&", "|", ":", "?", "extends"}
     nesting: list[str] = []
     matching = {")": "(", "]": "[", "}": "{", ">": "<"}
-    alias_tokens = prefix[equals_index + 1 :]
-    for index, token in enumerate(alias_tokens):
+    sequence = tokens[start_index:import_index]
+    for index, token in enumerate(sequence):
         if index:
-            previous = alias_tokens[index - 1]
+            previous = sequence[index - 1]
             if (
                 token.lineno > previous.lineno
                 and not nesting
@@ -543,8 +585,8 @@ def _is_import_type_expression(tokens: list[Token], import_index: int) -> bool:
         elif token.value in matching and nesting and nesting[-1] == matching[token.value]:
             nesting.pop()
 
-    if alias_tokens:
-        previous = alias_tokens[-1]
+    if sequence:
+        previous = sequence[-1]
         import_token = tokens[import_index]
         if (
             import_token.lineno > previous.lineno
@@ -553,23 +595,532 @@ def _is_import_type_expression(tokens: list[Token], import_index: int) -> bool:
             and import_token.value not in continuation_before
         ):
             return False
-    return not any(
-        token.value
-        in {
-            "class",
-            "const",
-            "default",
-            "enum",
-            "export",
-            "function",
-            "interface",
-            "let",
-            "return",
-            "throw",
-            "var",
+    return True
+
+
+def _type_alias_reaches_import(
+    tokens: list[Token], type_index: int, import_index: int
+) -> bool:
+    if (
+        type_index + 1 >= import_index
+        or tokens[type_index + 1].kind != "identifier"
+    ):
+        return False
+
+    # The import may occur in a type-parameter default/constraint before the
+    # alias's own assignment: `type Box<T = import("pkg").T> = T`.
+    if type_index + 2 < import_index and tokens[type_index + 2].value == "<":
+        close_index = _matching_pairs(tokens, "<", ">").get(type_index + 2)
+        if close_index is not None and import_index < close_index:
+            cursor = close_index + 1
+            while cursor < len(tokens) and tokens[cursor].value in {"?", "readonly"}:
+                cursor += 1
+            if cursor < len(tokens) and tokens[cursor].value == "=":
+                return True
+
+    # Find the alias assignment, ignoring defaults inside `<...>` type
+    # parameters. `from` or a string before `=` identifies an import clause,
+    # not a type-alias declaration.
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    equals_index: int | None = None
+    for cursor in range(type_index + 2, import_index):
+        token = tokens[cursor]
+        if token.value == ";" or token.value == "from" or token.kind == "string":
+            return False
+        if token.value in {"(", "[", "{", "<"}:
+            nesting.append(token.value)
+        elif token.value in matching and nesting and nesting[-1] == matching[token.value]:
+            nesting.pop()
+        elif token.value == "=" and not nesting:
+            equals_index = cursor
+            break
+    if equals_index is None:
+        return False
+
+    return _type_sequence_reaches_import(tokens, equals_index + 1, import_index)
+
+
+def _is_function_parameter_list(
+    tokens: list[Token], open_index: int, close_index: int
+) -> bool:
+    owner_index = open_index - 1
+    if owner_index < 0:
+        return False
+    owner = tokens[owner_index].value
+    if owner in {"for", "if", "switch", "while", "with"}:
+        return False
+
+    # A `function` keyword in this header is unambiguous. Stop at the nearest
+    # body/statement boundary so a call inside a function body cannot inherit
+    # the outer function's keyword.
+    for cursor in range(open_index - 1, -1, -1):
+        value = tokens[cursor].value
+        if value in {";", "{", "}"}:
+            break
+        if value == "function":
+            return True
+
+    # Direct class/interface members are method or call signatures. A call in
+    # a method body has that body (rather than the class body) as its nearest
+    # containing brace and therefore does not take this path.
+    containing_braces = [
+        (brace_open, brace_close)
+        for brace_open, brace_close in _matching_pairs(tokens, "{", "}").items()
+        if brace_open < open_index < brace_close
+    ]
+    if containing_braces:
+        brace_open, _ = max(containing_braces)
+        header_start = brace_open - 1
+        while header_start >= 0 and tokens[header_start].value not in {";", "{", "}"}:
+            header_start -= 1
+        header_values = {
+            token.value for token in tokens[header_start + 1 : brace_open]
         }
-        for token in prefix[equals_index + 1 :]
+        if header_values & {"class", "interface"}:
+            return True
+
+    # Arrow functions and object methods may declare a return type between
+    # `)` and their arrow/body. Importantly, a bare `:` is not enough: it may
+    # be the false branch of `condition ? call() : import(...)`.
+    cursor = close_index + 1
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    while cursor < len(tokens):
+        value = tokens[cursor].value
+        if value in {"(", "[", "{", "<"}:
+            if value == "{" and not nesting:
+                return tokens[owner_index].kind == "identifier"
+            nesting.append(value)
+        elif value in matching and nesting and nesting[-1] == matching[value]:
+            nesting.pop()
+        elif not nesting:
+            if value in {";", "}"}:
+                return False
+            if (
+                value == "="
+                and cursor + 1 < len(tokens)
+                and tokens[cursor + 1].value == ">"
+            ):
+                return True
+        cursor += 1
+    return False
+
+
+def _top_level_segment_start(
+    tokens: list[Token], start_index: int, end_index: int
+) -> int:
+    """Return the start of the comma-delimited segment owning end_index."""
+
+    segment_start = start_index
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    for cursor in range(start_index, end_index):
+        value = tokens[cursor].value
+        if value in {"(", "[", "{", "<"}:
+            nesting.append(value)
+        elif value in matching and nesting and nesting[-1] == matching[value]:
+            nesting.pop()
+        elif value == "," and not nesting:
+            segment_start = cursor + 1
+    return segment_start
+
+
+def _top_level_annotation_colon(
+    tokens: list[Token], start_index: int, import_index: int
+) -> int | None:
+    """Find a live annotation colon before import, excluding initializers."""
+
+    colon_index: int | None = None
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    for cursor in range(start_index, import_index):
+        value = tokens[cursor].value
+        if value in {"(", "[", "{", "<"}:
+            nesting.append(value)
+        elif value in matching and nesting and nesting[-1] == matching[value]:
+            nesting.pop()
+        elif not nesting:
+            if value == "=":
+                return None
+            if value == ":" and colon_index is None:
+                colon_index = cursor
+    if colon_index is None:
+        return None
+    if not _type_sequence_reaches_import(tokens, colon_index + 1, import_index):
+        return None
+    return colon_index
+
+
+def _parameter_annotation_contains_import(
+    tokens: list[Token], import_index: int
+) -> bool:
+    for open_index, close_index in _matching_pairs(tokens, "(", ")").items():
+        if not (open_index < import_index < close_index):
+            continue
+        if not _is_function_parameter_list(tokens, open_index, close_index):
+            continue
+        segment_start = _top_level_segment_start(
+            tokens, open_index + 1, import_index
+        )
+        if _top_level_annotation_colon(tokens, segment_start, import_index) is not None:
+            return True
+    return False
+
+
+def _interface_property_contains_import(
+    tokens: list[Token], import_index: int
+) -> bool:
+    # Every executable-looking import inside an interface body is necessarily
+    # part of a type member/signature. Use the declared interface body rather
+    # than the innermost brace so nested object types remain covered.
+    for open_index, close_index in _matching_pairs(tokens, "{", "}").items():
+        if not (open_index < import_index < close_index):
+            continue
+        header_start = open_index - 1
+        while header_start >= 0 and tokens[header_start].value not in {";", "{", "}"}:
+            header_start -= 1
+        header = tokens[header_start + 1 : open_index]
+        if any(token.value == "interface" for token in header):
+            return True
+    return False
+
+
+def _function_return_annotation_contains_import(
+    tokens: list[Token], import_index: int
+) -> bool:
+    parens = _matching_pairs(tokens, "(", ")")
+    closing_parens = {close: open_index for open_index, close in parens.items()}
+    for colon_index in range(import_index - 1, -1, -1):
+        if tokens[colon_index].value in {";", "{", "}"}:
+            return False
+        if tokens[colon_index].value != ":" or colon_index == 0:
+            continue
+        close_index = colon_index - 1
+        open_index = closing_parens.get(close_index)
+        if open_index is None:
+            continue
+        if _is_function_parameter_list(tokens, open_index, close_index):
+            if not _type_sequence_reaches_import(
+                tokens, colon_index + 1, import_index
+            ):
+                return False
+
+            # An outer arrow before the candidate starts the runtime body.
+            # Arrows nested in parentheses/brackets/braces belong to the type.
+            nesting: list[str] = []
+            matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+            for cursor in range(colon_index + 1, import_index):
+                value = tokens[cursor].value
+                if value in {"(", "[", "{", "<"}:
+                    nesting.append(value)
+                elif value in matching and nesting and nesting[-1] == matching[value]:
+                    nesting.pop()
+                elif (
+                    not nesting
+                    and value == "="
+                    and cursor + 1 < import_index
+                    and tokens[cursor + 1].value == ">"
+                ):
+                    return False
+            return True
+    return False
+
+
+def _class_property_contains_import(
+    tokens: list[Token], import_index: int
+) -> bool:
+    containing_class_bodies: list[tuple[int, int]] = []
+    for open_index, close_index in _matching_pairs(tokens, "{", "}").items():
+        if not (open_index < import_index < close_index):
+            continue
+        header_start = open_index - 1
+        while header_start >= 0 and tokens[header_start].value not in {";", "{", "}"}:
+            header_start -= 1
+        if any(
+            token.value == "class"
+            for token in tokens[header_start + 1 : open_index]
+        ):
+            containing_class_bodies.append((open_index, close_index))
+    if not containing_class_bodies:
+        return False
+
+    class_open, _ = max(containing_class_bodies)
+    member_start = class_open + 1
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    colon_index: int | None = None
+    for cursor in range(member_start, import_index):
+        value = tokens[cursor].value
+        if value in {"(", "[", "{", "<"}:
+            if value == "{" and not nesting:
+                # A brace after an initializer or a completed method return
+                # type is a runtime body. A brace immediately starting (or
+                # extending) the annotation is a type literal.
+                if colon_index is None:
+                    return False
+                prefix = tokens[colon_index + 1 : cursor]
+                if prefix and prefix[-1].value not in {
+                    "&",
+                    "|",
+                    "=",
+                    "(",
+                    "[",
+                    "{",
+                    ",",
+                    ":",
+                    "?",
+                    "extends",
+                }:
+                    return False
+            nesting.append(value)
+        elif value in matching and nesting and nesting[-1] == matching[value]:
+            nesting.pop()
+        elif not nesting:
+            if value == ";":
+                member_start = cursor + 1
+                colon_index = None
+            elif value == "=":
+                return False
+            elif value == ":" and colon_index is None:
+                colon_index = cursor
+
+    return colon_index is not None and _type_sequence_reaches_import(
+        tokens, colon_index + 1, import_index
     )
+
+
+def _declaration_annotation_contains_import(
+    tokens: list[Token], import_index: int
+) -> bool:
+    declaration_index: int | None = None
+    for cursor in range(import_index - 1, -1, -1):
+        if tokens[cursor].value == ";":
+            break
+        if tokens[cursor].value in {"const", "let", "var"}:
+            declaration_index = cursor
+            break
+    if declaration_index is None:
+        return False
+    declarator_start = _top_level_segment_start(
+        tokens, declaration_index + 1, import_index
+    )
+    return (
+        _top_level_annotation_colon(tokens, declarator_start, import_index)
+        is not None
+    )
+
+
+def _generic_argument_contains_import(
+    tokens: list[Token], import_index: int
+) -> bool:
+    for open_index, close_index in _matching_pairs(tokens, "<", ">").items():
+        if not (open_index < import_index < close_index):
+            continue
+
+        # `await import()` cannot occur in a TypeScript type argument. This
+        # also disambiguates comparisons such as
+        # `left < (await import("pkg")).default > (right)`.
+        if any(
+            token.value in {"await", "delete", "throw", "yield"}
+            for token in tokens[open_index + 1 : import_index]
+        ):
+            continue
+
+        after = tokens[close_index + 1].value if close_index + 1 < len(tokens) else None
+        owner_index = open_index - 1
+        if (
+            owner_index >= 2
+            and tokens[owner_index].value == "."
+            and tokens[owner_index - 1].value == "?"
+        ):
+            owner_index -= 2
+        owner = tokens[owner_index] if owner_index >= 0 else None
+
+        # Generic calls and generic declarations immediately followed by their
+        # parameter list are definite type-argument contexts.
+        if close_index + 1 < len(tokens) and tokens[close_index + 1].value == "(":
+            return True
+
+        header_start = open_index - 1
+        while header_start >= 0 and tokens[header_start].value not in {";", "{", "}"}:
+            header_start -= 1
+        header_values = {
+            token.value for token in tokens[header_start + 1 : open_index]
+        }
+        if header_values & {"as", "implements", "interface", "satisfies", "type"}:
+            return True
+
+        # Type parameters on class/function/arrow declarations use constraints
+        # or defaults before an import type.
+        inner_prefix = {
+            token.value for token in tokens[open_index + 1 : import_index]
+        }
+        if inner_prefix & {"extends", "="} and (
+            header_values & {"class", "function", "interface", "type"}
+            or owner is None
+            or (owner is not None and owner.value in {"=", "("})
+        ):
+            return True
+
+        # Angle-bracket assertions begin where an expression may begin and do
+        # not have a value owner immediately to their left.
+        assertion_prefixes = {
+            None,
+            "(",
+            "[",
+            "{",
+            ",",
+            ":",
+            "=",
+            "?",
+            "=>",
+            "return",
+            "yield",
+        }
+        owner_value = owner.value if owner is not None else None
+        if owner_value in assertion_prefixes:
+            return True
+
+        # Instantiation expressions (`const C = Factory<Type>`) and generic
+        # type references end at a delimiter/member operator. A comparison has
+        # a right-hand value after `>` and is deliberately not accepted here.
+        if owner is not None and owner.kind == "identifier" and after in {
+            None,
+            ";",
+            ",",
+            ")",
+            "]",
+            "}",
+            ".",
+            "?",
+            "!",
+            "[",
+            "as",
+            "satisfies",
+        }:
+            return True
+    return False
+
+
+def _type_operator_reaches_import(
+    tokens: list[Token], import_index: int
+) -> bool:
+    """Recognize nested types owned by `as`, `satisfies`, or `implements`."""
+
+    for operator_index in range(import_index - 1, -1, -1):
+        value = tokens[operator_index].value
+        if value == ";":
+            return False
+        if value not in {"as", "implements", "satisfies"}:
+            continue
+        return _type_sequence_reaches_import(
+            tokens, operator_index + 1, import_index
+        )
+    return False
+
+
+def _is_import_type_expression(tokens: list[Token], import_index: int) -> bool:
+    """Recognize dynamic-import syntax used as a TypeScript import type."""
+
+    statement_floor = import_index
+    while statement_floor > 0 and tokens[statement_floor - 1].value != ";":
+        statement_floor -= 1
+    for type_index in range(import_index - 1, statement_floor - 1, -1):
+        if tokens[type_index].value == "type" and _type_alias_reaches_import(
+            tokens, type_index, import_index
+        ):
+            return True
+    if _parameter_annotation_contains_import(tokens, import_index):
+        return True
+    if _interface_property_contains_import(tokens, import_index):
+        return True
+    if _function_return_annotation_contains_import(tokens, import_index):
+        return True
+    if _class_property_contains_import(tokens, import_index):
+        return True
+    if _declaration_annotation_contains_import(tokens, import_index):
+        return True
+    if _generic_argument_contains_import(tokens, import_index):
+        return True
+    return _type_operator_reaches_import(tokens, import_index)
+
+
+def _dynamic_import_binding_facts(
+    tokens: list[Token], import_index: int
+) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """Return imported names, local names, and namespace names for assignments."""
+
+    cursor = import_index - 1
+    while cursor >= 0 and tokens[cursor].value in {"await", "("}:
+        cursor -= 1
+    if cursor < 1 or tokens[cursor].value != "=":
+        return frozenset(), frozenset(), frozenset()
+
+    pattern_end = cursor - 1
+    if tokens[pattern_end].kind == "identifier":
+        if pattern_end > 0 and tokens[pattern_end - 1].value in {".", "?"}:
+            return frozenset(), frozenset(), frozenset()
+        binding = tokens[pattern_end].value
+        return frozenset(), frozenset({binding}), frozenset({binding})
+    if tokens[pattern_end].value != "}":
+        return frozenset(), frozenset(), frozenset()
+
+    depth = 0
+    pattern_start: int | None = None
+    for index in range(pattern_end, -1, -1):
+        value = tokens[index].value
+        if value == "}":
+            depth += 1
+        elif value == "{":
+            depth -= 1
+            if depth == 0:
+                pattern_start = index
+                break
+    if pattern_start is None:
+        return frozenset(), frozenset(), frozenset()
+
+    entries: list[list[Token]] = []
+    current: list[Token] = []
+    nesting = 0
+    for token in tokens[pattern_start + 1 : pattern_end]:
+        if token.value in {"{", "[", "("}:
+            nesting += 1
+        elif token.value in {"}", "]", ")"}:
+            nesting -= 1
+        if token.value == "," and nesting == 0:
+            entries.append(current)
+            current = []
+        else:
+            current.append(token)
+    entries.append(current)
+
+    imported: set[str] = set()
+    local: set[str] = set()
+    for entry in entries:
+        identifiers = [token.value for token in entry if token.kind == "identifier"]
+        if not identifiers:
+            continue
+        imported_name = identifiers[0]
+        imported.add(imported_name)
+        colon = next(
+            (index for index, token in enumerate(entry) if token.value == ":"),
+            None,
+        )
+        local_name = (
+            next(
+                (
+                    token.value
+                    for token in entry[colon + 1 :]
+                    if token.kind == "identifier"
+                ),
+                imported_name,
+            )
+            if colon is not None
+            else imported_name
+        )
+        local.add(local_name)
+    return frozenset(imported), frozenset(local), frozenset()
 
 
 def collect_imports(path: Path, text: str) -> list[ImportStatement]:
@@ -592,6 +1143,9 @@ def collect_imports(path: Path, text: str) -> list[ImportStatement]:
         if keyword == "import" and index + 2 < len(tokens) and tokens[index + 1].value == "(":
             source_token = tokens[index + 2]
             if source_token.kind == "string":
+                imported_names, local_bindings, namespace_bindings = (
+                    _dynamic_import_binding_facts(tokens, index)
+                )
                 close_index = index + 3
                 while close_index < len(tokens) and tokens[close_index].value != ")":
                     close_index += 1
@@ -606,6 +1160,10 @@ def collect_imports(path: Path, text: str) -> list[ImportStatement]:
                         statement=text[token.start:end],
                         lineno=token.lineno,
                         type_only=_is_import_type_expression(tokens, index),
+                        imported_names=imported_names,
+                        local_bindings=local_bindings,
+                        namespace_bindings=namespace_bindings,
+                        start=token.start,
                     )
                 )
                 index = close_index + 1
@@ -647,7 +1205,7 @@ def collect_imports(path: Path, text: str) -> list[ImportStatement]:
                     candidate = tokens[cursor + 1]
                     if candidate.kind == "string":
                         source_index = cursor + 1
-                    break
+                        break
                 cursor += 1
 
         if source_index is None:
@@ -662,6 +1220,7 @@ def collect_imports(path: Path, text: str) -> list[ImportStatement]:
                 statement=text[token.start:end],
                 lineno=token.lineno,
                 type_only=_is_type_only_tokens(statement_tokens, keyword),
+                start=token.start,
             )
         )
         index = source_index + 1
