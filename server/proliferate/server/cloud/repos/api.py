@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import get_async_session
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.github_app.transactions import (
     commit_github_app_reauthorization_on_error,
 )
@@ -37,18 +36,15 @@ async def list_cloud_repositories_endpoint(
 ) -> CloudGitRepositoriesResponse:
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["Vary"] = "Authorization, Cookie"
-    try:
-        page = await list_cloud_repositories(
-            db,
-            credentials,
-            query=query,
-            cursor=cursor,
-            limit=limit,
-            affiliation=affiliation,
-            visibility=visibility,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    page = await list_cloud_repositories(
+        db,
+        credentials,
+        query=query,
+        cursor=cursor,
+        limit=limit,
+        affiliation=affiliation,
+        visibility=visibility,
+    )
     return cloud_git_repositories_payload(page)
 
 
@@ -58,11 +54,8 @@ async def get_cloud_repo_branches_endpoint(
     git_repo_name: str,
     credentials: CloudRepoGitHubCredentialsDependency,
 ) -> RepoBranchesResponse:
-    try:
-        return await get_cloud_repo_branches(
-            credentials,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await get_cloud_repo_branches(
+        credentials,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )

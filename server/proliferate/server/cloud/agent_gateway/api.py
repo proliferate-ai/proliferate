@@ -46,7 +46,7 @@ from proliferate.server.cloud.agent_gateway.models import (
     org_agent_policy_payload,
     org_agent_policy_violation_payload,
 )
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.errors import CloudApiError
 
 router = APIRouter(prefix="/agent-auth", tags=["cloud-agent-auth"])
 
@@ -82,15 +82,12 @@ async def create_agent_api_key_endpoint(
     db: AsyncSession = Depends(get_async_session, scope="function"),
     user: User = Depends(current_product_user),
 ) -> AgentApiKeyResponse:
-    try:
-        record = await service.create_api_key(
-            db,
-            user_id=user.id,
-            title=body.title,
-            value=body.value,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    record = await service.create_api_key(
+        db,
+        user_id=user.id,
+        title=body.title,
+        value=body.value,
+    )
     return api_key_payload(record)
 
 
@@ -107,16 +104,13 @@ async def create_agent_provider_config_endpoint(
     entry is not bound to any harness until a selection references it, same
     as a bare key.
     """
-    try:
-        record = await service.create_provider_config(
-            db,
-            user_id=user.id,
-            title=body.title,
-            kind=body.kind,
-            value=body.value,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    record = await service.create_provider_config(
+        db,
+        user_id=user.id,
+        title=body.title,
+        kind=body.kind,
+        value=body.value,
+    )
     return api_key_payload(record)
 
 
@@ -126,10 +120,7 @@ async def revoke_agent_api_key_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentApiKeyResponse:
-    try:
-        record = await service.revoke_api_key(db, user_id=user.id, api_key_id=key_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    record = await service.revoke_api_key(db, user_id=user.id, api_key_id=key_id)
     return api_key_payload(record)
 
 
@@ -170,36 +161,28 @@ async def put_agent_auth_selections_endpoint(
 ) -> list[AgentAuthSelectionResponse]:
     try:
         sources = [desired_source(source) for source in body.sources]
-    except ValueError:
-        raise_cloud_error(
-            CloudApiError(
-                "invalid_agent_auth_selection",
-                "apiKeyId must be a UUID.",
-                status_code=400,
-            )
-        )
-    try:
-        records = await service.put_auth_selections(
+    except ValueError as error:
+        raise CloudApiError(
+            "invalid_agent_auth_selection",
+            "apiKeyId must be a UUID.",
+            status_code=400,
+        ) from error
+    records = await service.put_auth_selections(
+        db,
+        user_id=user.id,
+        harness_kind=harness_kind,
+        surface=surface,
+        sources=sources,
+    )
+    # Persist settings alongside sources when provided.
+    if body.settings is not None:
+        await service.put_harness_settings(
             db,
             user_id=user.id,
             harness_kind=harness_kind,
             surface=surface,
-            sources=sources,
+            settings_dict=body.settings,
         )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    # Persist settings alongside sources when provided.
-    if body.settings is not None:
-        try:
-            await service.put_harness_settings(
-                db,
-                user_id=user.id,
-                harness_kind=harness_kind,
-                surface=surface,
-                settings_dict=body.settings,
-            )
-        except CloudApiError as error:
-            raise_cloud_error(error)
     titles = await service.key_titles(db, user_id=user.id)
     applied = await service.annotate_selection_delivery(db, user_id=user.id, records=records)
     return [
@@ -253,16 +236,13 @@ async def ack_agent_auth_state_endpoint(
     acknowledged"). The cloud surface's twin is stamped server-side by the
     materialization worker, not through this route.
     """
-    try:
-        record = await service.ack_auth_state_delivery(
-            db,
-            user_id=user.id,
-            surface=surface,
-            revision=body.revision,
-            fingerprint=body.fingerprint,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    record = await service.ack_auth_state_delivery(
+        db,
+        user_id=user.id,
+        surface=surface,
+        revision=body.revision,
+        fingerprint=body.fingerprint,
+    )
     return delivery_ack_payload(record)
 
 
@@ -292,10 +272,7 @@ async def get_agent_gateway_enrollment_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentGatewayEnrollmentResponse:
-    try:
-        record = await service.get_enrollment(db, user_id=user.id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    record = await service.get_enrollment(db, user_id=user.id)
     return enrollment_payload(record)
 
 
@@ -322,16 +299,13 @@ async def put_org_agent_policy_endpoint(
     org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrgAgentPolicyResponse:
-    try:
-        snapshot = await service.update_org_policy(
-            db,
-            organization_id=org_admin.organization_id,
-            updated_by_user_id=org_admin.actor_user_id,
-            allowed_routes=body.allowed_routes,
-            allowed_harnesses=body.allowed_harnesses,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    snapshot = await service.update_org_policy(
+        db,
+        organization_id=org_admin.organization_id,
+        updated_by_user_id=org_admin.actor_user_id,
+        allowed_routes=body.allowed_routes,
+        allowed_harnesses=body.allowed_harnesses,
+    )
     return org_agent_policy_payload(snapshot)
 
 

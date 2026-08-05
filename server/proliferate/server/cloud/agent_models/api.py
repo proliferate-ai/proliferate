@@ -37,7 +37,6 @@ from proliferate.server.cloud.agent_models.models import (
     models_payload,
     override_payload,
 )
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.runtime_workers.auth import (
     WorkerAuthContext,
     authenticate_worker,
@@ -59,14 +58,11 @@ async def get_agent_models_endpoint(
     routes): one composed observation per harness, cloud-sandbox observations
     only.
     """
-    try:
-        layered = await snapshots_service.get_models(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    layered = await snapshots_service.get_models(
+        db,
+        user_id=user.id,
+        harness_kind=harness_kind,
+    )
     return models_payload(harness_kind=harness_kind, layered=layered)
 
 
@@ -88,21 +84,18 @@ async def ingest_agent_model_snapshot_endpoint(
     resolved from the Worker's sandbox row, so the body carries no user
     identity to spoof.
     """
-    try:
-        owner_user_id = await snapshots_service.resolve_upload_owner(
-            db,
-            runtime_kind=auth.runtime_kind,
-            cloud_sandbox_id=auth.cloud_sandbox_id,
-        )
-        layered = await snapshots_service.ingest_snapshot(
-            db,
-            owner_user_id=owner_user_id,
-            harness_kind=harness_kind,
-            snapshot_json=body.snapshot_json,
-            probed_at=body.probed_at,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    owner_user_id = await snapshots_service.resolve_upload_owner(
+        db,
+        runtime_kind=auth.runtime_kind,
+        cloud_sandbox_id=auth.cloud_sandbox_id,
+    )
+    layered = await snapshots_service.ingest_snapshot(
+        db,
+        owner_user_id=owner_user_id,
+        harness_kind=harness_kind,
+        snapshot_json=body.snapshot_json,
+        probed_at=body.probed_at,
+    )
     return models_payload(harness_kind=harness_kind, layered=layered)
 
 
@@ -113,15 +106,12 @@ async def upsert_agent_model_override_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentModelOverrideResponse:
-    try:
-        record = await overrides_service.upsert_override(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-            patch_json=body.patch_json,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    record = await overrides_service.upsert_override(
+        db,
+        user_id=user.id,
+        harness_kind=harness_kind,
+        patch_json=body.patch_json,
+    )
     return override_payload(record)
 
 
@@ -131,11 +121,8 @@ async def delete_agent_model_override_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> None:
-    try:
-        await overrides_service.delete_override(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    await overrides_service.delete_override(
+        db,
+        user_id=user.id,
+        harness_kind=harness_kind,
+    )

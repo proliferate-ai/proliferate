@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.github_app.transactions import (
     commit_github_app_reauthorization_on_error,
 )
@@ -54,15 +53,12 @@ async def list_cloud_workspaces_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[WorkspaceSummary]:
-    try:
-        return await list_cloud_workspaces_for_user(
-            db,
-            user.id,
-            lifecycle=lifecycle,
-            desktop_install_id=desktop_install_id,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await list_cloud_workspaces_for_user(
+        db,
+        user.id,
+        lifecycle=lifecycle,
+        desktop_install_id=desktop_install_id,
+    )
 
 
 @router.post(
@@ -79,10 +75,7 @@ async def create_cloud_workspace_endpoint(
     # the workspace back.
     db: AsyncSession = Depends(get_async_session, scope="function"),
 ) -> WorkspaceDetail:
-    try:
-        return await create_cloud_workspace_for_user(db, user, body)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await create_cloud_workspace_for_user(db, user, body)
 
 
 @router.get("/workspaces/{workspace_id}", response_model=WorkspaceDetail)
@@ -92,15 +85,12 @@ async def get_cloud_workspace_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
-    try:
-        return await get_cloud_workspace_detail(
-            db,
-            user.id,
-            workspace_id,
-            desktop_install_id=desktop_install_id,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await get_cloud_workspace_detail(
+        db,
+        user.id,
+        workspace_id,
+        desktop_install_id=desktop_install_id,
+    )
 
 
 @router.post(
@@ -113,15 +103,12 @@ async def create_workspace_materialization_intent_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MaterializationIntentResponse:
-    try:
-        return await create_local_materialization_intent(
-            db,
-            user_id=user.id,
-            workspace_id=workspace_id,
-            body=body,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await create_local_materialization_intent(
+        db,
+        user_id=user.id,
+        workspace_id=workspace_id,
+        body=body,
+    )
 
 
 @router.put(
@@ -135,16 +122,13 @@ async def report_workspace_materialization_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceMaterializationSummary:
-    try:
-        return await report_materialization(
-            db,
-            user_id=user.id,
-            workspace_id=workspace_id,
-            materialization_id=materialization_id,
-            body=body,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await report_materialization(
+        db,
+        user_id=user.id,
+        workspace_id=workspace_id,
+        materialization_id=materialization_id,
+        body=body,
+    )
 
 
 @router.delete(
@@ -157,15 +141,12 @@ async def unlink_workspace_materialization_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> None:
-    try:
-        await unlink_materialization(
-            db,
-            user_id=user.id,
-            workspace_id=workspace_id,
-            materialization_id=materialization_id,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    await unlink_materialization(
+        db,
+        user_id=user.id,
+        workspace_id=workspace_id,
+        materialization_id=materialization_id,
+    )
 
 
 @router.get(
@@ -177,10 +158,7 @@ async def get_cloud_workspace_runtime_status_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudWorkspaceRuntimeStatusResponse:
-    try:
-        return await get_cloud_workspace_runtime_status(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await get_cloud_workspace_runtime_status(db, user.id, workspace_id)
 
 
 @router.patch("/workspaces/{workspace_id}/display-name", response_model=WorkspaceDetail)
@@ -190,15 +168,12 @@ async def update_cloud_workspace_display_name_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
-    try:
-        return await sync_cloud_workspace_display_name(
-            db,
-            user.id,
-            workspace_id,
-            display_name=body.display_name,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await sync_cloud_workspace_display_name(
+        db,
+        user.id,
+        workspace_id,
+        display_name=body.display_name,
+    )
 
 
 @router.post("/workspaces/{workspace_id}/archive", response_model=WorkspaceDetail)
@@ -207,10 +182,7 @@ async def archive_cloud_workspace_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
-    try:
-        return await archive_cloud_workspace_for_user(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await archive_cloud_workspace_for_user(db, user.id, workspace_id)
 
 
 @router.post("/workspaces/{workspace_id}/restore", response_model=WorkspaceDetail)
@@ -219,10 +191,7 @@ async def restore_cloud_workspace_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
-    try:
-        return await restore_cloud_workspace_for_user(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await restore_cloud_workspace_for_user(db, user.id, workspace_id)
 
 
 @router.delete("/workspaces/{workspace_id}", status_code=204)
@@ -231,7 +200,4 @@ async def delete_cloud_workspace_endpoint(
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> None:
-    try:
-        await delete_cloud_workspace_for_user(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    await delete_cloud_workspace_for_user(db, user.id, workspace_id)

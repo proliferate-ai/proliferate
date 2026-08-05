@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.secrets import service
 from proliferate.server.cloud.secrets.models import (
     CloudSecretsResponse,
@@ -54,15 +54,12 @@ async def put_personal_secret_env_var_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_personal_secret_env_var(
-            db,
-            user_id=user.id,
-            name=name,
-            value=body.value,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_personal_secret_env_var(
+        db,
+        user_id=user.id,
+        name=name,
+        value=body.value,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -72,14 +69,11 @@ async def delete_personal_secret_env_var_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.delete_personal_secret_env_var(
-            db,
-            user_id=user.id,
-            name=name,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.delete_personal_secret_env_var(
+        db,
+        user_id=user.id,
+        name=name,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -89,15 +83,12 @@ async def put_personal_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_personal_secret_file(
-            db,
-            user_id=user.id,
-            path=body.path,
-            content=body.content,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_personal_secret_file(
+        db,
+        user_id=user.id,
+        path=body.path,
+        content=body.content,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -108,15 +99,12 @@ async def upload_personal_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_personal_secret_file(
-            db,
-            user_id=user.id,
-            path=path,
-            content=await _read_uploaded_secret_file(file),
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_personal_secret_file(
+        db,
+        user_id=user.id,
+        path=path,
+        content=await _read_uploaded_secret_file(file),
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -126,14 +114,11 @@ async def delete_personal_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.delete_personal_secret_file(
-            db,
-            user_id=user.id,
-            path=body.path,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.delete_personal_secret_file(
+        db,
+        user_id=user.id,
+        path=body.path,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -143,14 +128,11 @@ async def get_organization_secrets_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.get_organization_secrets(
-            db,
-            user_id=user.id,
-            organization_id=organization_id,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.get_organization_secrets(
+        db,
+        user_id=user.id,
+        organization_id=organization_id,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -165,16 +147,13 @@ async def put_organization_secret_env_var_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_organization_secret_env_var(
-            db,
-            user_id=user.id,
-            organization_id=organization_id,
-            name=name,
-            value=body.value,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_organization_secret_env_var(
+        db,
+        user_id=user.id,
+        organization_id=organization_id,
+        name=name,
+        value=body.value,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -188,15 +167,12 @@ async def delete_organization_secret_env_var_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.delete_organization_secret_env_var(
-            db,
-            user_id=user.id,
-            organization_id=organization_id,
-            name=name,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.delete_organization_secret_env_var(
+        db,
+        user_id=user.id,
+        organization_id=organization_id,
+        name=name,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -210,16 +186,13 @@ async def put_organization_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_organization_secret_file(
-            db,
-            user_id=user.id,
-            organization_id=organization_id,
-            path=body.path,
-            content=body.content,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_organization_secret_file(
+        db,
+        user_id=user.id,
+        organization_id=organization_id,
+        path=body.path,
+        content=body.content,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -234,16 +207,13 @@ async def upload_organization_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_organization_secret_file(
-            db,
-            user_id=user.id,
-            organization_id=organization_id,
-            path=path,
-            content=await _read_uploaded_secret_file(file),
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_organization_secret_file(
+        db,
+        user_id=user.id,
+        organization_id=organization_id,
+        path=path,
+        content=await _read_uploaded_secret_file(file),
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -257,15 +227,12 @@ async def delete_organization_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.delete_organization_secret_file(
-            db,
-            user_id=user.id,
-            organization_id=organization_id,
-            path=body.path,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.delete_organization_secret_file(
+        db,
+        user_id=user.id,
+        organization_id=organization_id,
+        path=body.path,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -279,15 +246,12 @@ async def get_workspace_secrets_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.get_workspace_secrets(
-            db,
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.get_workspace_secrets(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -303,17 +267,14 @@ async def put_workspace_secret_env_var_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_workspace_secret_env_var(
-            db,
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            name=name,
-            value=body.value,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_workspace_secret_env_var(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        name=name,
+        value=body.value,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -328,16 +289,13 @@ async def delete_workspace_secret_env_var_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.delete_workspace_secret_env_var(
-            db,
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            name=name,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.delete_workspace_secret_env_var(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        name=name,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -352,17 +310,14 @@ async def put_workspace_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_workspace_secret_file(
-            db,
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            path=body.path,
-            content=body.content,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_workspace_secret_file(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        path=body.path,
+        content=body.content,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -378,17 +333,14 @@ async def upload_workspace_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.set_workspace_secret_file(
-            db,
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            path=path,
-            content=await _read_uploaded_secret_file(file),
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.set_workspace_secret_file(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        path=path,
+        content=await _read_uploaded_secret_file(file),
+    )
     return cloud_secrets_payload(value, materialization=materialization)
 
 
@@ -403,14 +355,11 @@ async def delete_workspace_secret_file_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> CloudSecretsResponse:
-    try:
-        value, materialization = await service.delete_workspace_secret_file(
-            db,
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            path=body.path,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    value, materialization = await service.delete_workspace_secret_file(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        path=body.path,
+    )
     return cloud_secrets_payload(value, materialization=materialization)
