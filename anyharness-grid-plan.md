@@ -27,7 +27,8 @@ first. Written 2026-08-05 against `origin/main` @ `1471d4f7e`.
 ## Dependency graph
 
 ```text
-PR1 (checker) ──┬── PR2 (acp move)      [independent of 3–5, conflicts on allowlist]
+PR1 (checker) ──┬── PR1.5 (lints/ folder move — lands right after PR 1, before ratcheting)
+                ├── PR2 (acp move)      [independent of 3–5, conflicts on allowlist]
                 ├── PR3 (store escapes)
                 ├── PR4 (ProblemResponse)
                 ├── PR5a (workspaces SQL + retention_policy split)
@@ -103,6 +104,41 @@ ratchet behavior (over-count fails, stale-count fails).
 **Gates**: `python3 scripts/check_anyharness_boundaries.py` exits 0 on the
 seeded tree; unittest suite green; negative control — temporarily delete
 one seed line, checker must fail, restore.
+
+---
+
+## PR 1.5 — Move the lint suite to a top-level `lints/` folder
+
+**Branch**: `codex/lints-folder` off PR 1 head (it moves the files PR 1
+edits — must land after it). Python/docs only, **no Rust build**.
+
+`scripts/` is 72 mixed entries; the lint family (~20 files and growing) gets
+a designated home, allowlists co-located with their checkers:
+
+```text
+lints/
+  rust/       check_anyharness_boundaries.py + allowlist + test,
+              check_anyharness_old_paths.py,
+              check_session_mutation_admission.py + txts,
+              check_proliferate_worker_structure.py
+  frontend/   check_frontend_boundaries.py + allowlist + test,
+              frontend_imports.py, report_frontend_structure.py + allowlist,
+              check_appearance_scaling.py (+ baseline json + test),
+              check_design_attribution.py (+ test), check_toast_copy.py (+ test),
+              check_theme_contrast.py, check_mobile_product_client_export.py
+  server/     check_server_boundaries.py + allowlist, check_migration_heads.py,
+              check_workflow_managed_boundaries.py
+  repo/       check_max_lines.py + allowlist, check_docs.py (+ test)
+```
+
+Mechanics: `git mv` (history follows); bump each mover's
+`REPO_ROOT = parents[1]` → `parents[2]`; fix package-style imports in the
+frontend test (`from scripts import …`); update ~15 `ci.yml` lines; update
+every doc citing `scripts/check_*` paths (6+ spec files incl. the frontend
+README's CI-Enforced Repo Shape section) in the same PR. Deliberately
+top-level (not `scripts/lints/`) — enforcement is first-class, like
+`specs/`. Must land **before** the cleanup PRs start ratcheting, or every
+later PR's allowlist path churns.
 
 ---
 
@@ -339,6 +375,8 @@ with everything).
 ## Session sequencing (what runs when)
 
 - **Now**: recon workflow (running) → PR 1 build-out → PR 1 up.
+- **Right after PR 1 merges**: PR 1.5 (lints/ folder) — path churn must land
+  before the allowlist starts shrinking.
 - **Then serially** (allowlist conflicts + one-build rule): PR 3 → PR 4 →
   PR 5 → PR 2 (acp last of the mechanical set — biggest rebase surface),
   each rebased onto the previous head.
