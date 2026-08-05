@@ -167,11 +167,12 @@ named debt).
 ```text
 contract  -> (nothing in lib)                                LAW (crate edge)
 api       -> domain facades + models, contract, edge siblings HOLDS  (leak: 4× state.session_service.store(), WorkspaceStore::new in hosting.rs)
-runtime   -> own service/store, other facades, live/<area>    HOLDS  (valve rule: crate::live in domains/** only from runtime.rs / runtime/** / live_ports.rs; ~35/37 files clean)
-service   -> own store, foreign stores (READS), adapters      LEAKS  (mobility + materialization services hold live handles; foreign-store writes unguarded — pub methods, convention only)
+runtime   -> own service/store, other facades, live/<area>    HOLDS  (valve rule: crate::live POWER imports in domains/** only from runtime.rs / runtime/** / live_ports.rs; importing live model SHAPES to implement observer traits is the sanctioned inversion and legal anywhere)
+service   -> own store, foreign stores (READS), adapters      LEAKS  (9 files import live powers outside the valve — see backlog #1/#2/#13; foreign-store writes unguarded — pub methods, convention only)
 concerns  -> model.rs, other pure concerns                    HOLDS
-store     -> persistence                                      HOLDS  (drift: 2 SQL files in workspaces outside store/)
-live      -> domain SHAPES only (model.rs, pure prompt types) HOLDS AT ZERO (non-test)
+store     -> persistence                                      HOLDS  (drift: SQL embedded outside store modules in 8 files across 5 domains — see backlog #8)
+live/sessions -> domain SHAPES only (model.rs, prompt types)  HOLDS AT ZERO (non-test; one probe.rs exception — backlog #14)
+live/terminals -> domains/terminals service+store             LEAKS BY DESIGN (older doctrine, deliberately retained)
 adapters  -> std, vendor libs                                 HOLDS AT ZERO (semantic leaks only)
 integrations -> the foreign spec                              HOLDS AT ZERO
 core domains -> product domains (cowork/reviews/goals/...)    HOLDS  (5 test-only imports; inverted via SessionExtension/observer traits)
@@ -227,22 +228,30 @@ Currently **passing** with a 2-entry ratcheted allowlist
 
 ### Rules NOT yet automated (checker gaps)
 
-Each fits the existing engine as roughly one function + allowlist seed:
+Each fits the existing engine as roughly one function + allowlist seed
+(seed counts measured 2026-08-05):
 
 1. **The valve rule** — `crate::live` in `domains/**` legal only from
-   `runtime.rs`/`runtime/**`/`live_ports.rs`. Would flag exactly the two
-   known deviants (mobility, materialization).
-2. **`live ↛ domain stores/services`** — measured at zero non-test imports
-   today; adding the rule is a free ratchet that locks the doctrine in.
+   `runtime.rs`/`runtime/**`/`live_ports.rs`, **except** imports of live
+   model shapes (`crate::live::<area>::model::*`) — the sanctioned
+   inversion domains use to implement observer traits. Seeds: 9 power
+   importers (backlog #1, #2, #13).
+2. **`live ↛ domain stores/services`** — near zero: seeds are 5
+   `live/terminals` files (deliberately retained, ratchet only),
+   `live/sessions/probe.rs` (#14), and one engine-invisible
+   `#[cfg(test)]` import.
 3. **The api store-escape ban** — line pattern for `.store()` /
-   `*Store::new` under `api/`; seed the allowlist with the 5 known sites.
-4. **Policy purity** — `Utc::now`, `Uuid::new_v4`, `&self`, or store types
-   inside `*_policy.rs`.
-5. **Generalize the sessions-store rule** to every domain's `store/`
-   (api/live imports forbidden from any store module).
+   `*Store::new` / store imports under `api/`; seeds: the 6 sites in #4.
+4. **Policy purity** — `Utc::now`/`SystemTime::now`/`Uuid::new_v4`/store
+   imports inside `*_policy.rs`. (Not `&self` — measured: it over-fires
+   on Display impls and plain data methods; that stays judgment.) Seed:
+   `retention_policy.rs` (#15).
+5. **Generalize the sessions-store rule** to every domain's `store/`,
+   plus a new **SQL-outside-store** rule (`INSERT INTO`/`SELECT…FROM`/
+   `ON CONFLICT` in non-store domain files); seeds: the 8 files in #8.
 6. **Broaden the contract ban** beyond `*Request`/`*Response` — any
-   `anyharness_contract` import in `domains/**`, seeded with the ~81
-   existing lines as allowlist, ratcheted down.
+   `anyharness_contract` import in `domains/**`; seeds: 86 import lines
+   across 85 files (#3), ratcheted down per-domain.
 
 Beyond the checker: leaves-first **crate splits** (`observability`,
 `persistence`, `adapters`, `integrations` are at zero violations, so
@@ -260,22 +269,26 @@ whether an automated check flags it today.
 
 | # | Violation | Rule broken | Caught? | Target |
 | --- | --- | --- | --- | --- |
-| 1 | `domains/mobility/service.rs` (~1.5k lines) holds `live::terminals::TerminalService` directly; interleaves fetch/effect per item in `destroy_source_workspace`, `preflight_workspace` | service ↛ live (the valve); resolve-then-execute | No (gap 1) | a mobility runtime valve |
-| 2 | `domains/materialization/service.rs` — live access without a runtime layer | service ↛ live | No (gap 1) | same promotion |
-| 3 | ~81 `anyharness_contract` import lines in `domains/**` (worst: `runtime_config` persists wire types as rows; `agents/auth` uses contract structs as its domain model) | no wire types past the edge | Partially — only `*Request`/`*Response` (2 allowlisted) | domain twins at the seams |
-| 4 | `state.session_service.store()` at 4 api sites + `WorkspaceStore::new` in `api/http/hosting.rs` | handlers call facades, never stores | No (gap 3) | facade methods |
+| 1 | `domains/mobility/service.rs` (~1.5k lines) holds `live::terminals::TerminalService` directly (`:32`); interleaves fetch/effect per item in `destroy_source_workspace`, `preflight_workspace` | service ↛ live (the valve); resolve-then-execute | No (gap 1) | a mobility runtime valve |
+| 2 | `domains/materialization/service.rs:33` — live access without a runtime layer | service ↛ live | No (gap 1) | same promotion |
+| 3 | 86 `anyharness_contract` import lines + 30 inline uses across 85 files in `domains/**` (worst: `workspaces/retire_preflight.rs` 7, `loops/runtime.rs` 7; `runtime_config` persists wire types as rows; `agents/auth` uses contract structs as its domain model) | no wire types past the edge | Partially — only `*Request`/`*Response` (2 allowlisted) | domain twins at the seams |
+| 4 | `.store()` in `api/http/{mobility.rs:330, workspaces_purge.rs:65, sessions_pending.rs:197, workspaces_lifecycle.rs:448}` + `WorkspaceStore::new` in `api/http/hosting.rs:201` | handlers call facades, never stores | No (gap 3) | facade methods |
 | 5 | `api/http/workspaces_lifecycle.rs` — retire state machine written in the handler (three copies) | no business logic in handlers | No (judgment) | lifecycle service in `domains/workspaces` |
 | 6 | `WorkspaceService`/`WorkspaceRuntime` — duplicated, diverged use-case bodies | one entry per use case | No (judgment) | one entry surface |
 | 7 | Foreign-store mutation methods are plain `pub`; cross-domain reads-only holds by review, not law | foreign stores are READS only | No (visibility ratchet) | `pub(crate)` scoping after crate split |
-| 8 | 2 SQL files in `domains/workspaces` outside `store/` | rows/SQL stay in the store | No (gap 5) | fold into `store/` |
+| 8 | SQL embedded outside store modules in 8 non-test files across 5 domains (~29 lines; worst: `sessions/links/completions.rs` 14; also `plans/service.rs`, `workspaces/{retention_policy,access_store,inventory,access_gate}.rs`, `activity/feeds.rs`, `plans/decision_op.rs`) | rows/SQL stay in the store | No (gap 5 + new SQL rule) | fold into each domain's `store/` |
 | 9 | `agents/` — undocumented federation of 8 subdomains, absent from the migration ledger | ledger truth | No | ledger truth-up, then promotion decisions |
 | 10 | Provider branches (`agent_kind` matches) in ~30 shared files (worst: `session_lifecycle.rs` 30, `user_input.rs` 21, `process.rs` 20) | branching begs for a capability trait | No (judgment) | harness-capabilities trait for the worst files only — proportionality, not a blanket rewrite |
 | 11 | `acp/` homeless at src root | filing grammar | No | move to `integrations/acp` |
 | 12 | `agents_model_registry.rs` ProblemResponse — a second error mechanism at the edge | one error doctrine per surface | No (judgment) | fold into `ApiError` |
+| 13 | 7 more files import live POWERS outside the valve: `workspaces/{retire_preflight.rs:22, setup_runtime.rs:8, access_gate.rs:8}`, `agents/auth/login_terminal.rs:1`, `agents/model_snapshot/{probe.rs:40, entry.rs:20}`, `sessions/{execution_summary.rs:7, subagents/hooks.rs:13}` | service ↛ live (the valve) | No (gap 1) | per-file: promote to runtime, or re-export the needed type via `live/<area>/model.rs` when it is a shape not a power |
+| 14 | `live/sessions/probe.rs:19` imports `domains/agents/readiness/service` — the one non-test break in "live never fetches" | live ↛ domain services | No (gap 2) | capability trait or relocate the probe |
+| 15 | `workspaces/retention_policy.rs` — a `*_policy.rs` file with `Utc::now` (:44, :66) and embedded SQL — misnamed: it is a store with a clock | policy purity | No (gap 4) | split into store queries + a pure policy |
 
-Deliberately retained, not debt: `live/terminals` uses the older
-lock-shared-registry doctrine rather than actors — proportionality says do
-not "fix" it.
+Deliberately retained, not debt: `live/terminals` imports
+`domains/terminals` service+store (5 files) — the older lock-shared-registry
+doctrine rather than actors; proportionality says do not "fix" it. It gets
+allowlist entries marked "ratchet only," never a rewrite.
 
 ## Change Discipline
 

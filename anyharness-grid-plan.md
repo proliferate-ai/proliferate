@@ -30,10 +30,12 @@ first. Written 2026-08-05 against `origin/main` @ `1471d4f7e`.
 PR1 (checker) ──┬── PR2 (acp move)      [independent of 3–5, conflicts on allowlist]
                 ├── PR3 (store escapes)
                 ├── PR4 (ProblemResponse)
-                ├── PR5 (stray SQL)
+                ├── PR5a (workspaces SQL + retention_policy split)
+                │     └── PR5b (remaining SQL folds) ── PR5c (probe.rs fetch)
                 ├── PR6a (mobility move) ── PR6b (mobility policy)
-                ├── PR7 (materialization)   [after 6a proves the recipe]
+                ├── PR7 (materialization) ── PR7b (valve stragglers → valve at zero)
                 ├── PR8 (workspaces entry)  ── PR9 (lifecycle handler)
+                │     [7b's workspaces items coordinate with 8]
                 ├── PR10.x (contract ratchet, per-domain series)
                 └── PR11 (agents ledger, docs-only, anytime)
 PR12 (capability trait)  — design brief first, after 10.x stabilizes
@@ -55,19 +57,43 @@ New rules (IDs, semantics, engine placement):
 
 | Rule ID | Semantics | Engine hook |
 | --- | --- | --- |
-| `DOMAIN_LIVE_VALVE` | `crate::live` (import or inline path) in `domains/**` legal only in `runtime.rs`, `runtime/**`, `live_ports.rs` | import walk + line pattern |
+| `DOMAIN_LIVE_VALVE` | `crate::live` (import or inline path) in `domains/**` legal only in `runtime.rs`, `runtime/**`, `live_ports.rs` — **shapes exception**: `crate::live::<area>::model::*` imports are legal anywhere (the sanctioned observer-trait inversion) | import walk + line pattern |
 | `LIVE_DOMAIN_STORE_IMPORT` | `live/**` importing any `crate::domains::*::store` or `::service` path | import walk |
 | `API_STORE_ESCAPE` | under `api/**`: `.store()` call or `[A-Za-z]+Store::new` or importing `crate::domains::*::store` | line pattern + import walk |
-| `POLICY_PURITY` | in `*_policy.rs` under `domains/**`: `Utc::now`, `Local::now`, `SystemTime::now`, `Instant::now`, `Uuid::new_v4`, `&self`/`&mut self` in fn sigs, store/live/adapters imports | line pattern per policy file |
+| `POLICY_PURITY` | in `*_policy.rs` under `domains/**`: `Utc::now`, `Local::now`, `SystemTime::now`, `Instant::now`, `Uuid::new_v4`, `rand::`, store/adapters imports. NOT `&self` (measured: over-fires on Display impls / plain data methods — stays judgment) | line pattern per policy file |
 | `DOMAIN_STORE_API_IMPORT` / `DOMAIN_STORE_LIVE_IMPORT` | generalize the sessions-store rule to every `domains/*/store{.rs,/}` | import walk, path predicate generalized |
+| `DOMAIN_SQL_OUTSIDE_STORE` | SQL text (`INSERT INTO`, `SELECT … FROM`, `ON CONFLICT`, `CREATE TABLE`, `params!`) in `domains/**` outside store modules | line pattern, calibrated against the 8 known files |
 | `DOMAIN_CONTRACT_IMPORT` | any `anyharness_contract` use-line in `domains/**` (broader than the existing `*Request/*Response` rule, which stays) | import walk |
 
-Allowlist seeds come from the recon workflow measurements (exact per-file
-counts): mobility + materialization under `DOMAIN_LIVE_VALVE`; the api
-`.store()`/`Store::new` sites under `API_STORE_ESCAPE`; per-file
-`DOMAIN_CONTRACT_IMPORT` counts (~81 lines); any stray-SQL-adjacent store
-findings under the generalized store rules. Every seed line carries a
-reason string that names the target PR in this plan.
+Allowlist seeds are measured (recon 2026-08-05), not estimated:
+
+- `DOMAIN_LIVE_VALVE`: 9 power-importing files — mobility/service.rs:32,
+  materialization/service.rs:33, workspaces/{retire_preflight:22,
+  setup_runtime:8, access_gate:8+test-mod re-import},
+  agents/auth/login_terminal.rs:1, agents/model_snapshot/{probe.rs:40,
+  entry.rs:20 (inline), test_support.rs}, sessions/{execution_summary.rs:7,
+  subagents/hooks.rs:13}. The observer files (goals/plans/activity/loops/
+  reviews session_observer.rs etc.) fall under the shapes exception and
+  must NOT be seeded.
+- `LIVE_DOMAIN_STORE_IMPORT`: 5 live/terminals files (reason: "older
+  doctrine, deliberately retained — ratchet only"), live/sessions/probe.rs:19
+  (real debt), background_work/mod.rs cfg(test)-mod import (engine can't
+  see cfg boundaries — seeded with that reason).
+- `API_STORE_ESCAPE`: mobility.rs:330, workspaces_purge.rs:65,
+  sessions_pending.rs:197, workspaces_lifecycle.rs:448, hosting.rs:201 +
+  :29 import; workspaces_purge.rs test-mod `Store::new` lines seeded as
+  cfg-invisible.
+- `POLICY_PURITY`: workspaces/retention_policy.rs (Utc::now ×2 + SQL —
+  misnamed file, actually a store with a clock).
+- `DOMAIN_SQL_OUTSIDE_STORE`: sessions/links/completions.rs (14),
+  plans/service.rs (4), workspaces/retention_policy.rs (4),
+  workspaces/access_store.rs (3), activity/feeds.rs, plans/decision_op.rs,
+  workspaces/inventory.rs, workspaces/access_gate.rs (1 each) +
+  workflows/workspace_materialization/test_support.rs.
+- `DOMAIN_CONTRACT_IMPORT`: 86 import lines across 85 files (self-seeded
+  from the checker's own first run so counts match its parser exactly).
+
+Every seed line's reason names the cleanup PR in this plan.
 
 Tests (`test_check_anyharness_boundaries.py`, unittest, no repo access —
 fabricate files in tempdirs the way `test_check_frontend_boundaries.py`
@@ -131,14 +157,35 @@ rendering, stop and surface instead of silently changing the wire.
 
 ---
 
-## PR 5 — Stray workspaces SQL into `store/` (violation #8)
+## PR 5 — SQL-outside-store fold (violation #8) — now a 2-PR series
 
-**Branch**: `codex/anyharness-workspaces-sql-fold` off PR 1 head.
-**Touches**: the 2 SQL-bearing files in `domains/workspaces` outside
-`store/` (exact list from recon). Move query text + row structs into the
-store module; callers keep their signatures; no query changes. Allowlist
-−(their seeds) under the generalized store rules.
-**One cargo build.**
+Recon found 8 non-test offenders across 5 domains (~29 SQL lines), not 2.
+
+**PR 5a** `codex/anyharness-sql-fold-workspaces` off PR 1 head:
+the workspaces cluster — `access_store.rs` (3), `inventory.rs` (1),
+`access_gate.rs` (1), plus `retention_policy.rs`'s 4 SQL lines **and its
+`Utc::now` impurity in the same PR** (violation #15: the file is a store
+with a clock wearing a policy name — split into store queries + a pure
+policy fn, clock value passed in). This clears both the SQL seeds and the
+`POLICY_PURITY` seed for workspaces.
+
+**PR 5b** `codex/anyharness-sql-fold-rest` off 5a head: `plans/service.rs`
+(4) + `plans/decision_op.rs` (1), `activity/feeds.rs` (1), and the big one
+— `sessions/links/completions.rs` (14 SQL lines) folded into
+`sessions/store/`. Move query text + row structs; callers keep signatures;
+no query changes.
+
+**One cargo build each.**
+
+## PR 5c — live/sessions/probe.rs fetch (violation #14, small)
+
+**Branch**: rides with PR 5b or stands alone.
+`live/sessions/probe.rs:19` imports
+`domains/agents/readiness/service::resolve_agent_unrouted` — the single
+non-test break in "live never fetches." Remedy per doctrine: pass the
+resolved fact in at the call boundary or wire a capability trait in
+`app/`. Read the call site first; pick the smaller diff. Allowlist −1;
+live/sessions returns to zero.
 
 ---
 
@@ -182,8 +229,32 @@ fail. **One cargo build.**
 
 **Branch**: `codex/anyharness-materialization-valve` off PR 6a head (to
 reuse the recipe; rebase onto main once 6a merges). Same split as 6a+6b in
-one PR (the domain is much smaller). Deletes the last
-`DOMAIN_LIVE_VALVE` allowlist entry — **valve rule reaches zero; flip the
+one PR (the domain is much smaller). **One cargo build.**
+
+## PR 7b — Remaining valve stragglers (violation #13)
+
+**Branch**: `codex/anyharness-valve-stragglers` off PR 7 head. The 7
+non-mobility/materialization power importers, each with its own remedy —
+read before moving:
+
+- `workspaces/{retire_preflight,setup_runtime,access_gate}.rs` import
+  `live::terminals::TerminalService` → these are workspace use cases that
+  drive terminals; they belong behind a workspaces runtime (may fold into
+  PR 8's one-entry-surface work — coordinate, don't duplicate).
+- `agents/auth/login_terminal.rs` → agents-side terminal driving; promote
+  into an agents runtime seam or re-home the use case.
+- `agents/model_snapshot/{probe.rs,entry.rs,test_support.rs}` import
+  `live::sessions::probe` → probe types are arguably shapes; decide:
+  re-export `ProbeSnapshot`/`ProbeOptions` via `live/sessions/model.rs`
+  (shapes exception then applies) or valve them. Prefer the re-export —
+  smallest diff, honest semantics.
+- `sessions/execution_summary.rs` imports
+  `live::sessions::handle::LiveSessionExecutionSnapshot` → a shape living
+  in handle.rs; re-export via model.rs, fix the import. Trivial.
+- `sessions/subagents/hooks.rs` imports `LiveSessionManager` → a real
+  power; move the hook wiring to `live_ports.rs` or the runtime.
+
+After this PR the `DOMAIN_LIVE_VALVE` allowlist reaches zero — **flip the
 Dependency Direction row from LEAKS to HOLDS AT ZERO in
 `anyharness-structure.md` in this PR.** **One cargo build.**
 
