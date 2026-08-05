@@ -57,9 +57,8 @@ ignore = ["B008"]
 "proliferate/integrations/**" = ["ANN401"]
 # runtime/ operates on untyped E2B sandbox objects
 "proliferate/server/cloud/runtime/**" = ["ANN401"]
-# JSON crypto and telemetry scrubbing require Any at their recursive data boundaries.
+# JSON crypto requires Any at its recursive data boundary.
 "proliferate/utils/crypto.py" = ["ANN401"]
-"proliferate/lib/product/telemetry/scrubbing.py" = ["ANN401"]
 # Inline HTML/SVG page renderers contain long literal lines.
 "proliferate/auth/desktop/pages.py" = ["E501"]
 "proliferate/utils/redirect_callback_pages.py" = ["E501"]
@@ -83,12 +82,11 @@ warn_return_any = false
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-# cloud/runtime operates on untyped E2B sandbox objects; JSON crypto and telemetry
-# scrubbing require Any at their recursive data boundaries.
+# cloud/runtime operates on untyped E2B sandbox objects; JSON crypto requires Any
+# at its recursive data boundary.
 module = [
     "proliferate.server.cloud.runtime.*",
     "proliferate.utils.crypto",
-    "proliferate.lib.product.telemetry.scrubbing",
 ]
 disallow_any_explicit = false
 warn_return_any = false

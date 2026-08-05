@@ -32,6 +32,10 @@ from proliferate.db import engine as db_engine
 from proliferate.db.migrations import validate_database_schema
 from proliferate.errors import ProliferateError
 from proliferate.integrations.sentry import flush_server_sentry, init_server_sentry
+from proliferate.lib.product.telemetry.mode import (
+    get_server_telemetry_mode,
+    is_vendor_telemetry_enabled,
+)
 from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.ai_magic.api import router as ai_magic_router
@@ -252,7 +256,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     configure_server_logging()
-    init_server_sentry()
+    init_server_sentry(
+        enabled=is_vendor_telemetry_enabled(),
+        telemetry_mode=get_server_telemetry_mode(),
+    )
     api_prefix = _normalize_api_prefix(settings.api_path_prefix)
 
     app = FastAPI(
