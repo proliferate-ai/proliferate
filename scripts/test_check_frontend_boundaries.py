@@ -1375,6 +1375,16 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 "const chat = (Stores.useChatStore, fixture.store);\n"
                 "chat.setState({ unrelated: true });\n"
             ),
+            "apps/packages/product-client/src/hooks/chat/workflows/comma-last-alias.ts": (
+                "import { useChatStore } from '#product/stores/chat/chat-store';\n"
+                "const chat = (fixture.store, useChatStore);\n"
+                "chat.setState({ ready: true });\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/workflows/member-comma-last-alias.ts": (
+                "import * as Stores from '#product/stores/chat/chat-store';\n"
+                "const chat = (fixture.store, Stores.useChatStore);\n"
+                "chat.setState({ ready: true });\n"
+            ),
             "apps/packages/product-client/src/hooks/chat/workflows/member-target-safe.ts": (
                 "import * as Stores from '#product/stores/chat/chat-store';\n"
                 "({ useChatStore: target.store } = Stores);\n"
@@ -1412,6 +1422,8 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 "direct-alias.ts",
                 "member-alias.ts",
                 "asserted-direct-alias.ts",
+                "comma-last-alias.ts",
+                "member-comma-last-alias.ts",
             },
         )
 

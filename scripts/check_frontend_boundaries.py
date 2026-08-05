@@ -1609,6 +1609,25 @@ def _simple_alias_declaration(
     while cursor >= 0 and tokens[cursor].value == "(":
         receiver_groups += 1
         cursor -= 1
+    if cursor >= 0 and tokens[cursor].value == ",":
+        parens, _ = _matching_token_pairs(tokens, "(", ")")
+        comma_groups = [
+            (open_index, close_index)
+            for open_index, close_index in parens.items()
+            if open_index < cursor < receiver_index < close_index
+        ]
+        if not comma_groups:
+            return None
+        declaration_open, _ = max(comma_groups)
+        receiver_groups += 1
+        while (
+            declaration_open > 0
+            and tokens[declaration_open - 1].value == "("
+        ):
+            declaration_open -= 1
+            receiver_groups += 1
+        cursor = declaration_open - 1
+
     if cursor < 1 or tokens[cursor].value != "=":
         return None
     binding = tokens[cursor - 1]
