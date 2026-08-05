@@ -262,8 +262,11 @@ environment on Python 3.12, runs Ruff, and runs strict mypy through
 file, error code, normalized message, and multiplicity in a shrink-only
 baseline. A new diagnostic, a baseline increase relative to the comparison Git
 revision, or a stale entry after a fix fails the check. `make lint-server` uses
-the same frozen environment; after fixing existing diagnostics, ratchet the
-baseline down with:
+the same frozen environment. Pull requests compare with their base SHA, pushes
+compare with the event's pre-push SHA, and reusable/manual calls must provide an
+explicit trusted comparison SHA; a newly created release tag rechecks against
+its commit parent after the main-push gate. After fixing existing diagnostics,
+ratchet the baseline down with:
 
 ```bash
 cd server
