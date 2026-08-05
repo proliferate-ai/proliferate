@@ -106,6 +106,7 @@ class SourceKind:
     is_orm_model: bool = False
     is_integration: bool = False
     is_product: bool = False
+    is_migration: bool = False
 
 
 def should_skip(path: Path) -> bool:
@@ -122,6 +123,13 @@ def iter_target_files(repo_root: Path) -> list[Path]:
                 continue
             files.append(path)
     return files
+
+
+def iter_migration_files(repo_root: Path) -> list[Path]:
+    migration_root = repo_root / "server" / "alembic" / "versions"
+    if not migration_root.is_dir():
+        return []
+    return sorted(migration_root.glob("*.py"))
 
 
 def iter_structure_folders(repo_root: Path) -> list[Path]:
@@ -166,6 +174,7 @@ def classify_path(path: Path) -> SourceKind:
     is_store = _starts_with(parts, ("server", "proliferate", "db", "store"))
     is_orm_model = _starts_with(parts, ("server", "proliferate", "db", "models"))
     is_integration = _starts_with(parts, ("server", "proliferate", "integrations"))
+    is_migration = _starts_with(parts, ("server", "alembic", "versions"))
     name = path.name
     relative = relative_path(path)
     is_agent_auth_service_concern = (
@@ -195,6 +204,7 @@ def classify_path(path: Path) -> SourceKind:
         is_orm_model=is_orm_model,
         is_integration=is_integration,
         is_product=is_product,
+        is_migration=is_migration,
     )
 
 
@@ -321,6 +331,12 @@ class BoundaryChecker(ast.NodeVisitor):
             self._check_integration_import(node, module, names)
         if self.kind.is_product:
             self._check_product_raw_access_import(node, module)
+        if self.kind.is_migration and is_module(module, "proliferate"):
+            self.add(
+                node,
+                "MIGRATION_APP_IMPORT",
+                "Alembic revisions must be self-contained and must not import application code",
+            )
 
     def _check_api_import(self, node: ast.AST, module: str, names: set[str]) -> None:
         if is_module(module, "proliferate.db.store"):
@@ -788,7 +804,7 @@ def main() -> int:
         print("Server boundary check requires Python 3.12+ to parse server source.")
         return 2
 
-    paths = iter_target_files(REPO_ROOT)
+    paths = [*iter_target_files(REPO_ROOT), *iter_migration_files(REPO_ROOT)]
     allowlist = load_allowlist()
     violations = [*check_paths(paths), *check_structure(REPO_ROOT)]
     failing, stale = apply_allowlist(violations, allowlist)
