@@ -13,7 +13,7 @@ const typeScriptOutputPath = path.join(
 );
 const serverOutputPath = path.join(
   repoRoot,
-  "server/proliferate/lib/product/workspace_naming/animal_names_generated.py",
+  "server/proliferate/server/cloud/workspaces/domain/animal_names_generated.py",
 );
 const deniedNames = new Set([
   "affirmed",
