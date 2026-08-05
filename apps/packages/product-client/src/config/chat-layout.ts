@@ -1,9 +1,9 @@
 /**
  * Shared readable-width contract for transcript, composer, and chat states.
- * The thread column uses the 48rem transcript measure while Markdown prose
- * keeps the tighter readable cap applied by the transcript renderer.
+ * The thread column uses the same 40rem readable measure as the launch flow,
+ * keeping transcript and composer widths aligned before and after launch.
  */
-export const CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-transcript-thread";
+export const CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-transcript-readable";
 export const CHAT_SURFACE_GUTTER_CLASSNAME = "px-4";
 
 export const CHAT_SCROLL_BASE_BOTTOM_PADDING_PX = 40;

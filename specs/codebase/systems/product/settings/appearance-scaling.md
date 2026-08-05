@@ -5,10 +5,11 @@ Status: target
 Current gap: Desktop/Web already persist and apply independent UI font,
 readable-code font, and window-zoom preferences, but the visible contract is
 incomplete. At the frozen base, Default message/composer text is 13px while
-Default readable code is 10px; a production scan also finds 32 fixed text-size
-declarations across 20 files and 107 fixed-size vector-glyph call sites. Those
-fixed consumers respond to whole-window zoom but generally do not respond to
-the UI font preference.
+Default readable code is 10px; the target separates chat content from compact
+chrome at 16px/24px while keeping Default body and readable code at 13px. A
+production scan also finds 32 fixed text-size declarations across 20 files and
+107 fixed-size vector-glyph call sites. Those fixed consumers respond to
+whole-window zoom but generally do not respond to the UI font preference.
 
 Frozen delivery base: `ec2aafc2cf1d0d254adfce1bb0084a90e06e4b38`.
 
@@ -41,8 +42,9 @@ equivalent native setting.
   smaller than surrounding reading text, label/icon optical sizing that moves
   together, and stable compact-control hit areas.
 - **Intentional differences:** Proliferate retains eight independent UI and
-  readable-code presets, existing fonts and hierarchy, the 46rem chat column,
-  themes, and separate window zoom.
+  readable-code presets, existing fonts, the 40rem shared chat column, themes,
+  and separate window zoom. Chat/composer content is three pixels larger than
+  the same preset's compact body and code roles.
 - **Founder-approved Proliferate mock:**
   [Default and Extra Large scale contract](appearance-scaling-mock.svg). The
   founder approved the mock direction and complete-coverage rule on
@@ -70,28 +72,35 @@ The three stored ids remain independently selectable, persisted, resolved, and
 applied. Invalid or missing ids continue to fall back independently to
 `default`.
 
-## Readable-code parity
+## Chat-content and readable-code roles
 
-For every `id` in `APPEARANCE_SIZE_IDS`, the same-named readable-code font size
-equals the visible message/composer font size:
+For every `id` in `APPEARANCE_SIZE_IDS`, readable code follows the compact body
+ramp while chat and composer content use a dedicated three-pixel-larger ramp:
 
 ```text
 READABLE_CODE_FONT_SCALES[id].monacoFontSize
-  = px(UI_FONT_SCALES[id].composer.fontSize)
+  = px(UI_FONT_SCALES[id].body.fontSize)
   = px(READABLE_CODE_FONT_SCALES[id].diffsFontSize)
   = px(READABLE_CODE_FONT_SCALES[id].codeFontSize)
+
+px(UI_FONT_SCALES[id].chat.fontSize)
+  = px(UI_FONT_SCALES[id].composer.fontSize)
+  = px(UI_FONT_SCALES[id].body.fontSize) + 3
+
+px(UI_FONT_SCALES[id].chat.lineHeight)
+  = px(UI_FONT_SCALES[id].composer.fontSize) + 8
 ```
 
-| Preset | Message/composer | Readable code target |
+| Preset | Body/readable code | Message/composer |
 | --- | ---: | ---: |
-| Extra Extra Small | 11px | 11px |
-| Extra Small | 11.5px | 11.5px |
-| Small | 12px | 12px |
-| Default | 13px | 13px |
-| Large | 14px | 14px |
-| Extra Large | 15px | 15px |
-| Extra Extra Large | 16px | 16px |
-| Extra Extra Extra Large | 17px | 17px |
+| Extra Extra Small | 11px | 14px |
+| Extra Small | 11.5px | 14.5px |
+| Small | 12px | 15px |
+| Default | 13px | 16px |
+| Large | 14px | 17px |
+| Extra Large | 15px | 18px |
+| Extra Extra Large | 16px | 19px |
+| Extra Extra Extra Large | 17px | 20px |
 
 Editor, diff, and terminal line heights remain readable, strictly monotonic,
 and greater than their font sizes; they do not need to equal prose line height.
@@ -188,8 +197,8 @@ failing repository check before merge.
 ## Non-goals
 
 - Mobile/native appearance controls.
-- Font-family, weight, color, spacing/density, chat-width, or window-zoom
-  redesign.
+- Font-family, weight, color, spacing/density, chat-width, other typography
+  roles, or window-zoom redesign.
 - Scaling raster media, avatars, borders, shadows, or hit targets as glyphs.
 - Redesigning individual product surfaces while migrating semantic sizing.
 - Raising bundle caps or absorbing unrelated JavaScript/Rust failures.
@@ -197,9 +206,9 @@ failing repository check before merge.
 ## Acceptance and proof
 
 - At all eight presets, Monaco, xterm, diffs, code blocks, and file-source views
-  equal same-named message/composer font size.
-- Default computes to 13px for message and every readable-code surface; Extra
-  Large computes to 15px.
+  equal the same-named body font size; message/composer stays exactly 3px larger.
+- Default computes to 16px/24px for message/composer and 13px for body/readable
+  code; Extra Large computes to 18px chat and 15px body/readable code.
 - UI, readable-code, and window-zoom preferences remain independent in storage
   and application.
 - The production source guard finds zero raw fixed text sizes outside canonical

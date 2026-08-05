@@ -36,20 +36,20 @@ export function SidebarPrimaryNavigation({
     {
       id: "new-chat",
       active: homeActive,
-      icon: <AppShellNewChatIcon className="icon-paired" />,
+      icon: <AppShellNewChatIcon className="icon-indicator" />,
       label: "New chat",
       shortcutLabel: shortcutLabels.newChat,
     },
     {
       id: "workspaces",
       active: workspacesActive,
-      icon: <Grid className="icon-paired" />,
+      icon: <Grid className="icon-indicator" />,
       label: "Workspaces",
     },
     {
       id: "workflows",
       active: workflowsActive,
-      icon: <Fork className="icon-paired" />,
+      icon: <Fork className="icon-indicator" />,
       label: "Workflows",
       status: (
         <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
@@ -60,7 +60,7 @@ export function SidebarPrimaryNavigation({
     {
       id: "support",
       active: supportActive,
-      icon: <LifeBuoy className="icon-paired" strokeWidth={1.75} />,
+      icon: <LifeBuoy className="icon-indicator" strokeWidth={1.75} />,
       label: "Support",
       shortcutLabel: shortcutLabels.support,
     },

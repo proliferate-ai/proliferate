@@ -30,8 +30,7 @@ describe("ChromeWorkspaceTab", () => {
     expect(sessionTitle.className).toContain("font-medium");
     expect(sessionTitle.style.maskImage).toBe("");
     expect(sessionTitle.style.webkitMaskImage).toBe("");
-    const shortcutBadge = screen.getByText("⌘1");
-    expect(shortcutBadge.className).toContain("workspace-shell-tab__shortcut");
+    expect(screen.queryByText("⌘1")).toBeNull();
     const statusSlot = screen.getByText("Working").parentElement;
     expect(statusSlot?.className).toContain("workspace-shell-tab__status");
 
@@ -77,6 +76,6 @@ describe("ChromeWorkspaceTab", () => {
     );
 
     expect(screen.getByText("Working").parentElement?.className).toContain("opacity-0");
-    expect(screen.getByText("⌘1").className).toContain("opacity-100");
+    expect(screen.getByText("⌘1").className).toContain("workspace-shell-tab__shortcut");
   });
 });

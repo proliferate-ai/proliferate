@@ -5,6 +5,9 @@ import type { RepoGroupEnvironmentKind } from "#product/components/workspace/she
 /** The availability/configuration commands the repo `…` and right-click menus
  * can present, per the PR 2 minimum matrix. */
 export type RepoGroupMenuActionId =
+  | "new-local-workspace"
+  | "new-worktree"
+  | "new-cloud-workspace"
   | "set-up-cloud"
   | "add-to-this-mac"
   | "cloud-settings"
@@ -14,6 +17,12 @@ export type RepoGroupMenuActionId =
 export interface RepoGroupMenuAction {
   id: RepoGroupMenuActionId;
   label: string;
+  /** Native accelerator plus the equivalent DOM shortcut badge label. */
+  accelerator?: string;
+  shortcutLabel?: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  separatorBefore?: boolean;
   /** Rendered with the destructive treatment and separated from the rest. */
   destructive?: boolean;
 }
@@ -29,6 +38,52 @@ export interface RepoGroupMenuModelInput {
   canOpenCloudSettings: boolean;
   canOpenRepositorySettings: boolean;
   canRemoveRepo: boolean;
+}
+
+export interface RepoGroupCreationMenuModelInput {
+  showLocalWorkspaceActions: boolean;
+  cloudWorkspaceLabel: string | null;
+  cloudWorkspaceEnabled: boolean;
+  cloudWorkspaceTooltip?: string;
+  shortcuts: {
+    local: { accelerator?: string; label: string };
+    worktree: { accelerator?: string; label: string };
+    cloud: { accelerator?: string; label: string };
+  };
+}
+
+export function buildRepoGroupCreationMenuModel(
+  input: RepoGroupCreationMenuModelInput,
+): RepoGroupMenuAction[] {
+  const actions: RepoGroupMenuAction[] = [];
+
+  if (input.showLocalWorkspaceActions) {
+    actions.push({
+      id: "new-local-workspace",
+      label: "New local workspace",
+      accelerator: input.shortcuts.local.accelerator,
+      shortcutLabel: input.shortcuts.local.label,
+    });
+    actions.push({
+      id: "new-worktree",
+      label: "New worktree",
+      accelerator: input.shortcuts.worktree.accelerator,
+      shortcutLabel: input.shortcuts.worktree.label,
+    });
+  }
+
+  if (input.cloudWorkspaceLabel) {
+    actions.push({
+      id: "new-cloud-workspace",
+      label: input.cloudWorkspaceLabel,
+      accelerator: input.shortcuts.cloud.accelerator,
+      shortcutLabel: input.shortcuts.cloud.label,
+      disabled: !input.cloudWorkspaceEnabled,
+      disabledReason: input.cloudWorkspaceTooltip,
+    });
+  }
+
+  return actions;
 }
 
 /**
@@ -83,12 +138,14 @@ export function buildRepoGroupNativeContextMenuItems(
 ): NativeMenuItem[] {
   const items: NativeMenuItem[] = [];
   model.forEach((action, index) => {
-    if (action.destructive && index > 0) {
+    if ((action.separatorBefore || action.destructive) && index > 0) {
       items.push({ kind: "separator" });
     }
     items.push({
       id: action.id,
       label: action.label,
+      accelerator: action.accelerator,
+      enabled: !action.disabled,
       onSelect: () => handlers[action.id]?.(),
     });
   });

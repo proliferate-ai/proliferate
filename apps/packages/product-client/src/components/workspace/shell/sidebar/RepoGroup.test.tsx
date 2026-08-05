@@ -2,17 +2,18 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RepoGroup } from "#product/components/workspace/shell/sidebar/RepoGroup";
 import type { NewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 
 vi.mock("#product/primitives/icons/core", () => ({
-  ChevronRight: () => <span data-icon="chevron" />,
-  MoreHorizontal: () => <span data-icon="more" />,
-  Plus: () => <span data-icon="plus" />,
   Settings: () => <span data-icon="settings" />,
   Trash: () => <span data-icon="trash" />,
+}));
+
+vi.mock("#product/primitives/icons/app-shell", () => ({
+  AppShellNewChatIcon: () => <span data-icon="new-chat" />,
 }));
 
 vi.mock("#product/primitives/icons/platform", () => ({
@@ -23,10 +24,6 @@ vi.mock("#product/primitives/icons/workspace", () => ({
   FolderClosed: () => <span data-icon="folder-closed" />,
   FolderFilled: () => <span data-icon="folder-filled" />,
   FolderRemote: () => <span data-icon="folder-remote" />,
-}));
-
-vi.mock("#product/primitives/Tooltip", () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock("#product/primitives/PopoverButton", () => ({
@@ -42,16 +39,15 @@ vi.mock("#product/primitives/PopoverButton", () => ({
     onOpenChange?: (open: boolean) => void;
     trigger: ReactNode;
   }) => {
-    const testId = className?.includes("w-64") ? "create-popover" : "context-popover";
+    const testId = className?.includes("w-52") ? "context-popover" : "popover";
     return (
       <div data-testid={testId}>
         {trigger}
-        <button type="button" onClick={() => onOpenChange?.(true)}>
-          Open {testId}
-        </button>
-        <button type="button" onClick={() => onOpenChange?.(false)}>
-          Close {testId}
-        </button>
+        {testId === "context-popover" ? (
+          <button type="button" onClick={() => onOpenChange?.(true)}>
+            Open context menu
+          </button>
+        ) : null}
         <div>{children(() => onOpenChange?.(false))}</div>
       </div>
     );
@@ -59,8 +55,13 @@ vi.mock("#product/primitives/PopoverButton", () => ({
 }));
 
 vi.mock("#product/primitives/PopoverMenuItem", () => ({
-  PopoverMenuItem: ({ label, onClick }: { label: string; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>{label}</button>
+  PopoverMenuItem: ({ disabled, label, onClick, trailing }: {
+    disabled?: boolean;
+    label: string;
+    onClick?: () => void;
+    trailing?: ReactNode;
+  }) => (
+    <button type="button" disabled={disabled} onClick={onClick}>{label}{trailing}</button>
   ),
 }));
 
@@ -101,12 +102,14 @@ vi.mock("#product/hooks/workspaces/ui/use-repo-group-native-context-menu", async
 vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
+    onClick,
     title,
   }: {
     children: ReactNode;
+    onClick?: () => void;
     title: string;
   }) => (
-    <button type="button" aria-label={title}>{children}</button>
+    <button type="button" aria-label={title} onClick={onClick}>{children}</button>
   ),
 }));
 
@@ -138,34 +141,51 @@ const scope: NewWorkspaceCommandScope = {
   defaultBranch: null,
 };
 
-describe("RepoGroup new workspace command scope", () => {
-
-  beforeEach(() => {
-    useNewWorkspaceCommandScopeStore.setState({ activeScope: null });
-  });
+describe("RepoGroup", () => {
 
   afterEach(() => {
     cleanup();
     useNewWorkspaceCommandScopeStore.setState({ activeScope: null });
   });
 
-  it("clears an active create-menu scope when the repo group unmounts", () => {
+  it("uses one hover action to start a repo-scoped new chat", () => {
+    const onNewChat = vi.fn();
+    render(
+      <RepoGroup
+        name="Repo A"
+        collapsed={false}
+        onToggleCollapsed={vi.fn()}
+        onNewChat={onNewChat}
+        onNewLocalWorkspace={vi.fn()}
+        onNewWorkspace={vi.fn()}
+      >
+        <div>Workspace A</div>
+      </RepoGroup>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "New chat in Repo A" }));
+    expect(onNewChat).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Repository options" })).toBeNull();
+  });
+
+  it("scopes displayed creation shortcuts to the context-menu repository", () => {
     const { unmount } = render(
       <RepoGroup
         name="Repo A"
         collapsed={false}
         onToggleCollapsed={vi.fn()}
+        onNewLocalWorkspace={vi.fn()}
+        onNewWorkspace={vi.fn()}
         newWorkspaceCommandScope={scope}
       >
         <div>Workspace A</div>
       </RepoGroup>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open create-popover" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open context menu" }));
     expect(useNewWorkspaceCommandScopeStore.getState().activeScope?.id).toBe(scope.id);
 
     unmount();
-
     expect(useNewWorkspaceCommandScopeStore.getState().activeScope).toBeNull();
   });
 
@@ -184,7 +204,7 @@ describe("RepoGroup new workspace command scope", () => {
     expect(document.querySelector('[data-icon="folder-remote"]')).toBeTruthy();
   });
 
-  it("exposes a discoverable header options trigger that opens the availability menu", () => {
+  it("moves creation and repository management into the shared context menu", () => {
     render(
       <RepoGroup
         name="Repo A"
@@ -193,6 +213,8 @@ describe("RepoGroup new workspace command scope", () => {
         isGitHubRepo
         canSetUpCloud
         onSetUpCloud={vi.fn()}
+        onNewLocalWorkspace={vi.fn()}
+        onNewWorkspace={vi.fn()}
         onOpenSettings={vi.fn()}
         onRemoveRepo={vi.fn()}
         onToggleCollapsed={vi.fn()}
@@ -201,13 +223,12 @@ describe("RepoGroup new workspace command scope", () => {
       </RepoGroup>,
     );
 
-    // The `…` trigger is present alongside the `+` trigger (spec: owner/repo [+] […]).
-    expect(screen.getByRole("button", { name: "Repository options" })).toBeTruthy();
-    // It renders the same ordered availability menu the right-click menu builds.
-    expect(screen.getAllByRole("button", { name: "Set up Cloud" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /New local workspace/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /New worktree/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Set up Cloud" })).toBeTruthy();
   });
 
-  it("offers only the cloud action plus a desktop pointer where local workspaces are unsupported", () => {
+  it("offers only the cloud creation action where local workspaces are unsupported", () => {
     render(
       <RepoGroup
         name="Repo A"
@@ -224,11 +245,7 @@ describe("RepoGroup new workspace command scope", () => {
 
     expect(screen.queryByRole("button", { name: "New local workspace" })).toBeNull();
     expect(screen.queryByRole("button", { name: "New worktree" })).toBeNull();
-    expect(screen.getAllByRole("button", { name: "New workspace" }).length)
-      .toBeGreaterThan(0);
-    expect(
-      screen.getByText("The Desktop app also runs workspaces on this machine."),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /New workspace/ })).toBeTruthy();
   });
 
   it("keeps removal pending until the Cloud mutation settles", async () => {

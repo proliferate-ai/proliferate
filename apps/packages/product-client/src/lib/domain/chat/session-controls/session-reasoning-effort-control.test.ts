@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveReasoningEffortPresentation } from "./session-reasoning-effort-control";
+import {
+  reasoningLadderTopsOutAtUltra,
+  resolveReasoningEffortPresentation,
+} from "./session-reasoning-effort-control";
 
 describe("resolveReasoningEffortPresentation", () => {
   it("preserves authored catalog labels over internal spellings", () => {
@@ -18,5 +21,25 @@ describe("resolveReasoningEffortPresentation", () => {
     expect(resolveReasoningEffortPresentation("max", "")).toEqual({
       shortLabel: "X High",
     });
+  });
+});
+
+describe("reasoningLadderTopsOutAtUltra", () => {
+  it("detects an ultra top rung", () => {
+    expect(reasoningLadderTopsOutAtUltra([
+      { value: "medium" },
+      { value: "high" },
+      { value: "xhigh" },
+      { value: "Ultra" },
+    ])).toBe(true);
+  });
+
+  it("stays false for ladders without ultra and for degenerate ladders", () => {
+    expect(reasoningLadderTopsOutAtUltra([
+      { value: "medium" },
+      { value: "high" },
+      { value: "xhigh" },
+    ])).toBe(false);
+    expect(reasoningLadderTopsOutAtUltra([{ value: "ultra" }])).toBe(false);
   });
 });

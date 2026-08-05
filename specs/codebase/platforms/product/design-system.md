@@ -82,11 +82,11 @@ to ask for "13px" in the abstract.
 | `ui` | 12px | 17px | `+0.005em` | Compact controls: buttons, menu rows, tabs, inputs. |
 | `sidebar-nav` | 12px | 17px | `+0.005em` | Sidebar navigation rows. |
 | `sidebar-row` | 12px | 17px | `+0.005em` | Sidebar content rows (workspaces, sessions). |
-| `chat` | 13px | 20px | `0` | Transcript prose — the reading role. |
-| `composer` | 13px | 20px | `0` | Composer input text. |
+| `chat` | 16px | 24px | `0` | Transcript prose — the dedicated chat-content reading role. |
+| `composer` | 16px | 24px | `0` | Composer input text; matched to transcript prose. |
 | `body` | 13px | 20px | `0` | General product prose outside the transcript. |
 | `message` | = `composer` | = `composer` | = `composer` | Message body; a pure alias so message and composer can never drift. |
-| `chat-meta` | `calc(chat − 2px)` = 11px | inherited | inherited | Timestamps and per-turn meta, derived from `chat` rather than pinned. |
+| `chat-meta` | `calc(chat − 2px)` = 14px | inherited | inherited | Timestamps and per-turn meta, derived from `chat` rather than pinned. |
 | `body-emphasis` | 14px | 21px | `−0.005em` | Emphasized prose, section leads. |
 | `workspace-title` | 14px | 21px | `−0.005em` | Workspace/tab titles. |
 | `heading` | 16px | 23px | `−0.01em` (`--tracking-heading`) | In-page headings. |
@@ -97,13 +97,13 @@ to ask for "13px" in the abstract.
 
 Two properties are visible in that table and are the ramp's actual design:
 
-- **Tighter as larger.** Tracking runs positive at the small end (`+0.01em` at
-  11px, `+0.005em` at 12px), lands at zero for the 13px reading roles, and goes
-  negative as size grows (`−0.005em` at 14px, `−0.01em` at 16px, `−0.025em` at
-  19px and 26px). Small text needs air between letters to stay legible; display
-  text needs the letters pulled together to stop reading as loose.
-- **Ratios shift with role.** Control roles sit near 1.4 (11/15, 12/17), reading
-  roles at 1.54 (13/20), display roles compress toward 1.26 (19/24) and 1.31
+- **Tighter as larger.** Tracking runs positive at the small end
+  (`+0.01em` at 11px, `+0.005em` at 12px), lands at zero for body and chat
+  content, and goes negative for emphasized and display roles. Small controls
+  need air between letters; prose stays neutral; display text pulls together.
+- **Ratios shift with role.** Control roles sit near 1.4 (11/15, 12/17), body
+  prose at 1.54 (13/20), chat content at 1.5 (16/24), and display roles compress
+  toward 1.26 (19/24) and 1.31
   (26/34). The tighter the leading, the more the type reads as an object rather
   than a paragraph.
 
@@ -122,7 +122,7 @@ all fail `FIXED_TEXT_PATTERNS` in
 
 > **The chat/composer pair is CI-locked.**
 > [check-theme.mjs](../../../../apps/packages/design/scripts/check-theme.mjs)
-> asserts `typography.lineHeight.chat === typography.size.composer + 7`. The
+> asserts `typography.lineHeight.chat === typography.size.composer + 8`. The
 > transcript and the input it feeds are the same measure by construction: text
 > the user types keeps its rhythm when it becomes text the user reads. Retuning
 > one without the other fails the design build.
@@ -461,18 +461,17 @@ Five tokens define how a transcript reads:
 
 | Token | Value | Role |
 | --- | --- | --- |
-| `--container-transcript-readable` | `40rem` (640px) | A tighter optional reading measure. Conversation prose no longer applies it — `MarkdownBody.tsx` renders prose at `max-w-full` so a message fills the thread column at the same width the composer reads at. The token remains for consumers that want a narrower cap. |
-| `--container-transcript-thread` | `48rem` (768px) | The thread-column measure — the outer transcript column (avatars, action rows, and the `.chat-markdown` wrapper itself) widens to this. |
-| `--container-transcript-wide` | `56rem` (896px) | The spill measure — the width a wide block (table, image, code) is nominally entitled to; still bounded by the 48rem thread column until a breakout restructure lands (see `MarkdownBody.tsx`'s `table` override). |
+| `--container-transcript-readable` | `40rem` (640px) | The shared new-chat, transcript, and composer measure. `MarkdownBody.tsx` renders prose at `max-w-full` inside this column so the width does not change when a session starts. |
+| `--container-transcript-thread` | `48rem` (768px) | A reserved wider thread tier for a future explicit breakout treatment; the primary conversation flow does not currently apply it. |
+| `--container-transcript-wide` | `56rem` (896px) | The nominal spill measure for tables, images, and code; wide blocks remain bounded by the 40rem shared chat column until a breakout restructure lands (see `MarkdownBody.tsx`'s `table` override). |
 | `--spacing-transcript-turn` | `1rem` (16px) | Vertical rhythm between top-level turns. |
 | `--spacing-transcript-turn-tight` | `0.25rem` (4px) | Vertical rhythm within a turn, for closely related siblings (e.g. assistant prose and its action-row footer). |
 
 The width tokens name three *available* measures even though conversation
-prose currently uses one: prose and wide blocks (tables, code) both fill the
-48rem thread column, so an assistant message reads at the same width the
-user is typing into. The 40rem readable cap is kept as a named tier for any
-consumer that wants a tighter line length, and 56rem records what wide
-blocks are nominally entitled to once a breakout restructure lands. Two
+prose currently uses one: the new-chat flow, live transcript, composer, and
+wide blocks (tables, code) all fill the 40rem readable column, so the measure
+does not widen after launch. The 48rem thread tier and 56rem wide tier record
+the space those surfaces may use once a deliberate breakout treatment lands. Two
 spacing tiers make a real distinction vertically: turn-to-turn
 rhythm and within-turn rhythm are two different rungs, not one shared gap.
 
@@ -620,7 +619,7 @@ stay in lockstep with CSS import them and format through `motion.cssMs()`.
 | `--icon-status` | `0.55em` | 6.6px | 7.2px | Status dots. |
 | `--icon-tight` | `0.875em` | 10.5px | 11.4px | Trailing row controls that sit quieter than their text. |
 | `--icon-compact` | `1em` | 12px | 13px | Inline glyphs that match their text exactly. |
-| `--icon-indicator` | `1.166667em` | 14px | 15.2px | Sidebar row activity indicators (spinner, waiting, error) in their 20px trailing cell. |
+| `--icon-indicator` | `1em` | 12px | 13px | Sidebar row navigation, repository, git, and activity glyphs inside larger alignment wells. |
 | `--icon-paired` | `1.230769em` | 14.8px | 16px | The default glyph beside prose. |
 | `--icon-control` | `1.333333em` | 16px | 17.3px | The glyph inside an icon-only control. |
 | `--icon-large` | `1.666667em` | 20px | 21.7px | Emphasized inline glyphs. |
@@ -634,7 +633,10 @@ the same 16px optical target from different text sizes — and because the
 multiplier is relative, both track the user's font preference automatically,
 where a fixed `size-4` would not.
 
-The tiers are projected as `icon-status`/`icon-compact`/`icon-paired`/
+The sidebar indicator and compact tiers intentionally share a current `1em`
+value while retaining distinct semantic roles: sidebar glyphs can be retuned
+without changing general inline glyphs. The tiers are projected as
+`icon-status`/`icon-compact`/`icon-paired`/
 `icon-control`/`icon-large`/`icon-display` utilities in
 [product.css](../../../../apps/packages/design/src/css/product.css). The appearance gate
 holds the line at every glyph call site: fixed `size`/`width`/`height` attributes
@@ -827,7 +829,7 @@ index is the closed set, not a sample of it.
 | `Select` | [Select.tsx](../../../../apps/packages/product-client/src/primitives/Select.tsx) | Native select styled to tokens. |
 | `ShortcutBadge` | [ShortcutBadge.tsx](../../../../apps/packages/product-client/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
 | `Skeleton` | [Skeleton.tsx](../../../../apps/packages/product-client/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
-| `Sonner` | [Sonner.tsx](../../../../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment: `sonner` wrapped in the canonical popover frame (shared by reference from `popover-surface.ts`), 12px padding, closed type ramp, 24px action pair with only the primary filled. |
+| `Sonner` | [Sonner.tsx](../../../../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment: `sonner` wrapped in the canonical popover frame (shared by reference from `popover-surface.ts`), 12px padding with an inside-right close-control reserve, closed type ramp, 24px action pair with only the primary filled. |
 | `Spinner` | [Spinner.tsx](../../../../apps/packages/product-client/src/primitives/Spinner.tsx) | Inline loading spinner. |
 | `Switch` | [Switch.tsx](../../../../apps/packages/product-client/src/primitives/Switch.tsx) | Toggle switch. |
 | `Textarea` | [Textarea.tsx](../../../../apps/packages/product-client/src/primitives/Textarea.tsx) | Multi-line text input (default/ghost/flush/code variants). |
@@ -884,7 +886,7 @@ grandfathered.
 | `PickerPopoverContent` | [PickerPopoverContent.tsx](../../../../apps/packages/product-client/src/primitives/patterns/PickerPopoverContent.tsx) | Popover content shell for pickers: search field + list + empty row. |
 | `SettingsMenu` | [SettingsMenu.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SettingsMenu.tsx) | Labeled select-style menu, composes `PopoverButton`/`PopoverMenuItem`. |
 | `SidebarActionButton` | [SidebarActionButton.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SidebarActionButton.tsx) | Sidebar action button, composes `RowActionIconButton`. |
-| `SidebarNavRow` | [SidebarNavRow.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes the `ShortcutBadge` primitive + `SidebarRowSurface`. |
+| `SidebarNavRow` | [SidebarNavRow.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes the `ShortcutBadge` primitive + `SidebarRowSurface`; modifier-held shortcuts overlay an existing rightmost status instead of widening its trailing region. |
 | `SidebarRowSurface` | [SidebarRowSurface.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SidebarRowSurface.tsx) | Shared sidebar row interaction surface (active/disabled/press state) other sidebar rows build on. |
 | `ThinkingText` | [ThinkingText.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ThinkingText.tsx) | Animated "thinking" gleam text. |
 

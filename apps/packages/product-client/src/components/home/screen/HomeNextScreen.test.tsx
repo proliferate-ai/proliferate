@@ -368,7 +368,8 @@ describe("HomeNextScreen model availability notices", () => {
       { id: "agent-defaults", title: "Configure default harnesses", icon: "sliders" },
     );
     render(<HomeNextScreen />);
-    expect(document.querySelector('[data-home-composer-vertical-balance="onboarding"] .translate-y-5')).toBeTruthy();
+    expect(document.querySelector("[data-home-onboarding-region]")).toBeTruthy();
+    expect(document.querySelector("[data-home-composer-dock]")).toBeTruthy();
 
     expect(screen.getByText("Add a GitHub repo")).toBeTruthy();
     expect(screen.getByText("Configure default harnesses")).toBeTruthy();
@@ -399,9 +400,22 @@ describe("HomeNextScreen composer control-row parity", () => {
     render(<HomeNextScreen />);
     expect(screen.getByTestId("composer-leading-controls")).toBeTruthy();
     expect(screen.getByTestId("composer-trailing-controls")).toBeTruthy();
-    const column = screen.getByLabelText("Prompt").closest('[class~="max-w-transcript-thread"]');
-    expect(column?.className).toContain(CHAT_COLUMN_CLASSNAME);
+    const column = screen.getByLabelText("Prompt").closest('[class~="max-w-transcript-readable"]');
+    expect(column?.className).toContain("max-w-transcript-readable");
     expect(column?.parentElement?.className).toContain(CHAT_SURFACE_GUTTER_CLASSNAME);
+  });
+
+  it("attaches the launch utility bar above the bottom-docked composer", () => {
+    render(<HomeNextScreen />);
+
+    const utilityBar = document.querySelector("[data-home-launch-utility-bar]");
+    const composer = screen.getByLabelText("Prompt").closest('[data-focus-zone="chat"]');
+    expect(utilityBar).not.toBeNull();
+    expect(composer).not.toBeNull();
+    expect(
+      utilityBar!.compareDocumentPosition(composer!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(composer?.closest("[data-home-composer-dock]")).not.toBeNull();
   });
 
   it("feeds the clusters sessionless chat-equivalent props", () => {

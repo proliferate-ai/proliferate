@@ -4,7 +4,6 @@ import {
   prNumberLabelFromGitStatus,
   prStatusCompoundLabel,
   prStatusViewFromGitStatus,
-  sidebarGitGlyphForStatus,
 } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 import type {
   WorkspaceGitStatus,
@@ -154,39 +153,6 @@ describe("prStatusCompoundLabel", () => {
         capturedAt: THREE_HOURS_AGO,
       })),
     ).toBe("PR #805 · Open · as of 3h ago");
-  });
-});
-
-describe("sidebarGitGlyphForStatus", () => {
-  it("returns null when there is no git data", () => {
-    expect(sidebarGitGlyphForStatus(null)).toBeNull();
-    expect(sidebarGitGlyphForStatus(status({ branch: null, pr: null }))).toBeNull();
-  });
-
-  it("renders the pull-request glyph with the compound tooltip", () => {
-    const glyph = sidebarGitGlyphForStatus(status({ pr: pr() }));
-    expect(glyph).toEqual({
-      conflicted: false,
-      tooltip: "PR #805 · Open",
-    });
-  });
-
-  it("returns null for authoritative no-PR and unknown PR (no branch fallback)", () => {
-    expect(sidebarGitGlyphForStatus(status({ pr: pr({ state: "none" }) }))).toBeNull();
-    expect(sidebarGitGlyphForStatus(status({ pr: null }))).toBeNull();
-  });
-
-  it("marks conflicts with the conflict tooltip on PR rows", () => {
-    const glyph = sidebarGitGlyphForStatus(status({ pr: pr(), attention: "conflicts" }));
-    expect(glyph?.conflicted).toBe(true);
-    expect(glyph?.tooltip).toBe("Merge conflicts in worktree");
-  });
-
-  it("renders no glyph for conflicted rows without a PR (right-slot affordances own attention)", () => {
-    expect(sidebarGitGlyphForStatus(status({ pr: null, attention: "conflicts" }))).toBeNull();
-    expect(
-      sidebarGitGlyphForStatus(status({ pr: pr({ state: "none" }), attention: "conflicts" })),
-    ).toBeNull();
   });
 });
 

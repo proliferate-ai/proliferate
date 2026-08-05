@@ -124,7 +124,6 @@ export function HomeTargetPicker({
           <HomeTargetRowItem
             icon={<ProjectNotebook className="icon-paired" />}
             value={homeTargetProjectLabel({ destination, selectedRepository })}
-            disclosure={false}
             aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
           />
         )}

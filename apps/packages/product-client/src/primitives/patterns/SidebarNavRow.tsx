@@ -26,6 +26,9 @@ export function SidebarNavRow({
   className = "",
   ...props
 }: SidebarNavRowProps) {
+  const visibleShortcutLabel = shortcutRevealVisible ? shortcutLabel : null;
+  const hasTrailingStatus = status != null;
+
   return (
     <SidebarRowSurface
       as="button"
@@ -40,23 +43,37 @@ export function SidebarNavRow({
           The well matches the icon exactly — a fixed w-4 well leaves more
           slack around smaller icons, silently widening the icon→label gap on
           smaller-text surfaces (settings) vs the main sidebar. */}
-      <div className="flex w-[var(--icon-paired)] shrink-0 items-center justify-center text-current [&>svg]:icon-paired [&>svg]:shrink-0">
+      <div className="flex w-[var(--icon-paired)] shrink-0 items-center justify-center text-current [&>svg]:icon-indicator [&>svg]:shrink-0">
         {icon}
       </div>
       <div className="flex min-w-0 flex-1 items-center text-current">
         <span className="truncate">{label}</span>
       </div>
-      {status ? (
-        <span className="ml-auto shrink-0 text-ui-sm text-sidebar-muted-foreground">
-          {status}
+      {hasTrailingStatus || visibleShortcutLabel ? (
+        <span
+          data-sidebar-nav-trailing
+          className="relative ml-auto shrink-0 text-ui-sm text-sidebar-muted-foreground"
+        >
+          {hasTrailingStatus ? (
+            <span
+              data-sidebar-nav-status
+              className={visibleShortcutLabel ? "opacity-0" : undefined}
+            >
+              {status}
+            </span>
+          ) : null}
+          {visibleShortcutLabel ? (
+            <ShortcutBadge
+              label={visibleShortcutLabel}
+              data-sidebar-shortcut-overlay={hasTrailingStatus ? true : undefined}
+              className={`shrink-0 text-sidebar-muted-foreground ${
+                hasTrailingStatus
+                  ? "absolute right-0 top-1/2 -translate-y-1/2"
+                  : ""
+              }`}
+            />
+          ) : null}
         </span>
-      ) : shortcutLabel ? (
-        <ShortcutBadge
-          label={shortcutLabel}
-          className={`shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity ${
-            shortcutRevealVisible ? "opacity-100" : "group-hover:opacity-100 group-focus-within:opacity-100"
-          }`}
-        />
       ) : null}
     </SidebarRowSurface>
   );

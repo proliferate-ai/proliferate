@@ -50,7 +50,7 @@ export function SessionModeControl({
   const nextValue = getNextSessionModeValue(control.options, currentValue);
   const triggerIcon = compactTrigger
     ? undefined
-    : <SessionControlIcon icon={currentPresentation.icon} className="icon-control [font-size:var(--text-composer)]" />;
+    : <SessionControlIcon icon={currentPresentation.icon} className="icon-control [font-size:var(--text-body)]" />;
   // No disclosure chevron on the compact trigger: the mode name itself steps
   // immediately to the next runtime-provided value.
   const triggerTrailing = control.pendingState
@@ -114,7 +114,7 @@ export function SessionModeControl({
               <PopoverMenuItem
                 key={option.value}
                 data-session-mode-option={option.value}
-                icon={<SessionControlIcon icon={presentation.icon} className="icon-paired text-muted-foreground [font-size:var(--text-composer)]" />}
+                icon={<SessionControlIcon icon={presentation.icon} className="icon-paired text-muted-foreground [font-size:var(--text-body)]" />}
                 label={presentation.shortLabel ?? option.label}
                 trailing={option.selected ? <Check className="icon-paired shrink-0 text-foreground/60" /> : null}
                 onClick={() => {

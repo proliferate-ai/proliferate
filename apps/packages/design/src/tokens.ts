@@ -1104,16 +1104,14 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   /**
-   * [RETUNE:icons/sidebar-indicator] — the sidebar row's trailing activity
-   * glyphs (waiting clock, running spinner, error/warning badge) render at
-   * 14px inside a 20px centered cell in the reference, against the same 12px
-   * row text. 1.166667em is exactly 14px at that base — between
-   * `--icon-compact` (12px, too small) and `--icon-control` (16px, visibly
-   * too big), neither of which matches on screen.
+   * Sidebar row glyphs use the row text's 12px optical size inside their
+   * larger alignment wells. Keeping this role separate from `--icon-compact`
+   * lets the sidebar remain independently tunable even though both currently
+   * resolve to the same ratio.
    */
   "--icon-indicator": {
-    dark: "1.166667em",
-    light: "1.166667em",
+    dark: "1em",
+    light: "1em",
     provenance: "[RETUNE:icons/sidebar-indicator]",
   },
   "--icon-large": {
@@ -1207,13 +1205,13 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--scratch-font-size": {
-    dark: "var(--text-message, var(--text-composer, 13px))",
-    light: "var(--text-message, var(--text-composer, 13px))",
+    dark: "var(--text-message, var(--text-composer, 16px))",
+    light: "var(--text-message, var(--text-composer, 16px))",
     provenance: "[SHIPPED]",
   },
   "--scratch-line-height": {
-    dark: "var(--text-message--line-height, var(--text-composer--line-height, 21px))",
-    light: "var(--text-message--line-height, var(--text-composer--line-height, 21px))",
+    dark: "var(--text-message--line-height, var(--text-composer--line-height, 24px))",
+    light: "var(--text-message--line-height, var(--text-composer--line-height, 24px))",
     provenance: "[SHIPPED]",
   },
   "--scratch-list-marker-leading-space": {
@@ -1324,9 +1322,9 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat": {
-    dark: "13px",
-    light: "13px",
-    provenance: "[RETUNE:type/closed-ramp]",
+    dark: "16px",
+    light: "16px",
+    provenance: "[RETUNE:type/chat-content-split]",
   },
   "--text-chat--letter-spacing": {
     dark: "0",
@@ -1334,19 +1332,19 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat--line-height": {
-    dark: "20px",
-    light: "20px",
-    provenance: "[RETUNE:type/closed-ramp]",
+    dark: "24px",
+    light: "24px",
+    provenance: "[RETUNE:type/chat-content-split]",
   },
   "--text-chat-meta": {
-    dark: "calc(var(--text-chat, 13px) - 2px)",
-    light: "calc(var(--text-chat, 13px) - 2px)",
+    dark: "calc(var(--text-chat, 16px) - 2px)",
+    light: "calc(var(--text-chat, 16px) - 2px)",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-composer": {
-    dark: "13px",
-    light: "13px",
-    provenance: "[SHIPPED]",
+    dark: "16px",
+    light: "16px",
+    provenance: "[RETUNE:type/chat-content-split]",
   },
   "--text-composer--letter-spacing": {
     dark: "0",
@@ -1354,9 +1352,9 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-composer--line-height": {
-    dark: "20px",
-    light: "20px",
-    provenance: "[RETUNE:type/closed-ramp]",
+    dark: "24px",
+    light: "24px",
+    provenance: "[RETUNE:type/chat-content-split]",
   },
   "--text-heading": {
     dark: "16px",

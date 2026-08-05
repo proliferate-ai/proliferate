@@ -44,7 +44,9 @@ describe("ProductSidebarWorkspaceRow trailing slot", () => {
     );
 
     const date = screen.getByText("4h");
-    expect(date.closest(".grid")?.className).toContain("min-w-5");
+    expect(
+      date.closest("[data-sidebar-trailing-cells]")?.parentElement?.className,
+    ).toContain("min-w-5");
     // The timestamp is meta text, a step below the row's own type role.
     expect(date.className).toContain("text-ui-sm");
   });
@@ -72,5 +74,54 @@ describe("ProductSidebarWorkspaceRow trailing slot", () => {
     expect(cells?.children[0]?.textContent).toBe("Branch");
     expect(cells?.children[1]?.textContent).toBe("Running");
     expect(cells?.className).toContain("gap-1.5");
+  });
+
+  it("overlays the shortcut on the rightmost symbol without adding a trailing slot", () => {
+    const { rerender } = render(
+      <ProductSidebarWorkspaceRow
+        label="Shortcut workspace"
+        trailingIdentity={<span data-testid="identity">Branch</span>}
+        trailingStatus={<span data-testid="running-status">Running</span>}
+        shortcutLabel="⌘1"
+      />,
+    );
+
+    expect(screen.queryByText("⌘1")).toBeNull();
+    let cells = screen.getByTestId("identity").closest("[data-sidebar-trailing-cells]");
+    expect(cells?.children).toHaveLength(2);
+
+    rerender(
+      <ProductSidebarWorkspaceRow
+        label="Shortcut workspace"
+        trailingIdentity={<span data-testid="identity">Branch</span>}
+        trailingStatus={<span data-testid="running-status">Running</span>}
+        shortcutLabel="⌘1"
+        shortcutRevealVisible
+      />,
+    );
+
+    const shortcut = screen.getByText("⌘1");
+    cells = shortcut.closest("[data-sidebar-trailing-cells]");
+    expect(cells).not.toBeNull();
+    expect(cells?.children).toHaveLength(3);
+    expect(shortcut.className).toContain("absolute");
+    expect(shortcut.className).toContain("right-0");
+    expect(shortcut.getAttribute("data-sidebar-shortcut-overlay")).toBe("true");
+    expect(screen.getByTestId("identity").parentElement?.className).not.toContain("opacity-0");
+    expect(screen.getByTestId("running-status").parentElement?.className).toContain("opacity-0");
+  });
+
+  it("uses the ordinary trailing slot when there is no symbol to cover", () => {
+    render(
+      <ProductSidebarWorkspaceRow
+        label="Shortcut workspace"
+        shortcutLabel="⌘1"
+        shortcutRevealVisible
+      />,
+    );
+
+    const shortcut = screen.getByText("⌘1");
+    expect(shortcut.className).not.toContain("absolute");
+    expect(shortcut.hasAttribute("data-sidebar-shortcut-overlay")).toBe(false);
   });
 });

@@ -1,8 +1,41 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildRepoGroupCreationMenuModel,
   buildRepoGroupMenuModel,
   buildRepoGroupNativeContextMenuItems,
 } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
+
+describe("buildRepoGroupCreationMenuModel", () => {
+  it("describes local, worktree, and disabled Cloud actions for both menu surfaces", () => {
+    const model = buildRepoGroupCreationMenuModel({
+      showLocalWorkspaceActions: true,
+      cloudWorkspaceLabel: "New cloud workspace",
+      cloudWorkspaceEnabled: false,
+      cloudWorkspaceTooltip: "Cloud is unavailable.",
+      shortcuts: {
+        local: { accelerator: "CmdOrCtrl+Shift+L", label: "⌘⇧L" },
+        worktree: { accelerator: "CmdOrCtrl+Shift+W", label: "⌘⇧W" },
+        cloud: { accelerator: "CmdOrCtrl+Shift+C", label: "⌘⇧C" },
+      },
+    });
+
+    expect(model).toMatchObject([
+      { id: "new-local-workspace", label: "New local workspace" },
+      { id: "new-worktree", label: "New worktree" },
+      {
+        id: "new-cloud-workspace",
+        label: "New cloud workspace",
+        disabled: true,
+        disabledReason: "Cloud is unavailable.",
+      },
+    ]);
+    expect(buildRepoGroupNativeContextMenuItems(model, {})).toMatchObject([
+      { id: "new-local-workspace", accelerator: "CmdOrCtrl+Shift+L", enabled: true },
+      { id: "new-worktree", accelerator: "CmdOrCtrl+Shift+W", enabled: true },
+      { id: "new-cloud-workspace", accelerator: "CmdOrCtrl+Shift+C", enabled: false },
+    ]);
+  });
+});
 
 describe("buildRepoGroupMenuModel", () => {
   it("offers Set up Cloud for a Cloud-capable local GitHub repo", () => {

@@ -316,6 +316,17 @@ export const MainSidebar = memo(function MainSidebar() {
     setRepositoriesCollapsed(!repositoriesCollapsed);
   }, [repositoriesCollapsed, setRepositoriesCollapsed]);
   const filtersActive = !isDefaultSidebarWorkspaceTypes(workspaceTypes);
+  const activeRepositorySourceRoot = useMemo(
+    () => groups.find((group) => group.items.some((item) => item.active))?.sourceRoot ?? null,
+    [groups],
+  );
+  const handleStartRepositoryHeaderChat = useCallback(() => {
+    if (activeRepositorySourceRoot) {
+      actions.handleGoHomeForRepository(activeRepositorySourceRoot);
+      return;
+    }
+    actions.handleGoHome();
+  }, [actions, activeRepositorySourceRoot]);
   const sidebarShortcutLabelById = useMemo(
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
@@ -371,6 +382,7 @@ export const MainSidebar = memo(function MainSidebar() {
             workspaceTypes={workspaceTypes}
             onToggleRepositoriesCollapsed={handleToggleRepositoriesCollapsed}
             onToggleWorkspaceType={toggleSidebarWorkspaceType}
+            onNewChat={handleStartRepositoryHeaderChat}
             onAddRepo={actions.handleAddRepo}
           />
 
@@ -392,14 +404,15 @@ export const MainSidebar = memo(function MainSidebar() {
                 onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
                 onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
                 onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
+                onNewChatForRepository={actions.handleGoHomeForRepository}
                 onSelectWorkspace={actions.handleSelectWorkspace}
                 onIndicatorAction={actions.handleSidebarIndicatorAction}
                 onOpenPullRequest={actions.handleOpenPullRequest}
                 onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
                 onWorkspaceAvailabilityCommand={handleWorkspaceAvailabilityCommand}
                 onWorkspaceHover={handleWorkspaceHover}
-                shortcutRevealVisible={shortcutRevealVisible}
                 shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
+                shortcutRevealVisible={shortcutRevealVisible}
                 onArchiveWorkspace={handleArchiveWorkspace}
                 onUnarchiveWorkspace={handleUnarchiveWorkspace}
                 onRenameWorkspace={handleRenameWorkspace}

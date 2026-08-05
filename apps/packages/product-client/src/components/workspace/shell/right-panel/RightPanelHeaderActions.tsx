@@ -37,12 +37,12 @@ export function RightPanelHeaderActions({
           onClick={onTogglePanel}
         >
           <SplitPanel className="ui-icon" />
-          <ShortcutBadge
-            label={getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel)}
-            className={`pointer-events-none absolute -right-1 -bottom-1 z-20 text-muted-foreground opacity-0 transition-opacity duration-hover ${
-              shortcutRevealVisible ? "opacity-100" : ""
-            }`}
-          />
+          {shortcutRevealVisible ? (
+            <ShortcutBadge
+              label={getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel)}
+              className="pointer-events-none absolute -right-1 -bottom-1 z-20 text-muted-foreground"
+            />
+          ) : null}
           <span className="sr-only">Hide side panel</span>
         </IconButton>
       </div>

@@ -44,7 +44,9 @@ describe("Toaster", () => {
     }
     // Sonner's own selectors outrank plain utilities; every owned property has
     // to be important or the default opaque card wins.
-    expect(element.className).toContain("!p-3");
+    expect(element.className).toContain("!py-3");
+    expect(element.className).toContain("!pl-3");
+    expect(element.className).toContain("!pr-9");
     expect(element.className).toContain("!text-ui-sm");
     expect(element.className).not.toContain("!border-border ");
   });
@@ -102,9 +104,30 @@ describe("Toaster", () => {
       action: { label: "Download", onClick: vi.fn() },
     });
 
-    expect(element.className).toContain("!p-3");
+    expect(element.className).toContain("!py-3");
+    expect(element.className).toContain("!pl-3");
+    expect(element.className).toContain("!pr-9");
     expect(
       screen.getByRole("button", { name: "Download" }).className,
     ).toContain("[&&]:!bg-surface-elevated-secondary");
+  });
+
+  it("keeps the close control inside the clipped toast frame", async () => {
+    const surface = await showToast("Workspace saved", {
+      closeButton: true,
+      duration: Number.POSITIVE_INFINITY,
+    });
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-close-button]")).not.toBeNull();
+    });
+
+    const closeButton = document.querySelector<HTMLElement>("[data-close-button]");
+    expect(surface.className).toContain("group/toast");
+    expect(surface.className).toContain("!pr-9");
+    expect(closeButton?.className).toContain("[--toast-close-button-start:auto]");
+    expect(closeButton?.className).toContain("[--toast-close-button-end:8px]");
+    expect(closeButton?.className).toContain("!opacity-0");
+    expect(closeButton?.className).toContain("group-hover/toast:!opacity-100");
   });
 });
