@@ -167,6 +167,14 @@ def test_github_comparison_sha_must_be_full_hex() -> None:
         )
 
 
+def test_shrink_command_includes_active_comparison_ref() -> None:
+    module = _load_checker_module()
+
+    assert module.shrink_command("origin/main") == (
+        "python scripts/check_mypy_baseline.py --compare-ref origin/main --write-baseline"
+    )
+
+
 def test_baseline_writer_round_trips_multiplicity(tmp_path: Path) -> None:
     module = _load_checker_module()
     identity = module.DiagnosticIdentity("proliferate/example.py", "misc", "example")
