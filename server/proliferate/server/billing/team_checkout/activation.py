@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import logging
-from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,23 +10,12 @@ from proliferate.constants.organizations import (
     ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
     ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
     ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING,
-    ORGANIZATION_INVITE_EXPIRES_DAYS,
-    ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_STATUS_PENDING_CHECKOUT,
 )
 from proliferate.db import session_ops as db_session
 from proliferate.db.models.billing import BillingSubscription
 from proliferate.db.store import billing_subscriptions
-from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import users as user_store
-from proliferate.db.store.organizations import (
-    acquire_membership_activation_lock,
-    complete_team_checkout_activation,
-    load_team_checkout_intent_for_update,
-    mark_team_checkout_activating,
-    mark_team_checkout_failed,
-)
-from proliferate.integrations import resend
 from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing.domain.pricing import (
     monthly_subscription_price_ids,
@@ -45,119 +31,16 @@ from proliferate.server.billing.domain.webhooks import (
 from proliferate.server.billing.domain.webhooks import (
     subscription_period as _stripe_subscription_period,
 )
-from proliferate.server.billing.models import BillingServiceError, coerce_utc, utcnow
+from proliferate.server.billing.models import BillingServiceError, coerce_utc
 from proliferate.server.billing.pricing import billing_price_ids_from_settings
 from proliferate.server.cloud.agent_gateway.signup_hook import (
     schedule_agent_gateway_org_enrollment,
 )
-from proliferate.server.organizations.join_links import organization_join_url
-
-logger = logging.getLogger("proliferate.billing.team_checkout.activation")
+from proliferate.server.organizations import service as organization_service
 
 
 def _map_stripe_error(error: stripe_billing.StripeBillingError) -> BillingServiceError:
     return BillingServiceError(error.code, error.message, status_code=error.status_code)
-
-
-async def _send_staged_team_checkout_invitation(
-    *,
-    organization_id: UUID,
-    organization_name: str,
-    invited_by_user_id: UUID,
-    inviter_email: str,
-    email: str,
-) -> None:
-    async with db_session.open_async_transaction() as db:
-        record = await invitation_store.create_or_rotate_organization_invitation(
-            db,
-            organization_id=organization_id,
-            email=email,
-            role=ORGANIZATION_ROLE_MEMBER,
-            invited_by_user_id=invited_by_user_id,
-            expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
-        )
-    if record is None:
-        logger.warning(
-            "Skipping staged team checkout invitation because organization was not found",
-            extra={"organization_id": str(organization_id), "email": email},
-        )
-        return
-    try:
-        result = await resend.send_organization_invitation_email(
-            to_email=record.invitation.email,
-            organization_name=organization_name,
-            inviter_email=inviter_email,
-            invite_url=organization_join_url(organization_id),
-        )
-    except resend.ResendEmailError as error:
-        async with db_session.open_async_transaction() as db:
-            await invitation_store.mark_invitation_delivery(
-                db,
-                invitation_id=record.invitation.id,
-                sent=False,
-                skipped=False,
-                error=error.message,
-            )
-        logger.warning(
-            "Failed to deliver staged team checkout invitation",
-            extra={
-                "organization_id": str(organization_id),
-                "invitation_id": str(record.invitation.id),
-                "email": record.invitation.email,
-                "error_code": error.code,
-            },
-        )
-        return
-    async with db_session.open_async_transaction() as db:
-        await invitation_store.mark_invitation_delivery(
-            db,
-            invitation_id=record.invitation.id,
-            sent=not result.skipped,
-            skipped=result.skipped,
-        )
-
-
-async def _send_staged_team_checkout_invitations(
-    *,
-    organization_id: UUID,
-    organization_name: str,
-    invited_by_user_id: UUID,
-    inviter_email: str,
-    invite_emails_json: str | None,
-) -> None:
-    if not invite_emails_json:
-        return
-    try:
-        raw_invites = json.loads(invite_emails_json)
-    except ValueError:
-        logger.warning(
-            "Skipping staged team checkout invitations because invite JSON is invalid",
-            extra={"organization_id": str(organization_id)},
-        )
-        return
-    if not isinstance(raw_invites, list):
-        return
-    invite_emails = sorted(
-        {
-            email.strip().lower()
-            for email in raw_invites
-            if isinstance(email, str) and email.strip()
-        }
-    )
-    for email in invite_emails:
-        try:
-            await _send_staged_team_checkout_invitation(
-                organization_id=organization_id,
-                organization_name=organization_name,
-                invited_by_user_id=invited_by_user_id,
-                inviter_email=inviter_email,
-                email=email,
-            )
-        except Exception:
-            logger.exception(
-                "Unexpected failure while creating staged team checkout invitation",
-                extra={"organization_id": str(organization_id), "email": email},
-            )
 
 
 async def _upsert_team_subscription_from_stripe(
@@ -275,29 +158,30 @@ async def activate_team_checkout_from_stripe_session(
     status = subscription.get("status")
     if status not in {"active", "trialing"}:
         async with db_session.open_async_transaction() as db:
-            row = await load_team_checkout_intent_for_update(db, intent_id)
-            if row is not None:
-                intent, _organization = row
-                await mark_team_checkout_failed(
-                    db,
-                    intent,
-                    activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
-                    error_code="subscription_not_active",
-                    error_message="Team subscription is not active or trialing.",
-                    webhook_event_id=webhook_event_id,
-                )
+            await organization_service.fail_team_checkout_activation(
+                db,
+                intent_id=intent_id,
+                activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
+                error_code="subscription_not_active",
+                error_message="Team subscription is not active or trialing.",
+                webhook_event_id=webhook_event_id,
+            )
         return
 
     staged_invites: tuple[UUID, str, UUID, str, str | None] | None = None
     async with db_session.open_async_transaction() as db:
-        row = await load_team_checkout_intent_for_update(db, intent_id)
-        if row is None:
+        activation = await organization_service.load_team_checkout_activation(
+            db,
+            intent_id=intent_id,
+        )
+        if activation is None:
             raise BillingServiceError(
                 "team_checkout_intent_not_found",
                 "Team checkout intent was not found.",
                 status_code=404,
             )
-        intent, organization = row
+        intent = activation.intent
+        organization = activation.organization
         if (
             intent.organization_id != organization_id
             or intent.created_by_user_id != created_by_user_id
@@ -312,9 +196,9 @@ async def activate_team_checkout_from_stripe_session(
         if intent.status != ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING:
             return
         if organization.status != ORGANIZATION_STATUS_PENDING_CHECKOUT:
-            await mark_team_checkout_failed(
+            await organization_service.fail_team_checkout_activation(
                 db,
-                intent,
+                intent_id=intent_id,
                 activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
                 error_code="organization_not_pending_checkout",
                 error_message="Team checkout organization is not pending checkout.",
@@ -323,26 +207,29 @@ async def activate_team_checkout_from_stripe_session(
             return
         creator = await user_store.get_user_by_id(db, created_by_user_id)
         if creator is None:
-            await mark_team_checkout_failed(
+            await organization_service.fail_team_checkout_activation(
                 db,
-                intent,
+                intent_id=intent_id,
                 activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
                 error_code="checkout_creator_not_found",
                 error_message="Checkout creator account was not found.",
                 webhook_event_id=webhook_event_id,
             )
             return
-        await acquire_membership_activation_lock(db, created_by_user_id)
-        await mark_team_checkout_activating(db, intent, stripe_subscription_id=subscription_id)
+        await organization_service.begin_team_checkout_activation(
+            db,
+            intent_id=intent_id,
+            created_by_user_id=created_by_user_id,
+            stripe_subscription_id=subscription_id,
+        )
         await _upsert_team_subscription_from_stripe(
             db,
             subscription=subscription,
             billing_subject_id=billing_subject_id,
         )
-        activated = await complete_team_checkout_activation(
+        activated = await organization_service.complete_team_checkout_activation(
             db,
-            intent=intent,
-            organization=organization,
+            intent_id=intent_id,
             stripe_subscription_id=subscription_id,
             stripe_customer_id=customer_id,
             webhook_event_id=webhook_event_id,
@@ -365,7 +252,7 @@ async def activate_team_checkout_from_stripe_session(
         schedule_agent_gateway_org_enrollment(
             activated_organization_id, activated_created_by_user_id
         )
-        await _send_staged_team_checkout_invitations(
+        await organization_service.send_staged_team_checkout_invitations(
             organization_id=activated_organization_id,
             organization_name=activated_organization_name,
             invited_by_user_id=activated_created_by_user_id,
