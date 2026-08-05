@@ -4,6 +4,38 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import pytest
+
+
+PROTECTED_STORE_SYMBOLS = {
+    "proliferate.db.store.organizations": (
+        "acquire_membership_activation_lock",
+        "bind_team_checkout_session",
+        "cancel_team_checkout_intent",
+        "complete_team_checkout_activation",
+        "complete_team_checkout_activation_by_id",
+        "create_pending_team_checkout_intent",
+        "get_current_team_checkout_intent",
+        "load_team_checkout_activation_for_update",
+        "load_team_checkout_intent_for_update",
+        "mark_team_checkout_activating",
+        "mark_team_checkout_activating_by_id",
+        "mark_team_checkout_failed",
+        "mark_team_checkout_failed_by_id",
+    ),
+    "proliferate.db.store.organization_invitations": (
+        "accept_pending_invitation_for_organization_email",
+        "create_or_rotate_organization_invitation",
+        "mark_invitation_delivery",
+    ),
+    "proliferate.db.store.cloud_sandboxes": (
+        "accept_destroyed_cloud_sandbox_provider_observation",
+        "advance_cloud_sandbox_provider_observation_floor",
+        "apply_cloud_sandbox_provider_observation",
+        "mark_cloud_sandbox_provider_missing",
+    ),
+}
+
 
 def _load_checker_module():
     script_path = Path(__file__).resolve().parents[3] / "scripts" / "check_server_boundaries.py"
@@ -14,6 +46,316 @@ def _load_checker_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _check_named_source(
+    tmp_path: Path,
+    relative_path: str,
+    source: str,
+):
+    module = _load_checker_module()
+    path = tmp_path / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source)
+    return module, module.check_named_cross_domain_writes([path], tmp_path)
+
+
+def test_named_write_registry_matches_frozen_contract() -> None:
+    module = _load_checker_module()
+
+    actual = {
+        store_module: tuple(sorted(boundary.protected_symbols))
+        for store_module, boundary in module.NAMED_STORE_BOUNDARIES.items()
+    }
+    expected = {
+        store_module: tuple(sorted(symbols))
+        for store_module, symbols in PROTECTED_STORE_SYMBOLS.items()
+    }
+
+    assert actual == expected
+    assert {store_module: len(symbols) for store_module, symbols in actual.items()} == {
+        "proliferate.db.store.organizations": 13,
+        "proliferate.db.store.organization_invitations": 3,
+        "proliferate.db.store.cloud_sandboxes": 4,
+    }
+    assert sum(len(symbols) for symbols in actual.values()) == 20
+    organization_persistence = frozenset(
+        {
+            "server/proliferate/db/store/organization_invitations.py",
+            "server/proliferate/db/store/organizations.py",
+        }
+    )
+    for store_module in (
+        "proliferate.db.store.organizations",
+        "proliferate.db.store.organization_invitations",
+    ):
+        boundary = module.NAMED_STORE_BOUNDARIES[store_module]
+        assert boundary.product_owner_prefix == (
+            "server",
+            "proliferate",
+            "server",
+            "organizations",
+        )
+        assert boundary.persistence_owner_paths == organization_persistence
+        assert boundary.owner_service_hint == "proliferate.server.organizations.service"
+    cloud_boundary = module.NAMED_STORE_BOUNDARIES["proliferate.db.store.cloud_sandboxes"]
+    assert cloud_boundary.product_owner_prefix == (
+        "server",
+        "proliferate",
+        "server",
+        "cloud",
+    )
+    assert cloud_boundary.persistence_owner_paths == frozenset(
+        {"server/proliferate/db/store/cloud_sandboxes.py"}
+    )
+    assert cloud_boundary.owner_service_hint == "proliferate.server.cloud.cloud_sandboxes.service"
+
+
+@pytest.mark.parametrize(
+    ("store_module", "symbol"),
+    [
+        (store_module, symbol)
+        for store_module, symbols in PROTECTED_STORE_SYMBOLS.items()
+        for symbol in symbols
+    ],
+)
+@pytest.mark.parametrize("alias", ["", " as protected_alias"])
+def test_foreign_direct_import_rejects_every_protected_symbol(
+    tmp_path: Path,
+    store_module: str,
+    symbol: str,
+    alias: str,
+) -> None:
+    local_name = "protected_alias" if alias else symbol
+    _, violations = _check_named_source(
+        tmp_path,
+        "server/proliferate/server/billing/foreign.py",
+        f"from {store_module} import {symbol}{alias}\n{local_name}()\n",
+    )
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.rule_id == "NAMED_CROSS_DOMAIN_WRITE"
+    assert violation.lineno == 1
+    assert f"{store_module}.{symbol}" in violation.message
+    expected_hint = (
+        "proliferate.server.cloud.cloud_sandboxes.service"
+        if store_module.endswith("cloud_sandboxes")
+        else "proliferate.server.organizations.service"
+    )
+    assert expected_hint in violation.message
+    assert violation.relative_path(tmp_path) == ("server/proliferate/server/billing/foreign.py")
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from proliferate.db.store import organizations as organization_store\n"
+        "write = organization_store.bind_team_checkout_session\n",
+        "import proliferate.db.store.organizations as organization_store\n"
+        "write = organization_store.bind_team_checkout_session\n",
+    ],
+)
+def test_foreign_module_alias_access_is_rejected(
+    tmp_path: Path,
+    source: str,
+) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        "server/proliferate/server/billing/foreign.py",
+        source,
+    )
+
+    assert len(violations) == 1
+    assert violations[0].rule_id == "NAMED_CROSS_DOMAIN_WRITE"
+    assert "proliferate.db.store.organizations.bind_team_checkout_session" in violations[0].message
+
+
+def test_foreign_fully_qualified_reference_is_rejected_before_call(
+    tmp_path: Path,
+) -> None:
+    store_module = "proliferate.db.store.cloud_sandboxes"
+    symbol = "apply_cloud_sandbox_provider_observation"
+    _, violations = _check_named_source(
+        tmp_path,
+        "server/proliferate/server/billing/foreign.py",
+        f"import {store_module}\nwrite = {store_module}.{symbol}\nwrite()\n",
+    )
+
+    assert len(violations) == 1
+    assert violations[0].lineno == 2
+    assert f"{store_module}.{symbol}" in violations[0].message
+
+
+def test_foreign_star_import_rejects_each_protected_store_symbol(
+    tmp_path: Path,
+) -> None:
+    store_module = "proliferate.db.store.cloud_sandboxes"
+    _, violations = _check_named_source(
+        tmp_path,
+        "server/proliferate/server/billing/foreign.py",
+        f"from {store_module} import *\n",
+    )
+
+    assert len(violations) == 4
+    assert {item.rule_id for item in violations} == {"NAMED_CROSS_DOMAIN_WRITE"}
+    for symbol in PROTECTED_STORE_SYMBOLS[store_module]:
+        assert any(f"{store_module}.{symbol}" in item.message for item in violations)
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "store_module", "symbol"),
+    [
+        (
+            "server/proliferate/server/organizations/invitation_delivery.py",
+            "proliferate.db.store.organization_invitations",
+            "mark_invitation_delivery",
+        ),
+        (
+            "server/proliferate/server/cloud/webhooks/service.py",
+            "proliferate.db.store.cloud_sandboxes",
+            "apply_cloud_sandbox_provider_observation",
+        ),
+    ],
+)
+def test_product_owner_may_access_its_protected_store(
+    tmp_path: Path,
+    relative_path: str,
+    store_module: str,
+    symbol: str,
+) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        relative_path,
+        f"from {store_module} import {symbol}\n",
+    )
+
+    assert violations == []
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "store_module", "symbol"),
+    [
+        (
+            "server/proliferate/db/store/organizations.py",
+            "proliferate.db.store.organization_invitations",
+            "mark_invitation_delivery",
+        ),
+        (
+            "server/proliferate/db/store/organization_invitations.py",
+            "proliferate.db.store.organizations",
+            "mark_team_checkout_failed_by_id",
+        ),
+        (
+            "server/proliferate/db/store/cloud_sandboxes.py",
+            "proliferate.db.store.cloud_sandboxes",
+            "mark_cloud_sandbox_provider_missing",
+        ),
+    ],
+)
+def test_exact_persistence_owner_may_access_protected_store(
+    tmp_path: Path,
+    relative_path: str,
+    store_module: str,
+    symbol: str,
+) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        relative_path,
+        f"from {store_module} import {symbol}\n",
+    )
+
+    assert violations == []
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "server/proliferate/db/store/unrelated.py",
+        "server/proliferate/server/organizations_external/service.py",
+    ],
+)
+def test_owner_lookalikes_may_not_access_protected_store(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        relative_path,
+        "from proliferate.db.store.organizations import bind_team_checkout_session\n",
+    )
+
+    assert len(violations) == 1
+    assert violations[0].rule_id == "NAMED_CROSS_DOMAIN_WRITE"
+
+
+def test_same_named_owner_service_calls_are_legal(tmp_path: Path) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        "server/proliferate/server/billing/foreign.py",
+        "from proliferate.server.organizations import service as organization_service\n"
+        "from proliferate.server.cloud.cloud_sandboxes import service as cloud_service\n"
+        "organization_service.bind_team_checkout_session()\n"
+        "cloud_service.apply_cloud_sandbox_provider_observation()\n",
+    )
+
+    assert violations == []
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "source"),
+    [
+        (
+            "server/proliferate/auth/sso/user_resolution.py",
+            "from proliferate.db.store import organization_invitations as invitations\n"
+            "from proliferate.db.store import organizations as organizations\n"
+            "invitations.has_live_pending_invitation_for_organization_email()\n"
+            "organizations.get_active_membership()\n",
+        ),
+        (
+            "server/proliferate/server/billing/reconciler.py",
+            "from proliferate.db.store import cloud_sandboxes as sandboxes\n"
+            "sandboxes.load_cloud_sandbox_by_id()\n",
+        ),
+        (
+            "server/proliferate/server/billing/team_checkout/activation.py",
+            "from proliferate.db.store import billing_subscriptions as subscriptions\n"
+            "from proliferate.db.store import users as users\n"
+            "users.get_user_by_id()\n"
+            "subscriptions.upsert_billing_subscription()\n"
+            "unrelated.bind_team_checkout_session()\n",
+        ),
+    ],
+)
+def test_named_legal_reads_and_unrelated_same_named_method_are_legal(
+    tmp_path: Path,
+    relative_path: str,
+    source: str,
+) -> None:
+    _, violations = _check_named_source(tmp_path, relative_path, source)
+
+    assert violations == []
+
+
+def test_named_rule_scans_root_production_and_skips_migrations(
+    tmp_path: Path,
+) -> None:
+    module = _load_checker_module()
+    root_source = tmp_path / "server" / "proliferate" / "root_concern.py"
+    migration_source = tmp_path / "server" / "proliferate" / "db" / "migrations" / "revision.py"
+    alembic_source = tmp_path / "server" / "proliferate" / "alembic" / "versions" / "revision.py"
+    for path in (root_source, migration_source, alembic_source):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "from proliferate.db.store.organizations import cancel_team_checkout_intent\n"
+        )
+
+    targets = module.iter_named_write_target_files(tmp_path)
+    violations = module.check_named_cross_domain_writes(targets, tmp_path)
+
+    assert targets == [root_source]
+    assert len(violations) == 1
+    assert violations[0].path == root_source
 
 
 def test_api_allows_auth_user_import_only(tmp_path: Path) -> None:
