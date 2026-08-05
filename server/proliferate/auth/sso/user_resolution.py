@@ -33,6 +33,7 @@ from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment,
 )
 from proliferate.server.cloud.agent_gateway import signup_hook
+from proliferate.server.organizations import service as organization_service
 from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 from proliferate.server.organizations.membership_policy import (
     ensure_instance_membership_not_removed,
@@ -60,6 +61,7 @@ async def _resolve_sso_user(
     verified: VerifiedSsoIdentity,
 ) -> User:
     _require_verified_allowed_email(connection=connection, verified=verified)
+    assert verified.email is not None
     existing_identity = await sso_store.get_sso_identity_by_connection_subject(
         db,
         connection_key=connection.connection_key,
@@ -162,21 +164,13 @@ async def _resolve_organization_sso_user(
     if membership is not None:
         return user
     if has_pending_invitation:
-        accepted, _error = await invitation_store.accept_pending_invitation_for_organization_email(
+        accepted = await organization_service.try_accept_invitation(
             db,
+            user,
             organization_id=connection.organization_id,
-            authenticated_user_id=user.id,
             authenticated_email=verified.email or "",
         )
         if accepted is not None:
-            await maybe_create_organization_seat_adjustment(
-                db,
-                organization_id=accepted.organization.id,
-                membership_id=accepted.membership.id,
-            )
-            signup_hook.schedule_agent_gateway_org_enrollment(
-                accepted.organization.id, user.id, db=db
-            )
             return user
     if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
         raise HTTPException(status_code=403, detail="SSO user is not a team member.")
