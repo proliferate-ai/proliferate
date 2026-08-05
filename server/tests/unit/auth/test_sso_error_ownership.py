@@ -69,7 +69,7 @@ def test_sso_policy_error_is_local_and_framework_free() -> None:
 
 
 def test_sso_policy_error_callers_are_explicit_translation_boundaries() -> None:
-    production_root = Path(cast(str, user_resolution.__file__)).parents[2]
+    production_root = Path(cast(str, policy.__file__)).parents[2]
     named_paths = {
         path.relative_to(production_root).as_posix()
         for path in production_root.rglob("*.py")
@@ -77,8 +77,8 @@ def test_sso_policy_error_callers_are_explicit_translation_boundaries() -> None:
     }
     assert named_paths == {
         "auth/sso/policy.py",
-        "auth/sso/user_resolution.py",
         "integrations/sso/oidc.py",
+        "server/accounts/sso/user_resolution.py",
     }
 
     expected = {

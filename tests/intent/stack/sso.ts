@@ -12,8 +12,8 @@
 // organizationId, or connectionId (apps/desktop/src/hooks/auth/workflows/
 // use-sso-sign-in.ts + .../access/cloud/auth/use-sso-discovery.ts), and
 // `_connection_for_start`'s email-only branch resolves *only* the
-// deployment-scoped (env-var) connection regardless of the email's domain
-// (server/proliferate/auth/sso/service.py). There is no UI path — not even a
+// deployment-scoped (env-var) connection regardless of the email's domain.
+// There is no UI path — not even a
 // hypothetical "enter your email first" step — that reaches an
 // admin-configured org connection today. So this suite drives discovery and
 // the start call directly via the connection's id (the only way the org-scope

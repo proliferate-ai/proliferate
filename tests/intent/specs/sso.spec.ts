@@ -7,8 +7,8 @@
 // *deployment*-scoped (env-var) SSO connection. `useSsoDiscovery`
 // (apps/desktop/src/hooks/access/cloud/auth/use-sso-discovery.ts) is called
 // with no email; `useSsoSignIn`/`signInWithSso` never supply organizationId
-// or connectionId either. Server-side, `_connection_for_start`'s email-only
-// branch (server/proliferate/auth/sso/service.py) resolves
+// or connectionId either. The Accounts SSO coordinator's
+// `_connection_for_start` email-only branch resolves
 // `deployment_sso_connection()` regardless of the email's domain — there is
 // no email-domain-to-organization lookup at all. So an org admin can create
 // and enable an `sso_connection` (this file proves the whole round trip
