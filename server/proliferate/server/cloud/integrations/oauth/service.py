@@ -343,7 +343,10 @@ async def start_oauth_flow(
         owner_user_id=user_id,
         definition_id=definition.id,
         state_hash=_state_hash(state),
-        code_verifier_ciphertext=encrypt_text(verifier),
+        code_verifier_ciphertext=encrypt_text(
+            verifier,
+            secret=app_settings.cloud_secret_key,
+        ),
         issuer=auth_metadata.issuer,
         resource=resource,
         client_id=client.client_id,
@@ -474,7 +477,7 @@ async def complete_oauth_callback(
         definition_id=flow.definition_id,
     )
     client_secret = (
-        decrypt_text(oauth_client.client_secret_ciphertext)
+        decrypt_text(oauth_client.client_secret_ciphertext, secret=app_settings.cloud_secret_key)
         if oauth_client and oauth_client.client_secret_ciphertext
         else None
     )
@@ -484,7 +487,9 @@ async def complete_oauth_callback(
             token_endpoint=flow.token_endpoint,
             client_id=flow.client_id,
             code=code,
-            code_verifier=decrypt_text(flow.code_verifier_ciphertext),
+            code_verifier=decrypt_text(
+                flow.code_verifier_ciphertext, secret=app_settings.cloud_secret_key
+            ),
             redirect_uri=flow.redirect_uri,
             resource=flow.resource,
             client_secret=client_secret,
@@ -524,7 +529,8 @@ async def complete_oauth_callback(
                 scopes=granted_scopes,
                 token_endpoint=flow.token_endpoint,
                 redirect_uri=flow.redirect_uri,
-            )
+            ),
+            secret=app_settings.cloud_secret_key,
         ),
         credential_format="oauth-bundle-v1",
         auth_status="ready",

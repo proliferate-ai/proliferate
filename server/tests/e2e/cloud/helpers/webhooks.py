@@ -115,7 +115,9 @@ async def create_seeded_workspace_and_sandbox(
             else CloudSandboxStatus.error
         ),
         anyharness_base_url=runtime_url,
-        runtime_token_ciphertext=encrypt_text(runtime_token) if runtime_token else None,
+        runtime_token_ciphertext=encrypt_text(runtime_token, secret=settings.cloud_secret_key)
+        if runtime_token
+        else None,
         anyharness_data_key_ciphertext=None,
         ready_at=utcnow() if sandbox_status == "running" else None,
         last_health_at=utcnow() if sandbox_status == "running" else None,

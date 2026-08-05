@@ -19,6 +19,7 @@ from proliferate.integrations.integration_oauth.models import (
 from proliferate.server.cloud.integrations.oauth import clients as oauth_clients
 from proliferate.server.cloud.integrations.oauth import service as oauth_service
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.config import settings
 from proliferate.utils.crypto import decrypt_json
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
@@ -134,7 +135,9 @@ async def test_slack_http_callback_persists_only_exact_scope_grant(
     assert account is not None
     assert account.status == "ready"
     assert account.credential_ciphertext is not None
-    assert decrypt_json(account.credential_ciphertext)["scopes"] == list(SLACK_SCOPES)
+    assert decrypt_json(account.credential_ciphertext, secret=settings.cloud_secret_key)[
+        "scopes"
+    ] == list(SLACK_SCOPES)
 
 
 @pytest.mark.parametrize(

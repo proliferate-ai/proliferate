@@ -19,6 +19,7 @@ from proliferate.auth.identity.types import (
     AuthProviderName,
     VerifiedProviderIdentity,
 )
+from proliferate.config import settings
 from proliferate.db.models.auth import (
     AuthChallenge,
     AuthIdentity,
@@ -274,7 +275,6 @@ async def upsert_provider_grant(
 ) -> ProviderGrant | None:
     if verified.access_token is None:
         return None
-
     result = await db.execute(
         select(ProviderGrant).where(
             ProviderGrant.auth_identity_id == identity.id,
@@ -292,11 +292,11 @@ async def upsert_provider_grant(
             updated_at=now,
         )
         db.add(grant)
-
+    access_token, refresh_token = verified.access_token, verified.refresh_token
     grant.user_id = identity.user_id
-    grant.access_token_ciphertext = encrypt_text(verified.access_token)
+    grant.access_token_ciphertext = encrypt_text(access_token, secret=settings.cloud_secret_key)
     grant.refresh_token_ciphertext = (
-        encrypt_text(verified.refresh_token) if verified.refresh_token else None
+        encrypt_text(refresh_token, secret=settings.cloud_secret_key) if refresh_token else None
     )
     grant.scopes_json = _scopes_json(verified.scopes)
     grant.expires_at = verified.expires_at
@@ -466,13 +466,13 @@ async def get_ready_github_grant_for_user(
             continue
         if not _github_scopes_satisfy_requirements(_parse_scopes(grant.scopes_json)):
             continue
-        if not grant.access_token_ciphertext:
+        if not (ciphertext := grant.access_token_ciphertext):
             continue
 
         return ReadyGitHubGrant(
             user_id=user_id,
             identity_id=identity.id,
-            access_token=decrypt_text(grant.access_token_ciphertext),
+            access_token=decrypt_text(ciphertext, secret=settings.cloud_secret_key),
             account_email=identity.email,
             display_name=identity.display_name,
             avatar_url=identity.avatar_url,
@@ -497,13 +497,13 @@ async def read_ready_github_grant_for_user(
             continue
         if not _github_scopes_satisfy_requirements(_parse_scopes(grant.scopes_json)):
             continue
-        if not grant.access_token_ciphertext:
+        if not (ciphertext := grant.access_token_ciphertext):
             continue
 
         return ReadyGitHubGrant(
             user_id=user_id,
             identity_id=identity.id,
-            access_token=decrypt_text(grant.access_token_ciphertext),
+            access_token=decrypt_text(ciphertext, secret=settings.cloud_secret_key),
             account_email=identity.email,
             display_name=identity.display_name,
             avatar_url=identity.avatar_url,

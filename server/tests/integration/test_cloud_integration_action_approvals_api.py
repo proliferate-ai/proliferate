@@ -550,7 +550,8 @@ async def test_account_credential_rotation_invalidates_prior_approval(
                 "refreshToken": "rotated-refresh",
                 "expiresAt": None,
                 "scopes": [],
-            }
+            },
+            secret=settings.cloud_secret_key,
         ),
         credential_format="oauth-bundle-v1",
         auth_status="ready",

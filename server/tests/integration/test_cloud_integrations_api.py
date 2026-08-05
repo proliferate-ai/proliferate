@@ -39,6 +39,7 @@ from proliferate.server.cloud.integrations.config import (
 from proliferate.server.cloud.integrations.oauth import clients as oauth_clients
 from proliferate.server.cloud.integrations.oauth import service as oauth_service
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.config import settings
 from proliferate.utils.crypto import decrypt_json
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
@@ -167,7 +168,7 @@ class TestAuthenticateIntegration:
         assert stored is not None
         assert stored.credential_format == "secret-fields-v1"
         assert stored.credential_ciphertext is not None
-        decoded = decrypt_json(stored.credential_ciphertext)
+        decoded = decrypt_json(stored.credential_ciphertext, secret=settings.cloud_secret_key)
         assert decoded["secretFields"]["api_key"] == "ctx7sk-secret-value"
 
     @pytest.mark.asyncio

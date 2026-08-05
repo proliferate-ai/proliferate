@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from proliferate.config import settings
 from proliferate.integrations.sandbox import RuntimeEndpoint, SandboxRuntimeContext
 from proliferate.server.cloud.materialization.sandbox_io import connect
 from tests.unit.test_cloud_connect_race import (
@@ -59,10 +60,15 @@ async def test_partial_runtime_credentials_persist_exact_launched_values(
     db = _FakeDb(events)
     _patch_connect_prelude(monkeypatch, sandbox=sandbox, provider=provider)
 
-    def _decrypt(ciphertext: str) -> str:
+    def _decrypt(ciphertext: str, *, secret: str) -> str:
+        assert secret == settings.cloud_secret_key
         prefix = "cipher:"
         assert ciphertext.startswith(prefix)
         return ciphertext.removeprefix(prefix)
+
+    def _encrypt(value: str, *, secret: str) -> str:
+        assert secret == settings.cloud_secret_key
+        return f"cipher:{value}"
 
     async def _accept_resumed(*_args: Any, **_kwargs: Any) -> object:
         return sandbox
@@ -109,7 +115,7 @@ async def test_partial_runtime_credentials_persist_exact_launched_values(
         return sandbox
 
     monkeypatch.setattr(connect, "decrypt_text", _decrypt)
-    monkeypatch.setattr(connect, "encrypt_text", lambda value: f"cipher:{value}")
+    monkeypatch.setattr(connect, "encrypt_text", _encrypt)
     monkeypatch.setattr(connect.secrets, "token_urlsafe", lambda _length: "minted-token")
     monkeypatch.setattr(connect, "generate_anyharness_data_key", lambda: "minted-data-key")
     monkeypatch.setattr(connect, "accept_resumed_provider", _accept_resumed)
@@ -135,5 +141,17 @@ async def test_partial_runtime_credentials_persist_exact_launched_values(
         "runtime_token": expected_runtime_token,
         "anyharness_data_key": expected_data_key,
     }
-    assert _decrypt(persisted["runtime_token_ciphertext"]) == launched["runtime_token"]
-    assert _decrypt(persisted["data_key_ciphertext"]) == launched["anyharness_data_key"]
+    assert (
+        _decrypt(
+            persisted["runtime_token_ciphertext"],
+            secret=settings.cloud_secret_key,
+        )
+        == launched["runtime_token"]
+    )
+    assert (
+        _decrypt(
+            persisted["data_key_ciphertext"],
+            secret=settings.cloud_secret_key,
+        )
+        == launched["anyharness_data_key"]
+    )

@@ -81,7 +81,9 @@ async def _seed_ready_account(db_session: AsyncSession, *, user_id: str, namespa
     await accounts_store.set_account_credentials(
         db_session,
         account_id=account.id,
-        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "secret"}}),
+        credential_ciphertext=encrypt_json(
+            {"secretFields": {"api_key": "secret"}}, secret=settings.cloud_secret_key
+        ),
         credential_format="secret-fields-v1",
         auth_status="ready",
         token_expires_at=None,

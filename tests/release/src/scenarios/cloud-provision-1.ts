@@ -422,6 +422,7 @@ export interface CloudProvision1Driver {
  */
 const DECRYPT_RUNTIME_TOKEN_PY = `import asyncio, json, os
 from uuid import UUID
+from proliferate.config import settings
 from proliferate.db.engine import async_session_factory
 from proliferate.db.store.cloud_sandboxes import load_cloud_sandbox_by_id
 from proliferate.utils.crypto import decrypt_text
@@ -433,7 +434,10 @@ async def main():
         sandbox = await load_cloud_sandbox_by_id(db, CLOUD_SANDBOX_ID)
         token = None
         if sandbox is not None and sandbox.anyharness_bearer_token_ciphertext:
-            token = decrypt_text(sandbox.anyharness_bearer_token_ciphertext)
+            token = decrypt_text(
+                sandbox.anyharness_bearer_token_ciphertext,
+                secret=settings.cloud_secret_key,
+            )
         print(json.dumps({"token": token}))
 
 asyncio.run(main())

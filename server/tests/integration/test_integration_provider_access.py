@@ -23,6 +23,7 @@ from proliferate.server.cloud.integrations.config import (
     serialize_definition_config,
 )
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.config import settings
 from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 SLACK_SCOPES = (
@@ -93,7 +94,9 @@ async def test_api_key_access_renders_bearer_header(db_session: AsyncSession) ->
         db_session,
         namespace="context7",
         auth_kind="api_key",
-        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "ctx7sk-secret"}}),
+        credential_ciphertext=encrypt_json(
+            {"secretFields": {"api_key": "ctx7sk-secret"}}, secret=settings.cloud_secret_key
+        ),
         credential_format="secret-fields-v1",
     )
     access = await ensure_provider_access(
@@ -108,7 +111,9 @@ async def test_api_key_access_renders_query_param(db_session: AsyncSession) -> N
         db_session,
         namespace="exa",
         auth_kind="api_key",
-        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "exa-secret"}}),
+        credential_ciphertext=encrypt_json(
+            {"secretFields": {"api_key": "exa-secret"}}, secret=settings.cloud_secret_key
+        ),
         credential_format="secret-fields-v1",
     )
     access = await ensure_provider_access(
@@ -171,7 +176,7 @@ async def test_oauth_access_uses_unexpired_access_token(db_session: AsyncSession
         db_session,
         namespace="linear",
         auth_kind="oauth2",
-        credential_ciphertext=encrypt_json(bundle),
+        credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
         credential_format="oauth-bundle-v1",
     )
     access = await ensure_provider_access(
@@ -199,7 +204,7 @@ async def test_slack_access_keeps_legacy_empty_scope_metadata_usable(
         db_session,
         namespace="slack",
         auth_kind="oauth2",
-        credential_ciphertext=encrypt_json(bundle),
+        credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
         credential_format="oauth-bundle-v1",
     )
 
@@ -231,7 +236,7 @@ async def test_slack_refresh_preserves_scopes_when_provider_omits_them(
         db_session,
         namespace="slack",
         auth_kind="oauth2",
-        credential_ciphertext=encrypt_json(bundle),
+        credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
         credential_format="oauth-bundle-v1",
     )
 
@@ -254,7 +259,9 @@ async def test_slack_refresh_preserves_scopes_when_provider_omits_them(
     refreshed = await accounts_store.get_account(db_session, account.id)
     assert refreshed is not None
     assert refreshed.credential_ciphertext is not None
-    refreshed_bundle = decrypt_json(refreshed.credential_ciphertext)
+    refreshed_bundle = decrypt_json(
+        refreshed.credential_ciphertext, secret=settings.cloud_secret_key
+    )
     assert refreshed_bundle["scopes"] == list(SLACK_SCOPES)
     assert refreshed_bundle["accessToken"] == "replacement-access-token"
 
@@ -280,7 +287,7 @@ async def test_slack_refresh_accepts_nonempty_scope_subset_below_ceiling(
         db_session,
         namespace="slack",
         auth_kind="oauth2",
-        credential_ciphertext=encrypt_json(bundle),
+        credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
         credential_format="oauth-bundle-v1",
     )
 
@@ -303,7 +310,9 @@ async def test_slack_refresh_accepts_nonempty_scope_subset_below_ceiling(
     refreshed = await accounts_store.get_account(db_session, account.id)
     assert refreshed is not None
     assert refreshed.credential_ciphertext is not None
-    refreshed_bundle = decrypt_json(refreshed.credential_ciphertext)
+    refreshed_bundle = decrypt_json(
+        refreshed.credential_ciphertext, secret=settings.cloud_secret_key
+    )
     assert refreshed_bundle["scopes"] == ["search:read.public", "search:read.private"]
 
 
@@ -328,7 +337,7 @@ async def test_slack_refresh_rejects_reported_scope_above_ceiling_without_persis
         db_session,
         namespace="slack",
         auth_kind="oauth2",
-        credential_ciphertext=encrypt_json(bundle),
+        credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
         credential_format="oauth-bundle-v1",
     )
     original_ciphertext = account.credential_ciphertext
@@ -378,7 +387,7 @@ async def test_slack_refresh_translates_2xx_error_without_persisting(
         db_session,
         namespace="slack",
         auth_kind="oauth2",
-        credential_ciphertext=encrypt_json(bundle),
+        credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
         credential_format="oauth-bundle-v1",
     )
     original_ciphertext = account.credential_ciphertext
@@ -438,7 +447,7 @@ async def test_slack_access_rejects_known_stored_scope_above_ceiling(
         db_session,
         namespace="slack",
         auth_kind="oauth2",
-        credential_ciphertext=encrypt_json(bundle),
+        credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
         credential_format="oauth-bundle-v1",
     )
 

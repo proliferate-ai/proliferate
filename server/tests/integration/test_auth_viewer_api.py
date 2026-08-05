@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.store import get_account_readiness
 from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, SsoIdentity, User
+from proliferate.config import settings
 from proliferate.utils.crypto import encrypt_text
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -74,7 +75,9 @@ async def _link_ready_github_identity(
         user_id=uuid.UUID(user_id),
         auth_identity_id=identity.id,
         provider="github",
-        access_token_ciphertext=encrypt_text("github-access-token"),
+        access_token_ciphertext=encrypt_text(
+            "github-access-token", secret=settings.cloud_secret_key
+        ),
         scopes_json=scopes_json,
         status="ready",
         expires_at=expires_at,

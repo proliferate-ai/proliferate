@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from proliferate.config import settings
 from proliferate.db.models.auth import SsoChallenge, SsoConnection, SsoIdentity
 from proliferate.utils.crypto import decrypt_text
 
@@ -103,7 +104,7 @@ def parse_json_list(value: str | None) -> tuple[str, ...]:
 
 def sso_connection_record(connection: SsoConnection) -> SsoConnectionRecord:
     client_secret = (
-        decrypt_text(connection.oidc_client_secret_ciphertext)
+        decrypt_text(connection.oidc_client_secret_ciphertext, secret=settings.cloud_secret_key)
         if connection.oidc_client_secret_ciphertext
         else None
     )
