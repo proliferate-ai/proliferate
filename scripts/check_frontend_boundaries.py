@@ -10,9 +10,14 @@ import re
 import sys
 
 try:
-    from scripts.frontend_imports import ImportStatement, collect_imports, tokenize_typescript
+    from scripts.frontend_imports import (
+        ImportStatement,
+        Token,
+        collect_imports,
+        tokenize_typescript,
+    )
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
-    from frontend_imports import ImportStatement, collect_imports, tokenize_typescript
+    from frontend_imports import ImportStatement, Token, collect_imports, tokenize_typescript
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
@@ -515,19 +520,305 @@ def imported_bindings(statement: ImportStatement) -> set[str]:
     return bindings
 
 
+def _matching_token_pairs(
+    tokens: list[Token],
+    opener: str,
+    closer: str,
+) -> tuple[dict[int, int], dict[int, int]]:
+    opens: list[int] = []
+    forward: dict[int, int] = {}
+    reverse: dict[int, int] = {}
+    for index, token in enumerate(tokens):
+        if token.value == opener:
+            opens.append(index)
+        elif token.value == closer and opens:
+            open_index = opens.pop()
+            forward[open_index] = index
+            reverse[index] = open_index
+    return forward, reverse
+
+
+def _binding_names_in_pattern(tokens: list[Token], bindings: set[str]) -> set[str]:
+    """Return imported names rebound by one parameter/declaration pattern."""
+
+    cursor = 0
+    while cursor < len(tokens) and tokens[cursor].value in {
+        ".",
+        "override",
+        "private",
+        "protected",
+        "public",
+        "readonly",
+    }:
+        cursor += 1
+    if cursor >= len(tokens):
+        return set()
+    first = tokens[cursor]
+    if first.kind == "identifier":
+        return {first.value} & bindings
+    if first.value not in {"{", "["}:
+        return set()
+
+    opener = first.value
+    closer = "}" if opener == "{" else "]"
+    depth = 1
+    end = cursor + 1
+    rebound: set[str] = set()
+    while end < len(tokens) and depth:
+        token = tokens[end]
+        if token.value == opener:
+            depth += 1
+        elif token.value == closer:
+            depth -= 1
+        elif token.kind == "identifier" and token.value in bindings:
+            next_value = tokens[end + 1].value if end + 1 < len(tokens) else None
+            # `{ sourceName: localName }` does not bind the property key.
+            if not (opener == "{" and next_value == ":"):
+                rebound.add(token.value)
+        end += 1
+    return rebound
+
+
+def _binding_names_in_parameter_tokens(
+    tokens: list[Token], bindings: set[str]
+) -> set[str]:
+    """Return imported names rebound by a function-like parameter list."""
+
+    entries: list[list[Token]] = []
+    current: list[Token] = []
+    nesting: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+    for token in tokens:
+        if token.value in {"(", "[", "{", "<"}:
+            nesting.append(token.value)
+        elif token.value in matching and nesting and nesting[-1] == matching[token.value]:
+            nesting.pop()
+        if token.value == "," and not nesting:
+            entries.append(current)
+            current = []
+        else:
+            current.append(token)
+    entries.append(current)
+
+    rebound: set[str] = set()
+    for entry in entries:
+        rebound.update(_binding_names_in_pattern(entry, bindings))
+    return rebound
+
+
+def _function_shadow_ranges(
+    tokens: list[Token], bindings: set[str]
+) -> list[tuple[int, int, set[str]]]:
+    parens, closing_parens = _matching_token_pairs(tokens, "(", ")")
+    braces, _ = _matching_token_pairs(tokens, "{", "}")
+    ranges: list[tuple[int, int, set[str]]] = []
+
+    def add_range(param_start: int, param_end: int, body_start: int, body_end: int) -> None:
+        rebound = _binding_names_in_parameter_tokens(
+            tokens[param_start:param_end], bindings
+        )
+        if rebound:
+            ranges.append((body_start, body_end, rebound))
+
+    # Function declarations/expressions and catch clauses.
+    for index, token in enumerate(tokens):
+        if token.value not in {"function", "catch"}:
+            continue
+        open_index = index + 1
+        while open_index < len(tokens) and tokens[open_index].value != "(":
+            if tokens[open_index].value in {"{", ";"}:
+                break
+            open_index += 1
+        close_index = parens.get(open_index)
+        if close_index is None or close_index + 1 >= len(tokens):
+            continue
+        body_open = close_index + 1
+        if tokens[body_open].value != "{" or body_open not in braces:
+            continue
+        add_range(open_index + 1, close_index, body_open + 1, braces[body_open])
+
+    # Arrow functions, including a single bare parameter.
+    for arrow_index, token in enumerate(tokens):
+        is_combined_arrow = token.value == "=>"
+        is_split_arrow = (
+            token.value == "="
+            and arrow_index + 1 < len(tokens)
+            and tokens[arrow_index + 1].value == ">"
+        )
+        if (
+            not (is_combined_arrow or is_split_arrow)
+            or arrow_index == 0
+            or arrow_index + (2 if is_split_arrow else 1) >= len(tokens)
+        ):
+            continue
+        before = arrow_index - 1
+        if tokens[before].value == ")" and before in closing_parens:
+            open_index = closing_parens[before]
+            param_start, param_end = open_index + 1, before
+        elif tokens[before].kind == "identifier":
+            param_start, param_end = before, arrow_index
+        else:
+            continue
+
+        body_start = arrow_index + (2 if is_split_arrow else 1)
+        if tokens[body_start].value == "{" and body_start in braces:
+            body_end = braces[body_start]
+            add_range(param_start, param_end, body_start + 1, body_end)
+            continue
+
+        # An expression body ends at the first delimiter in its containing
+        # expression. This is deliberately conservative: skipping a false
+        # positive is preferable to attributing an unrelated object's call to
+        # an imported Zustand binding.
+        body_end = len(tokens)
+        depth = 0
+        for cursor in range(body_start, len(tokens)):
+            value = tokens[cursor].value
+            if value in {"(", "[", "{"}:
+                depth += 1
+            elif value in {
+                ")",
+                "]",
+                "}",
+            }:
+                if depth == 0:
+                    body_end = cursor
+                    break
+                depth -= 1
+            elif depth == 0 and value in {",", ";"}:
+                body_end = cursor
+                break
+        add_range(param_start, param_end, body_start, body_end)
+
+    # Object/class methods have the same parameter/body spelling but no
+    # `function` keyword. Limit this to a closing parameter list immediately
+    # followed by a body; control-flow constructs contain no imported binding
+    # parameter and therefore do not add a range.
+    for open_index, close_index in parens.items():
+        if open_index == 0:
+            continue
+        owner = tokens[open_index - 1]
+        if owner.kind != "identifier" or owner.value in {
+            "catch",
+            "for",
+            "if",
+            "switch",
+            "while",
+            "with",
+        }:
+            continue
+        if close_index + 1 >= len(tokens) or tokens[close_index + 1].value != "{":
+            continue
+        body_open = close_index + 1
+        if body_open not in braces:
+            continue
+        add_range(open_index + 1, close_index, body_open + 1, braces[body_open])
+
+    return ranges
+
+
+def _declares_binding_in_scope(
+    tokens: list[Token],
+    binding: str,
+    candidate_index: int,
+    brace_reverse: dict[int, int],
+) -> bool:
+    """Whether a local declaration shadows an imported binding at a call."""
+
+    # Lexical declarations shadow the import for their whole scope, including
+    # before initialization (where JavaScript's temporal dead zone applies).
+    enclosing_starts = {0} | {
+        open_index + 1
+        for close_index, open_index in brace_reverse.items()
+        if open_index < candidate_index < close_index
+    }
+
+    for index in range(len(tokens)):
+        if tokens[index].value not in {"const", "let", "var", "class", "function"}:
+            continue
+        # The declaration itself must begin inside one of the candidate's
+        # enclosing blocks, not a completed sibling/nested block.
+        declaration_containers = [
+            (open_index, close_index)
+            for close_index, open_index in brace_reverse.items()
+            if open_index < index < close_index
+        ]
+        declaration_scope = 0
+        if declaration_containers:
+            open_index, close_index = max(declaration_containers)
+            if not (open_index < candidate_index < close_index):
+                continue
+            declaration_scope = open_index + 1
+        if declaration_scope not in enclosing_starts:
+            continue
+
+        if tokens[index].value in {"class", "function"}:
+            if (
+                index + 1 < len(tokens)
+                and tokens[index + 1].kind == "identifier"
+                and tokens[index + 1].value == binding
+            ):
+                return True
+            continue
+
+        # Walk every declarator in `const a = 1, b = 2;`, but inspect only its
+        # binding pattern—not type annotations or initializer expressions.
+        cursor = index + 1
+        while cursor < len(tokens):
+            declarator_start = cursor
+            nesting: list[str] = []
+            matching = {")": "(", "]": "[", "}": "{", ">": "<"}
+            while cursor < len(tokens):
+                value = tokens[cursor].value
+                if value in {"(", "[", "{", "<"}:
+                    nesting.append(value)
+                elif value in matching and nesting and nesting[-1] == matching[value]:
+                    nesting.pop()
+                if not nesting and value in {",", ";"}:
+                    break
+                cursor += 1
+            if binding in _binding_names_in_pattern(
+                tokens[declarator_start:cursor], {binding}
+            ):
+                return True
+            if cursor >= len(tokens) or tokens[cursor].value == ";":
+                break
+            cursor += 1
+    return False
+
+
 def member_call_lines(text: str, bindings: set[str], member: str) -> list[int]:
     if not bindings:
         return []
     tokens = tokenize_typescript(text)
-    return [
-        tokens[index].lineno
-        for index in range(len(tokens) - 3)
-        if tokens[index].kind == "identifier"
-        and tokens[index].value in bindings
-        and tokens[index + 1].value == "."
-        and tokens[index + 2].value == member
-        and tokens[index + 3].value == "("
-    ]
+    _, brace_reverse = _matching_token_pairs(tokens, "{", "}")
+    shadow_ranges = _function_shadow_ranges(tokens, bindings)
+    lines: list[int] = []
+    for index in range(len(tokens) - 3):
+        token = tokens[index]
+        if (
+            token.kind != "identifier"
+            or token.value not in bindings
+            or tokens[index + 1].value != "."
+            or tokens[index + 2].value != member
+            or tokens[index + 3].value != "("
+        ):
+            continue
+        # `fixture.store.setState()` and `fixture?.store.setState()` are calls
+        # on a property, not on the imported binding with the same spelling.
+        if index > 0 and tokens[index - 1].value == ".":
+            continue
+        if index > 1 and tokens[index - 2].value == "?" and tokens[index - 1].value == ".":
+            continue
+        if any(
+            start <= index < end and token.value in rebound
+            for start, end, rebound in shadow_ranges
+        ):
+            continue
+        if _declares_binding_in_scope(tokens, token.value, index, brace_reverse):
+            continue
+        lines.append(token.lineno)
+    return lines
 
 
 def direct_call_lines(text: str, binding: str) -> list[int]:
@@ -568,6 +859,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
     text = path.read_text()
     statements = collect_imports(path, text)
     source_layer = product_client_layer(product_client_relative(path))
+    lib_area = (
+        product_client_relative(path).split("/", 2)[1]
+        if source_layer == "lib"
+        else None
+    )
     imported_store_bindings: set[str] = set()
 
     for statement in statements:
@@ -605,8 +901,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         if target_layer == "stores":
             imported_store_bindings.update(imported_bindings(statement))
 
+        query_hook_has_specific_owner = source_layer == "stores" or (
+            source_layer == "lib" and lib_area in {"domain", "workflows"}
+        )
         if (
-            source_layer not in {"lib", "stores"}
+            not query_hook_has_specific_owner
             and statement.source == "@tanstack/react-query"
             and identifiers.intersection(QUERY_HOOK_NAMES)
             and not is_product_client_query_hook_owner(path)
@@ -623,8 +922,15 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                 )
             )
 
+        internal_store_access = (
+            source_layer == "stores"
+            and target is not None
+            and target.startswith("lib/access/")
+        )
+
         if (
             "getAnyHarnessClient" in identifiers
+            and not internal_store_access
             and not is_anyharness_client_path(relative(path))
         ):
             violations.append(
@@ -646,7 +952,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                 )
             )
 
-        if source_layer == "stores" and target is not None and target.startswith("lib/access/"):
+        if internal_store_access:
             violations.append(
                 Violation(
                     "STORE_FORBIDDEN_ACCESS",
@@ -659,6 +965,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         runtime_access_import = (
             not statement.type_only
             and source_layer == "stores"
+            and not internal_store_access
             and (
                 statement.source == "@tanstack/react-query"
                 or statement.source.startswith("@proliferate/cloud-sdk-react")
@@ -677,7 +984,6 @@ def find_product_client_violations(path: Path) -> list[Violation]:
             )
 
         if source_layer == "lib":
-            lib_area = product_client_relative(path).split("/", 2)[1]
             rule_id = (
                 "DOMAIN_FORBIDDEN_IMPORT"
                 if lib_area == "domain"

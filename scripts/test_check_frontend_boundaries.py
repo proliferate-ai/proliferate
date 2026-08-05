@@ -284,6 +284,44 @@ class ProductClientBoundaryTest(unittest.TestCase):
         )
         self.assertTrue(statements[0].statement.startswith("import type"))
 
+    def test_shared_parser_handles_types_templates_jsx_regex_and_escaped_sources(self) -> None:
+        source = (
+            "import runtimeHook, { type HookOptions } "
+            "from '@proliferate/cloud-sdk-react';\n"
+            "import { type as runtimeBinding } from '@anyharness/sdk-react';\n"
+            "type Hook = import('@proliferate/cloud-sdk-react').UseHook;\n"
+            "const direct = import(`#product/components/Direct`);\n"
+            "const nested = `${import('#product/components/Nested')}`;\n"
+            "const computed = import(`#product/${from('@tauri-apps/api')}`);\n"
+            "const nestedSpecifier = "
+            "import(`${import('#product/components/SpecifierInner')}`);\n"
+            "const prose = <code>import('apps/desktop/src/not-code')</code>;\n"
+            "const regex = /import('apps\\/desktop\\/src\\/not-code')/;\n"
+            "export const Demo = () => <>from '@tauri-apps/api'</>;\n"
+            "export const prose = () => from('@tauri-apps/api');\n"
+            "const metadata = import.meta;\n"
+            "const escaped = import('@tauri\\u002dapps/api');\n"
+        )
+
+        statements = collect_imports(Path("Sample.tsx"), source)
+
+        self.assertEqual(
+            [statement.source for statement in statements],
+            [
+                "@proliferate/cloud-sdk-react",
+                "@anyharness/sdk-react",
+                "@proliferate/cloud-sdk-react",
+                "#product/components/Direct",
+                "#product/components/Nested",
+                "#product/components/SpecifierInner",
+                "@tauri-apps/api",
+            ],
+        )
+        self.assertEqual(
+            [statement.type_only for statement in statements],
+            [False, False, True, False, False, False, False],
+        )
+
     def test_every_forbidden_layer_pair_fails_for_alias_and_relative_imports(self) -> None:
         forbidden_pairs = sorted(check_module.PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES)
         files: dict[str, str] = {}
@@ -392,6 +430,59 @@ class ProductClientBoundaryTest(unittest.TestCase):
         self.assertEqual(len(set_state), 1)
         self.assertEqual(set_state[0].lineno, 2)
 
+    def test_imported_store_set_state_respects_lexical_and_property_shadowing(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/workflows/external.ts": (
+                "import { useChatStore } from '#product/stores/chat/chat-store';\n"
+                "useChatStore.setState({ top: true });\n"
+                "function parameter(useChatStore: OtherObject) {\n"
+                "  useChatStore.setState({ parameter: true });\n"
+                "}\n"
+                "const arrow = (useChatStore: OtherObject) => "
+                "useChatStore.setState({ arrow: true });\n"
+                "function local() {\n"
+                "  const useChatStore = fixture.store;\n"
+                "  useChatStore.setState({ local: true });\n"
+                "}\n"
+                "function destructured() {\n"
+                "  const { useChatStore } = fixture;\n"
+                "  useChatStore.setState({ destructured: true });\n"
+                "}\n"
+                "fixture.useChatStore.setState({ property: true });\n"
+                "fixture?.useChatStore.setState({ optional: true });\n"
+                "function unshadowed() {\n"
+                "  useChatStore.setState({ nested: true });\n"
+                "}\n"
+                "function typed(other: ReturnType<typeof useChatStore>) {\n"
+                "  useChatStore.setState({ typed: true });\n"
+                "}\n"
+                "function propertyParameter({ useChatStore: local }: Fixture) {\n"
+                "  useChatStore.setState({ propertyParameter: true });\n"
+                "  local.setState({ local: true });\n"
+                "}\n"
+                "function propertyDestructure() {\n"
+                "  const { useChatStore: local } = fixture;\n"
+                "  useChatStore.setState({ propertyDestructure: true });\n"
+                "}\n"
+                "function temporalDeadZone() {\n"
+                "  useChatStore.setState({ localBeforeDeclaration: true });\n"
+                "  const useChatStore = fixture.store;\n"
+                "}\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        set_state = [
+            violation
+            for violation in violations
+            if violation.rule_id == "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER"
+        ]
+        self.assertEqual(
+            [violation.lineno for violation in set_state],
+            [2, 18, 21, 24, 29],
+        )
+
     def test_query_hooks_pass_in_access_and_cache_but_fail_in_workflow_and_facade(self) -> None:
         files = {
             "apps/packages/product-client/src/hooks/access/cloud/query.ts": (
@@ -421,6 +512,40 @@ class ProductClientBoundaryTest(unittest.TestCase):
             {"action.ts", "model.ts"},
         )
 
+    def test_query_hooks_fail_in_non_owner_lib_areas_without_duplicate_domain_rules(self) -> None:
+        files = {
+            "apps/packages/product-client/src/lib/access/cloud/query.ts": (
+                "import { useQuery } from '@tanstack/react-query';\n"
+            ),
+            "apps/packages/product-client/src/lib/infra/query.ts": (
+                "import { useMutation } from '@tanstack/react-query';\n"
+            ),
+            "apps/packages/product-client/src/lib/domain/chat/query.ts": (
+                "import { useQueries } from '@tanstack/react-query';\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        query_paths = {
+            violation.path.as_posix().split("/src/", 1)[1]
+            for violation in violations
+            if violation.rule_id == "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE"
+        }
+        self.assertEqual(
+            query_paths,
+            {
+                "lib/access/cloud/query.ts",
+                "lib/infra/query.ts",
+            },
+        )
+        domain_rules = [
+            violation.rule_id
+            for violation in violations
+            if violation.path.as_posix().endswith("lib/domain/chat/query.ts")
+        ]
+        self.assertEqual(domain_rules, ["DOMAIN_FORBIDDEN_IMPORT"])
+
     def test_store_runtime_access_fails_but_contract_types_and_pure_sdk_helpers_pass(self) -> None:
         files = {
             "apps/packages/product-client/src/stores/chat/legal.ts": (
@@ -446,6 +571,76 @@ class ProductClientBoundaryTest(unittest.TestCase):
             if violation.rule_id == "STORE_RUNTIME_ACCESS"
         ]
         self.assertEqual(len(runtime_access), 3)
+
+    def test_store_import_type_expressions_and_mixed_runtime_imports_are_distinguished(self) -> None:
+        files = {
+            "apps/packages/product-client/src/stores/chat/type-expression.ts": (
+                "type Hook = import('@proliferate/cloud-sdk-react').UseHook;\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/mixed.ts": (
+                "import runtimeHook, { type HookOptions } "
+                "from '@proliferate/cloud-sdk-react';\n"
+            ),
+            "apps/packages/product-client/src/stores/chat/type-named-runtime.ts": (
+                "import { type as runtimeBinding } from '@anyharness/sdk-react';\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        runtime_paths = {
+            violation.path.name
+            for violation in violations
+            if violation.rule_id == "STORE_RUNTIME_ACCESS"
+        }
+        self.assertEqual(runtime_paths, {"mixed.ts", "type-named-runtime.ts"})
+
+    def test_internal_store_access_has_exactly_one_rule_owner(self) -> None:
+        files = {
+            "apps/packages/product-client/src/stores/chat/internal-access.ts": (
+                "import { getAnyHarnessClient } "
+                "from '#product/lib/access/anyharness/client';\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        self.assertEqual(
+            [violation.rule_id for violation in violations],
+            ["STORE_FORBIDDEN_ACCESS"],
+        )
+
+    def test_executable_template_and_jsx_code_is_checked_but_display_text_and_regex_pass(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/chat/template.ts": (
+                "const direct = import(`#product/components/Direct`);\n"
+                "const nested = `${import('#product/components/Nested')}`;\n"
+                "const tauri = `${window.__TAURI_INTERNALS__}`;\n"
+                "const divided = numerator / import('#product/components/Divided');\n"
+            ),
+            "apps/packages/product-client/src/hooks/chat/display.tsx": (
+                "export const Demo = () => (\n"
+                "  <code>import('apps/desktop/src/not-code') "
+                "from '@tauri-apps/api' __TAURI_INTERNALS__</code>\n"
+                ");\n"
+                "const pattern = /import('apps\\/desktop\\/src\\/not-code')/;\n"
+                "const executable = <code>{import('#product/components/InExpression')}</code>;\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_product_rules(Path(directory).resolve(), files)
+
+        relevant = [
+            violation
+            for violation in violations
+            if violation.rule_id
+            in {"PRODUCT_CLIENT_LAYER_DIRECTION", "PRODUCT_CLIENT_FORBIDDEN_IMPORT"}
+        ]
+        self.assertEqual(len(relevant), 5)
+        self.assertEqual(
+            [violation.lineno for violation in relevant],
+            [1, 2, 4, 3, 5],
+        )
 
     def test_product_client_generalizes_existing_access_and_lib_purity_rules(self) -> None:
         files = {
