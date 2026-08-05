@@ -73,6 +73,8 @@ SESSION_EVENT_SINK_PREFIXES = (
 )
 TOKEN_RE = re.compile(r"r#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*|::|[{}(),;*]")
 USE_START_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+")
+# A re-export specifically, not a private import: `pub use ..`, `pub(crate) use ..`.
+PUB_USE_START_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+use\s+")
 SESSION_COMMAND_USE_RE = re.compile(
     r"(?:\bSessionCommand|crate::live::sessions::actor::command::SessionCommand)\s*::"
 )
@@ -99,6 +101,7 @@ STORE_SEGMENTS = {"store"}
 STORE_OR_SERVICE_SEGMENTS = {"store", "service"}
 DOMAIN_STORE_FORBIDDEN_ROOTS = {"acp", "live"}
 POLICY_FILE_SUFFIX = "_policy.rs"
+POLICY_FILE_NAME = "policy.rs"
 CONTRACT_CRATE_ROOT = "anyharness_contract"
 
 # Inline `crate::live::<area>::<second>` path uses (fn param types, turbofish,
@@ -110,6 +113,20 @@ LIVE_INLINE_PATH_RE = re.compile(
 )
 STORE_METHOD_CALL_RE = re.compile(r"\.store\(\)")
 STORE_CONSTRUCTOR_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*Store::new\b")
+# A handler can also reach a domain store without naming a store type at all, by
+# reading a store field off AppState (`state.agent_seed_store.health()`). Neither
+# the import pass nor the two patterns above see that, because no store type is
+# mentioned on the line. AppState carries exactly one `*_store` field today,
+# `agent_seed_store`, and it is NOT a DB store -- it is an in-memory
+# `Arc<RwLock<AgentSeedHealth>>` snapshot that merely follows the naming law. So
+# today's single match is a benign false positive, seeded in the allowlist rather
+# than special-cased: the field-name shape is the durable signal we want to hold,
+# and a real `*_store` field added later would be caught for the right reason.
+APP_STATE_STORE_FIELD_RE = re.compile(r"\bstate\.[a-z_]*_store\b")
+# Inline `anyharness_contract::` path uses (fn signatures, struct literals,
+# turbofish) that no use-statement declares. Mirrors DOMAIN_LIVE_VALVE's
+# import-pass + line-pass pairing.
+CONTRACT_INLINE_PATH_RE = re.compile(r"\banyharness_contract::")
 POLICY_IMPURITY_RES = (
     re.compile(r"\bUtc::now\b"),
     re.compile(r"\bLocal::now\b"),
@@ -118,9 +135,20 @@ POLICY_IMPURITY_RES = (
     re.compile(r"\bUuid::new_v4\b"),
     re.compile(r"\brand::"),
 )
-# Calibrated against domains/**: these seven patterns hit every embedded-SQL
-# line found outside store code with zero false positives (no log strings, no
-# identifiers that merely contain a keyword).
+# Calibrated against domains/**: these patterns hit every embedded-SQL line found
+# outside store code with zero false positives (no log strings, no identifiers
+# that merely contain a keyword).
+#
+# The first six are whole-statement shapes that fit on one line. The next three
+# are keyword-anchored heads for the far more common case of SQL that rustfmt (or
+# the author) split across lines: `"UPDATE sessions` / `SET col = ?1` /
+# `WHERE id = ?1` each land on their own line, so a rule that demanded two
+# keywords together saw none of them. Keeping the clause heads uppercase-only and
+# anchored to a line start or an opening quote is what keeps prose out: English
+# never writes a bare capitalised `SELECT` at the head of a line, and a lowercase
+# "select the agent" comment or log string cannot match. `UPDATE` additionally
+# requires a lowercase table identifier after it, so `DO UPDATE SET` fragments and
+# prose like "run UPDATE both stamps" do not count twice or at all.
 SQL_RES = (
     re.compile(r"\bINSERT INTO\b"),
     re.compile(r"\bSELECT\b.*\bFROM\b"),
@@ -129,6 +157,15 @@ SQL_RES = (
     re.compile(r"\bDELETE FROM\b"),
     re.compile(r"\bUPDATE\b.*\bSET\b"),
     re.compile(r"\bparams!|\brusqlite::params\b"),
+    # Split-statement heads: the write verb and its table on one line, the clauses
+    # on the next.
+    re.compile(r'(?:^|")\s*SELECT\b'),
+    re.compile(r'(?:^|")\s*UPDATE\s+[a-z_]'),
+    re.compile(r"^\s*SET\b"),
+    # Conflict-resolving inserts and drops, which the two bare-verb patterns above
+    # miss because the verb and `INTO`/the table are separated by a modifier.
+    re.compile(r"\bINSERT\s+OR\s+[A-Z]+\s+INTO\b"),
+    re.compile(r"\bDROP TABLE\b"),
 )
 
 DOMAIN_LIVE_VALVE_MESSAGE = (
@@ -155,6 +192,11 @@ DOMAIN_SQL_OUTSIDE_STORE_MESSAGE = (
 DOMAIN_CONTRACT_IMPORT_MESSAGE = (
     "domain code must not import wire contract types below the API mapper "
     "boundary — use a domain twin; see anyharness-structure.md"
+)
+DOMAIN_VALVE_LIVE_REEXPORT_MESSAGE = (
+    "the runtime valve may hold live/ powers but must not re-export them — a "
+    "`pub use crate::live::..` republishes the power domain-wide; expose a domain "
+    "port instead; see anyharness-structure.md"
 )
 
 
@@ -353,9 +395,15 @@ def in_domain_store(relative_path: str) -> bool:
 
 
 def is_policy_file(relative_path: str) -> bool:
-    return bool(domain_relative_parts(relative_path)) and relative_path.endswith(
-        POLICY_FILE_SUFFIX
-    )
+    """`*_policy.rs` and a file named exactly `policy.rs`, anywhere under domains/**.
+
+    The suffix test alone missed `domains/<d>/**/policy.rs`, which is the same
+    thing by role and by name — a module whose whole job is deciding.
+    """
+    parts = domain_relative_parts(relative_path)
+    if not parts:
+        return False
+    return parts[-1] == POLICY_FILE_NAME or relative_path.endswith(POLICY_FILE_SUFFIX)
 
 
 def has_segment(import_path: ImportPath, segments: set[str]) -> bool:
@@ -861,6 +909,35 @@ def has_non_model_live_use(line: str) -> bool:
     return False
 
 
+def is_non_model_live_reexport(import_path: ImportPath) -> bool:
+    """A re-exported live power: `crate::live::<area>::<not-model>`."""
+    return import_path.crate_root == "live" and not is_live_model_import(import_path)
+
+
+def check_domain_valve_live_reexport(
+    violations: list[Violation],
+    path: Path,
+    start_line: int,
+    lines: list[str],
+    import_paths: list[ImportPath],
+) -> None:
+    """Valve files may hold live powers; re-exporting them launders the valve away.
+
+    One violation per re-exporting statement, not per leaf: the statement is the
+    laundering act, and a group `pub use crate::live::sessions::{A, B}` is one act.
+    """
+    if not PUB_USE_START_RE.search(lines[0]):
+        return
+    add_if(
+        violations,
+        any(is_non_model_live_reexport(import_path) for import_path in import_paths),
+        "DOMAIN_VALVE_LIVE_REEXPORT",
+        path,
+        start_line,
+        DOMAIN_VALVE_LIVE_REEXPORT_MESSAGE,
+    )
+
+
 def check_line_patterns(violations: list[Violation], path: Path) -> None:
     rel = relative(path)
     allow_session_private = in_live_sessions(rel)
@@ -872,6 +949,11 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
     check_api_store_escape = is_under(rel, API_PREFIX)
     check_policy_purity = is_policy_file(rel)
     check_domain_sql = in_domains and not in_domain_store(rel)
+    # live/** can construct or call a domain store inline without importing one,
+    # which the import-only rule could not see. Same rule id, same message: it is
+    # the same law, just the other half of the surface.
+    check_live_store_line = is_under(rel, LIVE_PREFIX)
+    check_contract_inline = in_domains
 
     for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
         line = strip_line_comment(raw_line)
@@ -892,11 +974,31 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
             add_if(
                 violations,
                 STORE_METHOD_CALL_RE.search(line) is not None
-                or STORE_CONSTRUCTOR_RE.search(line) is not None,
+                or STORE_CONSTRUCTOR_RE.search(line) is not None
+                or APP_STATE_STORE_FIELD_RE.search(line) is not None,
                 "API_STORE_ESCAPE",
                 path,
                 lineno,
                 API_STORE_ESCAPE_MESSAGE,
+            )
+        if check_live_store_line and not starts_use_statement:
+            add_if(
+                violations,
+                STORE_METHOD_CALL_RE.search(line) is not None
+                or STORE_CONSTRUCTOR_RE.search(line) is not None,
+                "LIVE_DOMAIN_STORE_IMPORT",
+                path,
+                lineno,
+                LIVE_DOMAIN_STORE_MESSAGE,
+            )
+        if check_contract_inline and not starts_use_statement:
+            add_if(
+                violations,
+                CONTRACT_INLINE_PATH_RE.search(line) is not None,
+                "DOMAIN_CONTRACT_IMPORT",
+                path,
+                lineno,
+                DOMAIN_CONTRACT_IMPORT_MESSAGE,
             )
         if check_policy_purity and not starts_use_statement:
             add_if(
@@ -1004,6 +1106,10 @@ def _check_file(path: Path) -> list[Violation]:
             check_domain_contract_import(violations, path, import_path)
         if in_domains:
             check_domain_contract_crate_import(violations, path, start_line, import_paths)
+        if in_live_valve:
+            check_domain_valve_live_reexport(
+                violations, path, start_line, lines, import_paths
+            )
 
     check_line_patterns(violations, path)
     return violations
