@@ -5,8 +5,14 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+import posixpath
 import re
 import sys
+
+try:
+    from scripts.frontend_imports import ImportStatement, collect_imports, tokenize_typescript
+except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
+    from frontend_imports import ImportStatement, collect_imports, tokenize_typescript
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
@@ -66,6 +72,28 @@ QUERY_CACHE_CALL_RE = re.compile(
 REACT_IMPORT_RE = re.compile(
     r"^\s*import(?:\s+type)?(?:\s+[^;]*\s+from)?\s+['\"]react['\"]"
 )
+QUERY_HOOK_NAMES = {
+    "useInfiniteQuery",
+    "useMutation",
+    "useQueries",
+    "useQuery",
+    "useSuspenseQuery",
+}
+RAW_CLIENT_BINDINGS = {
+    "createCloudClient",
+    "getAnyHarnessClient",
+    "getCloudClient",
+}
+PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES = {
+    ("hooks", "components"),
+    ("lib", "components"),
+    ("lib", "hooks"),
+    ("lib", "providers"),
+    ("lib", "stores"),
+    ("stores", "components"),
+    ("stores", "hooks"),
+    ("stores", "providers"),
+}
 
 
 @dataclass(frozen=True)
@@ -156,6 +184,74 @@ def is_under(relative_path: str, prefix: str) -> bool:
     return relative_path.startswith(prefix)
 
 
+def is_product_client_path(path: Path, prefix: str = "") -> bool:
+    try:
+        product_relative = path.relative_to(PRODUCT_CLIENT_SRC).as_posix()
+    except ValueError:
+        return False
+    return not prefix or product_relative.startswith(prefix)
+
+
+def product_client_relative(path: Path) -> str:
+    return path.relative_to(PRODUCT_CLIENT_SRC).as_posix()
+
+
+def resolve_product_client_import(path: Path, source: str) -> str | None:
+    if source.startswith("#product/"):
+        target = source.removeprefix("#product/")
+    elif source.startswith("@proliferate/product-client/internal/"):
+        target = source.removeprefix("@proliferate/product-client/internal/")
+    elif source.startswith("@proliferate/product-client/host/"):
+        target = f"host/{source.removeprefix('@proliferate/product-client/host/')}"
+    elif source == "@proliferate/product-client/infra/measurement":
+        target = "lib/infra/measurement/measurement-port"
+    elif source == "@proliferate/product-client/infra/cloud-gateway":
+        target = "lib/access/cloud/sandbox-gateway-access"
+    elif source == "@proliferate/product-client/ProductClient":
+        target = "ProductClient"
+    elif source.startswith("."):
+        target = posixpath.normpath(
+            posixpath.join(product_client_relative(path.parent), source)
+        )
+    else:
+        return None
+
+    target = target.split("?", 1)[0]
+    normalized = posixpath.normpath(target)
+    if normalized == ".." or normalized.startswith("../"):
+        return None
+    return normalized
+
+
+def product_client_layer(path_or_target: str) -> str:
+    return path_or_target.split("/", 1)[0]
+
+
+def is_product_client_query_owner(path: Path) -> bool:
+    target = product_client_relative(path)
+    return (
+        target.startswith("hooks/access/")
+        or target.startswith("lib/infra/query/")
+        or (target.startswith("hooks/") and "/cache/" in f"/{target}")
+    )
+
+
+def is_product_client_query_hook_owner(path: Path) -> bool:
+    target = product_client_relative(path)
+    return target.startswith("hooks/access/") or (
+        target.startswith("hooks/") and "/cache/" in f"/{target}"
+    )
+
+
+def code_only_text(text: str) -> str:
+    masked = ["\n" if char == "\n" else " " for char in text]
+    for token in tokenize_typescript(text):
+        if token.kind == "string":
+            continue
+        masked[token.start : token.end] = text[token.start : token.end]
+    return "".join(masked)
+
+
 def is_tauri_access_path(relative_path: str) -> bool:
     return is_under(relative_path, "apps/desktop/src/lib/access/tauri/")
 
@@ -164,11 +260,15 @@ def is_anyharness_client_path(relative_path: str) -> bool:
     return (
         is_under(relative_path, "apps/desktop/src/lib/access/anyharness/")
         or is_under(relative_path, "apps/desktop/src/hooks/access/anyharness/")
+        or is_under(relative_path, "apps/packages/product-client/src/lib/access/anyharness/")
+        or is_under(relative_path, "apps/packages/product-client/src/hooks/access/anyharness/")
     )
 
 
 def is_cloud_access_path(relative_path: str) -> bool:
-    return is_under(relative_path, "apps/desktop/src/lib/access/cloud/")
+    return is_under(relative_path, "apps/desktop/src/lib/access/cloud/") or is_under(
+        relative_path, "apps/packages/product-client/src/lib/access/cloud/"
+    )
 
 
 def is_ui_component_library_path(relative_path: str) -> bool:
@@ -183,6 +283,12 @@ def is_query_cache_owner_path(relative_path: str) -> bool:
         or is_under(relative_path, "apps/desktop/src/lib/infra/query/")
         or (
             is_under(relative_path, "apps/desktop/src/hooks/")
+            and "/cache/" in relative_path
+        )
+        or is_under(relative_path, "apps/packages/product-client/src/hooks/access/")
+        or is_under(relative_path, "apps/packages/product-client/src/lib/infra/query/")
+        or (
+            is_under(relative_path, "apps/packages/product-client/src/hooks/")
             and "/cache/" in relative_path
         )
     )
@@ -209,8 +315,14 @@ def check_file(path: Path) -> list[Violation]:
     in_stores = is_under(rel, "apps/desktop/src/stores/")
     in_desktop = is_under(rel, "apps/desktop/src/")
     in_product_client = is_under(rel, "apps/packages/product-client/src/")
+    text = path.read_text()
+    scan_lines = (
+        code_only_text(text).splitlines()
+        if in_product_client
+        else text.splitlines()
+    )
 
-    for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
+    for lineno, raw_line in enumerate(scan_lines, start=1):
         line = strip_line_comment(raw_line)
         if not line.strip():
             continue
@@ -247,7 +359,7 @@ def check_file(path: Path) -> list[Violation]:
         )
         add_if(
             violations,
-            in_desktop
+            (in_desktop or in_product_client)
             and contains_openapi_client_verb
             and not is_cloud_access_path(rel),
             "CLOUD_OPENAPI_CLIENT_OUTSIDE_ACCESS",
@@ -257,7 +369,7 @@ def check_file(path: Path) -> list[Violation]:
         )
         add_if(
             violations,
-            in_desktop
+            (in_desktop or in_product_client)
             and (contains_use_query_client or contains_query_cache_call)
             and not is_query_cache_owner_path(rel),
             "QUERY_CLIENT_OUTSIDE_CACHE_OWNER",
@@ -273,25 +385,6 @@ def check_file(path: Path) -> list[Violation]:
             lineno,
             "legacy cloud/AnyHarness/Tauri access paths are not allowed",
         )
-
-        if in_product_client:
-            add_if(
-                violations,
-                contains_tauri_api
-                or "@tauri-apps/" in line
-                or "__TAURI" in line
-                or "apps/desktop/" in line
-                or "apps/web/" in line
-                or "@/" in line,
-                "PRODUCT_CLIENT_FORBIDDEN_IMPORT",
-                path,
-                lineno,
-                (
-                    "product-client must not import either host (apps/desktop, "
-                    "apps/web), Tauri package or raw Tauri globals (__TAURI*), "
-                    "or Desktop-relative @/ aliases"
-                ),
-            )
 
         if in_domain:
             add_if(
@@ -334,13 +427,11 @@ def check_file(path: Path) -> list[Violation]:
                     "@/lib/access/" in line
                     or contains_tauri_api
                     or contains_anyharness_client
-                    or contains_use_query_client
-                    or contains_query_cache_call
                 ),
                 "COMPONENT_FORBIDDEN_ACCESS",
                 path,
                 lineno,
-                "components must not own raw access or React Query cache shape",
+                "components must not own raw access",
             )
 
         if in_stores:
@@ -356,6 +447,288 @@ def check_file(path: Path) -> list[Violation]:
                 path,
                 lineno,
                 "stores must not import raw access, Tauri, TanStack Query, or AnyHarness clients",
+            )
+
+    return violations
+
+
+def statement_identifiers(statement: ImportStatement) -> set[str]:
+    return {
+        token.value
+        for token in tokenize_typescript(statement.statement)
+        if token.kind == "identifier"
+    }
+
+
+def imported_bindings(statement: ImportStatement) -> set[str]:
+    tokens = tokenize_typescript(statement.statement)
+    if not tokens or tokens[0].value != "import":
+        return set()
+    try:
+        from_index = next(index for index, token in enumerate(tokens) if token.value == "from")
+    except StopIteration:
+        return set()
+
+    clause = tokens[1:from_index]
+    if clause and clause[0].value == "type":
+        clause = clause[1:]
+    bindings: set[str] = set()
+
+    if clause and clause[0].kind == "identifier":
+        bindings.add(clause[0].value)
+
+    for index, token in enumerate(clause):
+        if token.value == "*" and index + 2 < len(clause) and clause[index + 1].value == "as":
+            bindings.add(clause[index + 2].value)
+
+    try:
+        open_index = next(index for index, token in enumerate(clause) if token.value == "{")
+        close_index = max(index for index, token in enumerate(clause) if token.value == "}")
+    except (StopIteration, ValueError):
+        return bindings
+
+    current: list = []
+    entries: list[list] = []
+    for token in clause[open_index + 1 : close_index]:
+        if token.value == ",":
+            if current:
+                entries.append(current)
+            current = []
+        else:
+            current.append(token)
+    if current:
+        entries.append(current)
+
+    for entry in entries:
+        if entry and entry[0].value == "type":
+            entry = entry[1:]
+        if not entry:
+            continue
+        alias_index = next(
+            (index for index, token in enumerate(entry) if token.value == "as"),
+            None,
+        )
+        if alias_index is not None and alias_index + 1 < len(entry):
+            bindings.add(entry[alias_index + 1].value)
+        elif entry[0].kind == "identifier":
+            bindings.add(entry[0].value)
+    return bindings
+
+
+def member_call_lines(text: str, bindings: set[str], member: str) -> list[int]:
+    if not bindings:
+        return []
+    tokens = tokenize_typescript(text)
+    return [
+        tokens[index].lineno
+        for index in range(len(tokens) - 3)
+        if tokens[index].kind == "identifier"
+        and tokens[index].value in bindings
+        and tokens[index + 1].value == "."
+        and tokens[index + 2].value == member
+        and tokens[index + 3].value == "("
+    ]
+
+
+def direct_call_lines(text: str, binding: str) -> list[int]:
+    tokens = tokenize_typescript(text)
+    return [
+        token.lineno
+        for index, token in enumerate(tokens[:-1])
+        if token.kind == "identifier"
+        and token.value == binding
+        and tokens[index + 1].value == "("
+        and (index == 0 or tokens[index - 1].value != ".")
+    ]
+
+
+def is_product_client_forbidden_import(path: Path, source: str) -> bool:
+    if (
+        source.startswith("@tauri-apps/")
+        or source.startswith("@/")
+        or source.startswith("apps/desktop/")
+        or source.startswith("apps/web/")
+    ):
+        return True
+    if not source.startswith("."):
+        return False
+    clean_source = source.split("?", 1)[0]
+    resolved = (path.parent / clean_source).resolve()
+    return any(
+        is_under(resolved.as_posix(), root.resolve().as_posix() + "/")
+        for root in (REPO_ROOT / "apps" / "desktop", REPO_ROOT / "apps" / "web")
+    )
+
+
+def find_product_client_violations(path: Path) -> list[Violation]:
+    if not is_product_client_path(path):
+        return []
+
+    violations: list[Violation] = []
+    text = path.read_text()
+    statements = collect_imports(path, text)
+    source_layer = product_client_layer(product_client_relative(path))
+    imported_store_bindings: set[str] = set()
+
+    for statement in statements:
+        identifiers = statement_identifiers(statement)
+        if is_product_client_forbidden_import(path, statement.source):
+            violations.append(
+                Violation(
+                    "PRODUCT_CLIENT_FORBIDDEN_IMPORT",
+                    path,
+                    statement.lineno,
+                    (
+                        "product-client must use its typed host boundary instead of "
+                        f"importing {statement.source!r}"
+                    ),
+                )
+            )
+            continue
+
+        target = resolve_product_client_import(path, statement.source)
+        target_layer = product_client_layer(target) if target is not None else None
+        if target_layer is not None and (source_layer, target_layer) in PRODUCT_CLIENT_FORBIDDEN_LAYER_EDGES:
+            edge_kind = "type-only" if statement.type_only else "runtime"
+            violations.append(
+                Violation(
+                    "PRODUCT_CLIENT_LAYER_DIRECTION",
+                    path,
+                    statement.lineno,
+                    (
+                        f"{edge_kind} {source_layer} -> {target_layer} import is upward; "
+                        "move the dependency or its owned type to the lower layer"
+                    ),
+                )
+            )
+
+        if target_layer == "stores":
+            imported_store_bindings.update(imported_bindings(statement))
+
+        if (
+            source_layer not in {"lib", "stores"}
+            and statement.source == "@tanstack/react-query"
+            and identifiers.intersection(QUERY_HOOK_NAMES)
+            and not is_product_client_query_hook_owner(path)
+        ):
+            violations.append(
+                Violation(
+                    "QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE",
+                    path,
+                    statement.lineno,
+                    (
+                        "React Query query/mutation hooks belong under hooks/access/** "
+                        "or a product hooks/**/cache/** owner"
+                    ),
+                )
+            )
+
+        if (
+            "getAnyHarnessClient" in identifiers
+            and not is_anyharness_client_path(relative(path))
+        ):
+            violations.append(
+                Violation(
+                    "ANYHARNESS_CLIENT_OUTSIDE_ACCESS",
+                    path,
+                    statement.lineno,
+                    "getAnyHarnessClient must stay behind AnyHarness access boundaries",
+                )
+            )
+
+        if source_layer == "components" and target is not None and target.startswith("lib/access/"):
+            violations.append(
+                Violation(
+                    "COMPONENT_FORBIDDEN_ACCESS",
+                    path,
+                    statement.lineno,
+                    "components must call hooks instead of importing lib/access directly",
+                )
+            )
+
+        if source_layer == "stores" and target is not None and target.startswith("lib/access/"):
+            violations.append(
+                Violation(
+                    "STORE_FORBIDDEN_ACCESS",
+                    path,
+                    statement.lineno,
+                    "stores must receive access-owned values instead of importing lib/access",
+                )
+            )
+
+        runtime_access_import = (
+            not statement.type_only
+            and source_layer == "stores"
+            and (
+                statement.source == "@tanstack/react-query"
+                or statement.source.startswith("@proliferate/cloud-sdk-react")
+                or statement.source.startswith("@anyharness/sdk-react")
+                or bool(identifiers.intersection(RAW_CLIENT_BINDINGS))
+            )
+        )
+        if runtime_access_import:
+            violations.append(
+                Violation(
+                    "STORE_RUNTIME_ACCESS",
+                    path,
+                    statement.lineno,
+                    "stores must not import query/React SDK clients or raw client constructors",
+                )
+            )
+
+        if source_layer == "lib":
+            lib_area = product_client_relative(path).split("/", 2)[1]
+            rule_id = (
+                "DOMAIN_FORBIDDEN_IMPORT"
+                if lib_area == "domain"
+                else "WORKFLOW_FORBIDDEN_IMPORT"
+                if lib_area == "workflows"
+                else None
+            )
+            forbidden_lib_import = (
+                statement.source in {"react", "react-dom", "@tanstack/react-query"}
+                or (target is not None and target.startswith("lib/access/"))
+            )
+            if rule_id is not None and forbidden_lib_import:
+                violations.append(
+                    Violation(
+                        rule_id,
+                        path,
+                        statement.lineno,
+                        f"lib/{lib_area} must remain non-React and free of query/raw access imports",
+                    )
+                )
+
+    for lineno in member_call_lines(text, imported_store_bindings, "setState"):
+        violations.append(
+            Violation(
+                "PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER",
+                path,
+                lineno,
+                "call an action owned by the store instead of mutating imported store state directly",
+            )
+        )
+
+    if source_layer == "stores":
+        for lineno in direct_call_lines(text, "fetch"):
+            violations.append(
+                Violation(
+                    "STORE_RUNTIME_ACCESS",
+                    path,
+                    lineno,
+                    "stores must receive fetched values through actions instead of calling fetch directly",
+                )
+            )
+
+    for token in tokenize_typescript(text):
+        if token.kind == "identifier" and token.value.startswith("__TAURI"):
+            violations.append(
+                Violation(
+                    "PRODUCT_CLIENT_FORBIDDEN_IMPORT",
+                    path,
+                    token.lineno,
+                    "product-client must use its typed host boundary instead of raw __TAURI* globals",
+                )
             )
 
     return violations
@@ -519,6 +892,7 @@ def collect_violations() -> list[Violation]:
     violations: list[Violation] = []
     for path in iter_frontend_files():
         violations.extend(check_file(path))
+        violations.extend(find_product_client_violations(path))
     violations.extend(find_radix_import_violations())
     violations.extend(find_ui_src_top_level_violations())
     violations.extend(find_warning_ink_violations())

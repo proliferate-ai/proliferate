@@ -3,14 +3,44 @@
 # Format:
 # RULE_ID path count reason
 
-# WDU slice 04: sample diff/tool-call DISPLAY-PATH strings inside playground
-# fixtures and dev-only playground components. These are string-literal example
-# paths rendered in the diff viewer, NOT import specifiers — the text-based
-# boundary scanner matches the literal "apps/desktop/" substring. Several are
-# asserted verbatim by diff-display tests, so they are pinned here rather than
-# rewritten. Retire when the playground fixtures are refreshed post-move.
-PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/git-diff-fixtures.ts 4 sample diff display-path strings, not imports
-PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/components/playground/transcript/PlaygroundToolTranscript.tsx 4 sample tool-call path strings in a dev playground, not imports
-PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/plan-transcript-fixtures.ts 3 sample display-path strings, not imports
-PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/subagent-tool-transcript-fixtures.ts 2 sample display-path strings, not imports
-PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/components/playground/composer-slots/PlaygroundPanelSlotFixtures.tsx 1 sample edit-title path string in a dev playground, not an import
+# ProductClient's existing internal upward edges. These are import-statement
+# counts, including type-only edges; move the dependency/type down and shrink
+# the matching entry whenever a site is repaired.
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/chat/ui/use-assistant-reveal-frontier.ts 1 hook imports component-owned reveal type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx 11 JSX-returning hook imports connected components
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/ui/diff/use-gap-expansion.ts 1 hook imports component-owned expansion type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/workspaces/ui/tabs/use-header-tabs-group-editor.ts 1 hook imports component-owned anchor type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/workspaces/ui/use-repo-group-native-context-menu.ts 1 hook imports component-owned environment type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts 1 access module imports connection store
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/access/anyharness/session-runtime.ts 4 access module imports session stores
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/access/cloud/owner-context-headers.ts 1 access module imports organization store
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/domain/workspaces/cloud/workspace-availability-intent-mapping.ts 1 domain module imports store-owned intent type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/workflows/sessions/hot-session-ingest-manager.ts 1 workflow imports ingest store
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures.ts 1 domain fixture imports component-owned status type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/domain/workspaces/status/workspace-status-model.ts 1 domain module imports component-owned status type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/infra/chat/assistant-reveal-progress.ts 1 infra module imports component-owned reveal type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/infra/debug/dev-assistant-reveal-log.ts 1 infra module imports component-owned reveal type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/environment-fixtures.ts 1 domain fixture imports hook-owned pressure type
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/stores/toast/toast-store.ts 1 store imports component toast implementation
+
+# React Query wrapper/cache ownership debt.
+QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE apps/packages/product-client/src/hooks/cloud/workflows/use-cloud-workspace-actions.ts 1 workflow owns useMutation wrapper
+QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE apps/packages/product-client/src/hooks/cloud/workflows/use-create-cloud-workspace.ts 1 workflow owns useMutation wrapper
+QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE apps/packages/product-client/src/hooks/workspaces/facade/use-worktree-settings-targets.ts 1 facade owns useQueries wrapper
+QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-actions.ts 1 workflow owns useMutation wrapper
+QUERY_HOOK_OUTSIDE_ACCESS_OR_CACHE apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-display-name-actions.ts 1 workflow owns useMutation wrapper
+QUERY_CLIENT_OUTSIDE_CACHE_OWNER apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx 5 playground component owns query cache shape
+QUERY_CLIENT_OUTSIDE_CACHE_OWNER apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx 4 connected component owns query invalidation
+QUERY_CLIENT_OUTSIDE_CACHE_OWNER apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts 5 lifecycle hook owns query invalidation
+
+# Direct raw-access ownership debt.
+COMPONENT_FORBIDDEN_ACCESS apps/packages/product-client/src/components/settings/panes/AccountPane.tsx 1 component imports raw auth probe
+STORE_FORBIDDEN_ACCESS apps/packages/product-client/src/stores/workspaces/cloud-workspace-billing-block-store.ts 1 store imports access-owned billing type
+ANYHARNESS_CLIENT_OUTSIDE_ACCESS apps/packages/product-client/src/hooks/workspaces/workflows/files/use-file-reference-actions.ts 1 workflow imports raw AnyHarness client
+ANYHARNESS_CLIENT_OUTSIDE_ACCESS apps/packages/product-client/src/hooks/workspaces/workflows/use-materialization-health-pass.ts 1 workflow imports raw AnyHarness client
+ANYHARNESS_CLIENT_OUTSIDE_ACCESS apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-availability-actions.ts 1 workflow imports raw AnyHarness client
+ANYHARNESS_CLIENT_OUTSIDE_ACCESS apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-git-reconciliation-actions.ts 1 workflow imports raw AnyHarness client
+
+# Zustand stores must expose owned actions rather than external raw writes.
+PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts 10 runtime bootstrap mutates imported connection store
+PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER apps/packages/product-client/src/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects.ts 1 lifecycle hook mutates imported workspace UI store
