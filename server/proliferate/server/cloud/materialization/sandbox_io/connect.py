@@ -450,6 +450,7 @@ async def connect_ready_sandbox(
                 )
                 if resume_interrupted is not None:
                     raise resume_interrupted
+
         if (
             provider_sandbox is None
             or provider_sandbox_id is None
@@ -458,6 +459,7 @@ async def connect_ready_sandbox(
             raise CloudMaterializationCommandError(
                 "Cloud sandbox provider did not return a running sandbox."
             )
+
         # Resolve overlapping provider evidence, then ensure exact resume usage.
         try:
             active = await accept_resumed_provider(
@@ -520,10 +522,12 @@ async def connect_ready_sandbox(
             event_id=f"provider-resume-start:{sandbox.id}:{provider_sandbox_id}",
         )
         await db.commit()
+
         endpoint = await provider.resolve_runtime_endpoint(provider_sandbox)
         runtime_context = await provider.resolve_runtime_context(provider_sandbox)
         runtime_token = _runtime_token(sandbox)
         data_key = _runtime_data_key(sandbox)
+
         if runtime_token is not None and data_key is not None:
             try:
                 await wait_for_runtime_health(
@@ -565,6 +569,7 @@ async def connect_ready_sandbox(
                 runtime_token=runtime_token,
                 anyharness_data_key=data_key,
             )
+
         # Always finish the attempt with an exact-binding CAS. This clears a
         # previous receipt even when the runtime URL and credentials were reused.
         ready = await cloud_sandboxes_store.mark_cloud_sandbox_ready(

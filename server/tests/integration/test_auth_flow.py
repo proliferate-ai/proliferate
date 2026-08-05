@@ -93,16 +93,18 @@ async def _link_ready_github_identity(
         )
         session.add(identity)
         await session.flush()
-        token_ciphertext = encrypt_text("github-access-token", secret=settings.cloud_secret_key)
-        grant = ProviderGrant(
-            user_id=UUID(user_id),
-            auth_identity_id=identity.id,
-            provider="github",
-            access_token_ciphertext=token_ciphertext,
-            scopes_json='["repo","user","user:email"]',
-            status="ready",
+        session.add(
+            ProviderGrant(
+                user_id=UUID(user_id),
+                auth_identity_id=identity.id,
+                provider="github",
+                access_token_ciphertext=encrypt_text(
+                    "github-access-token", secret=settings.cloud_secret_key
+                ),
+                scopes_json='["repo","user","user:email"]',
+                status="ready",
+            )
         )
-        session.add(grant)
         await session.commit()
 
 
