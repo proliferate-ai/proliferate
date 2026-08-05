@@ -33,7 +33,7 @@ def test_json_parser_normalizes_message_and_counts_duplicates() -> None:
         }
     )
 
-    diagnostics = module.parse_mypy_json_lines(f"{line}\n{line}\nplain config note\n")
+    diagnostics = module.parse_mypy_json_lines(f"{line}\n{line}\n")
 
     identity = module.DiagnosticIdentity(
         path="proliferate/example.py",
@@ -55,6 +55,13 @@ def test_json_parser_rejects_broken_json_object() -> None:
 
     with pytest.raises(module.BaselineError, match="malformed JSON"):
         module.parse_mypy_json_lines("{not-json")
+
+
+def test_json_parser_rejects_non_json_output() -> None:
+    module = _load_checker_module()
+
+    with pytest.raises(module.BaselineError, match="unexpected non-JSON output"):
+        module.parse_mypy_json_lines("pyproject.toml: error: Unrecognized option")
 
 
 def test_comparison_reports_new_and_stale_multiplicity() -> None:
@@ -117,6 +124,62 @@ def test_baseline_update_refuses_growth() -> None:
 
     with pytest.raises(module.BaselineError, match="refusing to grow"):
         module.require_no_growth(Counter({existing: 1, added: 1}), Counter({existing: 1}))
+
+
+def test_monotonic_baseline_rejects_added_identity() -> None:
+    module = _load_checker_module()
+    existing = module.DiagnosticIdentity("proliferate/old.py", "misc", "old")
+    added = module.DiagnosticIdentity("proliferate/new.py", "misc", "new")
+    previous = module.Baseline("1.20.2", Counter({existing: 1}))
+    candidate = module.Baseline("1.20.2", Counter({existing: 1, added: 1}))
+
+    with pytest.raises(module.BaselineError, match="checked-in mypy baseline"):
+        module.require_monotonic_baseline(candidate, previous)
+
+
+def test_monotonic_baseline_rejects_replaced_identity() -> None:
+    module = _load_checker_module()
+    removed = module.DiagnosticIdentity("proliferate/example.py", "misc", "old")
+    replacement = module.DiagnosticIdentity("proliferate/example.py", "misc", "replacement")
+    previous = module.Baseline("1.20.2", Counter({removed: 1}))
+    candidate = module.Baseline("1.20.2", Counter({replacement: 1}))
+
+    with pytest.raises(module.BaselineError, match="replacement"):
+        module.require_monotonic_baseline(candidate, previous)
+
+
+def test_monotonic_baseline_rejects_count_growth() -> None:
+    module = _load_checker_module()
+    identity = module.DiagnosticIdentity("proliferate/example.py", "misc", "same")
+    previous = module.Baseline("1.20.2", Counter({identity: 1}))
+    candidate = module.Baseline("1.20.2", Counter({identity: 2}))
+
+    with pytest.raises(module.BaselineError, match="same"):
+        module.require_monotonic_baseline(candidate, previous)
+
+
+def test_run_mypy_rejects_stderr_mixed_with_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_checker_module()
+    output = json.dumps(
+        {
+            "file": "proliferate/example.py",
+            "message": "example",
+            "code": "misc",
+            "severity": "error",
+        }
+    )
+    completed = module.subprocess.CompletedProcess(
+        args=["mypy"],
+        returncode=1,
+        stdout=output,
+        stderr="pyproject.toml: error: Unrecognized option\n",
+    )
+    monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: completed)
+
+    with pytest.raises(module.BaselineError, match="unexpected stderr"):
+        module.run_mypy("mypy")
 
 
 def test_mypy_version_parser_rejects_unrecognized_output(monkeypatch: pytest.MonkeyPatch) -> None:

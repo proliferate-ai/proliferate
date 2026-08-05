@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 SERVER_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = SERVER_ROOT.parent
 DEFAULT_BASELINE = Path(__file__).with_name("mypy_baseline.json")
 SCHEMA_VERSION = 1
 MYPY_ARGUMENTS = (
@@ -76,9 +77,10 @@ def parse_mypy_json_lines(output: str) -> Counter[DiagnosticIdentity]:
         line = raw_line.strip()
         if not line:
             continue
-        # Mypy can append plain-text configuration notes even in JSON mode.
         if not line.startswith("{"):
-            continue
+            raise BaselineError(
+                f"mypy emitted unexpected non-JSON output on line {line_number}: {line!r}"
+            )
         try:
             payload = json.loads(line)
         except json.JSONDecodeError as error:
@@ -121,19 +123,17 @@ def _require_exact_keys(payload: dict[object, object], expected: set[str], label
         )
 
 
-def load_baseline(path: Path) -> Baseline:
+def parse_baseline(text: str, *, label: str) -> Baseline:
     try:
-        payload = json.loads(path.read_text())
-    except FileNotFoundError as error:
-        raise BaselineError(f"mypy baseline does not exist: {path}") from error
+        payload = json.loads(text)
     except json.JSONDecodeError as error:
-        raise BaselineError(f"mypy baseline is malformed JSON: {error}") from error
+        raise BaselineError(f"{label} is malformed JSON: {error}") from error
     if not isinstance(payload, dict):
-        raise BaselineError("mypy baseline root must be an object")
+        raise BaselineError(f"{label} root must be an object")
     _require_exact_keys(
         payload,
         {"schema_version", "mypy_version", "diagnostics"},
-        "mypy baseline",
+        label,
     )
     if payload["schema_version"] != SCHEMA_VERSION:
         raise BaselineError(f"unsupported mypy baseline schema: {payload['schema_version']!r}")
@@ -174,6 +174,61 @@ def load_baseline(path: Path) -> Baseline:
     return Baseline(mypy_version=mypy_version, diagnostics=diagnostics)
 
 
+def load_baseline(path: Path) -> Baseline:
+    try:
+        text = path.read_text()
+    except FileNotFoundError as error:
+        raise BaselineError(f"mypy baseline does not exist: {path}") from error
+    return parse_baseline(text, label="mypy baseline")
+
+
+def baseline_repo_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError as error:
+        raise BaselineError(f"comparison baseline must live in the repository: {path}") from error
+
+
+def load_baseline_from_git(ref: str, path: Path) -> Baseline | None:
+    revision = f"{ref}^{{commit}}"
+    resolved = subprocess.run(
+        ["git", "rev-parse", "--verify", revision],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if resolved.returncode != 0:
+        detail = (resolved.stderr or resolved.stdout).strip()
+        raise BaselineError(f"could not resolve comparison ref {ref!r}: {detail}")
+
+    relative_path = baseline_repo_path(path)
+    listed = subprocess.run(
+        ["git", "ls-tree", "--name-only", ref, "--", relative_path],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listed.returncode != 0:
+        detail = (listed.stderr or listed.stdout).strip()
+        raise BaselineError(f"could not inspect comparison baseline at {ref!r}: {detail}")
+    if listed.stdout.strip() != relative_path:
+        return None
+    object_name = f"{ref}:{relative_path}"
+    shown = subprocess.run(
+        ["git", "show", object_name],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if shown.returncode != 0:
+        detail = (shown.stderr or shown.stdout).strip()
+        raise BaselineError(f"could not read comparison baseline at {ref!r}: {detail}")
+    return parse_baseline(shown.stdout, label=f"mypy baseline at {ref}")
+
+
 def baseline_payload(baseline: Baseline) -> dict[str, object]:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -202,14 +257,30 @@ def compare_censuses(
 
 
 def require_no_growth(
-    current: Counter[DiagnosticIdentity], expected: Counter[DiagnosticIdentity]
+    current: Counter[DiagnosticIdentity],
+    expected: Counter[DiagnosticIdentity],
+    *,
+    label: str = "mypy baseline",
 ) -> None:
     new_diagnostics, _ = compare_censuses(current, expected)
     if new_diagnostics:
         raise BaselineError(
-            "refusing to grow the mypy baseline; resolve these new diagnostics first:\n"
+            f"refusing to grow {label}; resolve these new diagnostics first:\n"
             + format_census(new_diagnostics)
         )
+
+
+def require_monotonic_baseline(candidate: Baseline, previous: Baseline) -> None:
+    if candidate.mypy_version != previous.mypy_version:
+        raise BaselineError(
+            "baseline mypy version changed; tool upgrades require a separately reviewed "
+            f"re-baseline (previous {previous.mypy_version}, candidate {candidate.mypy_version})"
+        )
+    require_no_growth(
+        candidate.diagnostics,
+        previous.diagnostics,
+        label="the checked-in mypy baseline",
+    )
 
 
 def format_census(census: Counter[DiagnosticIdentity]) -> str:
@@ -250,6 +321,8 @@ def run_mypy(mypy_executable: str) -> Counter[DiagnosticIdentity]:
     if result.returncode not in {0, 1}:
         detail = (result.stderr or result.stdout).strip()
         raise BaselineError(f"mypy invocation failed ({result.returncode}): {detail}")
+    if result.stderr.strip():
+        raise BaselineError(f"mypy emitted unexpected stderr: {result.stderr.strip()}")
     diagnostics = parse_mypy_json_lines(result.stdout)
     if result.returncode == 1 and not diagnostics:
         detail = (result.stderr or result.stdout).strip()
@@ -267,6 +340,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_BASELINE,
         help="baseline JSON path (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--compare-ref",
+        help="Git revision whose baseline is the shrink-only lower bound",
     )
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument(
@@ -299,7 +376,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Initialized mypy baseline with {sum(current.values())} diagnostics.")
             return 0
 
+        if not args.compare_ref:
+            raise BaselineError("--compare-ref is required outside one-time initialization")
+
         baseline = load_baseline(baseline_path)
+        previous_baseline = load_baseline_from_git(args.compare_ref, baseline_path)
+        if previous_baseline is None:
+            print(
+                f"Comparison ref {args.compare_ref} has no mypy baseline; "
+                "treating this as the one-time reviewed initialization."
+            )
+        else:
+            require_monotonic_baseline(baseline, previous_baseline)
         if mypy_version != baseline.mypy_version:
             raise BaselineError(
                 "mypy version does not match the reviewed baseline: "
@@ -313,6 +401,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.write_baseline:
             require_no_growth(current, baseline.diagnostics)
+            if previous_baseline is not None:
+                require_no_growth(
+                    current,
+                    previous_baseline.diagnostics,
+                    label="the comparison-ref mypy baseline",
+                )
             if not stale_diagnostics:
                 print(f"Mypy baseline is already exact ({sum(current.values())} diagnostics).")
                 return 0

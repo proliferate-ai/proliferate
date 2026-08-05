@@ -256,6 +256,21 @@ only the outbox store.
 falls back to the repo-wide 600-line ceiling for server files without a
 server-specific hard threshold.
 
+The Server CI lint job installs the exact `server/uv.lock` development
+environment on Python 3.12, runs Ruff, and runs strict mypy through
+`server/scripts/check_mypy_baseline.py`. Existing mypy debt is recorded by
+file, error code, normalized message, and multiplicity in a shrink-only
+baseline. A new diagnostic, a baseline increase relative to the comparison Git
+revision, or a stale entry after a fix fails the check. `make lint-server` uses
+the same frozen environment; after fixing existing diagnostics, ratchet the
+baseline down with:
+
+```bash
+cd server
+uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py \
+  --compare-ref origin/main --write-baseline
+```
+
 | Layer | Soft: split before | Hard: split or justify |
 | --- | --- | --- |
 | `server/<domain>/api.py` | 200 | 400 |
