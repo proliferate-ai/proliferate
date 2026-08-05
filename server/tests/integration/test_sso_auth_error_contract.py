@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.errors import AuthFlowError
 from proliferate.server.accounts.sso import service as sso_service
+from proliferate.server.accounts.sso import user_resolution as sso_user_resolution
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
     SsoConnectionSnapshot,
@@ -22,7 +23,7 @@ from proliferate.auth.sso.types import (
     VerifiedSsoIdentity,
 )
 from proliferate.config import settings
-from proliferate.db.models.auth import SsoChallenge, SsoConnection
+from proliferate.db.models.auth import SsoChallenge, SsoConnection, User
 from proliferate.integrations.sso.errors import SsoIntegrationError
 from proliferate.integrations.sso.oidc import OidcMetadata, OidcTokenResponse
 from proliferate.utils.crypto import encrypt_text
@@ -259,6 +260,65 @@ async def test_valid_provider_error_consumes_state_and_keeps_client_redirect(
         "proliferate://auth/callback?error=access_denied&state=client-state"
     )
     await _assert_challenge_consumed(db_session, state=state, expected=True)
+
+
+@pytest.mark.asyncio
+async def test_sso_identity_backfills_empty_user_profile_without_overwriting(
+    db_session: AsyncSession,
+) -> None:
+    user = User(
+        email="profile-backfill@example.com",
+        hashed_password="unused-sso-only",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+        display_name=None,
+        avatar_url=None,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    user_id = user.id
+    connection = _connection()
+    verified = VerifiedSsoIdentity(
+        provider_subject="profile-backfill-subject",
+        email=user.email,
+        email_verified=True,
+        display_name="SSO Profile Name",
+        avatar_url="https://idp.example.test/profile.png",
+        claims={},
+    )
+
+    await sso_user_resolution._attach_sso_identity(
+        db_session,
+        user=user,
+        connection=connection,
+        verified=verified,
+    )
+    await db_session.commit()
+    db_session.expire_all()
+
+    persisted = await db_session.get(User, user_id)
+    assert persisted is not None
+    assert persisted.display_name == "SSO Profile Name"
+    assert persisted.avatar_url == "https://idp.example.test/profile.png"
+
+    await sso_user_resolution._attach_sso_identity(
+        db_session,
+        user=persisted,
+        connection=connection,
+        verified=replace(
+            verified,
+            display_name="Replacement Name",
+            avatar_url="https://idp.example.test/replacement.png",
+        ),
+    )
+    await db_session.commit()
+    db_session.expire_all()
+
+    unchanged = await db_session.get(User, user_id)
+    assert unchanged is not None
+    assert unchanged.display_name == "SSO Profile Name"
+    assert unchanged.avatar_url == "https://idp.example.test/profile.png"
 
 
 @pytest.mark.asyncio
