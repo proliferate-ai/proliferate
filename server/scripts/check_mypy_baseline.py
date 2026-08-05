@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from collections import Counter
@@ -261,6 +262,18 @@ def github_comparison_ref_from_environment() -> str:
     return resolve_git_revision(selected, fetch_missing=FULL_SHA.fullmatch(selected) is not None)
 
 
+def shrink_command(compare_ref: str) -> str:
+    return shlex.join(
+        [
+            "python",
+            "scripts/check_mypy_baseline.py",
+            "--compare-ref",
+            compare_ref,
+            "--write-baseline",
+        ]
+    )
+
+
 def load_baseline_from_git(ref: str, path: Path) -> Baseline | None:
     resolve_git_revision(ref, fetch_missing=False)
 
@@ -501,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
             failures.append(
                 "Stale mypy baseline entries (fixes must ratchet the census down):\n"
                 + format_census(stale_diagnostics)
-                + "\n  Run: python scripts/check_mypy_baseline.py --write-baseline"
+                + f"\n  Run: {shrink_command(compare_ref)}"
             )
         if failures:
             raise BaselineError("\n\n".join(failures))
