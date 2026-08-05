@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request, status
 from fastapi.responses import HTMLResponse
 from fastapi_users import exceptions as fastapi_users_exceptions
 from fastapi_users.jwt import decode_jwt, generate_jwt
@@ -34,6 +34,7 @@ from proliferate.auth.desktop.pages import (
     make_browser_flow_page,
     make_desktop_handoff_page,
 )
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.providers import (
     parse_scope_string,
     token_expiry_from_timestamp,
@@ -154,12 +155,13 @@ def github_csrf_cookie_secure(request: Request) -> bool:
 def validate_desktop_redirect_uri(redirect_uri: str) -> None:
     parsed = urlparse(redirect_uri)
     if parsed.scheme not in DESKTOP_REDIRECT_SCHEMES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise AuthFlowError(
+            "desktop_redirect_uri_not_allowed",
+            (
                 "redirect_uri must use a configured desktop scheme: "
                 f"{', '.join(sorted(DESKTOP_REDIRECT_SCHEMES))}"
             ),
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
 
@@ -207,9 +209,10 @@ async def mint_desktop_tokens(user: User) -> TokenResponse:
 async def get_active_user_or_400(db: AsyncSession, user_id: UUID) -> User:
     user = await get_active_user_by_id(db, user_id)
     if user is None:
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_user_not_found",
+            "User not found",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User not found",
         )
     return user
 
@@ -260,11 +263,10 @@ async def create_desktop_auth_code(
     validate_desktop_redirect_uri(params.redirect_uri)
 
     if params.code_challenge_method not in SUPPORTED_CODE_CHALLENGE_METHODS:
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_code_challenge_method_unsupported",
+            (f"Unsupported code_challenge_method. Supported: {SUPPORTED_CODE_CHALLENGE_METHODS}"),
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Unsupported code_challenge_method. Supported: {SUPPORTED_CODE_CHALLENGE_METHODS}"
-            ),
         )
 
     auth_code = await create_auth_code(
@@ -468,9 +470,10 @@ async def poll_desktop_auth(
 ) -> TokenResponse | PendingTokenResponse:
     code_challenge = build_code_challenge(body.code_verifier)
     if code_challenge is None:
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_code_verifier_invalid",
+            "Invalid code_verifier",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid code_verifier",
         )
 
     auth_code = await consume_auth_code_for_state(
@@ -490,16 +493,18 @@ async def exchange_desktop_token(
     body: TokenRequest,
 ) -> TokenResponse:
     if body.grant_type != "authorization_code":
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_authorization_grant_type_invalid",
+            "grant_type must be 'authorization_code'",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="grant_type must be 'authorization_code'",
         )
 
     auth_code = await consume_auth_code(db, code=body.code)
     if auth_code is None:
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_auth_code_invalid",
+            "Invalid, expired, or already-consumed authorization code",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid, expired, or already-consumed authorization code",
         )
 
     if not verify_pkce(
@@ -507,9 +512,10 @@ async def exchange_desktop_token(
         auth_code.code_challenge,
         auth_code.code_challenge_method,
     ):
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_pkce_verification_failed",
+            "PKCE verification failed — code_verifier does not match code_challenge",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="PKCE verification failed — code_verifier does not match code_challenge",
         )
 
     user = await get_active_user_or_400(db, auth_code.user_id)
@@ -521,9 +527,10 @@ async def refresh_desktop_access_token(
     body: RefreshRequest,
 ) -> TokenResponse:
     if body.grant_type != "refresh_token":
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_refresh_grant_type_invalid",
+            "grant_type must be 'refresh_token'",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="grant_type must be 'refresh_token'",
         )
 
     try:
@@ -533,30 +540,34 @@ async def refresh_desktop_access_token(
             audience=[REFRESH_TOKEN_AUDIENCE],
         )
     except Exception as exc:
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_refresh_token_invalid",
+            "Invalid or expired refresh token",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
         ) from exc
 
     user_id_str = payload.get("sub")
     if not user_id_str:
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_refresh_token_payload_invalid",
+            "Invalid refresh token payload",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token payload",
         )
 
     try:
         user_id = UUID(user_id_str)
     except (ValueError, AttributeError):
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_refresh_token_payload_invalid",
+            "Invalid refresh token payload",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token payload",
         ) from None
 
     user = await get_active_user_or_400(db, user_id)
     if claimed_token_generation(payload) != user_token_generation(user):
-        raise HTTPException(
+        raise AuthFlowError(
+            "desktop_refresh_token_revoked",
+            "Refresh token has been revoked",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked",
         )
     return await mint_desktop_tokens(user)
