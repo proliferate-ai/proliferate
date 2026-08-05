@@ -40,6 +40,19 @@ ALLOWED_WORKER_SERVICE_SQLALCHEMY_TYPE_IMPORTS = {
     "async_sessionmaker",
 }
 SERVICE_DB_METHODS = {"execute", "commit", "rollback", "add", "delete", "refresh"}
+WORKER_SERVICE_DB_METHODS = SERVICE_DB_METHODS | {
+    "add_all",
+    "connection",
+    "flush",
+    "get",
+    "get_one",
+    "merge",
+    "run_sync",
+    "scalar",
+    "scalars",
+    "stream",
+    "stream_scalars",
+}
 SERVICE_DB_SESSION_OPS_METHODS = {
     "open_async_session",
     "open_async_transaction",
@@ -165,6 +178,15 @@ def _starts_with(parts: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
     return parts[: len(prefix)] == prefix
 
 
+def is_canonical_worker_service_path(path: Path) -> bool:
+    parts = logical_parts(path)
+    return (
+        len(parts) == 6
+        and _starts_with(parts, ("server", "proliferate", "server"))
+        and parts[4:] == ("worker", "service.py")
+    )
+
+
 def classify_path(path: Path) -> SourceKind:
     parts = logical_parts(path)
     is_product = _starts_with(parts, ("server", "proliferate", "server"))
@@ -182,7 +204,7 @@ def classify_path(path: Path) -> SourceKind:
         and path.suffix == ".py"
         and name not in AGENT_AUTH_SERVICE_CONCERN_EXCLUDED_FILES
     )
-    is_worker_service = is_product and name == "service.py" and path.parent.name == "worker"
+    is_worker_service = is_canonical_worker_service_path(path)
 
     return SourceKind(
         is_api=is_product and name == "api.py",
@@ -275,12 +297,10 @@ def is_allowed_single_file_worker_folder(
     source_files: list[Path],
     child_folders: list[Path],
 ) -> bool:
-    parts = logical_parts(folder)
     return (
-        _starts_with(parts, ("server", "proliferate", "server"))
-        and folder.name == "worker"
-        and len(source_files) == 1
+        len(source_files) == 1
         and source_files[0].name == "service.py"
+        and is_canonical_worker_service_path(source_files[0])
         and not child_folders
     )
 
@@ -557,9 +577,12 @@ class BoundaryChecker(ast.NodeVisitor):
                     "API_DB_METHOD_CALL",
                     f"api.py must not call session method .{func.attr}()",
                 )
+            service_db_methods = (
+                WORKER_SERVICE_DB_METHODS if self.kind.is_worker_service else SERVICE_DB_METHODS
+            )
             if (
                 (self.kind.is_service or self.kind.is_service_boundary_debt)
-                and func.attr in SERVICE_DB_METHODS
+                and func.attr in service_db_methods
                 and looks_like_db_handle(func.value)
             ):
                 self.add(
