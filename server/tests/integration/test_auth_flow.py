@@ -7,13 +7,13 @@ from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
 import pytest
-from fastapi import HTTPException
 from fastapi_users.jwt import generate_jwt
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from proliferate.auth.desktop.models import AuthorizeParams
 from proliferate.auth.desktop import service as desktop_service
+from proliferate.auth.desktop.models import AuthorizeParams
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity import providers as identity_providers
 from proliferate.auth.identity.sessions import WEB_CSRF_COOKIE
 from proliferate.auth.oauth import github_oauth_client, google_oauth_client
@@ -680,7 +680,9 @@ class TestDesktopPKCEFlow:
             },
         )
         assert resp.status_code == 400
-        assert "PKCE" in resp.json()["detail"]
+        assert resp.json()["detail"] == (
+            "PKCE verification failed — code_verifier does not match code_challenge"
+        )
 
     @pytest.mark.asyncio
     async def test_code_cannot_be_reused(self, client: AsyncClient) -> None:
@@ -730,14 +732,12 @@ class TestDesktopPKCEFlow:
     @pytest.mark.asyncio
     async def test_unsupported_challenge_method(self, client: AsyncClient) -> None:
         user_id = await _create_user_via_manager("badmethod@example.com")
-        with pytest.raises(HTTPException) as exc_info:
-            await _create_desktop_auth_code_for_user(
-                user_id=user_id,
-                state="state-3",
-                code_challenge="whatever",
-                code_challenge_method="plain",
-            )
-        assert exc_info.value.status_code == 400
+        args = dict(state="s", code_challenge="x", code_challenge_method="plain")
+        with pytest.raises(AuthFlowError) as exc_info:
+            await _create_desktop_auth_code_for_user(user_id=user_id, **args)
+        expected_message = "Unsupported code_challenge_method. Supported: frozenset({'S256'})"
+        actual = exc_info.value.code, exc_info.value.status_code, exc_info.value.message
+        assert actual == ("desktop_code_challenge_method_unsupported", 400, expected_message)
 
     @pytest.mark.asyncio
     async def test_debug_authorize_endpoint_disabled_outside_debug(
