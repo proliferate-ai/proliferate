@@ -78,6 +78,95 @@ def test_comparison_reports_new_and_stale_multiplicity() -> None:
     assert stale == Counter({removed: 2})
 
 
+def test_github_pull_request_uses_base_sha() -> None:
+    module = _load_checker_module()
+    base_sha = "a" * 40
+
+    assert (
+        module.select_github_comparison_ref(
+            explicit_sha="",
+            event_name="pull_request",
+            pull_request_base_sha=base_sha,
+            push_before_sha="",
+            github_ref="refs/pull/42/merge",
+        )
+        == base_sha
+    )
+
+
+def test_github_multi_commit_push_uses_event_before_sha() -> None:
+    module = _load_checker_module()
+    before_sha = "b" * 40
+
+    assert (
+        module.select_github_comparison_ref(
+            explicit_sha="",
+            event_name="push",
+            pull_request_base_sha="",
+            push_before_sha=before_sha,
+            github_ref="refs/heads/main",
+        )
+        == before_sha
+    )
+
+
+def test_github_explicit_workflow_base_wins() -> None:
+    module = _load_checker_module()
+    explicit_sha = "c" * 40
+
+    assert (
+        module.select_github_comparison_ref(
+            explicit_sha=explicit_sha,
+            event_name="workflow_dispatch",
+            pull_request_base_sha="",
+            push_before_sha="",
+            github_ref="refs/heads/main",
+        )
+        == explicit_sha
+    )
+
+
+def test_github_new_tag_uses_parent_fallback() -> None:
+    module = _load_checker_module()
+
+    assert (
+        module.select_github_comparison_ref(
+            explicit_sha="",
+            event_name="push",
+            pull_request_base_sha="",
+            push_before_sha=module.ZERO_SHA,
+            github_ref="refs/tags/server-v1.2.3",
+        )
+        == "HEAD^"
+    )
+
+
+def test_github_event_without_trusted_base_fails() -> None:
+    module = _load_checker_module()
+
+    with pytest.raises(module.BaselineError, match="no trusted mypy comparison revision"):
+        module.select_github_comparison_ref(
+            explicit_sha="",
+            event_name="workflow_dispatch",
+            pull_request_base_sha="",
+            push_before_sha="",
+            github_ref="refs/heads/main",
+        )
+
+
+def test_github_comparison_sha_must_be_full_hex() -> None:
+    module = _load_checker_module()
+
+    with pytest.raises(module.BaselineError, match="malformed"):
+        module.select_github_comparison_ref(
+            explicit_sha="main",
+            event_name="workflow_call",
+            pull_request_base_sha="",
+            push_before_sha="",
+            github_ref="refs/heads/main",
+        )
+
+
 def test_baseline_writer_round_trips_multiplicity(tmp_path: Path) -> None:
     module = _load_checker_module()
     identity = module.DiagnosticIdentity("proliferate/example.py", "misc", "example")

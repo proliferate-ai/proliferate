@@ -22,11 +22,20 @@ on:
       - "scripts/validate-agent-catalog.mjs"
       - "server/**"
   workflow_dispatch:
+    inputs:
+      comparison_sha:
+        description: "Trusted base SHA for the shrink-only mypy baseline comparison."
+        required: true
+        type: string
   workflow_call:
     inputs:
       git_sha:
         description: "Commit SHA to validate and package. Defaults to the caller ref."
         required: false
+        type: string
+      comparison_sha:
+        description: "Trusted base SHA for the shrink-only mypy baseline comparison."
+        required: true
         type: string
       version:
         description: "Server/self-hosted version to release. Required for reusable release calls."
@@ -90,9 +99,15 @@ jobs:
         run: uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/
 
       - name: Mypy diagnostic ratchet
+        env:
+          MYPY_COMPARISON_SHA: ${{ inputs.comparison_sha || '' }}
+          MYPY_EVENT_NAME: ${{ github.event_name }}
+          MYPY_GITHUB_REF: ${{ github.ref }}
+          MYPY_PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          MYPY_PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
         run: >-
           uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py
-          --compare-ref HEAD^
+          --github-event-base
 
   test:
     runs-on: ubuntu-latest

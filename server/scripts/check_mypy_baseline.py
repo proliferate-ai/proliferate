@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -27,6 +28,8 @@ SERVER_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVER_ROOT.parent
 DEFAULT_BASELINE = Path(__file__).with_name("mypy_baseline.json")
 SCHEMA_VERSION = 1
+ZERO_SHA = "0" * 40
+FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 MYPY_ARGUMENTS = (
     "proliferate/",
     "--output",
@@ -189,18 +192,77 @@ def baseline_repo_path(path: Path) -> str:
         raise BaselineError(f"comparison baseline must live in the repository: {path}") from error
 
 
-def load_baseline_from_git(ref: str, path: Path) -> Baseline | None:
-    revision = f"{ref}^{{commit}}"
-    resolved = subprocess.run(
-        ["git", "rev-parse", "--verify", revision],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def select_github_comparison_ref(
+    *,
+    explicit_sha: str,
+    event_name: str,
+    pull_request_base_sha: str,
+    push_before_sha: str,
+    github_ref: str,
+) -> str:
+    if explicit_sha:
+        candidate = explicit_sha
+    elif event_name == "pull_request":
+        candidate = pull_request_base_sha
+    elif event_name == "push" and push_before_sha and push_before_sha != ZERO_SHA:
+        candidate = push_before_sha
+    elif event_name == "push" and github_ref.startswith("refs/tags/"):
+        # A newly created tag has an all-zero `before`. Its source commit was
+        # already checked by the main-push gate, so the parent is the bounded
+        # fallback for re-validating the tagged revision.
+        return "HEAD^"
+    else:
+        raise BaselineError(
+            "no trusted mypy comparison revision for this GitHub event; "
+            "workflow_dispatch/workflow_call must provide comparison_sha"
+        )
+    if FULL_SHA.fullmatch(candidate) is None:
+        raise BaselineError(f"GitHub mypy comparison SHA is malformed: {candidate!r}")
+    return candidate
+
+
+def resolve_git_revision(ref: str, *, fetch_missing: bool) -> str:
+    def _resolve() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    resolved = _resolve()
+    if resolved.returncode != 0 and fetch_missing:
+        fetched = subprocess.run(
+            ["git", "fetch", "--no-tags", "--depth=1", "origin", ref],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if fetched.returncode != 0:
+            detail = (fetched.stderr or fetched.stdout).strip()
+            raise BaselineError(f"could not fetch comparison revision {ref!r}: {detail}")
+        resolved = _resolve()
     if resolved.returncode != 0:
         detail = (resolved.stderr or resolved.stdout).strip()
         raise BaselineError(f"could not resolve comparison ref {ref!r}: {detail}")
+    return resolved.stdout.strip()
+
+
+def github_comparison_ref_from_environment() -> str:
+    selected = select_github_comparison_ref(
+        explicit_sha=os.environ.get("MYPY_COMPARISON_SHA", "").strip(),
+        event_name=os.environ.get("MYPY_EVENT_NAME", "").strip(),
+        pull_request_base_sha=os.environ.get("MYPY_PR_BASE_SHA", "").strip(),
+        push_before_sha=os.environ.get("MYPY_PUSH_BEFORE_SHA", "").strip(),
+        github_ref=os.environ.get("MYPY_GITHUB_REF", "").strip(),
+    )
+    return resolve_git_revision(selected, fetch_missing=FULL_SHA.fullmatch(selected) is not None)
+
+
+def load_baseline_from_git(ref: str, path: Path) -> Baseline | None:
+    resolve_git_revision(ref, fetch_missing=False)
 
     relative_path = baseline_repo_path(path)
     listed = subprocess.run(
@@ -341,9 +403,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_BASELINE,
         help="baseline JSON path (default: %(default)s)",
     )
-    parser.add_argument(
+    comparison = parser.add_mutually_exclusive_group()
+    comparison.add_argument(
         "--compare-ref",
         help="Git revision whose baseline is the shrink-only lower bound",
+    )
+    comparison.add_argument(
+        "--github-event-base",
+        action="store_true",
+        help="resolve the trusted comparison revision from MYPY_* GitHub event variables",
     )
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument(
@@ -376,14 +444,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Initialized mypy baseline with {sum(current.values())} diagnostics.")
             return 0
 
-        if not args.compare_ref:
+        compare_ref = (
+            github_comparison_ref_from_environment()
+            if args.github_event_base
+            else args.compare_ref
+        )
+        if not compare_ref:
             raise BaselineError("--compare-ref is required outside one-time initialization")
 
         baseline = load_baseline(baseline_path)
-        previous_baseline = load_baseline_from_git(args.compare_ref, baseline_path)
+        previous_baseline = load_baseline_from_git(compare_ref, baseline_path)
         if previous_baseline is None:
             print(
-                f"Comparison ref {args.compare_ref} has no mypy baseline; "
+                f"Comparison ref {compare_ref} has no mypy baseline; "
                 "treating this as the one-time reviewed initialization."
             )
         else:
