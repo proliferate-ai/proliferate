@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient, Response
@@ -26,6 +28,7 @@ from proliferate.config import settings
 from proliferate.db.models.auth import SsoChallenge, SsoConnection, User
 from proliferate.integrations.sso.errors import SsoIntegrationError
 from proliferate.integrations.sso.oidc import OidcMetadata, OidcTokenResponse
+from proliferate.server.organizations.sso import service as organization_sso_service
 from proliferate.utils.crypto import encrypt_text
 from tests.integration.test_organization_sso_membership import (
     _create_organization_for_user,
@@ -40,6 +43,19 @@ def _assert_error(response: Response, *, status_code: int, detail: str) -> None:
     assert "retry-after" not in response.headers
     assert "www-authenticate" not in response.headers
     assert "sso_" not in response.text
+
+
+def _assert_product_error(
+    response: Response,
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+) -> None:
+    assert response.status_code == status_code
+    assert response.json() == {"detail": {"code": code, "message": message}}
+    assert "retry-after" not in response.headers
+    assert "www-authenticate" not in response.headers
 
 
 def _start_body(
@@ -460,3 +476,98 @@ async def test_connection_test_preserves_integration_detail(
         status_code=400,
         detail="OIDC discovery metadata is invalid.",
     )
+
+
+@pytest.mark.asyncio
+async def test_organization_sso_validation_errors_use_structured_contract(
+    client: AsyncClient,
+) -> None:
+    owner = await _create_user_and_get_tokens(client, email="sso-validation-owner@example.com")
+    organization = await _create_organization_for_user(user_id=owner["user_id"])
+    organization_id = organization["organization_id"]
+    cases = [
+        (
+            {"displayName": " "},
+            "sso_display_name_required",
+            "SSO display name is required.",
+        ),
+        (
+            {"displayName": "x" * 256},
+            "sso_display_name_too_long",
+            "SSO display name is too long.",
+        ),
+        (
+            {"loginPolicy": "required"},
+            "sso_required_login_policy_unsupported",
+            "Required SSO login policy is not supported yet.",
+        ),
+        (
+            {"defaultRole": "owner"},
+            "sso_jit_default_role_not_allowed",
+            "SSO JIT default role cannot be owner.",
+        ),
+        (
+            {
+                "displayName": " ",
+                "loginPolicy": "required",
+                "defaultRole": "owner",
+            },
+            "sso_display_name_required",
+            "SSO display name is required.",
+        ),
+        (
+            {"loginPolicy": "required", "defaultRole": "owner"},
+            "sso_required_login_policy_unsupported",
+            "Required SSO login policy is not supported yet.",
+        ),
+    ]
+
+    for body, code, message in cases:
+        response = await client.post(
+            f"/v1/organizations/{organization_id}/sso/connections",
+            headers=_headers(owner),
+            json=body,
+        )
+
+        _assert_product_error(
+            response,
+            status_code=400,
+            code=code,
+            message=message,
+        )
+
+
+@pytest.mark.asyncio
+async def test_organization_sso_enable_protocol_error_uses_structured_contract(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = await _create_user_and_get_tokens(client, email="sso-enable-owner@example.com")
+    organization = await _create_organization_for_user(user_id=owner["user_id"])
+    organization_id = organization["organization_id"]
+    test_connection = AsyncMock(return_value=SimpleNamespace(protocol="saml"))
+    set_status = AsyncMock()
+    monkeypatch.setattr(
+        organization_sso_service,
+        "test_organization_sso_connection",
+        test_connection,
+    )
+    monkeypatch.setattr(
+        organization_sso_service.sso_store,
+        "set_sso_connection_status",
+        set_status,
+    )
+
+    response = await client.post(
+        f"/v1/organizations/{organization_id}/sso/connections/{uuid4()}/enable",
+        headers=_headers(owner),
+    )
+
+    _assert_product_error(
+        response,
+        status_code=400,
+        code="sso_connection_enable_protocol_unsupported",
+        message="Only OIDC SSO can be enabled right now.",
+    )
+    test_connection.assert_awaited_once()
+    set_status.assert_not_awaited()
