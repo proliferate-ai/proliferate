@@ -56,13 +56,13 @@ from proliferate.db.store.organization_records import (
 from proliferate.utils.time import utcnow
 
 _SLUG_ALLOWED = re.compile(r"[^a-z0-9]+")
-_SLUG_TRIM = re.compile(r"^-+|-+$")
+_SLUG_TRIM_CHAR = "-"
 _SLUG_NUMERIC_ATTEMPTS = 50
 
 
 def _slugify_organization(value: str | None) -> str:
-    slug = _SLUG_TRIM.sub("", _SLUG_ALLOWED.sub("-", (value or "").strip().lower()))
-    return _SLUG_TRIM.sub("", slug[:ORGANIZATION_SLUG_MAX_LENGTH]) or ORGANIZATION_SLUG_FALLBACK
+    slug = _SLUG_ALLOWED.sub("-", (value or "").strip().lower()).strip(_SLUG_TRIM_CHAR)
+    return slug[:ORGANIZATION_SLUG_MAX_LENGTH].strip(_SLUG_TRIM_CHAR) or ORGANIZATION_SLUG_FALLBACK
 
 
 async def _slug_taken(db: AsyncSession, slug: str) -> bool:
