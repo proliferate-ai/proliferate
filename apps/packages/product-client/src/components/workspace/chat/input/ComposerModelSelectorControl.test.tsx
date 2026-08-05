@@ -466,6 +466,57 @@ it("restores composer focus after Return selects a model", async () => {
   expect(prompt.selectionEnd).toBe(4);
 });
 
+// The all-keyboard flow moves focus onto the model rows rather than the search
+// field. Regression coverage for Return activating a focused row on that path.
+it("restores composer focus after Return activates a focused model row", async () => {
+  vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+  const props = createKeyboardModelSelectorProps();
+  const { container } = render(
+    <MemoryRouter>
+      <ShortcutDispatcher />
+      <div data-focus-zone="chat">
+        <textarea data-chat-composer-editor defaultValue="Keep typing" />
+        <ComposerModelSelectorControl
+          modelSelectorProps={props}
+          keyboardShortcutEnabled
+        />
+      </div>
+    </MemoryRouter>,
+  );
+  const prompt = container.querySelector<HTMLTextAreaElement>("[data-chat-composer-editor]")!;
+  prompt.focus();
+  prompt.setSelectionRange(4, 4);
+
+  fireEvent.keyDown(prompt, {
+    key: "M",
+    code: "KeyM",
+    ctrlKey: true,
+    shiftKey: true,
+  });
+  const modelMenu = document.querySelector<HTMLElement>("[data-composer-model-menu]")!;
+  modelMenu.focus();
+  fireEvent.keyDown(modelMenu, { key: "Enter", code: "Enter" });
+
+  await waitFor(() => {
+    expect(document.activeElement?.getAttribute("data-model-option")).toBe("haiku");
+  });
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowDown", code: "ArrowDown" });
+  await waitFor(() => {
+    expect(document.activeElement?.getAttribute("data-model-option")).toBe("sonnet");
+  });
+  fireEvent.keyDown(document.activeElement!, { key: "Enter", code: "Enter" });
+
+  expect(props.onSelect).toHaveBeenCalledWith({ kind: "claude", modelId: "sonnet" });
+  await waitFor(() => {
+    expect(
+      container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-state"),
+    ).toBe("closed");
+    expect(document.activeElement).toBe(prompt);
+  });
+  expect(prompt.selectionStart).toBe(4);
+  expect(prompt.selectionEnd).toBe(4);
+});
+
 it("does not restore Escape focus to a composer hidden behind another route", async () => {
   const props = createKeyboardModelSelectorProps();
   const { container } = render(

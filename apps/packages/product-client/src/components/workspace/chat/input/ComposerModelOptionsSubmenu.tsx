@@ -109,6 +109,7 @@ export function ComposerModelOptionsSubmenu({
               group={group}
               currentKind={currentKind}
               showSeparator={index > 0}
+              onKeyboardSelect={onKeyboardSelect}
               onSelect={onSelect}
               highlightedKey={effectiveHighlightedKey}
               onHighlight={setHighlightedKey}
@@ -137,6 +138,7 @@ function ModelPickerGroup({
   group,
   currentKind,
   showSeparator,
+  onKeyboardSelect,
   onSelect,
   highlightedKey,
   onHighlight,
@@ -145,6 +147,7 @@ function ModelPickerGroup({
   group: ModelSelectorGroup;
   currentKind: string | null;
   showSeparator: boolean;
+  onKeyboardSelect: () => void;
   onSelect: (selection: ModelSelectorSelection) => void;
   highlightedKey: string | null;
   onHighlight: (key: string) => void;
@@ -194,6 +197,16 @@ function ModelPickerGroup({
             className={`items-start px-2.5 py-2 text-composer ${
               !model.isUnsupported && (model.isSelected || isHighlighted) ? "bg-hover" : ""
             }`}
+            // Keyboard submenu navigation focuses the rows themselves (the
+            // menu, not the search field, owns focus after a keyboard open),
+            // and the menu primitive turns Enter/Space on a focused row into a
+            // click-select. Mark the close as keyboard-driven before that
+            // conversion runs; onSelect cannot tell keyboard from pointer.
+            onKeyDown={(event) => {
+              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                onKeyboardSelect();
+              }
+            }}
             onSelect={() => onSelect({ kind: group.kind, modelId: model.modelId })}
           >
             <ProviderIcon kind={group.kind} className="icon-compact mt-0.5 shrink-0 text-muted-foreground [font-size:var(--text-composer)]" />
