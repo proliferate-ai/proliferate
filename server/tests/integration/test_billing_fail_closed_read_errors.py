@@ -48,6 +48,7 @@ from proliferate.server.billing.authorization import (
     CloudSandboxResumeBlockedError,
     assert_cloud_sandbox_resume_allowed_for_owner,
 )
+from proliferate.server.billing.errors import BillingServiceError
 from tests.integration.billing_accounting_helpers import (
     patch_global_session_factory,
     seed_usage_segment,
@@ -222,6 +223,61 @@ async def test_billing_read_failure_denies_with_receipt_and_alert(
     assert receipt.would_block_start is True
     assert receipt.actor_user_id == user_id
     assert receipt.reason == "billing_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_billing_service_error_from_snapshot_still_uses_unavailable_corridor(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The new product-error base must not bypass fail-closed snapshot handling."""
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    patch_global_session_factory(test_engine, monkeypatch)
+    user_id = await _create_user(db_session)
+    subject_id = (await ensure_personal_billing_subject(db_session, user_id)).id
+    await db_session.commit()
+
+    failure = BillingServiceError(
+        "compute_price_unconfigured",
+        "Compute price is not configured.",
+        status_code=500,
+    )
+    alerts: list[BaseException] = []
+    monkeypatch.setattr(
+        authorization_module,
+        "report_critical",
+        lambda error, **_kwargs: alerts.append(error),
+    )
+
+    async def _snapshot_boom(*_args: object, **_kwargs: object) -> None:
+        raise failure
+
+    monkeypatch.setattr(
+        authorization_module,
+        "get_billing_snapshot_for_subject_in_session",
+        _snapshot_boom,
+    )
+
+    with pytest.raises(BillingStateUnavailableError) as excinfo:
+        await assert_cloud_sandbox_resume_allowed_for_owner(db_session, owner_user_id=user_id)
+
+    error = excinfo.value
+    assert error.status_code == 503
+    assert error.code == "billing_unavailable"
+    assert error.__cause__ is failure
+    assert alerts == [failure]
+
+    await db_session.rollback()
+    receipt = await db_session.scalar(
+        select(BillingDecisionEvent).where(
+            BillingDecisionEvent.billing_subject_id == subject_id,
+            BillingDecisionEvent.decision_type == BILLING_DECISION_READ_UNAVAILABLE,
+        )
+    )
+    assert receipt is not None
+    assert receipt.reason == "billing_unavailable"
+    assert receipt.would_block_start is True
 
 
 @pytest.mark.asyncio
@@ -404,6 +460,61 @@ async def test_verdict_persist_failure_denies_with_unavailable_not_bare_error(
     assert error.owner_user_id == user_id
     assert isinstance(error.__cause__, RuntimeError)
     assert len(alerts) == 1
+
+
+@pytest.mark.asyncio
+async def test_billing_service_error_from_persist_still_uses_unavailable_corridor(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The new product-error base must not bypass fail-closed persistence handling."""
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
+    monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 1.0)
+    patch_global_session_factory(test_engine, monkeypatch)
+    user_id, subject_id = await _seed_credits_exhausted_user(db_session)
+
+    failure = BillingServiceError(
+        "billing_decision_persist_failed",
+        "Billing decision could not be persisted.",
+        status_code=500,
+    )
+    alerts: list[BaseException] = []
+    monkeypatch.setattr(
+        authorization_module,
+        "report_critical",
+        lambda error, **_kwargs: alerts.append(error),
+    )
+
+    async def _persist_boom(*_args: object, **_kwargs: object) -> None:
+        raise failure
+
+    monkeypatch.setattr(
+        authorization_module,
+        "record_cloud_sandbox_billing_block",
+        _persist_boom,
+    )
+
+    with pytest.raises(BillingStateUnavailableError) as excinfo:
+        await assert_cloud_sandbox_resume_allowed_for_owner(db_session, owner_user_id=user_id)
+
+    error = excinfo.value
+    assert error.status_code == 503
+    assert error.code == "billing_unavailable"
+    assert error.__cause__ is failure
+    assert alerts == [failure]
+
+    await db_session.rollback()
+    receipt = await db_session.scalar(
+        select(BillingDecisionEvent).where(
+            BillingDecisionEvent.billing_subject_id == subject_id,
+            BillingDecisionEvent.decision_type == BILLING_DECISION_READ_UNAVAILABLE,
+        )
+    )
+    assert receipt is not None
+    assert receipt.reason == "billing_unavailable"
+    assert receipt.would_block_start is True
 
 
 @pytest.mark.asyncio

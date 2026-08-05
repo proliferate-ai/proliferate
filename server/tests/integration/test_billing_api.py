@@ -451,6 +451,29 @@ class TestBillingApi:
         assert portal["idempotency_key"].startswith(f"portal:active-cloud:{subject.id}:")
 
     @pytest.mark.asyncio
+    async def test_disabled_team_checkout_uses_product_error_envelope(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "pro_billing_enabled", False)
+        session = await _register_and_login(client, "billing-team-checkout-disabled@example.com")
+
+        response = await client.post(
+            "/v1/billing/team-checkout",
+            headers={"Authorization": f"Bearer {session['access_token']}"},
+            json={"teamName": "Acme Research"},
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": {
+                "code": "org_pro_billing_disabled",
+                "message": "Team billing is not available yet.",
+            }
+        }
+
+    @pytest.mark.asyncio
     async def test_team_checkout_creates_pending_org_without_membership(
         self,
         client: AsyncClient,
@@ -973,7 +996,12 @@ class TestBillingApi:
             },
         )
         assert disabled_response.status_code == 409
-        assert disabled_response.json()["detail"]["code"] == "org_pro_billing_disabled"
+        assert disabled_response.json() == {
+            "detail": {
+                "code": "org_pro_billing_disabled",
+                "message": "Organization Pro billing is not available yet.",
+            }
+        }
 
         monkeypatch.setattr(settings, "pro_billing_enabled", True)
         member_response = await client.post(
@@ -985,7 +1013,12 @@ class TestBillingApi:
             },
         )
         assert member_response.status_code == 403
-        assert member_response.json()["detail"]["code"] == "organization_permission_denied"
+        assert member_response.json() == {
+            "detail": {
+                "code": "organization_permission_denied",
+                "message": "You do not have permission to manage this organization.",
+            }
+        }
 
     @pytest.mark.asyncio
     async def test_org_cloud_plan_reports_active_member_seats(

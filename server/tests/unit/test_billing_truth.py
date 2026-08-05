@@ -82,7 +82,7 @@ def test_a4_compute_price_is_list_times_multiplier(monkeypatch: pytest.MonkeyPat
 
 def test_a4_compute_price_fails_closed_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     """T2R-R02: zero/invalid pricing raises instead of silently metering at 0c."""
-    from proliferate.server.billing.models import BillingServiceError
+    from proliferate.server.billing.errors import BillingServiceError
 
     monkeypatch.setattr(settings, "e2b_list_price_usd_per_hour", "not-a-number")
     with pytest.raises(BillingServiceError, match="compute_price_unconfigured|decimal"):
@@ -140,7 +140,7 @@ def test_a3_compute_hours_raises_when_unpriced(monkeypatch: pytest.MonkeyPatch) 
     # "0 hours, 0 cents" fail-safe silently priced overage at zero cents,
     # which is unbounded free compute once the cap logic sees no meterable
     # cents. Both derivations must raise instead.
-    from proliferate.server.billing.models import BillingServiceError
+    from proliferate.server.billing.errors import BillingServiceError
 
     monkeypatch.setattr(settings, "e2b_list_price_usd_per_hour", "0")
     with pytest.raises(BillingServiceError):
