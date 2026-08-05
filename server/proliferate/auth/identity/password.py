@@ -7,9 +7,10 @@ import hmac
 from datetime import UTC, datetime
 from ipaddress import ip_address, ip_network
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.models import PasswordCredentialResponse
 from proliferate.auth.identity.types import AuthSession
 from proliferate.auth.models import AuthPasswordCredential
@@ -90,7 +91,11 @@ def ensure_password_auth_enabled() -> None:
     operator disables password auth, no path may verify or create a password.
     """
     if not settings.password_auth_enabled:
-        raise HTTPException(status_code=404, detail="Email sign-in is not enabled.")
+        raise AuthFlowError(
+            "identity_password_auth_disabled",
+            "Email sign-in is not enabled.",
+            status_code=404,
+        )
 
 
 def password_login_buckets(
@@ -154,18 +159,30 @@ async def authenticate_password_user(
     buckets = password_login_buckets(email=normalized_email, client_ip=client_ip)
     now = datetime.now(UTC)
     if await active_password_login_blocks(db, buckets=buckets, now=now):
-        raise HTTPException(status_code=429, detail=PASSWORD_RATE_LIMIT_MESSAGE)
+        raise AuthFlowError(
+            "identity_password_rate_limited",
+            PASSWORD_RATE_LIMIT_MESSAGE,
+            status_code=429,
+        )
 
     user = await get_user_by_normalized_email(db, normalized_email)
     if user is None or not user.is_active or user.password_set_at is None:
         harden_password_failure(password)
         await record_password_login_failure(db, buckets=buckets, now=now)
-        raise HTTPException(status_code=401, detail=PASSWORD_BAD_CREDENTIALS_MESSAGE)
+        raise AuthFlowError(
+            "identity_password_credentials_invalid",
+            PASSWORD_BAD_CREDENTIALS_MESSAGE,
+            status_code=401,
+        )
 
     verification = verify_password(password, user.hashed_password)
     if not verification.verified:
         await record_password_login_failure(db, buckets=buckets, now=now)
-        raise HTTPException(status_code=401, detail=PASSWORD_BAD_CREDENTIALS_MESSAGE)
+        raise AuthFlowError(
+            "identity_password_credentials_invalid",
+            PASSWORD_BAD_CREDENTIALS_MESSAGE,
+            status_code=401,
+        )
 
     if verification.updated_hash is not None:
         updated = await update_user_password_hash(
@@ -207,15 +224,27 @@ async def set_password_credential(
     is_password_change = user.password_set_at is not None
     if is_password_change:
         if not current_password:
-            raise HTTPException(status_code=400, detail="Current password is required.")
+            raise AuthFlowError(
+                "identity_current_password_required",
+                "Current password is required.",
+                status_code=400,
+            )
         verification = verify_password(current_password, user.hashed_password)
         if not verification.verified:
-            raise HTTPException(status_code=401, detail="Current password is incorrect.")
+            raise AuthFlowError(
+                "identity_current_password_invalid",
+                "Current password is incorrect.",
+                status_code=401,
+            )
 
     try:
         validate_new_password(new_password)
     except PasswordValidationError as exc:
-        raise HTTPException(status_code=400, detail=exc.reason) from exc
+        raise AuthFlowError(
+            "identity_password_invalid",
+            exc.reason,
+            status_code=400,
+        ) from exc
 
     now = datetime.now(UTC)
     updated_user = await update_user_password_hash(
@@ -225,7 +254,11 @@ async def set_password_credential(
         password_set_at=now,
     )
     if updated_user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
+        raise AuthFlowError(
+            "identity_password_user_not_found",
+            "User not found.",
+            status_code=400,
+        )
 
     if not is_password_change:
         return password_credential_response(updated_user), None

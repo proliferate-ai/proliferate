@@ -1935,9 +1935,9 @@ class TestWebMobileProductAuthFlow:
             raise AssertionError("Google legacy profile endpoint should not be used.")
 
         async def fake_decode_google_id_token(_id_token: str) -> dict[str, object]:
-            raise identity_providers.HTTPException(
-                status_code=400,
-                detail="Google identity token could not be verified.",
+            raise identity_providers.ProviderVerificationError(
+                "identity_google_identity_token_unverified",
+                "Google identity token could not be verified.",
             )
 
         async def fake_fetch_google_userinfo(access_token: str) -> dict[str, object]:

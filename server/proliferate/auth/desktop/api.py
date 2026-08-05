@@ -47,6 +47,7 @@ from proliferate.auth.desktop.service import (
 from proliferate.auth.desktop.service import (
     poll_desktop_auth as poll_desktop_auth_service,
 )
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.models import PasswordLoginRequest
 from proliferate.auth.identity.password import (
     authenticate_password_user,
@@ -104,7 +105,7 @@ async def desktop_password_login(
             password=body.password,
             client_ip=request_client_ip(request),
         )
-    except HTTPException:
+    except AuthFlowError:
         # Persist rate-limit failure counters before surfacing the error.
         await db.commit()
         raise
