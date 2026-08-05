@@ -304,12 +304,32 @@ Dependency Direction row from LEAKS to HOLDS AT ZERO in
 ## PR 8 — Workspaces: one entry surface (violation #6)
 
 **Branch**: `codex/anyharness-workspaces-one-entry` off PR 1 head.
-Diff the duplicated `WorkspaceService`/`WorkspaceRuntime` bodies use case
-by use case; for each: pick the survivor **deliberately** (the diverged
-lines are the whole point — each divergence is either a bug in one copy or
-an intentional difference that must be named in the PR body), keep one
-body at the correct layer, delegate from the other or delete it. The diff
-review is the work; the code change is small. **One cargo build.**
+
+**Recon 2026-08-05 shrank this PR.** The overlap is exactly 4 methods, and
+the surfaces are siblings (each holds its own `WorkspaceStore`; runtime
+does NOT wrap service). `WorkspaceService` has ONE live call site in the
+whole tree — `MobilityService::load_workspace` → `get_workspace`
+(mobility/service.rs:778); its other 3 methods are dead code. Runtime is
+the domain's real backbone (AppState field, ~30 consumers). Divergence
+map:
+
+| Method | Verdict |
+| --- | --- |
+| `get_workspace` | DIVERGED — runtime's copy schedules a background branch-refresh (identity.rs:16-23); service's is a pure read |
+| `list_workspaces` | DIVERGED — runtime adds branch-refresh batch + latency tracing; service copy has zero callers |
+| `set_display_name` | IDENTICAL bodies, incl. two copies of `MAX_WORKSPACE_DISPLAY_NAME_CHARS = 160`; service copy dead |
+| `detect_setup` | IDENTICAL; service copy dead |
+
+The fix: delete `WorkspaceService` outright (both files, ~80 lines),
+re-point `MobilityService` at `Arc<WorkspaceRuntime>`, drop the
+construction at app/mod.rs:209 + the pass at :515. **One named design
+call in the PR body**: mobility's `load_workspace` gains the runtime's
+branch-refresh side effect — state whether that's wanted (probably yes:
+mobility wants fresh branches) or add a pure `find_workspace` read if
+not. Also fold the duplicated const into one place. The doctrine note
+("runtime wraps service") is satisfied vacuously — this domain's durable
+reads live on the runtime today; re-splitting is PR 13-era work, not
+this PR. **One cargo build.**
 
 ## PR 9 — workspaces_lifecycle out of the handler (violation #5)
 
@@ -319,6 +339,16 @@ Move the retire state machine (3 copies in
 surface as one use case with one state-transition policy fn. Handler
 becomes auth → parse → one call → map. Dedupe the 3 copies against each
 other the same way PR 8 deduped layers. **One cargo build.**
+
+Recon 2026-08-05 specifics: `active_path_owner_retire_blocker` is
+duplicated byte-for-byte (retire_preflight.rs:511 pub fn vs a private
+re-declaration at workspaces_lifecycle.rs:558) — quick win, import the
+pub one. The handler re-derives "is this retirable" three times
+(`retire_workspace` :71/:138, `retry_retire_cleanup` :307) from raw
+record fields instead of trusting `RetirePreflightChecker::check_workspace`
+— and re-runs the access-gate + worktree-path checks the checker already
+folds into blockers. Canonical home exists; the PR routes all three
+call sites through it.
 
 ---
 
