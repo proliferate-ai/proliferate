@@ -536,31 +536,67 @@ async def create_organization_join_landing(
     return build_join_landing_html(organization.name, organization.id)
 
 
-async def accept_invitation(
+async def _accept_invitation_for_organization(
     db: AsyncSession,
     actor_user: OrganizationActor,
     *,
     organization_id: UUID,
-) -> OrganizationWithMembershipRecord:
+    authenticated_email: str,
+) -> tuple[OrganizationWithMembershipRecord | None, str | None]:
     accepted, error = await invitation_store.accept_pending_invitation_for_organization_email(
         db,
         organization_id=organization_id,
         authenticated_user_id=actor_user.id,
-        authenticated_email=actor_user.email,
+        authenticated_email=authenticated_email,
     )
     if accepted is None:
-        accept_error = _build_invitation_accept_error(error)
-        raise accept_error
+        return None, error
     await maybe_create_organization_seat_adjustment(
         db,
         organization_id=accepted.organization.id,
         membership_id=accepted.membership.id,
     )
     schedule_agent_gateway_org_enrollment(accepted.organization.id, actor_user.id, db=db)
-    return OrganizationWithMembershipRecord(
-        organization=accepted.organization,
-        membership=accepted.membership,
+    return (
+        OrganizationWithMembershipRecord(
+            organization=accepted.organization,
+            membership=accepted.membership,
+        ),
+        error,
     )
+
+
+async def try_accept_invitation(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    *,
+    organization_id: UUID,
+    authenticated_email: str,
+) -> OrganizationWithMembershipRecord | None:
+    accepted, _error = await _accept_invitation_for_organization(
+        db,
+        actor_user,
+        organization_id=organization_id,
+        authenticated_email=authenticated_email,
+    )
+    return accepted
+
+
+async def accept_invitation(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    *,
+    organization_id: UUID,
+) -> OrganizationWithMembershipRecord:
+    accepted, error = await _accept_invitation_for_organization(
+        db,
+        actor_user,
+        organization_id=organization_id,
+        authenticated_email=actor_user.email,
+    )
+    if accepted is None:
+        raise _build_invitation_accept_error(error)
+    return accepted
 
 
 def _build_invitation_accept_error(
