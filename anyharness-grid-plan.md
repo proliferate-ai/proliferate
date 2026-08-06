@@ -608,6 +608,31 @@ cfg(test) rows.
    tautology). session_admission_tests pin LOWERED 660→650 via anchor
    table collapse — no pin raised.
 
+5. **#1672** `codex/anyharness-acp-into-integrations` @ e7335df68 — PR 2,
+   `src/acp/` → `src/integrations/acp/`. 4 pure renames (100%
+   similarity), 6 import occurrences repointed across 5 files, zero
+   references left (`crate::acp` grep empty crate-wide incl. the binary
+   crate). Checker re-expression: "acp" dropped from LIVE_RUNTIME_ROOTS
+   + DOMAIN_STORE_FORBIDDEN_ROOTS (now {"live"}), new
+   `is_acp_runtime_import()` OR'd into the four protecting rules with
+   rule IDs stable. Review verdict: no P1 — EXACT parity proven over
+   40 shape×layer probes (incl. bare-module import and the
+   inline-reference question: inline paths never fired on main either,
+   pre-existing limit of the use-line pass) + an undisclosed-but-
+   positive coverage gain (moved files now under INTEGRATIONS_* rules,
+   clean so counts hold). Old-paths fold: 11 subpath entries → dir ban;
+   review P2-1 caught the fold missing the `src/acp.rs` file-module
+   resurrection shape (both gates were blind to a resurrected
+   crate::acp root — the two gates had been each other's backstop);
+   closed by adding the dir+.rs pair entry, negative-controlled both
+   ways. P2-2: body count corrected 9→11 (third body-count inaccuracy
+   this program — reviewers keep earning their keep). Anchor suite
+   stays exactly 90 (one fixture edited in place, proven load-bearing
+   by arm-deletion control). No allowlist rows or pins changed. Based
+   on main directly — no retarget needed. P3 parked: ~8 stale
+   `src/acp/**` doc references (docs deferred program-wide; the specs
+   README.md:303 already anticipated "earned integrations/acp/**").
+
 Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
 the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
 facade-laundered live power; replaced with a plain `runtime_home: PathBuf`
