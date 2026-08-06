@@ -153,6 +153,95 @@ class RadixImportBoundaryTest(unittest.TestCase):
         self.assertEqual(violations, [])
 
 
+class TailwindMergeImportBoundaryTest(unittest.TestCase):
+    def write_files(self, directory: Path, files: dict[str, str]) -> None:
+        for name, content in files.items():
+            path = directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+
+    def run_rule(
+        self,
+        root: Path,
+    ) -> list[tuple[str, str, int]]:
+        product_client_src = root / "apps/packages/product-client/src"
+        roots = [
+            product_client_src,
+            root / "apps/desktop/src",
+            root / "apps/web/src",
+        ]
+        with patch.multiple(
+            check_module,
+            REPO_ROOT=root,
+            PRODUCT_CLIENT_PRIMITIVES_SRC=product_client_src / "primitives",
+            ALL_FRONTEND_SRC_ROOTS=roots,
+        ):
+            return sorted(
+                (violation.relative_path, violation.rule_id, violation.lineno)
+                for violation in check_module.find_tailwind_merge_import_violations()
+            )
+
+    def test_only_configured_product_client_wrapper_imports_tailwind_merge(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_files(
+                root,
+                {
+                    "apps/packages/product-client/src/primitives/utils/tw-merge.ts": (
+                        'import { extendTailwindMerge } from "tailwind-merge";\n'
+                    ),
+                    "apps/packages/product-client/src/components/Consumer.tsx": (
+                        'import { twMerge } from "#product/primitives/utils/tw-merge";\n'
+                    ),
+                },
+            )
+
+            violations = self.run_rule(root)
+
+        self.assertEqual(violations, [])
+
+    def test_direct_tailwind_merge_module_loads_fail_in_every_frontend_host(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_files(
+                root,
+                {
+                    "apps/packages/product-client/src/components/Static.tsx": (
+                        'import { twMerge } from "tailwind-merge";\n'
+                    ),
+                    "apps/desktop/src/Dynamic.ts": (
+                        'export const load = () => import("tailwind-merge");\n'
+                    ),
+                    "apps/web/src/CommonJs.ts": (
+                        'export const merge = require("tailwind-merge");\n'
+                    ),
+                },
+            )
+
+            violations = self.run_rule(root)
+
+        self.assertEqual(
+            violations,
+            [
+                (
+                    "apps/desktop/src/Dynamic.ts",
+                    "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                    1,
+                ),
+                (
+                    "apps/packages/product-client/src/components/Static.tsx",
+                    "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                    1,
+                ),
+                (
+                    "apps/web/src/CommonJs.ts",
+                    "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                    1,
+                ),
+            ],
+        )
+
+
 class ProductClientPrimitivesTopLevelShapeTest(unittest.TestCase):
     def test_only_allowed_top_level_entries_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

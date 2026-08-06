@@ -2740,6 +2740,40 @@ def find_radix_import_violations() -> list[Violation]:
     return violations
 
 
+def find_tailwind_merge_import_violations() -> list[Violation]:
+    """Keep Tailwind class merging behind the configured ProductClient wrapper.
+
+    The stock package does not know ProductClient's semantic text utilities and
+    can discard them as conflicting color classes.  The wrapper extends that
+    configuration, so every frontend caller must import it instead of reaching
+    the package directly.
+    """
+
+    violations: list[Violation] = []
+    wrapper_path = (
+        PRODUCT_CLIENT_PRIMITIVES_SRC / "utils" / "tw-merge.ts"
+    ).resolve()
+    for path in iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS, include_tests=True):
+        if path.resolve() == wrapper_path:
+            continue
+        for statement in collect_module_specifiers(path, path.read_text()):
+            if not is_package_source(statement.source, "tailwind-merge"):
+                continue
+            violations.append(
+                Violation(
+                    "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                    path,
+                    statement.lineno,
+                    (
+                        "tailwind-merge may only be imported by "
+                        "apps/packages/product-client/src/primitives/utils/tw-merge.ts; "
+                        "use #product/primitives/utils/tw-merge"
+                    ),
+                )
+            )
+    return violations
+
+
 def find_warning_ink_violations() -> list[Violation]:
     """Rule: `--color-warning` is a FILL token, never ink.
 
@@ -2880,6 +2914,7 @@ def collect_violations() -> list[Violation]:
     for path in iter_files_in_roots([MOBILE_SRC], include_tests=True):
         violations.extend(find_mobile_product_client_import_violations(path))
     violations.extend(find_radix_import_violations())
+    violations.extend(find_tailwind_merge_import_violations())
     violations.extend(find_primitives_top_level_violations())
     violations.extend(find_warning_ink_violations())
     return violations
