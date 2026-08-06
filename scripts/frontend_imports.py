@@ -124,6 +124,135 @@ def _decode_javascript_string(raw: str) -> str:
     return "".join(cooked)
 
 
+def _decode_prefilter_character(
+    raw: str,
+    index: int,
+) -> tuple[str | None, int]:
+    """Decode one candidate character without slowing the hot lexer path."""
+
+    if raw[index] != "\\" or index + 1 >= len(raw):
+        return raw[index], index + 1
+
+    escaped = raw[index + 1]
+    if escaped == "\n":
+        return None, index + 2
+    if escaped == "\r":
+        return (
+            None,
+            index + 3
+            if index + 2 < len(raw) and raw[index + 2] == "\n"
+            else index + 2,
+        )
+    if escaped == "x" and index + 3 < len(raw):
+        digits = raw[index + 2 : index + 4]
+        if all(char in "0123456789abcdefABCDEF" for char in digits):
+            return chr(int(digits, 16)), index + 4
+    if escaped == "u":
+        if index + 2 < len(raw) and raw[index + 2] == "{":
+            close = raw.find("}", index + 3)
+            digits = raw[index + 3 : close] if close >= 0 else ""
+            if digits and all(
+                char in "0123456789abcdefABCDEF" for char in digits
+            ):
+                value = int(digits, 16)
+                if value <= 0x10FFFF:
+                    return chr(value), close + 1
+        elif index + 5 < len(raw):
+            digits = raw[index + 2 : index + 6]
+            if all(char in "0123456789abcdefABCDEF" for char in digits):
+                return chr(int(digits, 16)), index + 6
+
+    simple_escapes = {
+        "b": "\b",
+        "f": "\f",
+        "n": "\n",
+        "r": "\r",
+        "t": "\t",
+        "v": "\v",
+        "0": "\0",
+    }
+    return simple_escapes.get(escaped, escaped), index + 2
+
+
+def could_contain_literal_sequence(text: str, target: str) -> bool:
+    """Conservatively find a cooked string assembled from source literals.
+
+    The finite module-source evaluator may choose among and concatenate quoted
+    strings or constant template fragments.  This lightweight prefilter keeps
+    every target-prefix state in source order, decodes JavaScript escapes, and
+    deliberately treats every quote and template-suffix-shaped brace as a
+    possible lexical boundary.  It may return a false positive, but it does
+    not reject escaped, fragmented, parenthesized, conditional, logical,
+    sequence, asserted, or template-built literal strings.
+    """
+
+    if not target:
+        return True
+
+    offsets = {0}
+
+    def advance_fragment(
+        start: int,
+        *,
+        quote: str | None = None,
+        template_fragment: bool = False,
+    ) -> tuple[bool, set[int]]:
+        possible = set(offsets)
+        consumed = 0
+        cursor = start
+        while cursor < len(text):
+            if template_fragment:
+                if text[cursor] == "`" or (
+                    text[cursor] == "$"
+                    and cursor + 1 < len(text)
+                    and text[cursor + 1] == "{"
+                ):
+                    break
+            elif text[cursor] == quote:
+                break
+
+            value, cursor = _decode_prefilter_character(text, cursor)
+            if value is None:
+                continue
+            possible = {
+                offset
+                for offset in possible
+                if offset + consumed < len(target)
+                and target[offset + consumed] == value
+            }
+            if not possible:
+                return False, set()
+            consumed += 1
+            if any(offset + consumed == len(target) for offset in possible):
+                return True, set()
+
+        return (
+            False,
+            {offset + consumed for offset in possible} if consumed else set(),
+        )
+
+    for index, char in enumerate(text):
+        if char in {"'", '"', "`"}:
+            complete, additions = advance_fragment(
+                index + 1,
+                quote=char,
+                template_fragment=char == "`",
+            )
+            if complete:
+                return True
+            offsets.update(additions)
+        if char == "}":
+            complete, additions = advance_fragment(
+                index + 1,
+                template_fragment=True,
+            )
+            if complete:
+                return True
+            offsets.update(additions)
+
+    return False
+
+
 class _TypeScriptLexer:
     def __init__(self, text: str, *, jsx: bool) -> None:
         self.text = text
@@ -2761,10 +2890,12 @@ def _looks_like_assertion_type(tokens: list[Token]) -> bool:
     return not nesting
 
 
-def collect_imports(path: Path, text: str) -> list[ImportStatement]:
-    """Collect static imports, re-exports, and quoted dynamic imports."""
+def _collect_imports_from_tokens(
+    text: str,
+    tokens: list[Token],
+) -> list[ImportStatement]:
+    """Collect import statements from an existing TypeScript token stream."""
 
-    tokens = tokenize_typescript(text, jsx=path.suffix == ".tsx")
     imports: list[ImportStatement] = []
     index = 0
 
@@ -2917,6 +3048,16 @@ def collect_imports(path: Path, text: str) -> list[ImportStatement]:
     return imports
 
 
+def collect_imports(
+    path: Path,
+    text: str,
+) -> list[ImportStatement]:
+    """Collect static imports, re-exports, and quoted dynamic imports."""
+
+    tokens = tokenize_typescript(text, jsx=path.suffix == ".tsx")
+    return _collect_imports_from_tokens(text, tokens)
+
+
 def collect_module_specifiers(path: Path, text: str) -> list[ImportStatement]:
     """Collect every literal TypeScript/Metro module-loading form we enforce.
 
@@ -2927,8 +3068,8 @@ def collect_module_specifiers(path: Path, text: str) -> list[ImportStatement]:
     ``jest.mock(...)`` calls without changing the established import-only API.
     """
 
-    imports = collect_imports(path, text)
     tokens = tokenize_typescript(text, jsx=path.suffix == ".tsx")
+    imports = _collect_imports_from_tokens(text, tokens)
     parens = _matching_pairs(tokens, "(", ")")
     occupied_ranges = [
         (statement.start, statement.start + len(statement.statement))

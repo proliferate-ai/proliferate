@@ -15,6 +15,7 @@ try:
         Token,
         collect_imports,
         collect_module_specifiers,
+        could_contain_literal_sequence,
         tokenize_typescript,
     )
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
@@ -23,6 +24,7 @@ except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
         Token,
         collect_imports,
         collect_module_specifiers,
+        could_contain_literal_sequence,
         tokenize_typescript,
     )
 
@@ -2782,15 +2784,7 @@ def find_tailwind_merge_import_violations(
         if path == wrapper_path:
             continue
         text = read_source_text(path, source_cache)
-        # Avoid fully tokenizing every frontend source file for a package used
-        # by only a few of them. Normal module sources contain the package name
-        # verbatim. Keep escaped spellings and finite expressions split at the
-        # package delimiter on the parser-backed path too, so string cooking
-        # and constant-expression evaluation remain authoritative.
-        if (
-            "tailwind-merge" not in text
-            and not ("tailwind" in text and "merge" in text)
-        ):
+        if not could_contain_literal_sequence(text, "tailwind-merge"):
             continue
         for statement in collect_module_specifiers(path, text):
             if not is_package_source(statement.source, "tailwind-merge"):
