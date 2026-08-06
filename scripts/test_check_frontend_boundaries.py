@@ -166,9 +166,11 @@ class TailwindMergeImportBoundaryTest(unittest.TestCase):
     ) -> list[tuple[str, str, int]]:
         product_client_src = root / "apps/packages/product-client/src"
         roots = [
-            product_client_src,
             root / "apps/desktop/src",
             root / "apps/web/src",
+            root / "apps/mobile/src",
+            root / "apps/packages/design/src",
+            product_client_src,
         ]
         with patch.multiple(
             check_module,
@@ -193,6 +195,9 @@ class TailwindMergeImportBoundaryTest(unittest.TestCase):
                     "apps/packages/product-client/src/components/Consumer.tsx": (
                         'import { twMerge } from "#product/primitives/utils/tw-merge";\n'
                     ),
+                    "apps/web/src/PackageName.ts": (
+                        'export const packageName = "tailwind-merge";\n'
+                    ),
                 },
             )
 
@@ -200,21 +205,65 @@ class TailwindMergeImportBoundaryTest(unittest.TestCase):
 
         self.assertEqual(violations, [])
 
-    def test_direct_tailwind_merge_module_loads_fail_in_every_frontend_host(self) -> None:
+    def test_direct_tailwind_merge_module_loads_fail_in_every_frontend_root(
+        self,
+    ) -> None:
+        cases = [
+            (
+                "apps/packages/product-client/src/components/Static.tsx",
+                'import { twMerge } from "tailwind-merge";\n',
+            ),
+            (
+                "apps/desktop/src/Dynamic.ts",
+                'export const load = () => import("tailwind-" + "merge");\n',
+            ),
+            (
+                "apps/web/src/CommonJs.ts",
+                'export const merge = require("tailwind-merge");\n',
+            ),
+            (
+                "apps/mobile/src/ImportEquals.ts",
+                'import twMerge = require("tailwind-merge");\n',
+            ),
+            (
+                "apps/packages/design/src/ReExport.ts",
+                'export { twMerge } from "tailwind-merge/subpath";\n',
+            ),
+            (
+                "apps/desktop/src/__tests__/TailwindMerge.test.ts",
+                'vi.mock("tailwind-merge", () => ({}));\n',
+            ),
+        ]
+
+        for relative_path, source in cases:
+            with self.subTest(path=relative_path):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory).resolve()
+                    self.write_files(root, {relative_path: source})
+
+                    violations = self.run_rule(root)
+
+                self.assertEqual(
+                    violations,
+                    [
+                        (
+                            relative_path,
+                            "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                            1,
+                        )
+                    ],
+                )
+
+    def test_escaped_package_spelling_remains_parser_backed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
+            relative_path = "apps/web/src/Escaped.ts"
             self.write_files(
                 root,
                 {
-                    "apps/packages/product-client/src/components/Static.tsx": (
-                        'import { twMerge } from "tailwind-merge";\n'
-                    ),
-                    "apps/desktop/src/Dynamic.ts": (
-                        'export const load = () => import("tailwind-merge");\n'
-                    ),
-                    "apps/web/src/CommonJs.ts": (
-                        'export const merge = require("tailwind-merge");\n'
-                    ),
+                    relative_path: (
+                        r'import { twMerge } from "tailwind\u002dmerge";' "\n"
+                    )
                 },
             )
 
@@ -224,22 +273,33 @@ class TailwindMergeImportBoundaryTest(unittest.TestCase):
             violations,
             [
                 (
-                    "apps/desktop/src/Dynamic.ts",
+                    relative_path,
                     "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
                     1,
-                ),
-                (
-                    "apps/packages/product-client/src/components/Static.tsx",
-                    "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
-                    1,
-                ),
-                (
-                    "apps/web/src/CommonJs.ts",
-                    "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
-                    1,
-                ),
+                )
             ],
         )
+
+    def test_non_candidate_files_are_not_tokenized(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_files(
+                root,
+                {
+                    "apps/desktop/src/Unrelated.ts": (
+                        'import { clsx } from "clsx";\n'
+                    ),
+                },
+            )
+            with patch.object(
+                check_module,
+                "collect_module_specifiers",
+                wraps=check_module.collect_module_specifiers,
+            ) as collect_module_specifiers:
+                violations = self.run_rule(root)
+
+        self.assertEqual(violations, [])
+        collect_module_specifiers.assert_not_called()
 
 
 class ProductClientPrimitivesTopLevelShapeTest(unittest.TestCase):
