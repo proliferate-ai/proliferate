@@ -18,6 +18,8 @@ type MockActionsState = {
   pathKindPending: boolean;
   workspacePath: string | null;
   absolutePath: string | null;
+  canOpenPrimary: boolean;
+  primaryUnavailableReason: string | null;
 };
 
 const state: MockActionsState = {
@@ -25,6 +27,8 @@ const state: MockActionsState = {
   pathKindPending: false,
   workspacePath: "src/App.tsx",
   absolutePath: "/repo/src/App.tsx",
+  canOpenPrimary: true,
+  primaryUnavailableReason: null,
 };
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
@@ -39,8 +43,8 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
     },
     pathKind: state.pathKind,
     pathKindPending: state.pathKindPending,
-    canOpenPrimary: true,
-    primaryUnavailableReason: null,
+    canOpenPrimary: state.canOpenPrimary,
+    primaryUnavailableReason: state.primaryUnavailableReason,
     openPrimary: vi.fn(),
   }),
 }));
@@ -73,6 +77,8 @@ afterEach(() => {
   state.pathKindPending = false;
   state.workspacePath = "src/App.tsx";
   state.absolutePath = "/repo/src/App.tsx";
+  state.canOpenPrimary = true;
+  state.primaryUnavailableReason = null;
 });
 
 describe("FileReferenceBadge glyph selection", () => {
@@ -137,5 +143,38 @@ describe("FileReferenceBadge glyph selection", () => {
     state.absolutePath = "/Users/pablo/tmp/scratch-file";
     const { container } = renderBadge("/Users/pablo/tmp/scratch-file", "logo.svg");
     expect(usesExternalMentionGlyph(container)).toBe(false);
+  });
+});
+
+describe("FileReferenceBadge interaction semantics", () => {
+  it("renders an actionable inline reference as a blue button", () => {
+    const { container } = renderBadge("src/App.tsx");
+    const reference = container.querySelector("[data-file-reference-badge='inline']");
+
+    expect(reference?.tagName).toBe("BUTTON");
+    expect(reference?.getAttribute("aria-disabled")).toBeNull();
+    expect(reference?.className).toContain("text-link-foreground");
+    expect(reference?.className).not.toContain("cursor-not-allowed");
+  });
+
+  it("keeps a retry reason on an actionable reference", () => {
+    state.primaryUnavailableReason = "Could not resolve this path. Click to retry.";
+    const { container } = renderBadge("src/App.tsx");
+    const reference = container.querySelector("[data-file-reference-badge='inline']");
+
+    expect(reference?.getAttribute("title"))
+      .toBe("Could not resolve this path. Click to retry.");
+  });
+
+  it("renders an unavailable reference as plain text instead of a disabled link", () => {
+    state.canOpenPrimary = false;
+    const { container } = renderBadge("/tmp/unavailable.txt");
+    const reference = container.querySelector("[data-file-reference-badge='inline']");
+
+    expect(reference?.tagName).toBe("SPAN");
+    expect(reference?.getAttribute("aria-disabled")).toBeNull();
+    expect(reference?.className).not.toContain("text-link-foreground");
+    expect(reference?.className).not.toContain("cursor-not-allowed");
+    expect(reference?.className).toContain("cursor-default");
   });
 });

@@ -7,7 +7,7 @@ import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider"
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 
 const editorMocks = vi.hoisted(() => ({
-  openInDefaultEditor: vi.fn(async () => undefined),
+  openInDefaultEditor: vi.fn(async () => true),
 }));
 
 const statMocks = vi.hoisted(() => ({
@@ -126,6 +126,7 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () 
 afterEach(() => {
   hostMocks.desktopAvailable = true;
   hostMocks.isDirectory.mockResolvedValue(false);
+  editorMocks.openInDefaultEditor.mockResolvedValue(true);
   statMocks.kind = "file";
   statMocks.sizeBytes = undefined;
   statMocks.isFetching = false;
@@ -158,6 +159,23 @@ describe("useFileReferenceActions", () => {
     expect(hostMocks.reveal).not.toHaveBeenCalled();
     expect(hostMocks.isDirectory).not.toHaveBeenCalled();
     expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
+  });
+
+  it("infers a workspace file when nullable path metadata is missing", async () => {
+    const { result } = renderHook(
+      () => useFileReferenceActions({
+        rawPath: "src/App.tsx",
+        workspacePath: null,
+      }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    expect(result.current.reference.workspacePath).toBe("src/App.tsx");
+    await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+    expect(viewerMocks.openTarget).toHaveBeenCalledWith({
+      kind: "file",
+      path: "src/App.tsx",
+    });
   });
 
   it("reveals a workspace directory in Finder instead of opening it as a file", async () => {
@@ -250,7 +268,7 @@ describe("useFileReferenceActions", () => {
     });
   });
 
-  it("disables primary opening after exact stat and unique correction both fail", async () => {
+  it("keeps primary opening retryable after exact stat and correction both fail", async () => {
     statMocks.kind = null;
     statMocks.error = new Error("not found");
     statMocks.refetch.mockResolvedValue({ data: undefined });
@@ -264,8 +282,11 @@ describe("useFileReferenceActions", () => {
       await expect(result.current.openPrimary()).resolves.toBe("unavailable");
     });
 
-    await waitFor(() => expect(result.current.canOpenPrimary).toBe(false));
-    expect(result.current.primaryUnavailableReason).toBe("This path is unavailable.");
+    await waitFor(() => {
+      expect(result.current.primaryUnavailableReason)
+        .toBe("Could not resolve this path. Click to retry.");
+    });
+    expect(result.current.canOpenPrimary).toBe(true);
     expect(viewerMocks.openTarget).not.toHaveBeenCalled();
   });
 
@@ -287,7 +308,7 @@ describe("useFileReferenceActions", () => {
     expect(viewerMocks.openTarget).toHaveBeenCalledTimes(opensViewer ? 1 : 0);
   });
 
-  it("fails closed for an external file that cannot be represented in the viewer", async () => {
+  it("opens an external file with the configured Desktop target", async () => {
     statMocks.kind = null;
     const { result } = renderHook(
       () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
@@ -295,8 +316,77 @@ describe("useFileReferenceActions", () => {
     );
 
     await waitFor(() => expect(result.current.pathKind).toBe("file"));
+    expect(result.current.canOpenPrimary).toBe(true);
+    await expect(result.current.openPrimary()).resolves.toBe("open-external");
+    expect(editorMocks.openInDefaultEditor).toHaveBeenCalledWith("/tmp/outside.txt");
+    expect(hostMocks.reveal).not.toHaveBeenCalled();
+    expect(viewerMocks.openTarget).not.toHaveBeenCalled();
+  });
+
+  it("keeps an external file retryable when its Desktop target fails", async () => {
+    statMocks.kind = null;
+    editorMocks.openInDefaultEditor
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    await waitFor(() => expect(result.current.pathKind).toBe("file"));
+    await act(async () => {
+      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
+    });
+
+    await waitFor(() => {
+      expect(result.current.primaryUnavailableReason)
+        .toBe("Could not open this path. Click to retry.");
+    });
+    expect(result.current.canOpenPrimary).toBe(true);
+
+    await act(async () => {
+      await expect(result.current.openPrimary()).resolves.toBe("open-external");
+    });
+    await waitFor(() => {
+      expect(result.current.primaryUnavailableReason).toBeNull();
+    });
+    expect(editorMocks.openInDefaultEditor).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps external path resolution retryable when the Desktop bridge rejects", async () => {
+    statMocks.kind = null;
+    hostMocks.isDirectory.mockRejectedValue(new Error("bridge unavailable"));
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    await waitFor(() => {
+      expect(hostMocks.isDirectory).toHaveBeenCalled();
+      expect(result.current.pathKindPending).toBe(false);
+    });
+    await act(async () => {
+      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
+    });
+
+    await waitFor(() => {
+      expect(result.current.primaryUnavailableReason)
+        .toBe("Could not resolve this path. Click to retry.");
+    });
+    expect(result.current.canOpenPrimary).toBe(true);
+  });
+
+  it("keeps an external file unavailable on Web", async () => {
+    hostMocks.desktopAvailable = false;
+    statMocks.kind = null;
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
     expect(result.current.canOpenPrimary).toBe(false);
     await expect(result.current.openPrimary()).resolves.toBe("unavailable");
+    expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
     expect(hostMocks.reveal).not.toHaveBeenCalled();
     expect(viewerMocks.openTarget).not.toHaveBeenCalled();
   });

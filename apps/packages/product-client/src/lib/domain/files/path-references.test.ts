@@ -57,6 +57,18 @@ describe("resolveFileReference", () => {
     });
   });
 
+  it("infers a relative workspace path when nullable metadata was omitted on the wire", () => {
+    expect(resolveFileReference({
+      rawPath: "src/App.tsx",
+      workspaceRoot: "/repo",
+      resolveAbsolute,
+      workspacePathOverride: null,
+    })).toMatchObject({
+      absolutePath: "/repo/src/App.tsx",
+      workspacePath: "src/App.tsx",
+    });
+  });
+
   it("maps absolute paths under the workspace back to workspace-relative paths", () => {
     expect(resolveFileReference({
       rawPath: "/repo/src/App.tsx:12:4",
@@ -76,8 +88,40 @@ describe("resolveFileReference", () => {
       rawPath: "/tmp/file.txt",
       workspaceRoot: "/repo",
       resolveAbsolute,
+      workspacePathOverride: null,
     })).toMatchObject({
       absolutePath: "/tmp/file.txt",
+      workspacePath: null,
+    });
+  });
+
+  it("normalizes absolute traversal before deciding workspace membership", () => {
+    expect(resolveFileReference({
+      rawPath: "/repo/sub/../../tmp/file.txt",
+      workspaceRoot: "/repo",
+      resolveAbsolute,
+      workspacePathOverride: null,
+    })).toMatchObject({
+      workspacePath: null,
+    });
+
+    expect(resolveFileReference({
+      rawPath: "/repo/src/../App.tsx",
+      workspaceRoot: "/repo",
+      resolveAbsolute,
+      workspacePathOverride: null,
+    })).toMatchObject({
+      workspacePath: "App.tsx",
+    });
+  });
+
+  it("rejects a relative path that escapes the workspace after normalization", () => {
+    expect(resolveFileReference({
+      rawPath: "src/../../tmp/file.txt",
+      workspaceRoot: "/repo",
+      resolveAbsolute,
+      workspacePathOverride: null,
+    })).toMatchObject({
       workspacePath: null,
     });
   });
@@ -85,11 +129,42 @@ describe("resolveFileReference", () => {
 
 describe("resolveFileReferencePrimaryAction", () => {
   it.each([
-    [{ pathKind: "file" as const, canOpenViewer: true, canReveal: true }, "open-viewer"],
-    [{ pathKind: "file" as const, canOpenViewer: false, canReveal: true }, "unavailable"],
-    [{ pathKind: "directory" as const, canOpenViewer: true, canReveal: true }, "reveal"],
-    [{ pathKind: "directory" as const, canOpenViewer: true, canReveal: false }, "unavailable"],
-    [{ pathKind: null, canOpenViewer: true, canReveal: true }, "unavailable"],
+    [{
+      pathKind: "file" as const,
+      canOpenViewer: true,
+      canOpenExternal: true,
+      canReveal: true,
+    }, "open-viewer"],
+    [{
+      pathKind: "file" as const,
+      canOpenViewer: false,
+      canOpenExternal: true,
+      canReveal: true,
+    }, "open-external"],
+    [{
+      pathKind: "file" as const,
+      canOpenViewer: false,
+      canOpenExternal: false,
+      canReveal: true,
+    }, "unavailable"],
+    [{
+      pathKind: "directory" as const,
+      canOpenViewer: true,
+      canOpenExternal: true,
+      canReveal: true,
+    }, "reveal"],
+    [{
+      pathKind: "directory" as const,
+      canOpenViewer: true,
+      canOpenExternal: true,
+      canReveal: false,
+    }, "unavailable"],
+    [{
+      pathKind: null,
+      canOpenViewer: true,
+      canOpenExternal: true,
+      canReveal: true,
+    }, "unavailable"],
   ])("routes %o to %s", (input, expected) => {
     expect(resolveFileReferencePrimaryAction(input)).toBe(expected);
   });

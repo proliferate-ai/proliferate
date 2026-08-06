@@ -74,17 +74,19 @@ export function ActionFileLink({
   displayName,
 }: {
   pathLabel: string;
-  /** null = authoritatively external; undefined = infer from workspace root. */
+  /** A known workspace-relative path, or absent to infer from pathLabel. */
   workspacePath: string | null | undefined;
   displayName: string;
 }) {
   return (
+    // Keep FileReferenceBadge's semantic link color: the surrounding activity
+    // row is intentionally muted, but this child is an actionable file target.
     <FileReferenceBadge
       rawPath={pathLabel}
       label={displayName}
       workspacePath={workspacePath}
       variant="inline"
-      className={`min-w-0 truncate !px-0 ${CHAT_BUTTON_TEXT_CLASS} !font-normal !text-inherit underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2 hover:!text-inherit hover:decoration-dotted [&>span:first-child]:hidden`}
+      className={`min-w-0 truncate !px-0 ${CHAT_BUTTON_TEXT_CLASS} !font-normal underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2 hover:decoration-dotted [&>span:first-child]:hidden`}
     />
   );
 }

@@ -65,13 +65,15 @@ export function useFileReferenceActions({
   });
   const [externalPathKind, setExternalPathKind] = useState<FileReferencePathKind | null>(null);
   const [externalPathKindPending, setExternalPathKindPending] = useState(false);
-  const [workspaceResolutionFailed, setWorkspaceResolutionFailed] = useState(false);
+  const [pathResolutionFailed, setPathResolutionFailed] = useState(false);
+  const [primaryOpenFailed, setPrimaryOpenFailed] = useState(false);
   const workspacePathKind = resolveWorkspaceStatPathKind(statQuery.data);
   const pathKind = reference.workspacePath ? workspacePathKind : externalPathKind;
 
   useEffect(() => {
-    setWorkspaceResolutionFailed(false);
-  }, [materializedWorkspaceId, reference.workspacePath]);
+    setPathResolutionFailed(false);
+    setPrimaryOpenFailed(false);
+  }, [materializedWorkspaceId, reference.absolutePath, reference.workspacePath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +116,7 @@ export function useFileReferenceActions({
   const resolvedPrimaryAction = resolveFileReferencePrimaryAction({
     pathKind,
     canOpenViewer: canOpenInSidebar,
+    canOpenExternal,
     canReveal,
   });
   const canResolvePathKind = Boolean(
@@ -121,19 +124,23 @@ export function useFileReferenceActions({
     || (reference.absolutePath && files),
   );
   const canOpenPrimary = resolvedPrimaryAction !== "unavailable"
-    || (pathKind === null && canResolvePathKind && !workspaceResolutionFailed);
+    || (pathKind === null && canResolvePathKind);
   const pathKindPending = externalPathKindPending || statQuery.isFetching;
   const primaryUnavailableReason = pathKindPending
     ? "Checking whether this path is a file or folder…"
-    : pathKind === "directory" && !canReveal
-      ? "Reveal in Finder is available in the Desktop app."
-      : pathKind === "file" && !canOpenInSidebar
-        ? "This file is outside the current workspace."
-        : pathKind === null && workspaceResolutionFailed
-          ? "This path is unavailable."
-          : pathKind === null
-            ? "Resolve this path in the workspace."
-          : null;
+    : primaryOpenFailed
+      ? "Could not open this path. Click to retry."
+      : pathKind === "directory" && !canReveal
+        ? "Reveal in Finder is available in the Desktop app."
+        : !reference.workspacePath && reference.absolutePath && !files
+          ? "External files are available in the Desktop app."
+          : pathKind === "file" && !canOpenInSidebar && !canOpenExternal
+            ? "External files are available in the Desktop app."
+            : pathKind === null && pathResolutionFailed
+              ? "Could not resolve this path. Click to retry."
+              : pathKind === null
+                ? "Resolve this path in the workspace."
+                : null;
   const openTargets = useMemo(
     () => targets.filter((target) => target.kind !== "copy"),
     [targets],
@@ -194,9 +201,9 @@ export function useFileReferenceActions({
 
   const openDefault = useCallback(async () => {
     if (!reference.absolutePath) {
-      return;
+      return false;
     }
-    await openInDefaultEditor(reference.absolutePath);
+    return openInDefaultEditor(reference.absolutePath);
   }, [openInDefaultEditor, reference.absolutePath]);
 
   const reveal = useCallback(async () => {
@@ -231,24 +238,37 @@ export function useFileReferenceActions({
           }
         }
         if (!resolvedPathKind || !resolvedWorkspacePath) {
-          setWorkspaceResolutionFailed(true);
+          setPathResolutionFailed(true);
           return "unavailable";
         }
       }
     }
     if (!resolvedPathKind && reference.absolutePath && files) {
-      resolvedPathKind = await files.isDirectory(reference.absolutePath)
-        ? "directory"
-        : "file";
+      try {
+        resolvedPathKind = await files.isDirectory(reference.absolutePath)
+          ? "directory"
+          : "file";
+      } catch {
+        setPathResolutionFailed(true);
+        return "unavailable";
+      }
     }
 
     const action = resolveFileReferencePrimaryAction({
       pathKind: resolvedPathKind,
       canOpenViewer: Boolean(resolvedWorkspacePath),
+      canOpenExternal: Boolean(files && reference.absolutePath),
       canReveal: Boolean(files && reference.absolutePath),
     });
     if (action === "reveal") {
-      await reveal();
+      try {
+        await reveal();
+      } catch {
+        setPrimaryOpenFailed(true);
+        return "unavailable";
+      }
+      setPathResolutionFailed(false);
+      setPrimaryOpenFailed(false);
       return action;
     }
     if (action === "open-viewer") {
@@ -264,7 +284,18 @@ export function useFileReferenceActions({
           });
         }
       }
-      setWorkspaceResolutionFailed(false);
+      setPathResolutionFailed(false);
+      setPrimaryOpenFailed(false);
+      return action;
+    }
+    if (action === "open-external") {
+      const opened = await openDefault();
+      if (!opened) {
+        setPrimaryOpenFailed(true);
+        return "unavailable";
+      }
+      setPathResolutionFailed(false);
+      setPrimaryOpenFailed(false);
       return action;
     }
     return action;
@@ -273,6 +304,7 @@ export function useFileReferenceActions({
     activateViewerTarget,
     fuzzyResolveFilePath,
     materializedWorkspaceId,
+    openDefault,
     openTarget,
     pathKind,
     reference.absolutePath,

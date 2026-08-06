@@ -138,8 +138,8 @@ Rules:
   mistaken for a link. Favicon requests go to the linked site itself (no
   third-party favicon service), so no list of linked hosts leaks anywhere. The
   provider mention and the file-path mention share one inline-mention treatment
-  (muted link color, no underline at rest, brighten to foreground + dashed
-  underline on hover); this only renders because the global `a` reset lives in
+  (semantic blue link color, no underline at rest, and a dashed underline on
+  hover); this only renders because the global `a` reset lives in
   `@layer base` (see the frontend styling guide) — unlayered, it would strip the
   anchor's color/underline.
 - Web falls back to unhighlighted (identically styled) code blocks; shiki stays
@@ -261,8 +261,16 @@ toggles its ledger; the summary does not route to the Changes pane.
 Every row revealed inside an activity ledger repeats its own semantic glyph
 (including mixed parsed shell operations), at the same text-relative size and
 inherited ink as its label. Completed command details use `Ran …`; only the
-active command uses `Running …`. An edit detail shows one pen glyph followed by
-an inherited-color, dotted-underlined filename, not a second file-type glyph.
+active command uses `Running …`. A read target with missing nullable workspace
+metadata is classified from its raw path against the current workspace root.
+An openable file target uses the semantic blue link color even though the
+surrounding activity row is muted: a workspace file opens in the viewer, while
+an external Desktop file uses the configured external target. It remains
+pointer- and keyboard-activatable while retrying path resolution or a failed
+external launch. A read target with no available primary action remains muted
+plain text without link or file-menu semantics rather than a disabled control.
+An edit detail shows one pen glyph followed by an inherited-color,
+dotted-underlined filename, not a second file-type glyph.
 When a transcript patch is available, clicking the edit row outside its
 filename toggles the inline diff. Clicking either the filename or the trailing
 open-file arrow opens the file without changing the row's expanded state. The

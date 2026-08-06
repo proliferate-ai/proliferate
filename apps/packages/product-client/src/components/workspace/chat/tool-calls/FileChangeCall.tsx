@@ -106,7 +106,7 @@ export function FileChangeCall({
             collapsible={false}
             headerTone="inlineTool"
             showOpenAction={false}
-            onOpenFile={fileReferenceActions.canOpenInSidebar || fileReferenceActions.canOpenExternal
+            onOpenFile={fileReferenceActions.canOpenPrimary
               ? handleOpenFile
               : undefined}
           >

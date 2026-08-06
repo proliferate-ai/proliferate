@@ -8,7 +8,7 @@ import type { FileReadScope } from "@anyharness/sdk";
 
 interface FileReadCallProps {
   path: string;
-  /** null = authoritatively external; undefined = infer from workspace root. */
+  /** A known workspace-relative path, or absent to infer from path. */
   workspacePath?: string | null;
   basename?: string | null;
   line?: number | null;
@@ -59,7 +59,7 @@ export function FileReadCall({
       </span>
       <ToolFileChip
         basename={resolvedBasename}
-        pathLabel={workspacePath ?? path}
+        pathLabel={workspacePath || path}
         workspacePath={workspacePath}
       />
       {scopeLabel && <span className="truncate text-ui-sm text-faint">{scopeLabel}</span>}

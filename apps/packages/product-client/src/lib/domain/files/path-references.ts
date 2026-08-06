@@ -10,7 +10,11 @@ export interface ResolvedFileReference {
 }
 
 export type FileReferencePathKind = "file" | "directory";
-export type FileReferencePrimaryAction = "open-viewer" | "reveal" | "unavailable";
+export type FileReferencePrimaryAction =
+  | "open-viewer"
+  | "open-external"
+  | "reveal"
+  | "unavailable";
 
 export function resolveWorkspaceStatPathKind(stat: {
   kind: "file" | "directory" | "symlink";
@@ -30,15 +34,20 @@ export function resolveWorkspaceStatPathKind(stat: {
 /**
  * Keep primary file-reference behavior host-independent and fail closed while
  * the path kind is unknown. A directory must never be routed through the file
- * viewer, and a file must never silently fall back to Finder.
+ * viewer, and an external file must use the configured external open target
+ * rather than silently falling back to Finder.
  */
 export function resolveFileReferencePrimaryAction(args: {
   pathKind: FileReferencePathKind | null;
   canOpenViewer: boolean;
+  canOpenExternal: boolean;
   canReveal: boolean;
 }): FileReferencePrimaryAction {
   if (args.pathKind === "file") {
-    return args.canOpenViewer ? "open-viewer" : "unavailable";
+    if (args.canOpenViewer) {
+      return "open-viewer";
+    }
+    return args.canOpenExternal ? "open-external" : "unavailable";
   }
   if (args.pathKind === "directory") {
     return args.canReveal ? "reveal" : "unavailable";
@@ -54,9 +63,11 @@ export function resolveFileReference(args: {
 }): ResolvedFileReference {
   const trimmed = args.rawPath.trim();
   const { path, line, column } = splitPathLineSuffix(trimmed);
-  const workspacePath = args.workspacePathOverride !== undefined
-    ? normalizeWorkspacePathOverride(args.workspacePathOverride)
-    : resolveWorkspacePathFromReference(path, args.workspaceRoot);
+  // The SDK normalizes both an omitted wire field and an explicit null to
+  // `null`, so absence cannot safely mean "authoritatively external" here.
+  // Use a non-empty override when supplied; otherwise classify the raw path.
+  const workspacePath = normalizeWorkspacePathOverride(args.workspacePathOverride)
+    ?? resolveWorkspacePathFromReference(path, args.workspaceRoot);
 
   return {
     rawPath: args.rawPath,
@@ -118,11 +129,16 @@ export function fileReferenceBasename(path: string): string {
   return segments[segments.length - 1] ?? path;
 }
 
-function normalizeWorkspacePathOverride(path: string | null): string | null {
+function normalizeWorkspacePathOverride(path: string | null | undefined): string | null {
   if (!path) {
     return null;
   }
-  return stripRelativePrefix(path.trim());
+  const trimmed = stripRelativePrefix(path.trim());
+  if (trimmed === "~" || trimmed.startsWith("~/")) {
+    return null;
+  }
+  const normalized = normalizeLexicalPath(trimmed);
+  return normalized && !normalized.startsWith("/") ? normalized : null;
 }
 
 function resolveWorkspacePathFromReference(
@@ -134,23 +150,30 @@ function resolveWorkspacePathFromReference(
     return null;
   }
 
-  const normalizedRoot = normalizeRoot(workspaceRoot);
-  if (trimmed.startsWith("/")) {
-    if (!normalizedRoot) {
-      return null;
-    }
-    if (trimmed === normalizedRoot) {
-      return null;
-    }
-    const prefix = `${normalizedRoot}/`;
-    return trimmed.startsWith(prefix) ? trimmed.slice(prefix.length) : null;
-  }
-
-  if (trimmed === "~" || trimmed.startsWith("~/") || trimmed.startsWith("../")) {
+  if (trimmed === "~" || trimmed.startsWith("~/")) {
     return null;
   }
 
-  return stripRelativePrefix(trimmed);
+  const normalizedPath = normalizeLexicalPath(trimmed);
+  if (!normalizedPath) {
+    return null;
+  }
+
+  const normalizedRoot = normalizeRoot(workspaceRoot);
+  if (normalizedPath.startsWith("/")) {
+    if (!normalizedRoot) {
+      return null;
+    }
+    if (normalizedPath === normalizedRoot) {
+      return null;
+    }
+    const prefix = normalizedRoot === "/" ? "/" : `${normalizedRoot}/`;
+    return normalizedPath.startsWith(prefix)
+      ? normalizedPath.slice(prefix.length)
+      : null;
+  }
+
+  return normalizedPath;
 }
 
 function stripRelativePrefix(path: string): string {
@@ -165,5 +188,29 @@ function normalizeRoot(root: string | null): string | null {
   if (!root) {
     return null;
   }
-  return root.endsWith("/") ? root.slice(0, -1) : root;
+  const normalized = normalizeLexicalPath(root.trim());
+  return normalized?.startsWith("/") ? normalized : null;
+}
+
+function normalizeLexicalPath(path: string): string | null {
+  const absolute = path.startsWith("/");
+  const segments: string[] = [];
+  for (const segment of path.split("/")) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      if (segments.length === 0) {
+        return null;
+      }
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+
+  if (segments.length === 0) {
+    return absolute ? "/" : null;
+  }
+  return `${absolute ? "/" : ""}${segments.join("/")}`;
 }
