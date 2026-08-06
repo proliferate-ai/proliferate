@@ -78,21 +78,8 @@ export function FileReferenceBadge({
     void actions.openPrimary();
   }, [actions, stopPropagation]);
 
-  const trigger = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="unstyled"
-      data-chat-transcript-ignore
-      data-file-reference-badge={variant}
-      data-path-kind={actions.pathKind ?? "unknown"}
-      aria-busy={actions.pathKindPending || undefined}
-      aria-disabled={!actions.canOpenPrimary}
-      title={actions.primaryUnavailableReason ?? rawPath}
-      onClick={handleClick}
-      onContextMenuCapture={onContextMenuCapture}
-      className={`${resolveBadgeClassName(variant, className)} ${!actions.canOpenPrimary ? "cursor-not-allowed opacity-60 hover:no-underline" : ""}`}
-    >
+  const contents = (
+    <>
       <span className={iconShellClassName}>
         {useExternalInlineIcon ? (
           <span
@@ -120,6 +107,39 @@ export function FileReferenceBadge({
       >
         {displayLabel}
       </span>
+    </>
+  );
+  if (!actions.canOpenPrimary) {
+    return (
+      <span
+        data-chat-transcript-ignore
+        data-file-reference-badge={variant}
+        data-file-reference-unavailable="true"
+        data-path-kind={actions.pathKind ?? "unknown"}
+        aria-busy={actions.pathKindPending || undefined}
+        title={actions.primaryUnavailableReason ?? rawPath}
+        className={resolveUnavailableBadgeClassName(variant, className)}
+      >
+        {contents}
+      </span>
+    );
+  }
+
+  const trigger = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="unstyled"
+      data-chat-transcript-ignore
+      data-file-reference-badge={variant}
+      data-path-kind={actions.pathKind ?? "unknown"}
+      aria-busy={actions.pathKindPending || undefined}
+      title={actions.primaryUnavailableReason ?? rawPath}
+      onClick={handleClick}
+      onContextMenuCapture={onContextMenuCapture}
+      className={resolveBadgeClassName(variant, className)}
+    >
+      {contents}
     </Button>
   );
 
@@ -127,7 +147,7 @@ export function FileReferenceBadge({
     <PopoverButton
       trigger={trigger}
       triggerMode="contextMenu"
-      stopPropagation
+      stopPropagation={stopPropagation}
       className={FILE_REFERENCE_MENU_CLASS}
     >
       {(close) => (
@@ -135,6 +155,24 @@ export function FileReferenceBadge({
       )}
     </PopoverButton>
   );
+}
+
+function resolveUnavailableBadgeClassName(
+  variant: FileReferenceBadgeVariant,
+  className: string,
+): string {
+  if (variant === "chip") {
+    return [
+      "inline-flex h-auto min-w-0 max-w-full cursor-default items-center gap-px rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-ui leading-none text-foreground/70 shadow-none",
+      className,
+    ].filter(Boolean).join(" ");
+  }
+
+  return [
+    "group/inline-mention m-0 inline-flex cursor-default appearance-none whitespace-normal break-words border-0 bg-transparent px-0.5 py-0 text-left align-baseline font-[inherit] font-medium text-inherit shadow-none",
+    className,
+    "!no-underline",
+  ].filter(Boolean).join(" ");
 }
 
 function resolveBadgeClassName(
@@ -153,4 +191,3 @@ function resolveBadgeClassName(
     className,
   ].filter(Boolean).join(" ");
 }
-

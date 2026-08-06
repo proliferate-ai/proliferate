@@ -27,9 +27,14 @@ function render(ui: ReactElement) {
   return testingRender(ui, { wrapper: WebProductHostWrapper });
 }
 
-const { openPrimaryMock, fileReferenceActionsCalls } = vi.hoisted(() => ({
+const {
+  openPrimaryMock,
+  fileReferenceActionsCalls,
+  fileReferenceActionState,
+} = vi.hoisted(() => ({
   openPrimaryMock: vi.fn(),
   fileReferenceActionsCalls: [] as Array<{ rawPath: string; workspacePath?: string | null }>,
+  fileReferenceActionState: { canOpenPrimary: true },
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
@@ -50,7 +55,7 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
       pathKindPending: false,
       canOpenInSidebar: true,
       canOpenExternal: true,
-      canOpenPrimary: true,
+      canOpenPrimary: fileReferenceActionState.canOpenPrimary,
       canReveal: true,
       primaryUnavailableReason: null,
       copyPath: vi.fn(),
@@ -67,11 +72,12 @@ afterEach(() => {
   cleanup();
   openPrimaryMock.mockClear();
   fileReferenceActionsCalls.length = 0;
+  fileReferenceActionState.canOpenPrimary = true;
 });
 
 describe("CollapsedActionRows read rows", () => {
 
-  it("renders read ledger rows as clickable file references", () => {
+  it("renders read ledger rows as blue, clickable file references", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),
@@ -89,6 +95,12 @@ describe("CollapsedActionRows read rows", () => {
       ?.querySelector("[data-file-reference-badge='inline']");
     const readRow = badge?.closest("[title]");
     expect(badge?.textContent).toContain("read.ts");
+    expect(badge?.tagName).toBe("BUTTON");
+    expect(badge?.getAttribute("aria-disabled")).toBeNull();
+    expect(badge?.className).toContain("text-link-foreground");
+    expect(badge?.className).toContain("hover:text-link-foreground");
+    expect(badge?.className).not.toContain("!text-inherit");
+    expect(badge?.className).not.toContain("hover:!text-inherit");
     expect(badge?.className).toContain("decoration-dotted");
     expect(badge?.className).toContain("[&>span:first-child]:hidden");
     expect(readRow?.getAttribute("title")).toContain("read.ts");
@@ -97,6 +109,30 @@ describe("CollapsedActionRows read rows", () => {
     expect(openPrimaryMock).toHaveBeenCalledTimes(1);
     expect(fileReferenceActionsCalls.find((call) => call.rawPath === "read.ts")?.workspacePath)
       .toBe("read.ts");
+  });
+
+  it("renders a read target with no primary action as plain text", () => {
+    fileReferenceActionState.canOpenPrimary = false;
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["read"]}
+        transcript={transcript}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Read files/i }));
+
+    const reference = screen.getByText("read.ts")
+      .closest("[data-file-reference-badge='inline']");
+    expect(reference?.tagName).toBe("SPAN");
+    expect(reference?.getAttribute("aria-disabled")).toBeNull();
+    expect(reference?.className).not.toContain("text-link-foreground");
+    expect(reference?.className).not.toContain("cursor-not-allowed");
+    expect(reference?.className).toContain("!no-underline");
   });
 
   it("opens raw-input fallback reads through workspace-root inference", () => {
@@ -151,7 +187,35 @@ describe("CollapsedActionRows read rows", () => {
     expect(openPrimaryMock).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps structured reads without a workspace path authoritatively external", () => {
+  it("infers a relative structured read when nullable workspace metadata is missing", () => {
+    const transcript = createTranscriptState("session-1");
+    const read = toolItem("read", "turn-1", 1, "file_read");
+    const part = read.contentParts[0];
+    if (part?.type === "file_read") {
+      part.path = "src/legacy/read.ts";
+      part.basename = "read.ts";
+      part.workspacePath = null;
+    }
+    transcript.itemsById = { read };
+
+    render(
+      <CollapsedActions
+        itemIds={["read"]}
+        transcript={transcript}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Read/i }));
+
+    const call = fileReferenceActionsCalls.find(
+      (entry) => entry.rawPath === "src/legacy/read.ts",
+    );
+    expect(call?.workspacePath).toBeUndefined();
+
+    fireEvent.click(screen.getByText("read.ts"));
+    expect(openPrimaryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("infers classification for structured reads without workspace metadata", () => {
     const transcript = createTranscriptState("session-1");
     const read = toolItem("read", "turn-1", 1, "file_read");
     const part = read.contentParts[0];
@@ -172,6 +236,6 @@ describe("CollapsedActionRows read rows", () => {
 
     const call = fileReferenceActionsCalls.find((entry) => entry.rawPath === "/etc/hosts");
     expect(call).toBeTruthy();
-    expect(call?.workspacePath).toBeNull();
+    expect(call?.workspacePath).toBeUndefined();
   });
 });

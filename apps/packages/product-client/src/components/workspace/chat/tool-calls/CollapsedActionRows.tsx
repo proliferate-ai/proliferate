@@ -75,15 +75,14 @@ function ReadRows({ item }: { item: ToolCallItem }) {
   const fileReads = item.contentParts.filter(
     (part): part is FileReadContentPart => part.type === "file_read",
   );
-  // Structured parts are server-normalized: a missing workspacePath there is
-  // an authoritative "outside the workspace" ruling (null = external-only).
-  // Raw-input fallbacks carry no such ruling, so leave workspacePath undefined
-  // and let the file-reference resolver infer it from the workspace root.
+  // The SDK collapses an omitted workspacePath and an explicit null to the same
+  // value. Preserve a non-empty normalized path, but otherwise let the shared
+  // resolver classify the raw path against the current workspace root.
   const targets = fileReads.length > 0
     ? fileReads.map((part) => ({
-      rawPath: part.workspacePath ?? part.path,
-      workspacePath: part.workspacePath ?? null,
-      displayName: part.basename || basename(part.workspacePath ?? part.path),
+      rawPath: part.workspacePath || part.path,
+      workspacePath: part.workspacePath || undefined,
+      displayName: part.basename || basename(part.workspacePath || part.path),
     }))
     : [{ ...deriveReadPathTarget(item), workspacePath: undefined }];
 
@@ -124,7 +123,7 @@ function FileActionRow({
   icon: ReactNode;
   verb: string;
   pathLabel: string;
-  /** null = authoritatively external; undefined = infer from workspace root. */
+  /** A known workspace-relative path, or absent to infer from pathLabel. */
   workspacePath: string | null | undefined;
   displayName: string;
   failed: boolean;

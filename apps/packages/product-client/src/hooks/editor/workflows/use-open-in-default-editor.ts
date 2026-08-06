@@ -34,8 +34,8 @@ function loadTargets(files: DesktopFilesBridge, pathKind: PathKind): Promise<Ope
 }
 
 interface UseOpenInDefaultEditorResult {
-  /** Open a path in the user's preferred external editor. */
-  openInDefaultEditor: (absolutePath: string) => Promise<void>;
+  /** Open a path in the preferred external target and report whether it launched. */
+  openInDefaultEditor: (absolutePath: string) => Promise<boolean>;
   /** Open a path in a specific shell target. */
   openTarget: (targetId: string, absolutePath: string) => Promise<void>;
   /** Reveal a path in Finder. */
@@ -97,9 +97,14 @@ export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDe
       }
       const list = targets ?? (await loadTargets(files, pathKind));
       const preferred = resolvePreferredOpenTarget(openableTargets(list), { defaultOpenInTargetId });
-      if (!preferred) return;
+      if (!preferred) return false;
       const { path } = splitPathLineSuffix(absolutePath);
-      await files.openTarget(preferred.id, path).catch(() => {});
+      try {
+        await files.openTarget(preferred.id, path);
+        return true;
+      } catch {
+        return false;
+      }
     },
     [files, pathKind, targets, defaultOpenInTargetId],
   );

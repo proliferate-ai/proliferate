@@ -1,6 +1,6 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { FileChangeCall } from "#product/components/workspace/chat/tool-calls/FileChangeCall";
 import { makeTestProductHost } from "#product/test/product-host-fixtures";
@@ -9,6 +9,11 @@ import { makeTestProductHost } from "#product/test/product-host-fixtures";
 // useProductHost().clipboard for its copy control, so a bare { desktop: null }
 // cast (no clipboard) crashes; makeTestProductHost supplies every capability.
 const webTestHost = makeTestProductHost({ desktop: null });
+const fileReferenceActionState = vi.hoisted(() => ({
+  canOpenInSidebar: true,
+  canOpenExternal: true,
+  canOpenPrimary: true,
+}));
 
 function renderToStaticMarkup(ui: ReactElement) {
   return renderReactToStaticMarkup(
@@ -27,8 +32,9 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
       workspacePath: rawPath,
     },
     openTargets: [],
-    canOpenInSidebar: true,
-    canOpenExternal: true,
+    canOpenInSidebar: fileReferenceActionState.canOpenInSidebar,
+    canOpenExternal: fileReferenceActionState.canOpenExternal,
+    canOpenPrimary: fileReferenceActionState.canOpenPrimary,
     copyPath: vi.fn(),
     openInSidebar: vi.fn(),
     openDefault: vi.fn(),
@@ -37,6 +43,12 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
     reveal: vi.fn(),
   }),
 }));
+
+afterEach(() => {
+  fileReferenceActionState.canOpenInSidebar = true;
+  fileReferenceActionState.canOpenExternal = true;
+  fileReferenceActionState.canOpenPrimary = true;
+});
 
 describe("FileChangeCall", () => {
   it("renders expanded edit diffs as file cards without an aggregate files-changed header", () => {
@@ -106,5 +118,25 @@ describe("FileChangeCall", () => {
 
     expect(html).toContain("Too large to render inline");
     expect(html).not.toContain("overflow-x-auto overflow-y-auto");
+  });
+
+  it("keeps a retryable unresolved file path clickable", () => {
+    fileReferenceActionState.canOpenInSidebar = false;
+    fileReferenceActionState.canOpenExternal = false;
+    fileReferenceActionState.canOpenPrimary = true;
+
+    const html = renderToStaticMarkup(
+      createElement(FileChangeCall, {
+        operation: "edit",
+        path: "README.md",
+        basename: "README.md",
+        additions: 1,
+        deletions: 1,
+        patch: "@@ -1 +1 @@\n-old\n+new",
+        status: "completed",
+      }),
+    );
+
+    expect(html).toContain("select-text [direction:rtl]");
   });
 });
