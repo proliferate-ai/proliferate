@@ -57,7 +57,10 @@ against this contract; the next contract is the legacy Web replacement (see
 - Parent architecture: [`../README.md`](../README.md)
 - Application-entry contract: [`../entry-contract.md`](../entry-contract.md)
 - Move ledger: `../move-ledger.md` (consumed and removed after the move
-  landed; see Git history)
+  landed; see Git history). The one-shot ledger tooling named in the evidence
+  tables below (`scripts/check-product-client-move-ledger*.py`,
+  `scripts/migrate-desktop-product-client.mjs`) was removed with it — the
+  command results here are historical acceptance evidence, not runnable steps.
 - Approved contract:
   `04 - Move the Desktop Product into ProductClient.md` (founder-approved).
 
