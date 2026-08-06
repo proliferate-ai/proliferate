@@ -33,7 +33,7 @@ Use this map before creating a new spec:
 | Browsers | No dedicated browser system spec yet. Product MCP ownership is in [Product Agent Features](../../platforms/product/agent-features/README.md); runtime/domain ownership remains under [AnyHarness](../../structures/anyharness/README.md). Create a browser system spec before adding user-visible browser workflows. |
 | Terminals | [workspaces/terminals.md](workspaces/terminals.md) owns terminal pane UX and the creation grid contract. Runtime ownership remains under [AnyHarness](../../structures/anyharness/README.md). |
 | Computer Use | No dedicated computer-use system spec yet. Product MCP ownership is in [Product Agent Features](../../platforms/product/agent-features/README.md); create a system spec before adding user-visible Computer Use workflow, permissions, or QA behavior. |
-| Plugins | Runtime/config ownership lives in [MCP, Skills, and Plugins](../../platforms/product/mcp-skills.md). Create a plugins system spec only for user-facing catalog/install/manage workflows that exceed the platform contract. |
+| Plugins | No current platform document. Create a plugins system spec only for user-facing catalog/install/manage workflows that exceed today's implicit plugin-expansion behavior. |
 | Product MCP Structure | Covered by [Product MCP Servers](../../platforms/product/agent-features/servers.md) and [Product MCP Definitions](../../platforms/product/agent-features/definitions/README.md). |
 
 ## Agent Feature Coverage
@@ -44,10 +44,10 @@ new system spec or Product MCP definition:
 | Agent feature | Current owner |
 | --- | --- |
 | Browser | No concrete system spec or Product MCP definition yet; create one before user-visible browser workflow or permission changes. |
-| Artifacts | [agents/cowork-artifacts.md](agents/cowork-artifacts.md) and [Artifacts MCP](../../platforms/product/agent-features/definitions/artifacts.md). |
+| Artifacts | [agents/cowork-artifacts.md](agents/cowork-artifacts.md). |
 | Sub Agents | [agents/delegated-work.md](agents/delegated-work.md) and [Subagents MCP](../../platforms/product/agent-features/definitions/subagents.md). |
 | Computer Use | No concrete system spec or Product MCP definition yet; create one before user-visible Computer Use workflow, permission, or QA changes. |
-| Plugins | [MCP, Skills, and Plugins](../../platforms/product/mcp-skills.md) owns runtime/config expansion; create a system spec only for catalog/install/manage UX. |
+| Plugins | No current platform document owns runtime/config expansion; create a system spec only for catalog/install/manage UX. |
 
 ## Adding A Product System Spec
 

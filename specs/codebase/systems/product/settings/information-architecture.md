@@ -7,7 +7,7 @@ Current gap: the managed-Target UI described here is not implemented.
 Date: 2026-05-20.
 
 Depends on: [`sandbox-lifecycle.md`](../../../platforms/product/sandbox-lifecycle.md),
-[`mcp-skills.md`](../../../platforms/product/mcp-skills.md), and
+`mcp-skills.md` (document retired; no owning platform document replaces it), and
 [`agent-auth.md`](../../../platforms/product/agent-auth.md).
 
 Staleness note (2026-07-25): this document predates the Bifrost removal.
@@ -131,7 +131,7 @@ Hard:
   the `sandbox_profile` / `sandbox_profile_target_state` schema this pane
   consumes currently has no owning platform document): Compute pane
   consumes `sandbox_profile` and `sandbox_profile_target_state`.
-- [`mcp-skills.md`](../../../platforms/product/mcp-skills.md): Plugins page
+- `mcp-skills.md` (document retired): Plugins page
   rows show `enabled`, `public_to_org`, `auth_status`,
   `runtime_apply_status`.
 - [`agent-auth.md`](../../../platforms/product/agent-auth.md): this spec's

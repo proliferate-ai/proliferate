@@ -17,7 +17,6 @@ expectations, but it is not the owner of a full user workflow.
 | Design system | The whole visual system in one document: the closed type ramp and control weight, the color role model, elevation, spacing/containers, radii, motion, icon tiers and layering, plus the token-authority and gate model, change control for moving a value, and the component library (tier model, governance rules, sanctioned index, how a component enters it). | [design-system.md](design-system.md) |
 | Cloud workspace provisioning | Repository-environment materialization, synchronous Cloud workspace creation, direct AnyHarness worktree creation, and Cloud/runtime truth boundaries. | [workspace-provisioning.md](workspace-provisioning.md) (slimming to create-row choreography, materialization ledger, and workspace-kind rules as the new specs absorb the rest) |
 | MCP runtime | AnyHarness MCP concepts, user bindings, session extensions, product MCP serving, and elicitation boundaries. | [mcp-runtime.md](mcp-runtime.md) |
-| MCP + skills + plugins flow | Cloud configured items for MCPs, skills, plugins, runtime manifests, worker materialization, and plugin-to-runtime expansion rules. | [mcp-skills.md](mcp-skills.md) |
 | Product MCP structure | Product-owned MCP server pattern, static definitions, binding summaries, and concrete agent-feature MCP definitions. | [agent-features/servers.md](agent-features/servers.md), [agent-features/definitions/README.md](agent-features/definitions/README.md) |
 | Agent auth platform | Harness auth source selection (`gateway`/`api_key` selections, native = no selection), key vault and typed provider configs, `state.json` delivery, per-harness application recipes, and fail-closed launch behavior. | [agent-auth.md](agent-auth.md) (Status: target) |
 | Integrations + runtime worker auth | Integration definitions/accounts/policies, OAuth flows, the cloud integration MCP gateway and its virtual tools, and the runtime worker enrollment/heartbeat/token model. | [integrations.md](integrations.md) |
@@ -35,9 +34,6 @@ expectations, but it is not the owner of a full user workflow.
   Product MCP definitions describe capabilities consumed by multiple systems,
   while
   [mcp-runtime.md](mcp-runtime.md) owns the generic AnyHarness runtime.
-- "Plugins" are not a runtime platform inside AnyHarness. Plugins expand into
-  configured MCP and skill items before launch; [mcp-skills.md](mcp-skills.md)
-  is the owning platform.
 
 ## Adding A Product Platform Spec
 
