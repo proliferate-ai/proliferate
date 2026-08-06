@@ -560,6 +560,22 @@ After both merge: valve debt = the 7 stragglers (PR 7/7b) + materialization;
 live/sessions returns to zero non-test fetches; SQL debt = 2 engine-invisible
 cfg(test) rows.
 
+3. **#1670** `codex/anyharness-workspaces-one-entry` @ e2b829fcd — PR 8,
+   WorkspaceService deleted (80 lines, all call sites verified dead
+   except mobility's `load_workspace`, repointed at the runtime).
+   Design call adopted: mobility gains the background branch-refresh —
+   review proved it safe THREE independent ways (mobility never reads
+   DB current_branch; the refresh was already scheduled on these
+   workspaces via assert_workspace_not_retired; the sqlite Mutex means
+   refresh re-read and destroy delete can't interleave). Review CLEAN
+   (2 P2s closed: body disclosure fixed; deleted-row SkippedMissing
+   no-op guard now permanently pinned by
+   `branch_refresh_skips_a_row_deleted_after_the_snapshot_was_taken`,
+   landed as a test-only commit by the reviewer). Pins: app/mod.rs
+   693→690, mobility/service.rs 851 unchanged. PR 9 stacks on this
+   branch and needs the usual main-sync retarget after #1670
+   squash-merges.
+
 Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
 the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
 facade-laundered live power; replaced with a plain `runtime_home: PathBuf`
