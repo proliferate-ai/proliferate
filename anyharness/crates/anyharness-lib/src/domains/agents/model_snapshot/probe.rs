@@ -34,6 +34,8 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::domains::agents::model::AgentKind;
+use crate::domains::agents::readiness::service::resolve_agent_unrouted;
+use crate::domains::agents::registry::built_in_registry;
 use crate::domains::agents::route_auth::{
     self, GatewayModelPlan, ProbeAuthMaterial, RouteAuthError,
 };
@@ -123,6 +125,21 @@ impl ProbeRunner for AcpProbeRunner {
                 detail: format!("unknown harness kind '{}'", request.harness_kind),
             });
         };
+        // Resolved here, not inside `probe_agent`: `live/` never fetches from a
+        // domain service (LIVE_DOMAIN_STORE_IMPORT), so the fact crosses the
+        // live boundary as a value on `ProbeOptions`, not as an import.
+        // Unrouted: artifact paths only; a route supplies credentials, not
+        // binaries — materialize_for_probe below layers those on separately.
+        let registry = built_in_registry();
+        let Some(descriptor) = registry
+            .iter()
+            .find(|descriptor| descriptor.kind == agent_kind)
+        else {
+            return Err(ProbeError::Failed {
+                detail: format!("agent kind {} not in registry", agent_kind.as_str()),
+            });
+        };
+        let resolved = resolve_agent_unrouted(descriptor, &request.runtime_home);
 
         let cancel = CancellationToken::new();
         // Dropping the caller's future fires the token, so a cancelled probe still
@@ -158,6 +175,7 @@ impl ProbeRunner for AcpProbeRunner {
                     )?;
                     let options = ProbeOptions {
                         agent_kind,
+                        resolved,
                         auth_context: COMPOSED_AUTH_CONTEXT_LABEL.to_string(),
                         auth_env: materialized.env_set.clone(),
                         auth_env_remove: materialized.env_remove.clone(),

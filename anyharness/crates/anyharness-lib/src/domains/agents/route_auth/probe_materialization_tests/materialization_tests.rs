@@ -462,8 +462,16 @@ fn claude_removals_reach_the_spawn_env_for_gateway_and_api_key_routes() {
 
     // The removals actually win at spawn: the driver applies route_auth_remove
     // last, so an ambient/composed value cannot survive.
+    let registry = crate::domains::agents::registry::built_in_registry();
+    let descriptor = registry
+        .iter()
+        .find(|descriptor| descriptor.kind == crate::domains::agents::model::AgentKind::Claude)
+        .expect("claude is in the built-in registry");
+    let resolved =
+        crate::domains::agents::readiness::service::resolve_agent_unrouted(descriptor, home.path());
     let options = crate::live::sessions::probe::ProbeOptions {
         agent_kind: crate::domains::agents::model::AgentKind::Claude,
+        resolved,
         auth_context: "composed".to_string(),
         auth_env: materialized.env_set.clone(),
         auth_env_remove: materialized.env_remove.clone(),

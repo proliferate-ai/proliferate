@@ -74,6 +74,29 @@ impl PlanStore {
         })
     }
 
+    /// Reads a plan row inside a caller-owned transaction. Distinct from
+    /// `find_by_id` (which opens its own connection): callers that are
+    /// already inside a `with_tx_anyhow` closure — e.g. the decision-update
+    /// paths in `service.rs` — read the current row before writing the
+    /// updated one, in the same transaction.
+    pub fn find_by_id_in_tx(tx: &Connection, plan_id: &str) -> rusqlite::Result<PlanRecord> {
+        tx.query_row("SELECT * FROM plans WHERE id = ?1", [plan_id], map_plan)
+    }
+
+    /// Whether a plan has a native interaction link, read inside a
+    /// caller-owned transaction alongside `find_by_id_in_tx`.
+    pub fn has_interaction_link_in_tx(
+        tx: &Connection,
+        plan_id: &str,
+    ) -> rusqlite::Result<bool> {
+        tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM plan_interaction_links WHERE plan_id = ?1)",
+            [plan_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|value| value != 0)
+    }
+
     pub fn find_by_source_key(
         tx: &Connection,
         source_session_id: &str,

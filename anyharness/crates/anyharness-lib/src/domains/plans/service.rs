@@ -243,16 +243,12 @@ impl PlanService {
         self.store
             .with_tx_anyhow(|tx| {
                 (|| -> Result<(PlanRecord, Vec<SessionEventEnvelope>), PlanDecisionTxError> {
-                    let plan = tx
-                        .query_row(
-                            "SELECT * FROM plans WHERE id = ?1",
-                            [plan_id],
-                            super::store::map_plan,
-                        )
-                        .map_err(|error| match error {
+                    let plan = PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| {
+                        match error {
                             rusqlite::Error::QueryReturnedNoRows => PlanDecisionTxError::NotFound,
                             other => PlanDecisionTxError::Sqlite(other),
-                        })?;
+                        }
+                    })?;
                     if plan.decision_version != expected_version {
                         return Err(PlanDecisionTxError::StaleVersion);
                     }
@@ -262,7 +258,7 @@ impl PlanService {
                     let native_state = initial_native_state_for_decision(
                         &plan,
                         &decision,
-                        plan_has_interaction_link(tx, &plan.id)?,
+                        PlanStore::has_interaction_link_in_tx(tx, &plan.id)?,
                         false,
                     );
                     let next = PlanStore::update_decision(
@@ -301,16 +297,12 @@ impl PlanService {
         self.store
             .with_tx_anyhow(|tx| {
                 (|| -> Result<(PlanRecord, Vec<SessionEventEnvelope>), PlanDecisionTxError> {
-                    let plan = tx
-                        .query_row(
-                            "SELECT * FROM plans WHERE id = ?1",
-                            [plan_id],
-                            super::store::map_plan,
-                        )
-                        .map_err(|error| match error {
+                    let plan = PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| {
+                        match error {
                             rusqlite::Error::QueryReturnedNoRows => PlanDecisionTxError::NotFound,
                             other => PlanDecisionTxError::Sqlite(other),
-                        })?;
+                        }
+                    })?;
                     if plan.decision_version != expected_version {
                         return Err(PlanDecisionTxError::StaleVersion);
                     }
@@ -323,7 +315,7 @@ impl PlanService {
                     let native_state = initial_native_state_for_decision(
                         &plan,
                         &decision,
-                        plan_has_interaction_link(tx, &plan.id)?,
+                        PlanStore::has_interaction_link_in_tx(tx, &plan.id)?,
                         true,
                     );
                     let next = PlanStore::update_decision(
@@ -360,16 +352,12 @@ impl PlanService {
         self.store
             .with_tx_anyhow(|tx| {
                 (|| -> Result<(PlanRecord, Vec<SessionEventEnvelope>), PlanDecisionTxError> {
-                    let plan = tx
-                        .query_row(
-                            "SELECT * FROM plans WHERE id = ?1",
-                            [plan_id],
-                            super::store::map_plan,
-                        )
-                        .map_err(|error| match error {
+                    let plan = PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| {
+                        match error {
                             rusqlite::Error::QueryReturnedNoRows => PlanDecisionTxError::NotFound,
                             other => PlanDecisionTxError::Sqlite(other),
-                        })?;
+                        }
+                    })?;
                     if plan.native_resolution_state == native_state {
                         return Ok((plan, Vec::new()));
                     }
@@ -486,15 +474,6 @@ fn map_decision_tx_error(error: anyhow::Error) -> PlanDecisionError {
         Ok(PlanDecisionTxError::Sqlite(error)) => PlanDecisionError::Store(error.into()),
         Err(error) => PlanDecisionError::Store(error),
     }
-}
-
-fn plan_has_interaction_link(tx: &rusqlite::Connection, plan_id: &str) -> rusqlite::Result<bool> {
-    tx.query_row(
-        "SELECT EXISTS(SELECT 1 FROM plan_interaction_links WHERE plan_id = ?1)",
-        [plan_id],
-        |row| row.get::<_, i64>(0),
-    )
-    .map(|value| value != 0)
 }
 
 fn initial_native_state_for_decision(

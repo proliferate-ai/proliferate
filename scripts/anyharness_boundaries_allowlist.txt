@@ -65,9 +65,19 @@ DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/retire
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/setup_runtime.rs 1 workspace setup holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)
 
 # Rule: live/** never fetches from domain stores/services.
-# 7 files, 19 occurrences.
+# 6 files, 18 occurrences.
+#
+# live/sessions/probe.rs dropped out entirely (grid plan PR 7): its
+# resolve_agent_unrouted call moved to the callers (AcpProbeRunner::run in
+# domains/agents/model_snapshot/probe.rs, catalog_probe.rs's CLI command,
+# and the probe-materialization test), which now resolve the agent and pass
+# the already-resolved fact in on ProbeOptions.resolved. Passing the fact in
+# at the call boundary was the smaller diff than a capability trait: probe_agent
+# is a standalone async fn (not an actor with launch-time capability
+# injection), ProbeOptions already carried a caller-supplied runtime_home for
+# the same install-artifact question, and no ActorCapabilities-style seam
+# reaches live::sessions::probe today.
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/sessions/background_work/mod.rs 2 both inside the inline cfg(test) mod the engine cannot see (1 import + 1 SessionStore::new in a fixture); target = none, engine-invisible cfg boundary
-LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 1 probe reaches domain service (resolve_agent_unrouted); target = capability trait or relocation (grid plan PR 7)
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs 5 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/setup_process.rs 3 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/driver/pty.rs 3 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
@@ -84,24 +94,20 @@ API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.
 POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workflows/control/policy.rs 1 store-holding policy file: imports WorkflowRunStore at :8 and keeps it as a field, so the decision reads the DB instead of taking facts; target = pass the controlling run id in, or rename to a gate (cleanup PR TBD)
 
 # Rule: SQL in domains/** lives in the store.
-# 6 files, 38 occurrences.
+# 2 files, 2 occurrences.
 #
-# Counts rose from 39 with no code change: the rule now also reads the heads of
-# SQL statements split across lines (`"UPDATE sessions` / `SET col = ?1`) and
-# conflict-resolving inserts (`INSERT OR IGNORE INTO`), which the two-keywords-on-
-# one-line patterns could not see. Most of the codebase's UPDATEs are split, so
-# the old numbers understated this debt substantially. workspaces/access_store.rs,
-# workspaces/retention_policy.rs, and workspaces/inventory.rs dropped out entirely
-# (grid plan PR 8c): their SQL folded into workspaces/store/** (access.rs,
-# retention.rs), which is exempt as store code, and inventory.rs's remaining SQL
-# was in a test fixture now routed through the shared repo_roots test_support
-# helper. workspaces/access_gate.rs dropped by one for the same reason: its
-# INSERT INTO repo_roots seed moved to that shared helper, leaving only the
-# DROP TABLE line the engine cannot see past.
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/activity/feeds.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/plans/service.rs 4 plan service queries plans/plan_interaction_links inline; target = plans store methods (grid plan PR 8b)
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/sessions/links/completions.rs 30 session-link completions embed 30 SQL lines outside the store (19 previously counted + 11 now visible: 4 INSERT OR IGNORE heads, 3 split UPDATE heads, 3 SET clauses, 1 split SELECT head); target = sessions/links store (grid plan PR 8a)
+# activity/feeds.rs, plans/decision_op.rs, plans/service.rs, and
+# sessions/links/completions.rs dropped out entirely (grid plan PR 5b):
+# feeds.rs's and decision_op.rs's inline-test INSERT INTO sessions rows now
+# route through the shared SessionStore::insert (same reasoning as the
+# repo_roots test_support helper below), plans/service.rs's plan/
+# plan_interaction_links reads moved to PlanStore::find_by_id_in_tx /
+# has_interaction_link_in_tx (called inside the caller's existing
+# transaction), and sessions/links/completions.rs's LinkCompletionStore
+# physically relocated to domains/sessions/store/link_completions.rs (a
+# `links/completions.rs` re-export shim keeps every external import path
+# unchanged). Remaining two rows are both engine-invisible cfg(test)
+# boundaries that later PRs still own.
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/workspace_materialization/test_support.rs 1 format!-built COUNT query in a test-support file (not excluded by should_skip); target = none, test fixture
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 1 inside the inline cfg(test) mod the engine cannot see (DROP TABLE workspace_access_modes); the repo_roots INSERT that used to sit alongside it moved to the shared repo_roots test_support helper (grid plan PR 8c); target = none, engine-invisible cfg boundary
 

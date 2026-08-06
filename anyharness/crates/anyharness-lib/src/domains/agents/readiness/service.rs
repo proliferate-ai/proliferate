@@ -57,6 +57,29 @@ pub fn resolve_agent_unrouted(
     resolve_agent_in_scope(descriptor, runtime_home, CredentialEnvScope::HostAmbient)
 }
 
+/// [`resolve_agent_unrouted`], but looking the descriptor up by [`AgentKind`]
+/// against the built-in registry first. For callers that only have the kind
+/// (every `live::sessions::probe::ProbeOptions` builder: `AcpProbeRunner::run`,
+/// the `catalog-probe` CLI, and probe-materialization tests), so the
+/// registry-lookup-then-resolve pair — required at each of those call sites
+/// once `live/` stopped doing it internally (grid plan PR 7) — has one
+/// implementation instead of three.
+pub fn resolve_agent_unrouted_by_kind(
+    kind: &AgentKind,
+    runtime_home: &Path,
+) -> Result<ResolvedAgent, AgentKindNotRegisteredError> {
+    let registry = crate::domains::agents::registry::built_in_registry();
+    let descriptor = registry
+        .iter()
+        .find(|descriptor| &descriptor.kind == kind)
+        .ok_or_else(|| AgentKindNotRegisteredError(kind.as_str().to_string()))?;
+    Ok(resolve_agent_unrouted(descriptor, runtime_home))
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("agent kind {0} not in registry")]
+pub struct AgentKindNotRegisteredError(String);
+
 /// Workspace-scoped readiness: the composed workspace env, never the host's
 /// ambient env (agent-distribution.md's ambient law). No route layered on — use
 /// [`resolve_launch_agent`] for the launch answer.

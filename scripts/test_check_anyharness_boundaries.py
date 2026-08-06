@@ -1221,14 +1221,24 @@ class ShippedAllowlistTest(unittest.TestCase):
         prefix = "anyharness/crates/anyharness-lib/src"
 
         for rule_id, path, lineno, why in [
-            # Multi-line embedded SQL: the SELECT head with FROM on the next line.
-            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 128,
-             "split SELECT head"),
-            # A split UPDATE and its SET clause.
-            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 117,
-             "split UPDATE head"),
-            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 118,
-             "SET clause line"),
+            # Multi-line embedded SQL: a format!-built SELECT head, FROM on the
+            # same interpolated line but still caught by the bare-SELECT-head
+            # pattern (not just the single-line SELECT...FROM pattern), so this
+            # anchor stays meaningful even though the head and FROM did not
+            # split across lines here. Repointed from
+            # sessions/links/completions.rs (grid plan PR 5b folded that file's
+            # SQL into domains/sessions/store/link_completions.rs, which is
+            # exempt as store code); this and the DROP TABLE anchor below are
+            # now the only two real DOMAIN_SQL_OUTSIDE_STORE offenders left in
+            # the repo, both engine-invisible cfg(test) boundaries later PRs
+            # still own.
+            ("DOMAIN_SQL_OUTSIDE_STORE",
+             "domains/workflows/workspace_materialization/test_support.rs", 159,
+             "format!-built SELECT COUNT(*) head"),
+            # A DROP TABLE line, inside a cfg(test) mod the engine cannot see
+            # past — the checker still flags the line itself.
+            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/workspaces/access_gate.rs", 324,
+             "DROP TABLE line"),
             # A `state.*_store` field access, which carries no store type on the
             # line for the import pass to see. This particular one is benign (an
             # in-memory health snapshot), but the shape is what the rule watches.
