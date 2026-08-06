@@ -1,11 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import {
-  BillingSettingsSurface,
-  type BillingCheckoutReturnState,
-} from "@proliferate/product-surfaces/settings/BillingSettingsSurface";
+import { BillingSettingsSurface } from "#product/components/settings/panes/billing/BillingSettingsSurface";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 
 import { PROLIFERATE_PRICING_URL } from "#product/config/capabilities";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
@@ -16,6 +13,7 @@ import {
   buildSettingsHref,
   type SettingsFocus,
 } from "#product/lib/domain/settings/navigation";
+import type { BillingCheckoutReturnState } from "#product/lib/domain/settings/billing-settings-presentation";
 
 export function BillingPane({ focus = {} }: { focus?: SettingsFocus }) {
   const navigate = useNavigate();

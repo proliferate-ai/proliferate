@@ -1,9 +1,9 @@
 import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sdk";
 import { useMemo, useState } from "react";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Input } from "#product/primitives/Input";
+import { Textarea } from "#product/primitives/Textarea";
+import { Button } from "#product/primitives/Button";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import { useActivePendingInteractionState } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
 import { useHeldInteractionPayload } from "#product/hooks/chat/ui/use-composer-dock-card-presence";
 import { useChatUserInputActions } from "#product/hooks/chat/workflows/use-chat-user-input-actions";

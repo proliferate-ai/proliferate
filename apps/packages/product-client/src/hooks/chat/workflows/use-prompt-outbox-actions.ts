@@ -4,7 +4,7 @@ import {
   canCancelPromptOutboxEntryLocally,
   canDismissPromptOutboxEntry,
   canRetryPromptOutboxEntry,
-} from "@proliferate/product-domain/sessions/intents/session-intent-actions";
+} from "#product/domain/sessions/intents/session-intent-actions";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";

@@ -16,7 +16,6 @@
     "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
     "@proliferate/product-client": "workspace:*",
-    "@proliferate/product-domain": "workspace:*",
     "@sentry/react": "^10.67.0",
     "@tanstack/react-query": "^5.101.4",
     "posthog-js": "^1.386.8",

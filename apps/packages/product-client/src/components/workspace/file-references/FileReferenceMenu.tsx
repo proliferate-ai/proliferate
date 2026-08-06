@@ -1,5 +1,5 @@
 import { FilePathContextMenuContent } from "#product/components/workspace/open-target/FilePathContextMenuContent";
-import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
 import type { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 
 type FileReferenceActions = ReturnType<typeof useFileReferenceActions>;

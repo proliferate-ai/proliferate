@@ -1,0 +1,41 @@
+import { type ReactNode } from "react";
+import { PageContentFrame } from "#product/primitives/patterns/PageContentFrame";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+
+interface ProductPageShellProps {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  maxWidthClassName?: string;
+  telemetryBlocked?: boolean;
+}
+
+export function ProductPageShell({
+  title,
+  description,
+  actions,
+  children,
+  maxWidthClassName = "max-w-3xl",
+  telemetryBlocked = false,
+}: ProductPageShellProps) {
+  const shell = (
+    <PageContentFrame
+      maxWidthClassName={maxWidthClassName}
+      stickyTitle={typeof title === "string" ? title : undefined}
+      header={<PageHeader title={title} description={description} actions={actions} className="border-b-0 px-0 py-0 sm:px-0 sm:py-0" />}
+    >
+      {children}
+    </PageContentFrame>
+  );
+
+  if (!telemetryBlocked) {
+    return shell;
+  }
+
+  return (
+    <div className="contents" data-telemetry-block>
+      {shell}
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 /**
  * Quiet empty/placeholder state for the review document. reference-style: plain

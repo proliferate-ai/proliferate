@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { resolveSessionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionSidebarActivityState } from "#product/domain/sessions/activity";
 import type { DesktopNativeUiBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useShallow } from "zustand/react/shallow";
 import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";

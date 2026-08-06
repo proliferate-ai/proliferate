@@ -10,12 +10,12 @@ import {
   outboxEntryToPendingPromptEntry,
   projectPendingPromptsWithSessionIntents,
   queuedOutboxEntriesForSession,
-} from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
+} from "#product/domain/sessions/intents/session-intent-selectors";
 import type {
   PromptOutboxEntry,
   SessionIntent,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
-import { sessionIntentsForSession } from "@proliferate/product-domain/sessions/intents/session-intent-state";
+} from "#product/domain/sessions/intents/session-intent-model";
+import { sessionIntentsForSession } from "#product/domain/sessions/intents/session-intent-state";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { parsePermissionOptionActions, type PermissionOptionAction } from "#product/lib/domain/chat/composer/chat-input-helpers";

@@ -3,8 +3,10 @@ import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { useTurnCurrentFilePatch } from "#product/hooks/chat/cache/use-turn-current-file-diffs";
 import { useLazyDiffFileLines } from "#product/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { GitPanelReviewFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";
-import { CircleAlert, FileCode, FileIcon, RefreshCw } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { FileCode, FileIcon } from "#product/primitives/icons/workspace";
+import { RefreshCw } from "#product/primitives/icons/platform";
+import { Button } from "#product/primitives/Button";
 import { TurnDiffFileRow } from "#product/components/workspace/chat/transcript/TurnDiffFileRow";
 
 const TURN_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";

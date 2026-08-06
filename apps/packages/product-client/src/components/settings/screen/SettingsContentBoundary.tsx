@@ -3,7 +3,7 @@ import type { ErrorContext } from "@proliferate/product-client/host/product-host
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import type { SettingsSection } from "#product/config/settings";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 interface SettingsContentBoundaryProps {
   section: SettingsSection;

@@ -10,7 +10,7 @@ import {
 import type {
   CloudWorkOwnerFilter,
   CloudWorkSort,
-} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+} from "@proliferate/product-client/internal/domain/workspaces/cloud-work-inventory";
 
 import {
   MOBILE_WORK_OWNER_OPTIONS,

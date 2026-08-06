@@ -4,7 +4,7 @@ import type {
   CloudWorkOwnerFilter,
   CloudWorkSort,
   RecentWorkRuntimeLocation,
-} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+} from "@proliferate/product-client/internal/domain/workspaces/cloud-work-inventory";
 
 import type { MobileWorkItem } from "../derived/use-mobile-work-inventory";
 import {

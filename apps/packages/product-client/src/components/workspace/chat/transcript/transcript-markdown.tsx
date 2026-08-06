@@ -3,9 +3,9 @@ import {
   type MarkdownCodeBlockRenderInput,
   type MarkdownInlineCodeRenderInput,
   type MarkdownLinkRenderInput,
-} from "@proliferate/product-ui/chat/transcript/MarkdownBody";
-import { CodeBlock } from "@proliferate/product-ui/code/CodeBlock";
-import { isExternalHttpLink } from "@proliferate/product-ui/chat/transcript/ProviderLinkMention";
+} from "#product/components/workspace/chat/transcript/MarkdownBody";
+import { CodeBlock } from "#product/components/content/ui/CodeBlock";
+import { isExternalHttpLink } from "#product/components/workspace/chat/transcript/ProviderLinkMention";
 import { FilePathLink } from "#product/components/content/ui/FilePathLink";
 import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
 import {
@@ -15,11 +15,11 @@ import {
 } from "#product/lib/domain/files/path-detection";
 
 /**
- * Desktop renderers injected into the product-ui transcript markdown
+ * ProductClient renderers injected into the shared transcript markdown
  * (AssistantMessage and plan cards). File-like link destinations and
  * path-like inline code render as FilePathLink mentions that open the file
  * in the workspace viewer; fenced code renders shiki-highlighted HTML inside
- * the shared product-ui code block shell.
+ * the shared ProductClient code block shell.
  */
 export function renderTranscriptLink({
   href,

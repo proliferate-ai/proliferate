@@ -1,16 +1,14 @@
 import { useState, type ReactNode } from "react";
-import { SkeletonBlock } from "#product/components/feedback/Skeleton";
-import {
-  CircleAlert,
-  Clock,
-  MessageSquare,
-  Spinner,
-} from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { Clock } from "#product/primitives/icons/core";
+import { MessageSquare } from "#product/primitives/icons/product";
+import { Spinner } from "#product/primitives/Spinner";
+import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import {
   DotCellLoader,
   type DotCellLoaderVariant,
-} from "@proliferate/ui/primitives/DotCellLoader";
+} from "#product/primitives/DotCellLoader";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 import type {

@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
-import { GitHub, Settings, SlidersHorizontal, Spinner, X } from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { Button } from "#product/primitives/Button";
+import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
+import { GitHub } from "#product/primitives/icons/platform";
+import { Settings, SlidersHorizontal, X } from "#product/primitives/icons/core";
+import { Spinner } from "#product/primitives/Spinner";
+import { ProviderIcon } from "#product/primitives/icons/provider-icons";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import type {
   HomeModelProbeCardState,
@@ -25,7 +27,7 @@ function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
 
 /**
  * Onboarding card (UX spec §10, owner rev 2026-07-01: cards, not rows):
- * side-by-side tile — card surface (bg-card, 12px radius, 1px border),
+ * side-by-side tile — page-tone surface, 20px radius, hairline ring,
  * icon row on top with trailing accessories + hover dismiss, then
  * title 13/500 and description 12px muted below.
  */
@@ -49,7 +51,7 @@ function OnboardingCard({
   selectLabel: string;
 }) {
   return (
-    <div className="group relative flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:bg-hover active:bg-active">
+    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy transition-colors hover:bg-hover active:bg-active">
       {onSelect ? (
         <Button
           type="button"
@@ -58,11 +60,11 @@ function OnboardingCard({
           loading={loading}
           aria-label={selectLabel}
           onClick={onSelect}
-          className="absolute inset-0 z-0 rounded-xl"
+          className="absolute inset-0 z-0 rounded-composer"
         />
       ) : null}
       <span className={`pointer-events-none z-10 flex items-center gap-1.5 ${onDismiss ? "pr-9" : ""}`}>
-        <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+        <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground [&_svg]:icon-control">
           {icon}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -82,8 +84,8 @@ function OnboardingCard({
           <X />
         </RowActionIconButton>
       ) : null}
-      <span className="pointer-events-none z-10 flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-ui font-medium text-foreground">
+      <span className="pointer-events-none z-10 mt-auto flex min-h-10 min-w-0 flex-col justify-end gap-0.5">
+        <span className="truncate text-body font-medium text-foreground">
           {title}
         </span>
         {description ? (
@@ -226,7 +228,7 @@ export function HomeOnboardingCards({
   const visibleCards = cards.slice(0, 3 - reservedSlots);
 
   return (
-    <div className="mt-4 grid w-full grid-cols-1 gap-2 empty:hidden sm:grid-cols-3">
+    <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3 empty:hidden">
       {hasAuthSetupCard && authSetup ? <AuthSetupCard state={authSetup} /> : null}
       {visibleCards.map((card) => (
         <OnboardingCard

@@ -1,4 +1,4 @@
-import { Folder } from "@proliferate/ui/icons";
+import { Folder } from "#product/primitives/icons/workspace";
 import { WORKSPACE_ARRIVAL_LABELS } from "#product/copy/workspaces/workspace-arrival-copy";
 import { ChatSurfaceCard } from "#product/components/workspace/chat/surface/ChatSurfaceCard";
 

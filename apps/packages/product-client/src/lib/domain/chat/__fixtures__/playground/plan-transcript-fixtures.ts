@@ -1,4 +1,4 @@
-import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import type { PromptDisplayPlanPart } from "#product/domain/chats/composer/prompt-display-parts";
 
 export const CLAUDE_PLAN_SHORT = `# Tighten onboarding copy
 

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type {
   PromptOutboxEntry,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
+} from "#product/domain/sessions/intents/session-intent-model";
 
 export interface ChatPromptRecovery {
   id: string;

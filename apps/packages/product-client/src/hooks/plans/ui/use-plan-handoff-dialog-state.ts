@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 
 export function usePlanHandoffDialogState() {
   const [plan, setPlan] = useState<PromptPlanAttachmentDescriptor | null>(null);

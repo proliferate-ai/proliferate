@@ -1,6 +1,7 @@
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowLeft, RefreshCw } from "@proliferate/ui/icons";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { Button } from "#product/primitives/Button";
+import { ArrowLeft } from "#product/primitives/icons/core";
+import { RefreshCw } from "#product/primitives/icons/platform";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import {
   TURN_ITEM_GAP_CLASS,
@@ -11,11 +12,11 @@ import {
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@proliferate/product-ui/chat/ChatColumn";
+} from "#product/config/chat-layout";
 import { useChatLaunchIntentActions } from "#product/hooks/chat/workflows/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "#product/lib/domain/chat/launch/launch-intent";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
-import { formatTranscriptActionTime } from "@proliferate/product-domain/chats/transcript/transcript-action-time";
+import { formatTranscriptActionTime } from "#product/domain/chats/transcript/transcript-action-time";
 
 interface ChatLaunchIntentPaneProps {
   bottomInsetPx: number;

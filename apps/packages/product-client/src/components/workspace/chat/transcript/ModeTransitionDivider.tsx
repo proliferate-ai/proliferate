@@ -1,4 +1,4 @@
-import { SlidersHorizontal } from "@proliferate/ui/icons";
+import { SlidersHorizontal } from "#product/primitives/icons/core";
 
 /**
  * Phase-divider row for a harness mode transition, on the turn-header

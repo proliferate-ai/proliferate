@@ -12,7 +12,7 @@ import {
 import {
   resolveRepositoryReadiness,
   type RepositoryReadiness,
-} from "@proliferate/product-domain/repos/repo-readiness";
+} from "@proliferate/product-client/internal/domain/repos/repo-readiness";
 import * as Clipboard from "expo-clipboard";
 
 import {

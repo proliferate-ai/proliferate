@@ -9,8 +9,8 @@ import {
   terminalItem,
   toolItem,
   turnRecord,
-} from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
-import { buildTurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+} from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
+import { buildTurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 import {
   CompletedHistorySequence,
   constrainTurnItemSequencePresentation,
@@ -18,7 +18,7 @@ import {
   shouldRenderCompletedArtifactCards,
   TurnItemSequence,
 } from "#product/components/workspace/chat/transcript/TurnItemSequence";
-import type { TurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+import type { TurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 
 vi.mock("./TranscriptTreeNode", () => ({
   TranscriptTreeNode: ({ itemId }: { itemId: string }) => (

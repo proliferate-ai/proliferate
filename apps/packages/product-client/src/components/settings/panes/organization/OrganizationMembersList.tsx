@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
-import { Check, Copy, Mail, MoreHorizontal, Trash } from "@proliferate/ui/icons";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Check, Copy, MoreHorizontal, Trash } from "#product/primitives/icons/core";
+import { Mail } from "#product/primitives/icons/platform";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
-} from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { SettingsEyebrow } from "@proliferate/product-ui/patterns/SettingsEyebrow";
+} from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Avatar } from "#product/components/settings/panes/organization/OrganizationLogo";
 import { buildProliferateApiUrl } from "#product/lib/infra/proliferate-api";

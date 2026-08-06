@@ -4,7 +4,7 @@ import {
   pendingInteractionsForActivity,
   resolveSessionExecutionPhase,
   resolveSessionViewState,
-} from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/sessions/activity";
 import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
 import {
   forgetSessionActivityDebugState,

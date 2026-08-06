@@ -1,11 +1,11 @@
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
-import { PlanMarkdownBody } from "@proliferate/product-ui/chat/transcript/PlanMarkdownBody";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { PlanMarkdownBody } from "#product/components/workspace/chat/transcript/PlanMarkdownBody";
 import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,
   renderTranscriptLink,
 } from "#product/components/workspace/chat/transcript/transcript-markdown";
-import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import type { PromptDisplayPlanPart } from "#product/domain/chats/composer/prompt-display-parts";
 
 interface PlanReferencePreviewDialogProps {
   open: boolean;

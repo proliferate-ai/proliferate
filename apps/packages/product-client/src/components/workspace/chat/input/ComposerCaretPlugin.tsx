@@ -6,7 +6,7 @@ import {
   $isRangeSelection,
   type LexicalEditor,
 } from "lexical";
-import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
+import { useNativeOverlayOpen } from "#product/primitives/overlays/overlay-presence";
 
 interface ComposerCaretMeasurement {
   color: string;

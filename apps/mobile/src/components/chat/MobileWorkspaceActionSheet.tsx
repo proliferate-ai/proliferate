@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 import type { CloudSessionProjection } from "@proliferate/cloud-sdk";
-import type { CloudChatComposerControlView } from "@proliferate/product-domain/chats/cloud/composer-controls";
+import type { CloudChatComposerControlView } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import { colors, spacing } from "../../styles/tokens";
 import type { MobileIconName } from "../primitives/MobileIcon";

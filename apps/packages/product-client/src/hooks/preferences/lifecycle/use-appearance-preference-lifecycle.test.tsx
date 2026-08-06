@@ -76,9 +76,10 @@ describe("useAppearancePreferenceLifecycle", () => {
       expect(document.documentElement.dataset.uiFontSize).toBe("default");
       expect(document.documentElement.dataset.readableCodeFontSize).toBe("default");
       expect(document.documentElement.dataset.windowZoom).toBe("default");
-      // [TYPE-04] chat chrome is 13/20 on the closed ramp (was 11/19).
-      expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("13px");
-      expect(document.documentElement.style.getPropertyValue("--text-workspace-title")).toBe("14px");
+      // The default semantic ramp keeps compact chrome one step below reading text.
+      expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("14px");
+      expect(document.documentElement.style.getPropertyValue("--text-sidebar-row")).toBe("13px");
+      expect(document.documentElement.style.getPropertyValue("--text-workspace-title")).toBe("15px");
       expect(document.documentElement.style.getPropertyValue("--proliferate-window-zoom")).toBe("1");
     });
   });
@@ -101,9 +102,9 @@ describe("useAppearancePreferenceLifecycle", () => {
       expect(document.documentElement.dataset.uiFontSize).toBe("large");
       expect(document.documentElement.dataset.readableCodeFontSize).toBe("xlarge");
       expect(document.documentElement.dataset.windowZoom).toBe("zoom90");
-      expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("14px");
-      expect(document.documentElement.style.getPropertyValue("--text-workspace-title")).toBe("15px");
-      expect(document.documentElement.style.getPropertyValue("--readable-code-font-size")).toBe("15px");
+      expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("15px");
+      expect(document.documentElement.style.getPropertyValue("--text-workspace-title")).toBe("16px");
+      expect(document.documentElement.style.getPropertyValue("--readable-code-font-size")).toBe("16px");
       expect(document.documentElement.style.getPropertyValue("--proliferate-window-zoom")).toBe("0.9");
     });
   });

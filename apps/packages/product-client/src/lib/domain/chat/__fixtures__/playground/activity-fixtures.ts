@@ -1,6 +1,6 @@
-import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/activity/loop";
-import type { ActivityProcessWire } from "@proliferate/product-domain/activity/process";
-import type { ActivitySubagentWire } from "@proliferate/product-domain/activity/subagent";
+import type { LoopCapabilities, LoopWire } from "#product/domain/activity/loop";
+import type { ActivityProcessWire } from "#product/domain/activity/process";
+import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
 
 export const ACTIVITY_FIXTURE_NOW_MS = 1_751_450_100_000; // 2026-07-02T10:15:00.000Z
 

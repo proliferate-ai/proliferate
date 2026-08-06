@@ -1,5 +1,6 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { RefreshCw, Undo } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { RefreshCw } from "#product/primitives/icons/platform";
+import { Undo } from "#product/primitives/icons/core";
 import {
   GitReviewEmptyState,
   GitReviewEmptyStateAction,

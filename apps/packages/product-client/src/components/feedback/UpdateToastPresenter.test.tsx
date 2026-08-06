@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ToastInput } from "@proliferate/ui/utils/toast-model";
+import type { ToastInput } from "#product/primitives/utils/toast-model";
 import {
   UpdateToastPresenter,
   UPDATE_TOAST_ID,
@@ -68,7 +68,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ links: { openExternal: vi.fn() } }),
 }));
 
-vi.mock("@proliferate/ui/utils/show-toast", () => toastMocks);
+vi.mock("#product/primitives/utils/show-toast", () => toastMocks);
 
 function raised(): ToastInput[] {
   return toastMocks.showToast.mock.calls.map(([input]) => input as ToastInput);

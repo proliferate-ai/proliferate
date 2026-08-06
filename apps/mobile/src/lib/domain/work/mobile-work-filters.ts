@@ -4,7 +4,7 @@ import type {
   CloudWorkStatusFilter,
   RecentWorkRuntimeLocation,
   RecentWorkSourceKind,
-} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+} from "@proliferate/product-client/internal/domain/workspaces/cloud-work-inventory";
 
 export type MobileWorkTypeFilter =
   | "all"

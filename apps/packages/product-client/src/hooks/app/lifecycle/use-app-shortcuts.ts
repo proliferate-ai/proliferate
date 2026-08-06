@@ -2,7 +2,11 @@ import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-short
 import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { getFocusZone, isRightPanelFocusZone } from "#product/lib/domain/focus-zone";
+import {
+  focusChatInput,
+  getFocusZone,
+  isRightPanelFocusZone,
+} from "#product/lib/domain/focus-zone";
 import {
   resolveAdjacentSidebarShortcutTarget,
   resolveSidebarShortcutDigitTarget,
@@ -125,12 +129,10 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   });
 
   useShortcutHandler("workspace.new-default", () => {
-    const mode = useUserPreferencesStore.getState().defaultNewWorkspaceMode;
-    if (mode === "local") {
-      actions.newLocalWorkspace.execute("shortcut");
-    } else {
-      actions.newWorktreeWorkspace.execute("shortcut");
-    }
+    actions.goHome.execute("shortcut");
+    window.setTimeout(() => {
+      focusChatInput();
+    }, 0);
   });
 
   useShortcutHandler("workspace.new-local", () => {

@@ -1,6 +1,7 @@
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
-import { Settings, SplitPanel } from "@proliferate/ui/icons";
+import { IconButton } from "#product/primitives/IconButton";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { Settings } from "#product/primitives/icons/core";
+import { SplitPanel } from "#product/primitives/icons/app-shell";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
@@ -36,12 +37,12 @@ export function RightPanelHeaderActions({
           onClick={onTogglePanel}
         >
           <SplitPanel className="ui-icon" />
-          <ShortcutBadge
-            label={getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel)}
-            className={`pointer-events-none absolute -right-1 -bottom-1 z-20 text-muted-foreground opacity-0 transition-opacity duration-hover ${
-              shortcutRevealVisible ? "opacity-100" : ""
-            }`}
-          />
+          {shortcutRevealVisible ? (
+            <ShortcutBadge
+              label={getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel)}
+              className="pointer-events-none absolute -right-1 -bottom-1 z-20 text-muted-foreground"
+            />
+          ) : null}
           <span className="sr-only">Hide side panel</span>
         </IconButton>
       </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Navigate, Outlet } from "react-router-dom"
-import { twMerge } from "@proliferate/ui/utils/tw-merge"
+import { twMerge } from "#product/primitives/utils/tw-merge"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import type { AuthState } from "@proliferate/product-client/host/product-host"
 import { AuthShell } from "#product/components/auth/AuthShell"

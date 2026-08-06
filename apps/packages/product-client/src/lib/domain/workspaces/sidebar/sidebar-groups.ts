@@ -1,6 +1,6 @@
 import type { GitStatusSnapshot, RepoRoot } from "@anyharness/sdk";
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
-import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
+import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { repoRootGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";

@@ -12,15 +12,15 @@ import {
   modelRowKey,
   useModelPickerKeyboardNav,
 } from "#product/hooks/chat/ui/use-model-picker-keyboard-nav";
-import { ArrowUpRight, Check } from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { ArrowUpRight, Check } from "#product/primitives/icons/core";
+import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import {
   DropdownMenuItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@proliferate/ui/primitives/DropdownMenu";
-import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
+} from "#product/primitives/DropdownMenu";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 
 export function ComposerModelOptionsSubmenu({
   groups,

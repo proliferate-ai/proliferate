@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowDown, CircleAlert, RefreshCw } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ArrowDown } from "#product/primitives/icons/core";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { RefreshCw } from "#product/primitives/icons/platform";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import type { UpdaterPhase } from "#product/hooks/access/tauri/use-updater";
 import { formatRemainingTime } from "#product/lib/domain/updates/byte-progress";

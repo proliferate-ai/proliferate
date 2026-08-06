@@ -29,6 +29,8 @@ describe("KeyboardShortcutsDialog", () => {
     expect(screen.getByText("Keyboard shortcuts")).toBeTruthy();
     expect(screen.getByText("App")).toBeTruthy();
     expect(screen.getByText("Tabs")).toBeTruthy();
+    expect(screen.getByText("Open new chat")).toBeTruthy();
+    expect(screen.getByText("⌘N")).toBeTruthy();
     expect(screen.getByText("New chat")).toBeTruthy();
     expect(screen.getByText("⌘T")).toBeTruthy();
   });
@@ -51,6 +53,7 @@ describe("KeyboardShortcutsDialog", () => {
 
     expect(screen.getByText("Open terminal")).toBeTruthy();
     expect(screen.getByText("⌘J")).toBeTruthy();
+    expect(screen.queryByText("Open new chat")).toBeNull();
     expect(screen.queryByText("New chat")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -64,6 +67,7 @@ describe("KeyboardShortcutsDialog", () => {
 
     const searchInput = screen.getByPlaceholderText("Search shortcuts");
     expect((searchInput as HTMLInputElement).value).toBe("");
+    expect(screen.getByText("Open new chat")).toBeTruthy();
     expect(screen.getByText("New chat")).toBeTruthy();
   });
 });

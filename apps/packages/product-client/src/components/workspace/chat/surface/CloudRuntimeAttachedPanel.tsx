@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import {
   ComposerAttachedPanel,
   ComposerAttachedPanelRow,
 } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "#product/components/workspace/chat/surface/CloudStatusCompactHeader";
-import { CircleAlert, Spinner } from "@proliferate/ui/icons";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { Spinner } from "#product/primitives/Spinner";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import type { SelectedCloudRuntimeViewModel } from "#product/lib/domain/workspaces/cloud/cloud-runtime-state";
 

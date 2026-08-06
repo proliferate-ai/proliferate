@@ -4,7 +4,7 @@ import type {
 import {
   buildLaunchSessionConfigUpdates,
   type CloudLaunchComposerSelection,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
 import type { MobileIconName } from "../../../components/primitives/MobileIcon";

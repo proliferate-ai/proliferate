@@ -6,9 +6,9 @@ import {
   type ReactElement,
   type Ref,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 
 interface WorkspaceRenamePopoverProps {
   /**

@@ -11,8 +11,9 @@ In-app find (Cmd+F) over transcript prose is documented separately in
 
 - SSE events should be batched into at most one Zustand store write per
   animation frame during normal streaming. The shared scheduler owner is
-  `apps/packages/product-domain/src/chats/transcript/stream-batcher.ts`; Desktop and
-  Web controllers inject their own timing/runtime hooks around it.
+  `apps/packages/product-client/src/domain/chats/transcript/stream-batcher.ts`;
+  ProductClient's session-stream lifecycle injects the timing/runtime hooks
+  around it for both Desktop and Web.
 - Do not reintroduce per-event store patches for the live stream path.
 - Any deliberate stream close, detach, prune, or reconnect path must flush
   pending batched stream events before discarding the current handle.
@@ -31,7 +32,7 @@ stream flushing, session runtime/history loading, transcript row modeling, SDK
 transcript reducer immutability, plus:
 
 ```bash
-pnpm --dir desktop exec tsc --noEmit
+pnpm --filter @proliferate/product-client typecheck
 ```
 
 ## Tool Result Rendering
@@ -43,13 +44,13 @@ payloads, and tool results that have no durable product display contract.
 Product-specific result rendering must stay split by ownership:
 
 ```text
-apps/packages/product-domain/src/chats/tools/<tool>-presentation.ts
+apps/packages/product-client/src/domain/chats/tools/<tool>-presentation.ts
   pure parser and display model for raw tool input/output
 
-apps/desktop/src/components/workspace/chat/tool-calls/<Tool>Row.tsx
+apps/packages/product-client/src/components/workspace/chat/tool-calls/<Tool>Row.tsx
   visual row/details rendering for that display model
 
-apps/desktop/src/components/workspace/chat/transcript/TranscriptToolCallItemBlock.tsx
+apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptToolCallItemBlock.tsx
   routing only; no product-specific parsing beyond choosing the row
 ```
 
@@ -87,26 +88,26 @@ Assistant markdown renders file references as clickable file mentions and code
 blocks as bordered highlighted cards. Ownership is split by package law:
 
 ```text
-apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx
+apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx
   presentational markdown renderer; permissive urlTransform (blocks only
   javascript:/data:/vbscript:); injection props renderLink, renderInlineCode,
   renderCodeBlock; owns the code-block shell styling
 
-apps/desktop/src/components/workspace/chat/transcript/transcript-markdown.tsx
-  desktop renderers injected at TranscriptItemBlock, ClaudePlanCard, and
+apps/packages/product-client/src/components/workspace/chat/transcript/transcript-markdown.tsx
+  ProductClient renderers injected at TranscriptItemBlock, ClaudePlanCard, and
   ConnectedProposedPlanItem: only workspace file references render FilePathLink
   mentions; external/web link hrefs defer to MarkdownBody's default anchor
   (ProviderLinkMention); fenced code renders shiki-highlighted HTML in the shell
 
-apps/packages/product-ui/src/chat/transcript/ProviderLinkMention.tsx
+apps/packages/product-client/src/components/workspace/chat/transcript/ProviderLinkMention.tsx
   shared inline provider-icon link mention + URL/host classification
   (isExternalHttpLink, linkHost); rendered by MarkdownBody's default anchor, so
   every surface (web + cloud chat included) gets icon links
 
-apps/desktop/src/lib/domain/files/path-detection.ts
+apps/packages/product-client/src/lib/domain/files/path-detection.ts
   pure path heuristics (looksLikePath, looksLikeFileReferenceHref,
-  splitPathLineSuffix); promote to product-domain only when a second app
-  renders mentions
+  splitPathLineSuffix); move to product-client/src/domain/files only when
+  Mobile also needs the same rule
 
 anyharness .../domains/sessions/response_formatting.rs
   the prompt-side instruction (FILE_REFERENCE_INSTRUCTIONS) requiring markdown
@@ -153,7 +154,7 @@ not as raw MCP mechanics.
 Creation grouping belongs in the transcript presentation layer:
 
 ```text
-apps/packages/product-domain/src/chats/transcript/transcript-presentation.ts
+apps/packages/product-client/src/domain/chats/transcript/transcript-presentation.ts
   buildTranscriptDisplayBlocks
 ```
 
@@ -297,7 +298,7 @@ reduced-motion preferences disable the entrance.
 ### Stick-to-bottom engine
 
 Bottom pinning is owned by one shared engine,
-`apps/packages/product-ui/src/chat/transcript/useTranscriptStickToBottom.ts`,
+`apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts`,
 consumed by both `FullTranscriptRowList` and `VirtualizedTranscriptRowList`. It
 distinguishes user scrolls from its own programmatic snaps (`notifyProgrammaticScroll`
 tags every `scrollTop`/`scrollToOffset` write the engine or its callers make) so
@@ -377,7 +378,7 @@ move upward when its controls appear.
 | Frontier sibling gap | `TURN_ITEM_GAP_CLASS` in `TranscriptTurnChrome.tsx` | `gap-4` (16px) |
 | Pending/materialized working-status frame | `renderWorkingTrailingStatus` in `TranscriptTurnChrome.tsx` | `flex h-6 items-center` |
 | Empty/completed assistant footer | `TurnAssistantActionRow` in `TranscriptTurnChrome.tsx` | `h-6` (24px) |
-| Message/status line-height | `--text-message--line-height` (aliases the appearance composer scale) | Dynamic; `21px` by default |
+| Message/status line-height | `--text-message--line-height` (aliases the appearance chat scale) | Dynamic; `22px` by default |
 
 Additional dependencies:
 

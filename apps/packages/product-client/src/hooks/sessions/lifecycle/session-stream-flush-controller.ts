@@ -1,7 +1,7 @@
 import type { SessionEventEnvelope } from "@anyharness/sdk";
 import {
   createFrameStreamBatchScheduler,
-} from "@proliferate/product-domain/chats/transcript/stream-batcher";
+} from "#product/domain/chats/transcript/stream-batcher";
 import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { getSessionRecord } from "#product/stores/sessions/session-records";

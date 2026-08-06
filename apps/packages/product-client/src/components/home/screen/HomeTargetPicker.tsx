@@ -1,16 +1,14 @@
 import { useState } from "react";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import {
   PickerEmptyRow,
   PickerPopoverContent,
-} from "@proliferate/ui/patterns/PickerPopoverContent";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import {
-  Check,
-  ProjectNotebook,
-  GitBranchIcon,
-} from "@proliferate/ui/icons";
-import { matchesPickerSearch } from "@proliferate/ui/utils/search";
+} from "#product/primitives/patterns/PickerPopoverContent";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { Check } from "#product/primitives/icons/core";
+import { ProjectNotebook } from "#product/primitives/icons/workspace";
+import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
+import { matchesPickerSearch } from "#product/primitives/utils/search";
 import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
 import type {
   HomeNextDestination,
@@ -126,7 +124,6 @@ export function HomeTargetPicker({
           <HomeTargetRowItem
             icon={<ProjectNotebook className="icon-paired" />}
             value={homeTargetProjectLabel({ destination, selectedRepository })}
-            disclosure={false}
             aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
           />
         )}

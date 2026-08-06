@@ -1,12 +1,10 @@
 import type { ToolCallItem, ToolResultTextContentPart } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import {
-  ExternalLink,
-  FolderPlus,
-  GitBranchIcon,
-  Spinner,
-} from "@proliferate/ui/icons";
-import { ProliferateIcon } from "@proliferate/ui/icons/proliferate-icons";
+import { Button } from "#product/primitives/Button";
+import { ExternalLink } from "#product/primitives/icons/core";
+import { FolderPlus } from "#product/primitives/icons/workspace";
+import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
+import { Spinner } from "#product/primitives/Spinner";
+import { ProliferateIcon } from "#product/primitives/icons/proliferate-icons";
 import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
 import {
   CoworkCodingLedger,
@@ -16,8 +14,8 @@ import {
 import {
   deriveCoworkCodingToolPresentation,
   type CoworkCodingAction,
-} from "@proliferate/product-domain/chats/tools/cowork-coding-tool-presentation";
-import { normalizeToolResultText } from "@proliferate/product-domain/chats/tools/tool-result-text";
+} from "#product/domain/chats/tools/cowork-coding-tool-presentation";
+import { normalizeToolResultText } from "#product/domain/chats/tools/tool-result-text";
 
 interface CoworkCodingToolActionRowProps {
   item: ToolCallItem;

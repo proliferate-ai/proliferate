@@ -18,7 +18,7 @@ import {
   buildCloudTranscriptView,
   cloudTranscriptHasAgentProgressAfterPrompt,
   cloudTranscriptHasUserPrompt,
-} from "@proliferate/product-domain/chats/cloud/transcript-view";
+} from "@proliferate/product-client/internal/domain/chats/cloud/transcript-view";
 
 import type {
   MobileCloudChat,

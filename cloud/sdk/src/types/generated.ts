@@ -36,7 +36,7 @@ export type CloudWorkspaceSandboxType =
 // repository worktree carries real repository metadata; a scratch workspace has
 // no repository backing (managed Workflow runs) and serializes repo/
 // repoEnvironmentId as null. Absent (older servers) is treated as
-// repositoryWorktree by the product-domain derivation.
+// repositoryWorktree by the shared product-state derivation.
 export type CloudWorkspaceBackingKind = "repositoryWorktree" | "scratch";
 
 export type CloudWorkspaceProductLifecycle = "active" | "archived" | "deleted";

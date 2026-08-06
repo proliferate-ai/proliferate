@@ -1,6 +1,6 @@
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { Button } from "#product/primitives/Button";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 
 export interface AuthRestartModalSession {

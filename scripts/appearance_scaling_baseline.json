@@ -21,11 +21,8 @@
         "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx": 2,
         "apps/packages/product-client/src/components/workspace/chat/transcript/UserMessage.tsx": 1,
         "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx": 1,
-        "apps/packages/product-ui/src/chat/CloudChatHeader.tsx": 2,
-        "apps/packages/product-ui/src/chat/transcript/CloudChatUserMessage.tsx": 1,
-        "apps/packages/product-ui/src/settings/OrganizationSsoSettingsSurface.tsx": 3,
-        "apps/packages/product-ui/src/workspaces/CloudWorkspaceList.tsx": 1,
-        "apps/packages/product-ui/src/workspaces/WorkspaceInventory.tsx": 5
+        "apps/packages/product-client/src/components/settings/panes/OrganizationSsoSettingsSurface.tsx": 3,
+        "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx": 5
       },
       "justification": "v2 4.2 widened FOREGROUND_ALPHA_RE to every Tailwind alpha spelling in every variant position (bg-foreground/5, /[0.04], /[8%]). The 82 static plain-numeric sites the prior regex could not see are pre-existing and are censused here so Workflow 2 has a ratchet target for them; the ban is at full strength for anything new. The single apps/packages/product-surfaces/ site is newly visible for a different reason \u2014 see the R-V2-1 census-completion trail on fixed-stock-text-utility \u2014 and migrates with the rest."
     }
@@ -48,8 +45,8 @@
     "apps/packages/product-client/src/components/settings/panes/organization/OrganizationSettingsCard.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx|foreground-alpha-foundation": 2,
     "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-ui/src/settings/OrganizationSsoSettingsSurface.tsx|foreground-alpha-foundation": 3,
-    "apps/packages/product-ui/src/workspaces/WorkspaceInventory.tsx|foreground-alpha-foundation": 5
+    "apps/packages/product-client/src/components/settings/panes/OrganizationSsoSettingsSurface.tsx|foreground-alpha-foundation": 3,
+    "apps/packages/product-client/src/components/workspace/repo-setup/WorkspaceInventory.tsx|foreground-alpha-foundation": 5
   },
   "standardNumericZ": {
     "apps/packages/product-client/src/components/auth/AuthGate.tsx|z-50": 1,
@@ -106,25 +103,17 @@
     "apps/packages/product-client/src/components/workspace/shell/tabs/ChromeWorkspaceTab.tsx|z-20": 4,
     "apps/packages/product-client/src/components/workspace/terminals/TerminalCommandFloatingAction.tsx|z-20": 1,
     "apps/packages/product-client/src/pages/AuthenticatedAppHost.tsx|z-50": 1,
-    "apps/packages/product-ui/src/automations/AutomationCalendarView.tsx|z-10": 1,
-    "apps/packages/product-ui/src/automations/AutomationInventoryList.tsx|z-10": 1,
-    "apps/packages/product-ui/src/automations/AutomationInventoryList.tsx|z-40": 1,
-    "apps/packages/product-ui/src/chat/CloudChatSurface.tsx|z-20": 1,
-    "apps/packages/product-ui/src/chat/composer/CloudChatSingleControl.tsx|z-30": 1,
-    "apps/packages/product-ui/src/chat/transcript/TranscriptRowListShared.tsx|z-10": 1,
-    "apps/packages/product-ui/src/code/VirtualizedCodeContent.tsx|z-10": 1,
-    "apps/packages/product-ui/src/sidebar/ProductSidebarRepositories.tsx|z-10": 1,
-    "apps/packages/product-ui/src/sidebar/ProductSidebarThreads.tsx|z-10": 1,
-    "apps/packages/product-ui/src/workspaces/WorkspacesSurface.tsx|z-40": 1,
-    "apps/packages/ui/src/kit/ContextMenu.tsx|z-50": 2,
-    "apps/packages/ui/src/patterns/ModalShell.tsx|z-10": 1,
-    "apps/packages/ui/src/patterns/PageContentFrame.tsx|z-30": 1,
-    "apps/packages/ui/src/primitives/AlertDialog.tsx|z-50": 2,
-    "apps/packages/ui/src/primitives/Dialog.tsx|z-50": 2,
-    "apps/packages/ui/src/primitives/DropdownMenu.tsx|z-50": 2,
-    "apps/packages/ui/src/primitives/Popover.tsx|z-50": 1,
-    "apps/packages/ui/src/primitives/PopoverButton.tsx|z-50": 1,
-    "apps/packages/ui/src/primitives/tooltip-primitive.tsx|z-50": 1
+    "apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptRowListShared.tsx|z-10": 1,
+    "apps/packages/product-client/src/components/workspace/shell/sidebar/ProductSidebarRepositories.tsx|z-10": 1,
+    "apps/packages/product-client/src/components/workspace/shell/sidebar/ProductSidebarThreads.tsx|z-10": 1,
+    "apps/packages/product-client/src/primitives/patterns/ModalShell.tsx|z-10": 1,
+    "apps/packages/product-client/src/primitives/patterns/PageContentFrame.tsx|z-30": 1,
+    "apps/packages/product-client/src/primitives/AlertDialog.tsx|z-50": 2,
+    "apps/packages/product-client/src/primitives/Dialog.tsx|z-50": 2,
+    "apps/packages/product-client/src/primitives/DropdownMenu.tsx|z-50": 2,
+    "apps/packages/product-client/src/primitives/Popover.tsx|z-50": 1,
+    "apps/packages/product-client/src/primitives/PopoverButton.tsx|z-50": 1,
+    "apps/packages/product-client/src/primitives/tooltip-primitive.tsx|z-50": 1
   },
   "unvirtualizedLongLists": {
     "apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx|rows": 2,
@@ -147,14 +136,9 @@
     "apps/packages/product-client/src/components/workspace/shell/tabs/ClosedChatTabsMenu.tsx|rows": 1,
     "apps/packages/product-client/src/components/workspace/shell/topbar/HeaderTabsStripRows.tsx|shellRows": 1,
     "apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/git-review-v2-fixtures.ts|files": 1,
-    "apps/packages/product-ui/src/automations/AutomationRunsList.tsx|runs": 1,
-    "apps/packages/product-ui/src/billing/BillingPlanComparison.tsx|section.rows": 1,
-    "apps/packages/product-ui/src/chat/CloudChatHeader.tsx|view.sessions": 1,
-    "apps/packages/product-ui/src/chat/transcript/CloudChatTranscriptRows.tsx|rows": 1,
-    "apps/packages/product-ui/src/chat/transcript/FullTranscriptRowList.test.tsx|ROWS": 1,
-    "apps/packages/product-ui/src/chat/transcript/FullTranscriptRowList.tsx|rows": 1,
-    "apps/packages/product-ui/src/sidebar/ProductSidebarRepositoriesSection.tsx|group.rows": 1,
-    "apps/packages/product-ui/src/sidebar/ProductSidebarThreadSection.tsx|rows": 1,
-    "apps/packages/product-ui/src/workflows/WorkflowRunList.tsx|runs": 1
+    "apps/packages/product-client/src/components/billing/BillingPlanComparison.tsx|section.rows": 1,
+    "apps/packages/product-client/src/components/workspace/chat/transcript/FullTranscriptRowList.test.tsx|ROWS": 1,
+    "apps/packages/product-client/src/components/workspace/chat/transcript/FullTranscriptRowList.tsx|rows": 1,
+    "apps/packages/product-client/src/components/workflows/WorkflowRunList.tsx|runs": 1
   }
 }

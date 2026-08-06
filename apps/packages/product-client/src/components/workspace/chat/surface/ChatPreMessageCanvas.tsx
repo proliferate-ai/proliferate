@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@proliferate/product-ui/chat/ChatColumn";
+} from "#product/config/chat-layout";
 
 interface ChatPreMessageCanvasProps {
   bottomInsetPx: number;

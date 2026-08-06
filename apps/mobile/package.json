@@ -4,7 +4,7 @@
   "private": true,
   "main": "index.ts",
   "scripts": {
-    "build:shared": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build",
+    "build:shared": "pnpm --filter @proliferate/product-client build",
     "start": "pnpm build:shared && expo start",
     "ios": "pnpm build:shared && expo start --ios",
     "android": "pnpm build:shared && expo start --android",
@@ -22,7 +22,7 @@
     "@proliferate/cloud-sdk": "workspace:*",
     "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
-    "@proliferate/product-domain": "workspace:*",
+    "@proliferate/product-client": "workspace:*",
     "@sentry/react-native": "^8.19.0",
     "@tanstack/react-query": "^5.101.4",
     "expo": "~54.0.33",

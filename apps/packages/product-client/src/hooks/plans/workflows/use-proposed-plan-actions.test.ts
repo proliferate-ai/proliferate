@@ -5,7 +5,7 @@ import {
   executePlanImplementation,
 } from "#product/lib/workflows/plans/execute-plan-implementation";
 import { PLAN_IMPLEMENT_HERE_PROMPT } from "#product/copy/plans/plan-prompts";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import type { StartLatencyFlowInput } from "#product/lib/infra/measurement/measurement-port";
 
 type TestSessionRecord = {

@@ -4,7 +4,7 @@ import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { getPendingSessionConfigChange } from "@proliferate/product-domain/sessions/pending-config";
+import { getPendingSessionConfigChange } from "#product/domain/sessions/pending-config";
 import {
   resolveMatchingModelControlLabel,
 } from "#product/lib/domain/chat/models/model-display";

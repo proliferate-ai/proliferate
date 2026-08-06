@@ -55,7 +55,7 @@
 // the real Web bundle (apps/web/src/web-host.ts) sets `desktop: null` and
 // collapses to `["cloud"]`; that bundle is not what this suite boots, and its
 // cloud-only contract is pinned by unit tests instead
-// (apps/packages/product-ui/test/AddRepoFlow.test.tsx "offers only Set up in
+// (apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.test.tsx "offers only Set up in
 // Cloud on Web", apps/web/src/web-host.test.tsx "surface web and desktop null").
 //
 // So the host-truthful assertion for THIS booted client is: both the local and
@@ -88,17 +88,17 @@ async function signInThroughUi(page: Page, email: string, password: string): Pro
 }
 
 /**
- * The sidebar (which owns the "Add repository" action) defaults to
+ * The sidebar (whose Repository options menu owns "Add repository…") defaults to
  * collapsed on a fresh profile — StandardWorkspaceShell renders a
  * "Show sidebar" toggle in its place (`sidebarOpen` false-by-default,
  * apps/desktop/src/components/workspace/shell/screen/StandardWorkspaceShell.tsx).
- * Expand it once per test so "Add repository" is actually reachable, not
+ * Expand it once per test so "Repository options" is actually reachable, not
  * just present-but-off-screen in a collapsed panel (verified: clicking
- * straight at "Add repository" without this first hangs forever — the
+ * straight at "Repository options" without this first hangs forever — the
  * button resolves via role query but the sidebar container has zero width).
  */
 /**
- * Wait for the "Add repository" control to reach a settled, interactable
+ * Wait for the "Repository options" control to reach a settled, interactable
  * layout — not merely to exist in the DOM. This is the deterministic
  * readiness gate the width transition demands.
  *
@@ -110,7 +110,7 @@ async function signInThroughUi(page: Page, email: string, password: string): Pro
  *      becomes true — i.e. at t=0 of the width animation, before the panel
  *      has any usable width. Asserting the toggle proves the state changed,
  *      not that the layout settled.
- *   2. Playwright reports the clipped "Add repository" button as `visible`
+ *   2. Playwright reports the clipped "Repository options" button as `visible`
  *      (it ignores ancestor `overflow-hidden` clipping), and its built-in
  *      pre-click stability check only compares two animation frames — a
  *      window `ease-in-out`'s near-zero opening velocity can satisfy while
@@ -126,9 +126,9 @@ async function signInThroughUi(page: Page, email: string, password: string): Pro
  * `force`, no fixed sleeps standing in for readiness, and — critically — no
  * retry of the product action itself.
  */
-async function waitForAddRepoButtonSettled(page: Page): Promise<void> {
+async function waitForRepositoryOptionsButtonSettled(page: Page): Promise<void> {
   await page
-    .getByRole("button", { name: "Add repository" })
+    .getByRole("button", { name: "Repository options", exact: true })
     .evaluate(async (node) => {
       const TRANSITION_SETTLE_MS = 200; // > the 150ms width transition
       const raf = () =>
@@ -157,7 +157,7 @@ async function waitForAddRepoButtonSettled(page: Page): Promise<void> {
             second.top >= 0;
           if (settled) return second;
         }
-        throw new Error("Add repository control did not settle into a stable, in-viewport box");
+        throw new Error("Repository options control did not settle into a stable, in-viewport box");
       };
 
       const box = await stableBox();
@@ -165,7 +165,7 @@ async function waitForAddRepoButtonSettled(page: Page): Promise<void> {
       const cy = box.top + box.height / 2;
       const topAtCenter = document.elementFromPoint(cx, cy);
       if (!(topAtCenter && (topAtCenter === node || node.contains(topAtCenter)))) {
-        throw new Error("Add repository control is not the top hit-test element at its center");
+        throw new Error("Repository options control is not the top hit-test element at its center");
       }
     });
 }
@@ -176,7 +176,7 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
   // The shell mounts asynchronously after the auth gate clears. An instant
   // isVisible() here raced that mount on cold starts (the first test of a CI
   // run): the check missed while the shell was still booting, the expand was
-  // skipped, and the "Add repository" click then hung forever against the
+  // skipped, and the "Repository options" click then hung forever against the
   // zero-width collapsed sidebar (the button is in the DOM either way — see
   // the note above). Wait for whichever toggle state the shell settles into
   // before deciding whether to expand.
@@ -189,14 +189,15 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
     await expect(hideSidebarButton.first()).toBeVisible();
   }
   // The toggle flip above is synchronous with the start of the width
-  // animation; wait for the Add-repository control to actually reach a
+  // animation; wait for the Repository-options control to actually reach a
   // stable, clickable layout before any caller clicks it.
-  await waitForAddRepoButtonSettled(page);
+  await waitForRepositoryOptionsButtonSettled(page);
 }
 
 async function openAddRepoFlow(page: Page): Promise<void> {
   await ensureSidebarOpen(page);
-  await page.getByRole("button", { name: "Add repository" }).click();
+  await page.getByRole("button", { name: "Repository options", exact: true }).click();
+  await page.getByRole("button", { name: "Add repository…", exact: true }).click();
 }
 
 async function expectEntryStepVisible(page: Page): Promise<void> {
@@ -215,7 +216,7 @@ test.beforeEach(async ({ page }) => {
   await signInThroughUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   // Same app-shell render proof auth.spec.ts's expectSignedInAppShell uses:
   // past the auth gate, the login form is gone. Deliberately NOT asserting
-  // on "Add repository" here — its containing sidebar panel collapses to
+  // on "Repository options" here — its containing sidebar panel collapses to
   // zero width by default (see ensureSidebarOpen below) rather than
   // unmounting, so the button stays `visible` by Playwright's CSS-only
   // definition even while functionally unreachable; it is not a reliable

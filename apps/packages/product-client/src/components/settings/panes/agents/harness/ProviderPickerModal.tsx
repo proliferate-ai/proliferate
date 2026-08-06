@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
-import { Search } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { Search } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { ProviderRow } from "#product/components/settings/panes/agents/harness/ProviderRow";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import {

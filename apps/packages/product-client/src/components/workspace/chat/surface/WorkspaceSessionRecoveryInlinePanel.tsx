@@ -1,5 +1,6 @@
-import { CircleAlert, RefreshCw } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { RefreshCw } from "#product/primitives/icons/platform";
+import { Button } from "#product/primitives/Button";
 import { useNavigate } from "react-router-dom";
 import {
   ComposerAttachedPanel,

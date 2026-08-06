@@ -4,8 +4,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useGitHubAppInstallationStatus,
@@ -18,9 +18,9 @@ import {
   GitHubAppInstallationSection,
   isOrganizationAdminRole,
 } from "#product/components/settings/panes/organization/GitHubAppInstallationSection";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
 import {
   useCurrentTeamCheckout,

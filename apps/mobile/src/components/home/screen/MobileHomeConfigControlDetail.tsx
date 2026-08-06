@@ -4,7 +4,7 @@ import {
   cloudComposerControlTitle,
   type CloudChatComposerControlOptionView,
   type CloudChatComposerControlView,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import { colors, radius, spacing } from "../../../styles/tokens";
 import { MobileIcon } from "../../primitives/MobileIcon";

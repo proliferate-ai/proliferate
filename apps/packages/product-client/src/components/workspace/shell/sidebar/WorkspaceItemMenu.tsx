@@ -2,16 +2,18 @@ import { useCallback, useRef, useState } from "react";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   Archive,
-  CloudIcon,
-  Folder,
-  GitBranchIcon,
-  GitPullRequest,
   Link2,
   MoreHorizontal,
   Pencil,
   RotateCcw,
   Trash,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/core";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { Folder } from "#product/primitives/icons/workspace";
+import {
+  GitBranchIcon,
+  GitPullRequest,
+} from "#product/primitives/icons/workspace-git";
 import type {
   WorkspaceAvailabilityCommand,
   WorkspaceAvailabilityCommandKind,
@@ -23,8 +25,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@proliferate/ui/primitives/DropdownMenu";
-import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
+} from "#product/primitives/DropdownMenu";
+import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 interface WorkspaceItemMenuProps {

@@ -5,8 +5,9 @@ acceptance criteria. It intentionally does not redefine authentication,
 billing, chat, workspace, workflow, or other feature behavior; the focused
 feature specs remain authoritative for those behaviors.
 
-Scope: `apps/desktop`, `apps/web`, and the shared DOM packages under
-`apps/packages/**`. Mobile is outside this migration and must remain DOM-free.
+Scope: `apps/desktop`, `apps/web`, and the shared DOM package/design owners under
+`apps/packages/**`. Mobile is outside this DOM migration and remains native; it
+may consume only concrete ProductClient `internal/domain/<file>` modules.
 
 ## Goal
 
@@ -44,8 +45,8 @@ At the end:
 - Host differences are passed through one typed `ProductHost`.
 - Raw Tauri and browser-specific authentication code stay in the apps.
 - The old Web pages, chat client, polling, stores, and controllers are gone.
-- `@proliferate/product-surfaces` remains a separate package. ProductClient may
-  consume it; absorbing it is an optional later cleanup.
+- Shared connected Cloud surfaces follow ProductClient's standard component,
+  access-hook, workflow-hook, and domain ownership layers.
 
 ## What ProductClient owns
 
@@ -53,6 +54,7 @@ At the end:
 
 - Product pages and the authenticated route tree.
 - Components and product UI.
+- The canonical DOM component library under `src/primitives/**`.
 - Hooks, stores, providers, and product lifecycles.
 - Chat, transcript, workspaces, sessions, files, billing, integrations, and
   workflows.
@@ -78,6 +80,12 @@ store.
 apps/packages/product-client/
   src/
     ProductClient.tsx
+    domain/                      # pure shared rules; Mobile-safe
+    primitives/
+      patterns/
+      icons/
+      utils/
+      overlays/
     app/
     pages/
     components/
@@ -96,17 +104,15 @@ apps/packages/product-client/
       desktop-bridge.ts
       ProductHostProvider.tsx
 
-apps/packages/product-surfaces/
-  src/                         # remains a separate connected-surfaces package
-
 apps/desktop/src/
   main.tsx
-  desktop-host.ts
-  index.css
-  native/                      # raw Tauri/native implementation
+  providers/                    # Desktop host construction and mounting
+  lib/access/tauri/             # raw Tauri/native implementation
+  lib/integrations/             # Desktop vendor/auth adapters
 
 apps/web/src/
   main.tsx
+  WebHostApp.tsx
   web-host.ts
   index.css
   browser/                     # browser auth/callback implementation
@@ -128,12 +134,25 @@ ProductClient is a normal compiled workspace package.
   runtime instances as the hosts; they are not bundled twice.
 - Desktop and Web build, typecheck, and test ProductClient before bundling.
 - CI and frontend structure checks scan the package root.
-- ProductClient may import `product-surfaces`, `product-ui`, `product-domain`,
-  `ui`, `design`, and the Cloud/AnyHarness SDKs in the allowed direction.
+- ProductClient's connected tier may import concrete `#product/domain/<file>`
+  modules, `design`, and the Cloud/AnyHarness SDKs in the allowed direction.
+- ProductClient's nested `primitives/**` owner is a lower layer: it may import
+  `design`, React/DOM-safe libraries, and itself, but not `#product/domain/*`,
+  SDK/query clients, host code, or higher ProductClient layers.
+- ProductClient's nested `domain/**` owner is pure and may not import React,
+  DOM/RN code, SDK clients, access/query/store code, primitives, or higher
+  ProductClient layers.
 - ProductClient never imports `apps/desktop`, `apps/web`, `@tauri-apps/**`, raw
   Tauri `invoke`, or a Desktop-relative `@/` path.
-- Hosts import public `@proliferate/product-client/<entrypoint>` subpaths and do
-  not reach into the package's internal hooks or stores.
+- Hosts mount the product through public
+  `@proliferate/product-client/<entrypoint>` subpaths and do not reach into
+  internal primitives. Desktop and Web retain explicitly named `internal/*`
+  seams where host assembly, authentication, or native/browser adapters depend
+  on connected ProductClient owners; this contract does not broaden or narrow
+  those established paths. A host adapter may also import a concrete
+  `@proliferate/product-client/internal/domain/<file>` rule. Mobile is different:
+  it may import only those concrete domain modules, never another internal
+  subtree, the package root, or a domain barrel.
 
 When the Desktop source moves, internal package imports use one package-local
 mapping, `#product/*`, configured in ProductClient's package, TypeScript,
@@ -418,17 +437,15 @@ apps/web/src/index.css
   imports product.css (import-only; the Web host carries no bespoke CSS)
 ```
 
-The Tailwind entry explicitly scans every DOM package that emits classes:
+The Tailwind entry explicitly scans ProductClient, the single DOM product
+source root:
 
 ```css
-@source "../../../ui/src";
-@source "../../../product-ui/src";
-@source "../../../product-surfaces/src";
 @source "../../../product-client/src";
 ```
 
-The ProductClient source line is required before JSX moves. Without it, both
-apps can compile while Tailwind silently omits classes from the moved product.
+The ProductClient source line covers all product JSX. Without it,
+both apps can compile while Tailwind silently omits product classes.
 
 Each host sets its surface before React renders:
 
@@ -596,10 +613,13 @@ The migration is complete when:
   local capability.
 - ProductClient owns the product pages, routes, UI, hooks, stores, Cloud,
   gateway, and AnyHarness behavior.
+- ProductClient's nested `src/domain/**` owns pure rules shared with Mobile;
+  connected Desktop/Web-only rules remain in `src/lib/domain/**`.
 - ProductClient contains no raw Tauri access, browser auth transport, or
   vendor-specific host implementation.
-- Product-surfaces remains a separate package unless deliberately consolidated
-  in a later change.
+- Connected Cloud billing, organization SSO, cloud-environment, and workflow
+  surfaces live in ProductClient's component, access, workflow, and domain
+  owners rather than a separate package.
 - The old Web product implementation and embedded browser are gone.
 - Both hosts build, test, and deploy cleanly with the shared CSS and assets.
 

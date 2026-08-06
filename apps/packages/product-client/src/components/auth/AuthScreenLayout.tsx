@@ -1,12 +1,13 @@
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
-import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
+import { twMerge } from "#product/primitives/utils/tw-merge";
+import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark";
+import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { PasswordSignInForm } from "#product/components/auth/PasswordSignInForm";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { useConnectServer } from "#product/hooks/auth/workflows/use-connect-server";
-import { ArrowRight, GitHub } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ArrowRight } from "#product/primitives/icons/core";
+import { GitHub } from "#product/primitives/icons/platform";
+import { Button } from "#product/primitives/Button";
 import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS, CONNECT_SERVER_LABELS } from "#product/copy/auth/auth-copy";
 
 // Shared shell for the initial page (loading -> auth). The SAME element tree is

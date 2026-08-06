@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowUpRight, ChevronDown } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ArrowUpRight, ChevronDown } from "#product/primitives/icons/core";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import type { GitPanelReviewFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";

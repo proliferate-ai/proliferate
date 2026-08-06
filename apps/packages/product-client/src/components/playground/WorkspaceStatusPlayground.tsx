@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
 import {
   ProductSidebarBrandRow,
   ProductSidebarSectionHeader,
-} from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
+} from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
 import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
@@ -49,19 +49,19 @@ interface ScenarioRow {
 
 const SCENARIOS: ScenarioRow[] = [
   {
-    label: "Open PR — plain branch glyph",
+    label: "Open PR — purple PR glyph",
     name: "Passing feature",
     gitStatus: makeGitStatus(),
   },
   {
-    label: "Draft PR — same plain glyph, state in tooltip",
+    label: "Draft PR — purple glyph, state in tooltip",
     name: "Draft work",
     gitStatus: makeGitStatus({
       pr: { state: "draft", number: 809, url: "https://github.com/acme/repo/pull/809", checks: "pending", reviewDecision: "none" },
     }),
   },
   {
-    label: "Failing checks — red issue dot",
+    label: "Failing checks — orange attention alert",
     name: "Broken build",
     gitStatus: makeGitStatus({
       pr: { state: "open", number: 807, url: "https://github.com/acme/repo/pull/807", checks: "failing", reviewDecision: "none" },
@@ -69,7 +69,7 @@ const SCENARIOS: ScenarioRow[] = [
     }),
   },
   {
-    label: "Conflicts — amber attention dot",
+    label: "Conflicts — orange attention alert",
     name: "Rebase me",
     gitStatus: makeGitStatus({
       dirty: true,
@@ -79,14 +79,14 @@ const SCENARIOS: ScenarioRow[] = [
     }),
   },
   {
-    label: "Merged PR — muted merge glyph",
+    label: "Merged PR — purple PR glyph",
     name: "Shipped thing",
     gitStatus: makeGitStatus({
       pr: { state: "merged", number: 810, url: "https://github.com/acme/repo/pull/810", checks: "passing", reviewDecision: "approved" },
     }),
   },
   {
-    label: "No PR — worktree glyph",
+    label: "No PR — dim PR glyph",
     name: "Local only",
     gitStatus: makeGitStatus({
       ahead: 2,
@@ -331,6 +331,7 @@ function FullSidebarPane() {
             workspaceTypes={["local", "worktree", "cloud", "ssh"]}
             onToggleRepositoriesCollapsed={() => setRepositoriesCollapsed((value) => !value)}
             onToggleWorkspaceType={() => {}}
+            onNewChat={() => {}}
             onAddRepo={() => {}}
           />
           {!repositoriesCollapsed && SIDEBAR_FIXTURE_GROUPS.map((group) => (
@@ -340,6 +341,7 @@ function FullSidebarPane() {
               collapsed={!!collapsedGroups[group.name]}
               environmentKind={group.kind}
               onToggleCollapsed={() => toggleGroup(group.name)}
+              onNewChat={() => {}}
               onNewWorkspace={() => {}}
               onNewLocalWorkspace={() => {}}
             >
@@ -392,10 +394,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  * the PrStatusBadge kinds. No live data — pure fixtures, so states that need
  * a real PR (merged, CI failing...) are reviewable at any time.
  *
- * Layout rules under test: the left trailing cell carries PR identity when
- * present and otherwise falls back to worktree or cloud identity. Activity,
- * waiting, and error indicators render in the right trailing cell, beating
- * the unread dot while yielding to hover affordances.
+ * Layout rules under test: the trailing area keeps a stable PR identity
+ * (purple with a PR, dim without one), adds a separate orange attention
+ * alert, and reveals workspace-switch badges only while the primary modifier
+ * is held. Activity, waiting, and error indicators beat the unread dot while
+ * yielding to hover affordances.
  */
 export function WorkspaceStatusPlayground() {
   return (

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { deriveActivityChips, type ActivityChipDescriptor } from "@proliferate/product-domain/activity/chips";
+import { deriveActivityChips, type ActivityChipDescriptor } from "#product/domain/activity/chips";
 import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
 
 /**

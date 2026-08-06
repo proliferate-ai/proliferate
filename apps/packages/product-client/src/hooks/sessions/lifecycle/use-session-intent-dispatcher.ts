@@ -9,10 +9,10 @@ import {
 } from "@anyharness/sdk-react";
 import {
   selectNextDispatchableSessionIntent,
-} from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
+} from "#product/domain/sessions/intents/session-intent-selectors";
 import type {
   SessionIntent,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
+} from "#product/domain/sessions/intents/session-intent-model";
 import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSummaryActions } from "#product/hooks/sessions/workflows/use-session-summary-actions";
 import { useSessionTitleActions } from "#product/hooks/sessions/workflows/use-session-title-actions";

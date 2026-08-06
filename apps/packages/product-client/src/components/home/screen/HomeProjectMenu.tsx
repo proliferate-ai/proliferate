@@ -1,15 +1,17 @@
 import { useState, type ReactElement } from "react";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { PickerEmptyRow } from "@proliferate/ui/patterns/PickerPopoverContent";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { PickerEmptyRow } from "#product/primitives/patterns/PickerPopoverContent";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import {
   Check,
   ChevronRight,
+  X,
+} from "#product/primitives/icons/core";
+import {
   FolderPlus,
   ProjectNotebook,
-  X,
-} from "@proliferate/ui/icons";
-import { matchesPickerSearch } from "@proliferate/ui/utils/search";
+} from "#product/primitives/icons/workspace";
+import { matchesPickerSearch } from "#product/primitives/utils/search";
 import type { HomeNextDestination } from "#product/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import { ProjectSearchField } from "#product/components/home/screen/HomeTargetPickerParts";

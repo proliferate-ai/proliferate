@@ -24,8 +24,8 @@ import {
   buildContentSearchLineMatchIds,
   normalizeContentSearchQuery,
 } from "#product/lib/domain/content-search/content-search";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
+import { Button } from "#product/primitives/Button";
+import { chainVerticalWheelScroll } from "#product/primitives/utils/scroll-chain";
 import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "#product/lib/domain/files/diff-parser";
 import {
   getChatDiffRows,
@@ -41,7 +41,7 @@ import {
 } from "#product/hooks/ui/diff/diff-gap-flatten";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
-import { useChatTranscriptRow } from "@proliferate/product-ui/chat/transcript/ChatContentSearchContext";
+import { useChatTranscriptRow } from "#product/components/workspace/chat/transcript/ChatContentSearchContext";
 
 const CHAT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",

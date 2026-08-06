@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Plug } from "lucide-react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import axiomIcon from "../../../../assets/connector-icons/axiom.svg";
 import axiomDarkIcon from "../../../../assets/connector-icons/axiom-dark.svg";
 import context7Icon from "../../../../assets/connector-icons/context7.jpeg";

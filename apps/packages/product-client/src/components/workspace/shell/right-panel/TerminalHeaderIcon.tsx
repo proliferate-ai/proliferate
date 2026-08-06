@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
-import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Button } from "#product/primitives/Button";
+import { IconButton } from "#product/primitives/IconButton";
+import { Input } from "#product/primitives/Input";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { useTerminalTabNativeContextMenu } from "#product/hooks/terminals/ui/use-terminal-tab-native-context-menu";
 import {
   AppShellTabCloseIcon,
   AppShellTerminalIcon,
+} from "#product/primitives/icons/app-shell";
+import {
   Check,
   Pencil,
   X,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/core";
 
 const HEADER_TERMINAL_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";
 const HEADER_TAB_EDIT_CLASS =
@@ -174,12 +176,10 @@ export function TerminalHeaderIcon({
           data-dirty={unread ? true : undefined}
           aria-hidden="true"
         />
-        {shortcutLabel ? (
+        {shortcutRevealVisible && shortcutLabel ? (
           <ShortcutBadge
             label={shortcutLabel}
-            className={`right-panel-shortcut-badge opacity-0 transition-opacity duration-hover ${
-              shortcutRevealVisible ? "opacity-100" : ""
-            }`}
+            className="right-panel-shortcut-badge"
           />
         ) : null}
       </span>

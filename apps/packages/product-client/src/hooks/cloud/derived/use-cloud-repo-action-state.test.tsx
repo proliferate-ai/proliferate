@@ -43,7 +43,7 @@ vi.mock("#product/lib/domain/settings/repositories", () => ({
   cloudRepositoryKey: (owner: string, repo: string) => `${owner}/${repo}`,
 }));
 
-vi.mock("@proliferate/product-domain/repos/repo-readiness", () => ({
+vi.mock("#product/domain/repos/repo-readiness", () => ({
   resolveRepositoryReadiness: () => ({ gate: 10 }),
 }));
 

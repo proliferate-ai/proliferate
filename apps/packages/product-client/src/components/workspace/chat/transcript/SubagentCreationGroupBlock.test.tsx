@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createTranscriptState } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
-import { toolItem } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
+import { toolItem } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import { SubagentCreationGroupBlock } from "#product/components/workspace/chat/transcript/SubagentCreationGroupBlock";
 
 describe("SubagentCreationGroupBlock", () => {

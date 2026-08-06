@@ -15,8 +15,11 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import { useWorkspaceRetireActions } from "#product/hooks/workspaces/workflows/use-workspace-retire-actions";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
+import { useHomeNextTargetSelectionState } from "#product/hooks/home/ui/use-home-next-target-selection-state";
+import { focusChatInput } from "#product/lib/domain/focus-zone";
 
 export function useWorkspaceSidebarActions() {
+  const { patchTargetSelection } = useHomeNextTargetSelectionState();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const {
     goToTopLevelRoute,
@@ -38,13 +41,30 @@ export function useWorkspaceSidebarActions() {
   const { markDone, retryCleanup } = useWorkspaceRetireActions();
   const { openExternal } = useProductHost().links;
 
+  const focusNewChatComposer = useCallback(() => {
+    window.setTimeout(() => {
+      focusChatInput();
+    }, 0);
+  }, []);
+
   const handleAddRepo = useCallback(() => {
     openAddRepoFlow();
   }, [openAddRepoFlow]);
 
   const handleGoHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
-  }, [goToTopLevelRoute]);
+    focusNewChatComposer();
+  }, [focusNewChatComposer, goToTopLevelRoute]);
+
+  const handleGoHomeForRepository = useCallback((sourceRoot: string) => {
+    patchTargetSelection({
+      destination: "repository",
+      repositorySelection: { kind: "repository", sourceRoot },
+      baseBranchOverride: null,
+    });
+    goToTopLevelRoute(APP_ROUTES.home);
+    focusNewChatComposer();
+  }, [focusNewChatComposer, goToTopLevelRoute, patchTargetSelection]);
 
   const handleGoWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
@@ -209,6 +229,7 @@ export function useWorkspaceSidebarActions() {
   return {
     handleAddRepo,
     handleGoHome,
+    handleGoHomeForRepository,
     handleGoWorkflows,
     handleGoWorkspaces,
     handleSidebarIndicatorAction,

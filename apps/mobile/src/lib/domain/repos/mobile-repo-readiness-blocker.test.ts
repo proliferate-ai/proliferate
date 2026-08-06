@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveRepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
+import { resolveRepositoryReadiness } from "@proliferate/product-client/internal/domain/repos/repo-readiness";
 
 import {
   buildMobileCloudAdminRequestMessage,

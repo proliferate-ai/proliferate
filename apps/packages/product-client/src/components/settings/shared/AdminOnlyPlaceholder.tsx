@@ -1,5 +1,5 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
+import { Button } from "#product/primitives/Button";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
 
 interface AdminOnlyPlaceholderProps {
   role?: string | null;

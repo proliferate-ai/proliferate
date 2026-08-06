@@ -16,6 +16,31 @@ const releaseNoticeState = vi.hoisted(() => ({
   openChangelog: vi.fn(),
 }));
 
+const sidebarActionMocks = vi.hoisted(() => ({
+  handleAddRepo: vi.fn(),
+  handleCreateCloudWorkspace: vi.fn(),
+  handleCreateLocalWorkspace: vi.fn(),
+  handleCreateWorktreeWorkspace: vi.fn(),
+  handleGoHome: vi.fn(),
+  handleGoHomeForRepository: vi.fn(),
+  handleGoWorkflows: vi.fn(),
+  handleGoWorkspaces: vi.fn(),
+  handleMarkWorkspaceDone: vi.fn(),
+  handleOpenPullRequest: vi.fn(),
+  handleRetryWorkspaceCleanup: vi.fn(),
+  handleSelectWorkspace: vi.fn(),
+  handleSidebarIndicatorAction: vi.fn(),
+}));
+
+const workspaceSidebarState = vi.hoisted(() => ({
+  groups: [] as Array<{ sourceRoot: string; items: Array<{ active: boolean }> }>,
+  selectedWorkspaceId: null,
+  selectedLogicalWorkspaceId: null,
+  cleanupAttentionWorkspaces: [],
+  emptyState: null,
+  isLoading: false,
+}));
+
 vi.mock("#product/hooks/updates/facade/use-release-notice", () => ({
   useReleaseNotice: () => releaseNoticeState,
 }));
@@ -28,7 +53,7 @@ vi.mock("#product/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
-vi.mock("@proliferate/ui/patterns/SidebarRowSurface", () => ({
+vi.mock("#product/primitives/patterns/SidebarRowSurface", () => ({
   SidebarRowSurface: ({
     active,
     children,
@@ -38,13 +63,13 @@ vi.mock("@proliferate/ui/patterns/SidebarRowSurface", () => ({
     children: ReactNode;
     onPress?: () => void;
   }) => (
-    <button type="button" data-active={String(!!active)} onClick={onPress}>
+    <div role="button" tabIndex={0} data-active={String(!!active)} onClick={onPress}>
       {children}
-    </button>
+    </div>
   ),
 }));
 
-vi.mock("@proliferate/ui/patterns/SidebarActionButton", () => ({
+vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     onClick,
@@ -65,7 +90,17 @@ vi.mock("./SidebarWorkspaceVariantIcon", () => ({
 }));
 
 vi.mock("./SidebarWorkspaceContent", () => ({
-  SidebarWorkspaceContent: () => <div data-testid="sidebar-workspace-content" />,
+  SidebarWorkspaceContent: ({
+    onNewChatForRepository,
+  }: {
+    onNewChatForRepository: (sourceRoot: string) => void;
+  }) => (
+    <div data-testid="sidebar-workspace-content">
+      <button type="button" onClick={() => onNewChatForRepository("/repo-a")}>
+        New chat in Repo A
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("./WorkspaceCleanupAttentionSection", () => ({
@@ -76,7 +111,7 @@ vi.mock("#product/components/workspace/cowork/sidebar/CoworkThreadsSection", () 
   CoworkThreadsSection: () => <div data-testid="cowork-threads" />,
 }));
 
-vi.mock("@proliferate/ui/primitives/PopoverMenuItem", () => ({
+vi.mock("#product/primitives/PopoverMenuItem", () => ({
   PopoverMenuItem: ({
     label,
     onClick,
@@ -90,11 +125,11 @@ vi.mock("@proliferate/ui/primitives/PopoverMenuItem", () => ({
   ),
 }));
 
-vi.mock("@proliferate/ui/patterns/AutoHideScrollArea", () => ({
+vi.mock("#product/primitives/patterns/AutoHideScrollArea", () => ({
   AutoHideScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
+vi.mock("#product/primitives/PopoverButton", () => ({
   PopoverButton: ({
     children,
     trigger,
@@ -214,19 +249,7 @@ vi.mock("#product/hooks/workspaces/workflows/use-workspace-display-name-actions"
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
-  useWorkspaceSidebarActions: () => ({
-    handleAddRepo: vi.fn(),
-    handleCreateCloudWorkspace: vi.fn(),
-    handleCreateLocalWorkspace: vi.fn(),
-    handleCreateWorktreeWorkspace: vi.fn(),
-    handleGoHome: vi.fn(),
-    handleGoWorkflows: vi.fn(),
-    handleGoWorkspaces: vi.fn(),
-    handleMarkWorkspaceDone: vi.fn(),
-    handleRetryWorkspaceCleanup: vi.fn(),
-    handleSelectWorkspace: vi.fn(),
-    handleSidebarIndicatorAction: vi.fn(),
-  }),
+  useWorkspaceSidebarActions: () => sidebarActionMocks,
 }));
 
 vi.mock("#product/hooks/cloud/workflows/use-cloud-workspace-actions", () => ({
@@ -261,14 +284,7 @@ vi.mock("#product/hooks/workspaces/facade/use-sidebar-repo-group-state", () => (
 }));
 
 vi.mock("#product/hooks/workspaces/derived/use-workspace-sidebar-state", () => ({
-  useWorkspaceSidebarState: () => ({
-    groups: [],
-    selectedWorkspaceId: null,
-    selectedLogicalWorkspaceId: null,
-    cleanupAttentionWorkspaces: [],
-    emptyState: null,
-    isLoading: false,
-  }),
+  useWorkspaceSidebarState: () => workspaceSidebarState,
 }));
 
 vi.mock("#product/hooks/sessions/lifecycle/use-session-activity-reconciler", () => ({
@@ -291,6 +307,7 @@ afterEach(() => {
   releaseNoticeState.notice = null;
   productHostState.desktop = null;
   workspaceUiState.sidebarOpen = true;
+  workspaceSidebarState.groups = [];
 });
 
 function renderMainSidebar() {
@@ -299,6 +316,18 @@ function renderMainSidebar() {
       <MainSidebar />
     </MemoryRouter>,
   );
+}
+
+function getRepositoriesHeaderNewChatButton(): HTMLButtonElement {
+  const button = screen
+    .getAllByRole("button", { name: "New chat" })
+    .find((element): element is HTMLButtonElement => element.tagName === "BUTTON");
+
+  if (!button) {
+    throw new Error("Expected the repositories header New chat button");
+  }
+
+  return button;
 }
 
 describe("MainSidebar host capabilities", () => {
@@ -327,6 +356,36 @@ describe("MainSidebar support modal", () => {
       expect(useSupportModalStore.getState().open).toBe(true);
       expect(useSupportModalStore.getState().kind).toBe("bug");
     });
+  });
+});
+
+describe("MainSidebar new chat entry points", () => {
+  it("starts the shared new-chat flow from the repositories header", () => {
+    renderMainSidebar();
+
+    fireEvent.click(getRepositoriesHeaderNewChatButton());
+    expect(sidebarActionMocks.handleGoHome).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries the active repository into a header-started new chat", () => {
+    workspaceSidebarState.groups = [{
+      sourceRoot: "/repo-current",
+      items: [{ active: true }],
+    }];
+    renderMainSidebar();
+
+    fireEvent.click(getRepositoriesHeaderNewChatButton());
+
+    expect(sidebarActionMocks.handleGoHomeForRepository)
+      .toHaveBeenCalledWith("/repo-current");
+    expect(sidebarActionMocks.handleGoHome).not.toHaveBeenCalled();
+  });
+
+  it("starts a repository-scoped new chat from a repo action", () => {
+    renderMainSidebar();
+
+    fireEvent.click(screen.getByRole("button", { name: "New chat in Repo A" }));
+    expect(sidebarActionMocks.handleGoHomeForRepository).toHaveBeenCalledWith("/repo-a");
   });
 });
 

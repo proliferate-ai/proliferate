@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/activity/loop";
-import type { ActivityProcessWire } from "@proliferate/product-domain/activity/process";
-import type { ActivitySubagentWire } from "@proliferate/product-domain/activity/subagent";
+import type { LoopCapabilities, LoopWire } from "#product/domain/activity/loop";
+import type { ActivityProcessWire } from "#product/domain/activity/process";
+import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
 import { resolveActivityFixture } from "#product/lib/domain/chat/__fixtures__/playground/activity-fixtures";
 import {
   loopCapabilitiesForSession,

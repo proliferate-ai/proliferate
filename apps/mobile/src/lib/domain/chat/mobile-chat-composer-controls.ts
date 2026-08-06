@@ -12,11 +12,11 @@ import {
   type CloudChatComposerControlView,
   type CloudLaunchComposerSelection,
   type PendingConfigChange,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 import {
   resolveCloudHarnessAvailability,
   type CloudHarnessAvailability,
-} from "@proliferate/product-domain/chats/cloud/harness-availability";
+} from "@proliferate/product-client/internal/domain/chats/cloud/harness-availability";
 
 import { summarizeComposerControls } from "./mobile-chat-composer-presentation";
 

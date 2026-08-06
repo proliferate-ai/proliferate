@@ -8,7 +8,9 @@ import {
 } from "@anyharness/sdk-react";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
-import { CircleAlert, FileIcon, RefreshCw } from "@proliferate/ui/icons";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { FileIcon } from "#product/primitives/icons/workspace";
+import { RefreshCw } from "#product/primitives/icons/platform";
 import {
   DiffDisplayPolicyPlaceholder,
   formatEmptyDiffState,

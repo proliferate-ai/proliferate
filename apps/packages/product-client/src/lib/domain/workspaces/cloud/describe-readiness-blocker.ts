@@ -1,9 +1,9 @@
 import type {
   RepositoryCapabilityRequirement,
   RepositoryReadiness,
-} from "@proliferate/product-domain/repos/repo-readiness";
-import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
+} from "#product/domain/repos/repo-readiness";
 import type { CloudRepoIdentity } from "#product/lib/domain/workspaces/cloud/cloud-repository-intent";
+import type { CloudRepoPickerBlockerView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 
 export interface ReadinessBlockerInputs {
   readiness: RepositoryReadiness;

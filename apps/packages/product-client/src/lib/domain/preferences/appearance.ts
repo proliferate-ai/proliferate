@@ -128,7 +128,7 @@ export interface WindowZoomScale {
 export const DEFAULT_APPEARANCE_SIZE_ID: AppearanceSizeId = "default";
 export const DEFAULT_WINDOW_ZOOM_ID: WindowZoomId = "default";
 /** Compact canonical numeric ladders; expanded once into the public API below. */
-const READING_FONT_SIZES = [11, 11.5, 12, 13, 14, 15, 16, 17] as const;
+const READING_FONT_SIZES = [11, 12, 13, 14, 15, 16, 17, 18] as const;
 const HERO_FONT_SIZES = [23, 24, 25, 26, 28, 29.5, 31, 32.5] as const;
 
 function pixelScale(
@@ -153,8 +153,8 @@ function buildUiFontScale(index: number): UiFontScale {
   return {
     uiSm: pixelScale(reading - 2, reading + 2, "0.01em"),
     ui: pixelScale(reading - 1, reading + 4, "0.005em"),
-    chat: pixelScale(reading, reading + 7, "0"),
-    composer: pixelScale(reading, reading + 7, "0"),
+    chat: pixelScale(reading, reading + 8, "0"),
+    composer: pixelScale(reading, reading + 6, "0"),
     body: pixelScale(reading, reading + 7, "0"),
     bodyEmphasis: pixelScale(reading + 1, reading + 8, "-0.005em"),
     /** Workspace titles stay exactly one step above reading prose. */
@@ -234,7 +234,7 @@ export const DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES: UiGlyphScaleCssVariables = {
   "--icon-status": "0.55em",
   "--icon-tight": "0.875em",
   "--icon-compact": "1em",
-  "--icon-indicator": "1.166667em",
+  "--icon-indicator": "1em",
   "--icon-paired": "1.230769em",
   "--icon-control": "1.333333em",
   "--icon-large": "1.666667em",

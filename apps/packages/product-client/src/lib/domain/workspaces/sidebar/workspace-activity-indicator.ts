@@ -1,4 +1,4 @@
-import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
+import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
 import {
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceMatchesId,

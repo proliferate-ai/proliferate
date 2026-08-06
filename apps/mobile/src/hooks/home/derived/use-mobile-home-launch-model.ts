@@ -10,10 +10,10 @@ import {
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 import {
   resolveCloudHarnessAvailability,
-} from "@proliferate/product-domain/chats/cloud/harness-availability";
+} from "@proliferate/product-client/internal/domain/chats/cloud/harness-availability";
 
 import {
   buildMobileRepoOptions,

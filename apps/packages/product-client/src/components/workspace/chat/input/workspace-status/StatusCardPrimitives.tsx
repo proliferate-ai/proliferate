@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, CircleAlert, Circle, Spinner } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Check } from "#product/primitives/icons/core";
+import { CircleAlert, Circle } from "#product/primitives/icons/status";
+import { Spinner } from "#product/primitives/Spinner";
 import {
   Tooltip as KitTooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@proliferate/ui/primitives/tooltip-primitive";
+} from "#product/primitives/tooltip-primitive";
 
 /**
  * The ambient card anatomy, extracted from the workspace-status card so

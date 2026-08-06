@@ -22,7 +22,7 @@ impl SessionStore {
     }
 
     /// Deletes only session-store-owned rows. Use the session delete workflow
-    /// when dependent product-domain rows must be removed in the same
+    /// when dependent product-state rows must be removed in the same
     /// transaction.
     pub fn delete_session(&self, id: &str) -> anyhow::Result<()> {
         self.db.with_tx(|conn| delete_session_rows_in_tx(conn, id))

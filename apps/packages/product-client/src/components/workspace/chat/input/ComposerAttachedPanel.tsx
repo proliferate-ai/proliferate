@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronDown } from "@proliferate/ui/icons";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { ChevronDown } from "#product/primitives/icons/core";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 interface ComposerAttachedPanelProps {
   /** Optional 16px leading icon for the structured header. */

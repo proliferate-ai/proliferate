@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowRight, CheckCircleFilled } from "@proliferate/ui/icons";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { Button } from "#product/primitives/Button";
+import { ArrowRight } from "#product/primitives/icons/core";
+import { CheckCircleFilled } from "#product/primitives/icons/status";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 
 interface RepoSetupModalProps {

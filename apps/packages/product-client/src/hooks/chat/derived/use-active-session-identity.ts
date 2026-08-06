@@ -1,5 +1,5 @@
 import type { PromptCapabilities } from "@anyharness/sdk";
-import { isSessionSlotBusy } from "@proliferate/product-domain/sessions/activity";
+import { isSessionSlotBusy } from "#product/domain/sessions/activity";
 import { useRef } from "react";
 import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";

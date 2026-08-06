@@ -3,7 +3,7 @@ import type {
   RecentWorkRuntimeLocation,
   RecentWorkSourceKind,
   RecentWorkStatusIndicatorTone,
-} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+} from "@proliferate/product-client/internal/domain/workspaces/cloud-work-inventory";
 
 import type { MobileIconName } from "../../../components/primitives/MobileIcon";
 

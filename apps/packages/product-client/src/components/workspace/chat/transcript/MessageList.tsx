@@ -11,7 +11,7 @@ import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "#product/config/chat-layout"
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useOpenCoworkArtifact } from "#product/hooks/cowork/workflows/use-open-cowork-artifact";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
@@ -19,25 +19,27 @@ import {
   startMeasurementOperation,
 } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
+import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";
 import { useTypingActivityStore } from "#product/lib/infra/interaction/typing-activity-store";
-import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
+import type { TranscriptOpenSessionRole } from "#product/domain/chats/transcript/transcript-open-target";
 import type {
   PendingPromptEntry,
   TranscriptState,
 } from "@anyharness/sdk";
-import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
-import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
+import type { SessionViewState } from "#product/domain/sessions/activity";
+import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import {
   ChatTranscriptView,
-  type ChatTranscriptGoalEventRenderInput,
-  type ChatTranscriptPendingPromptRenderInput,
-  type ChatTranscriptPendingStatusInput,
-  type ChatTranscriptScrollHandle,
-  type ChatTranscriptTurnRowRenderInput,
-  type ChatTranscriptTurnStatusInput,
-} from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
+} from "#product/components/workspace/chat/transcript/ChatTranscriptView";
+import type {
+  ChatTranscriptGoalEventRenderInput,
+  ChatTranscriptPendingPromptRenderInput,
+  ChatTranscriptPendingStatusInput,
+  ChatTranscriptScrollHandle,
+  ChatTranscriptTurnRowRenderInput,
+  ChatTranscriptTurnStatusInput,
+} from "#product/hooks/chat/ui/chat-transcript-view-types";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { useChatTranscriptContentSearch } from "#product/hooks/chat/lifecycle/use-chat-transcript-content-search";
 import {
@@ -45,8 +47,8 @@ import {
   parseChatRowMatchId,
   scrollActiveChatRowMatchIntoView,
 } from "#product/lib/domain/content-search/chat-row-match-jump";
-import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
-import { collectToolCallIdsWithProposedPlan } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
+import type { ChatTranscriptState } from "#product/domain/chats/transcript/chat-transcript-state";
+import { collectToolCallIdsWithProposedPlan } from "#product/domain/chats/transcript/transcript-rendering";
 import {
   resolvePendingPromptTrailingStatus,
   resolveTurnTrailingStatus,

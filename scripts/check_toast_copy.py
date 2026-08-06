@@ -40,9 +40,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SCANNED_ROOTS = [
-    "apps/packages/ui/src",
-    "apps/packages/product-ui/src",
-    "apps/packages/product-surfaces/src",
     "apps/packages/product-client/src",
     "apps/desktop/src",
     # Web raises toasts through the same kit, so a ban that skipped it would be a

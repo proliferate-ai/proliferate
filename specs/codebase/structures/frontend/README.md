@@ -8,16 +8,13 @@ These standards apply to all frontend app logic and shared frontend packages:
 - `apps/web/src/**`
 - `apps/mobile/src/**`
 - `apps/packages/design/**`
-- `apps/packages/ui/**`
-- `apps/packages/product-domain/**`
-- `apps/packages/product-ui/**`
-- `apps/packages/product-surfaces/**`
 - `apps/packages/product-client/**`
 
-Desktop, Web, and Mobile use the same folder logic. Platform-specific folders
-exist only where the platform genuinely differs: Desktop has Tauri and local
-AnyHarness runtime access, Web has browser/cloud access, and Mobile has native
-navigation, native styling, and React Native UI.
+ProductClient and Mobile use the layered folder logic below. Desktop and Web
+are thin hosts: Desktop keeps Tauri and local-runtime adapters, Web keeps
+browser adapters, and both mount the connected product owned by ProductClient.
+Mobile keeps native navigation, native styling, and React Native UI while
+sharing only concrete ProductClient domain modules.
 
 ## Goal
 
@@ -37,13 +34,15 @@ through unrelated layers, the structure is wrong.
 
 ## Target Shape
 
-The app tree is relative to each app source root:
+The layered product tree is relative to ProductClient or a native app source
+root. Desktop and Web are thin hosts and keep only bootstrap plus their genuine
+native/browser adapters:
 
-- `apps/desktop/src/`
-- `apps/web/src/`
+- `apps/packages/product-client/src/`
 - `apps/mobile/src/`
 
-Each app starts from this shape and omits folders it does not need.
+ProductClient and Mobile start from this shape and omit folders they do not
+need. A host does not recreate this tree around the shared product.
 
 ```text
 <app>/src/
@@ -104,40 +103,38 @@ apps/packages/
       css/product.css
       react-native.ts
 
-  ui/
+  product-client/
     src/
+      domain/
+        <domain>/
       primitives/
-      patterns/
-      icons/
-      lib/, utils/, overlays/
-
-  product-domain/
-    src/
-      <domain>/
-
-  product-ui/
-    src/
-      patterns/
-      <domain>/
-        <surface>/
-
-  product-surfaces/
-    src/
-      <domain>/
-        <surface>/
+        patterns/
+        icons/
+        utils/
+        overlays/
+      components/
+      hooks/
+      lib/
+      pages/
+      providers/
+      stores/
 ```
 
 Platform notes:
 
-- Desktop uses `hooks/access/{anyharness,cloud,mcp,tauri}/**` and
-  `lib/access/{anyharness,cloud,tauri}/**` when it needs local runtime, native
-  shell, and Cloud attachment behavior.
-- Web uses Cloud/browser access and shared DOM packages. It should not rebuild
-  Desktop/Web product presentation locally when `product-ui` or
-  `product-surfaces` can own it.
+- ProductClient owns the connected Desktop/Web access hooks, including
+  `hooks/access/{anyharness,cloud,tauri}/**`, plus its shared Cloud and
+  AnyHarness raw helpers. Its Tauri hooks call the typed Desktop bridge; they do
+  not import Tauri.
+- Desktop owns raw `lib/access/tauri/**`, local-runtime/native bridge
+  implementation, host authentication, and vendor bootstrap. Web owns browser
+  authentication, storage, links, telemetry, and Cloud-client construction.
+  Neither host rebuilds ProductClient controllers or presentation locally.
 - Mobile uses Cloud/native access, native navigation, React Native components,
-  `design/react-native`, and `product-domain`. It does not import DOM packages:
-  `ui`, `product-ui`, or `product-surfaces`.
+  `design/react-native`, and concrete
+  `@proliferate/product-client/internal/domain/<file>` modules. It never imports
+  ProductClient's package root, DOM primitives, components, hooks, stores, CSS,
+  or host code.
 
 ## What Goes Where
 
@@ -168,11 +165,8 @@ Use the lowest layer that can own the logic cleanly.
 | Styling | `<app>/src/styles/**`, `<app>/src/index.css` | App-local style entrypoints, native token bridge, app-specific third-party CSS. | Shared tokens or reusable DOM primitives. | [guides/styling.md](guides/styling.md) |
 | Telemetry | `<app>/src/hooks/**`, `<app>/src/lib/**`, `<app>/src/providers/**` | Product event wiring and replay/privacy boundaries at the owning app layer. | Hidden tracking inside shared product UI. | [guides/telemetry.md](guides/telemetry.md) |
 | Design package | `apps/packages/design/**` | Shared tokens, DOM CSS entrypoint, React Native-safe token values. | Product concepts, app code, SDK clients. | [packages/README.md](packages/README.md) |
-| UI package | `apps/packages/ui/**` | Canonical Desktop/Web DOM primitives and compositions (`primitives/` base tier + `patterns/` compositions). | Product concepts, app code, SDK clients, stores, React Native. | [packages/README.md](packages/README.md) |
-| Product domain package | `apps/packages/product-domain/**` | Pure shared product rules, vocabulary, validation, projections, view models. | React, DOM, React Native components, SDK clients, query clients, stores, access. | [packages/README.md](packages/README.md) |
-| Product UI package | `apps/packages/product-ui/src/<domain>/<surface>/**` | Shared Desktop/Web product presentation. Props in, callbacks out. | SDK clients, access helpers, query hooks, app stores, routes, Tauri, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md) |
-| Product surfaces package | `apps/packages/product-surfaces/src/<domain>/<surface>/**` | Shared connected Desktop/Web Cloud surfaces with SDK/query wiring and product UI composition. | Desktop/Web app internals, Tauri, AnyHarness runtime wiring, app stores, app routes, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md) |
-| Product client package | `apps/packages/product-client/src/**` | The shared connected Desktop/Web application; Desktop and Web become thin hosts that mount it via `ProductHostProvider`. Owns the `ProductHost`/`DesktopBridge` contract and provider (foundation state). | Either host (`apps/desktop/**`, `apps/web/**`), `@tauri-apps/**`, raw Tauri `invoke`, Desktop-relative `@/` aliases. | [packages/README.md](packages/README.md), [features/web-desktop-client-unification.md](../../systems/product/clients/web-desktop-unification/README.md) |
+| ProductClient domain | `apps/packages/product-client/src/domain/**` | Pure shared product rules, vocabulary, validation, projections, view models, and planners; the Mobile-safe sharing boundary. | React, DOM, React Native components, SDK clients, query clients, stores, access, primitives, or higher ProductClient layers. | [packages/README.md](packages/README.md) |
+| Product client package | `apps/packages/product-client/src/**` outside `domain/**` | Canonical Desktop/Web DOM primitives under `primitives/**`, shared product presentation, and the connected application: routes, components, layered access/workflow/domain hooks and logic, stores, providers, Cloud/gateway/AnyHarness orchestration, and the typed host boundary. | Either host (`apps/desktop/**`, `apps/web/**`), `@tauri-apps/**`, raw Tauri `invoke`, Desktop-relative `@/` aliases, React Native, or product/SDK/query dependencies from the nested primitives subtree. | [packages/README.md](packages/README.md), [web-desktop-unification/README.md](../../systems/product/clients/web-desktop-unification/README.md) |
 
 ## Read Order
 
@@ -203,17 +197,22 @@ layer you are changing:
 - Product hook domains use responsibility folders. Hook files should not sit
   directly under `hooks/<domain>/`.
 - Components render. Hooks own React behavior. Stores hold shared client-only
-  state. `lib/domain` and `product-domain` hold pure product rules.
-- Desktop, Web, `product-ui`, and `product-surfaces` use
-  `apps/packages/ui/**` for DOM primitives.
-- Do not define DOM primitive components outside `apps/packages/ui/**`. This
+  state. `lib/domain` holds app-local or connected-client rules;
+  `product-client/src/domain/**` holds pure rules shared with Mobile.
+- ProductClient code uses `apps/packages/product-client/src/primitives/**` for
+  DOM primitives. Desktop and Web mount product UI through ProductClient's
+  public host boundary and do not import its internal primitives directly.
+  Existing explicitly named internal host-assembly/auth seams remain narrow;
+  Mobile's separate domain-only restriction does not apply to those hosts.
+- Do not define DOM primitive components outside
+  `apps/packages/product-client/src/primitives/**`. This
   includes differently named local wrappers around buttons, inputs, dialogs,
   menus, tabs, tooltips, badges, layout shells, or similar reusable controls.
-- Desktop and Web share product presentation through `product-ui` and connected
-  Cloud surfaces through `product-surfaces` when sharing keeps the product more
-  legible.
-- Mobile shares product rules through `product-domain` and renders native UI in
-  the app.
+- Desktop and Web share presentational product components through
+  ProductClient, which owns them alongside connected Cloud surfaces using its
+  standard component, access-hook, workflow-hook, and domain layers.
+- Mobile shares product rules through concrete ProductClient
+  `internal/domain/<file>` imports and renders native UI in the app.
 - Preserve current UI and behavior unless an explicit behavior change is
   requested.
 - Delete dead code when replacing an implementation.
@@ -243,23 +242,34 @@ telemetry, and cache callbacks through dependency arguments.
 Shared package dependency direction:
 
 ```text
-apps
-  -> product-surfaces
-  -> product-ui
-  -> ui
-  -> design
+desktop/web
+  -> product-client public host entries
+  -> retained explicit product-client/internal/* host-adapter seams
+  -> product-client/internal/domain/<file> when a host adapter needs a pure rule
 
-apps
-  -> product-domain
-product-surfaces -> product-domain
-product-ui -> product-domain
+mobile
+  -> product-client/internal/domain/<file>
+  -> design/react-native
+
+product-client connected layers
+  -> design
+  -> product-client/src/domain
+  -> product-client/src/primitives
 ```
 
-`product-domain` is pure. It does not import React, DOM, React Native, SDK
-clients, access helpers, stores, or query clients. `product-ui` is
-presentational DOM UI. It does not import app code, raw access, stores, routes,
-or SDK clients. `product-surfaces` may use shared Cloud SDK React hooks for
-Desktop/Web surfaces, but it must not import app internals.
+ProductClient's `domain/**` subtree is pure. It does not import React, DOM,
+React Native, SDK clients, access helpers, stores, query clients, primitives, or
+higher ProductClient layers. ProductClient's connected tier owns both
+presentational DOM UI and connected behavior, but Cloud SDK React hooks belong
+under `hooks/access/cloud/**`; components and product workflow hooks consume
+those access seams rather than importing query hooks directly. ProductClient
+code imports the nested owner through `#product/domain/<file>`; host and Mobile
+code use the concrete package-internal form above.
+
+Within ProductClient, `primitives/**` remains a lower, DOM-safe component
+library. It may import `design`, React, DOM-safe libraries, and other files in
+the same primitives subtree; it must not import `#product/domain/*`, SDK/query
+clients, host code, or any higher ProductClient layer.
 
 ## CI-Enforced Repo Shape
 
@@ -268,7 +278,7 @@ Frontend ownership boundaries are enforced by
 the ownership rules in this document.
 
 React Query cache shape is owned by access hooks by default. The only
-product-domain exception is a product-composed cache under
+product-composition exception is a cache under
 `hooks/<domain>/cache/**`; ordinary workflow, lifecycle, derived, and component
 files should call access/cache callbacks instead of importing `useQueryClient`
 or hand-editing query keys.

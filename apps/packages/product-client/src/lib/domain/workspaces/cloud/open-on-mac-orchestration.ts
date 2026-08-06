@@ -7,7 +7,7 @@ import type {
   MaterializeWorkspaceAtRefRequest,
   RepoRoot,
 } from "@anyharness/sdk";
-import { canonicalRepoKey } from "@proliferate/product-domain/repos/repo-id";
+import { canonicalRepoKey } from "#product/domain/repos/repo-id";
 import { githubHttpsCloneUrl } from "#product/lib/domain/workspaces/creation/clone-repo-workflow";
 
 /**

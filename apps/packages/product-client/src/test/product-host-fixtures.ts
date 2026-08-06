@@ -7,7 +7,7 @@ import type {
 } from "@proliferate/product-client/host/product-host";
 
 import type { AuthUser } from "#product/lib/domain/auth/auth-user";
-import type { AuthMethod } from "@proliferate/product-domain/auth/model";
+import type { AuthMethod } from "#product/domain/auth/model";
 
 /**
  * Pure ProductHost fixtures — deliberately free of any import of

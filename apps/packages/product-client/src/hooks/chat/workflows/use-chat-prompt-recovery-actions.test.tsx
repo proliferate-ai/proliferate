@@ -7,7 +7,7 @@ import {
   useChatPromptRecoveryStore,
   type ChatPromptRecovery,
 } from "#product/stores/chat/chat-prompt-recovery-store";
-import { createPromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
+import { createPromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 
 const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),

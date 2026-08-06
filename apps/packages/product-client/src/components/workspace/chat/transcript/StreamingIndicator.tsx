@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";

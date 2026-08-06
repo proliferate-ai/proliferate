@@ -1,18 +1,22 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { Button } from "#product/primitives/Button";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { AppShellReviewIcon } from "#product/primitives/icons/app-shell";
 import {
-  AppShellReviewIcon,
   ArrowUpRight,
+  List,
+} from "#product/primitives/icons/core";
+import {
   GitCommit,
   GitPullRequest,
-  List,
+} from "#product/primitives/icons/workspace-git";
+import {
   PixelAgentSprite,
-  RefreshCw,
   Robot,
-  SquareTerminal,
-} from "@proliferate/ui/icons";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+} from "#product/primitives/icons/product";
+import { RefreshCw } from "#product/primitives/icons/platform";
+import { SquareTerminal } from "#product/primitives/icons/workspace";
+import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import {
   DetailStateGlyph,
   StatusRow,

@@ -12,19 +12,19 @@ import {
   githubAppRootKey,
   repositoriesKey,
 } from "@proliferate/cloud-sdk-react";
-import { buildMinimalCloudEnvironmentConfigRequest } from "@proliferate/product-domain/environments/cloud-environments";
+import { buildMinimalCloudEnvironmentConfigRequest } from "#product/domain/environments/cloud-environments";
 import {
   resolveRepositoryReadiness,
   type RepositoryReadiness,
-} from "@proliferate/product-domain/repos/repo-readiness";
+} from "#product/domain/repos/repo-readiness";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@proliferate/ui/primitives/Dialog";
-import { CloudRepoPickerBlocker } from "@proliferate/product-ui/repos/CloudRepoPickerBlocker";
-import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
+} from "#product/primitives/Dialog";
+import { CloudRepoPickerBlocker } from "#product/components/workspace/repo-setup/CloudRepoPickerBlocker";
+import type { CloudRepoPickerBlockerView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
@@ -52,7 +52,7 @@ import {
 } from "#product/hooks/workspaces/workflows/use-clone-repo";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import { formatGitRepoId } from "#product/domain/repos/repo-id";
 
 const USER_AUTHORIZATION_RETURN_TO_SOURCE = "github_app_callback";
 
@@ -380,7 +380,7 @@ export function CloudRepoActionDialogHost() {
   // A continuation failure (env save / workspace create) surfaces its own
   // retryable blocker in the continue state, where the readiness blocker is
   // null. Earlier completed steps are preserved (spec §Failure).
-  const continuationBlocker: CloudRepoPickerBlockerView | null = continuationError
+  const continuationBlocker: ReturnType<typeof describeReadinessBlocker> = continuationError
     ? {
         title: intent.kind === "clone_from_github"
           ? "Couldn't clone repository"
@@ -391,7 +391,7 @@ export function CloudRepoActionDialogHost() {
       }
     : null;
 
-  const blocker = readinessBlocker ?? continuationBlocker;
+  const blocker: CloudRepoPickerBlockerView | null = readinessBlocker ?? continuationBlocker;
 
   const closeDialog = () => {
     if (intent.kind === "add_cloud_repository" || intent.kind === "clone_from_github") {

@@ -1,4 +1,4 @@
-import { CloudOrganizationSsoSettingsSurface } from "@proliferate/product-surfaces/settings/CloudOrganizationSsoSettingsSurface";
+import { CloudOrganizationSsoSettingsSurface } from "#product/components/settings/panes/organization/CloudOrganizationSsoSettingsSurface";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 
 export function OrganizationSsoPane() {

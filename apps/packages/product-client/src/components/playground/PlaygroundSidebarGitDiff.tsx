@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
-import { CheckCircleFilled } from "@proliferate/ui/icons";
+import { CheckCircleFilled } from "#product/primitives/icons/status";
 import { GitReviewEmptyState } from "#product/components/workspace/git/GitReviewEmptyState";
 import {
   PLAYGROUND_SIDEBAR_GIT_DIFF_FILES,

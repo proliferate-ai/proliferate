@@ -1,6 +1,7 @@
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
-import { ArrowUpRight, FileDiff, Undo } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ArrowUpRight, Undo } from "#product/primitives/icons/core";
+import { FileDiff } from "#product/primitives/icons/workspace";
+import { Button } from "#product/primitives/Button";
 
 interface TurnDiffPanelHeaderProps {
   title: string;

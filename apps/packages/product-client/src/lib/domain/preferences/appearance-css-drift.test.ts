@@ -7,7 +7,7 @@ import {
   ICON_BUTTON_SIZE_TOKEN_IDS,
   TEXT_SIZE_TOKEN_IDS,
   twMerge,
-} from "@proliferate/ui/utils/tw-merge";
+} from "#product/primitives/utils/tw-merge";
 import { typography } from "@proliferate/design/tokens";
 import {
   APPEARANCE_SIZE_IDS,
@@ -154,9 +154,9 @@ describe("generated design-package semantic text tokens", () => {
     );
 
     expect(actual).toEqual(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES);
-    expect(actual["--text-workspace-title"]).toBe("14px");
-    expect(actual["--text-workspace-title--line-height"]).toBe("21px");
-    expect(actual["--text-composer"]).toBe("13px");
+    expect(actual["--text-workspace-title"]).toBe("15px");
+    expect(actual["--text-workspace-title--line-height"]).toBe("22px");
+    expect(actual["--text-composer"]).toBe("14px");
     expect(actual["--text-composer--line-height"]).toBe("20px");
   });
 

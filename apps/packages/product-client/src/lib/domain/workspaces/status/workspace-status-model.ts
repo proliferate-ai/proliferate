@@ -1,24 +1,24 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
-import type { ActivitySubagentWire } from "@proliferate/product-domain/activity/subagent";
+import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
 import {
   sortSubagentsForDisplay,
   subagentDisplayTitle,
   subagentUsageDurationLabel,
-} from "@proliferate/product-domain/activity/subagent";
-import type { LoopWire } from "@proliferate/product-domain/activity/loop";
+} from "#product/domain/activity/subagent";
+import type { LoopWire } from "#product/domain/activity/loop";
 import {
   humanizeLoopCadence,
   loopNextFireAtMs,
   relativeFutureTimeLabel,
   sortLoopsForDisplay,
-} from "@proliferate/product-domain/activity/loop";
-import type { ActivityProcessWire } from "@proliferate/product-domain/activity/process";
+} from "#product/domain/activity/loop";
+import type { ActivityProcessWire } from "#product/domain/activity/process";
 import {
   isProcessRunning,
   processElapsedLabel,
   processStatusLabel,
   sortProcessesForDisplay,
-} from "@proliferate/product-domain/activity/process";
+} from "#product/domain/activity/process";
 import type { WorkspaceActivityPullRequest } from "#product/lib/domain/workspaces/activity/composer-workspace-activity";
 import type {
   WorkspaceStatusDetailItem,

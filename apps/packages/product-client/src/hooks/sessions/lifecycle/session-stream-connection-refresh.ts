@@ -1,4 +1,4 @@
-import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionViewState } from "#product/domain/sessions/activity";
 import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";

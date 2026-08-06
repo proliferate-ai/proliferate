@@ -1,5 +1,5 @@
 import { DelegatedAgentReceiptName } from "#product/components/workspace/chat/transcript/DelegatedAgentReceiptName";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 interface SubagentWakeBadgeProps {
   label?: string | null;

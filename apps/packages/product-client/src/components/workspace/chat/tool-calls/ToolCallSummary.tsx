@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
+import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
 import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
 import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 

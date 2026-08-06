@@ -1,7 +1,7 @@
 import type { ToolCallItem } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { FileText } from "@proliferate/ui/icons";
-import { deriveCoworkArtifactToolPresentation } from "@proliferate/product-domain/chats/tools/cowork-artifact-tool-presentation";
+import { Button } from "#product/primitives/Button";
+import { FileText } from "#product/primitives/icons/workspace";
+import { deriveCoworkArtifactToolPresentation } from "#product/domain/chats/tools/cowork-artifact-tool-presentation";
 import { resolveCoworkArtifactTitle } from "#product/lib/domain/cowork/artifacts";
 
 interface CoworkArtifactTurnCardProps {
