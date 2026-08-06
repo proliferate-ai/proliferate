@@ -6,59 +6,13 @@ import {
   GLUE_STABLE_FRAMES,
   PROGRAMMATIC_MATCH_TOL_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
-  SCROLLABLE_OVERFLOW_EPSILON_PX,
   TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
-
-const USER_SCROLL_KEYS = new Set([
-  "ArrowDown",
-  "ArrowUp",
-  "End",
-  "Home",
-  "PageDown",
-  "PageUp",
-  " ",
-]);
-const USER_SCROLL_UP_KEYS = new Set(["ArrowUp", "Home", "PageUp"]);
+import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
 
 function interactionNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
-}
-
-/**
- * Whether the viewport actually has room to scroll. The pre-emptive
- * intent-to-leave listeners must not unpin when the content fits entirely in the
- * viewport: that gesture produces no scroll event, so `onViewportScroll` never
- * runs to re-pin, leaving the engine stuck unpinned and the scroll-to-bottom
- * button wrongly visible while already at the bottom.
- */
-function viewportCanScroll(viewport: HTMLDivElement): boolean {
-  return viewport.scrollHeight - viewport.clientHeight > SCROLLABLE_OVERFLOW_EPSILON_PX;
-}
-
-function viewportCanScrollInDirection(
-  viewport: HTMLDivElement,
-  direction: -1 | 1,
-): boolean {
-  if (!viewportCanScroll(viewport)) {
-    return false;
-  }
-  if (direction < 0) {
-    return viewport.scrollTop > DIRECTION_EPSILON_PX;
-  }
-  const maximumTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-  return viewport.scrollTop < maximumTop - DIRECTION_EPSILON_PX;
-}
-
-function keyboardScrollDirection(event: KeyboardEvent): -1 | 1 | null {
-  if (!USER_SCROLL_KEYS.has(event.key)) {
-    return null;
-  }
-  if (event.key === " ") {
-    return event.shiftKey ? -1 : 1;
-  }
-  return USER_SCROLL_UP_KEYS.has(event.key) ? -1 : 1;
 }
 
 export interface UseTranscriptStickToBottomOptions {
@@ -345,63 +299,9 @@ export function useTranscriptStickToBottom({
     startGlueLoop();
   }, [scrollToBottom, setPinned, startGlueLoop]);
 
-  // Pre-emptive intent-to-leave: flip the pin ref synchronously when the user
-  // acts, BEFORE the next per-frame snap effect reads it, so the snap bails and
-  // the user actually escapes. The scroll-event classifier alone loses this race
-  // because a snap can overwrite scrollTop before the scroll event is read.
-  useEffect(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) {
-      return;
-    }
-    let touchStartY = 0;
-    // All three listeners gate on `viewportCanScroll`: an intent to leave the
-    // bottom is meaningless when there is nowhere to scroll, and acting on it
-    // would strand the engine unpinned (no scroll event follows to re-pin).
-    const onWheel = (event: WheelEvent) => {
-      const direction = event.deltaY < -DIRECTION_EPSILON_PX
-        ? -1
-        : event.deltaY > DIRECTION_EPSILON_PX
-          ? 1
-          : null;
-      if (direction !== null && viewportCanScrollInDirection(viewport, direction)) {
-        notifyUserScrollIntent(direction);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      const direction = keyboardScrollDirection(event);
-      if (direction !== null && viewportCanScrollInDirection(viewport, direction)) {
-        notifyUserScrollIntent(direction);
-      }
-    };
-    const onTouchStart = (event: TouchEvent) => {
-      touchStartY = event.touches[0]?.clientY ?? 0;
-    };
-    const onTouchMove = (event: TouchEvent) => {
-      const y = event.touches[0]?.clientY ?? touchStartY;
-      const direction = y - touchStartY > DIRECTION_EPSILON_PX
-        ? -1
-        : touchStartY - y > DIRECTION_EPSILON_PX
-          ? 1
-          : null;
-      if (
-        direction !== null
-        && viewportCanScrollInDirection(viewport, direction)
-      ) {
-        notifyUserScrollIntent(direction);
-      }
-    };
-    viewport.addEventListener("wheel", onWheel, { passive: true });
-    viewport.addEventListener("keydown", onKeyDown);
-    viewport.addEventListener("touchstart", onTouchStart, { passive: true });
-    viewport.addEventListener("touchmove", onTouchMove, { passive: true });
-    return () => {
-      viewport.removeEventListener("wheel", onWheel);
-      viewport.removeEventListener("keydown", onKeyDown);
-      viewport.removeEventListener("touchstart", onTouchStart);
-      viewport.removeEventListener("touchmove", onTouchMove);
-    };
-  }, [notifyUserScrollIntent, scrollRef]);
+  // Establish input ownership before the visibility lifecycle can resume the
+  // pinned glue loop.
+  useTranscriptUserScrollIntent({ scrollRef, notifyUserScrollIntent });
 
   // On tab/window re-show while pinned, glue to the bottom for a few frames so
   // the suspended-then-resumed measurement backlog lands as one jump. Listen to
