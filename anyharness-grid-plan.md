@@ -544,12 +544,17 @@ or file overlap); merge in either order, no retarget needed.
    DOMAIN_SQL_OUTSIDE_STORE 6/38 → 2/2; LIVE_DOMAIN_STORE_IMPORT 7/19 →
    6/18; 3 anchor repoints, suite 90. All CI green (builder was
    compile-blind by machine constraint; review compiled + ran targeted
-   tests). Review CLEAN, 2 P2s being closed on-branch: helper-doc
-   overclaim ("one implementation instead of three" while 2 call sites
-   hand-roll), and the resolve's blocking FS scan + `node --version`
-   subprocess landing on an async worker without spawn_blocking.
-   Ride-along find: pre-existing timezone-dependent sweep test → issue
-   #1669 (touch -t fed a UTC stamp; fails west of UTC, green in CI).
+   tests). Review CLEAN, 2 P2s closed at **2a6d6b92d** (CI green,
+   state CLEAN): all three ProbeOptions builders converged on
+   `resolve_agent_unrouted_by_kind` (error string now single-homed;
+   `find_descriptor_by_kind` split out so the not-in-registry arm is
+   testable against a hand-built registry slice — the bundled registry
+   always has all kinds), and the resolve's blocking FS scan +
+   `node --version` subprocess moved onto the probe's dedicated thread
+   (still ahead of materialize_for_probe, so a bad kind fails before
+   scratch is touched). Ride-along find: pre-existing
+   timezone-dependent sweep test → issue #1669 (touch -t fed a UTC
+   stamp; fails west of UTC, green in CI).
 
 After both merge: valve debt = the 7 stragglers (PR 7/7b) + materialization;
 live/sessions returns to zero non-test fetches; SQL debt = 2 engine-invisible
