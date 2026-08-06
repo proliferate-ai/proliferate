@@ -262,9 +262,27 @@ fn retire_and_retry_disagree_about_a_retired_workspace_with_no_cleanup_state() {
 
 #[test]
 fn preflight_mode_follows_the_retry_rule_exactly() {
-    // The handler used to restate copy C's three-term predicate here. Same
-    // question, so the mode is defined in terms of it: assert they never part.
-    for lifecycle_state in [WorkspaceLifecycleState::Active, WorkspaceLifecycleState::Retired] {
+    // `retire_preflight_mode` is DEFINED in terms of `decide_retry_admission`,
+    // so deriving the expectation from that same fn would assert the definition
+    // against itself. The expectations below are therefore HAND-WRITTEN from the
+    // pre-refactor handler's own predicate — the mode was
+    // `RetiredCleanupRetry` exactly when
+    //   lifecycle == Retired
+    //   && matches!(cleanup_state, Pending | Failed)
+    //   && cleanup_operation != Some(Purge)
+    // — transcribed here as literal expected values so this is a real old==new
+    // equivalence check over the full 2x4x3 cross-product, not a tautology.
+    let retried = |cleanup_state, operation| {
+        matches!(
+            cleanup_state,
+            WorkspaceCleanupState::Pending | WorkspaceCleanupState::Failed
+        ) && operation != Some(WorkspaceCleanupOperation::Purge)
+    };
+    let mut checked = 0;
+    for lifecycle_state in [
+        WorkspaceLifecycleState::Active,
+        WorkspaceLifecycleState::Retired,
+    ] {
         for cleanup_state in [
             WorkspaceCleanupState::None,
             WorkspaceCleanupState::Pending,
@@ -276,19 +294,25 @@ fn preflight_mode_follows_the_retry_rule_exactly() {
                 Some(WorkspaceCleanupOperation::Retire),
                 Some(WorkspaceCleanupOperation::Purge),
             ] {
-                let record = facts(lifecycle_state, cleanup_state, operation);
-                let expected = match decide_retry_admission(&record) {
-                    RetryAdmission::Proceed => RetirePreflightMode::RetiredCleanupRetry,
-                    RetryAdmission::Unavailable => RetirePreflightMode::ActiveRetire,
+                // Hand-written expectation: retry mode needs a RETIRED record
+                // whose cleanup is resumable and which is not a purge tombstone.
+                let expected = if lifecycle_state == WorkspaceLifecycleState::Retired
+                    && retried(cleanup_state, operation)
+                {
+                    RetirePreflightMode::RetiredCleanupRetry
+                } else {
+                    RetirePreflightMode::ActiveRetire
                 };
                 assert_eq!(
-                    retire_preflight_mode(&record),
+                    retire_preflight_mode(&facts(lifecycle_state, cleanup_state, operation)),
                     expected,
-                    "mode must track the retry rule for {lifecycle_state:?}/{cleanup_state:?}/{operation:?}"
+                    "mode for {lifecycle_state:?}/{cleanup_state:?}/{operation:?}"
                 );
+                checked += 1;
             }
         }
     }
+    assert_eq!(checked, 24, "the full cross-product must be covered");
 }
 
 #[test]

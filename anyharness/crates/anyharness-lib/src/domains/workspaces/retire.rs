@@ -177,11 +177,18 @@ impl WorkspaceRetireService {
         if let Some(result) = self.retired_state_result(workspace_id, &workspace).await? {
             return Ok(result);
         }
-        // Redundant with the preflight below (ActiveRetire mode folds this exact
-        // gate check into a blocker, so the next branch would refuse anyway with
-        // an identical response body) — kept as an explicit branch because the
-        // gate can flip between the two reads and the pre-refactor handler
-        // refused on the earlier observation.
+        // Provably unobservable, and kept anyway. The preflight below folds this
+        // exact gate check into a blocker under ActiveRetire mode and returns a
+        // byte-identical body, and nothing can make the two disagree: the
+        // retired-state branch above already returned for every Retired record,
+        // so this record is necessarily Active; both reads happen under the same
+        // exclusive lease with no await between them. So this branch cannot
+        // change any response.
+        //
+        // It survives because grid PR 9 is a refactor: the pre-refactor handler
+        // had this standalone gate check, and preserving its structure keeps the
+        // diff honestly behaviour-preserving rather than mixing a dead-branch
+        // deletion into a move. Delete it in a follow-up that owns that call.
         if self
             .workspace_access_gate
             .assert_can_mutate_for_workspace(workspace_id)
