@@ -61,7 +61,7 @@ pub async fn preflight_workspace_mobility(
             .await;
         assert_workspace_not_retired(&state, &workspace_id)?;
         let result = state
-            .mobility_service
+            .mobility_runtime
             .preflight_workspace(&workspace_id, &[])
             .await
             .map_err(map_mobility_error)?;
@@ -187,7 +187,7 @@ pub async fn export_workspace_mobility_archive(
             "MOBILITY_EXPORT_EXPECTED_BRANCH_REQUIRED",
         ));
     }
-    let mobility_service = state.mobility_service.clone();
+    let mobility_runtime = state.mobility_runtime.clone();
     let export_options = WorkspaceMobilityExportOptions {
         exclude_paths: req.exclude_paths,
         expected_base_commit_sha: req.expected_base_commit_sha,
@@ -196,7 +196,7 @@ pub async fn export_workspace_mobility_archive(
         require_clean_git_state: req.require_clean_git_state,
     };
     let archive = run_blocking("mobility_export", move || {
-        mobility_service.export_workspace_archive(&workspace_id, &export_options)
+        mobility_runtime.export_workspace_archive(&workspace_id, &export_options)
     })
     .await?
     .map_err(map_mobility_error)?;
@@ -228,7 +228,7 @@ pub async fn install_workspace_mobility_archive(
         .workspace_access_gate
         .assert_can_mutate_for_workspace(&workspace_id)
         .map_err(map_access_error)?;
-    let mobility_service = state.mobility_service.clone();
+    let mobility_runtime = state.mobility_runtime.clone();
     let operation_id = req.operation_id;
     let archive = from_contract_archive(
         req.archive,
@@ -236,7 +236,7 @@ pub async fn install_workspace_mobility_archive(
         state.session_service.attachment_storage(),
     )?;
     let summary = run_blocking("mobility_install", move || {
-        mobility_service.install_workspace_archive(&workspace_id, &archive, operation_id.as_deref())
+        mobility_runtime.install_workspace_archive(&workspace_id, &archive, operation_id.as_deref())
     })
     .await?
     .map_err(map_mobility_error)?;
@@ -295,10 +295,10 @@ pub async fn destroy_workspace_mobility_source(
     // workflow controls a session. Read-only lookup + pure in-memory set
     // comparison: no permit, no further lease — no ABBA edge.
     reject_destroy_if_workflow_controlled(&state, &workspace_id, &admitted_session_ids).await?;
-    let mobility_service = state.mobility_service.clone();
+    let mobility_runtime = state.mobility_runtime.clone();
     let workspace_id_for_destroy = workspace_id.clone();
     let summary = run_blocking("mobility_destroy_source", move || {
-        mobility_service.destroy_source_workspace(&workspace_id_for_destroy)
+        mobility_runtime.destroy_source_workspace(&workspace_id_for_destroy)
     })
     .await?
     .map_err(map_mobility_error)?;

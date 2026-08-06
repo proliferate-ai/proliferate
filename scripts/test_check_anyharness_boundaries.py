@@ -1017,18 +1017,26 @@ class ShippedAllowlistTest(unittest.TestCase):
         self.assertEqual([violation.format() for violation in failures], [])
         self.assertEqual(stale, [])
 
-    def test_mobility_service_is_valved(self) -> None:
-        """Calibration anchor: this file must stay visible to the valve rule."""
+    def test_a_live_holding_service_is_valved(self) -> None:
+        """Calibration anchor: a live-holding non-valve file stays visible.
+
+        The original anchor was `domains/mobility/service.rs`; grid PR 6a moved
+        its live power into `domains/mobility/runtime/`, so the anchor moved to
+        the next real offender rather than being deleted. The paired assertion
+        below is the other half: the new valve must NOT be flagged even though
+        it holds the very same `crate::live::terminals` import.
+        """
         violations = check_module.collect_violations()
         flagged = {
             violation.relative_path
             for violation in violations
             if violation.rule_id == "DOMAIN_LIVE_VALVE"
         }
+        prefix = "anyharness/crates/anyharness-lib/src"
 
-        self.assertIn(
-            "anyharness/crates/anyharness-lib/src/domains/mobility/service.rs", flagged
-        )
+        self.assertIn(f"{prefix}/domains/agents/auth/login_terminal.rs", flagged)
+        self.assertNotIn(f"{prefix}/domains/mobility/runtime/mod.rs", flagged)
+        self.assertNotIn(f"{prefix}/domains/mobility/service.rs", flagged)
 
     def test_known_truths_the_hardened_rules_must_see(self) -> None:
         """Calibration anchors for the four rules widened after review.

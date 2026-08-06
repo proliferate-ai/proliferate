@@ -1,35 +1,22 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
 
 use anyhow::Context;
 
 use crate::adapters::git::executor::run_git_ok;
-use crate::domains::agents::portability::{
-    collect_agent_artifacts, delete_session_agent_artifacts, install_session_agent_artifacts,
-    validate_session_agent_artifacts, AgentArtifactFileData,
-};
+use crate::domains::agents::portability::{collect_agent_artifacts, AgentArtifactFileData};
 use crate::domains::mobility::model::{
-    DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
-    MobilityFileData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
-    WorkspaceMobilityExportOptions, WorkspaceMobilityPreflightResult,
+    MobilityFileData, WorkspaceMobilityArchiveData, WorkspaceMobilityExportOptions,
     WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
-use crate::domains::mobility::store::MobilityStore;
 use crate::domains::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
-use crate::domains::reviews::store::ReviewStore;
-use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::subagents::service::SubagentService;
-use crate::domains::terminals::model::{TerminalRecord, TerminalStatus};
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
-use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
-use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::domains::workspaces::service::WorkspaceService;
-use crate::domains::workspaces::types::PreparedWorkspaceMobilityDestination;
-use crate::live::terminals::TerminalService;
 use crate::{
     adapters::files::safety::resolve_safe_path,
     adapters::git::{types::GitOperation, GitService},
@@ -63,391 +50,29 @@ pub enum MobilityError {
 #[derive(Clone)]
 pub struct MobilityService {
     workspace_service: Arc<WorkspaceService>,
-    workspace_runtime: Arc<WorkspaceRuntime>,
-    mobility_store: MobilityStore,
     session_service: Arc<SessionService>,
-    session_runtime: Arc<SessionRuntime>,
     subagent_service: Arc<SubagentService>,
-    review_store: ReviewStore,
     access_gate: Arc<WorkspaceAccessGate>,
-    terminal_service: Arc<TerminalService>,
+    /// The runtime home directory, for locating per-session agent artifacts.
+    /// A path fact, handed in by `app/` — the same value `SessionRuntime` gets.
+    runtime_home: PathBuf,
 }
 
 impl MobilityService {
     pub fn new(
         workspace_service: Arc<WorkspaceService>,
-        workspace_runtime: Arc<WorkspaceRuntime>,
-        mobility_store: MobilityStore,
         session_service: Arc<SessionService>,
-        session_runtime: Arc<SessionRuntime>,
         subagent_service: Arc<SubagentService>,
-        review_store: ReviewStore,
         access_gate: Arc<WorkspaceAccessGate>,
-        terminal_service: Arc<TerminalService>,
+        runtime_home: PathBuf,
     ) -> Self {
         Self {
             workspace_service,
-            workspace_runtime,
-            mobility_store,
             session_service,
-            session_runtime,
             subagent_service,
-            review_store,
             access_gate,
-            terminal_service,
+            runtime_home,
         }
-    }
-
-    pub async fn prepare_repo_root_destination(
-        &self,
-        repo_root_id: &str,
-        requested_branch: &str,
-        requested_base_sha: &str,
-        destination_id: Option<&str>,
-        preferred_workspace_name: Option<&str>,
-    ) -> Result<PreparedWorkspaceMobilityDestination, MobilityError> {
-        let repo_root_id = repo_root_id.trim().to_string();
-        let requested_branch = requested_branch.trim().to_string();
-        let requested_base_sha = requested_base_sha.trim().to_string();
-        let preferred_workspace_name = preferred_workspace_name
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
-        let destination_id = destination_id
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
-
-        if requested_branch.is_empty() {
-            return Err(MobilityError::Invalid(
-                "requested branch is required".to_string(),
-            ));
-        }
-        if requested_base_sha.is_empty() {
-            return Err(MobilityError::Invalid(
-                "requested base sha is required".to_string(),
-            ));
-        }
-
-        let workspace_runtime = self.workspace_runtime.clone();
-        let prepared = tokio::task::spawn_blocking(move || {
-            workspace_runtime.create_mobility_destination(
-                &repo_root_id,
-                &requested_branch,
-                &requested_base_sha,
-                destination_id.as_deref(),
-                preferred_workspace_name.as_deref(),
-            )
-        })
-        .await
-        .map_err(|error| MobilityError::Internal(anyhow::anyhow!(error.to_string())))?
-        .map_err(|error| {
-            let message = error.to_string();
-            if message.contains("mobility destination conflict") {
-                MobilityError::DestinationConflict(message)
-            } else {
-                MobilityError::Internal(error)
-            }
-        })?;
-
-        self.validate_prepared_destination_is_empty(&prepared.workspace)
-            .await?;
-
-        Ok(prepared)
-    }
-
-    pub async fn preflight_workspace(
-        &self,
-        workspace_id: &str,
-        exclude_paths: &[String],
-    ) -> Result<WorkspaceMobilityPreflightResult, MobilityError> {
-        let started = Instant::now();
-        let workspace = self.load_workspace(workspace_id)?;
-        let runtime_state = self
-            .access_gate
-            .runtime_state(workspace_id)
-            .map_err(map_access_error)?;
-
-        let workspace_path = PathBuf::from(&workspace.path);
-        let repo_root = GitService::resolve_repo_root(&workspace_path)
-            .map_err(|_| MobilityError::NotGitWorkspace(workspace.path.clone()))?;
-        let base_commit_sha = run_git_ok(&repo_root, &["rev-parse", "HEAD"])?
-            .trim()
-            .to_string();
-        let branch_name = current_branch_name(&repo_root)?;
-        tracing::info!(
-            workspace_id = %workspace_id,
-            workspace_kind = %workspace.kind,
-            runtime_mode = %runtime_state.mode.as_str(),
-            branch_name = branch_name.as_deref().unwrap_or(""),
-            elapsed_ms = started.elapsed().as_millis() as u64,
-            "[workspace-latency] mobility.preflight.repo_ready"
-        );
-
-        let sessions = self
-            .session_service
-            .list_sessions(Some(workspace_id), true)?
-            .into_iter()
-            .map(|session| MobilitySessionCandidate {
-                supported: is_supported_agent_kind(&session.agent_kind),
-                reason: if is_supported_agent_kind(&session.agent_kind) {
-                    None
-                } else {
-                    Some("Unsupported agent kind for workspace mobility v1".to_string())
-                },
-                session,
-            })
-            .collect::<Vec<_>>();
-
-        let mut blockers = Vec::new();
-        let mut warnings = Vec::new();
-
-        if runtime_state.mode != WorkspaceAccessMode::Normal {
-            blockers.push(MobilityBlocker {
-                code: "workspace_not_mutable".to_string(),
-                message: format!(
-                    "Workspace is currently in {} mode",
-                    runtime_state.mode.as_str()
-                ),
-                session_id: None,
-            });
-        }
-
-        let default_branch = if workspace.kind == WorkspaceKind::Local {
-            let repo_root_id = workspace.repo_root_id.clone();
-            match self
-                .workspace_runtime
-                .resolve_repo_root_default_branch(&repo_root_id)
-            {
-                Ok(branch) => Some(branch),
-                Err(_) => {
-                    blockers.push(MobilityBlocker {
-                        code: "default_branch_unknown".to_string(),
-                        message: ("Main local workspaces require a resolved repo default branch "
-                            .to_string()),
-                        session_id: None,
-                    });
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
-        if self.terminal_service.is_setup_running(workspace_id).await {
-            blockers.push(MobilityBlocker {
-                code: "setup_running".to_string(),
-                message: "Workspace setup is still running".to_string(),
-                session_id: None,
-            });
-        }
-
-        match GitService::status(workspace_id, &workspace_path) {
-            Ok(status) => {
-                if status.detached {
-                    blockers.push(MobilityBlocker {
-                        code: "workspace_detached".to_string(),
-                        message: "Workspace must be on a branch before moving".to_string(),
-                        session_id: None,
-                    });
-                }
-                if status.operation != GitOperation::None {
-                    blockers.push(MobilityBlocker {
-                        code: "git_operation_in_progress".to_string(),
-                        message: "Finish the current Git operation before moving".to_string(),
-                        session_id: None,
-                    });
-                }
-                if status.conflicted {
-                    blockers.push(MobilityBlocker {
-                        code: "workspace_conflicted".to_string(),
-                        message: "Resolve Git conflicts before moving".to_string(),
-                        session_id: None,
-                    });
-                }
-                if !status.clean {
-                    blockers.push(MobilityBlocker {
-                        code: "workspace_dirty".to_string(),
-                        message: "Workspace must be committed and clean before moving".to_string(),
-                        session_id: None,
-                    });
-                }
-            }
-            Err(error) => blockers.push(MobilityBlocker {
-                code: "workspace_status_unknown".to_string(),
-                message: format!("Unable to inspect workspace status: {error}"),
-                session_id: None,
-            }),
-        }
-
-        if workspace.kind == WorkspaceKind::Local {
-            if let (Some(current_branch), Some(default_branch)) =
-                (branch_name.as_deref(), default_branch.as_deref())
-            {
-                if current_branch == default_branch {
-                    blockers.push(MobilityBlocker {
-                        code: "local_default_branch_in_use".to_string(),
-                        message: format!(
-                            "Main local workspaces on '{default_branch}' must move from a worktree instead"
-                        ),
-                        session_id: None,
-                    });
-                }
-            }
-        }
-
-        for terminal in self.active_terminals_async(workspace_id).await {
-            warnings.push(format!(
-                "Terminal {} will be force-closed after the move commits",
-                terminal.id
-            ));
-        }
-
-        for run in self
-            .review_store
-            .list_active_runs_for_workspace(workspace_id)?
-        {
-            blockers.push(MobilityBlocker {
-                code: "review_active".to_string(),
-                message: format!("Review run {} is still active", run.id),
-                session_id: Some(run.parent_session_id),
-            });
-        }
-
-        for candidate in &sessions {
-            if matches!(candidate.session.status.as_str(), "starting" | "running") {
-                blockers.push(MobilityBlocker {
-                    code: "session_running".to_string(),
-                    message: format!("Session {} is still active", candidate.session.id),
-                    session_id: Some(candidate.session.id.clone()),
-                });
-            }
-
-            let execution_summary = self
-                .session_runtime
-                .session_execution_summary(&candidate.session)
-                .await;
-            if !execution_summary.pending_interactions.is_empty() {
-                blockers.push(MobilityBlocker {
-                    code: "session_awaiting_interaction".to_string(),
-                    message: format!("Session {} is awaiting interaction", candidate.session.id),
-                    session_id: Some(candidate.session.id.clone()),
-                });
-            }
-
-            if !self
-                .session_service
-                .store()
-                .list_pending_prompts(&candidate.session.id)?
-                .is_empty()
-            {
-                blockers.push(MobilityBlocker {
-                    code: "pending_prompt".to_string(),
-                    message: format!("Session {} has pending prompts", candidate.session.id),
-                    session_id: Some(candidate.session.id.clone()),
-                });
-            }
-
-            if !candidate.supported {
-                blockers.push(MobilityBlocker {
-                    code: "unsupported_session".to_string(),
-                    message: format!(
-                        "Session {} ({}) cannot move because {}",
-                        candidate.session.id,
-                        candidate.session.agent_kind,
-                        candidate
-                            .reason
-                            .clone()
-                            .unwrap_or_else(|| "it is unsupported".to_string())
-                    ),
-                    session_id: Some(candidate.session.id.clone()),
-                });
-            }
-        }
-        let session_ids = sessions
-            .iter()
-            .filter(|candidate| candidate.supported)
-            .map(|candidate| candidate.session.id.clone())
-            .collect::<HashSet<_>>();
-        let (_links, _completions, _wake_schedules, partial_graph) = self
-            .subagent_service
-            .mobility_graph_for_sessions(&session_ids)
-            .map_err(MobilityError::Internal)?;
-        for missing_id in partial_graph {
-            blockers.push(MobilityBlocker {
-                code: "partial_subagent_graph".to_string(),
-                message: format!(
-                    "Session graph includes linked subagent session {missing_id} outside this archive"
-                ),
-                session_id: Some(missing_id),
-            });
-        }
-        tracing::info!(
-            workspace_id = %workspace_id,
-            session_count = sessions.len(),
-            blocker_count = blockers.len(),
-            warning_count = warnings.len(),
-            elapsed_ms = started.elapsed().as_millis() as u64,
-            "[workspace-latency] mobility.preflight.validation_complete"
-        );
-
-        let archive_estimated_bytes = if blockers.is_empty() {
-            let archive_started = Instant::now();
-            tracing::info!(
-                workspace_id = %workspace_id,
-                exclude_path_count = exclude_paths.len(),
-                "[workspace-latency] mobility.preflight.archive_estimate.start"
-            );
-            let archive = self.export_workspace_archive(
-                workspace_id,
-                &WorkspaceMobilityExportOptions {
-                    exclude_paths: exclude_paths.to_vec(),
-                    ..WorkspaceMobilityExportOptions::default()
-                },
-            )?;
-            let size = archive_estimated_size_bytes(&archive);
-            if size > MAX_MOBILITY_ARCHIVE_BODY_BYTES as u64 {
-                blockers.push(MobilityBlocker {
-                    code: "archive_too_large".to_string(),
-                    message: format!(
-                        "Archive exceeds the {} byte limit",
-                        MAX_MOBILITY_ARCHIVE_BODY_BYTES
-                    ),
-                    session_id: None,
-                });
-            }
-            tracing::info!(
-                workspace_id = %workspace_id,
-                archive_estimated_bytes = size,
-                elapsed_ms = archive_started.elapsed().as_millis() as u64,
-                "[workspace-latency] mobility.preflight.archive_estimate.completed"
-            );
-            Some(size)
-        } else {
-            None
-        };
-
-        let can_move = blockers.is_empty();
-        tracing::info!(
-            workspace_id = %workspace_id,
-            can_move = can_move,
-            blocker_count = blockers.len(),
-            warning_count = warnings.len(),
-            elapsed_ms = started.elapsed().as_millis() as u64,
-            "[workspace-latency] mobility.preflight.completed"
-        );
-
-        Ok(WorkspaceMobilityPreflightResult {
-            workspace_id: workspace.id,
-            runtime_state,
-            can_move,
-            branch_name,
-            base_commit_sha: Some(base_commit_sha),
-            archive_estimated_bytes,
-            blockers,
-            sessions,
-            warnings,
-        })
     }
 
     pub fn export_workspace_archive(
@@ -520,190 +145,6 @@ impl MobilityService {
         Ok(archive)
     }
 
-    pub fn install_workspace_archive(
-        &self,
-        workspace_id: &str,
-        archive: &WorkspaceMobilityArchiveData,
-        operation_id: Option<&str>,
-    ) -> Result<ImportedWorkspaceArchiveSummary, MobilityError> {
-        validate_archive_size(archive)?;
-        let operation_id = operation_id
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
-        if let Some(operation_id) = operation_id.as_deref() {
-            if let Some(summary) = self
-                .mobility_store
-                .find_completed_install(workspace_id, operation_id)
-                .map_err(MobilityError::Internal)?
-            {
-                return Ok(summary);
-            }
-        }
-        let workspace = self.load_workspace(workspace_id)?;
-        let workspace_path = PathBuf::from(&workspace.path);
-        let repo_root = GitService::resolve_repo_root(&workspace_path)
-            .map_err(|_| MobilityError::NotGitWorkspace(workspace.path.clone()))?;
-        let destination_commit = run_git_ok(&repo_root, &["rev-parse", "HEAD"])?
-            .trim()
-            .to_string();
-        if destination_commit != archive.base_commit_sha {
-            return Err(MobilityError::BaseCommitMismatch {
-                destination: destination_commit,
-                archive: archive.base_commit_sha.clone(),
-            });
-        }
-        validate_clean_repo_for_mobility(
-            workspace_id,
-            &workspace_path,
-            "Destination workspace must be clean before installing a mobility archive",
-        )?;
-
-        let relocated_session_ids =
-            self.validate_install_preconditions(&workspace, &repo_root, archive)?;
-
-        for deleted_path in &archive.deleted_paths {
-            let resolved = resolve_safe_path(&repo_root, deleted_path)
-                .map_err(|error| MobilityError::Invalid(error.to_string()))?;
-            if resolved.is_dir() {
-                std::fs::remove_dir_all(&resolved)
-                    .with_context(|| format!("removing destination path {}", resolved.display()))?;
-            } else if resolved.exists() {
-                std::fs::remove_file(&resolved)
-                    .with_context(|| format!("removing destination path {}", resolved.display()))?;
-            }
-        }
-
-        for file in &archive.files {
-            write_workspace_file(&repo_root, file)?;
-        }
-
-        let mut imported_session_ids = Vec::new();
-        let mut imported_agent_artifact_count = 0usize;
-        let mut relocated_session_count = 0usize;
-        for bundle in &archive.sessions {
-            let mut session = bundle.session.clone();
-            session.workspace_id = workspace.id.clone();
-            // Native agent session state is tied to the source workspace path.
-            // Keep durable history, but let the destination start a fresh native session.
-            session.native_session_id = None;
-            // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
-            session.mcp_bindings_ciphertext = None;
-            session.mcp_binding_summaries_json = None;
-            session.mcp_binding_policy =
-                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace;
-            install_session_agent_artifacts(&session, &workspace_path, &bundle.agent_artifacts)
-                .map_err(|error| MobilityError::Invalid(error.to_string()))?;
-            imported_agent_artifact_count += bundle.agent_artifacts.len();
-            if relocated_session_ids.contains(&session.id) {
-                self.session_runtime
-                    .forget_live_session_for_mobility_blocking(&session.id);
-                self.session_service
-                    .relocate_session_for_mobility(&session)?;
-                relocated_session_count += 1;
-            } else {
-                self.session_service.import_session_bundle(
-                    &workspace.id,
-                    &session,
-                    bundle.live_config_snapshot.as_ref(),
-                    &bundle.pending_config_changes,
-                    &bundle.pending_prompts,
-                    &bundle.session_prompt_attachments(),
-                    &bundle.events,
-                    &bundle.raw_notifications,
-                )?;
-            }
-            imported_session_ids.push(session.id);
-        }
-        if relocated_session_count == 0 {
-            for link in &archive.session_links {
-                self.subagent_service
-                    .import_link(link)
-                    .map_err(MobilityError::Internal)?;
-            }
-            for completion in &archive.session_link_completions {
-                self.subagent_service
-                    .import_completion(completion)
-                    .map_err(MobilityError::Internal)?;
-            }
-            for schedule in &archive.session_link_wake_schedules {
-                self.subagent_service
-                    .import_wake_schedule(schedule)
-                    .map_err(MobilityError::Internal)?;
-            }
-        } else if relocated_session_count != archive.sessions.len() {
-            return Err(MobilityError::Invalid(
-                "cannot install a mobility archive with mixed relocated and imported sessions"
-                    .to_string(),
-            ));
-        }
-
-        let summary = ImportedWorkspaceArchiveSummary {
-            workspace_id: workspace.id,
-            source_workspace_path: archive.source_workspace_path.clone(),
-            base_commit_sha: archive.base_commit_sha.clone(),
-            imported_session_ids,
-            applied_file_count: archive.files.len(),
-            deleted_file_count: archive.deleted_paths.len(),
-            imported_agent_artifact_count,
-        };
-        if let Some(operation_id) = operation_id.as_deref() {
-            self.mobility_store
-                .record_completed_install(workspace_id, operation_id, &summary)
-                .map_err(MobilityError::Internal)?;
-        }
-        Ok(summary)
-    }
-
-    pub fn destroy_source_workspace(
-        &self,
-        workspace_id: &str,
-    ) -> Result<DestroyedWorkspaceSourceSummary, MobilityError> {
-        let workspace = self.load_workspace(workspace_id)?;
-        let workspace_path = PathBuf::from(&workspace.path);
-        let default_branch = if workspace.kind == WorkspaceKind::Local {
-            let repo_root_id = workspace.repo_root_id.clone();
-            Some(
-                self.workspace_runtime
-                    .resolve_repo_root_default_branch(&repo_root_id)
-                    .map_err(MobilityError::Internal)?,
-            )
-        } else {
-            None
-        };
-
-        let active_terminals = self.active_terminals_blocking(workspace_id);
-        let mut closed_terminal_ids = Vec::new();
-        for terminal in active_terminals {
-            self.terminal_service
-                .close_terminal_blocking(&terminal.id)
-                .map_err(MobilityError::Internal)?;
-            closed_terminal_ids.push(terminal.id);
-        }
-        let sessions = self
-            .session_service
-            .store()
-            .list_by_workspace(workspace_id)?;
-        let mut deleted_session_ids = Vec::new();
-        let runtime_home = Some(self.session_runtime.runtime_home());
-        for session in sessions {
-            delete_session_agent_artifacts(&session, &workspace_path, runtime_home)?;
-            self.session_service.delete_session(&session.id)?;
-            deleted_session_ids.push(session.id);
-        }
-
-        self.workspace_runtime
-            .destroy_source_workspace_materialization(&workspace, default_branch.as_deref())
-            .map_err(MobilityError::Internal)?;
-
-        Ok(DestroyedWorkspaceSourceSummary {
-            workspace_id: workspace.id,
-            deleted_session_ids,
-            closed_terminal_ids,
-            source_destroyed: true,
-        })
-    }
-
     fn collect_workspace_sessions(
         &self,
         workspace: &WorkspaceRecord,
@@ -714,7 +155,7 @@ impl MobilityService {
             .store()
             .list_by_workspace(&workspace.id)?;
         let mut bundles = Vec::new();
-        let runtime_home = Some(self.session_runtime.runtime_home());
+        let runtime_home = Some(self.runtime_home.as_path());
         for mut session in sessions {
             if !is_supported_agent_kind(&session.agent_kind) {
                 continue;
@@ -774,83 +215,16 @@ impl MobilityService {
         Ok(bundles)
     }
 
-    fn load_workspace(&self, workspace_id: &str) -> Result<WorkspaceRecord, MobilityError> {
+    pub(super) fn load_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<WorkspaceRecord, MobilityError> {
         self.workspace_service
             .get_workspace(workspace_id)?
             .ok_or_else(|| MobilityError::WorkspaceNotFound(workspace_id.to_string()))
     }
 
-    fn validate_install_preconditions(
-        &self,
-        workspace: &WorkspaceRecord,
-        repo_root: &Path,
-        archive: &WorkspaceMobilityArchiveData,
-    ) -> Result<HashSet<String>, MobilityError> {
-        self.access_gate
-            .assert_can_mutate_for_workspace(&workspace.id)
-            .map_err(map_access_error)?;
-        if self
-            .terminal_service
-            .is_setup_running_blocking(&workspace.id)
-        {
-            return Err(MobilityError::Invalid(
-                "destination workspace setup is still running".to_string(),
-            ));
-        }
-        let existing_sessions = self
-            .session_service
-            .store()
-            .list_by_workspace(&workspace.id)?;
-        if let Some(existing_session) = existing_sessions.first() {
-            return Err(MobilityError::Invalid(format!(
-                "destination workspace already contains session {}",
-                existing_session.id
-            )));
-        }
-        if let Some(terminal) = self.active_terminals_blocking(&workspace.id).first() {
-            return Err(MobilityError::Invalid(format!(
-                "destination workspace still has active terminal {}",
-                terminal.id
-            )));
-        }
-        for deleted_path in &archive.deleted_paths {
-            resolve_safe_path(repo_root, deleted_path)
-                .map_err(|error| MobilityError::Invalid(error.to_string()))?;
-        }
-        for file in &archive.files {
-            resolve_safe_path(repo_root, &file.relative_path)
-                .map_err(|error| MobilityError::Invalid(error.to_string()))?;
-        }
-        validate_delegated_archive_graph(archive)?;
-        let mut relocated_session_ids = HashSet::new();
-        for bundle in &archive.sessions {
-            if let Some(existing_session) = self.session_service.get_session(&bundle.session.id)? {
-                if self.can_relocate_existing_archive_session(
-                    workspace,
-                    archive,
-                    &existing_session,
-                )? {
-                    relocated_session_ids.insert(bundle.session.id.clone());
-                } else {
-                    return Err(MobilityError::SessionAlreadyExists(
-                        bundle.session.id.clone(),
-                    ));
-                }
-            }
-            let mut remapped_session = bundle.session.clone();
-            remapped_session.workspace_id = workspace.id.clone();
-            // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
-            remapped_session.mcp_bindings_ciphertext = None;
-            validate_session_agent_artifacts(
-                &remapped_session,
-                Path::new(&workspace.path),
-                &bundle.agent_artifacts,
-            )?;
-        }
-        Ok(relocated_session_ids)
-    }
-
-    fn can_relocate_existing_archive_session(
+    pub(super) fn can_relocate_existing_archive_session(
         &self,
         destination_workspace: &WorkspaceRecord,
         archive: &WorkspaceMobilityArchiveData,
@@ -879,47 +253,6 @@ impl MobilityService {
         }
 
         Ok(true)
-    }
-
-    async fn validate_prepared_destination_is_empty(
-        &self,
-        workspace: &WorkspaceRecord,
-    ) -> Result<(), MobilityError> {
-        let sessions = self
-            .session_service
-            .store()
-            .list_by_workspace(&workspace.id)?;
-        if let Some(session) = sessions.first() {
-            return Err(MobilityError::DestinationConflict(format!(
-                "mobility destination conflict: destination workspace already contains session {}",
-                session.id
-            )));
-        }
-        let active_terminals = self.active_terminals_async(&workspace.id).await;
-        if let Some(terminal) = active_terminals.first() {
-            return Err(MobilityError::DestinationConflict(format!(
-                "mobility destination conflict: destination workspace still has active terminal {}",
-                terminal.id
-            )));
-        }
-        Ok(())
-    }
-
-    async fn active_terminals_async(&self, workspace_id: &str) -> Vec<TerminalRecord> {
-        self.terminal_service
-            .list_terminals(workspace_id)
-            .await
-            .into_iter()
-            .filter(is_active_terminal)
-            .collect()
-    }
-
-    fn active_terminals_blocking(&self, workspace_id: &str) -> Vec<TerminalRecord> {
-        self.terminal_service
-            .list_terminals_blocking(workspace_id)
-            .into_iter()
-            .filter(is_active_terminal)
-            .collect()
     }
 
     fn validate_expected_export_runtime_state(
@@ -1077,7 +410,10 @@ mod tests {
     }
 }
 
-fn write_workspace_file(repo_root: &Path, file: &MobilityFileData) -> Result<(), MobilityError> {
+pub(super) fn write_workspace_file(
+    repo_root: &Path,
+    file: &MobilityFileData,
+) -> Result<(), MobilityError> {
     let resolved = resolve_safe_path(repo_root, &file.relative_path)
         .map_err(|error| MobilityError::Invalid(error.to_string()))?;
     if let Some(parent) = resolved.parent() {
@@ -1097,7 +433,7 @@ fn write_workspace_file(repo_root: &Path, file: &MobilityFileData) -> Result<(),
     Ok(())
 }
 
-fn is_supported_agent_kind(agent_kind: &str) -> bool {
+pub(super) fn is_supported_agent_kind(agent_kind: &str) -> bool {
     matches!(agent_kind, "claude" | "codex")
 }
 
@@ -1112,13 +448,6 @@ fn env_flag_enabled(key: &str) -> bool {
     let value = value.to_string_lossy();
     let normalized = value.trim().to_ascii_lowercase();
     !normalized.is_empty() && !matches!(normalized.as_str(), "0" | "false" | "no" | "off")
-}
-
-fn is_active_terminal(terminal: &TerminalRecord) -> bool {
-    matches!(
-        terminal.status,
-        TerminalStatus::Starting | TerminalStatus::Running
-    )
 }
 
 fn validate_expected_export_git_state(
@@ -1203,7 +532,7 @@ fn validate_expected_handoff_runtime_state(
     Ok(())
 }
 
-fn validate_clean_repo_for_mobility(
+pub(super) fn validate_clean_repo_for_mobility(
     workspace_id: &str,
     workspace_path: &Path,
     message: &str,
@@ -1231,7 +560,7 @@ fn validate_clean_repo_for_mobility(
     Ok(())
 }
 
-fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
+pub(super) fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
     use MobilityError::Invalid;
 
     match error {
@@ -1252,7 +581,7 @@ fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
     }
 }
 
-fn validate_delegated_archive_graph(
+pub(super) fn validate_delegated_archive_graph(
     archive: &WorkspaceMobilityArchiveData,
 ) -> Result<(), MobilityError> {
     let session_ids = archive
@@ -1304,7 +633,9 @@ fn validate_delegated_archive_graph(
     Ok(())
 }
 
-fn validate_archive_size(archive: &WorkspaceMobilityArchiveData) -> Result<(), MobilityError> {
+pub(super) fn validate_archive_size(
+    archive: &WorkspaceMobilityArchiveData,
+) -> Result<(), MobilityError> {
     let total = archive_estimated_size_bytes(archive);
     if total > MAX_MOBILITY_ARCHIVE_BODY_BYTES as u64 {
         return Err(MobilityError::SizeLimitExceeded(format!(
@@ -1351,7 +682,7 @@ fn validate_archive_size(archive: &WorkspaceMobilityArchiveData) -> Result<(), M
     Ok(())
 }
 
-fn archive_estimated_size_bytes(archive: &WorkspaceMobilityArchiveData) -> u64 {
+pub(super) fn archive_estimated_size_bytes(archive: &WorkspaceMobilityArchiveData) -> u64 {
     let file_bytes = archive
         .files
         .iter()
