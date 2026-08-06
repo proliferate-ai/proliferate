@@ -65,7 +65,7 @@ function EditActionRow({
   const canExpand = Boolean(patch);
   const fileActions = useFileReferenceActions({ rawPath: pathLabel, workspacePath });
   const nativeContextMenu = useFileReferenceNativeContextMenu(fileActions);
-  const canOpenFile = fileActions.canOpenInSidebar || fileActions.canOpenExternal;
+  const canOpenFile = fileActions.canOpenPrimary;
   const displayPolicy = patch
     ? resolveDiffDisplayPolicy({ path: pathLabel, additions, deletions, patch })
     : null;
@@ -103,13 +103,31 @@ function EditActionRow({
         {failed && (
           <span className="shrink-0">{formatFailedEditActionTitle(part.operation)}</span>
         )}
-        <span
-          data-edit-action-file-label
-          title={pathLabel}
-          className="min-w-0 truncate underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2"
-        >
-          {displayName}
-        </span>
+        {canOpenFile ? (
+          <Button
+            type="button"
+            variant="unstyled"
+            size="unstyled"
+            data-chat-transcript-ignore
+            data-edit-action-file-label
+            title={pathLabel}
+            onClick={(event) => {
+              event.stopPropagation();
+              void fileActions.openPrimary();
+            }}
+            className="pointer-events-auto h-auto min-w-0 max-w-full shrink justify-start truncate rounded-none bg-transparent p-0 text-left text-chat font-normal text-current underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2 hover:bg-transparent hover:text-current focus-visible:ring-1 focus-visible:ring-border"
+          >
+            {displayName}
+          </Button>
+        ) : (
+          <span
+            data-edit-action-file-label
+            title={pathLabel}
+            className="min-w-0 truncate underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2"
+          >
+            {displayName}
+          </span>
+        )}
         <FileChangeStats
           additions={additions}
           deletions={deletions}

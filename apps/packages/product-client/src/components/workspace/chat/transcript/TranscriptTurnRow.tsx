@@ -251,7 +251,6 @@ export function TranscriptTurnRow({
           onAssistantRevealStateChange={handleAssistantRevealStateChange}
           showCompletedArtifactFallback={row.isLastTurnRow}
           workspaceId={selectedWorkspaceId}
-          onOpenTurnChanges={onOpenTurnChanges}
           onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
         />

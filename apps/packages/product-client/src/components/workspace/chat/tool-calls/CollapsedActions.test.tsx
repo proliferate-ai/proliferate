@@ -28,9 +28,20 @@ function render(ui: ReactElement) {
   return testingRender(ui, { wrapper: WebProductHostWrapper });
 }
 
-const { openPrimaryMock, fileReferenceActionsCalls } = vi.hoisted(() => ({
+const {
+  openPrimaryMock,
+  fileReferenceActionsCalls,
+  fileReferenceOpenState,
+} = vi.hoisted(() => ({
   openPrimaryMock: vi.fn(),
   fileReferenceActionsCalls: [] as Array<{ rawPath: string; workspacePath?: string | null }>,
+  fileReferenceOpenState: {
+    canOpenPrimary: true,
+    canOpenInSidebar: true,
+    canOpenExternal: true,
+    canReveal: true,
+    pathKind: "file" as "file" | "directory" | null,
+  },
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
@@ -46,8 +57,8 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
         workspacePath: args.rawPath,
       },
       openTargets: [],
-      canOpenInSidebar: true,
-      canOpenExternal: true,
+      defaultOpenTarget: null,
+      ...fileReferenceOpenState,
       copyPath: vi.fn(),
       openInSidebar: vi.fn(),
       openDefault: vi.fn(),
@@ -62,6 +73,11 @@ afterEach(() => {
   cleanup();
   openPrimaryMock.mockClear();
   fileReferenceActionsCalls.length = 0;
+  fileReferenceOpenState.canOpenPrimary = true;
+  fileReferenceOpenState.canOpenInSidebar = true;
+  fileReferenceOpenState.canOpenExternal = true;
+  fileReferenceOpenState.canReveal = true;
+  fileReferenceOpenState.pathKind = "file";
 });
 
 describe("CollapsedActions", () => {
@@ -459,29 +475,28 @@ describe("CollapsedActions", () => {
     expect(document.body.innerHTML).toContain("data-diff-surface=\"chat\"");
   });
 
-  it("opens Changes from an edit summary and keeps ledger disclosure separate", () => {
+  it("toggles edited files from the whole summary row", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       "edit-1": toolItem("edit-1", "turn-1", 1, "file_change"),
       "edit-2": toolItem("edit-2", "turn-1", 2, "file_change"),
     };
-    const onOpenChanges = vi.fn();
-
     render(
       <CollapsedActions
         itemIds={["edit-1", "edit-2"]}
         transcript={transcript}
-        onOpenChanges={onOpenChanges}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Edited files" }));
-    expect(onOpenChanges).toHaveBeenCalledOnce();
-    expect(document.querySelector("[data-collapsed-actions-ledger]")).toBeNull();
+    const summary = screen.getByRole("button", { name: "Edited files" });
+    expect(summary.getAttribute("aria-expanded")).toBe("false");
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand edited files" }));
+    fireEvent.click(summary);
+    expect(summary.getAttribute("aria-expanded")).toBe("true");
     expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Collapse edited files" })).toBeTruthy();
+
+    fireEvent.click(summary);
+    expect(summary.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("repeats each parsed command's semantic icon in the expanded ledger", () => {
@@ -550,7 +565,7 @@ describe("CollapsedActions", () => {
       .toContain("text-foreground/60");
   });
 
-  it("reveals the edited diff from the row and opens the file only from its arrow", () => {
+  it("reveals the edited diff from the row and opens the file from its name or arrow", () => {
     const transcript = createTranscriptState("session-1");
     const firstEdit = toolItem("edit-1", "turn-1", 1, "file_change");
     const firstEditPart = firstEdit.contentParts[0];
@@ -575,8 +590,65 @@ describe("CollapsedActions", () => {
     expect(document.body.innerHTML).toContain("data-diff-surface=\"chat\"");
     expect(openPrimaryMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open edit-1.ts" }));
+    fireEvent.click(screen.getByRole("button", { name: "edit-1.ts" }));
     expect(openPrimaryMock).toHaveBeenCalledOnce();
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open edit-1.ts" }));
+    expect(openPrimaryMock).toHaveBeenCalledTimes(2);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("keeps edit file controls available while the path kind is resolving", () => {
+    fileReferenceOpenState.canOpenInSidebar = false;
+    fileReferenceOpenState.canOpenExternal = false;
+    fileReferenceOpenState.canReveal = false;
+    fileReferenceOpenState.pathKind = null;
+
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      "edit-1": toolItem("edit-1", "turn-1", 1, "file_change"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["edit-1"]}
+        transcript={transcript}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Edited a file/i }));
+    fireEvent.click(screen.getByRole("button", { name: "edit-1.ts" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open edit-1.ts" }));
+
+    expect(openPrimaryMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens the file context menu without opening the file or toggling its diff", () => {
+    const transcript = createTranscriptState("session-1");
+    const firstEdit = toolItem("edit-1", "turn-1", 1, "file_change");
+    const firstEditPart = firstEdit.contentParts[0];
+    if (firstEditPart?.type === "file_change") {
+      firstEditPart.patch = "@@ -1 +1 @@\n-old\n+new";
+    }
+    transcript.itemsById = {
+      "edit-1": firstEdit,
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["edit-1"]}
+        transcript={transcript}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Edited a file/i }));
+    const fileName = screen.getByRole("button", { name: "edit-1.ts" });
+    const toggle = screen.getByRole("button", { name: "Toggle diff for edit-1.ts" });
+    fireEvent.contextMenu(fileName);
+
+    expect(screen.getByRole("menuitem", { name: "Copy path" })).toBeTruthy();
+    expect(openPrimaryMock).not.toHaveBeenCalled();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 });

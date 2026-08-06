@@ -14,14 +14,12 @@ export function ScopedTranscriptBlocks({
   transcript,
   autoFollowCollapsedActionBlockId,
   animateActivityEntry = false,
-  onOpenChanges,
   renderItem,
 }: {
   displayBlocks: readonly TurnDisplayBlock[];
   transcript: TranscriptState;
   autoFollowCollapsedActionBlockId?: string | null;
   animateActivityEntry?: boolean;
-  onOpenChanges?: () => void;
   renderItem: (itemId: string) => ReactNode;
 }) {
   return (
@@ -33,7 +31,6 @@ export function ScopedTranscriptBlocks({
           transcript={transcript}
           autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
           animateActivityEntry={animateActivityEntry}
-          onOpenChanges={onOpenChanges}
           renderItem={renderItem}
         />
       ))}
@@ -46,14 +43,12 @@ export function TurnDisplayBlockNode({
   transcript,
   autoFollowCollapsedActionBlockId,
   animateActivityEntry = false,
-  onOpenChanges,
   renderItem,
 }: {
   block: TurnDisplayBlock;
   transcript: TranscriptState;
   autoFollowCollapsedActionBlockId?: string | null;
   animateActivityEntry?: boolean;
-  onOpenChanges?: () => void;
   renderItem: (itemId: string) => ReactNode;
 }) {
   if (block.kind === "collapsed_actions") {
@@ -68,7 +63,6 @@ export function TurnDisplayBlockNode({
           transcript={transcript}
           autoFollow={ownsLiveContinuation}
           liveContinuation={ownsLiveContinuation}
-          onOpenChanges={onOpenChanges}
         />
       </TranscriptActivityBlock>
     );
@@ -86,7 +80,6 @@ export function TurnDisplayBlockNode({
           transcript={transcript}
           autoFollow={ownsLiveContinuation}
           liveContinuation={ownsLiveContinuation}
-          onOpenChanges={onOpenChanges}
         />
       </TranscriptActivityBlock>
     );
@@ -104,7 +97,6 @@ export function TurnDisplayBlockNode({
           transcript={transcript}
           autoFollow={ownsLiveContinuation}
           liveContinuation={ownsLiveContinuation}
-          onOpenChanges={onOpenChanges}
         />
       </TranscriptActivityBlock>
     );
