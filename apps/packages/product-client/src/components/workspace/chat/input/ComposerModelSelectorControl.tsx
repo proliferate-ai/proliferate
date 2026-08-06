@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
@@ -32,6 +32,7 @@ import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { ComposerModelTuningControls } from "#product/components/workspace/chat/input/ComposerModelTuningControls";
 import { ComposerModelOptionsSubmenu } from "#product/components/workspace/chat/input/ComposerModelOptionsSubmenu";
+import { focusChatInput } from "#product/lib/domain/focus-zone";
 
 interface ComposerModelSelectorControlProps {
   modelSelectorProps: ModelSelectorProps;
@@ -65,6 +66,9 @@ export function ComposerModelSelectorControl({
   // each reopen it, and nothing has to reset a flag.
   const pickerRequestNonce = useModelSupportStore((state) => state.pickerRequestNonce);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const restoreComposerFocusOnCloseRef = useRef(false);
+  const keyboardFocusRestoreEnabled = keyboardShortcutEnabled
+    && location.pathname === APP_ROUTES.home;
   useEffect(() => {
     if (pickerRequestNonce === 0) {
       return;
@@ -72,13 +76,19 @@ export function ComposerModelSelectorControl({
     setPickerOpen(true);
   }, [pickerRequestNonce]);
   useShortcutHandler("workspace.open-model-selector", () => {
+    if (pickerOpen && keyboardFocusRestoreEnabled) {
+      restoreComposerFocusOnCloseRef.current = true;
+    }
     setPickerOpen((open) => !open);
   }, {
-    enabled: keyboardShortcutEnabled
-      && selectorEnabled
-      && location.pathname === APP_ROUTES.home,
+    enabled: keyboardFocusRestoreEnabled && selectorEnabled,
     priority: "contextual",
   });
+  const handleKeyboardClose = useCallback(() => {
+    if (keyboardFocusRestoreEnabled) {
+      restoreComposerFocusOnCloseRef.current = true;
+    }
+  }, [keyboardFocusRestoreEnabled]);
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
   const selectedReasoningOption = reasoningControl?.options.find((option) => option.selected) ?? null;
   const reasoningLabel = resolveReasoningEffortPresentation(
@@ -171,7 +181,15 @@ export function ComposerModelSelectorControl({
           align="start"
           sideOffset={2}
           className="w-56 min-w-56"
-          onCloseAutoFocus={(event) => event.preventDefault()}
+          onEscapeKeyDown={handleKeyboardClose}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            const shouldRestoreComposerFocus = restoreComposerFocusOnCloseRef.current;
+            restoreComposerFocusOnCloseRef.current = false;
+            if (shouldRestoreComposerFocus && keyboardFocusRestoreEnabled) {
+              focusChatInput();
+            }
+          }}
         >
           <ComposerModelPickerMenu
             groups={groups}
@@ -179,6 +197,8 @@ export function ComposerModelSelectorControl({
             currentModelLabel={triggerLabel}
             reasoningControl={reasoningControl}
             fastModeControl={fastModeControl}
+            onEscapeKeyDown={handleKeyboardClose}
+            onKeyboardSelect={handleKeyboardClose}
             onSelect={(selection) => {
               onSelect(selection);
               setPickerOpen(false);
@@ -214,6 +234,8 @@ function ComposerModelPickerMenu({
   currentModelLabel,
   reasoningControl,
   fastModeControl,
+  onEscapeKeyDown,
+  onKeyboardSelect,
   onSelect,
   onAddProvider,
   onSettings,
@@ -223,6 +245,8 @@ function ComposerModelPickerMenu({
   currentModelLabel: string;
   reasoningControl: LiveSessionControlDescriptor | null;
   fastModeControl: LiveSessionControlDescriptor | null;
+  onEscapeKeyDown: () => void;
+  onKeyboardSelect: () => void;
   onSelect: (selection: ModelSelectorSelection) => void;
   onAddProvider: () => void;
   onSettings: () => void;
@@ -233,15 +257,19 @@ function ComposerModelPickerMenu({
         groups={groups}
         currentModel={currentModel}
         currentModelLabel={currentModelLabel}
+        onEscapeKeyDown={onEscapeKeyDown}
+        onKeyboardSelect={onKeyboardSelect}
         onSelect={onSelect}
       />
       <ComposerModelTuningControls
         reasoningControl={reasoningControl}
         fastModeControl={fastModeControl}
+        onEscapeKeyDown={onEscapeKeyDown}
       />
       <DropdownMenuSeparator />
       <AdvancedOptionsSubmenu
         onAddProvider={onAddProvider}
+        onEscapeKeyDown={onEscapeKeyDown}
         onSettings={onSettings}
       />
     </>
@@ -250,9 +278,11 @@ function ComposerModelPickerMenu({
 
 function AdvancedOptionsSubmenu({
   onAddProvider,
+  onEscapeKeyDown,
   onSettings,
 }: {
   onAddProvider: () => void;
+  onEscapeKeyDown: () => void;
   onSettings: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -265,7 +295,12 @@ function AdvancedOptionsSubmenu({
       >
         Advanced
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent sideOffset={4} alignOffset={-4} className="w-56">
+      <DropdownMenuSubContent
+        sideOffset={4}
+        alignOffset={-4}
+        className="w-56"
+        onEscapeKeyDown={onEscapeKeyDown}
+      >
         <DropdownMenuItem onSelect={onAddProvider}>
           <Plus className="icon-compact shrink-0" />
           <span>Add provider</span>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-display-name-parts";
 import { orderModelGroupsActiveFirst } from "#product/lib/domain/chat/models/order-model-groups";
@@ -26,17 +26,25 @@ export function ComposerModelOptionsSubmenu({
   groups,
   currentModel,
   currentModelLabel,
+  onEscapeKeyDown,
+  onKeyboardSelect,
   onSelect,
 }: {
   groups: ModelSelectorGroup[];
   currentModel: ModelSelectorProps["currentModel"];
   currentModelLabel: string;
+  onEscapeKeyDown: () => void;
+  onKeyboardSelect: () => void;
   onSelect: (selection: ModelSelectorSelection) => void;
 }) {
   const currentKind = currentModel?.kind ?? null;
   const orderedGroups = orderModelGroupsActiveFirst(groups, currentKind);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const handleKeyboardSelect = useCallback((selection: ModelSelectorSelection) => {
+    onKeyboardSelect();
+    onSelect(selection);
+  }, [onKeyboardSelect, onSelect]);
 
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -63,7 +71,7 @@ export function ComposerModelOptionsSubmenu({
     setHighlightedKey,
     setRowRef,
     handleSearchKeyDown,
-  } = useModelPickerKeyboardNav(filteredGroups, onSelect);
+  } = useModelPickerKeyboardNav(filteredGroups, handleKeyboardSelect);
 
   return (
     <DropdownMenuSub open={open} onOpenChange={setOpen}>
@@ -79,6 +87,7 @@ export function ComposerModelOptionsSubmenu({
         sideOffset={4}
         alignOffset={-4}
         className="flex max-h-96 w-72 flex-col overflow-hidden p-0"
+        onEscapeKeyDown={onEscapeKeyDown}
       >
         <div className="shrink-0 border-b border-border">
           <PopoverSearchField
@@ -100,6 +109,7 @@ export function ComposerModelOptionsSubmenu({
               group={group}
               currentKind={currentKind}
               showSeparator={index > 0}
+              onKeyboardSelect={onKeyboardSelect}
               onSelect={onSelect}
               highlightedKey={effectiveHighlightedKey}
               onHighlight={setHighlightedKey}
@@ -128,6 +138,7 @@ function ModelPickerGroup({
   group,
   currentKind,
   showSeparator,
+  onKeyboardSelect,
   onSelect,
   highlightedKey,
   onHighlight,
@@ -136,6 +147,7 @@ function ModelPickerGroup({
   group: ModelSelectorGroup;
   currentKind: string | null;
   showSeparator: boolean;
+  onKeyboardSelect: () => void;
   onSelect: (selection: ModelSelectorSelection) => void;
   highlightedKey: string | null;
   onHighlight: (key: string) => void;
@@ -185,6 +197,16 @@ function ModelPickerGroup({
             className={`items-start px-2.5 py-2 text-composer ${
               !model.isUnsupported && (model.isSelected || isHighlighted) ? "bg-hover" : ""
             }`}
+            // Keyboard submenu navigation focuses the rows themselves (the
+            // menu, not the search field, owns focus after a keyboard open),
+            // and the menu primitive turns Enter/Space on a focused row into a
+            // click-select. Mark the close as keyboard-driven before that
+            // conversion runs; onSelect cannot tell keyboard from pointer.
+            onKeyDown={(event) => {
+              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                onKeyboardSelect();
+              }
+            }}
             onSelect={() => onSelect({ kind: group.kind, modelId: model.modelId })}
           >
             <ProviderIcon kind={group.kind} className="icon-compact mt-0.5 shrink-0 text-muted-foreground [font-size:var(--text-composer)]" />
