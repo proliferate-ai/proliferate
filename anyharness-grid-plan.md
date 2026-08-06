@@ -575,6 +575,25 @@ cfg(test) rows.
    693→690, mobility/service.rs 851 unchanged. PR 9 stacks on this
    branch and needs the usual main-sync retarget after #1670
    squash-merges.
+4. **#1671** `codex/anyharness-lifecycle-service` @ 82e8b7b0c — PR 9,
+   retire state machine out of the handler (workspaces_lifecycle.rs
+   644→89; handler now auth → parse → one call → map). STACKED on
+   #1670's branch. Builder findings: handler copies A/B were
+   byte-identical modulo a binding name → ONE policy fn evaluated
+   twice (pre-lease early-out + under-lease re-read); copy C (retry
+   admission) is a genuinely different predicate; five copies of
+   decision logic total, not three. Structure: lifecycle SERVICE (not
+   runtime method — construction-cycle constraint; matches the law
+   doc's own table). New app/workspaces.rs wiring family kept
+   app/mod.rs at exactly 690; NO pin raised anywhere.
+   **NEEDS PABLO'S RULING**: two real pre-existing endpoint
+   inconsistencies were preserved (not unified) with pinning tests:
+   (a) retired+Complete → retire says AlreadyRetired/success but
+   retry says Unavailable (defensible); (b) retired+cleanup_state=None
+   → BOTH endpoints dead-end (retire: "cleanup is not complete";
+   retry: refuses to resume) — a workspace stuck in this state has no
+   API path out. (b) wants a product decision: which endpoint should
+   accept it? Adversarial review in flight.
 
 Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
 the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
