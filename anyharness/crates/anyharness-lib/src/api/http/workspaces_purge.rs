@@ -62,8 +62,7 @@ pub(super) async fn admit_all_workspace_sessions(
 ) -> Result<AdmittedWorkspaceSessions, ApiError> {
     let mut sessions = state
         .session_service
-        .store()
-        .list_with_dismissed_by_workspace(workspace_id)
+        .list_sessions(Some(workspace_id), true)
         .map_err(|error| {
             tracing::error!(workspace_id = %workspace_id, error = %error, "session list failed");
             ApiError::internal("session list failed")

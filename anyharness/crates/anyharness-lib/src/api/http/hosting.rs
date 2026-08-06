@@ -26,7 +26,6 @@ use crate::adapters::hosting::types::{
 use crate::adapters::hosting::HostingService;
 use crate::app::AppState;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::domains::workspaces::store::WorkspaceStore;
 
 fn resolve_workspace_path(
     workspace_runtime: &crate::domains::workspaces::runtime::WorkspaceRuntime,
@@ -198,19 +197,12 @@ pub async fn get_repo_pull_request_statuses(
 
     // The daemon derives the branch set itself: distinct current branches
     // over the repo root's non-retired workspaces (clients send nothing).
-    let workspace_store = WorkspaceStore::new(state.db.clone());
-    let workspaces = run_blocking("list active repo root workspaces", move || {
-        workspace_store.list_active_by_repo_root_id(&repo_root_id)
+    let workspace_runtime = state.workspace_runtime.clone();
+    let active_branches = run_blocking("derive active repo root branches", move || {
+        workspace_runtime.list_repo_root_active_branches(&repo_root_id)
     })
     .await?
     .map_err(|error| ApiError::internal(error.to_string()))?;
-    let active_branches: Vec<String> = workspaces
-        .into_iter()
-        .filter_map(|workspace| workspace.current_branch)
-        .filter(|branch| !branch.is_empty())
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect();
 
     // Reads the repo root only — never a worktree — so no workspace
     // operation lease is taken (cannot race retire/purge).

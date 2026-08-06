@@ -194,7 +194,6 @@ pub async fn get_prompt_attachment(
         })?;
     let attachment = state
         .session_service
-        .store()
         .find_prompt_attachment(&session_id, &attachment_id)
         .map_err(|error| ApiError::internal(error.to_string()))?
         .ok_or_else(|| {
