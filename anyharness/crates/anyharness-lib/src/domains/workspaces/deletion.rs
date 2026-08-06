@@ -69,10 +69,7 @@ impl WorkspaceDeleteWorkflow {
         conn: &rusqlite::Connection,
         workspace_id: &str,
     ) -> rusqlite::Result<()> {
-        crate::domains::workspaces::access_store::delete_workspace_access_modes_in_tx(
-            conn,
-            workspace_id,
-        )?;
+        crate::domains::workspaces::store::delete_workspace_access_modes_in_tx(conn, workspace_id)?;
         for participant in &self.participants {
             participant.delete_workspace_rows_in_tx(conn, workspace_id)?;
         }
