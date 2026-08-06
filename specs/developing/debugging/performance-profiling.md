@@ -146,9 +146,10 @@ localStorage.setItem("proliferate:transcriptVirtualization", "on")
 localStorage.setItem("proliferate:transcriptVirtualization", "off")
 ```
 
-`auto` is the default and virtualizes only larger transcripts. Use `on` to force
-the virtual path while profiling scroll behavior, and `off` to verify the full
-render path. The older `proliferate:enableTranscriptVirtualization` and
+`auto` is the default and uses one stable virtual path from the first row as a
+transcript grows. Use `on` to explicitly force that same path while profiling,
+and `off` to verify the full render path. The older
+`proliferate:enableTranscriptVirtualization` and
 `proliferate:disableTranscriptVirtualization` keys are still read only as
 fallbacks when the tri-state key is absent.
 

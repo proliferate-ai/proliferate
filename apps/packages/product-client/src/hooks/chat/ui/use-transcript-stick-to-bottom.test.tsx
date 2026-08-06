@@ -316,6 +316,21 @@ describe("useTranscriptStickToBottom", () => {
     expect(handle.current.api.isPinnedToBottom).toBe(false);
   });
 
+  it("records the bottom baseline when a guarded snap is already satisfied", () => {
+    const handle = renderHarness();
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 700 });
+
+    act(() => {
+      handle.current.api.scrollToBottom();
+    });
+
+    // This is still inside the re-pin band, so only the upward direction tells
+    // the engine that the user is leaving the bottom.
+    userScroll(handle, 690);
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+  });
+
   it("re-pins only within the tight bottom band", () => {
     const handle = renderHarness();
     const { viewport } = handle.current;

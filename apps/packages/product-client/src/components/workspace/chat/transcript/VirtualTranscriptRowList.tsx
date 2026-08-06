@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
@@ -15,22 +15,14 @@ const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:enableTranscriptVi
 const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:disableTranscriptVirtualization";
 
 export function VirtualTranscriptRowList(props: TranscriptRowListBaseProps) {
-  const { activeSessionId, rows, selectedWorkspaceId } = props;
+  const { activeSessionId, selectedWorkspaceId } = props;
   const [virtualizationMode] = useState(readTranscriptVirtualizationMode);
-  // Latch the auto decision per session: swapping list implementations
-  // mid-session remounts the whole transcript DOM, which reads as a full-page
-  // jump right as a chat crosses the row threshold. A session that starts
-  // small stays on the full list until re-entered; the full list stays
-  // correct (just less efficient) at larger row counts.
-  const latchedSessionRef = useRef<{ sessionId: string; enabled: boolean } | null>(null);
-  const latched = latchedSessionRef.current;
-  const virtualizationEnabled = latched?.sessionId === activeSessionId
-    ? latched.enabled
-    : resolveTranscriptVirtualizationEnabled({
-        mode: virtualizationMode,
-        rowCount: rows.length,
-      });
-  latchedSessionRef.current = { sessionId: activeSessionId, enabled: virtualizationEnabled };
+  // Auto uses one stable virtualized implementation from the first row onward.
+  // This avoids both a threshold remount and the old false latch that left a
+  // live session on the full-DOM path forever.
+  const virtualizationEnabled = resolveTranscriptVirtualizationEnabled({
+    mode: virtualizationMode,
+  });
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
   useLayoutEffect(() => {
     setFallbackReason(null);

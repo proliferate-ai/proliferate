@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 import type {
   PendingPromptEntry,
@@ -15,10 +15,16 @@ import type {
 } from "./chat-transcript-view-types";
 import { resolvePendingPromptRenderTarget } from "#product/lib/domain/chat/transcript/chat-transcript-view-rules";
 
+export interface ChatTranscriptRowRendering {
+  renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
+  getRowRenderRevision: (row: TranscriptVirtualRow) => object;
+}
+
 export function useChatTranscriptRowRenderer({
   activeSessionId,
   latestLiveExplorationBlock,
   latestLiveStatus,
+  latestCompletedTurnId,
   latestTurnId,
   optimisticPromptTrailingStatus,
   outboxActions,
@@ -35,6 +41,7 @@ export function useChatTranscriptRowRenderer({
   activeSessionId: string;
   latestLiveExplorationBlock: Extract<TurnDisplayBlock, { kind: "collapsed_actions" }> | null;
   latestLiveStatus: ReactNode;
+  latestCompletedTurnId: string | null;
   latestTurnId: string | null;
   optimisticPromptTrailingStatus: ReactNode;
   outboxActions: ChatTranscriptOutboxActions;
@@ -47,8 +54,8 @@ export function useChatTranscriptRowRenderer({
   transcript: TranscriptState;
   visibleOutboxEntries: readonly PromptOutboxEntry[];
   visibleOptimisticPrompt: PendingPromptEntry | null;
-}): (row: TranscriptVirtualRow, rowIndex: number) => ReactNode {
-  return useCallback((row: TranscriptVirtualRow, rowIndex: number) => {
+}): ChatTranscriptRowRendering {
+  const renderRow = useCallback((row: TranscriptVirtualRow, rowIndex: number) => {
     if (row.kind === "pending_prompt" || row.kind === "outbox_prompt") {
       const target = resolvePendingPromptRenderTarget({
         row,
@@ -84,6 +91,7 @@ export function useChatTranscriptRowRenderer({
       turn,
       transcript,
       latestTurnId,
+      latestCompletedTurnId,
       latestLiveExplorationBlock,
       latestLiveStatus,
       outboxStartedAtByPromptId,
@@ -92,6 +100,7 @@ export function useChatTranscriptRowRenderer({
     });
   }, [
     activeSessionId,
+    latestCompletedTurnId,
     latestLiveExplorationBlock,
     latestLiveStatus,
     latestTurnId,
@@ -107,4 +116,62 @@ export function useChatTranscriptRowRenderer({
     visibleOutboxEntries,
     visibleOptimisticPrompt,
   ]);
+
+  // Row wrappers intentionally ignore renderRow's whole-transcript identity.
+  // These explicit revisions carry only the external inputs that can change a
+  // row whose immutable row model stayed the same. A streaming tail update now
+  // repaints the tail row while historical rows retain their memoized subtree.
+  const turnRenderRevision = useMemo(() => ({}), [
+    outboxStartedAtByPromptId,
+    renderTurnRow,
+    selectedWorkspaceId,
+    sessionViewState,
+    transcript.linkCompletionsByCompletionId,
+    transcript.sessionMeta.title,
+  ]);
+  const latestTurnRenderRevision = useMemo(() => ({}), [
+    latestLiveExplorationBlock,
+    latestLiveStatus,
+    latestTurnId,
+    turnRenderRevision,
+  ]);
+  const latestCompletedTurnRenderRevision = useMemo(() => ({}), [
+    latestCompletedTurnId,
+    turnRenderRevision,
+  ]);
+  const pendingPromptRenderRevision = useMemo(() => ({}), [
+    activeSessionId,
+    optimisticPromptTrailingStatus,
+    outboxActions,
+    renderPendingPromptRow,
+    visibleOptimisticPrompt,
+    visibleOutboxEntries,
+  ]);
+  const goalEventRenderRevision = useMemo(() => ({}), [renderGoalEventRow]);
+
+  const getRowRenderRevision = useCallback((row: TranscriptVirtualRow): object => {
+    if (row.kind === "pending_prompt" || row.kind === "outbox_prompt") {
+      return pendingPromptRenderRevision;
+    }
+    if (row.kind === "goal_event") {
+      return goalEventRenderRevision;
+    }
+    if (row.turnId === latestTurnId) {
+      return latestTurnRenderRevision;
+    }
+    if (row.turnId === latestCompletedTurnId) {
+      return latestCompletedTurnRenderRevision;
+    }
+    return turnRenderRevision;
+  }, [
+    goalEventRenderRevision,
+    latestCompletedTurnId,
+    latestCompletedTurnRenderRevision,
+    latestTurnId,
+    latestTurnRenderRevision,
+    pendingPromptRenderRevision,
+    turnRenderRevision,
+  ]);
+
+  return { renderRow, getRowRenderRevision };
 }

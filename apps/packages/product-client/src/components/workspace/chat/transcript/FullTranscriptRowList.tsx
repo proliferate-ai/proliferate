@@ -57,6 +57,7 @@ export function FullTranscriptRowList({
   onLoadOlderHistory,
   onScrollSample,
   renderRow,
+  getRowRenderRevision,
   columnClassName = CHAT_COLUMN_CLASSNAME,
   gutterClassName = CHAT_SURFACE_GUTTER_CLASSNAME,
   fallbackReason,
@@ -283,6 +284,7 @@ export function FullTranscriptRowList({
                 row={row}
                 rowIndex={rowIndex}
                 renderRow={renderRow}
+                renderRevision={getRowRenderRevision?.(row) ?? renderRow}
               />
             ))}
           </div>
@@ -321,6 +323,7 @@ const MemoizedFullTranscriptRow = memo(function MemoizedFullTranscriptRow({
   row: TranscriptVirtualRow;
   rowIndex: number;
   renderRow: TranscriptRowRenderer;
+  renderRevision: unknown;
 }) {
   const rowContext = useMemo(
     () => ({ rowUnitId: `chatrow:${row.key}`, rowIndex }),
@@ -340,5 +343,5 @@ const MemoizedFullTranscriptRow = memo(function MemoizedFullTranscriptRow({
 }, (prev, next) =>
   prev.row === next.row
   && prev.rowIndex === next.rowIndex
-  && prev.renderRow === next.renderRow
+  && prev.renderRevision === next.renderRevision
 );

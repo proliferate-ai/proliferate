@@ -3,8 +3,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TranscriptVirtualizationMode } from "#product/domain/chats/transcript/transcript-virtualization-config";
 import {
   buildRenderableRows,
-  estimateRenderableRowHeight,
-  estimateRenderableRowsHeight,
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
   TRANSCRIPT_TOP_PADDING_PX,
@@ -12,7 +10,6 @@ import {
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
-  type TranscriptRenderableRow,
   type TranscriptRowListBaseProps,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { TranscriptFloatingControls } from "./TranscriptRowListShared";
@@ -20,20 +17,10 @@ import { useAboveChangeCompensation } from "#product/hooks/chat/ui/use-above-cha
 import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
+import { useTranscriptVirtualAnchorCapture } from "#product/hooks/chat/ui/use-transcript-virtual-anchor-capture";
+import { useTranscriptVirtualMeasurementModel } from "#product/hooks/chat/ui/use-transcript-virtual-measurement-model";
 
 const VIRTUALIZER_OVERSCAN = 8;
-
-interface VirtualScrollAnchor {
-  key: TranscriptRenderableRow["key"];
-  offsetWithinRowPx: number;
-  rowIndex: number;
-  rowCount: number;
-  // Real measured DOM metrics at capture, for the composition-change fallback
-  // (turn-row split) where offset+estimate math lands wrong. See the restore
-  // effect below.
-  scrollHeight: number;
-  scrollTop: number;
-}
 
 interface VirtualizedTranscriptRowListProps extends TranscriptRowListBaseProps {
   onFallback: (reason: string) => void;
@@ -55,6 +42,7 @@ export function VirtualizedTranscriptRowList({
   onLoadOlderHistory,
   onScrollSample,
   renderRow,
+  getRowRenderRevision,
   columnClassName,
   gutterClassName,
   onFallback,
@@ -63,7 +51,6 @@ export function VirtualizedTranscriptRowList({
 }: VirtualizedTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const pendingAnchorRef = useRef<VirtualScrollAnchor | null>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
@@ -90,21 +77,41 @@ export function VirtualizedTranscriptRowList({
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
   );
-  const estimatedInitialBottomOffset =
-    TRANSCRIPT_TOP_PADDING_PX
-    + estimateRenderableRowsHeight(renderableRows)
-    + structuralBottomInsetPx;
-
+  const {
+    estimateSize,
+    estimatedRowsHeight,
+    getItemKey,
+    rowCompositionKey,
+  } = useTranscriptVirtualMeasurementModel({
+    activeSessionId,
+    renderableRows,
+    selectedWorkspaceId,
+  });
+  // initialOffset is consumed only when the virtualizer mounts. Avoid reducing
+  // the entire transcript again on every scroll-driven virtualizer render.
+  const estimatedInitialBottomOffset = useMemo(
+    () => TRANSCRIPT_TOP_PADDING_PX
+      + estimatedRowsHeight
+      + structuralBottomInsetPx,
+    [estimatedRowsHeight, structuralBottomInsetPx],
+  );
   const virtualizer = useVirtualizer({
     count: renderableRows.length,
     getScrollElement: () => scrollRef.current,
-    getItemKey: (index) => renderableRows[index]?.key ?? index,
-    estimateSize: (index) => estimateRenderableRowHeight(renderableRows[index]),
+    getItemKey,
+    estimateSize,
     overscan: VIRTUALIZER_OVERSCAN,
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
     paddingEnd: structuralBottomInsetPx,
     initialOffset: () => estimatedInitialBottomOffset,
     useAnimationFrameWithResizeObserver: true,
+  });
+  const pendingAnchorRef = useTranscriptVirtualAnchorCapture({
+    getVirtualItems: () => virtualizer.getVirtualItems(),
+    pinnedRef,
+    renderableRows,
+    rowCompositionKey,
+    scrollRef,
   });
   // Content-search jump-to-match: bring an off-screen row into view so its
   // painted marks mount before the overlay queries the DOM for the active one.
@@ -347,37 +354,6 @@ export function VirtualizedTranscriptRowList({
     };
   }, [pinnedRef, scrollToBottom]);
 
-  useLayoutEffect(() => () => {
-    const viewport = scrollRef.current;
-    if (!viewport || pinnedRef.current) {
-      pendingAnchorRef.current = null;
-      return;
-    }
-
-    const firstVisibleVirtualRow = virtualizer
-      .getVirtualItems()
-      .find((item) => item.end >= viewport.scrollTop);
-    if (!firstVisibleVirtualRow) {
-      pendingAnchorRef.current = null;
-      return;
-    }
-
-    const row = renderableRows[firstVisibleVirtualRow.index];
-    if (!row) {
-      pendingAnchorRef.current = null;
-      return;
-    }
-
-    pendingAnchorRef.current = {
-      key: row.key,
-      offsetWithinRowPx: Math.max(viewport.scrollTop - firstVisibleVirtualRow.start, 0),
-      rowIndex: firstVisibleVirtualRow.index,
-      rowCount: renderableRows.length,
-      scrollHeight: viewport.scrollHeight,
-      scrollTop: viewport.scrollTop,
-    };
-  });
-
   useTranscriptVirtualizerBlankFallback({
     activeSessionId, bottomSpacerHeight,
     firstVirtualItem, lastVirtualItem,
@@ -400,6 +376,7 @@ export function VirtualizedTranscriptRowList({
         onViewportScroll={handleViewportScroll}
         renderableRows={renderableRows}
         renderRow={renderRow}
+        getRowRenderRevision={getRowRenderRevision}
         scrollRef={scrollRef}
         selectionRootRef={selectionRootRef}
         topSpacerHeight={topSpacerHeight}

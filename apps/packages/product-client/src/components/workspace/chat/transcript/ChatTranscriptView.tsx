@@ -42,10 +42,14 @@ export function ChatTranscriptView({
     visibleOptimisticPrompt: model.visibleOptimisticPrompt,
   });
 
-  const renderVirtualRow = useChatTranscriptRowRenderer({
+  const {
+    renderRow: renderVirtualRow,
+    getRowRenderRevision,
+  } = useChatTranscriptRowRenderer({
     activeSessionId: model.activeSessionId,
     latestLiveExplorationBlock: model.latestLiveExplorationBlock,
     latestLiveStatus: model.latestLiveStatus,
+    latestCompletedTurnId: model.latestCompletedTurnId,
     latestTurnId: model.latestTurnId,
     optimisticPromptTrailingStatus: model.optimisticPromptTrailingStatus,
     outboxActions,
@@ -80,6 +84,7 @@ export function ChatTranscriptView({
         onLoadOlderHistory={model.onLoadOlderHistory}
         onScrollSample={onScrollSample}
         renderRow={renderVirtualRow}
+        getRowRenderRevision={getRowRenderRevision}
         columnClassName={model.columnClassName}
         gutterClassName={model.gutterClassName}
         scrollHandleRef={scrollHandleRef}

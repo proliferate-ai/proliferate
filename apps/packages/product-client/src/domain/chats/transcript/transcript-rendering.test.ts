@@ -8,12 +8,27 @@ import {
 } from "./transcript-presentation-test-fixtures";
 import { buildTurnPresentation } from "./transcript-presentation";
 import {
+  collectToolCallIdsWithProposedPlan,
   findTrailingLiveExplorationBlock,
   findTrailingLiveWorkBlock,
   turnHasActiveToolWork,
 } from "./transcript-rendering";
 
 describe("transcript rendering helpers", () => {
+  it("preserves the proposed-plan index identity when unrelated prose changes", () => {
+    const transcript = createTranscriptState("session-1");
+    const previous = new Set<string>();
+
+    const first = collectToolCallIdsWithProposedPlan(transcript, previous);
+    transcript.itemsById = {
+      message: assistantItem("message", "turn-1", 1),
+    };
+    const next = collectToolCallIdsWithProposedPlan(transcript, first);
+
+    expect(first).toBe(previous);
+    expect(next).toBe(first);
+  });
+
   it("does not keep a completed trailing inline action live after the action phase", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {

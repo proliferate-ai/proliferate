@@ -1,9 +1,9 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
-  useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -57,13 +57,43 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
   ) {
     const viewportRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
+    const thumbTrackRef = useRef<HTMLDivElement>(null);
+    const thumbRef = useRef<HTMLDivElement>(null);
+    const onViewportScrollRef = useRef(onViewportScroll);
     const hideTimerRef = useRef<number | null>(null);
+    const thumbFrameRef = useRef<number | null>(null);
+    const pendingThumbVisibleRef = useRef(false);
     const dragOffsetRef = useRef(0);
     const draggingRef = useRef(false);
     const thumbStateRef = useRef<ScrollThumbState>(HIDDEN_THUMB_STATE);
-    const [thumb, setThumb] = useState<ScrollThumbState>(HIDDEN_THUMB_STATE);
 
     useImperativeHandle(ref, () => viewportRef.current as HTMLDivElement);
+
+    useEffect(() => {
+      onViewportScrollRef.current = onViewportScroll;
+    }, [onViewportScroll]);
+
+    const applyThumbStateToDom = useCallback((state: ScrollThumbState) => {
+      const track = thumbTrackRef.current;
+      const thumb = thumbRef.current;
+      if (!track || !thumb) {
+        return;
+      }
+      track.style.opacity = state.visible && state.size > 0 ? "1" : "0";
+      thumb.style.pointerEvents = state.visible && state.size > 0 ? "auto" : "none";
+      thumb.style.height = `${state.size}px`;
+      thumb.style.transform = `translateY(${state.offset}px)`;
+    }, []);
+
+    const setThumbTrackNode = useCallback((node: HTMLDivElement | null) => {
+      thumbTrackRef.current = node;
+      applyThumbStateToDom(thumbStateRef.current);
+    }, [applyThumbStateToDom]);
+
+    const setThumbNode = useCallback((node: HTMLDivElement | null) => {
+      thumbRef.current = node;
+      applyThumbStateToDom(thumbStateRef.current);
+    }, [applyThumbStateToDom]);
 
     const clearHideTimer = () => {
       if (hideTimerRef.current != null) {
@@ -77,7 +107,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
         return;
       }
       thumbStateRef.current = next;
-      setThumb(next);
+      applyThumbStateToDom(next);
     };
 
     const updateThumb = (visible = false) => {
@@ -106,6 +136,19 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       });
     };
 
+    const requestThumbUpdate = (visible = false) => {
+      pendingThumbVisibleRef.current = pendingThumbVisibleRef.current || visible;
+      if (thumbFrameRef.current !== null) {
+        return;
+      }
+      thumbFrameRef.current = window.requestAnimationFrame(() => {
+        thumbFrameRef.current = null;
+        const nextVisible = pendingThumbVisibleRef.current;
+        pendingThumbVisibleRef.current = false;
+        updateThumb(nextVisible);
+      });
+    };
+
     const scheduleHide = () => {
       clearHideTimer();
       if (draggingRef.current) return;
@@ -121,39 +164,29 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       const viewport = viewportRef.current;
       const content = contentRef.current;
       if (!viewport || !content) return;
-      let resizeFrame: number | null = null;
-
-      const requestResizeUpdate = () => {
-        if (resizeFrame !== null) {
-          return;
-        }
-        resizeFrame = window.requestAnimationFrame(() => {
-          resizeFrame = null;
-          updateThumb(false);
-        });
-      };
 
       const handleScroll = () => {
-        updateThumb(true);
-        onViewportScroll?.(viewport);
+        requestThumbUpdate(true);
+        onViewportScrollRef.current?.(viewport);
         scheduleHide();
       };
       viewport.addEventListener("scroll", handleScroll, { passive: true });
 
-      const observer = new ResizeObserver(requestResizeUpdate);
+      const observer = new ResizeObserver(() => requestThumbUpdate(false));
       observer.observe(viewport);
       observer.observe(content);
-      requestResizeUpdate();
+      requestThumbUpdate(false);
 
       return () => {
         clearHideTimer();
-        if (resizeFrame !== null) {
-          window.cancelAnimationFrame(resizeFrame);
+        if (thumbFrameRef.current !== null) {
+          window.cancelAnimationFrame(thumbFrameRef.current);
+          thumbFrameRef.current = null;
         }
         viewport.removeEventListener("scroll", handleScroll);
         observer.disconnect();
       };
-    }, [onViewportScroll]);
+    }, []);
 
     useEffect(() => {
       const handlePointerMove = (event: PointerEvent) => {
@@ -176,7 +209,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
         );
         viewport.scrollTop =
           (nextOffset / maxOffset) * Math.max(scrollHeight - clientHeight, 0);
-        updateThumb(true);
+        requestThumbUpdate(true);
       };
 
       const handlePointerUp = () => {
@@ -200,7 +233,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       draggingRef.current = true;
       clearHideTimer();
 
-      const thumbTop = thumb.offset;
+      const thumbTop = thumbStateRef.current.offset;
       dragOffsetRef.current = event.clientY - viewport.getBoundingClientRect().top - thumbTop;
       const current = thumbStateRef.current;
       if (!current.visible) {
@@ -240,18 +273,19 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
           </div>
         </div>
 
-        {!allowHorizontal && thumb.size > 0 && (
+        {!allowHorizontal && (
           <div
+            ref={setThumbTrackNode}
             aria-hidden="true"
-            className={`pointer-events-none absolute right-[3px] top-[3px] bottom-[3px] w-1.5 transition-opacity duration-hover ${
-              thumb.visible ? "opacity-100" : "opacity-0"
-            }`}
+            className="pointer-events-none absolute right-[3px] top-[3px] bottom-[3px] w-1.5 opacity-0 transition-opacity duration-hover"
           >
             <div
+              ref={setThumbNode}
               className="pointer-events-auto absolute right-0 w-1.5 rounded-full bg-scrollbar-thumb transition-colors duration-hover hover:bg-scrollbar-thumb-active"
               style={{
-                height: `${thumb.size}px`,
-                transform: `translateY(${thumb.offset}px)`,
+                height: 0,
+                pointerEvents: "none",
+                transform: "translateY(0)",
               }}
               onPointerDown={handleThumbPointerDown}
             />

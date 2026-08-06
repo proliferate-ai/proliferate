@@ -32,9 +32,6 @@ import {
   collectTurnFileRevertPatchEntries,
 } from "#product/domain/chats/transcript/turn-file-patches";
 import {
-  latestCompletedTurn,
-} from "#product/domain/chats/transcript/last-turn-file-changes";
-import {
   resolveTurnStoppedNotice,
 } from "#product/domain/chats/transcript/turn-stopped-presentation";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
@@ -54,6 +51,7 @@ export function TranscriptTurnRow({
   turn,
   transcript,
   latestTurnId,
+  latestCompletedTurnId,
   latestLiveExplorationBlock,
   latestLiveStatus,
   outboxStartedAtByPromptId,
@@ -69,6 +67,7 @@ export function TranscriptTurnRow({
   turn: TurnRecord;
   transcript: TranscriptState;
   latestTurnId: string | null;
+  latestCompletedTurnId: string | null;
   latestLiveExplorationBlock: Extract<TurnDisplayBlock, { kind: "collapsed_actions" }> | null;
   latestLiveStatus: ReactNode;
   outboxStartedAtByPromptId: ReadonlyMap<string, string>;
@@ -81,10 +80,6 @@ export function TranscriptTurnRow({
 }) {
   const isLatestTurn = row.turnId === latestTurnId;
   const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
-  const latestCompletedTurnId = useMemo(
-    () => latestCompletedTurn(transcript)?.turnId ?? null,
-    [transcript],
-  );
   const sessionGoal = useSessionGoal();
   const presentation = row.presentation;
   const renderPresentation = row.renderPresentation;

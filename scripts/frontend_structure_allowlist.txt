@@ -18,7 +18,6 @@
 # max-lines entries.
 
 apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 425 workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth
-apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx 416 virtualized transcript list pending row-window split (recorded in debt repair)
 apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx 525 existing markdown transcript renderer pending split
 # Relocated from apps/desktop/src by the Desktop-product move into product-client
 # (web-desktop-unification slice 04). Same files, same counts/reasons — relocation,

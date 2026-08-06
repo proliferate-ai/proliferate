@@ -23,6 +23,7 @@ export function VirtualTranscriptViewport({
   onViewportScroll,
   renderableRows,
   renderRow,
+  getRowRenderRevision,
   scrollRef,
   selectionRootRef,
   topSpacerHeight,
@@ -40,6 +41,7 @@ export function VirtualTranscriptViewport({
   onViewportScroll: (viewport: HTMLDivElement) => void;
   renderableRows: readonly TranscriptRenderableRow[];
   renderRow: TranscriptRowListBaseProps["renderRow"];
+  getRowRenderRevision?: TranscriptRowListBaseProps["getRowRenderRevision"];
   scrollRef: RefObject<HTMLDivElement | null>;
   selectionRootRef: TranscriptRowListBaseProps["selectionRootRef"];
   topSpacerHeight: number;
@@ -95,6 +97,7 @@ export function VirtualTranscriptViewport({
                 rowIndex={renderableRow.rowIndex}
                 virtualIndex={virtualRow.index}
                 renderRow={renderRow}
+                renderRevision={getRowRenderRevision?.(row) ?? renderRow}
                 measureElement={measureElement}
               />
             );

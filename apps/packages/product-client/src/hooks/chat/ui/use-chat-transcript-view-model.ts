@@ -24,6 +24,7 @@ import { collectVisibleTurnIds } from "#product/lib/domain/chat/transcript/chat-
 import { useLatestTranscriptLiveStatus } from "./use-latest-transcript-live-status";
 import { useSharedTranscriptRowModel } from "./use-shared-transcript-row-model";
 import { useOptimisticPromptHandoff } from "./use-optimistic-prompt-handoff";
+import { latestCompletedTurn } from "#product/domain/chats/transcript/last-turn-file-changes";
 
 const noop = () => {};
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
@@ -49,6 +50,7 @@ export interface ChatTranscriptViewModel {
   virtualRows: readonly TranscriptVirtualRow[];
   visibleTurnIds: readonly string[];
   latestTurnId: string | null;
+  latestCompletedTurnId: string | null;
   latestLiveExplorationBlock: Extract<TurnDisplayBlock, { kind: "collapsed_actions" }> | null;
   latestLiveStatus: ReactNode;
 }
@@ -85,6 +87,10 @@ export function useChatTranscriptViewModel({
   const columnClassName = layout?.columnClassName;
   const gutterClassName = layout?.gutterClassName;
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
+  const latestCompletedTurnId = useMemo(
+    () => latestCompletedTurn(transcript)?.turnId ?? null,
+    [transcript],
+  );
   const latestTurn = latestTurnId ? transcript.turnsById[latestTurnId] ?? null : null;
   const latestTurnHasAssistantRenderableContent = turnHasAssistantRenderableTranscriptContent(
     latestTurn,
@@ -174,6 +180,7 @@ export function useChatTranscriptViewModel({
     virtualRows,
     visibleTurnIds,
     latestTurnId,
+    latestCompletedTurnId,
     latestLiveExplorationBlock,
     latestLiveStatus,
   };
