@@ -486,37 +486,35 @@ with everything).
 - **Then**: PR 8 → 9; PR 11 docs PR anytime; PR 10.x cadence begins.
 - PR 12 brief and PR 13 wait for the train to be quiet + rulings.
 
-## Merge choreography (state 2026-08-05, Pablo merges)
+## Merge choreography — EXECUTED 2026-08-05 (Pablo authorized: "ensure all clean then squash merge")
 
-Open stack, in merge order:
+All four PRs squash-merged to main, in order. Each stacked PR needed a
+post-squash main-sync (squash rewrites history, so branches carrying the
+pre-squash base commits go CONFLICTING): plain merge of origin/main,
+scripts resolved to main's copies, the branch's earned allowlist shrink +
+anchor-test edits re-applied on top, gates re-run (checker exit 0, 90/90,
+max-lines, negative control), plain push.
 
-1. **#1651** `codex/anyharness-grid-checker` @ 87147cce2 — PR 1, checker.
-   Review chain closed (initial F1–F9 → hardening → delta re-review no-P1 →
-   P2 closure, byte-identical). Merge first.
-2. **#1654** `codex/anyharness-api-store-escapes` @ 762f38925 — PR 3, base =
-   #1651's branch. After #1651 merges: retarget base to main. Its tree
-   predates the P2-closure checker commits (87147cce2), so the retarget
-   merge/update brings those in — proven forward-compatible: the P2-closure
-   checker runs exit-0 against the descendant tree with its own allowlist.
-3. **#1657** `codex/anyharness-sql-fold-workspaces` @ 6845e1f9f — PR 5a,
-   base = #1654's branch. After #1654 merges: retarget to main. Carries the
-   anchor-test repoint (retention_policy.rs:29 → completions.rs:128) that
-   the P2-closure test file needs on this tree; the base-sync that brings
-   in 87147cce2's test file will surface exactly one anchor subTest failure
-   until this PR's repoint is applied on top — merge order handles it, but
-   if the checker files and PR 5a's fold land out of order, re-run the
-   anchor repoint (one line).
+1. **#1651** checker — merged from 87147cce2 → squash **5fd51a614**.
+2. **#1654** API store escapes — main-synced to e0ea31c51 → squash
+   **734c61edb**.
+3. **#1657** workspaces SQL folds — main-synced to 27d3e6412 (anchor
+   repoint to completions.rs:128 re-applied) → squash **3aa6c9366**.
+4. **#1658** mobility valve — main-synced to 5ff57f5a4 (DOMAIN_LIVE_VALVE
+   shrink 12/21 → 11/20 re-applied; anchor test
+   `test_a_live_holding_service_is_valved` → agents/auth/login_terminal.rs
+   + two assertNotIn; app/mod.rs auto-merged and held its exact 693-line
+   pin; mobility/service.rs pinned 851) → squash **c8cd66447**.
+   Adversarial review CLEAN — the disclosed service.rs reconstruction
+   audited 48/48 items accounted, all deltas forced-by-move; PathBuf
+   equivalence proven. Nits parked: 9-arg MobilityRuntime::new should
+   become a wiring-deps struct; vestigial Clone derive on MobilityService
+   (pre-existing).
 
-4. **#1658** `codex/anyharness-mobility-valve` @ bac5b1667 — PR 6a,
-   base = #1651's branch. Base-synced onto 87147cce2 (clean; anchor
-   repoint survived, 90/90). Adversarial review CLEAN — the disclosed
-   service.rs reconstruction audited 48/48 items accounted, all deltas
-   forced-by-move; PathBuf equivalence proven; Cargo check & test green
-   at head. After #1651 merges: retarget to main (independent of
-   #1654/#1657 — no allowlist-row overlap: 6a touches DOMAIN_LIVE_VALVE,
-   3/5a touch API_STORE_ESCAPE/SQL/POLICY). Nits parked: 9-arg
-   MobilityRuntime::new should become a wiring-deps struct; vestigial
-   Clone derive on MobilityService (pre-existing).
+Post-merge allowlist state on main: DOMAIN_LIVE_VALVE 11 files/20;
+API_STORE_ESCAPE 2 rows (health.rs benign, workspaces_purge.rs cfg-test);
+POLICY_PURITY 1 row (workflows/control/policy.rs); DOMAIN_SQL_OUTSIDE_STORE
+6 files/38.
 
 Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
 the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
