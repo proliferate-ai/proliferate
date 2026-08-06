@@ -501,5 +501,21 @@ Open stack, in merge order:
    if the checker files and PR 5a's fold land out of order, re-run the
    anchor repoint (one line).
 
-PR 6a (`codex/anyharness-mobility-valve`, in build) stacks on #1651's
-branch and joins the queue behind #1657.
+4. **#1658** `codex/anyharness-mobility-valve` — PR 6a, base = #1651's
+   branch. Built @ 211179e15 from the pre-P2-closure base; base-sync onto
+   87147cce2 in flight (test-file collision: the mobility anchor test
+   repoint must be re-applied on the 90-test suite). Adversarial review
+   runs at the synced head. After #1651 merges: retarget to main
+   (independent of #1654/#1657 — different files, no allowlist overlap:
+   6a touches DOMAIN_LIVE_VALVE rows, 3/5a touch API_STORE_ESCAPE/SQL/
+   POLICY rows).
+
+Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
+the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
+facade-laundered live power; replaced with a plain `runtime_home: PathBuf`
+wired from `app/`. Export endpoint reaches the service via runtime
+delegation (kept app/mod.rs at its exact 693-line pin). Known main-level
+drift, NOT ours to fix in this train: Cargo.lock pins proliferate 0.3.50
+while VERSION says 0.4.2 — any grid PR that runs cargo will see the lock
+resync; revert it out of the diff (6a did) and let the release train own
+the bump.
