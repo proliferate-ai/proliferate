@@ -46,6 +46,7 @@ from proliferate.db.store.billing_subjects import (
     get_billing_subject_by_id,
 )
 from proliferate.integrations import stripe as stripe_billing
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.domain.accounting import (
     next_accounting_boundary,
     ordered_accounting_grants,
@@ -55,7 +56,7 @@ from proliferate.server.billing.domain.accounting import (
     usage_export_idempotency_key,
     usage_export_identifier,
 )
-from proliferate.server.billing.models import coerce_utc, utcnow
+from proliferate.server.billing.models import coerce_utc
 from proliferate.server.billing.pricing import (
     compute_hours_per_seat,
     compute_price_per_hour_cents,

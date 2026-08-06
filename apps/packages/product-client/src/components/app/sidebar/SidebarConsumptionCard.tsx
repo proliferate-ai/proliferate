@@ -1,5 +1,5 @@
 import type { UsageSummary } from "@proliferate/cloud-sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 type ConsumptionMeterTone = "default" | "warning" | "destructive";
 

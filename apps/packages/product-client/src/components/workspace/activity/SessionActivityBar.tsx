@@ -1,11 +1,11 @@
 import { useCallback, useMemo } from "react";
-import { GoalBar } from "@proliferate/product-ui/activity/GoalBar";
-import { ActivityChips } from "@proliferate/product-ui/activity/ActivityChips";
-import { LoopsPanel } from "@proliferate/product-ui/activity/LoopsPanel";
-import { AgentsRosterPanel } from "@proliferate/product-ui/activity/AgentsRosterPanel";
+import { GoalBar } from "#product/components/workspace/activity/GoalBar";
+import { ActivityChips } from "#product/components/workspace/activity/ActivityChips";
+import { LoopsPanel } from "#product/components/workspace/activity/LoopsPanel";
+import { AgentsRosterPanel } from "#product/components/workspace/activity/AgentsRosterPanel";
 import { LiveTerminalsRosterPanel } from "#product/components/workspace/activity/LiveTerminalsRosterPanel";
-import { deriveActivityChips } from "@proliferate/product-domain/activity/chips";
-import type { GoalCapabilities } from "@proliferate/product-domain/activity/goal";
+import { deriveActivityChips } from "#product/domain/activity/chips";
+import type { GoalCapabilities } from "#product/domain/activity/goal";
 import { useSessionGoalBarModel } from "#product/hooks/activity/derived/use-session-goal";
 import { useSessionGoalActions } from "#product/hooks/activity/workflows/use-session-goal-actions";
 import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";

@@ -2,8 +2,11 @@
 
 Status: target
 
-Current gap: this is not the deployed automation architecture, and its command,
-exposure, and projection substrate is absent.
+Current gap: the automation API and execution implementation are absent. Client
+and SDK surfaces, automation persistence and migration history, cloud agent
+run-config persistence, and the repository-environment deletion guard remain.
+This target is parked and must be reconciled with current platform foundations
+before implementation is assigned.
 
 Date: 2026-05-20.
 
@@ -14,12 +17,12 @@ the agent auth platform (document removed; rewrite planned),
 the claiming platform (document removed; the claim/exposure substrate this
 spec builds on was reverted from the codebase).
 
-Automations are scheduled or manually-triggered work that uses the
+The target defines scheduled or manually-triggered work that uses the
 same sandbox profile, runtime config, agent auth, command queue,
 exposure/projection, and claim primitives as user-initiated work.
-The system already exists; spec 06 aligns it to the new foundation:
-team scope, reusable agent run configs, preflight with auto-cascade,
-and shared_unclaimed exposure on team runs.
+Implementing it would reintroduce an automation API and execution plane aligned
+to current foundations: team scope, reusable agent run configs, preflight with
+auto-cascade, and `shared_unclaimed` exposure on team runs.
 
 ## 1. Purpose & Scope
 
@@ -50,8 +53,8 @@ In scope:
 - Team automation requires shared cloud readiness; fail-fast at
   enqueue if `ensure_organization_sandbox_profile` cannot
   complete or the org profile is `blocked`.
-- Existing scheduler loop, RRULE cursor on `Automation.next_run_at`,
-  and idempotent missed-tick handling stay as-is.
+- Reintroduce scheduling around the retained RRULE cursor on
+  `Automation.next_run_at` and idempotent missed-tick handling.
 
 Out of scope:
 
@@ -66,10 +69,9 @@ Out of scope:
   error fields + `cloud_commands` audit are sufficient.
 - Slack-specific automation behaviour (→ spec 07). Spec 06 ensures
   Slack can reuse the same primitives.
-- Local-automation execution semantics on Desktop beyond what
-  exists today (Desktop worker scheduling). Spec 06 keeps the
-  current local execution shape and only adjusts the `target_mode`
-  enum.
+- Local-automation execution semantics on Desktop beyond the parked target
+  described here. A future implementation should reintroduce only the minimum
+  Desktop execution shape needed for `target_mode='local'`.
 
 ## 2. Mental Model
 
@@ -92,7 +94,7 @@ AutomationRun                        one execution attempt
 
 flow                                 reuse the same primitives:
   1. scheduler tick creates an automation_run row
-  2. executor claims the run (existing executor lease)
+  2. executor claims the run using the target lease design
   3. resolve owner -> sandbox_profile (ensure_personal / _organization)
   4. resolve primary target
   5. preflight runtime config; cascade if stale
@@ -144,124 +146,50 @@ Soft:
 
 ## 4. Current Repo State
 
-Verified against `the current repository worktree` on 2026-05-20.
+Verified against the repository on 2026-08-04.
 
-### 4.1 What is shipped
+### 4.1 Retained foundations
 
-**`Automation` model** (`db/models/automations.py`):
+Automation persistence and migration history remain registered and intact:
 
-```text
-id, user_id, cloud_repo_config_id,
-title, prompt, schedule_rrule, schedule_timezone, schedule_summary,
-execution_target ENUM('cloud','local'),
-cloud_target_id nullable FK,
-cloud_target_kind_snapshot text nullable,
-agent_kind, model_id, mode_id, reasoning_effort   -- inline agent config
-enabled, paused_at, next_run_at, last_scheduled_at,
-created_at, updated_at
-```
+- `db/models/automations.py` retains `Automation` and `AutomationRun`, including
+  owner scope, target mode, repository-environment references, run-config
+  snapshots, scheduling cursors, claim fields, and run status/audit fields.
+- Historical Alembic revisions retain the deployed tables and constraints. No
+  new migration is implied merely by parking execution.
+- `db/store/automation_environment_references.py` checks both retained
+  definitions and run-history snapshots. Repository removal returns
+  `cloud_repository_in_use` while either reference exists, and both foreign keys
+  remain restrictive.
+- `db/models/cloud/agent_run_config.py`, its store, and the Cloud agent run-config
+  domain remain independently live. They are not owned by automation execution.
 
-**No owner_scope.** Automations are user-scoped only today.
+Client and SDK automation surfaces also remain. They describe product and wire
+contracts, but their presence does not imply that server endpoints are mounted
+or executable.
 
-**`AutomationRun` model**:
+### 4.2 Absent execution surface
 
-```text
-id, automation_id, user_id,
-trigger_kind ENUM('scheduled','manual'),
-scheduled_for nullable (required for scheduled),
-execution_target,
-status ENUM(queued, claimed, creating_workspace,
-            provisioning_workspace, creating_session,
-            dispatching, dispatched, failed, cancelled),
-title_snapshot, prompt_snapshot, git_*_snapshot,
-agent_kind_snapshot, model_id_snapshot, mode_id_snapshot,
-reasoning_effort_snapshot,
-cloud_workspace_id nullable FK,
-anyharness_workspace_id nullable, anyharness_session_id nullable,
-executor_kind, executor_id, claim_id, claimed_at,
-claim_expires_at, last_heartbeat_at,
-dispatch_started_at, dispatched_at, failed_at, cancelled_at,
-last_error_code, last_error_message
-```
+There is no server automation API or execution package:
 
-No `agent_run_config_id`. No `sandbox_profile_id`. No
-`exposure_id`. No `agent_run_config_snapshot_json`.
+- no automation router is imported or mounted by `main.py`, and
+  `test_api_path_prefix.py` pins `/v1/automations` as absent;
+- no server scheduler, cloud executor, local executor, worker entry point, claim
+  transition store, or execution-only automation store remains;
+- no automation worker launch target or deploy-surface classifier remains; and
+- the cloud-executor-only settings are absent.
 
-**Execution pipeline**
-(`server/automations/worker/cloud_execution/pipeline.py`):
+Consequently, retained automation rows cannot currently be created, changed,
+scheduled, claimed, or executed through the server.
 
-```text
-ordered stages:
-  resolve_target
-  ensure_git_identity
-  materialize_workspace
-  materialize_environment        (env files only today; no runtime config)
-  start_session
-  apply_session_config
-  dispatch_prompt
-```
+### 4.3 Reconciliation required before assignment
 
-Target resolution
-(`stages/target.py`):
-- if `cloud_target_id_snapshot` is set, load that target;
-- else scan visible targets, pick first online `managed_cloud`
-  with no archive.
-- **Does NOT call `ensure_*_sandbox_profile`.**
-
-Workspace creation
-(`server/cloud/workspaces/service.py:create_cloud_workspace_for_automation_run`):
-- Resolves via `_resolve_new_cloud_workspace_create`.
-- Calls `_raise_org_cloud_not_ready` (which today blocks all
-  org-scoped paths, including any hypothetical org automation).
-- Inserts CloudWorkspace; attaches to `automation_run.cloud_workspace_id`.
-
-**No runtime config preflight.** **No agent auth preflight.**
-
-**Scheduler** (`worker/scheduler.py:run_scheduler_loop`):
-- Polling interval from settings.
-- `_resolve_due_schedule()` parses RRULE; advances
-  `Automation.next_run_at`.
-- UNIQUE constraint on `(automation_id, scheduled_for)` for
-  scheduled runs prevents duplicate ticks.
-
-**No `agent_run_config` or `cloud_agent_run_config` table exists.**
-
-**Desktop UI**:
-
-```text
-apps/desktop/src/pages/AutomationsPage.tsx                  -> AutomationsScreen
-apps/desktop/src/components/automations/
-  screen/AutomationsScreen.tsx
-  list/AutomationListContent.tsx, AutomationRow.tsx,
-        AutomationSectionHeader.tsx, AutomationDetailContent.tsx
-  timeline/AutomationRunTimeline.tsx
-  editor/AutomationEditorModal.tsx, AutomationEditorControls.tsx
-  controls/AutomationTargetPicker.tsx, AutomationModelPicker.tsx,
-           AutomationModePicker.tsx
-
-apps/desktop/src/hooks/access/cloud/automations/
-  use-automations.ts, use-automation-mutations.ts,
-  use-local-automation-run-claims.ts, query-keys.ts
-```
-
-No "personal / team" toggle. No `AgentRunConfigSelector` (spec 03
-primitive).
-
-### 4.2 Gaps spec 06 closes
-
-- `Automation` has no `owner_scope`. Team automations cannot exist.
-- Inline agent config columns block reuse; no
-  `cloud_agent_run_config` row.
-- Target resolution does not go through `ensure_*_sandbox_profile`;
-  the automation runner does not depend on spec 00.
-- No runtime config or agent auth preflight in the pipeline; runs
-  silently launch on stale state.
-- No auto-cascade on stale revisions; spec 04 ships fail-fast and
-  defers cascade to here.
-- Workspace creation does not set `cloud_workspace_exposure`;
-  team-automation output is not claim-eligible today.
-- `execution_target` ENUM is `cloud | local`; doesn't distinguish
-  personal vs shared cloud.
+This document preserves the accepted product semantics, but its implementation
+map predates current sandbox, command, exposure, background-work, and client
+ownership. Before assigning implementation, reconcile every named dependency
+and file seam against current canonical contracts, decide how retained rows are
+handled, and freeze the work into bounded delivery slices. Do not restore the
+deleted package as a compatibility path.
 
 ## 5. Target Model
 
@@ -662,9 +590,9 @@ stub card, or "coming soon" panel should render.
 
 ### 5.4 Scheduler + cursor
 
-Scheduler stays as-is. The cursor pattern on `Automation.next_run_at`
-+ UNIQUE `(automation_id, scheduled_for)` on AutomationRun handles
-missed ticks idempotently.
+A reintroduced scheduler should use the retained cursor pattern on
+`Automation.next_run_at` plus UNIQUE `(automation_id, scheduled_for)` on
+AutomationRun to handle missed ticks idempotently.
 
 Two additions:
 
@@ -673,19 +601,19 @@ Two additions:
   picking the next run's owner fields (so the AutomationRun row
   inherits owner_scope/user_id/org_id from the Automation).
 
-- on creating an AutomationRun, the scheduler snapshots the
+- on creating an AutomationRun, a reintroduced scheduler snapshots the
   resolved cloud_agent_run_config at trigger time into
   agent_run_config_snapshot_json. The snapshot is the source of
   truth for that run; later edits to the cloud_agent_run_config row
   do not affect in-flight runs.
 ```
 
-Scheduled runs continue to require `scheduled_for IS NOT NULL`;
-manual runs `scheduled_for IS NULL`.
+Scheduled runs would require `scheduled_for IS NOT NULL`; manual runs would use
+`scheduled_for IS NULL`.
 
 ### 5.5 Execution pipeline — preflight + cascade
 
-The pipeline gets two new stages:
+A reintroduced pipeline would use these stages:
 
 ```text
 ordered stages (after spec 06):
@@ -698,7 +626,7 @@ ordered stages (after spec 06):
   start_session
   apply_session_config
   dispatch_prompt
-  observe_end_of_turn              (existing)
+  observe_end_of_turn
 ```
 
 Each new/changed stage:
@@ -775,16 +703,16 @@ result is `failed`):
   *_apply_failed error code
 ```
 
-Idempotency: the executor's claim lease ensures only one executor
-processes a given automation_run at a time. Cascade enqueues
+Idempotency: the reintroduced executor's claim lease would ensure only one
+executor processes a given automation_run at a time. Cascade enqueues
 include the automation_run id in their idempotency key so retried
 ticks collapse.
 
 ### 5.6 Workspace creation via `managed_profile_launch`
 
-The current `create_cloud_workspace_for_automation_run` is replaced
-by a call to `managed_profile_launch` (spec 04 §5.7) with
-automation-specific arguments. The returned tuple carries:
+Reintroduced execution should call the current launch capability directly; it
+must not restore the deleted automation-specific workspace creation path. The
+reconciled equivalent of `managed_profile_launch` (spec 04 §5.7) returns:
 
 ```text
 cloud_workspace_id
@@ -827,9 +755,9 @@ member claims by accident.
 `target_mode='local'` automations:
 
 - Allowed only when `owner_scope='personal'`.
-- Execute on Desktop via the existing local executor service
-  (`server/automations/local_executor.py` +
-  `apps/desktop/src/hooks/access/cloud/automations/use-local-automation-run-claims.ts`).
+- Would execute on Desktop through a reintroduced server claim API and the
+  retained client-side local-execution surface. The deleted
+  `server/automations/local_executor.py` path must not be treated as current.
 - Do not call `ensure_personal_sandbox_profile` (no cloud profile
   involved) and do not preflight runtime config / agent auth (the
   local Desktop AnyHarness handles its own state).
@@ -842,7 +770,7 @@ the CHECK constraint in §5.1).
 ### 5.9 API surface
 
 ```text
-Existing (renamed / parameter changes):
+Target user API (to reintroduce):
   GET    /v1/cloud/automations          -- supports
                                             ?owner_scope=personal|organization
                                             filter; org members see team
@@ -863,10 +791,9 @@ New:
   PATCH  /v1/cloud/agent-run-configs/{id}
   DELETE /v1/cloud/agent-run-configs/{id}
 
-Worker (unchanged):
-  POST   /v1/cloud/worker/automation-claims/...  (existing executor lease;
-                                                   unrelated to user claim
-                                                   spec 05)
+Target executor API (to reintroduce):
+  POST   /v1/cloud/worker/automation-claims/...  (executor lease; unrelated to
+                                                   user claim spec 05)
 ```
 
 Authorization:
@@ -881,7 +808,7 @@ Authorization:
   membership table
 ```
 
-## 6. Files To Change
+## 6. Implementation Map To Reconcile
 
 Server (Python):
 
@@ -907,13 +834,13 @@ server/proliferate/db/models/cloud/agent_run_config.py            (new)
 server/alembic/versions/<NEW>_automations_v2.py
   - all of the above; one-PR replacement
 
-server/proliferate/db/store/automations.py
+server/proliferate/db/store/automations.py                         (reintroduce)
   - extend snapshot dataclasses
   - new helpers: load_automation_for_org, list_automations_for_owner
 
 server/proliferate/db/store/cloud_agent_run_config.py            (new)
 
-server/proliferate/server/automations/
+server/proliferate/server/automations/                             (reintroduce)
   service.py            authorization + validation now branches on
                         owner_scope; create_team_automation gated by
                         useIsAdmin

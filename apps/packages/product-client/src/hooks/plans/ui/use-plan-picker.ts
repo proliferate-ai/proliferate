@@ -7,7 +7,7 @@ import {
 } from "#product/lib/domain/plans/plan-presentation";
 import {
   planAttachmentDescriptorFromDetail,
-} from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+} from "#product/domain/chats/composer/prompt-plan-attachments";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useAddPlanDraftAttachment } from "#product/hooks/plans/workflows/use-add-plan-draft-attachment";
 

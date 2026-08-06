@@ -7,11 +7,11 @@ import {
   PROMPT_TEXT_RESOURCE_MAX_BYTES,
   shouldCreatePasteAttachment,
   type PromptAttachmentDescriptor,
-} from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
+} from "#product/domain/chats/composer/prompt-attachment-rules";
 import {
   createPromptAttachmentSnapshot,
   type PromptAttachmentSnapshot,
-} from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
+} from "#product/domain/chats/composer/prompt-attachment-snapshot";
 
 interface AttachmentEntry {
   descriptor: PromptAttachmentDescriptor;

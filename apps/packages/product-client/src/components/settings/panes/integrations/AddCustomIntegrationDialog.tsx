@@ -6,11 +6,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@proliferate/ui/primitives/Dialog";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
+} from "#product/primitives/Dialog";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
 import { integrationApiErrorMessage } from "#product/hooks/access/cloud/integrations/use-admin-integration-definitions";
 import {
   CUSTOM_INTEGRATION_AUTH_OPTIONS,

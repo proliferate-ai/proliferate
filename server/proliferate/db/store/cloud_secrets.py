@@ -11,13 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.models.cloud.secrets import (
     CloudSecretEnvVar,
     CloudSecretFile,
     CloudSecretSet,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,7 @@ def _file_value(row: CloudSecretFile) -> CloudSecretFileValue:
 def _env_payload(row: CloudSecretEnvVar) -> CloudSecretEnvVarPayload:
     return CloudSecretEnvVarPayload(
         name=row.name,
-        value=decrypt_text(row.value_ciphertext),
+        value=decrypt_text(row.value_ciphertext, secret=settings.cloud_secret_key),
         value_sha256=row.value_sha256,
         byte_size=row.byte_size,
     )
@@ -131,7 +132,7 @@ def _env_payload(row: CloudSecretEnvVar) -> CloudSecretEnvVarPayload:
 def _file_payload(row: CloudSecretFile) -> CloudSecretFilePayload:
     return CloudSecretFilePayload(
         path=row.path,
-        content=decrypt_text(row.content_ciphertext),
+        content=decrypt_text(row.content_ciphertext, secret=settings.cloud_secret_key),
         content_sha256=row.content_sha256,
         byte_size=row.byte_size,
     )
@@ -459,7 +460,7 @@ async def upsert_secret_env_var(
             CloudSecretEnvVar(
                 secret_set_id=secret_set_id,
                 name=name,
-                value_ciphertext=encrypt_text(value),
+                value_ciphertext=encrypt_text(value, secret=settings.cloud_secret_key),
                 value_sha256=value_sha256,
                 byte_size=byte_size,
                 created_at=now,
@@ -468,7 +469,7 @@ async def upsert_secret_env_var(
         )
         secret_set.version += 1
     elif row.value_sha256 != value_sha256 or row.byte_size != byte_size:
-        row.value_ciphertext = encrypt_text(value)
+        row.value_ciphertext = encrypt_text(value, secret=settings.cloud_secret_key)
         row.value_sha256 = value_sha256
         row.byte_size = byte_size
         row.updated_at = now
@@ -533,7 +534,7 @@ async def upsert_secret_file(
             CloudSecretFile(
                 secret_set_id=secret_set_id,
                 path=path,
-                content_ciphertext=encrypt_text(content),
+                content_ciphertext=encrypt_text(content, secret=settings.cloud_secret_key),
                 content_sha256=content_sha256,
                 byte_size=byte_size,
                 created_at=now,
@@ -542,7 +543,7 @@ async def upsert_secret_file(
         )
         secret_set.version += 1
     elif row.content_sha256 != content_sha256 or row.byte_size != byte_size:
-        row.content_ciphertext = encrypt_text(content)
+        row.content_ciphertext = encrypt_text(content, secret=settings.cloud_secret_key)
         row.content_sha256 = content_sha256
         row.byte_size = byte_size
         row.updated_at = now

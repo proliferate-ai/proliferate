@@ -3,10 +3,10 @@ import type {
   ToolCallContentPart,
   ToolCallItem,
 } from "@anyharness/sdk";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { describeToolCallDisplay } from "@proliferate/product-domain/chats/tools/tool-call-display";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import { deriveGenericToolOutput } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { describeToolCallDisplay } from "#product/domain/chats/tools/tool-call-display";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
+import { deriveGenericToolOutput } from "#product/domain/chats/tools/collapsed-action-labels";
 import {
   ActionDisclosureRow,
   PlainActionRow,

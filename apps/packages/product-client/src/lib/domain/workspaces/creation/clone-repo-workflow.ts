@@ -1,6 +1,6 @@
 import type { RepoRoot } from "@anyharness/sdk";
 import type { MaterializeRepoRootRequest } from "@anyharness/sdk";
-import { canonicalRepoKey } from "@proliferate/product-domain/repos/repo-id";
+import { canonicalRepoKey } from "#product/domain/repos/repo-id";
 import {
   AddRepoIdentityMismatchError,
   type ExpectedRepoIdentity,

@@ -29,7 +29,7 @@ from proliferate.server.billing.domain.pricing import (
 from proliferate.server.billing.domain.pricing import (
     price_class_is_paid as price_class_is_paid_for_config,
 )
-from proliferate.server.billing.models import BillingServiceError
+from proliferate.server.billing.errors import BillingServiceError
 
 
 def _e2b_list_price_per_hour_usd() -> Decimal:

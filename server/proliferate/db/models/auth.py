@@ -21,7 +21,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from proliferate.db.models.base import Base, utcnow
+from proliferate.db.models.base import Base
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 class OAuthAccount(SQLAlchemyBaseOAuthAccountTableUUID, Base):

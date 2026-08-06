@@ -1,7 +1,7 @@
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { Button } from "#product/primitives/Button";
+import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import type { HarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
 

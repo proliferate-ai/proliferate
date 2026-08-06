@@ -1,13 +1,44 @@
-import type {
-  WorkspaceReconciliationBodyView,
-  WorkspaceReconciliationColumnView,
-} from "@proliferate/product-ui/workspaces/WorkspaceReconciliationBody";
 import {
   classifyWorkspaceGitSide,
   type WorkspaceGitSide,
   type WorkspaceGitSideState,
 } from "#product/lib/domain/workspaces/cloud/workspace-git-relation";
 import type { WorkspaceGitReconciliationPlan } from "#product/lib/domain/workspaces/cloud/workspace-git-reconciliation";
+
+export type WorkspaceReconciliationTone =
+  | "neutral"
+  | "accent"
+  | "success"
+  | "info"
+  | "warning"
+  | "destructive"
+  | "sidebar";
+
+export interface WorkspaceReconciliationColumnView {
+  /** "This Mac" | "Cloud" | "GitHub branch". */
+  title: string;
+  /** Short branch label, or null when unknown. */
+  branch: string | null;
+  /** Abbreviated head sha, or null when unknown/not client-verifiable. */
+  headShort: string | null;
+  /** A truthful state chip label (e.g. "clean", "2 ahead", "dirty", "missing",
+   * "last-known"). */
+  stateLabel: string;
+  stateTone: WorkspaceReconciliationTone;
+  /** A truthfulness caveat rendered under the column (e.g. remote staleness). */
+  caveat?: string | null;
+}
+
+export interface WorkspaceReconciliationBodyView {
+  title: string;
+  /** This Mac / Cloud / GitHub branch HEAD columns. GitHub may be null when the
+   * remote head is not client-visible. */
+  columns: WorkspaceReconciliationColumnView[];
+  /** The single safe next action's explanation. */
+  actionDetail: string;
+  /** What stays unchanged if the user cancels. */
+  cancelPreserves: string;
+}
 
 /**
  * PR 6 — pure mapping from a reconciliation plan + the two Git sides to the

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { WorkflowDefinitionsSurface } from "@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface";
-import { WorkflowRunsSurface } from "@proliferate/product-surfaces/workflows/WorkflowRunsSurface";
+import { WorkflowDefinitionsSurface } from "#product/components/workflows/definitions/WorkflowDefinitionsSurface";
+import { WorkflowRunsSurface } from "#product/components/workflows/runs/WorkflowRunsSurface";
 import { WorkflowDefinitionsAccessScreen } from "#product/components/workflows/definitions/WorkflowDefinitionsAccessScreen";
 import { WorkflowsBetaGateModal } from "#product/components/workflows/WorkflowsBetaGateModal";
 import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";

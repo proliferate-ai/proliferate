@@ -157,3 +157,9 @@ async def test_remove_cloud_repo_environment_blocks_automation_history(
         )
 
     assert raised.value.code == "cloud_repository_in_use"
+    assert (
+        raised.value.message
+        == "This repository has retained automation definitions or run history "
+        "and cannot be removed."
+    )
+    assert raised.value.status_code == 409

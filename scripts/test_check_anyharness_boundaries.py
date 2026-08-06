@@ -1222,7 +1222,7 @@ class ShippedAllowlistTest(unittest.TestCase):
 
         for rule_id, path, lineno, why in [
             # Multi-line embedded SQL: the SELECT head with FROM on the next line.
-            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/workspaces/retention_policy.rs", 29,
+            ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 128,
              "split SELECT head"),
             # A split UPDATE and its SET clause.
             ("DOMAIN_SQL_OUTSIDE_STORE", "domains/sessions/links/completions.rs", 117,

@@ -75,36 +75,35 @@ LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/han
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/manager.rs 4 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 
 # Rule: api/** calls domain facades, never stores.
-# 6 files, 16 occurrences.
+# 2 files, 10 occurrences.
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/health.rs 1 in-memory health snapshot named like a store (Arc<RwLock<AgentSeedHealth>>, not SQL); matches the state.*_store pattern; benign - seeded rather than special-cased to keep the pattern simple
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/hosting.rs 2 1 handler constructs WorkspaceStore directly (1 import + 1 ctor); target = facade method (grid plan PR 3)
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/mobility.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/sessions_pending.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
-API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 10 1 handler reaches store directly at :65; the other 9 are store setup inside the inline cfg(test) mod the engine cannot see; target = facade method (grid plan PR 3)
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 9 cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary
 
 # Rule: policy.rs and *_policy.rs files are pure.
-# 2 files, 3 occurrences.
+# 1 file, 1 occurrence.
 POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workflows/control/policy.rs 1 store-holding policy file: imports WorkflowRunStore at :8 and keeps it as a field, so the decision reads the DB instead of taking facts; target = pass the controlling run id in, or rename to a gate (cleanup PR TBD)
-POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workspaces/retention_policy.rs 2 misnamed policy: DB-backed store with clock (Utc::now at :44 and :66); target = split into store + pure policy (grid plan PR 8c)
 
 # Rule: SQL in domains/** lives in the store.
-# 9 files, 52 occurrences.
+# 6 files, 38 occurrences.
 #
 # Counts rose from 39 with no code change: the rule now also reads the heads of
 # SQL statements split across lines (`"UPDATE sessions` / `SET col = ?1`) and
 # conflict-resolving inserts (`INSERT OR IGNORE INTO`), which the two-keywords-on-
 # one-line patterns could not see. Most of the codebase's UPDATEs are split, so
-# the old numbers understated this debt substantially.
+# the old numbers understated this debt substantially. workspaces/access_store.rs,
+# workspaces/retention_policy.rs, and workspaces/inventory.rs dropped out entirely
+# (grid plan PR 8c): their SQL folded into workspaces/store/** (access.rs,
+# retention.rs), which is exempt as store code, and inventory.rs's remaining SQL
+# was in a test fixture now routed through the shared repo_roots test_support
+# helper. workspaces/access_gate.rs dropped by one for the same reason: its
+# INSERT INTO repo_roots seed moved to that shared helper, leaving only the
+# DROP TABLE line the engine cannot see past.
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/activity/feeds.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/plans/service.rs 4 plan service queries plans/plan_interaction_links inline; target = plans store methods (grid plan PR 8b)
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/sessions/links/completions.rs 30 session-link completions embed 30 SQL lines outside the store (19 previously counted + 11 now visible: 4 INSERT OR IGNORE heads, 3 split UPDATE heads, 3 SET clauses, 1 split SELECT head); target = sessions/links store (grid plan PR 8a)
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/workspace_materialization/test_support.rs 1 format!-built COUNT query in a test-support file (not excluded by should_skip); target = none, test fixture
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 2 both inside the inline cfg(test) mod the engine cannot see (1 previously counted + 1 DROP TABLE now visible); target = none, engine-invisible cfg boundary
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_store.rs 5 access store is a store by role but not by path; target = rename/move under workspaces/store/ (grid plan PR 8c)
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/retention_policy.rs 7 misnamed policy: DB-backed store with embedded SQL (6 previously counted + the split SELECT head at :29 the old patterns missed); target = split into store + pure policy (grid plan PR 8c)
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 1 inside the inline cfg(test) mod the engine cannot see (DROP TABLE workspace_access_modes); the repo_roots INSERT that used to sit alongside it moved to the shared repo_roots test_support helper (grid plan PR 8c); target = none, engine-invisible cfg boundary
 
 # Rule: the runtime valve holds live/ powers but never re-exports them
 # (DOMAIN_VALVE_LIVE_REEXPORT). Zero occurrences — the rule lands clean and has no

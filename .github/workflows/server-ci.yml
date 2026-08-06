@@ -22,11 +22,20 @@ on:
       - "scripts/validate-agent-catalog.mjs"
       - "server/**"
   workflow_dispatch:
+    inputs:
+      comparison_sha:
+        description: "Trusted base SHA for the shrink-only mypy baseline comparison."
+        required: true
+        type: string
   workflow_call:
     inputs:
       git_sha:
         description: "Commit SHA to validate and package. Defaults to the caller ref."
         required: false
+        type: string
+      comparison_sha:
+        description: "Trusted base SHA for the shrink-only mypy baseline comparison."
+        required: true
         type: string
       version:
         description: "Server/self-hosted version to release. Required for reusable release calls."
@@ -55,6 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git_sha || github.ref }}
+          fetch-depth: 2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
@@ -80,13 +90,24 @@ jobs:
         working-directory: .
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --python 3.12 --frozen --extra dev
 
       - name: Ruff check
-        run: ruff check proliferate/ tests/
+        run: uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/
 
       - name: Ruff format check
-        run: ruff format --check proliferate/ tests/
+        run: uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/
+
+      - name: Mypy diagnostic ratchet
+        env:
+          MYPY_COMPARISON_SHA: ${{ inputs.comparison_sha || '' }}
+          MYPY_EVENT_NAME: ${{ github.event_name }}
+          MYPY_GITHUB_REF: ${{ github.ref }}
+          MYPY_PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          MYPY_PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
+        run: >-
+          uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py
+          --github-event-base
 
   test:
     runs-on: ubuntu-latest

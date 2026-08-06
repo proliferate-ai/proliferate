@@ -1,10 +1,10 @@
 import type { ConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/presentation";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Check, ChevronDown } from "@proliferate/ui/icons";
-import { SessionControlIcon } from "#product/components/session-controls/SessionControlIcon";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { Button } from "#product/primitives/Button";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { Check, ChevronDown } from "#product/primitives/icons/core";
+import { SessionControlIcon } from "#product/components/workspace/chat/session-controls/SessionControlIcon";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 
 export interface PlanHandoffModePickerProps {
   options: ConfiguredSessionControlValue[];

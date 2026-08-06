@@ -15,8 +15,6 @@ FORBIDDEN_MODULE_PREFIXES = (
     "proliferate.db.models.cloud.sync",
     "proliferate.db.store.cloud_sync",
     "proliferate.db.store.support_session_diagnostics",
-    "proliferate.server.automations.worker.cloud_execution",
-    "proliferate.server.automations.worker.cloud_executor_commands",
     "proliferate.server.cloud.commands",
     "proliferate.server.cloud.gateway.proxy",
 )

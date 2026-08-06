@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useGitStatusQuery } from "@anyharness/sdk-react";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
-import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionViewState } from "#product/domain/sessions/activity";
 import { updateCloudWorkspaceDisplayName } from "@proliferate/cloud-sdk/client/workspaces";
 import {
   CLOUD_DISPLAY_NAME_SYNC_RETRY_INTERVAL_MS,

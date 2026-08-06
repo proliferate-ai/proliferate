@@ -135,6 +135,13 @@ Use the global handler instead:
 await service.do_work(...)
 ```
 
+`AuthFlowError` is a legacy Auth protocol compatibility exception translated by
+that same global handler. It preserves the already-shipped raw string
+`{"detail": "Client-facing message."}` response while keeping its stable
+internal code out of the public response. This exception exists only for
+compatibility with existing Auth clients; it is not a general shortcut for new
+product errors, which use the structured envelope above.
+
 ## Direct `HTTPException`
 
 Direct `HTTPException` is allowed only at actual HTTP boundaries:

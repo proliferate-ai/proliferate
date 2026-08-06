@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueRow,
-} from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+} from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";
 import { useQueuedPromptEditReader } from "#product/hooks/chat/ui/use-queued-prompt-edit";

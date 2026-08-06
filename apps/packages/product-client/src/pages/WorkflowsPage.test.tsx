@@ -42,7 +42,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
   };
 });
 
-vi.mock("@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface", () => ({
+vi.mock("#product/components/workflows/definitions/WorkflowDefinitionsSurface", () => ({
   WorkflowDefinitionsSurface: (props: {
     authCacheScope: string;
     selectedWorkflowId: string | null;
@@ -53,7 +53,7 @@ vi.mock("@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface", ()
   },
 }));
 
-vi.mock("@proliferate/product-surfaces/workflows/WorkflowRunsSurface", () => ({
+vi.mock("#product/components/workflows/runs/WorkflowRunsSurface", () => ({
   WorkflowRunsSurface: (props: {
     authCacheScope: string;
     workflowDefinitionId: string;

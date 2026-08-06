@@ -250,6 +250,12 @@ gate.
 | `self-host-smoke.yml` | Pull request, push to `main`, or manual | Smoke the production Compose path when relevant paths change. Branch-protection status is not encoded here. |
 | `server-ci.yml` | Relevant push/PR, `server-v*` tag, manual, or reusable | Validate/package the server and publish self-host images/assets when invoked as a release. |
 
+Server CI's shrink-only mypy census compares a pull request with its base SHA
+and a push with the event's pre-push SHA. Manual and reusable invocations must
+supply an explicit comparison SHA; the nightly and hotfix coordinators pass the
+base selected by their prepare job. A new release tag uses its source commit's
+parent because that source commit already passed the `main` push gate.
+
 ### Hosted deployment and promotion coordinators
 
 | Workflow | Trigger and posture | Role |

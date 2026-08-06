@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Check, KeyRound } from "#product/primitives/icons/core";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { SquareTerminal } from "#product/primitives/icons/workspace";
+import { Button } from "#product/primitives/Button";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { gatewaySubtitle } from "#product/copy/settings/agent-auth-copy";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";

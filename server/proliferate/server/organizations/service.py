@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
@@ -22,12 +22,15 @@ from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organization_member_auth_methods as member_auth_method_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.organization_records import (
+    CheckoutIntentRecord,
+    CheckoutIntentWithOrganizationRecord,
     InvitationRecord,
     MemberRecord,
     MembershipRecord,
     OrganizationWithMembershipRecord,
     normalize_invitation_email,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.permissions import (
     CurrentOrgUser,
     OwnerContext,
@@ -62,8 +65,10 @@ from proliferate.server.organizations.domain.profile import (
 from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.join_links import organization_join_url
 from proliferate.server.organizations.landing import build_join_landing_html
-from proliferate.server.organizations.membership_policy import place_new_identity
-from proliferate.utils.time import utcnow
+from proliferate.server.organizations.membership_policy import (
+    ensure_instance_membership_not_removed,
+    place_new_identity,
+)
 
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
 
@@ -225,6 +230,143 @@ async def list_organizations(
         user_id=actor_user.id,
         name=_default_organization_name(actor_user),
         logo_domain=derive_logo_domain_from_email(actor_user.email),
+    )
+
+
+async def ensure_pending_team_checkout_intent(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    *,
+    team_name: str,
+    logo_domain: str | None,
+    idempotency_key: str,
+    invite_emails: list[str],
+    expires_at: datetime,
+) -> CheckoutIntentWithOrganizationRecord:
+    await organization_store.acquire_membership_activation_lock(db, actor_user.id)
+    current = await organization_store.get_current_team_checkout_intent(db, actor_user.id)
+    if current is not None:
+        return current
+    return await organization_store.create_pending_team_checkout_intent(
+        db,
+        created_by_user_id=actor_user.id,
+        team_name=team_name,
+        logo_domain=logo_domain,
+        idempotency_key=idempotency_key,
+        invite_emails=invite_emails,
+        expires_at=expires_at,
+    )
+
+
+async def get_current_team_checkout_intent(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+) -> CheckoutIntentWithOrganizationRecord | None:
+    return await organization_store.get_current_team_checkout_intent(db, actor_user.id)
+
+
+async def bind_team_checkout_session(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+    stripe_checkout_session_id: str,
+    stripe_customer_id: str,
+    checkout_url: str,
+) -> CheckoutIntentRecord | None:
+    return await organization_store.bind_team_checkout_session(
+        db,
+        intent_id=intent_id,
+        stripe_checkout_session_id=stripe_checkout_session_id,
+        stripe_customer_id=stripe_customer_id,
+        checkout_url=checkout_url,
+    )
+
+
+async def cancel_team_checkout_intent(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    intent_id: UUID,
+) -> CheckoutIntentWithOrganizationRecord | None:
+    return await organization_store.cancel_team_checkout_intent(
+        db,
+        intent_id=intent_id,
+        created_by_user_id=actor_user.id,
+    )
+
+
+async def load_team_checkout_activation(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+) -> CheckoutIntentWithOrganizationRecord | None:
+    return await organization_store.load_team_checkout_activation_for_update(db, intent_id)
+
+
+async def fail_team_checkout_activation(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+    activation_status: str,
+    error_code: str,
+    error_message: str,
+    webhook_event_id: str | None,
+) -> CheckoutIntentRecord | None:
+    return await organization_store.mark_team_checkout_failed_by_id(
+        db,
+        intent_id=intent_id,
+        activation_status=activation_status,
+        error_code=error_code,
+        error_message=error_message,
+        webhook_event_id=webhook_event_id,
+    )
+
+
+async def begin_team_checkout_activation(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+    created_by_user_id: UUID,
+    stripe_subscription_id: str,
+) -> None:
+    await organization_store.acquire_membership_activation_lock(db, created_by_user_id)
+    await organization_store.mark_team_checkout_activating_by_id(
+        db,
+        intent_id=intent_id,
+        stripe_subscription_id=stripe_subscription_id,
+    )
+
+
+async def complete_team_checkout_activation(
+    db: AsyncSession,
+    *,
+    intent_id: UUID,
+    stripe_subscription_id: str,
+    stripe_customer_id: str,
+    webhook_event_id: str | None,
+) -> OrganizationWithMembershipRecord:
+    return await organization_store.complete_team_checkout_activation_by_id(
+        db,
+        intent_id=intent_id,
+        stripe_subscription_id=stripe_subscription_id,
+        stripe_customer_id=stripe_customer_id,
+        webhook_event_id=webhook_event_id,
+    )
+
+
+async def send_staged_team_checkout_invitations(
+    *,
+    organization_id: UUID,
+    organization_name: str,
+    invited_by_user_id: UUID,
+    inviter_email: str,
+    invite_emails_json: str | None,
+) -> None:
+    await invitation_delivery.send_staged_team_checkout_invitations(
+        organization_id=organization_id,
+        organization_name=organization_name,
+        invited_by_user_id=invited_by_user_id,
+        inviter_email=inviter_email,
+        invite_emails_json=invite_emails_json,
     )
 
 
@@ -536,31 +678,96 @@ async def create_organization_join_landing(
     return build_join_landing_html(organization.name, organization.id)
 
 
-async def accept_invitation(
+async def _accept_invitation_for_organization(
     db: AsyncSession,
     actor_user: OrganizationActor,
     *,
     organization_id: UUID,
-) -> OrganizationWithMembershipRecord:
+    authenticated_email: str,
+) -> tuple[OrganizationWithMembershipRecord | None, str | None]:
     accepted, error = await invitation_store.accept_pending_invitation_for_organization_email(
         db,
         organization_id=organization_id,
         authenticated_user_id=actor_user.id,
-        authenticated_email=actor_user.email,
+        authenticated_email=authenticated_email,
     )
     if accepted is None:
-        accept_error = _build_invitation_accept_error(error)
-        raise accept_error
+        return None, error
     await maybe_create_organization_seat_adjustment(
         db,
         organization_id=accepted.organization.id,
         membership_id=accepted.membership.id,
     )
     schedule_agent_gateway_org_enrollment(accepted.organization.id, actor_user.id, db=db)
-    return OrganizationWithMembershipRecord(
-        organization=accepted.organization,
-        membership=accepted.membership,
+    return (
+        OrganizationWithMembershipRecord(
+            organization=accepted.organization,
+            membership=accepted.membership,
+        ),
+        error,
     )
+
+
+async def try_accept_invitation(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    *,
+    organization_id: UUID,
+    authenticated_email: str,
+) -> OrganizationWithMembershipRecord | None:
+    accepted, _error = await _accept_invitation_for_organization(
+        db,
+        actor_user,
+        organization_id=organization_id,
+        authenticated_email=authenticated_email,
+    )
+    return accepted
+
+
+async def provision_sso_jit_membership(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    *,
+    organization_id: UUID,
+    authenticated_email: str,
+    role: str,
+) -> MembershipRecord:
+    await ensure_instance_membership_not_removed(
+        db,
+        organization_id=organization_id,
+        user_id=actor_user.id,
+        email=authenticated_email,
+    )
+    membership = await organization_store.ensure_sso_jit_membership(
+        db,
+        organization_id=organization_id,
+        user_id=actor_user.id,
+        role=role,
+    )
+    await maybe_create_organization_seat_adjustment(
+        db,
+        organization_id=organization_id,
+        membership_id=membership.id,
+    )
+    schedule_agent_gateway_org_enrollment(organization_id, actor_user.id, db=db)
+    return membership
+
+
+async def accept_invitation(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    *,
+    organization_id: UUID,
+) -> OrganizationWithMembershipRecord:
+    accepted, error = await _accept_invitation_for_organization(
+        db,
+        actor_user,
+        organization_id=organization_id,
+        authenticated_email=actor_user.email,
+    )
+    if accepted is None:
+        raise _build_invitation_accept_error(error)
+    return accepted
 
 
 def _build_invitation_accept_error(

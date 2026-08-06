@@ -6,11 +6,11 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CoworkThreadRow } from "#product/components/workspace/cowork/sidebar/CoworkThreadRow";
 
-vi.mock("@proliferate/ui/icons", () => ({
+vi.mock("#product/primitives/icons/core", () => ({
   ChevronRight: () => <span />,
 }));
 
-vi.mock("@proliferate/ui/primitives/IconButton", () => ({
+vi.mock("#product/primitives/IconButton", () => ({
   IconButton: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
 }));
 
@@ -18,7 +18,7 @@ vi.mock("#product/components/workspace/shell/sidebar/SidebarIndicators", () => (
   SidebarStatusIndicatorView: () => <span data-testid="activity-indicator" />,
 }));
 
-vi.mock("@proliferate/product-ui/sidebar/ProductSidebarThreads", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/ProductSidebarThreads", () => ({
   ProductSidebarThreadRow: ({
     status,
     trailingStatus,

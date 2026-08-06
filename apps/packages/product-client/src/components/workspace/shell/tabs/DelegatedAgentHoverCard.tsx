@@ -14,8 +14,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "@proliferate/design/motion";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
+import { Button } from "#product/primitives/Button";
+import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 

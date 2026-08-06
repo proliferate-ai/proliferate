@@ -417,14 +417,15 @@ export interface CloudProvision1Driver {
  * Mirrors `connect.py`'s `_runtime_token`: decrypts
  * `cloud_sandbox.runtime_token_ciphertext` (the `CloudSandboxValue` field the
  * product calls `anyharness_bearer_token_ciphertext`) with the exact same
- * `proliferate.utils.crypto.decrypt_text` helper. Never prints the token
- * itself — only a `{"token": ...}` JSON line the caller parses.
+ * `proliferate.lib.infra.encryption.fernet.decrypt_text` helper. Never prints
+ * the token itself — only a `{"token": ...}` JSON line the caller parses.
  */
 const DECRYPT_RUNTIME_TOKEN_PY = `import asyncio, json, os
 from uuid import UUID
+from proliferate.config import settings
 from proliferate.db.engine import async_session_factory
 from proliferate.db.store.cloud_sandboxes import load_cloud_sandbox_by_id
-from proliferate.utils.crypto import decrypt_text
+from proliferate.lib.infra.encryption.fernet import decrypt_text
 
 CLOUD_SANDBOX_ID = UUID(os.environ["CLOUD_SANDBOX_ID"])
 
@@ -433,7 +434,10 @@ async def main():
         sandbox = await load_cloud_sandbox_by_id(db, CLOUD_SANDBOX_ID)
         token = None
         if sandbox is not None and sandbox.anyharness_bearer_token_ciphertext:
-            token = decrypt_text(sandbox.anyharness_bearer_token_ciphertext)
+            token = decrypt_text(
+                sandbox.anyharness_bearer_token_ciphertext,
+                secret=settings.cloud_secret_key,
+            )
         print(json.dumps({"token": token}))
 
 asyncio.run(main())

@@ -1,5 +1,5 @@
 import type { Session } from "@anyharness/sdk";
-import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import {
   createEmptySessionRecord,
   getSessionRecord,

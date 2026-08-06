@@ -1,13 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHAT_COLUMN_CLASSNAME,
   CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
   CHAT_SCROLL_STICKY_BOTTOM_GAP_PX,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
   computeChatDockLowerBackdropTopPx,
   computeChatStableBottomInsetPx,
   computeChatSurfaceBottomInsetPx,
 } from "#product/config/chat-layout";
 
 describe("chat layout", () => {
+
+  it("owns one ruled thread measure for every chat state", () => {
+    expect(CHAT_COLUMN_CLASSNAME).toBe("mx-auto w-full max-w-transcript-thread");
+    expect(CHAT_COLUMN_CLASSNAME).not.toContain("max-w-3xl");
+    expect(CHAT_COLUMN_CLASSNAME).not.toContain("[");
+    expect(CHAT_SURFACE_GUTTER_CLASSNAME).toBe("px-4");
+  });
 
   it("keeps the baseline padding before the dock is measured", () => {
     expect(computeChatSurfaceBottomInsetPx({

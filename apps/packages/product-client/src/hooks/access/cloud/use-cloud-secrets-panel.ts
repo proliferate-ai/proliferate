@@ -7,7 +7,28 @@ import {
   usePutCloudSecretFile,
   type CloudSecretsScope,
 } from "@proliferate/cloud-sdk-react";
-import type { SecretManagementPanelProps } from "@proliferate/product-ui/patterns/secrets/SecretManagementPanel";
+import type { SecretFilePathMode } from "#product/lib/domain/secrets/secret-editor-vocabulary";
+import type {
+  SecretMaterializationView,
+  SecretMetadata,
+} from "#product/lib/domain/secrets/secret-management-panel";
+
+export interface CloudSecretsPanelModel {
+  title: string;
+  description: string;
+  filePathMode: SecretFilePathMode;
+  envVars: readonly SecretMetadata[];
+  files: readonly SecretMetadata[];
+  materialization?: SecretMaterializationView | null;
+  canManage?: boolean;
+  loading?: boolean;
+  saving?: boolean;
+  error?: string | null;
+  onSaveEnvVar: (name: string, value: string) => void;
+  onDeleteEnvVar: (name: string) => void;
+  onSaveFile: (path: string, input: { content: string } | { file: File }) => void;
+  onDeleteFile: (path: string) => void;
+}
 
 export interface UseCloudSecretsPanelOptions {
   scope: CloudSecretsScope;
@@ -23,7 +44,7 @@ export interface UseCloudSecretsPanelOptions {
  *   const panel = useCloudSecretsPanel({ scope });
  *   return <SecretManagementPanel {...panel} />;
  *
- * Split out of the former `CloudSecretsSettingsSurface` (product-surfaces),
+ * Split out of the former `CloudSecretsSettingsSurface`,
  * which mixed this data wiring with the panel render in one connected
  * component. The 3 real call sites (Organization/Personal/Repo-environment
  * secrets panes) now import the hook and the pattern separately.
@@ -31,7 +52,7 @@ export interface UseCloudSecretsPanelOptions {
 export function useCloudSecretsPanel({
   scope,
   enabled = true,
-}: UseCloudSecretsPanelOptions): SecretManagementPanelProps {
+}: UseCloudSecretsPanelOptions): CloudSecretsPanelModel {
   const secrets = useCloudSecrets(scope, enabled);
   const putEnvVar = usePutCloudSecretEnvVar();
   const deleteEnvVar = useDeleteCloudSecretEnvVar();

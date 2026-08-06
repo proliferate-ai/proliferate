@@ -1,6 +1,6 @@
 import { useCallback, useRef, type KeyboardEvent } from "react";
-import { X } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { X } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
 import type { NavigationCloseChildAgent } from "#product/lib/domain/playground/subagents-ux/navigation-close-model";
 import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 

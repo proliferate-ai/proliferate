@@ -1,8 +1,8 @@
 import { useState, type CSSProperties } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
+import { Button } from "#product/primitives/Button";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
+import { Label } from "#product/primitives/Label";
+import { RangeSlider } from "#product/primitives/RangeSlider";
 
 // Timing lab for the PRODUCT ThinkingText animation. The two-layer compositor
 // sweep (.thinking-text-band / .thinking-text-band-glyphs, design product.css —

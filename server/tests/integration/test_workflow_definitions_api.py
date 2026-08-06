@@ -62,7 +62,7 @@ async def _seed_repo(
     git_repo_name: str,
     deleted: bool = False,
 ) -> RepoConfig:
-    from proliferate.utils.time import utcnow
+    from proliferate.lib.infra.time.wall_clock import utcnow
 
     now = utcnow()
     repo = RepoConfig(

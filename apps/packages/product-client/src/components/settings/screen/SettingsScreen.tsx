@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { Button } from "#product/primitives/Button";
 import {
   SETTINGS_DEFAULT_SECTION,
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
@@ -28,7 +28,7 @@ import {
 import { RepoScopeHeaderControls } from "#product/components/settings/screen/RepoScopeHeaderControls";
 import { AgentScopeHeaderControls } from "#product/components/settings/screen/AgentScopeHeaderControls";
 import { SettingsSidebar } from "#product/components/settings/sidebar/SettingsSidebar";
-import { SettingsScopeTabs } from "@proliferate/product-ui/patterns/SettingsScopeTabs";
+import { SettingsScopeTabs } from "#product/components/patterns/SettingsScopeTabs";
 import { ArrowLeft } from "lucide-react";
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";

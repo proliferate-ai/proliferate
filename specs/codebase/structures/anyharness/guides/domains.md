@@ -117,7 +117,7 @@ These are not product surface domains and should not own product tool behavior.
 Expected shape:
 
 ```text
-<product-domain>/
+<feature-domain>/
   model.rs        # durable product records and domain-owned types
   store/          # product-specific queries
   service/        # durable product rules

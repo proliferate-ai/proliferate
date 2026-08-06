@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import {
   AUTH_REQUIRED_GITHUB_COPY,
   authProviderPresentation,
-} from "@proliferate/product-domain/auth/presentation";
+} from "@proliferate/product-client/internal/domain/auth/presentation";
 
 import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";

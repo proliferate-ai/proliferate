@@ -1,10 +1,10 @@
 import { forwardRef, memo, type HTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@proliferate/product-ui/chat/ChatColumn";
+} from "#product/config/chat-layout";
 import { CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX } from "#product/config/chat-layout";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 

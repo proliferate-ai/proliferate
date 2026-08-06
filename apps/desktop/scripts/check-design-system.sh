@@ -14,7 +14,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-SETTINGS=src/components/settings
+SETTINGS=../packages/product-client/src/components/settings
 FAIL=0
 
 # ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ is_allowed() {
 check() {
   local pattern=$1 label=$2
   local hits
-  hits=$(grep -rln "$pattern" "$SETTINGS" --include='*.tsx' 2>/dev/null || true)
+  hits=$(grep -rln "$pattern" "$SETTINGS" --include='*.tsx' --exclude='*.test.*' 2>/dev/null || true)
   for f in $hits; do
     if ! is_allowed "$f"; then
       echo "FAIL [$label]: $f"
@@ -49,9 +49,9 @@ check() {
 # Card-era primitives must not come back anywhere in desktop settings.
 # Any import path ending in /SettingsCard or /SettingsCardRow fails.
 RETIRED_PRIMITIVE_PATTERN='/SettingsCard(Row)?["'"'"']'
-if grep -rEn "$RETIRED_PRIMITIVE_PATTERN" "$SETTINGS" --include='*.tsx' >/dev/null 2>&1; then
+if grep -rEn "$RETIRED_PRIMITIVE_PATTERN" "$SETTINGS" --include='*.tsx' --exclude='*.test.*' >/dev/null 2>&1; then
   echo "FAIL [retired card primitive]:"
-  grep -rEn "$RETIRED_PRIMITIVE_PATTERN" "$SETTINGS" --include='*.tsx'
+  grep -rEn "$RETIRED_PRIMITIVE_PATTERN" "$SETTINGS" --include='*.tsx' --exclude='*.test.*'
   FAIL=1
 fi
 
@@ -66,7 +66,7 @@ check 'tracking-\[0.06em\]' "raw eyebrow tracking (use SettingsSection)"
 # Semantic type tokens
 # ---------------------------------------------------------------------------
 
-TYPE_ROOTS=(src ../packages/ui/src ../packages/product-ui/src)
+TYPE_ROOTS=(src ../packages/product-client/src)
 ARBITRARY_TYPE_PATTERN='text-\[[0-9.]+(px|rem|em)\]|leading-\[[0-9.]+(px|rem|em)\]'
 
 TYPE_HITS=$(grep -rEln --exclude='*.test.*' "$ARBITRARY_TYPE_PATTERN" "${TYPE_ROOTS[@]}" 2>/dev/null || true)
@@ -82,11 +82,11 @@ done
 # scans apps/web too (every workspace that depends on tailwind-merge); web is
 # deliberately NOT in TYPE_ROOTS — its px conventions are untouched here.
 TW_MERGE_ROOTS=("${TYPE_ROOTS[@]}" ../web/src)
-TW_MERGE_MODULE="../packages/ui/src/utils/tw-merge.ts"
+TW_MERGE_MODULE="../packages/product-client/src/primitives/utils/tw-merge.ts"
 RAW_TW_HITS=$(grep -rln 'from "tailwind-merge"' "${TW_MERGE_ROOTS[@]}" 2>/dev/null || true)
 for f in $RAW_TW_HITS; do
   if [[ "$f" != "$TW_MERGE_MODULE" ]]; then
-    echo "FAIL [raw tailwind-merge import — use @proliferate/ui/utils/tw-merge]: $f"
+    echo "FAIL [raw tailwind-merge import — use #product/primitives/utils/tw-merge]: $f"
     FAIL=1
   fi
 done
@@ -96,7 +96,7 @@ if [[ $FAIL -eq 1 ]]; then
   echo "Design-system check failed. Spell type through the semantic tokens"
   echo "(text-ui / text-ui-sm / text-composer / text-title / text-hero and the"
   echo "base scale), route settings markup through the shared primitives in"
-  echo "@proliferate/product-ui/patterns, or add a justified one-off to the"
+  echo "ProductClient components/patterns, or add a justified one-off to the"
   echo "relevant allowlist in $0."
   exit 1
 fi

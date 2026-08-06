@@ -9,18 +9,18 @@ import {
   ToolCallSummary,
   ToolCallWorkDivider,
 } from "#product/components/workspace/chat/tool-calls/ToolCallSummary";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import {
   collectTurnCoworkArtifactToolCalls,
-} from "@proliferate/product-domain/chats/tools/cowork-artifact-tool-presentation";
+} from "#product/domain/chats/tools/cowork-artifact-tool-presentation";
 import {
   blockBelongsToCompletedHistory,
-} from "@proliferate/product-domain/chats/transcript/transcript-rendering";
-import { formatWorkedForDuration } from "@proliferate/product-domain/chats/transcript/transcript-work-duration";
+} from "#product/domain/chats/transcript/transcript-rendering";
+import { formatWorkedForDuration } from "#product/domain/chats/transcript/transcript-work-duration";
 import type {
   TurnDisplayBlock,
   TurnPresentation,
-} from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+} from "#product/domain/chats/transcript/transcript-presentation";
 import {
   getTurnDisplayBlockKey,
   TurnDisplayBlockNode,
@@ -30,7 +30,7 @@ import {
   formatCollapsedSummary,
 } from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
 import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
-import type { AssistantMessageRevealState } from "#product/components/workspace/chat/transcript/AssistantMessage";
+import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 

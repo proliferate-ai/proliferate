@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { CodeBlockTokenContent } from "@proliferate/product-ui/code/CodeBlockTokenContent";
+import { Button } from "#product/primitives/Button";
+import { CodeBlockTokenContent } from "#product/components/content/ui/CodeBlockTokenContent";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
 

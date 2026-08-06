@@ -22,7 +22,7 @@ from proliferate.constants.agent_gateway import AGENT_AUTH_SURFACES
 from proliferate.db.models.cloud.agent_gateway import AgentAuthDeliveryAck
 from proliferate.db.store.agent_gateway.mappers import delivery_ack_record
 from proliferate.db.store.agent_gateway.records import AgentAuthDeliveryAckRecord
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def get_delivery_ack(

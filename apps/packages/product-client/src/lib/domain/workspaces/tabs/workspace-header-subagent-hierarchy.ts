@@ -6,8 +6,8 @@ import type {
   SessionReviewsResponse,
   SessionSubagentsResponse,
 } from "@anyharness/sdk";
-import { formatSubagentLabel } from "@proliferate/product-domain/chats/subagents/provenance";
-import type { SubagentSessionRelationshipHint } from "@proliferate/product-domain/chats/subagents/session-relationship-hints";
+import { formatSubagentLabel } from "#product/domain/chats/subagents/provenance";
+import type { SubagentSessionRelationshipHint } from "#product/domain/chats/subagents/session-relationship-hints";
 import {
   reviewAssignmentHeaderStatusLabel,
   reviewKindLabel,

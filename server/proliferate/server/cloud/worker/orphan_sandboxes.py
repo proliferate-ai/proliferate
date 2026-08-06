@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.store.cloud_sandboxes import load_cloud_sandbox_by_id
 from proliferate.integrations.sandbox import ProviderSandboxState, SandboxProvider
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 logger = logging.getLogger("proliferate.cloud.orphan_reaper")
 

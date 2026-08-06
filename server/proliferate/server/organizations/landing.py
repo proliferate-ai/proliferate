@@ -6,7 +6,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from proliferate.config import settings
-from proliferate.utils.redirect_callback_pages import render_redirect_callback_page
+from proliferate.lib.product.redirect_callbacks.page import render_redirect_callback_page
 
 
 def _issuing_server_origin() -> str:

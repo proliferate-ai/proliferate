@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import type { InterHunkGap } from "#product/lib/domain/files/diff-parser";
 
 /** Threshold: gaps with this many lines or fewer show a single expand-all control */

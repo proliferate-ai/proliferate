@@ -712,8 +712,8 @@ export async function seedEnabledOrgSsoConnection(
  * itself cannot produce (it re-tests the live OIDC endpoints before flipping
  * status), but that a later admin edit CAN: nothing in `update_organization_
  * sso_connection` re-validates or revokes `enabled` when a required field is
- * cleared. Discover's `oidc_configuration_error` gate (server/proliferate/
- * auth/sso/service.py's `_discover_for_context`) exists precisely to catch
+ * cleared. The Accounts SSO `_discover_for_context` configuration gate exists
+ * precisely to catch
  * this — an "enabled" row that would only fail at the provider must still
  * report `enabled=false`, not a false positive. Only reachable via direct
  * seed: the product's own admin API always tests before enabling.

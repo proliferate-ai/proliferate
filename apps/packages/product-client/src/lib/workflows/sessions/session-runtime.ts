@@ -1,6 +1,6 @@
 import {
   resolveSessionViewState,
-} from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/sessions/activity";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 
 export interface FlushAwareSessionStreamHandle {

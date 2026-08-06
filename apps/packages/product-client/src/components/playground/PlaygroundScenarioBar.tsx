@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import {
   SCENARIOS,
   type PlaygroundScenarioSelection,

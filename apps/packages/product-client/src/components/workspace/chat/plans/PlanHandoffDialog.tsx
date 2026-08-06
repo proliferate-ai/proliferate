@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowRight, ExternalLink, FileText } from "@proliferate/ui/icons";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Button } from "#product/primitives/Button";
+import { ArrowRight, ExternalLink } from "#product/primitives/icons/core";
+import { FileText } from "#product/primitives/icons/workspace";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
+import { Textarea } from "#product/primitives/Textarea";
 import {
   PlanHandoffModePicker,
   type PlanHandoffModePickerProps,
 } from "#product/components/workspace/chat/plans/PlanHandoffModePicker";
 import { PlanReferencePreviewDialog } from "#product/components/workspace/chat/plans/PlanReferencePreviewDialog";
 import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
-import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptDisplayPlanPart } from "#product/domain/chats/composer/prompt-display-parts";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
 
 interface PlanHandoffDialogProps {

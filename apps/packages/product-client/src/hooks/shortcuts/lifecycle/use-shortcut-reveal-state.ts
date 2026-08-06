@@ -1,8 +1,7 @@
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 import { isApplePlatform } from "#product/lib/domain/shortcuts/matching"
 import { useShortcutRevealStore } from "#product/stores/shortcuts/shortcut-reveal-store"
 
-export const SHORTCUT_REVEAL_DELAY_MS = 1000
 export const SHORTCUT_REVEAL_RESET_EVENT = "proliferate:shortcut-reveal-reset"
 
 function isPrimaryModifierKey(key: string, isApple: boolean): boolean {
@@ -23,51 +22,23 @@ function primaryModifierPressed(event: KeyboardEvent, isApple: boolean): boolean
 export function useShortcutRevealState(): boolean {
   const visible = useShortcutRevealStore((state) => state.visible)
   const setStoreVisible = useShortcutRevealStore((state) => state.setVisible)
-  const timerRef = useRef<number | null>(null)
-  const primaryDownRef = useRef(false)
 
   useEffect(() => {
     const clearReveal = () => {
-      primaryDownRef.current = false
-      if (timerRef.current) {
-        window.clearTimeout(timerRef.current)
-        timerRef.current = null
-      }
       setStoreVisible(false)
-    }
-
-    const startRevealTimer = () => {
-      if (timerRef.current) {
-        return
-      }
-
-      timerRef.current = window.setTimeout(() => {
-        timerRef.current = null
-        if (primaryDownRef.current) {
-          setStoreVisible(true)
-        }
-      }, SHORTCUT_REVEAL_DELAY_MS)
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const isApple = isApplePlatform()
       const primaryPressed = primaryModifierPressed(event, isApple)
 
-      if (!primaryPressed) {
-        clearReveal()
-        return
-      }
-
-      if (!isModifierKey(event.key)) {
-        clearReveal()
-        return
-      }
-
       if (isPrimaryModifierKey(event.key, isApple)) {
-        primaryDownRef.current = true
-        if (!event.repeat) {
-          startRevealTimer()
-        }
+        setStoreVisible(primaryPressed)
+        return
+      }
+
+      if (!primaryPressed || !isModifierKey(event.key)) {
+        clearReveal()
       }
     }
 

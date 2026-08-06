@@ -29,6 +29,8 @@ from proliferate.integrations.integration_oauth.models import (
     ProtectedResourceMetadata,
     RegisteredOAuthClient,
 )
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integrations import api as integrations_api
 from proliferate.server.cloud.integrations.config import (
     IntegrationConfig,
     StaticUrl,
@@ -37,7 +39,8 @@ from proliferate.server.cloud.integrations.config import (
 from proliferate.server.cloud.integrations.oauth import clients as oauth_clients
 from proliferate.server.cloud.integrations.oauth import service as oauth_service
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
-from proliferate.utils.crypto import decrypt_json
+from proliferate.config import settings
+from proliferate.lib.infra.encryption.json import decrypt_json
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 
@@ -165,7 +168,7 @@ class TestAuthenticateIntegration:
         assert stored is not None
         assert stored.credential_format == "secret-fields-v1"
         assert stored.credential_ciphertext is not None
-        decoded = decrypt_json(stored.credential_ciphertext)
+        decoded = decrypt_json(stored.credential_ciphertext, secret=settings.cloud_secret_key)
         assert decoded["secretFields"]["api_key"] == "ctx7sk-secret-value"
 
     @pytest.mark.asyncio
@@ -376,6 +379,36 @@ class TestAuthenticateIntegration:
 
         assert response.status_code == 400
         assert response.json()["detail"]["code"] == "oauth_scope_escalation"
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_keeps_browser_safe_error_page(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        raw_code = "must_not_reach_browser"
+        raw_message = "Sensitive provider detail must not reach the browser."
+
+        async def _fail_completion(*_args: object, **_kwargs: object) -> None:
+            raise CloudApiError(raw_code, raw_message, status_code=418)
+
+        monkeypatch.setattr(
+            integrations_api,
+            "complete_integration_oauth_callback",
+            _fail_completion,
+        )
+
+        response = await client.get(
+            "/v1/cloud/integrations/oauth/callback",
+            params={"state": "synthetic-state", "code": "synthetic-code"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert "Authorization failed" in response.text
+        assert "invalid_state" in response.text
+        assert raw_code not in response.text
+        assert raw_message not in response.text
 
 
 class TestRemoveAccount:

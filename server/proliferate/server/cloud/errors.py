@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import NoReturn
-
-from fastapi import HTTPException
 
 from proliferate.errors import ProliferateError
 
@@ -25,13 +22,3 @@ class CloudApiError(ProliferateError):
         super().__init__(message=message, code=code, status_code=status_code)
         self.extra_detail = dict(extra_detail or {})
         self.headers = dict(headers or {})
-
-
-def raise_cloud_error(error: CloudApiError) -> NoReturn:
-    """Transitional route helper for cloud APIs that have not migrated yet."""
-
-    raise HTTPException(
-        status_code=error.status_code,
-        detail={"code": error.code, "message": error.message, **error.extra_detail},
-        headers=error.headers or None,
-    ) from error

@@ -1,5 +1,5 @@
 import { FlatList, StyleSheet, Text, View } from "react-native";
-import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-client/internal/domain/chats/cloud/transcript-view";
 
 import { MobileChatMessageRow } from "./MobileChatMessageRow";
 import { colors, radius, spacing } from "../../../styles/tokens";

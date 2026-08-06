@@ -6,7 +6,7 @@ import {
 import {
   getPendingSessionConfigChange,
   type PendingSessionConfigChanges,
-} from "@proliferate/product-domain/sessions/pending-config";
+} from "#product/domain/sessions/pending-config";
 import type {
   DesktopAgentLaunchControl,
   DesktopModelTuningControlValues,

@@ -155,6 +155,18 @@ impl SessionService {
         &self.attachment_storage
     }
 
+    /// Look up a single prompt attachment's record (not its bytes — see
+    /// [`SessionService::read_prompt_attachment_content`]) by session and
+    /// attachment id, for the download-by-id handler.
+    pub fn find_prompt_attachment(
+        &self,
+        session_id: &str,
+        attachment_id: &str,
+    ) -> anyhow::Result<Option<super::model::PromptAttachmentRecord>> {
+        self.session_store
+            .find_prompt_attachment(session_id, attachment_id)
+    }
+
     pub fn read_prompt_attachment_content(
         &self,
         record: &super::model::PromptAttachmentRecord,

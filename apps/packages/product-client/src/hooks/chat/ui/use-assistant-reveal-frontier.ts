@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
-import type { AssistantMessageRevealState } from "#product/components/workspace/chat/transcript/AssistantMessage";
-import { getAssistantRevealProgress } from "#product/lib/infra/chat/assistant-reveal-progress";
-import { logDevAssistantRevealState } from "#product/lib/infra/debug/dev-assistant-reveal-log";
+import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
+import { getAssistantRevealProgress } from "#product/hooks/chat/ui/assistant-reveal-progress";
+import { logDevAssistantRevealState } from "#product/hooks/chat/ui/dev-assistant-reveal-log";
 
 type AssistantRevealClaim = {
   itemId: string;

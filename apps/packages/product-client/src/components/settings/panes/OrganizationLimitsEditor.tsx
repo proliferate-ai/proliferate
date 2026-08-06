@@ -1,14 +1,14 @@
 import { useState } from "react";
 import type { BudgetLimitInput, OrgUserUsageRow } from "@proliferate/cloud-sdk";
 import { useOrgLimits, useUpdateOrgLimits } from "@proliferate/cloud-sdk-react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
-import { Switch } from "@proliferate/ui/primitives/Switch";
-import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
-import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
+import { Switch } from "#product/primitives/Switch";
+import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
 import {
   capInputValue,

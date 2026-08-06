@@ -11,6 +11,7 @@ from proliferate.server.release import (
     build_release_id,
     is_canonical_release_id,
     normalize_git_sha,
+    resolve_server_release_id,
     sanitize_component_release_override,
     server_release_id,
 )
@@ -159,3 +160,32 @@ def test_server_release_id_production_rejects_dev_version(
     monkeypatch.setattr(release, "server_version", lambda: "0.0.0-dev")
     with pytest.raises(ReleaseIdentityError):
         server_release_id()
+
+
+def test_resolve_server_release_id_prefers_canonical_configured_release() -> None:
+    configured = f"proliferate-server@0.3.27+{_SHA12}"
+    assert resolve_server_release_id(configured) == configured
+
+
+@pytest.mark.parametrize(
+    "configured",
+    [None, "", "not a release", f"anyharness@0.3.27+{_SHA12}"],
+)
+def test_resolve_server_release_id_builds_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    configured: str | None,
+) -> None:
+    monkeypatch.setenv("SERVER_GIT_SHA", _SHA40)
+    monkeypatch.setenv("SERVER_VERSION", "0.3.27")
+    monkeypatch.delenv("PROLIFERATE_REQUIRE_RELEASE_IDENTITY", raising=False)
+    assert resolve_server_release_id(configured) == f"proliferate-server@0.3.27+{_SHA12}"
+
+
+def test_resolve_server_release_id_fails_closed_for_invalid_production_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PROLIFERATE_REQUIRE_RELEASE_IDENTITY", "1")
+    monkeypatch.delenv("SERVER_GIT_SHA", raising=False)
+    monkeypatch.setenv("SERVER_VERSION", "0.3.27")
+    with pytest.raises(ReleaseIdentityError):
+        resolve_server_release_id("anyharness@0.3.27+3c2bbf20e215")

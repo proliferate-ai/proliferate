@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Callable
 from typing import Any
 
 try:
@@ -15,14 +17,63 @@ except ImportError:  # pragma: no cover - optional dependency in local/test envs
     StarletteIntegration = None
 
 from proliferate.config import settings
-from proliferate.server.release import is_canonical_release_id, server_release_id
-from proliferate.utils.telemetry_mode import (
-    get_server_telemetry_mode,
-    is_vendor_telemetry_enabled,
-)
-from proliferate.utils.telemetry_scrub import scrub_mapping, scrub_text
 
 _sentry_initialized = False
+
+SENSITIVE_KEY_PATTERN = re.compile(
+    r"(authorization|cookie|token|secret|password|api[_-]?key|credential|"
+    r"prompt|content|stdout|stderr|request_body|body|env|file_path|path)",
+    re.IGNORECASE,
+)
+ABSOLUTE_PATH_PATTERN = re.compile(r"(?:/Users/[^\s]+|/home/[^\s]+|[A-Za-z]:\\[^\s]+)")
+BEARER_TOKEN_PATTERN = re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", re.IGNORECASE)
+JWT_PATTERN = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+\b")
+
+
+def _scrub_string_patterns(value: str) -> str:
+    return (
+        BEARER_TOKEN_PATTERN.sub("[redacted-token]", value)
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    )
+
+
+def scrub_text(value: str) -> str:
+    return JWT_PATTERN.sub(
+        "[redacted-jwt]",
+        ABSOLUTE_PATH_PATTERN.sub("[redacted-path]", _scrub_string_patterns(value)),
+    )
+
+
+def scrub_value(value: Any, key: str | None = None) -> Any:
+    if value is None:
+        return None
+
+    if key and SENSITIVE_KEY_PATTERN.search(key):
+        return "[redacted]"
+
+    if isinstance(value, str):
+        return scrub_text(value)
+
+    if isinstance(value, list):
+        return [scrub_value(item) for item in value]
+
+    if isinstance(value, tuple):
+        return tuple(scrub_value(item) for item in value)
+
+    if isinstance(value, dict):
+        return {
+            entry_key: scrub_value(entry_value, entry_key)
+            for entry_key, entry_value in value.items()
+        }
+
+    return value
+
+
+def scrub_mapping(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return scrub_value(value)
 
 
 def _scrub_breadcrumb(
@@ -88,15 +139,15 @@ def _scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]
     return scrubbed
 
 
-def init_server_sentry() -> None:
+def init_server_sentry(
+    *,
+    enabled: bool,
+    telemetry_mode: str,
+    release_resolver: Callable[[], str],
+) -> None:
     global _sentry_initialized
 
-    if (
-        _sentry_initialized
-        or not settings.sentry_dsn
-        or sentry_sdk is None
-        or not is_vendor_telemetry_enabled()
-    ):
+    if _sentry_initialized or not enabled or not settings.sentry_dsn or sentry_sdk is None:
         return
 
     _sentry_initialized = True
@@ -105,17 +156,7 @@ def init_server_sentry() -> None:
         level=logging.INFO,
         event_level=None,
     )
-
-    # Prefer a CI-stamped release only when it canonically names this component;
-    # otherwise fall back to the code-built `proliferate-server@<version>+<sha>`
-    # so a misconfigured `SENTRY_RELEASE` can never stamp the server's Sentry
-    # events with another component's (or a malformed) release.
-    configured_release = settings.sentry_release
-    release = (
-        configured_release
-        if is_canonical_release_id(configured_release, component="proliferate-server")
-        else server_release_id()
-    )
+    release = release_resolver()
 
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
@@ -134,11 +175,11 @@ def init_server_sentry() -> None:
         before_breadcrumb=_scrub_breadcrumb,
     )
     sentry_sdk.set_tag("surface", "cloud_api")
-    sentry_sdk.set_tag("telemetry_mode", get_server_telemetry_mode())
+    sentry_sdk.set_tag("telemetry_mode", telemetry_mode)
 
 
 def set_server_sentry_user(user_id: str) -> None:
-    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+    if not _sentry_initialized or sentry_sdk is None:
         return
 
     sentry_sdk.set_user(
@@ -155,21 +196,21 @@ def clear_server_sentry_user() -> None:
     never leak onto a later, unrelated request handled on the same worker
     (cross-user leakage). Passing ``None`` clears the scope's ``user``.
     """
-    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+    if not _sentry_initialized or sentry_sdk is None:
         return
 
     sentry_sdk.set_user(None)
 
 
 def set_server_sentry_tag(key: str, value: str) -> None:
-    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+    if not _sentry_initialized or sentry_sdk is None:
         return
 
     sentry_sdk.set_tag(key, value)
 
 
 def set_server_sentry_correlation_context(context: dict[str, str]) -> None:
-    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+    if not _sentry_initialized or sentry_sdk is None:
         return
 
     allowed_keys = {
@@ -202,7 +243,7 @@ def capture_server_sentry_exception(
     extras: dict[str, Any] | None = None,
     fingerprint: list[str] | None = None,
 ) -> None:
-    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+    if not _sentry_initialized or sentry_sdk is None:
         return
 
     normalized = (
@@ -269,7 +310,7 @@ def report_critical(
 
 
 def flush_server_sentry(timeout: float = 2.0) -> None:
-    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+    if not _sentry_initialized or sentry_sdk is None:
         return
 
     sentry_sdk.flush(timeout=timeout)

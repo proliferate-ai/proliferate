@@ -3,7 +3,7 @@ import { PLAN_IMPLEMENT_HERE_PROMPT } from "#product/copy/plans/plan-prompts";
 import {
   planReferenceContentPartFromDescriptor,
   type PromptPlanAttachmentDescriptor,
-} from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+} from "#product/domain/chats/composer/prompt-plan-attachments";
 
 export interface PlanImplementationPrompt {
   text: string;

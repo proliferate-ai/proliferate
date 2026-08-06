@@ -19,6 +19,7 @@ from proliferate.auth.identity.types import (
     AuthProviderName,
     VerifiedProviderIdentity,
 )
+from proliferate.config import settings
 from proliferate.db.models.auth import (
     AuthChallenge,
     AuthIdentity,
@@ -26,7 +27,7 @@ from proliferate.db.models.auth import (
     ProviderGrant,
     User,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 
 
 @dataclass(frozen=True)
@@ -294,9 +295,13 @@ async def upsert_provider_grant(
         db.add(grant)
 
     grant.user_id = identity.user_id
-    grant.access_token_ciphertext = encrypt_text(verified.access_token)
+    grant.access_token_ciphertext = encrypt_text(
+        verified.access_token, secret=settings.cloud_secret_key
+    )
     grant.refresh_token_ciphertext = (
-        encrypt_text(verified.refresh_token) if verified.refresh_token else None
+        encrypt_text(verified.refresh_token, secret=settings.cloud_secret_key)
+        if verified.refresh_token
+        else None
     )
     grant.scopes_json = _scopes_json(verified.scopes)
     grant.expires_at = verified.expires_at
@@ -472,7 +477,9 @@ async def get_ready_github_grant_for_user(
         return ReadyGitHubGrant(
             user_id=user_id,
             identity_id=identity.id,
-            access_token=decrypt_text(grant.access_token_ciphertext),
+            access_token=decrypt_text(
+                grant.access_token_ciphertext, secret=settings.cloud_secret_key
+            ),
             account_email=identity.email,
             display_name=identity.display_name,
             avatar_url=identity.avatar_url,
@@ -503,7 +510,9 @@ async def read_ready_github_grant_for_user(
         return ReadyGitHubGrant(
             user_id=user_id,
             identity_id=identity.id,
-            access_token=decrypt_text(grant.access_token_ciphertext),
+            access_token=decrypt_text(
+                grant.access_token_ciphertext, secret=settings.cloud_secret_key
+            ),
             account_email=identity.email,
             display_name=identity.display_name,
             avatar_url=identity.avatar_url,

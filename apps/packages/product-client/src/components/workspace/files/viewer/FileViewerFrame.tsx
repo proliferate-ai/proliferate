@@ -4,24 +4,24 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import {
   Check,
   ChevronRight,
   Copy,
   ExternalLink,
-  FolderTree,
   MoreHorizontal,
   Search,
-} from "@proliferate/ui/icons";
-import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
-import { PaneOptionsMenuItem } from "@proliferate/ui/patterns/PaneOptionsMenuItem";
+} from "#product/primitives/icons/core";
+import { FolderTree } from "#product/primitives/icons/workspace";
+import { PaneIconButton } from "#product/primitives/PaneIconButton";
+import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
 import {
   POPOVER_FRAME_CLASS,
   POPOVER_SURFACE_CLASS,
   PopoverButton,
-} from "@proliferate/ui/primitives/PopoverButton";
+} from "#product/primitives/PopoverButton";
 import { PaneOptionsMenuSeparator } from "#product/components/workspace/pane/PaneOptionsMenu";
 import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 import {

@@ -1,0 +1,81 @@
+import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { twMerge } from "#product/primitives/utils/tw-merge";
+import { Spinner } from "./Spinner";
+
+type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "outline"
+  | "ghost"
+  | "destructive"
+  | "inverted"
+  | "sidebar"
+  | "sidebar-link"
+  | "unstyled";
+type ButtonSize = "sm" | "md" | "pill" | "icon" | "icon-sm" | "unstyled";
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
+}
+
+const variantClasses: Record<ButtonVariant, string> = {
+  // [SHADOW-04] keystone removal: `--shadow-keystone` is removed by the token
+  // authority, so `shadow-keystone` resolved to nothing. The primary button is
+  // surface-led (retune-spec.md §8 [SHADOW-04]); the dead class is deleted
+  // rather than absorbed by the staged census.
+  primary:
+    "bg-primary text-primary-foreground font-medium hover:bg-primary/90",
+  secondary:
+    "border border-border bg-card text-card-foreground transition-colors hover:bg-hover active:bg-active",
+  outline:
+    "border border-input text-muted-foreground hover:bg-hover active:bg-active",
+  ghost:
+    "text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active",
+  destructive:
+    "bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90",
+  inverted:
+    "bg-foreground text-background hover:bg-foreground/80",
+  sidebar:
+    "font-medium text-sidebar-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
+  "sidebar-link":
+    "text-ui font-medium text-sidebar-foreground underline decoration-sidebar-muted-foreground/60 underline-offset-2 hover:decoration-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
+  unstyled: "",
+};
+
+const sizeClasses: Record<ButtonSize, string> = {
+  sm: "h-8 px-3 text-ui rounded-md",
+  md: "h-9 px-4 text-ui rounded-md",
+  icon: "h-8 w-8 rounded-md",
+  pill: "h-auto px-2.5 py-0.5 text-ui rounded-full",
+  "icon-sm": "h-7 w-7 rounded-full px-0",
+  unstyled: "",
+};
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  function Button({
+    variant = "primary",
+    size = "sm",
+    loading = false,
+    disabled,
+    className = "",
+    children,
+    ...props
+  }, ref) {
+    const base =
+      "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50";
+
+    return (
+      <button
+        ref={ref}
+        disabled={disabled || loading}
+        className={twMerge(base, variantClasses[variant], sizeClasses[size], className)}
+        {...props}
+      >
+        {loading && <Spinner className="icon-compact" />}
+        {children}
+      </button>
+    );
+  },
+);

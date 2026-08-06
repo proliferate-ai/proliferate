@@ -33,6 +33,8 @@ from proliferate.integrations.sandbox import (
     SandboxRuntimeContext,
     get_sandbox_provider,
 )
+from proliferate.lib.infra.encryption.fernet import decrypt_text
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
@@ -57,8 +59,6 @@ from proliferate.server.cloud.runtime_workers.models import (
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 from proliferate.server.version import runtime_version_pin as pinned_runtime_version
 from proliferate.server.version import worker_version_pin as pinned_worker_version
-from proliferate.utils.crypto import decrypt_text
-from proliferate.utils.time import utcnow
 
 _TOKEN_BYTES = 48
 
@@ -376,8 +376,12 @@ def _build_supervisor_bridge_inputs(
             runtime_binary_path=provider.runtime_binary_path,
             base_env={"HOME": provider.user_home},
         )
-        runtime_token = decrypt_text(sandbox.anyharness_bearer_token_ciphertext)
-        anyharness_data_key = decrypt_text(sandbox.anyharness_data_key_ciphertext)
+        runtime_token = decrypt_text(
+            sandbox.anyharness_bearer_token_ciphertext, secret=settings.cloud_secret_key
+        )
+        anyharness_data_key = decrypt_text(
+            sandbox.anyharness_data_key_ciphertext, secret=settings.cloud_secret_key
+        )
         anyharness_env = build_runtime_env(
             runtime_token,
             anyharness_data_key=anyharness_data_key,

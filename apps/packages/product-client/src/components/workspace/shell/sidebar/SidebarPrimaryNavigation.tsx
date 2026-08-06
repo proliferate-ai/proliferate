@@ -1,6 +1,8 @@
-import { AppShellNewChatIcon, Fork, Grid, LifeBuoy } from "@proliferate/ui/icons";
-import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
-import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
+import { AppShellNewChatIcon } from "#product/primitives/icons/app-shell";
+import { Fork, LifeBuoy } from "#product/primitives/icons/core";
+import { Grid } from "#product/primitives/icons/platform";
+import type { SidebarNavItemView } from "#product/components/workspace/shell/sidebar/ProductSidebarNavigation";
+import { ProductSidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/ProductSidebarNavigation";
 
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
@@ -34,20 +36,20 @@ export function SidebarPrimaryNavigation({
     {
       id: "new-chat",
       active: homeActive,
-      icon: <AppShellNewChatIcon className="icon-paired" />,
+      icon: <AppShellNewChatIcon className="icon-indicator" />,
       label: "New chat",
       shortcutLabel: shortcutLabels.newChat,
     },
     {
       id: "workspaces",
       active: workspacesActive,
-      icon: <Grid className="icon-paired" />,
+      icon: <Grid className="icon-indicator" />,
       label: "Workspaces",
     },
     {
       id: "workflows",
       active: workflowsActive,
-      icon: <Fork className="icon-paired" />,
+      icon: <Fork className="icon-indicator" />,
       label: "Workflows",
       status: (
         <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
@@ -58,7 +60,7 @@ export function SidebarPrimaryNavigation({
     {
       id: "support",
       active: supportActive,
-      icon: <LifeBuoy className="icon-paired" strokeWidth={1.75} />,
+      icon: <LifeBuoy className="icon-indicator" strokeWidth={1.75} />,
       label: "Support",
       shortcutLabel: shortcutLabels.support,
     },

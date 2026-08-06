@@ -269,7 +269,10 @@ async def remove_cloud_repo_environment(
     ):
         raise CloudApiError(
             "cloud_repository_in_use",
-            "Delete this repository's automations and run history before removing it.",
+            (
+                "This repository has retained automation definitions or run history "
+                "and cannot be removed."
+            ),
             status_code=409,
         )
     await remove_cloud_repo_environment_row(

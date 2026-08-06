@@ -3,7 +3,7 @@ import type {
   SessionExecutionSummary,
   SessionStatus,
 } from "@anyharness/sdk";
-import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionViewState } from "#product/domain/sessions/activity";
 
 export const MAX_HOT_SESSION_STREAMS = 12;
 

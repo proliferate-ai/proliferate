@@ -1,8 +1,8 @@
 import type { ReactElement, ReactNode, Ref } from "react";
-import { Copy } from "@proliferate/ui/icons";
+import { Copy } from "#product/primitives/icons/core";
 import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
 export function TargetIcon({ target, size = "icon-paired" }: { target: OpenTarget; size?: string }) {

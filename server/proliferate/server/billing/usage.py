@@ -18,6 +18,7 @@ from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZ
 from proliferate.db.models.billing import BillingBudgetLimit
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import billing as billing_store
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing import snapshots as billing_snapshots
 from proliferate.server.billing.budget_limits import (
     bucket_starts,
@@ -31,7 +32,6 @@ from proliferate.server.billing.models import (
     UsageTimeseries,
     UsageTimeseriesBucket,
 )
-from proliferate.utils.time import utcnow
 
 
 async def get_usage_summary(

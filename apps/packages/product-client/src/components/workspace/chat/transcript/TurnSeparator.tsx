@@ -1,5 +1,5 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ChevronRight } from "#product/primitives/icons/core";
 
 interface TurnSeparatorProps {
   label: string;

@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Check } from "@proliferate/ui/icons";
+import { Check } from "#product/primitives/icons/core";
 import {
   DropdownMenuItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@proliferate/ui/primitives/DropdownMenu";
+} from "#product/primitives/DropdownMenu";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";

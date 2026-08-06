@@ -16,6 +16,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings as app_settings
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.integrations.accounts import (
     IntegrationAccountRecord,
@@ -40,6 +41,7 @@ from proliferate.integrations.integration_oauth.discovery import (
     discover_protected_resource_metadata,
 )
 from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
+from proliferate.lib.infra.encryption.json import encrypt_json
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import (
     HeaderTemplate,
@@ -68,7 +70,6 @@ from proliferate.server.cloud.integrations.oauth import (
     start_oauth_flow,
 )
 from proliferate.server.organizations.domain.policy import organization_admin_roles
-from proliferate.utils.crypto import encrypt_json
 
 _DEFAULT_SECRET_FIELD_ID = "api_key"
 
@@ -301,7 +302,9 @@ async def authenticate_integration(
         updated = await set_account_credentials(
             db,
             account_id=account.id,
-            credential_ciphertext=encrypt_json({"secretFields": {field_id: secret}}),
+            credential_ciphertext=encrypt_json(
+                {"secretFields": {field_id: secret}}, secret=app_settings.cloud_secret_key
+            ),
             credential_format="secret-fields-v1",
             auth_status="ready",
             token_expires_at=None,

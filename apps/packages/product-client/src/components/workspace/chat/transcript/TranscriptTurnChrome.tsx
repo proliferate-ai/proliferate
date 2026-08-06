@@ -1,18 +1,18 @@
 import type { ReactNode } from "react";
-// CircleCheck isn't in the curated @proliferate/ui/icons set — the goal bar
+// CircleCheck isn't in the curated ProductClient icon set — the goal bar
 // and goal transcript rows source it directly from lucide-react too.
 import { CircleCheck } from "lucide-react";
 import {
   CircleQuestion,
   MessageCircleQuestion,
-  Sparkles,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/core";
+import { Sparkles } from "#product/primitives/icons/product";
 import type { PendingInteraction } from "@anyharness/sdk";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { useActivePendingInteractionState } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
-import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+import type { SessionViewState } from "#product/domain/sessions/activity";
 
 /**
  * The two interaction shapes that get a distinct transcript marker while the

@@ -19,7 +19,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from proliferate.db.models.base import Base, utcnow
+from proliferate.db.models.base import Base
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 class Automation(Base):

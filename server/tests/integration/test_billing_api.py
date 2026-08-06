@@ -7,8 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
@@ -66,10 +65,10 @@ from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
     from proliferate.auth.models import UserCreate
-    from proliferate.auth.users import UserManager
+    from proliferate.auth.users import UserManager, get_user_db
     from proliferate.db.engine import get_async_session
     from proliferate.db.models.auth import OAuthAccount
-    from proliferate.auth.users import get_user_db
+    from proliferate.server.organizations.membership_policy import place_new_identity
 
     user_id: str | None = None
     async for session in get_async_session():
@@ -82,6 +81,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
                     display_name="Billing Tester",
                 ),
             )
+            await place_new_identity(session, user)
             session.add(
                 OAuthAccount(
                     user_id=user.id,
@@ -449,6 +449,29 @@ class TestBillingApi:
         assert portal["stripe_customer_id"] == "cus_checkout_portal"
         assert portal["return_url"] == "https://app.test/portal?returnSurface=desktop"
         assert portal["idempotency_key"].startswith(f"portal:active-cloud:{subject.id}:")
+
+    @pytest.mark.asyncio
+    async def test_disabled_team_checkout_uses_product_error_envelope(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "pro_billing_enabled", False)
+        session = await _register_and_login(client, "billing-team-checkout-disabled@example.com")
+
+        response = await client.post(
+            "/v1/billing/team-checkout",
+            headers={"Authorization": f"Bearer {session['access_token']}"},
+            json={"teamName": "Acme Research"},
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": {
+                "code": "org_pro_billing_disabled",
+                "message": "Team billing is not available yet.",
+            }
+        }
 
     @pytest.mark.asyncio
     async def test_team_checkout_creates_pending_org_without_membership(
@@ -973,7 +996,12 @@ class TestBillingApi:
             },
         )
         assert disabled_response.status_code == 409
-        assert disabled_response.json()["detail"]["code"] == "org_pro_billing_disabled"
+        assert disabled_response.json() == {
+            "detail": {
+                "code": "org_pro_billing_disabled",
+                "message": "Organization Pro billing is not available yet.",
+            }
+        }
 
         monkeypatch.setattr(settings, "pro_billing_enabled", True)
         member_response = await client.post(
@@ -985,7 +1013,12 @@ class TestBillingApi:
             },
         )
         assert member_response.status_code == 403
-        assert member_response.json()["detail"]["code"] == "organization_permission_denied"
+        assert member_response.json() == {
+            "detail": {
+                "code": "organization_permission_denied",
+                "message": "You do not have permission to manage this organization.",
+            }
+        }
 
     @pytest.mark.asyncio
     async def test_org_cloud_plan_reports_active_member_seats(

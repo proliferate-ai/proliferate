@@ -3,14 +3,24 @@
 Scope:
 
 - `server/proliferate/auth/**`
-- `apps/web/src/components/auth/**`
+- `server/proliferate/server/accounts/**`
+- `apps/web/src/browser/auth/**`
+- `apps/web/src/lib/access/cloud/auth/**`
 - `apps/mobile/src/components/auth/**`
-- `apps/desktop/src/components/settings/panes/AccountPane.tsx`
-- `apps/packages/product-domain/src/auth/**`
-- `apps/packages/product-ui/src/auth/**`
+- `apps/packages/product-client/src/components/auth/**`
+- `apps/packages/product-client/src/components/settings/panes/AccountPane.tsx`
+- `apps/packages/product-client/src/domain/auth/**`
 - `cloud/sdk/src/client/auth.ts`
 
 ## Model
+
+`auth/**` is the importable authentication leaf: credentials, sessions,
+provider protocols, identity persistence, and transport-neutral Auth failures.
+`server/accounts/**` owns product account entry: the Desktop, Identity, and SSO
+routes; product-user resolution/creation; identity placement; admin-email
+enforcement; and coordinated product side effects. The public routes remain
+under `/auth/**`. Organizations owns OrganizationMembership mutations, including
+the SSO JIT membership operation and its billing/enrollment follow-ups.
 
 Proliferate has two related but distinct auth concepts:
 

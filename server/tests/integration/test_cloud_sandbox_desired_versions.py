@@ -31,7 +31,7 @@ from proliferate.db.store import instance_organizations as instance_organization
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers import service
 from proliferate.server.cloud.runtime_workers.service import create_cloud_sandbox_enrollment
-from proliferate.utils.crypto import encrypt_text
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 
 
@@ -468,8 +468,12 @@ class TestSupervisorBridgeDelivery:
             provider_sandbox_id=f"e2b-{uuid.uuid4().hex[:8]}",
             status=CloudSandboxStatus.ready,
             anyharness_base_url="https://runtime.example.invalid",
-            runtime_token_ciphertext=encrypt_text("runtime-token"),
-            anyharness_data_key_ciphertext=encrypt_text("data-key"),
+            runtime_token_ciphertext=encrypt_text(
+                "runtime-token", secret=settings.cloud_secret_key
+            ),
+            anyharness_data_key_ciphertext=encrypt_text(
+                "data-key", secret=settings.cloud_secret_key
+            ),
         )
         db_session.add(sandbox)
         await db_session.commit()

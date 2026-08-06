@@ -1,8 +1,10 @@
+import asyncio
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -58,6 +60,77 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
         try:
             async with inspection_engine.begin() as conn:
                 await assert_current_schema(conn, HEAD_REVISION)
+        finally:
+            await inspection_engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_organization_slug_migration_preserves_frozen_backfill_policy() -> None:
+    async with temporary_database("organization_slug_migration") as (
+        _database_name,
+        database_url,
+    ):
+        await _upgrade_database_to_revision(database_url, "d10c0a11e5ef")
+
+        base_time = datetime(2026, 1, 1, tzinfo=UTC)
+        organizations = [
+            {
+                "id": uuid.uuid4(),
+                "name": name,
+                "created_at": base_time + timedelta(seconds=offset),
+                "updated_at": base_time + timedelta(seconds=offset),
+            }
+            for offset, name in enumerate(
+                ("Acme Inc", " ACME---INC! ", "!!!", "é", "A" * 49, "A" * 48)
+            )
+        ]
+        seed_engine = create_async_engine(database_url, echo=False)
+        try:
+            async with seed_engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO organization (id, name, created_at, updated_at)
+                        VALUES (:id, :name, :created_at, :updated_at)
+                        """
+                    ),
+                    list(reversed(organizations)),
+                )
+        finally:
+            await seed_engine.dispose()
+
+        await _upgrade_database_to_revision(database_url, "e1f2a3b4c5d6")
+
+        inspection_engine = create_async_engine(database_url, echo=False)
+        try:
+            async with inspection_engine.connect() as conn:
+                slugs = (
+                    (
+                        await conn.execute(
+                            text("SELECT slug FROM organization ORDER BY created_at ASC")
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                indexes = await conn.run_sync(
+                    lambda sync_conn: inspect(sync_conn).get_indexes("organization")
+                )
+
+            assert slugs == [
+                "acme-inc",
+                "acme-inc-2",
+                "org",
+                "org-2",
+                "a" * 48,
+                "a" * 48 + "-2",
+            ]
+            slug_index = next(
+                index for index in indexes if index["name"] == "ux_organization_slug"
+            )
+            assert slug_index["unique"] is True
+            where = str(slug_index["dialect_options"].get("postgresql_where", ""))
+            assert "slug is not null" in where.lower()
         finally:
             await inspection_engine.dispose()
 
@@ -161,4 +234,8 @@ async def test_app_startup_fails_when_postgres_is_unreachable(
 
 
 async def _upgrade_database_to_revision(database_url: str, revision: str) -> None:
-    await command.upgrade(build_alembic_config(database_url), revision)
+    await asyncio.to_thread(
+        command.upgrade,
+        build_alembic_config(database_url),
+        revision,
+    )

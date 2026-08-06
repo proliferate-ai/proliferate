@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 export function TabGroupPill({
   groupKind,

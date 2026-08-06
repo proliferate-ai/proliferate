@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
+import { Button } from "#product/primitives/Button";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "#product/components/workspace/chat/surface/CloudStatusCompactHeader";
 import {
@@ -8,7 +8,8 @@ import {
   type CloudWorkspaceStatusScreenMode,
   type CloudWorkspaceStatusScreenModel,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import { CircleAlert, Spinner } from "@proliferate/ui/icons";
+import { CircleAlert } from "#product/primitives/icons/status";
+import { Spinner } from "#product/primitives/Spinner";
 
 function SectionRow({
   label,

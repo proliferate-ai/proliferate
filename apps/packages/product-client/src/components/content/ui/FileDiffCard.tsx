@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowUpRight, ChevronDown } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ArrowUpRight, ChevronDown } from "#product/primitives/icons/core";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 

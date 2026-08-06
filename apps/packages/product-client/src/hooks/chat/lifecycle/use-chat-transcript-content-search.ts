@@ -3,15 +3,15 @@ import type {
   PendingPromptEntry,
   TranscriptState,
 } from "@anyharness/sdk";
-import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
-import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
+import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
+import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import {
   buildTranscriptRowModel,
   createTranscriptRowModelCache,
   type TranscriptRowModelCache,
-} from "@proliferate/product-domain/chats/transcript/transcript-row-model";
-import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
-import { turnHasAssistantRenderableTranscriptContent } from "@proliferate/product-domain/chats/pending-prompts/pending-prompts";
+} from "#product/domain/chats/transcript/transcript-row-model";
+import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
+import { turnHasAssistantRenderableTranscriptContent } from "#product/domain/chats/pending-prompts/pending-prompts";
 import {
   findContentSearchMatches,
   normalizeContentSearchQuery,

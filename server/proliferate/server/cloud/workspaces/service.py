@@ -33,7 +33,7 @@ from proliferate.integrations.anyharness.workspaces import (
     materialize_workspace_at_ref,
     retire_runtime_workspace,
 )
-from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
 from proliferate.server.cloud.errors import CloudApiError
@@ -50,6 +50,7 @@ from proliferate.server.cloud.materialization.materialize.repo_environment impor
 from proliferate.server.cloud.provisioning_observability import provisioning_phase
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
+from proliferate.server.cloud.workspaces.domain.naming import resolve_generated_branch_name
 from proliferate.server.cloud.workspaces.materializations.service import (
     validate_cloud_copy_local_source,
 )
@@ -75,7 +76,6 @@ from proliferate.server.cloud.workspaces.provisioning import (
 from proliferate.server.cloud.workspaces.provisioning import (
     resolve_repo_root as _resolve_repo_root,
 )
-from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.cloud.workspaces")
 

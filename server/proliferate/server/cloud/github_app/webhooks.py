@@ -13,9 +13,9 @@ from proliferate.integrations.github import (
     GitHubWebhookSignatureError,
     verify_github_webhook_signature,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app.service import installation_info_from_webhook
-from proliferate.utils.time import utcnow
 
 
 async def handle_github_app_webhook(

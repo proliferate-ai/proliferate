@@ -1,0 +1,1326 @@
+{
+  "schema_version": 1,
+  "mypy_version": "1.20.2",
+  "diagnostics": [
+    {
+      "path": "proliferate/auth/identity/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 10
+    },
+    {
+      "path": "proliferate/auth/identity/providers.py",
+      "code": "arg-type",
+      "message": "Argument \"avatar_url\" to \"VerifiedProviderIdentity\" has incompatible type \"object\"; expected \"str | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/providers.py",
+      "code": "arg-type",
+      "message": "Argument \"display_name\" to \"VerifiedProviderIdentity\" has incompatible type \"object\"; expected \"str | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/providers.py",
+      "code": "arg-type",
+      "message": "Argument \"email\" to \"VerifiedProviderIdentity\" has incompatible type \"object\"; expected \"str | None\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/auth/identity/providers.py",
+      "code": "arg-type",
+      "message": "Argument \"extras_params\" to \"get_authorization_url\" of \"BaseOAuth2\" has incompatible type \"dict[str, str] | None\"; expected \"GitHubOAuth2AuthorizeParams | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/providers.py",
+      "code": "arg-type",
+      "message": "Argument \"extras_params\" to \"get_authorization_url\" of \"BaseOAuth2\" has incompatible type \"dict[str, str] | None\"; expected \"GoogleOAuth2AuthorizeParams | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/providers.py",
+      "code": "arg-type",
+      "message": "Argument \"refresh_token\" to \"VerifiedProviderIdentity\" has incompatible type \"object\"; expected \"str | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/providers.py",
+      "code": "import-untyped",
+      "message": "Library stubs not installed for \"jose\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/providers.py",
+      "code": "no-any-return",
+      "message": "Returning Any from function declared to return \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/sessions.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"provider_enabled\" has incompatible type \"str\"; expected \"Literal['github', 'google', 'apple']\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/sessions.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"sso_brand_label_for_connection\" has incompatible type \"SsoConnectionRecord\"; expected \"SsoBrandConnection\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/auth/identity/sessions.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"SsoConnectionSnapshot | None\", variable has type \"SsoConnectionRecord | None\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/sessions.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 2
+    },
+    {
+      "path": "proliferate/auth/identity/store.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"where\" of \"Select\" has incompatible type \"bool\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
+      "count": 6
+    },
+    {
+      "path": "proliferate/auth/identity/store.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"where\" of \"Select\" has incompatible type \"bool\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
+      "count": 3
+    },
+    {
+      "path": "proliferate/auth/identity/store.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"AuthIdentity | None\", variable has type \"AuthIdentity\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/identity/store.py",
+      "code": "attr-defined",
+      "message": "\"UUID\" has no attribute \"asc\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/auth/identity/store.py",
+      "code": "attr-defined",
+      "message": "\"str\" has no attribute \"in_\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/profile_api.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/service.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"_linked_provider_payload\" has incompatible type \"Literal['github', 'google', 'apple']\"; expected \"AuthProvider\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/service.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"_provider_availability_payload\" has incompatible type \"Literal['github', 'google', 'apple']\"; expected \"AuthProvider\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/service.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"first_account_for_provider\" has incompatible type \"AuthProvider\"; expected \"Literal['github', 'google', 'apple']\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/auth/sso/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 4
+    },
+    {
+      "path": "proliferate/background/beat_schedule.py",
+      "code": "import-untyped",
+      "message": "Skipping analyzing \"celery.schedules\": module is installed, but missing library stubs or py.typed marker",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/celery_app.py",
+      "code": "import-untyped",
+      "message": "Skipping analyzing \"celery\": module is installed, but missing library stubs or py.typed marker",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/config.py",
+      "code": "import-untyped",
+      "message": "Skipping analyzing \"kombu\": module is installed, but missing library stubs or py.typed marker",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/correlation.py",
+      "code": "import-untyped",
+      "message": "Skipping analyzing \"celery\": module is installed, but missing library stubs or py.typed marker",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/correlation.py",
+      "code": "misc",
+      "message": "Class cannot subclass \"Task\" (has type \"Any\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/relay.py",
+      "code": "import-untyped",
+      "message": "Skipping analyzing \"celery\": module is installed, but missing library stubs or py.typed marker",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/task_metrics.py",
+      "code": "import-untyped",
+      "message": "Skipping analyzing \"celery.signals\": module is installed, but missing library stubs or py.typed marker",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/task_metrics.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"_on_task_failure\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/task_metrics.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"_on_task_prerun\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/task_metrics.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"_on_task_retry\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/task_metrics.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"_on_task_success\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/cloud_sandboxes.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"cloud_sandbox_orphan_reap\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/customerio_sync.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"customerio_engagement_sync\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/health.py",
+      "code": "import-untyped",
+      "message": "Skipping analyzing \"celery\": module is installed, but missing library stubs or py.typed marker",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/health.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"noop\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/notifications.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"send_slack\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/relay.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"relay\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/workflows.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/workflows.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"cancel\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/workflows.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"deliver\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/background/tasks/workflows.py",
+      "code": "untyped-decorator",
+      "message": "Untyped decorator makes function \"observe\" untyped",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/agent_gateway/credits.py",
+      "code": "attr-defined",
+      "message": "\"Result[Any]\" has no attribute \"rowcount\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/agent_gateway/harness_settings.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 3
+    },
+    {
+      "path": "proliferate/db/store/agent_gateway/policy.py",
+      "code": "call-overload",
+      "message": "No overload variant of \"select\" matches argument types \"InstrumentedAttribute[UUID]\", \"str\", \"InstrumentedAttribute[str | None]\", \"InstrumentedAttribute[str]\", \"InstrumentedAttribute[str]\", \"InstrumentedAttribute[str]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/agent_gateway/selections.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"AgentAuthSelection | None\", variable has type \"AgentAuthSelection\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/agent_gateway/selections.py",
+      "code": "attr-defined",
+      "message": "\"Result[Any]\" has no attribute \"rowcount\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/billing.py",
+      "code": "return-value",
+      "message": "Incompatible return value type (got \"Extract\", expected \"ColumnElement[float]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/billing_accounting.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"BillingOverageRemainder | None\", variable has type \"BillingOverageRemainder\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/billing_runtime_usage.py",
+      "code": "attr-defined",
+      "message": "\"Result[Any]\" has no attribute \"rowcount\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/billing_seats.py",
+      "code": "attr-defined",
+      "message": "\"Result[Any]\" has no attribute \"rowcount\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/billing_subjects.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"BillingSubject | None\", variable has type \"BillingSubject\")",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/billing_subjects.py",
+      "code": "attr-defined",
+      "message": "\"Result[Any]\" has no attribute \"rowcount\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/billing_subjects.py",
+      "code": "no-any-return",
+      "message": "Returning Any from function declared to return \"str | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/cloud_repo_environment_materializations.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"str\", variable has type \"SQLCoreOperations[CloudMaterializationStatus] | CloudMaterializationStatus\")",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/cloud_sandbox_secrets.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"str\", variable has type \"SQLCoreOperations[CloudSandboxSecretMaterializationStatus] | CloudSandboxSecretMaterializationStatus\")",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/cloud_workspaces.py",
+      "code": "return-value",
+      "message": "Incompatible return value type (got \"str\", expected \"Literal['repository_worktree', 'scratch']\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/instance_setup.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"count\" has incompatible type \"UUID\"; expected \"ColumnElement[Any] | _HasClauseElement[Any] | SQLCoreOperations[Any] | ExpressionElementRole[Any] | TypedColumnsClauseRole[Any] | Callable[[], ColumnElement[Any]] | LambdaElement | Literal['*', 1] | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/integrations/accounts.py",
+      "code": "type-arg",
+      "message": "Missing type arguments for generic type \"Row\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/integrations/accounts.py",
+      "code": "type-arg",
+      "message": "Missing type arguments for generic type \"Select\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/notifications.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"where\" of \"Select\" has incompatible type \"bool\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/notifications.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"where\" of \"Select\" has incompatible type \"bool\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/notifications.py",
+      "code": "attr-defined",
+      "message": "\"UUID\" has no attribute \"asc\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/notifications.py",
+      "code": "attr-defined",
+      "message": "\"str\" has no attribute \"asc\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/organization_member_auth_methods.py",
+      "code": "attr-defined",
+      "message": "\"UUID\" has no attribute \"asc\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/organization_member_auth_methods.py",
+      "code": "attr-defined",
+      "message": "\"UUID\" has no attribute \"in_\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/organization_member_auth_methods.py",
+      "code": "attr-defined",
+      "message": "\"str\" has no attribute \"asc\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/organization_member_auth_methods.py",
+      "code": "attr-defined",
+      "message": "\"str\" has no attribute \"in_\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/organization_member_auth_methods.py",
+      "code": "call-overload",
+      "message": "No overload variant of \"select\" matches argument types \"UUID\", \"InstrumentedAttribute[datetime | None]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/organization_member_auth_methods.py",
+      "code": "call-overload",
+      "message": "No overload variant of \"select\" matches argument types \"UUID\", \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/organizations.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"join\" of \"Select\" has incompatible type \"bool\"; expected \"ColumnElement[Any] | _HasClauseElement[Any] | SQLCoreOperations[Any] | ExpressionElementRole[Any] | TypedColumnsClauseRole[Any] | Callable[[], ColumnElement[Any]] | LambdaElement | OnClauseRole | None\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/organizations.py",
+      "code": "attr-defined",
+      "message": "\"str\" has no attribute \"asc\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/support_reports.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"join\" of \"Select\" has incompatible type \"bool\"; expected \"ColumnElement[Any] | _HasClauseElement[Any] | SQLCoreOperations[Any] | ExpressionElementRole[Any] | TypedColumnsClauseRole[Any] | Callable[[], ColumnElement[Any]] | LambdaElement | OnClauseRole | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/support_reports.py",
+      "code": "attr-defined",
+      "message": "\"object\" has no attribute \"__iter__\"; maybe \"__dir__\" or \"__str__\"? (not iterable)",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/support_session_diagnostics.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"where\" of \"Select\" has incompatible type \"object\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/support_session_diagnostics.py",
+      "code": "attr-defined",
+      "message": "\"object\" has no attribute \"session_id\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/support_session_diagnostics.py",
+      "code": "attr-defined",
+      "message": "\"object\" has no attribute \"target_id\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/support_session_diagnostics.py",
+      "code": "import-untyped",
+      "message": "Skipping analyzing \"proliferate.db.models.cloud.sync\": module is installed, but missing library stubs or py.typed marker",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/users.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"where\" of \"DMLWhereBase\" has incompatible type \"bool\"; expected \"ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/users.py",
+      "code": "call-overload",
+      "message": "No overload variant of \"select\" matches argument type \"UUID\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/db/store/workflow_managed_delivery.py",
+      "code": "call-overload",
+      "message": "No overload variant of \"int\" matches argument type \"object\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/db/store/workflow_managed_projection.py",
+      "code": "call-overload",
+      "message": "No overload variant of \"int\" matches argument type \"object\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/errors.py",
+      "code": "misc",
+      "message": "Cannot assign to class variable \"code\" via instance",
+      "count": 1
+    },
+    {
+      "path": "proliferate/errors.py",
+      "code": "misc",
+      "message": "Cannot assign to class variable \"status_code\" via instance",
+      "count": 1
+    },
+    {
+      "path": "proliferate/main.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"add_exception_handler\" of \"Starlette\" has incompatible type \"Callable[[Request[State], ProliferateError], Coroutine[Any, Any, JSONResponse]]\"; expected \"Callable[[Request[State], Exception], Response | Awaitable[Response]] | Callable[[WebSocket[State], Exception], Awaitable[None]]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/main.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"add_exception_handler\" of \"Starlette\" has incompatible type \"Callable[[Request[State], RequestValidationError], Coroutine[Any, Any, JSONResponse]]\"; expected \"Callable[[Request[State], Exception], Response | Awaitable[Response]] | Callable[[WebSocket[State], Exception], Awaitable[None]]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/ai_magic/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 6
+    },
+    {
+      "path": "proliferate/server/analytics/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"ActivationPayload\", variable has type \"VersionPayload\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"ActivationPayloadRequest\", variable has type \"VersionPayloadRequest\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"UsagePayload\", variable has type \"VersionPayload\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"UsagePayloadRequest\", variable has type \"VersionPayloadRequest\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "attr-defined",
+      "message": "\"VersionPayloadRequest\" has no attribute \"connectors_installed\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "attr-defined",
+      "message": "\"VersionPayloadRequest\" has no attribute \"credentials_synced\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "attr-defined",
+      "message": "\"VersionPayloadRequest\" has no attribute \"milestone\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "attr-defined",
+      "message": "\"VersionPayloadRequest\" has no attribute \"prompts_submitted\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "attr-defined",
+      "message": "\"VersionPayloadRequest\" has no attribute \"sessions_started\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "attr-defined",
+      "message": "\"VersionPayloadRequest\" has no attribute \"workspaces_created_cloud\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "attr-defined",
+      "message": "\"VersionPayloadRequest\" has no attribute \"workspaces_created_local\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/anonymous_telemetry/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 5
+    },
+    {
+      "path": "proliferate/server/billing/accounting.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"create_meter_event\" has incompatible type \"**dict[str, int | str | None]\"; expected \"int | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/accounting.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"create_meter_event\" has incompatible type \"**dict[str, int | str | None]\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/accounting.py",
+      "code": "arg-type",
+      "message": "Argument 3 to \"next_accounting_boundary\" has incompatible type \"list[BillingGrant] | list[AccountingGrantLike]\"; expected \"list[AccountingGrantLike]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/accounting.py",
+      "code": "type-var",
+      "message": "Value of type variable \"GrantT\" of \"ordered_accounting_grants\" cannot be \"BillingGrant\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/accounting_pass.py",
+      "code": "arg-type",
+      "message": "Argument \"subscription\" to \"account_usage_for_snapshot_state\" has incompatible type \"SubscriptionLike\"; expected \"BillingSubscription | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/accounting_pass.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"subscription_is_pro_for_settings\" has incompatible type \"SubscriptionLike\"; expected \"BillingSubscription\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/authorization.py",
+      "code": "arg-type",
+      "message": "Argument \"remaining_seconds\" to \"CloudSandboxResumeBlockedError\" has incompatible type \"float | None\"; expected \"int | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/budget_limits.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"float\" has incompatible type \"object\"; expected \"str | Buffer | SupportsFloat | SupportsIndex\"",
+      "count": 3
+    },
+    {
+      "path": "proliferate/server/billing/budget_limits.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"_LimitLike | None\", variable has type \"_LimitLike\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/domain/webhooks.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 11
+    },
+    {
+      "path": "proliferate/server/billing/domain/webhooks.py",
+      "code": "no-any-return",
+      "message": "Returning Any from function declared to return \"str | None\"",
+      "count": 3
+    },
+    {
+      "path": "proliferate/server/billing/snapshot_state.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"ensure_free_trial_v2_grant\" has incompatible type \"BillingSubjectRecord\"; expected \"BillingSubject\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/snapshot_state.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 8
+    },
+    {
+      "path": "proliferate/server/billing/snapshots.py",
+      "code": "arg-type",
+      "message": "Argument \"entitlements\" to \"compute_unlimited_cloud_hours_state\" has incompatible type \"list[BillingEntitlement]\"; expected \"Sequence[EntitlementLike]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/snapshots.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"_subscription_in_rollover_grace\" has incompatible type \"SubscriptionLike | None\"; expected \"BillingSubscription | None\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/snapshots.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"grant_is_active\" has incompatible type \"BillingGrant\"; expected \"GrantLike\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/snapshots.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"subscription_is_pro_for_settings\" has incompatible type \"SubscriptionLike\"; expected \"BillingSubscription\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/snapshots.py",
+      "code": "attr-defined",
+      "message": "\"SubscriptionLike\" has no attribute \"hosted_invoice_url\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/snapshots.py",
+      "code": "operator",
+      "message": "Unsupported operand types for / (\"None\" and \"float\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/snapshots.py",
+      "code": "type-var",
+      "message": "Value of type variable \"GrantT\" of \"ordered_accounting_grants\" cannot be \"BillingGrant\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/stripe_webhooks.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 11
+    },
+    {
+      "path": "proliferate/server/billing/team_checkout/activation.py",
+      "code": "type-arg",
+      "message": "Missing type arguments for generic type \"dict\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/billing/team_checkout/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 4
+    },
+    {
+      "path": "proliferate/server/billing/usage.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"resolve_effective_limit\" has incompatible type \"list[BillingBudgetLimit]\"; expected \"Sequence[_LimitLike]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/billing/webhook_drops.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 10
+    },
+    {
+      "path": "proliferate/server/cloud/agent_gateway/api.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"get\" of \"dict\" has incompatible type \"UUID | None\"; expected \"UUID\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/agent_gateway/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 20
+    },
+    {
+      "path": "proliferate/server/cloud/agent_gateway/models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 6
+    },
+    {
+      "path": "proliferate/server/cloud/agent_gateway/service.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"active_unlimited_cloud_entitlement\" has incompatible type \"list[BillingEntitlement]\"; expected \"Sequence[EntitlementLike]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/agent_models/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 7
+    },
+    {
+      "path": "proliferate/server/cloud/agent_models/overrides.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 5
+    },
+    {
+      "path": "proliferate/server/cloud/agent_models/snapshots.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 11
+    },
+    {
+      "path": "proliferate/server/cloud/agent_run_config/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 9
+    },
+    {
+      "path": "proliferate/server/cloud/agent_run_config/models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 3
+    },
+    {
+      "path": "proliferate/server/cloud/cloud_sandboxes/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/cloud_sandboxes/service.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/api.py",
+      "code": "arg-type",
+      "message": "Argument \"org_user\" to \"create_github_app_installation_url\" has incompatible type \"proliferate.permissions.CurrentOrgUser\"; expected \"proliferate.server.cloud.github_app.service.CurrentOrgUser\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/api.py",
+      "code": "arg-type",
+      "message": "Argument \"org_user\" to \"get_github_app_installation_status\" has incompatible type \"proliferate.permissions.CurrentOrgUser\"; expected \"proliferate.server.cloud.github_app.service.CurrentOrgUser\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 5
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"access_token\" to \"GitHubCloudRepoAuthority\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"coverage\" to \"upsert_installation_repo_cache\" has incompatible type \"GitHubAppRepositoryCoverage\"; expected \"GitHubAppRepositoryCoveragePayload\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"user_access_token\" to \"fetch_installation_repo_coverage_from_github\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"user_access_token\" to \"verify_github_app_user_repo_access\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/service.py",
+      "code": "arg-type",
+      "message": "Argument \"expected_kind\" to \"_state_payload\" has incompatible type \"str\"; expected \"Literal['user_authorization', 'installation']\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/service.py",
+      "code": "arg-type",
+      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/service.py",
+      "code": "arg-type",
+      "message": "Argument \"kind\" to \"_state_for\" has incompatible type \"str\"; expected \"Literal['user_authorization', 'installation']\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/service.py",
+      "code": "arg-type",
+      "message": "Argument \"user_access_token\" to \"list_github_app_user_installations\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/service.py",
+      "code": "import-untyped",
+      "message": "Library stubs not installed for \"jose\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/service.py",
+      "code": "no-any-return",
+      "message": "Returning Any from function declared to return \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/webhooks.py",
+      "code": "arg-type",
+      "message": "Argument \"coverage\" to \"upsert_installation_repo_cache\" has incompatible type \"GitHubAppRepositoryCoverage\"; expected \"GitHubAppRepositoryCoveragePayload\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/github_app/webhooks.py",
+      "code": "arg-type",
+      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/integrations/access.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 9
+    },
+    {
+      "path": "proliferate/server/cloud/integrations/config.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 15
+    },
+    {
+      "path": "proliferate/server/cloud/integrations/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 17
+    },
+    {
+      "path": "proliferate/server/cloud/integrations/oauth/service.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/integrations/service.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/integrations/tools.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/failures.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/agent_auth.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"append\" of \"list\" has incompatible type \"tuple[tuple[str, str], dict[str, object]]\"; expected \"tuple[str, dict[str, object]]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/repo_environment.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"CloudSandboxValue | None\", variable has type \"CloudSandboxValue\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"CloudSecretFilePayload\", variable has type \"CloudSecretEnvVarPayload\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
+      "code": "attr-defined",
+      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"content\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
+      "code": "attr-defined",
+      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"content_sha256\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
+      "code": "attr-defined",
+      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"path\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/runner.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[()]\", variable has type \"tuple[str | None]\")",
+      "count": 4
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[Any, None]\", variable has type \"tuple[str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[None, Any | str]\", variable has type \"tuple[str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[None, Any]\", variable has type \"tuple[str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[None, str | None]\", variable has type \"tuple[str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "attr-defined",
+      "message": "\"object\" has no attribute \"sandbox_id\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/resume_acceptance.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/target.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/service.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/runtime_workers/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 14
+    },
+    {
+      "path": "proliferate/server/cloud/secrets/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 7
+    },
+    {
+      "path": "proliferate/server/cloud/secrets/models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/webhooks/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 4
+    },
+    {
+      "path": "proliferate/server/cloud/webhooks/service.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/workspaces/materializations/summaries.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/workspaces/service.py",
+      "code": "return-value",
+      "message": "Incompatible return value type (got \"WorkspaceSummary\", expected \"WorkspaceDetail\")",
+      "count": 7
+    },
+    {
+      "path": "proliferate/server/cloud/worktree_policy/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/devtools/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 3
+    },
+    {
+      "path": "proliferate/server/organizations/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 16
+    },
+    {
+      "path": "proliferate/server/organizations/models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 8
+    },
+    {
+      "path": "proliferate/server/organizations/registration_api.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/organizations/sso/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 6
+    },
+    {
+      "path": "proliferate/server/organizations/sso/models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 6
+    },
+    {
+      "path": "proliferate/server/organizations/sso/service.py",
+      "code": "name-defined",
+      "message": "Name \"sso_store.SsoConnectionRecord\" is not defined",
+      "count": 7
+    },
+    {
+      "path": "proliferate/server/organizations/sso/transactions.py",
+      "code": "name-defined",
+      "message": "Name \"sso_store.SsoConnectionRecord\" is not defined",
+      "count": 6
+    },
+    {
+      "path": "proliferate/server/organizations/usage/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 8
+    },
+    {
+      "path": "proliferate/server/organizations/usage/service.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"resolve_effective_limit\" has incompatible type \"list[BillingBudgetLimit]\"; expected \"Sequence[_LimitLike]\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/support/domain/report_records.py",
+      "code": "attr-defined",
+      "message": "\"object\" has no attribute \"model_dump\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/domain/report_records.py",
+      "code": "no-any-return",
+      "message": "Returning Any from function declared to return \"dict[str, object]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/feed/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 3
+    },
+    {
+      "path": "proliferate/server/support/feed/service.py",
+      "code": "call-arg",
+      "message": "Missing named argument \"completed_at\" for \"SupportFeedItem\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/feed/service.py",
+      "code": "call-arg",
+      "message": "Missing named argument \"credit_consent\" for \"SupportFeedItem\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/feed/service.py",
+      "code": "call-arg",
+      "message": "Missing named argument \"notify_me\" for \"SupportFeedItem\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/feed/service.py",
+      "code": "call-arg",
+      "message": "Missing named argument \"owner_user_id\" for \"SupportFeedItem\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/feed/service.py",
+      "code": "call-arg",
+      "message": "Missing named argument \"private_case_reference\" for \"SupportFeedItem\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/feed/service.py",
+      "code": "call-arg",
+      "message": "Missing named argument \"report_id\" for \"SupportFeedItem\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/feed/service.py",
+      "code": "call-arg",
+      "message": "Missing named argument \"submitted_at\" for \"SupportFeedItem\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/models.py",
+      "code": "attr-defined",
+      "message": "\"object\" has no attribute \"__iter__\"; maybe \"__dir__\" or \"__str__\"? (not iterable)",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/service.py",
+      "code": "arg-type",
+      "message": "Argument \"attachments\" to \"object_manifest_from_targets\" has incompatible type \"list[SupportReportUploadFile]\"; expected \"list[object]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/service.py",
+      "code": "arg-type",
+      "message": "Argument \"authorized_cloud_refs\" to \"tenant_context_for_report\" has incompatible type \"tuple[object, ...]\"; expected \"tuple[AuthorizedCloudRefLike, ...]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/service.py",
+      "code": "arg-type",
+      "message": "Argument \"report\" to \"support_request_record\" has incompatible type \"SupportReportSnapshot\"; expected \"SupportReportLike\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/support/service.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"trusted_workspace_refs_for_report\" has incompatible type \"tuple[object, ...]\"; expected \"tuple[AuthorizedCloudRefLike, ...]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/web_app.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"add_exception_handler\" of \"Starlette\" has incompatible type \"Callable[[Request[State], HTTPException], Coroutine[Any, Any, Response]]\"; expected \"Callable[[Request[State], Exception], Response | Awaitable[Response]] | Callable[[WebSocket[State], Exception], Awaitable[None]]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/workflows/api.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"workflow_history_item_response\" has incompatible type \"Any | str\"; expected \"WorkflowHistoryItem\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/workflows/api.py",
+      "code": "misc",
+      "message": "\"WorkflowHistoryItem\" object is not iterable",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/workflows/api.py",
+      "code": "str-unpack",
+      "message": "Unpacking a string is disallowed",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/workflows/domain/managed_execution.py",
+      "code": "no-any-return",
+      "message": "Returning Any from function declared to return \"int\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/workflows/managed.py",
+      "code": "return-value",
+      "message": "Incompatible return value type (got \"tuple[tuple[tuple[WorkflowHistoryItem, str], ...], str | None]\", expected \"tuple[tuple[WorkflowHistoryItem, str], str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/workflows/managed_models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 9
+    },
+    {
+      "path": "proliferate/server/workflows/managed_models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 7
+    },
+    {
+      "path": "proliferate/server/workflows/worker/observation.py",
+      "code": "call-overload",
+      "message": "No overload variant of \"int\" matches argument type \"object\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/workflows/worker/target_plan.py",
+      "code": "union-attr",
+      "message": "Item \"None\" of \"str | None\" has no attribute \"strip\"",
+      "count": 1
+    }
+  ]
+}

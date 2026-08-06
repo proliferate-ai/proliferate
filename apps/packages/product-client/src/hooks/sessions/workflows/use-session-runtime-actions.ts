@@ -13,7 +13,7 @@ import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   resolveSessionStatus,
-} from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/sessions/activity";
 import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
 import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { useToastStore } from "#product/stores/toast/toast-store";

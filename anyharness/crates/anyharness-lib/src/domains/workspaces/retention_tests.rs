@@ -24,6 +24,9 @@ use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::workflows::service::WorkflowRunService;
 use crate::domains::workflows::store::WorkflowRunStore;
 use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
+use crate::domains::workspaces::retention_policy::{
+    MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO, MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO,
+};
 use crate::persistence::Db;
 use anyharness_contract::v1::WorktreeRetentionRowOutcome;
 
@@ -33,6 +36,57 @@ fn startup_deferral_is_startup_only_gate() {
     assert!(!should_spawn_startup_pass(true, true));
     assert!(!should_spawn_startup_pass(false, false));
     assert!(!should_spawn_startup_pass(false, true));
+}
+
+// ── review P2 on #1657: the bounds guard is a service-layer convention, not a
+// store-enforced invariant ──
+//
+// Before the SQL fold, `update_policy`'s bounds check
+// (`validate_max_materialized_worktrees_per_repo`) was the first statement of
+// the store's only write path, so it could not be bypassed. After the split,
+// `WorktreeRetentionPolicyStore::upsert_policy` writes whatever it is handed —
+// the guard survives only because `WorkspaceRetentionService::update_policy`
+// calls `decide_policy_update` before it calls the store. Nothing proved that
+// seam still holds. If `MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO - 1` (0) ever
+// reached the store, `keep_count` would return 0 and every worktree in every
+// repo would become a retirement candidate on the next pass.
+#[tokio::test(flavor = "current_thread")]
+async fn update_policy_rejects_out_of_bounds_caps_without_persisting_them() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-retention-seam-{}-{}",
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    ));
+    let state = AppState::new(
+        runtime_home,
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+    let service = &state.workspace_retention_service;
+
+    let before = service.get_policy().expect("read policy before rejections");
+
+    service
+        .update_policy(MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO - 1)
+        .expect_err("below-minimum cap must be rejected");
+    service
+        .update_policy(MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO + 1)
+        .expect_err("above-maximum cap must be rejected");
+
+    let after = service.get_policy().expect("read policy after rejections");
+    assert_eq!(
+        after, before,
+        "a rejected cap must never reach the store: policy changed from {before:?} to {after:?}"
+    );
 }
 
 #[test]

@@ -7,7 +7,7 @@ import { applySessionLaunchDefaults } from "#product/lib/workflows/sessions/sess
 import { createSessionLaunchDefaultsClient } from "#product/lib/access/anyharness/session-launch-defaults-client";
 import { resolveRuntimeTargetForWorkspace } from "#product/lib/access/anyharness/runtime-target";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
-import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import {
   findCompatibleExistingSession,
   shouldProbeCompatibleRuntimeSessions,

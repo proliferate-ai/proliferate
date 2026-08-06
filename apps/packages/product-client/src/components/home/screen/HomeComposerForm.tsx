@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
 import { ChatComposerActions } from "#product/components/workspace/chat/input/ChatComposerActions";
-import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
-import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
+import { ChatComposerControlRowFrame } from "#product/components/workspace/chat/composer/ChatComposerControlRowFrame";
+import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { focusChatInputOnActivation } from "#product/lib/domain/focus-zone";
@@ -40,7 +40,7 @@ const HOME_TYPING_SURFACES = [
  * PERF (render isolation): `draft` state lives HERE, not in `HomeNextScreen`, so a
  * keystroke only re-renders this component — the textarea and the submit button.
  * Everything that does NOT depend on the draft (the model/mode/config pickers, the
- * target picker, the onboarding cards, the availability notice) is passed in as an
+ * target picker and availability notice) is passed in as an
  * already-constructed element via the *Slot props below. Those elements are created
  * by the parent, which no longer re-renders while typing, so their identity is stable
  * and React skips re-rendering their subtrees on every character.
@@ -65,14 +65,12 @@ interface HomeComposerFormProps {
   controlsSlot: ReactNode;
   /** Trailing control-row content (model/config selector), stable across keystrokes. */
   controlsTrailingSlot?: ReactNode;
-  /** The `HomeTargetPicker` row rendered directly under the composer surface. */
+  /** The `HomeTargetPicker` row rendered in the utility bar above the composer surface. */
   targetPickerSlot: ReactNode;
   /** Model-availability notice (draft-independent), or null. */
   modelAvailabilityNoticeSlot: ReactNode;
   /** CTA rendered next to a submit-disabled reason (e.g. "Configure"), or null. */
   submitDisabledReasonCtaSlot: ReactNode;
-  /** The onboarding cards block at the bottom of the screen. */
-  onboardingSlot: ReactNode;
 }
 
 export function HomeComposerForm({
@@ -88,7 +86,6 @@ export function HomeComposerForm({
   targetPickerSlot,
   modelAvailabilityNoticeSlot,
   submitDisabledReasonCtaSlot,
-  onboardingSlot,
 }: HomeComposerFormProps) {
   const composer = useHomeNextComposerState({
     targetDisabledReason,
@@ -149,64 +146,65 @@ export function HomeComposerForm({
 
   return (
     <>
-      <DebugProfiler id="home-composer">
-        <div className="relative z-10" data-focus-zone="chat">
-        <ChatComposerSurface>
-          <form
-            className="relative flex flex-col"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (composer.canSubmit) void composer.submit();
-            }}
-          >
-            <div
-              className="mt-3 mb-2 flex-grow select-text overflow-y-auto px-4"
-              style={{
-                minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
-                maxHeight: homeComposerInputMaxHeight,
-              }}
-            >
-              <ComposerRichTextEditor
-                value={composer.draft}
-                snapshot={composer.editorSnapshot}
-                onChange={handleDraftChange}
-                onKeyDown={composer.handleKeyDown}
-                canSubmit={composer.canSubmit}
-                onSubmit={() => { void composer.submit(); }}
-                placeholder={CHAT_COMPOSER_LABELS.placeholder}
-                disabled={false}
-                surface="home"
-                className="min-h-[inherit]"
-              />
-            </div>
-
-            <ChatComposerControlRowFrame
-              leading={(
-                <DebugProfiler id="home-composer-controls">
-                  {controlsSlot}
-                </DebugProfiler>
-              )}
-              trailing={controlsTrailingSlot}
-              action={(
-                <ChatComposerActions
-                  isRunning={false}
-                  isEmpty={composer.draft.trim().length === 0}
-                  isDisabled={!composer.canSubmit}
-                  onSubmit={() => { void composer.submit(); }}
-                  onCancel={composer.cancel}
-                />
-              )}
-            />
-          </form>
-        </ChatComposerSurface>
+      <DebugProfiler id="home-target-picker">
+        <div
+          className="relative z-0 -mx-px -mb-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-t-composer bg-surface-elevated-secondary px-2 pb-[27px] pt-2"
+          data-home-launch-utility-bar
+        >
+          {targetPickerSlot}
         </div>
       </DebugProfiler>
 
-      <DebugProfiler id="home-target-picker">
-        {/* Home footer: a tray tucked under the composer (rounded-b,
-            sidebar bg) so the selectors read as attached, not floating. */}
-        <div className="relative z-0 -mx-px -mt-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-b-2xl bg-sidebar px-2 pb-2 pt-[25px]">
-          {targetPickerSlot}
+      <DebugProfiler id="home-composer">
+        <div className="relative z-10" data-focus-zone="chat">
+          <ChatComposerSurface>
+            <form
+              className="relative flex flex-col"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (composer.canSubmit) void composer.submit();
+              }}
+            >
+              <div
+                className="mt-3 mb-2 flex-grow select-text overflow-y-auto px-4"
+                style={{
+                  minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
+                  maxHeight: homeComposerInputMaxHeight,
+                }}
+              >
+                <ComposerRichTextEditor
+                  value={composer.draft}
+                  snapshot={composer.editorSnapshot}
+                  onChange={handleDraftChange}
+                  onKeyDown={composer.handleKeyDown}
+                  canSubmit={composer.canSubmit}
+                  onSubmit={() => { void composer.submit(); }}
+                  placeholder={CHAT_COMPOSER_LABELS.placeholder}
+                  disabled={false}
+                  surface="home"
+                  className="min-h-[inherit]"
+                />
+              </div>
+
+              <ChatComposerControlRowFrame
+                leading={(
+                  <DebugProfiler id="home-composer-controls">
+                    {controlsSlot}
+                  </DebugProfiler>
+                )}
+                trailing={controlsTrailingSlot}
+                action={(
+                  <ChatComposerActions
+                    isRunning={false}
+                    isEmpty={composer.draft.trim().length === 0}
+                    isDisabled={!composer.canSubmit}
+                    onSubmit={() => { void composer.submit(); }}
+                    onCancel={composer.cancel}
+                  />
+                )}
+              />
+            </form>
+          </ChatComposerSurface>
         </div>
       </DebugProfiler>
 
@@ -218,10 +216,6 @@ export function HomeComposerForm({
           {submitDisabledReasonCtaSlot}
         </div>
       ) : null}
-
-      <DebugProfiler id="home-onboarding">
-        {onboardingSlot}
-      </DebugProfiler>
     </>
   );
 }

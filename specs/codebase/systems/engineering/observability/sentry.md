@@ -22,11 +22,12 @@ Source owners:
 ```text
 server/proliferate/integrations/sentry.py
 server/proliferate/middleware/request_telemetry.py
-server/proliferate/utils/logging.py
+server/proliferate/middleware/logging.py
 apps/desktop/src/lib/integrations/telemetry/{client,config,sentry,scrub}.ts
 apps/desktop/src-tauri/src/telemetry.rs
-apps/web/src/lib/integrations/telemetry/{config,sentry}.ts
+apps/web/src/browser/telemetry/{install-web-telemetry,sentry-event-filter,web-telemetry}.ts
 apps/mobile/src/lib/integrations/telemetry/{config,sentry}.ts
+apps/packages/product-client/src/domain/telemetry/scrub.ts
 anyharness/crates/anyharness/src/telemetry.rs
 anyharness/crates/proliferate-worker/src/logging.rs
 anyharness/crates/proliferate-supervisor/src/logging.rs
@@ -102,8 +103,8 @@ Two exact, bounded fields are deliberately preserved through the scrubbers
 because they are deployment identity, not a raw process-environment map:
 
 - The top-level Sentry `environment` field (for example `production`). Server
-  `_scrub_event` and the shared product-domain `scrubTelemetryEvent` envelope
-  wrapper (used by the Web, Desktop, and Mobile adapters) snapshot only that
+  `_scrub_event` and the shared ProductClient domain `scrubTelemetryEvent`
+  envelope wrapper (used by the Web, Desktop, and Mobile adapters) snapshot only that
   top-level string, run the recursive scrubber, then restore the snapshot
   scrubbed as text. Nested `environment`/`env` keys and raw environment maps
   stay redacted.

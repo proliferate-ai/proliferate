@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { sessionSlotBelongsToWorkspace } from "@proliferate/product-domain/sessions/activity";
+import { sessionSlotBelongsToWorkspace } from "#product/domain/sessions/activity";
 import { useSessionDismissActions } from "#product/hooks/sessions/workflows/use-session-dismiss-actions";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useManualChatGroupActions } from "#product/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";

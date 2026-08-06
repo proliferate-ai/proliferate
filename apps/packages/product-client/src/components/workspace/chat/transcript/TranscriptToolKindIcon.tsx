@@ -1,14 +1,14 @@
+import { ClipboardList } from "#product/primitives/icons/product";
 import {
-  ClipboardList,
   CommandWindow,
   FilePen,
   FilePlus,
   FolderList,
   ReadBook,
-  Settings,
-} from "@proliferate/ui/icons";
-import { ProliferateIcon } from "@proliferate/ui/icons/proliferate-icons";
-import type { ToolDisplayIconKey } from "@proliferate/product-domain/chats/tools/tool-call-display";
+} from "#product/primitives/icons/workspace";
+import { Settings } from "#product/primitives/icons/core";
+import { ProliferateIcon } from "#product/primitives/icons/proliferate-icons";
+import type { ToolDisplayIconKey } from "#product/domain/chats/tools/tool-call-display";
 
 export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {
   const className = "icon-paired text-current";

@@ -50,7 +50,7 @@ export const PLAYGROUND_SLASH_COMMANDS: SessionSlashCommandViewModel[] = [
 ];
 
 export const PLAYGROUND_FILE_MENTIONS: FileMentionResult[] = [
-  { path: "apps/packages/ui/src/primitives/Button.tsx", name: "Button.tsx", parent: "apps/packages/ui/src/primitives" },
+  { path: "apps/packages/product-client/src/primitives/Button.tsx", name: "Button.tsx", parent: "apps/packages/product-client/src/primitives" },
   { path: "apps/packages/design/src/tokens.ts", name: "tokens.ts", parent: "apps/packages/design/src" },
   { path: "specs/README.md", name: "README.md", parent: "specs" },
   { path: "Cargo.toml", name: "Cargo.toml", parent: "" },

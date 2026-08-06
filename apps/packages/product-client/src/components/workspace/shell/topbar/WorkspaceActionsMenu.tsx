@@ -5,14 +5,14 @@ import {
   DropdownMenuItem,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@proliferate/ui/primitives/DropdownMenu";
-import { Button } from "@proliferate/ui/primitives/Button";
+} from "#product/primitives/DropdownMenu";
+import { Button } from "#product/primitives/Button";
 import {
   Fork,
   MoreHorizontal,
   Pencil,
   Trash,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/core";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import { useWorkspaceActionsNativeMenu } from "#product/hooks/workspaces/ui/use-workspace-actions-native-menu";

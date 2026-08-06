@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { twMerge } from "#product/primitives/utils/tw-merge";
+import { Button } from "#product/primitives/Button";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { ChevronRight, Search } from "@proliferate/ui/icons";
+import { Input } from "#product/primitives/Input";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { ChevronRight, Search } from "#product/primitives/icons/core";
 
 export interface PaneFileTreeNode<TData = unknown> {
   id: string;

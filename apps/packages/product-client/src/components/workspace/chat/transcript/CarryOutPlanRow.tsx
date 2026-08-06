@@ -1,6 +1,6 @@
 import { PlanReferenceAttachmentCard } from "#product/components/workspace/chat/content/PlanReferenceAttachmentCard";
 import { PLAN_IMPLEMENT_HERE_ROW_LABEL } from "#product/copy/plans/plan-prompts";
-import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import type { PromptDisplayPlanPart } from "#product/domain/chats/composer/prompt-display-parts";
 
 /**
  * Compact transcript receipt for the plan→execution flip. 'Run here'

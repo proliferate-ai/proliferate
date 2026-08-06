@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_KIND_API_KEY,
     AGENT_API_KEY_STATUS_ACTIVE,
@@ -17,8 +18,9 @@ from proliferate.constants.agent_gateway import (
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey
 from proliferate.db.store.agent_gateway.mappers import api_key_record
 from proliferate.db.store.agent_gateway.records import AgentApiKeyRecord
-from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 def build_redacted_hint(value: str) -> str:
@@ -44,7 +46,7 @@ async def create_agent_api_key(
         user_id=user_id,
         title=title,
         kind=AGENT_API_KEY_KIND_API_KEY,
-        value_ciphertext=encrypt_text(value),
+        value_ciphertext=encrypt_text(value, secret=settings.cloud_secret_key),
         encryption_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
         redacted_hint=build_redacted_hint(value),
         status=AGENT_API_KEY_STATUS_ACTIVE,
@@ -81,7 +83,7 @@ async def create_agent_provider_config(
         user_id=user_id,
         title=title,
         kind=kind,
-        value_ciphertext=encrypt_json(value),
+        value_ciphertext=encrypt_json(value, secret=settings.cloud_secret_key),
         encryption_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
         redacted_hint=f"{kind}:{len(value)} field(s)",
         status=AGENT_API_KEY_STATUS_ACTIVE,
@@ -155,7 +157,9 @@ async def get_agent_api_key_decrypted(
     ).scalar_one_or_none()
     if row is None:
         return None
-    return api_key_record(row), decrypt_text(row.value_ciphertext)
+    return api_key_record(row), decrypt_text(
+        row.value_ciphertext, secret=settings.cloud_secret_key
+    )
 
 
 async def get_agent_provider_config_decrypted(
@@ -184,4 +188,6 @@ async def get_agent_provider_config_decrypted(
     ).scalar_one_or_none()
     if row is None:
         return None
-    return api_key_record(row), decrypt_json(row.value_ciphertext)
+    return api_key_record(row), decrypt_json(
+        row.value_ciphertext, secret=settings.cloud_secret_key
+    )

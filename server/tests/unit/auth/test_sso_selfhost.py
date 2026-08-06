@@ -10,11 +10,12 @@ from dataclasses import replace
 from typing import cast
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.sso import api as sso_api
-from proliferate.auth.sso import service as sso_service
+from proliferate.auth.errors import AuthFlowError
+from proliferate.server.accounts.sso import api as sso_api
+from proliferate.server.accounts.sso import service as sso_service
 from proliferate.auth.sso.types import SsoScope
 from proliferate.config import settings
 
@@ -143,7 +144,11 @@ async def test_oidc_sso_callback_maps_jit_disabled_to_specific_code(
     monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
 
     async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
-        raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
+        raise AuthFlowError(
+            "sso_jit_disabled",
+            "SSO user provisioning is disabled.",
+            status_code=403,
+        )
 
     monkeypatch.setattr(
         sso_api,
@@ -173,7 +178,7 @@ def test_github_oauth_availability_requires_both_id_and_secret(
     # The desktop /methods probe advertises GitHub only when the OAuth app is
     # FULLY configured — a client id without a secret is a button that only
     # fails at the provider.
-    from proliferate.auth.desktop.service import github_oauth_enabled
+    from proliferate.server.accounts.desktop.service import github_oauth_enabled
 
     monkeypatch.setattr(settings, "github_oauth_client_id", "")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "")

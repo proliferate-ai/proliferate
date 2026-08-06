@@ -3,7 +3,7 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { ToastInput } from "@proliferate/ui/utils/toast-model";
+import type { ToastInput } from "#product/primitives/utils/toast-model";
 import {
   CLOUD_HARNESS_UPDATE_TOAST_ID,
   HarnessUpdateToastPresenter,
@@ -50,7 +50,7 @@ const toastMocks = vi.hoisted(() => ({
   dismissToast: vi.fn(),
 }));
 
-vi.mock("@proliferate/ui/utils/show-toast", () => toastMocks);
+vi.mock("#product/primitives/utils/show-toast", () => toastMocks);
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => {
     state.catalogCallCount += 1;

@@ -1,13 +1,13 @@
 import type { PendingPromptEntry, SessionEventEnvelope, TranscriptState } from "@anyharness/sdk";
-import { hasVisibleTranscriptContent } from "@proliferate/product-domain/chats/pending-prompts/pending-prompts";
-import { isSessionSlotBusy, resolveSessionViewState, type SessionViewState } from "@proliferate/product-domain/sessions/activity";
-import { outboxEntriesForSession } from "@proliferate/product-domain/sessions/intents/session-intent-state";
-import { renderableOutboxEntriesForTranscript } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
-import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
+import { hasVisibleTranscriptContent } from "#product/domain/chats/pending-prompts/pending-prompts";
+import { isSessionSlotBusy, resolveSessionViewState, type SessionViewState } from "#product/domain/sessions/activity";
+import { outboxEntriesForSession } from "#product/domain/sessions/intents/session-intent-state";
+import { renderableOutboxEntriesForTranscript } from "#product/domain/sessions/intents/session-intent-selectors";
+import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 import {
   deriveGoalTranscriptEvents,
   type GoalTranscriptEvent,
-} from "@proliferate/product-domain/activity/goal-transcript-events";
+} from "#product/domain/activity/goal-transcript-events";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";

@@ -2,7 +2,7 @@ import { StyleSheet, View } from "react-native";
 
 import { colors } from "../../styles/tokens";
 
-import type { ProductChat } from "@proliferate/product-domain/chats/model";
+import type { ProductChat } from "@proliferate/product-client/internal/domain/chats/model";
 
 type StatusKind = ProductChat["status"];
 

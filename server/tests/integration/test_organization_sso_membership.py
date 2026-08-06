@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
@@ -272,7 +273,7 @@ async def test_sso_jit_membership_allows_existing_user_with_another_active_org(
     await _create_organization_for_user(user_id=user["user_id"], name="Personal Org")
 
     from proliferate.db import engine as engine_module
-    from proliferate.db.store import auth_sso as sso_store
+    from proliferate.db.store import organizations as organization_store
 
     async with engine_module.async_session_factory() as session:
         now = datetime.now(UTC)
@@ -286,7 +287,7 @@ async def test_sso_jit_membership_allows_existing_user_with_another_active_org(
         session.add(target_org)
         await session.flush()
 
-        await sso_store.ensure_sso_organization_membership(
+        await organization_store.ensure_sso_jit_membership(
             session,
             organization_id=target_org.id,
             user_id=uuid.UUID(user["user_id"]),
@@ -309,3 +310,78 @@ async def test_sso_jit_membership_allows_existing_user_with_another_active_org(
         )
 
     assert len(active_memberships) == 2
+
+
+@pytest.mark.asyncio
+async def test_sso_jit_membership_store_creates_updates_and_reactivates_membership(
+    client: AsyncClient,
+) -> None:
+    user = await _create_user_and_get_tokens(client, email="jit-store@acme.dev")
+    user_id = uuid.UUID(user["user_id"])
+    historical_time = datetime(2020, 1, 1, tzinfo=UTC)
+
+    from proliferate.db import engine as engine_module
+    from proliferate.db.store import organizations as organization_store
+
+    async with engine_module.async_session_factory() as session:
+        now = datetime.now(UTC)
+        organization = Organization(
+            name="JIT Store Org",
+            logo_domain="jit-store.dev",
+            status=ORGANIZATION_STATUS_ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(organization)
+        await session.flush()
+
+        created = await organization_store.ensure_sso_jit_membership(
+            session,
+            organization_id=organization.id,
+            user_id=user_id,
+            role=ORGANIZATION_ROLE_MEMBER,
+        )
+        assert created.organization_id == organization.id
+        assert created.user_id == user_id
+        assert created.role == ORGANIZATION_ROLE_MEMBER
+        assert created.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+        assert created.joined_at is not None
+        assert created.removed_at is None
+
+        membership = await session.get(OrganizationMembership, created.id)
+        assert membership is not None
+        membership.joined_at = historical_time
+        membership.updated_at = historical_time
+        await session.flush()
+
+        updated = await organization_store.ensure_sso_jit_membership(
+            session,
+            organization_id=organization.id,
+            user_id=user_id,
+            role=ORGANIZATION_ROLE_OWNER,
+        )
+        assert updated.id == created.id
+        assert updated.role == ORGANIZATION_ROLE_OWNER
+        assert updated.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+        assert updated.joined_at == historical_time
+        assert updated.removed_at is None
+        assert membership.updated_at > historical_time
+
+        membership.status = ORGANIZATION_MEMBERSHIP_STATUS_REMOVED
+        membership.removed_at = historical_time
+        membership.joined_at = historical_time
+        membership.updated_at = historical_time
+        await session.flush()
+
+        reactivated = await organization_store.ensure_sso_jit_membership(
+            session,
+            organization_id=organization.id,
+            user_id=user_id,
+            role=ORGANIZATION_ROLE_MEMBER,
+        )
+        assert reactivated.id == created.id
+        assert reactivated.role == ORGANIZATION_ROLE_MEMBER
+        assert reactivated.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+        assert reactivated.joined_at == historical_time
+        assert reactivated.removed_at is None
+        assert membership.updated_at > historical_time

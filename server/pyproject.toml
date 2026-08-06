@@ -38,7 +38,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "httpx==0.28.1",
-    "mypy>=1.20.2",
+    "mypy==1.20.2",
     "ruff>=0.15.22",
     "sqlalchemy[mypy]>=2.0.0",
 ]
@@ -57,11 +57,11 @@ ignore = ["B008"]
 "proliferate/integrations/**" = ["ANN401"]
 # runtime/ operates on untyped E2B sandbox objects
 "proliferate/server/cloud/runtime/**" = ["ANN401"]
-# utils/ contains generic helpers where Any is unavoidable at public boundaries
-"proliferate/utils/**" = ["ANN401"]
+# Recursive JSON encryption requires Any at its data boundary.
+"proliferate/lib/infra/encryption/json.py" = ["ANN401"]
 # Inline HTML/SVG page renderers contain long literal lines.
 "proliferate/auth/desktop/pages.py" = ["E501"]
-"proliferate/utils/redirect_callback_pages.py" = ["E501"]
+"proliferate/lib/product/redirect_callbacks/page.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -82,11 +82,15 @@ warn_return_any = false
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-# cloud/runtime operates on untyped E2B sandbox objects; utils contains generic
-# helpers (JSON crypto, telemetry scrubbing, time) where Any is unavoidable.
+# cloud/runtime operates on untyped E2B sandbox objects.
+module = ["proliferate.server.cloud.runtime.*"]
+disallow_any_explicit = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+# Recursive JSON encryption accepts untyped JSON values at its data boundary.
 module = [
-    "proliferate.server.cloud.runtime.*",
-    "proliferate.utils.*",
+    "proliferate.lib.infra.encryption.json",
 ]
 disallow_any_explicit = false
 warn_return_any = false
@@ -99,24 +103,11 @@ module = [
     "proliferate.server.health",
     "proliferate.auth.models",
     "proliferate.auth.desktop.models",
-    "proliferate.server.cloud.backfill.models",
-    "proliferate.server.cloud.commands.models",
-    "proliferate.server.cloud.compute.models",
-    "proliferate.server.cloud.mcp_catalog.models",
-    "proliferate.server.cloud.mcp_connections.models",
-    "proliferate.server.cloud.mcp_oauth.models",
-    "proliferate.server.cloud.plugins.catalog.models",
     "proliferate.server.cloud.repositories.models",
-    "proliferate.server.cloud.targets.models",
-    "proliferate.server.cloud.target_config.models",
-    "proliferate.server.cloud.worker.models",
     "proliferate.server.cloud.workspaces.models",
     "proliferate.server.catalogs.models",
     "proliferate.server.workflows.models",
     "proliferate.server.meta",
-    "proliferate.server.cloud.events.models",
-    "proliferate.server.cloud.live.models",
-    "proliferate.server.cloud.managed_sandboxes.models",
     "proliferate.server.cloud.repos.models",
     "proliferate.server.cloud.integrations.action_approvals.models",
     "proliferate.server.support.models",

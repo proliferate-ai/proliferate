@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
@@ -22,8 +23,8 @@ from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.agent_gateway.enrollment_keys import revoke_enrollment_keys
 from proliferate.db.store.agent_gateway.mappers import enrollment_record
 from proliferate.db.store.agent_gateway.records import AgentGatewayEnrollmentRecord
-from proliferate.utils.crypto import decrypt_text, encrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 # The per-(org, member) LiteLLM user id prefix. A pre-migration row whose
 # stored LiteLLM user does not carry it was provisioned under the old shared
@@ -207,7 +208,7 @@ async def mark_enrollment_synced(
     row.litellm_user_id = litellm_user_id
     row.virtual_key_id = virtual_key_id
     if virtual_key is not None:
-        row.virtual_key_ciphertext = encrypt_text(virtual_key)
+        row.virtual_key_ciphertext = encrypt_text(virtual_key, secret=settings.cloud_secret_key)
         row.virtual_key_ciphertext_key_id = AGENT_GATEWAY_CIPHERTEXT_KEY_ID
     elif virtual_key_id is None:
         # Post-B2: per-harness keys live on the child table, not here. An
@@ -471,7 +472,7 @@ async def get_enrollment_virtual_key_decrypted(
     row = await db.get(AgentGatewayEnrollment, enrollment_id)
     if row is None or row.virtual_key_ciphertext is None:
         return None
-    return decrypt_text(row.virtual_key_ciphertext)
+    return decrypt_text(row.virtual_key_ciphertext, secret=settings.cloud_secret_key)
 
 
 async def revoke_enrollment(

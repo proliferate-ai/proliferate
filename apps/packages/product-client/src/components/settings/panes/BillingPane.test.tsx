@@ -21,7 +21,7 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock("@proliferate/product-surfaces/settings/BillingSettingsSurface", () => ({
+vi.mock("#product/components/settings/panes/billing/BillingSettingsSurface", () => ({
   BillingSettingsSurface: ({
     organization,
     checkoutReturnState,

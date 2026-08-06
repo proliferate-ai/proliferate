@@ -4,6 +4,8 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import pytest
+
 
 def _load_checker_module():
     script_path = Path(__file__).resolve().parents[3] / "scripts" / "check_server_boundaries.py"
@@ -14,6 +16,15 @@ def _load_checker_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _configure_structure_root(module, tmp_path: Path) -> Path:  # type: ignore[no-untyped-def]
+    root = tmp_path / "server" / "proliferate" / "server"
+    root.mkdir(parents=True)
+    module.REPO_ROOT = tmp_path
+    module.CHECK_ROOTS = [root]
+    module.STRUCTURE_ROOTS = [root]
+    return root
 
 
 def test_api_allows_auth_user_import_only(tmp_path: Path) -> None:
@@ -83,6 +94,149 @@ def test_service_allows_async_session_type_only(tmp_path: Path) -> None:
 
     violations = module.check_paths([path])
     assert violations == []
+
+
+def test_worker_service_allows_task_created_session_factory_type(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "worker" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker\n"
+        "async def run(factory: async_sessionmaker[AsyncSession]) -> None:\n"
+        "    async with factory() as db:\n"
+        "        await read_store(db)\n"
+    )
+
+    violations = module.check_paths([path])
+
+    assert violations == []
+
+
+def test_ordinary_service_rejects_session_factory_type(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("from sqlalchemy.ext.asyncio import async_sessionmaker\n")
+
+    violations = module.check_paths([path])
+
+    assert any(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in violations)
+
+
+def test_worker_service_still_rejects_queries_engines_models_and_session_methods(
+    tmp_path: Path,
+) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "worker" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "from sqlalchemy import select\n"
+        "from sqlalchemy.ext.asyncio import (\n"
+        "    AsyncSession, async_sessionmaker, create_async_engine,\n"
+        ")\n"
+        "from proliferate.db.engine import async_session_factory\n"
+        "from proliferate.db.models.auth import User\n"
+        "async def run(db) -> None:\n"
+        "    await db.execute(select(User))\n"
+        "    await db.commit()\n"
+        "    await db.rollback()\n"
+    )
+
+    violations = module.check_paths([path])
+
+    assert sum(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in violations) == 2
+    assert any(item.rule_id == "SERVICE_DB_ENGINE_IMPORT" for item in violations)
+    assert any(item.rule_id == "SERVICE_ORM_IMPORT" for item in violations)
+    assert sum(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations) == 3
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "scalar",
+        "scalars",
+        "stream",
+        "stream_scalars",
+        "get",
+        "get_one",
+        "add_all",
+        "merge",
+        "flush",
+        "connection",
+        "run_sync",
+    ],
+)
+def test_worker_service_rejects_direct_session_escape_methods(
+    tmp_path: Path,
+    method_name: str,
+) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "worker" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(f"async def run(db) -> None:\n    db.{method_name}(value)\n")
+
+    violations = module.check_paths([path])
+
+    assert any(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations)
+
+
+def test_canonical_single_file_worker_service_folder_is_allowed(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    root = _configure_structure_root(module, tmp_path)
+    worker = root / "example" / "worker"
+    worker.mkdir(parents=True)
+    (worker / "__init__.py").write_text("")
+    (worker / "service.py").write_text("async def run() -> None:\n    return None\n")
+
+    violations = module.check_structure(tmp_path)
+
+    assert not any(item.path == worker for item in violations)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        Path("worker/service.py"),
+        Path("example/subdomain/worker/service.py"),
+    ],
+)
+def test_worker_service_exemption_requires_exact_domain_depth(
+    tmp_path: Path,
+    relative_path: Path,
+) -> None:
+    module = _load_checker_module()
+    root = _configure_structure_root(module, tmp_path)
+    path = root / relative_path
+    path.parent.mkdir(parents=True)
+    path.write_text("from sqlalchemy.ext.asyncio import async_sessionmaker\n")
+
+    path_violations = module.check_paths([path])
+    structure_violations = module.check_structure(tmp_path)
+
+    assert any(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in path_violations)
+    assert any(
+        item.rule_id == "SINGLE_FILE_FOLDER" and item.path == path.parent
+        for item in structure_violations
+    )
+
+
+def test_noncanonical_worker_and_arbitrary_single_file_folders_remain_rejected(
+    tmp_path: Path,
+) -> None:
+    module = _load_checker_module()
+    root = _configure_structure_root(module, tmp_path)
+    worker = root / "example" / "worker"
+    worker.mkdir(parents=True)
+    (worker / "jobs.py").write_text("def run() -> None:\n    return None\n")
+    arbitrary = root / "example" / "reports"
+    arbitrary.mkdir()
+    (arbitrary / "snapshot.py").write_text("def read() -> None:\n    return None\n")
+
+    violations = module.check_structure(tmp_path)
+
+    rejected = {item.path for item in violations if item.rule_id == "SINGLE_FILE_FOLDER"}
+    assert worker in rejected
+    assert arbitrary in rejected
 
 
 def test_service_rejects_query_builder_import(tmp_path: Path) -> None:
@@ -201,6 +355,18 @@ def test_integration_rejects_database_import(tmp_path: Path) -> None:
     violations = module.check_paths([path])
 
     assert any(item.rule_id == "INTEGRATION_DB_IMPORT" for item in violations)
+
+
+def test_migration_rejects_application_import(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    module.REPO_ROOT = tmp_path
+    path = tmp_path / "server" / "alembic" / "versions" / "revision.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("from proliferate.constants.organizations import STATUS\n")
+
+    violations = module.check_paths([path])
+
+    assert any(item.rule_id == "MIGRATION_APP_IMPORT" for item in violations)
 
 
 def test_allowlist_counts_do_not_hide_new_debt(tmp_path: Path) -> None:

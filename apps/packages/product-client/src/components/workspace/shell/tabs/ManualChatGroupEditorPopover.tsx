@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { FixedPositionLayer } from "@proliferate/ui/primitives/FixedPositionLayer";
-import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
-import { useNativeOverlayRegistration } from "@proliferate/ui/overlays/overlay-presence";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { FixedPositionLayer } from "#product/primitives/FixedPositionLayer";
+import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
+import { useNativeOverlayRegistration } from "#product/primitives/overlays/overlay-presence";
 import {
   MANUAL_CHAT_GROUP_COLOR_IDS,
   resolveManualChatGroupColor,

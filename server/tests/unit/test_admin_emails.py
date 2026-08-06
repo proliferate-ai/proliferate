@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity.password import authenticate_password_login
+from proliferate.server.accounts.identity.service import authenticate_password_login
 from proliferate.auth.identity.store import create_auth_user
 from proliferate.auth.passwords import hash_password
 from proliferate.config import Settings, settings

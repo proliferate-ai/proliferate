@@ -4,13 +4,13 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 import {
   ArrowUp,
   Search,
   X,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/core";
 import {
   selectVisibleContentSearchMatchIds,
   type ContentSearchSurface,

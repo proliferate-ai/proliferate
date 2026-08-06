@@ -1,14 +1,16 @@
 import type { ComponentType, CSSProperties, SVGProps } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 import {
   Blocks,
   CloudIcon,
-  Folder,
   Globe,
   Monitor,
+} from "#product/primitives/icons/platform";
+import {
+  Folder,
   Terminal,
-  Zap,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/workspace";
+import { Zap } from "#product/primitives/icons/product";
 import type {
   ComputeTargetAppearance,
   ComputeTargetIconId,

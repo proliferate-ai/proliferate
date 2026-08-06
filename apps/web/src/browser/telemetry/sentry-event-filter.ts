@@ -2,11 +2,11 @@ import type { ErrorEvent, EventHint, Exception, StackFrame } from "@sentry/react
 import {
   EXPECTED_CONTROL_PLANE_PROBE_TIMEOUT_ERROR_NAME,
   isExpectedControlPlaneProbeTimeoutError,
-} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
+} from "@proliferate/product-client/internal/domain/telemetry/control-plane-probe-timeout";
 import {
   EXPECTED_SESSION_STREAM_STALE_CLOSE_ERROR_NAME,
   isExpectedSessionStreamStaleCloseError,
-} from "@proliferate/product-domain/telemetry/session-stream-stale-close";
+} from "@proliferate/product-client/internal/domain/telemetry/session-stream-stale-close";
 
 const UNHANDLED_REJECTION_MECHANISM =
   "auto.browser.global_handlers.onunhandledrejection";

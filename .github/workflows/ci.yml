@@ -24,6 +24,8 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@v7
+
       - name: Check max source file length
         run: python3 scripts/check_max_lines.py
 
@@ -33,6 +35,11 @@ jobs:
       - name: Check AnyHarness old flat paths
         run: python3 scripts/check_anyharness_old_paths.py
 
+      - name: Check Proliferate server old paths
+        run: |
+          python3 -m unittest scripts/test_check_server_old_paths.py
+          python3 scripts/check_server_old_paths.py
+
       - name: Check Proliferate Worker structure
         run: python3 scripts/check_proliferate_worker_structure.py
 
@@ -40,6 +47,7 @@ jobs:
         run: |
           python3 -m unittest scripts/test_check_frontend_boundaries.py
           python3 scripts/check_frontend_boundaries.py
+          python3 -m unittest scripts/test_check_mobile_product_client_export.py
 
       - name: Check appearance scaling ownership
         run: |
@@ -58,6 +66,13 @@ jobs:
 
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
+
+      - name: Test server boundary checker
+        run: >-
+          uv run --python 3.12 --with pytest==9.1.1
+          pytest --noconftest -p no:cacheprovider -c /dev/null -q
+          server/tests/unit/test_server_boundary_checker.py
+          server/tests/unit/test_server_boundary_checker_named_writes.py
 
       - name: Check server layer boundaries
         run: python3 scripts/check_server_boundaries.py
@@ -405,16 +420,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Check Mobile ProductClient export resolution
+        run: python3 scripts/check_mobile_product_client_export.py --preflight
+
       - name: Check theme contrast floors
         run: |
           python3 -m unittest scripts/test_check_theme_contrast.py
           python3 scripts/check_theme_contrast.py --table
 
-      - name: Test product domain
-        run: pnpm --filter @proliferate/product-domain test
-
-      - name: Test product UI
-        run: pnpm --filter @proliferate/product-ui test
+      - name: Test ProductClient domain
+        run: pnpm --filter @proliferate/product-client exec vitest run src/domain
 
       - name: Test product client
         run: pnpm --filter @proliferate/product-client test
@@ -422,11 +437,10 @@ jobs:
       # Focused Tier-1 gate for the workflow definition surface: passive
       # refetch draft preservation, revision-conflict handling, failed-reload
       # retry, and create-state reset (specs/codebase/systems/product/workflows/definitions.md
-      # assigns UI conflict behavior to Tier 1). Runs this exact file - the
-      # package-wide product-surfaces suite has known-noisy unrelated tests
-      # and is not gated yet.
+      # assigns UI conflict behavior to Tier 1). Keep this exact-file signal in
+      # addition to the package suite so regressions remain immediately named.
       - name: Test workflow definition surface
-        run: pnpm --filter @proliferate/product-surfaces exec vitest run src/workflows/WorkflowDefinitionsSurface.test.tsx
+        run: pnpm --filter @proliferate/product-client exec vitest run src/components/workflows/definitions/WorkflowDefinitionsSurface.test.tsx
 
   # Fail-closed Tier-2 gate for the workflow-definition lifecycle (T2-WFDEF-1)
   # only. No continue-on-error: a red result fails the CI workflow on PRs and

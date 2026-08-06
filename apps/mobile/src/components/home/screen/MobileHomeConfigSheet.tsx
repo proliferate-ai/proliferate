@@ -10,7 +10,7 @@ import {
   cloudComposerControlTitle,
   formatCloudComposerControlValueLabel,
   type CloudChatComposerControlView,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import type { MobileRuntimeOption } from "../../../lib/domain/home/mobile-home-launch";
 import { colors, spacing } from "../../../styles/tokens";

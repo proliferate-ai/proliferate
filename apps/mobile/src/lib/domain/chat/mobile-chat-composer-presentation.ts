@@ -1,4 +1,4 @@
-import type { CloudChatComposerControlView } from "@proliferate/product-domain/chats/cloud/composer-controls";
+import type { CloudChatComposerControlView } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import { joinUniqueLabels, type MobileChatIconName } from "./mobile-chat-presentation";
 

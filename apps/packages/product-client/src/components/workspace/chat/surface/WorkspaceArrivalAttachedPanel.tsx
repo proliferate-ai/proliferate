@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { Button } from "#product/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { IconButton } from "#product/primitives/IconButton";
 import {
   ComposerAttachedPanel,
   ComposerAttachedPanelRow,
@@ -15,7 +15,8 @@ import { useCloudWorkspaceStatusScreenActions } from "#product/hooks/cloud/workf
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
-import { ArrowUpRight, Spinner, X } from "@proliferate/ui/icons";
+import { ArrowUpRight, X } from "#product/primitives/icons/core";
+import { Spinner } from "#product/primitives/Spinner";
 import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
 import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
 

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { RefreshCw } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { RefreshCw } from "#product/primitives/icons/platform";
 import { useTerminalActions } from "#product/hooks/terminals/workflows/use-terminal-actions";
 import { useToastStore } from "#product/stores/toast/toast-store";
 

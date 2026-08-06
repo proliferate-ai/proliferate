@@ -4,19 +4,27 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.sso.policy import normalize_domains
-from proliferate.auth.sso.service import (
+from proliferate.config import settings
+from proliferate.db.store import auth_sso as sso_store
+from proliferate.errors import NotFoundError
+from proliferate.server.accounts.sso.service import (
     oidc_callback_url,
     snapshot_from_sso_connection_record,
     test_oidc_connection,
 )
-from proliferate.config import settings
-from proliferate.db.store import auth_sso as sso_store
-from proliferate.errors import NotFoundError
+from proliferate.server.organizations.errors import (
+    OrganizationSsoConnectionEnableProtocolUnsupported,
+    OrganizationSsoDisplayNameRequired,
+    OrganizationSsoDisplayNameTooLong,
+    OrganizationSsoJitDefaultRoleNotAllowed,
+    OrganizationSsoRequiredLoginPolicyUnsupported,
+)
 from proliferate.server.organizations.sso.models import (
     OrganizationSsoConnectionRequest,
     OrganizationSsoConnectionUpdateRequest,
@@ -143,13 +151,13 @@ async def test_organization_sso_connection(
         raise NotFoundError("SSO connection not found.", code="sso_connection_not_found")
     try:
         discovered = await test_oidc_connection(db, connection=snapshot)
-    except HTTPException as exc:
+    except AuthFlowError as exc:
         updated = await sso_store.mark_sso_connection_test_result(
             db,
             connection_id=connection_id,
             organization_id=organization_id,
             success=False,
-            error=str(exc.detail),
+            error=exc.message,
             discovered=None,
             actor_user_id=actor_user_id,
         )
@@ -187,7 +195,7 @@ async def enable_organization_sso_connection(
         connection_id=connection_id,
     )
     if tested.protocol != "oidc":
-        raise HTTPException(status_code=400, detail="Only OIDC SSO can be enabled right now.")
+        raise OrganizationSsoConnectionEnableProtocolUnsupported()
     enabled = await sso_store.set_sso_connection_status(
         db,
         connection_id=connection_id,
@@ -263,9 +271,9 @@ def organization_sso_urls(request: Request, connection_id: UUID) -> tuple[str, s
 def _clean_display_name(value: str | None) -> str:
     cleaned = (value or "").strip()
     if not cleaned:
-        raise HTTPException(status_code=400, detail="SSO display name is required.")
+        raise OrganizationSsoDisplayNameRequired()
     if len(cleaned) > 255:
-        raise HTTPException(status_code=400, detail="SSO display name is too long.")
+        raise OrganizationSsoDisplayNameTooLong()
     return cleaned
 
 
@@ -278,17 +286,11 @@ def _clean_optional(value: str | None) -> str | None:
 
 def _clean_default_role(value: str) -> str:
     if value == "owner":
-        raise HTTPException(
-            status_code=400,
-            detail="SSO JIT default role cannot be owner.",
-        )
+        raise OrganizationSsoJitDefaultRoleNotAllowed()
     return value
 
 
 def _clean_login_policy(value: str) -> str:
     if value == "required":
-        raise HTTPException(
-            status_code=400,
-            detail="Required SSO login policy is not supported yet.",
-        )
+        raise OrganizationSsoRequiredLoginPolicyUnsupported()
     return value

@@ -30,7 +30,7 @@ from proliferate.integrations.sandbox.base import (
     SandboxProviderUnavailableError,
     SandboxRuntimeContext,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 logger = logging.getLogger("proliferate.cloud.e2b")
 

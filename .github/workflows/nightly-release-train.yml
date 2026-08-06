@@ -227,6 +227,7 @@ jobs:
     uses: ./.github/workflows/server-ci.yml
     with:
       git_sha: ${{ needs.prepare.outputs.head_sha }}
+      comparison_sha: ${{ needs.prepare.outputs.base_sha }}
       version: ${{ needs.prepare.outputs.server_version }}
       dry_run: false
       publish: true

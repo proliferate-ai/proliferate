@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { GitPanelHeader } from "./GitPanelHeader";
-import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
 import { GitPanelReviewBody } from "./GitPanelReviewBody";
 import { formatGitPanelUndoError } from "./GitPanelReviewChrome";
 import { useDiffReviewMeasurement } from "#product/hooks/workspaces/ui/files/use-diff-review-measurement";

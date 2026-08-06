@@ -26,8 +26,8 @@ index, and the change-control model for moving a value or adding a component.
   [systems/product/settings/appearance-scaling.md](../../systems/product/settings/appearance-scaling.md).
   This document names the rules that shape the value system; that document is
   the gate's specification.
-- Package dependency direction between
-  `design`/`ui`/`product-domain`/`product-ui`/`product-surfaces`/`product-client` —
+- Package dependency direction between `design` and ProductClient's nested
+  domain, primitives, and connected tiers —
   [structures/frontend/packages/README.md](../../structures/frontend/packages/README.md).
 - Per-surface product behavior (what a screen does, its flows and copy) — the
   owning [systems/product/**](../../systems/README.md) document.
@@ -45,25 +45,26 @@ apps/packages/design/
 ├── scripts/copy-css.mjs        copies src/css/*.css into dist/css for package consumers
 └── scripts/check-theme.mjs     re-projects independently; asserts byte equality, real Tailwind compile, ownership laws
 
-apps/packages/ui/src/           the component library
-├── primitives/                 raw Radix/vendor wrapper families + single-purpose visual atoms
+apps/packages/product-client/src/primitives/           the component library
+├── *.tsx                       root Radix/vendor wrappers + single-purpose visual atoms
 ├── patterns/                   opinionated compositions built from primitives + tokens
-├── icons/                      icon sets: a general barrel plus palette/brand/provider glyph modules
-└── lib/, utils/, overlays/     supporting infrastructure (cn() joiner, tw-merge, search/scroll
-                                helpers, native-overlay-stack registration) — not components
+├── icons/                      concrete general, palette, brand, and provider glyph modules
+├── utils/, overlays/           cn(), tw-merge, search/scroll, toast, and overlay infrastructure
+└── __tests__/                  moved component-library tests
 
-apps/packages/product-ui/src/patterns/
-                                domain-aware patterns: same composition rule as ui/src/patterns,
-                                but this tier may import product-domain view models/vocabulary
+apps/packages/product-client/src/components/patterns/
+                                domain-aware patterns: same composition rule as primitives/patterns,
+                                but this tier may import #product/domain/<file> view models/vocabulary
 
 scripts/check_appearance_scaling.py   class-level gate: banned class shapes at every call site
-scripts/check_frontend_boundaries.py  Radix containment + the ui/src top-level closure
+scripts/check_frontend_boundaries.py  Radix containment + primitives top-level closure/layer law
 scripts/git-hooks/pre-commit          staged-file gate; encodes the load-bearing build order
 Makefile                              git-hooks target wires core.hooksPath scripts/git-hooks
 ```
 
-`apps/packages/ui/src` has no other top-level entries; the six above are the
-complete list, enforced by `UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES` in
+`apps/packages/product-client/src/primitives` contains root `.ts`/`.tsx` files
+plus the five support directories above. That closure is enforced by
+`PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES` in
 [check_frontend_boundaries.py](../../../../scripts/check_frontend_boundaries.py).
 
 ## Type
@@ -77,32 +78,33 @@ to ask for "13px" in the abstract.
 
 | Role | Size | Line-height | Letter-spacing | What it is for |
 | --- | --- | --- | --- | --- |
-| `ui-sm` | 11px | 15px | `+0.01em` | Meta text, labels, badges, the smallest legible control text. |
-| `ui` | 12px | 17px | `+0.005em` | Compact controls: buttons, menu rows, tabs, inputs. |
-| `sidebar-nav` | 12px | 17px | `+0.005em` | Sidebar navigation rows. |
-| `sidebar-row` | 12px | 17px | `+0.005em` | Sidebar content rows (workspaces, sessions). |
-| `chat` | 13px | 20px | `0` | Transcript prose — the reading role. |
-| `composer` | 13px | 20px | `0` | Composer input text. |
-| `body` | 13px | 20px | `0` | General product prose outside the transcript. |
-| `message` | = `composer` | = `composer` | = `composer` | Message body; a pure alias so message and composer can never drift. |
-| `chat-meta` | `calc(chat − 2px)` = 11px | inherited | inherited | Timestamps and per-turn meta, derived from `chat` rather than pinned. |
-| `body-emphasis` | 14px | 21px | `−0.005em` | Emphasized prose, section leads. |
-| `workspace-title` | 14px | 21px | `−0.005em` | Workspace/tab titles. |
-| `heading` | 16px | 23px | `−0.01em` (`--tracking-heading`) | In-page headings. |
-| `sidebar-brand` | 16px | 23px | `−0.01em` (`--tracking-heading`) | The sidebar brand lockup. |
+| `ui-sm` | 12px | 16px | `+0.01em` | Meta text, labels, badges, the smallest legible control text. |
+| `ui` | 13px | 18px | `+0.005em` | Compact controls: buttons, menu rows, tabs, inputs. |
+| `sidebar-nav` | 13px | 18px | `+0.005em` | Sidebar navigation rows. |
+| `sidebar-row` | 13px | 18px | `+0.005em` | Sidebar content rows (workspaces, sessions). |
+| `chat` | 14px | 22px | `0` | Transcript prose — the reading role. |
+| `composer` | 14px | 20px | `0` | Composer input text. |
+| `body` | 14px | 21px | `0` | General product prose outside the transcript. |
+| `message` | = `chat` | = `chat` | = `chat` | Message body; a pure alias of the transcript reading role. |
+| `chat-meta` | `calc(chat − 2px)` = 12px | inherited | inherited | Timestamps and per-turn meta, derived from `chat` rather than pinned. |
+| `body-emphasis` | 15px | 22px | `−0.005em` | Emphasized prose, section leads. |
+| `workspace-title` | 15px | 22px | `−0.005em` | Workspace/tab titles. |
+| `heading` | 17px | 24px | `−0.01em` (`--tracking-heading`) | In-page headings. |
+| `sidebar-brand` | 17px | 24px | `−0.01em` (`--tracking-heading`) | The sidebar brand lockup. |
 | `title` | 19px | 24px | `−0.025em` (`--tracking-tight`) | Page titles. |
 | `hero` | 26px | 34px | `−0.025em` (`--tracking-tight`) | Hero/empty-state display type. |
-| `readable-code` | 13px | 1.625 (unitless) | `0` | Monospace prose: code blocks, readable code views. |
+| `readable-code` | 14px | 1.625 (unitless) | `0` | Monospace prose: code blocks, readable code views. |
 
 Two properties are visible in that table and are the ramp's actual design:
 
 - **Tighter as larger.** Tracking runs positive at the small end (`+0.01em` at
-  11px, `+0.005em` at 12px), lands at zero for the 13px reading roles, and goes
-  negative as size grows (`−0.005em` at 14px, `−0.01em` at 16px, `−0.025em` at
+  12px, `+0.005em` at 13px), lands at zero for the 14px reading roles, and goes
+  negative as size grows (`−0.005em` at 15px, `−0.01em` at 17px, `−0.025em` at
   19px and 26px). Small text needs air between letters to stay legible; display
   text needs the letters pulled together to stop reading as loose.
-- **Ratios shift with role.** Control roles sit near 1.4 (11/15, 12/17), reading
-  roles at 1.54 (13/20), display roles compress toward 1.26 (19/24) and 1.31
+- **Ratios shift with role.** Control roles sit near 1.4 (12/16, 13/18), while
+  transcript prose gets 14/22 reading leading and the compact composer uses
+  14/20. Display roles compress toward 1.26 (19/24) and 1.31
   (26/34). The tighter the leading, the more the type reads as an object rather
   than a paragraph.
 
@@ -121,10 +123,9 @@ all fail `FIXED_TEXT_PATTERNS` in
 
 > **The chat/composer pair is CI-locked.**
 > [check-theme.mjs](../../../../apps/packages/design/scripts/check-theme.mjs)
-> asserts `typography.lineHeight.chat === typography.size.composer + 7`. The
-> transcript and the input it feeds are the same measure by construction: text
-> the user types keeps its rhythm when it becomes text the user reads. Retuning
-> one without the other fails the design build.
+> asserts that both roles share one font-size rung while transcript leading is
+> `font-size + 8px` and compact composer leading is `font-size + 6px`. Retuning
+> either role onto a separate size ladder fails the design build.
 
 Thirteen of these roles — `uiSm`, `ui`, `chat`, `composer`, `body`,
 `bodyEmphasis`, `workspaceTitle`, `heading`, `title`, `hero`, `sidebarNav`,
@@ -460,18 +461,18 @@ Five tokens define how a transcript reads:
 
 | Token | Value | Role |
 | --- | --- | --- |
-| `--container-transcript-readable` | `40rem` (640px) | A tighter optional reading measure. Conversation prose no longer applies it — `MarkdownBody.tsx` renders prose at `max-w-full` so a message fills the thread column at the same width the composer reads at. The token remains for consumers that want a narrower cap. |
-| `--container-transcript-thread` | `48rem` (768px) | The thread-column measure — the outer transcript column (avatars, action rows, and the `.chat-markdown` wrapper itself) widens to this. |
-| `--container-transcript-wide` | `56rem` (896px) | The spill measure — the width a wide block (table, image, code) is nominally entitled to; still bounded by the 48rem thread column until a breakout restructure lands (see `MarkdownBody.tsx`'s `table` override). |
+| `--container-transcript-readable` | `40rem` (640px) | A narrower measure available to prose-heavy surfaces outside the unified chat flow. |
+| `--container-transcript-thread` | `48rem` (768px) | The shared new-chat, transcript, and composer column. `MarkdownBody.tsx` renders prose at `max-w-full` inside this column so the width does not change when a session starts. |
+| `--container-transcript-wide` | `56rem` (896px) | The nominal spill measure for tables, images, and code; wide blocks remain bounded by the 48rem shared chat column until a breakout restructure lands (see `MarkdownBody.tsx`'s `table` override). |
 | `--spacing-transcript-turn` | `1rem` (16px) | Vertical rhythm between top-level turns. |
 | `--spacing-transcript-turn-tight` | `0.25rem` (4px) | Vertical rhythm within a turn, for closely related siblings (e.g. assistant prose and its action-row footer). |
 
 The width tokens name three *available* measures even though conversation
-prose currently uses one: prose and wide blocks (tables, code) both fill the
-48rem thread column, so an assistant message reads at the same width the
-user is typing into. The 40rem readable cap is kept as a named tier for any
-consumer that wants a tighter line length, and 56rem records what wide
-blocks are nominally entitled to once a breakout restructure lands. Two
+prose currently uses one: the new-chat flow, live transcript, composer, and
+wide blocks (tables, code) all fill the 48rem thread column, so the measure
+does not change after launch. The 40rem readable tier remains available to
+prose-heavy surfaces outside that flow, while the 56rem wide tier records the
+space wide blocks may use once a deliberate breakout treatment lands. Two
 spacing tiers make a real distinction vertically: turn-to-turn
 rhythm and within-turn rhythm are two different rungs, not one shared gap.
 
@@ -614,26 +615,30 @@ stay in lockstep with CSS import them and format through `motion.cssMs()`.
 
 ### Em-based glyph tiers
 
-| Token | Value | At 12px text | At 13px text | Role |
-| --- | --- | --- | --- | --- |
-| `--icon-status` | `0.55em` | 6.6px | 7.2px | Status dots. |
-| `--icon-tight` | `0.875em` | 10.5px | 11.4px | Trailing row controls that sit quieter than their text. |
-| `--icon-compact` | `1em` | 12px | 13px | Inline glyphs that match their text exactly. |
-| `--icon-indicator` | `1.166667em` | 14px | 15.2px | Sidebar row activity indicators (spinner, waiting, error) in their 20px trailing cell. |
-| `--icon-paired` | `1.230769em` | 14.8px | 16px | The default glyph beside prose. |
-| `--icon-control` | `1.333333em` | 16px | 17.3px | The glyph inside an icon-only control. |
-| `--icon-large` | `1.666667em` | 20px | 21.7px | Emphasized inline glyphs. |
-| `--icon-display` | `2em` | 24px | 26px | Empty-state and display glyphs. |
+| Token | Value | At 12px `ui-sm` | At 13px compact UI | At 14px reading text | Role |
+| --- | --- | --- | --- | --- | --- |
+| `--icon-status` | `0.55em` | 6.6px | 7.2px | 7.7px | Status dots. |
+| `--icon-tight` | `0.875em` | 10.5px | 11.4px | 12.3px | Trailing row controls that sit quieter than their text. |
+| `--icon-compact` | `1em` | 12px | 13px | 14px | Inline glyphs that match their text exactly. |
+| `--icon-indicator` | `1em` | 12px | 13px | 14px | Sidebar row navigation, repository, git, and activity glyphs inside larger alignment wells. |
+| `--icon-paired` | `1.230769em` | 14.8px | 16px | 17.2px | The default glyph beside prose. |
+| `--icon-control` | `1.333333em` | 16px | 17.3px | 18.7px | The glyph inside an icon-only control. |
+| `--icon-large` | `1.666667em` | 20px | 21.7px | 23.3px | Emphasized inline glyphs. |
+| `--icon-display` | `2em` | 24px | 26px | 28px | Empty-state and display glyphs. |
 
 **Sizing glyphs in `em` is what makes the Appearance font preference work.** The
 two odd-looking ratios are exact by construction: `1.230769em × 13px = 16px`, so
-a paired glyph lands at 16px beside transcript prose; `1.333333em × 12px = 16px`,
-so a control glyph lands at 16px inside a 12px `text-ui` control. Both tiers hit
-the same 16px optical target from different text sizes — and because the
-multiplier is relative, both track the user's font preference automatically,
-where a fixed `size-4` would not.
+a paired glyph lands at 16px beside compact UI text; `1.333333em × 12px = 16px`,
+so a control glyph lands at 16px when its owner uses the `ui-sm` role. At the
+current Default rung, compact UI and sidebar text are 13px while reading text
+is 14px, so the same proportional tiers resolve to the values shown above.
+Because each multiplier is relative, it tracks the user's font preference
+automatically where a fixed `size-4` would not.
 
-The tiers are projected as `icon-status`/`icon-compact`/`icon-paired`/
+The sidebar indicator and compact tiers intentionally share a current `1em`
+value while retaining distinct semantic roles: sidebar glyphs can be retuned
+without changing general inline glyphs. The tiers are projected as
+`icon-status`/`icon-compact`/`icon-paired`/
 `icon-control`/`icon-large`/`icon-display` utilities in
 [product.css](../../../../apps/packages/design/src/css/product.css). The appearance gate
 holds the line at every glyph call site: fixed `size`/`width`/`height` attributes
@@ -659,14 +664,14 @@ emits each as a square `width`+`height` utility.
 
 Because these utilities set both dimensions, they are registered in
 tailwind-merge's stock `size` group in
-[tw-merge.ts](../../../../apps/packages/ui/src/utils/tw-merge.ts). Unregistered,
+[tw-merge.ts](../../../../apps/packages/product-client/src/primitives/utils/tw-merge.ts). Unregistered,
 a consumer overriding a component's own `h-7 w-7` with `size-icon-button-sm`
 would keep both classes and lose on generated-CSS source order — the token
 survives the merge but never wins the cascade. The registration is locked against
 the generated theme's emitted utilities by a drift test, so adding a fourth tier
 without registering it fails.
 
-[RowActionIconButton.tsx](../../../../apps/packages/ui/src/primitives/RowActionIconButton.tsx)
+[RowActionIconButton.tsx](../../../../apps/packages/product-client/src/primitives/RowActionIconButton.tsx)
 is the sanctioned primitive for hover-revealed row actions: a 28px box with an
 `icon-control` glyph, hover/active overlays, and a reveal contract expressed
 entirely in opacity (`group-hover`, `group-focus-within`, `focus-visible`, and
@@ -706,17 +711,18 @@ inventing new visual vocabulary, and the sanctioned index of what the library
 actually ships.
 
 One non-component module lives inside a tier directory:
-[popover-surface.ts](../../../../apps/packages/ui/src/primitives/popover-surface.ts)
+[popover-surface.ts](../../../../apps/packages/product-client/src/primitives/popover-surface.ts)
 holds the shared popover frame/surface class constants composed by `Popover`,
 `DropdownMenu`, and `PopoverButton`. Like the infrastructure directories, it is
 not a component: no index row below, no export subpath.
 
 ### The library model
 
-Three tiers inside `ui/src`, organized by **component role, never by feature
-area** — a component's name describes what it does, not where it is used:
+Three tiers inside `product-client/src/primitives`, organized by **component
+role, never by feature area** — a component's name describes what it does, not
+where it is used:
 
-- **`primitives/`** — the base tier. Holds both the raw Radix (and other vendor)
+- **Root files** — the base tier. Holds both the raw Radix (and other vendor)
   wrapper families — `Dialog`, `AlertDialog`, `Popover`, `DropdownMenu`,
   `checkbox-primitive`, `tooltip-primitive`, `Command`, `Sonner` — and
   single-purpose visual atoms that don't compose another primitive: `Button`,
@@ -732,37 +738,39 @@ area** — a component's name describes what it does, not where it is used:
   `SidebarNavRow`, composer controls, and similar. A pattern is named for the
   job it does (`ListRow`, `PageHeader`), never for the feature that first needed
   it.
-- **`icons/`** — icon sets: a general glyph barrel plus named sets scoped to a
-  specific surface (command palette) or brand (Proliferate mark, auth/model
-  provider glyphs). Icon sets are barrels of glyphs, not components in the
-  atom/composition sense, so they get their own tier rather than living inside
-  `primitives/` or `patterns/`.
+- **`icons/`** — concrete glyph modules split by general role, specific surface
+  (command palette), or brand (Proliferate mark, auth/model provider glyphs).
+  There is no aggregate icon barrel. Icon modules are glyph collections, not
+  components in the atom/composition sense, so they get their own tier rather
+  than living inside root primitives or `patterns/`.
 
-A fourth tier lives in a different package because of an import-direction
-constraint, not a different role:
+A fourth tier lives in ProductClient because of an import-direction constraint,
+not a different role:
 
-- **`product-ui/src/patterns/`** — domain-aware patterns. Same composition rule
-  as `ui/src/patterns/` (built from primitives/patterns + tokens), but this tier
-  is allowed to import `product-domain` view models and vocabulary, which
-  `ui/src/patterns/` must not (per the package boundary in
+- **`product-client/src/components/patterns/`** — domain-aware patterns. Same composition rule
+  as `product-client/src/primitives/patterns/` (built from primitives/patterns + tokens), but this tier
+  is allowed to import concrete `#product/domain/<file>` view models and vocabulary, which
+  `product-client/src/primitives/patterns/` must not (per the package boundary in
   [packages/README.md](../../structures/frontend/packages/README.md)). The
   settings family (`SettingsRow`, `SettingsSection`, `SettingsPageHeader`, and
   siblings), `PrStatusBadge`, `ProductPageShell`, and the `secrets/` sub-tree
   live here for that reason, not because they belong to a "settings" or
   "secrets" feature folder.
 
-There is no fourth content tier inside `ui/src` (no `surfaces/`, no feature-keyed
-folder): a component's tier is always primitives, patterns, or icons, decided by
-role.
+There is no fourth content tier inside `product-client/src/primitives` (no
+`surfaces/`, no feature-keyed folder): a component's tier is always a root
+primitive, pattern, or icon module, decided by role.
 
 ### Governance rule
 
-Feature code (pages, panes, screens under `product-client`, `product-ui` outside
-`patterns/`, `product-surfaces`, `apps/desktop`, `apps/web`) composes library
+Feature code (pages, panes, and screens under `product-client` outside
+`components/patterns/`, plus `apps/desktop` and `apps/web`) composes library
 components and `design` tokens. It does not invent new visual vocabulary:
 
 - **No raw Radix imports outside the library.** Every `@radix-ui/*` import must
-  resolve to a file under `ui/src/primitives/**` or `ui/src/patterns/**`.
+  resolve to a root file directly under `product-client/src/primitives/` or any
+  file under `product-client/src/primitives/patterns/**`. Radix stays illegal in
+  `icons/**`, `utils/**`, `overlays/**`, `__tests__/**`, and higher layers.
   Enforced by `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY` in
   [check_frontend_boundaries.py](../../../../scripts/check_frontend_boundaries.py),
   scanned across every frontend package and app.
@@ -787,49 +795,49 @@ sanctioned index below.
 
 ### The sanctioned index
 
-Every component below has a canonical `package.json` `exports` subpath (no
-aliases — one path per component) and a row here. A styled component with no row
-here is not library-sanctioned; the index is the closed set, not a sample of it.
+Every component below has one canonical `#product/primitives/...` subpath and a
+row here. A styled component with no row here is not library-sanctioned; the
+index is the closed set, not a sample of it.
 
-#### Primitives (`ui/src/primitives/`)
+#### Primitives (`product-client/src/primitives/`)
 
 | Component | Path | Purpose |
 | --- | --- | --- |
-| `AlertDialog` | [AlertDialog.tsx](../../../../apps/packages/ui/src/primitives/AlertDialog.tsx) | Raw `@radix-ui/react-alert-dialog` wrapper, styled to tokens. |
-| `AnimatedCollapsibleContent` | [AnimatedCollapsibleContent.tsx](../../../../apps/packages/ui/src/primitives/AnimatedCollapsibleContent.tsx) | Height + opacity disclosure motion for expand/collapse content; collapsed subtree is inert. |
-| `AnimatedSwapText` | [AnimatedSwapText.tsx](../../../../apps/packages/ui/src/primitives/AnimatedSwapText.tsx) | Crossfade transition when a keyed text value changes. |
-| `Badge` | [Badge.tsx](../../../../apps/packages/ui/src/primitives/Badge.tsx) | Tone-based label/status chip. |
-| `Button` | [Button.tsx](../../../../apps/packages/ui/src/primitives/Button.tsx) | The button primitive — variant/size/loading/destructive API every other button-shaped component composes. |
-| `Checkbox` | [Checkbox.tsx](../../../../apps/packages/ui/src/primitives/Checkbox.tsx) | One-line re-export of `checkbox-primitive` — see Collision pairs below. |
-| `checkbox-primitive` | [checkbox-primitive.tsx](../../../../apps/packages/ui/src/primitives/checkbox-primitive.tsx) | Raw `@radix-ui/react-checkbox` wrapper — see Collision pairs below. |
-| `Command` | [Command.tsx](../../../../apps/packages/ui/src/primitives/Command.tsx) | Raw `cmdk` wrapper. `CommandPalette` (below) imports `cmdk` directly rather than this wrapper; today's only consumer is [WorkspacesCommandList.tsx](../../../../apps/packages/product-ui/src/workspaces/WorkspacesCommandList.tsx) — two parallel `cmdk` consumers, a transitional gap, not a migration in progress. |
-| `Dialog` | [Dialog.tsx](../../../../apps/packages/ui/src/primitives/Dialog.tsx) | Raw `@radix-ui/react-dialog` wrapper; `ModalShell` composes it. |
-| `DotCellLoader` | [DotCellLoader.tsx](../../../../apps/packages/ui/src/primitives/DotCellLoader.tsx) | Nine-dot activity indicator with wave, orbit, scan, helix, and breathe motion variants. |
-| `DropdownMenu` | [DropdownMenu.tsx](../../../../apps/packages/ui/src/primitives/DropdownMenu.tsx) | Raw `@radix-ui/react-dropdown-menu` wrapper — see DropdownMenu status below. |
-| `FixedPositionLayer` | [FixedPositionLayer.tsx](../../../../apps/packages/ui/src/primitives/FixedPositionLayer.tsx) | Fixed-position wrapper for viewport-anchored overlay content. |
-| `IconButton` | [IconButton.tsx](../../../../apps/packages/ui/src/primitives/IconButton.tsx) | Icon-only button, tone/size variants. |
-| `Input` | [Input.tsx](../../../../apps/packages/ui/src/primitives/Input.tsx) | Text input field. |
-| `Label` | [Label.tsx](../../../../apps/packages/ui/src/primitives/Label.tsx) | Form field label. |
-| `PaneIconButton` | [PaneIconButton.tsx](../../../../apps/packages/ui/src/primitives/PaneIconButton.tsx) | Pane-scoped icon button (24px box), composes `Button`. |
-| `Popover` | [Popover.tsx](../../../../apps/packages/ui/src/primitives/Popover.tsx) | Raw `@radix-ui/react-popover` wrapper; `PopoverButton` composes it. |
-| `PopoverButton` | [PopoverButton.tsx](../../../../apps/packages/ui/src/primitives/PopoverButton.tsx) | Popover-backed trigger/content wrapper with `triggerMode` (`click`/`doubleClick`/`contextMenu`); the sanctioned menu/popover trigger. |
-| `PopoverMenuItem` | [PopoverMenuItem.tsx](../../../../apps/packages/ui/src/primitives/PopoverMenuItem.tsx) | Plain-button popover menu row; the sanctioned menu-item companion to `PopoverButton`. |
-| `PopoverSearchField` | [PopoverSearchField.tsx](../../../../apps/packages/ui/src/primitives/PopoverSearchField.tsx) | Search input for popover pickers, with an in-place list-navigation keyboard hook. |
-| `ProgressBar` | [ProgressBar.tsx](../../../../apps/packages/ui/src/primitives/ProgressBar.tsx) | Determinate progress bar. |
-| `RadioCardGroup` | [RadioCardGroup.tsx](../../../../apps/packages/ui/src/primitives/RadioCardGroup.tsx) | Radio-selectable card group with label/description/icon per option. |
-| `RangeSlider` | [RangeSlider.tsx](../../../../apps/packages/ui/src/primitives/RangeSlider.tsx) | Native range input styled to tokens. |
-| `RowActionIconButton` | [RowActionIconButton.tsx](../../../../apps/packages/ui/src/primitives/RowActionIconButton.tsx) | Sanctioned hover-revealed row-action icon button (sidebar kebab, archive, tab close, file-row actions) — 28px hit target, 16px glyph. |
-| `SegmentedControl` | [SegmentedControl.tsx](../../../../apps/packages/ui/src/primitives/SegmentedControl.tsx) | Segmented tab-like control. |
-| `Select` | [Select.tsx](../../../../apps/packages/ui/src/primitives/Select.tsx) | Native select styled to tokens. |
-| `ShortcutBadge` | [ShortcutBadge.tsx](../../../../apps/packages/ui/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
-| `Skeleton` | [Skeleton.tsx](../../../../apps/packages/ui/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
-| `Sonner` | [Sonner.tsx](../../../../apps/packages/ui/src/primitives/Sonner.tsx) | Sole toast treatment: `sonner` wrapped in the canonical popover frame (shared by reference from `popover-surface.ts`), 12px padding, closed type ramp, 24px action pair with only the primary filled. |
-| `Spinner` | [Spinner.tsx](../../../../apps/packages/ui/src/primitives/Spinner.tsx) | Inline loading spinner. |
-| `Switch` | [Switch.tsx](../../../../apps/packages/ui/src/primitives/Switch.tsx) | Toggle switch. |
-| `Textarea` | [Textarea.tsx](../../../../apps/packages/ui/src/primitives/Textarea.tsx) | Multi-line text input (default/ghost/flush/code variants). |
-| `Tooltip` | [Tooltip.tsx](../../../../apps/packages/ui/src/primitives/Tooltip.tsx) | Formatting wrapper over `tooltip-primitive` — see Collision pairs below. |
-| `tooltip-primitive` | [tooltip-primitive.tsx](../../../../apps/packages/ui/src/primitives/tooltip-primitive.tsx) | Raw `@radix-ui/react-tooltip` wrapper — see Collision pairs below. |
-| `UserAvatar` | [UserAvatar.tsx](../../../../apps/packages/ui/src/primitives/UserAvatar.tsx) | Person avatar with initials fallback (`userInitials()` helper). |
+| `AlertDialog` | [AlertDialog.tsx](../../../../apps/packages/product-client/src/primitives/AlertDialog.tsx) | Raw `@radix-ui/react-alert-dialog` wrapper, styled to tokens. |
+| `AnimatedCollapsibleContent` | [AnimatedCollapsibleContent.tsx](../../../../apps/packages/product-client/src/primitives/AnimatedCollapsibleContent.tsx) | Height + opacity disclosure motion for expand/collapse content; collapsed subtree is inert. |
+| `AnimatedSwapText` | [AnimatedSwapText.tsx](../../../../apps/packages/product-client/src/primitives/AnimatedSwapText.tsx) | Crossfade transition when a keyed text value changes. |
+| `Badge` | [Badge.tsx](../../../../apps/packages/product-client/src/primitives/Badge.tsx) | Tone-based label/status chip. |
+| `Button` | [Button.tsx](../../../../apps/packages/product-client/src/primitives/Button.tsx) | The button primitive — variant/size/loading/destructive API every other button-shaped component composes. |
+| `Checkbox` | [Checkbox.tsx](../../../../apps/packages/product-client/src/primitives/Checkbox.tsx) | One-line re-export of `checkbox-primitive` — see Collision pairs below. |
+| `checkbox-primitive` | [checkbox-primitive.tsx](../../../../apps/packages/product-client/src/primitives/checkbox-primitive.tsx) | Raw `@radix-ui/react-checkbox` wrapper — see Collision pairs below. |
+| `Command` | [Command.tsx](../../../../apps/packages/product-client/src/primitives/Command.tsx) | Raw `cmdk` wrapper. `CommandPalette` (below) imports `cmdk` directly rather than this wrapper; today's only consumer is [WorkspacesCommandList.tsx](../../../../apps/packages/product-client/src/components/workspace/repo-setup/WorkspacesCommandList.tsx) — two parallel `cmdk` consumers, a transitional gap, not a migration in progress. |
+| `Dialog` | [Dialog.tsx](../../../../apps/packages/product-client/src/primitives/Dialog.tsx) | Raw `@radix-ui/react-dialog` wrapper; `ModalShell` composes it. |
+| `DotCellLoader` | [DotCellLoader.tsx](../../../../apps/packages/product-client/src/primitives/DotCellLoader.tsx) | Nine-dot activity indicator with wave, orbit, scan, helix, and breathe motion variants. |
+| `DropdownMenu` | [DropdownMenu.tsx](../../../../apps/packages/product-client/src/primitives/DropdownMenu.tsx) | Raw `@radix-ui/react-dropdown-menu` wrapper — see DropdownMenu status below. |
+| `FixedPositionLayer` | [FixedPositionLayer.tsx](../../../../apps/packages/product-client/src/primitives/FixedPositionLayer.tsx) | Fixed-position wrapper for viewport-anchored overlay content. |
+| `IconButton` | [IconButton.tsx](../../../../apps/packages/product-client/src/primitives/IconButton.tsx) | Icon-only button, tone/size variants. |
+| `Input` | [Input.tsx](../../../../apps/packages/product-client/src/primitives/Input.tsx) | Text input field. |
+| `Label` | [Label.tsx](../../../../apps/packages/product-client/src/primitives/Label.tsx) | Form field label. |
+| `PaneIconButton` | [PaneIconButton.tsx](../../../../apps/packages/product-client/src/primitives/PaneIconButton.tsx) | Pane-scoped icon button (24px box), composes `Button`. |
+| `Popover` | [Popover.tsx](../../../../apps/packages/product-client/src/primitives/Popover.tsx) | Raw `@radix-ui/react-popover` wrapper; `PopoverButton` composes it. |
+| `PopoverButton` | [PopoverButton.tsx](../../../../apps/packages/product-client/src/primitives/PopoverButton.tsx) | Popover-backed trigger/content wrapper with `triggerMode` (`click`/`doubleClick`/`contextMenu`); the sanctioned menu/popover trigger. |
+| `PopoverMenuItem` | [PopoverMenuItem.tsx](../../../../apps/packages/product-client/src/primitives/PopoverMenuItem.tsx) | Plain-button popover menu row; the sanctioned menu-item companion to `PopoverButton`. |
+| `PopoverSearchField` | [PopoverSearchField.tsx](../../../../apps/packages/product-client/src/primitives/PopoverSearchField.tsx) | Search input for popover pickers, with an in-place list-navigation keyboard hook. |
+| `ProgressBar` | [ProgressBar.tsx](../../../../apps/packages/product-client/src/primitives/ProgressBar.tsx) | Determinate progress bar. |
+| `RadioCardGroup` | [RadioCardGroup.tsx](../../../../apps/packages/product-client/src/primitives/RadioCardGroup.tsx) | Radio-selectable card group with label/description/icon per option. |
+| `RangeSlider` | [RangeSlider.tsx](../../../../apps/packages/product-client/src/primitives/RangeSlider.tsx) | Native range input styled to tokens. |
+| `RowActionIconButton` | [RowActionIconButton.tsx](../../../../apps/packages/product-client/src/primitives/RowActionIconButton.tsx) | Sanctioned hover-revealed row-action icon button (sidebar kebab, archive, tab close, file-row actions) — 28px hit target, 16px glyph. |
+| `SegmentedControl` | [SegmentedControl.tsx](../../../../apps/packages/product-client/src/primitives/SegmentedControl.tsx) | Segmented tab-like control. |
+| `Select` | [Select.tsx](../../../../apps/packages/product-client/src/primitives/Select.tsx) | Native select styled to tokens. |
+| `ShortcutBadge` | [ShortcutBadge.tsx](../../../../apps/packages/product-client/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
+| `Skeleton` | [Skeleton.tsx](../../../../apps/packages/product-client/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
+| `Sonner` | [Sonner.tsx](../../../../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment: `sonner` wrapped in the canonical popover frame (shared by reference from `popover-surface.ts`), 12px padding with an inside-right close-control reserve, closed type ramp, 24px action pair with only the primary filled. |
+| `Spinner` | [Spinner.tsx](../../../../apps/packages/product-client/src/primitives/Spinner.tsx) | Inline loading spinner. |
+| `Switch` | [Switch.tsx](../../../../apps/packages/product-client/src/primitives/Switch.tsx) | Toggle switch. |
+| `Textarea` | [Textarea.tsx](../../../../apps/packages/product-client/src/primitives/Textarea.tsx) | Multi-line text input (default/ghost/flush/code variants). |
+| `Tooltip` | [Tooltip.tsx](../../../../apps/packages/product-client/src/primitives/Tooltip.tsx) | Formatting wrapper over `tooltip-primitive` — see Collision pairs below. |
+| `tooltip-primitive` | [tooltip-primitive.tsx](../../../../apps/packages/product-client/src/primitives/tooltip-primitive.tsx) | Raw `@radix-ui/react-tooltip` wrapper — see Collision pairs below. |
+| `UserAvatar` | [UserAvatar.tsx](../../../../apps/packages/product-client/src/primitives/UserAvatar.tsx) | Person avatar with initials fallback (`userInitials()` helper). |
 
 **Collision pairs (transitional).** Two primitive families ship both a raw
 wrapper and a same-tier overlay under names that would otherwise collide:
@@ -848,8 +856,8 @@ tier. Four files still import it directly:
 [RightPanelNewTabMenu.tsx](../../../../apps/packages/product-client/src/components/workspace/shell/right-panel/RightPanelNewTabMenu.tsx),
 [WorkspaceActionsMenu.tsx](../../../../apps/packages/product-client/src/components/workspace/shell/topbar/WorkspaceActionsMenu.tsx)
 (all `product-client`), and
-[ProposedPlanCard.tsx](../../../../apps/packages/product-ui/src/chat/transcript/ProposedPlanCard.tsx)
-(`product-ui`). Migrating them onto `PopoverButton`/`PopoverMenuItem` is pending:
+[ProposedPlanCard.tsx](../../../../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx)
+(`product-client`). Migrating them onto `PopoverButton`/`PopoverMenuItem` is pending:
 Radix's dropdown-menu primitive provides roving-tabindex arrow-key navigation,
 typeahead, and managed focus-return-to-trigger that
 `PopoverButton`/`PopoverMenuItem` do not implement today. `DropdownMenu` is not
@@ -857,77 +865,84 @@ banned outright — it has no CI gate — but new menu call sites should use
 `PopoverButton`/`PopoverMenuItem`; only the four existing consumers above are
 grandfathered.
 
-#### Patterns (`ui/src/patterns/`)
+#### Patterns (`product-client/src/primitives/patterns/`)
 
 | Component | Path | Purpose |
 | --- | --- | --- |
-| `AuthProviderButton` | [AuthProviderButton.tsx](../../../../apps/packages/ui/src/patterns/AuthProviderButton.tsx) | Auth-provider sign-in button with a loading state, composes `Spinner`. |
-| `AutoHideScrollArea` | [AutoHideScrollArea.tsx](../../../../apps/packages/ui/src/patterns/AutoHideScrollArea.tsx) | Scroll area whose scrollbar affordance auto-hides. |
-| `CommandPalette` | [CommandPalette.tsx](../../../../apps/packages/ui/src/patterns/CommandPalette.tsx) | Command-palette shell/context, built directly on `cmdk` (not on the `Command` primitive — see `Command` row above). |
-| `ComposerActionButton` | [ComposerActionButton.tsx](../../../../apps/packages/ui/src/patterns/ComposerActionButton.tsx) | Composer primary-action button, composes `Button`. |
-| `ComposerControlButton` | [ComposerControlButton.tsx](../../../../apps/packages/ui/src/patterns/ComposerControlButton.tsx) | Composer control pill (icon/label/detail/trailing/active), composes `Button`. |
-| `ComposerTextarea` | [ComposerTextarea.tsx](../../../../apps/packages/ui/src/patterns/ComposerTextarea.tsx) | Composer-sized text input, composes `Textarea`. |
-| `ComposerTextareaFrame` | [ComposerTextareaFrame.tsx](../../../../apps/packages/ui/src/patterns/ComposerTextareaFrame.tsx) | Composer textarea's outer frame/top-inset shell. |
-| `ConfirmationDialog` | [ConfirmationDialog.tsx](../../../../apps/packages/ui/src/patterns/ConfirmationDialog.tsx) | Confirm/cancel dialog, built on `ModalShell` + `Button`. |
-| `EmptyState` | [EmptyState.tsx](../../../../apps/packages/ui/src/patterns/EmptyState.tsx) | Title/description/action empty-state block. |
-| `EnvironmentSearchSelect` | [EnvironmentSearchSelect.tsx](../../../../apps/packages/ui/src/patterns/EnvironmentSearchSelect.tsx) | Searchable environment picker, composes `PopoverButton`/`PopoverMenuItem`/`PickerPopoverContent`. |
-| `LevelBarsButton` | [LevelBarsButton.tsx](../../../../apps/packages/ui/src/patterns/LevelBarsButton.tsx) | Stepped-level control button (level-bars affordance), composes `ComposerControlButton`. |
-| `ListRow` | [ListRow.tsx](../../../../apps/packages/ui/src/patterns/ListRow.tsx) | Clickable list row with leading/trailing slots. |
-| `ModalShell` | [ModalShell.tsx](../../../../apps/packages/ui/src/patterns/ModalShell.tsx) | Modal composition built on `Dialog`. |
-| `PageContentFrame` | [PageContentFrame.tsx](../../../../apps/packages/ui/src/patterns/PageContentFrame.tsx) | Page content frame with header slot and sticky action/title. |
-| `PageHeader` | [PageHeader.tsx](../../../../apps/packages/ui/src/patterns/PageHeader.tsx) | Page-level header (title/description/actions). |
-| `PaneOptionsMenuItem` | [PaneOptionsMenuItem.tsx](../../../../apps/packages/ui/src/patterns/PaneOptionsMenuItem.tsx) | Pane options-menu row, composes `Button`. |
-| `PickerPopoverContent` | [PickerPopoverContent.tsx](../../../../apps/packages/ui/src/patterns/PickerPopoverContent.tsx) | Popover content shell for pickers: search field + list + empty row. |
-| `SettingsMenu` | [SettingsMenu.tsx](../../../../apps/packages/ui/src/patterns/SettingsMenu.tsx) | Labeled select-style menu, composes `PopoverButton`/`PopoverMenuItem`. |
-| `SidebarActionButton` | [SidebarActionButton.tsx](../../../../apps/packages/ui/src/patterns/SidebarActionButton.tsx) | Sidebar action button, composes `RowActionIconButton`. |
-| `SidebarNavRow` | [SidebarNavRow.tsx](../../../../apps/packages/ui/src/patterns/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes the `ShortcutBadge` primitive + `SidebarRowSurface`. |
-| `SidebarRowSurface` | [SidebarRowSurface.tsx](../../../../apps/packages/ui/src/patterns/SidebarRowSurface.tsx) | Shared sidebar row interaction surface (active/disabled/press state) other sidebar rows build on. |
-| `ThinkingText` | [ThinkingText.tsx](../../../../apps/packages/ui/src/patterns/ThinkingText.tsx) | Animated "thinking" gleam text. |
+| `AuthProviderButton` | [AuthProviderButton.tsx](../../../../apps/packages/product-client/src/primitives/patterns/AuthProviderButton.tsx) | Auth-provider sign-in button with a loading state, composes `Spinner`. |
+| `AutoHideScrollArea` | [AutoHideScrollArea.tsx](../../../../apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx) | Scroll area whose scrollbar affordance auto-hides. |
+| `CommandPalette` | [CommandPalette.tsx](../../../../apps/packages/product-client/src/primitives/patterns/CommandPalette.tsx) | Command-palette shell/context, built directly on `cmdk` (not on the `Command` primitive — see `Command` row above). |
+| `ComposerActionButton` | [ComposerActionButton.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ComposerActionButton.tsx) | Composer primary-action button, composes `Button`. |
+| `ComposerControlButton` | [ComposerControlButton.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ComposerControlButton.tsx) | Composer control pill (icon/label/detail/trailing/active), composes `Button`. |
+| `ComposerTextarea` | [ComposerTextarea.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ComposerTextarea.tsx) | Composer-sized text input, composes `Textarea`. |
+| `ComposerTextareaFrame` | [ComposerTextareaFrame.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ComposerTextareaFrame.tsx) | Composer textarea's outer frame/top-inset shell. |
+| `ConfirmationDialog` | [ConfirmationDialog.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ConfirmationDialog.tsx) | Confirm/cancel dialog, built on `ModalShell` + `Button`. |
+| `EmptyState` | [EmptyState.tsx](../../../../apps/packages/product-client/src/primitives/patterns/EmptyState.tsx) | Title/description/action empty-state block. |
+| `EnvironmentSearchSelect` | [EnvironmentSearchSelect.tsx](../../../../apps/packages/product-client/src/primitives/patterns/EnvironmentSearchSelect.tsx) | Searchable environment picker, composes `PopoverButton`/`PopoverMenuItem`/`PickerPopoverContent`. |
+| `LevelBarsButton` | [LevelBarsButton.tsx](../../../../apps/packages/product-client/src/primitives/patterns/LevelBarsButton.tsx) | Stepped-level control button (level-bars affordance), composes `ComposerControlButton`. |
+| `ListRow` | [ListRow.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ListRow.tsx) | Clickable list row with leading/trailing slots. |
+| `ModalShell` | [ModalShell.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ModalShell.tsx) | Modal composition built on `Dialog`. |
+| `PageContentFrame` | [PageContentFrame.tsx](../../../../apps/packages/product-client/src/primitives/patterns/PageContentFrame.tsx) | Page content frame with header slot and sticky action/title. |
+| `PageHeader` | [PageHeader.tsx](../../../../apps/packages/product-client/src/primitives/patterns/PageHeader.tsx) | Page-level header (title/description/actions). |
+| `PaneOptionsMenuItem` | [PaneOptionsMenuItem.tsx](../../../../apps/packages/product-client/src/primitives/patterns/PaneOptionsMenuItem.tsx) | Pane options-menu row, composes `Button`. |
+| `PickerPopoverContent` | [PickerPopoverContent.tsx](../../../../apps/packages/product-client/src/primitives/patterns/PickerPopoverContent.tsx) | Popover content shell for pickers: search field + list + empty row. |
+| `SettingsMenu` | [SettingsMenu.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SettingsMenu.tsx) | Labeled select-style menu, composes `PopoverButton`/`PopoverMenuItem`. |
+| `SidebarActionButton` | [SidebarActionButton.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SidebarActionButton.tsx) | Sidebar action button, composes `RowActionIconButton`. |
+| `SidebarNavRow` | [SidebarNavRow.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SidebarNavRow.tsx) | Sidebar navigation row (icon/label/status/shortcut), composes the `ShortcutBadge` primitive + `SidebarRowSurface`; modifier-held shortcuts overlay an existing rightmost status instead of widening its trailing region. |
+| `SidebarRowSurface` | [SidebarRowSurface.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SidebarRowSurface.tsx) | Shared sidebar row interaction surface (active/disabled/press state) other sidebar rows build on. |
+| `ThinkingText` | [ThinkingText.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ThinkingText.tsx) | Animated "thinking" gleam text. |
 
-#### Icons (`ui/src/icons/`)
-
-| Component | Path | Purpose |
-| --- | --- | --- |
-| `icons` (barrel) | [index.tsx](../../../../apps/packages/ui/src/icons/index.tsx) | General glyph set — re-exports the `core`/`workspace`/`product`/`platform`/`status`/`app-shell` detail modules. |
-| `command-palette-icons` | [command-palette-icons.tsx](../../../../apps/packages/ui/src/icons/command-palette-icons.tsx) | Icon set scoped to the command palette. |
-| `proliferate-icons` | [proliferate-icons.tsx](../../../../apps/packages/ui/src/icons/proliferate-icons.tsx) | The Proliferate brand-mark glyph. |
-| `provider-icons` | [provider-icons.tsx](../../../../apps/packages/ui/src/icons/provider-icons.tsx) | Auth/model-provider brand glyphs, composes `proliferate-icons` for the Proliferate entry. |
-
-#### Patterns — domain-aware (`product-ui/src/patterns/`)
+#### Icons (`product-client/src/primitives/icons/`)
 
 | Component | Path | Purpose |
 | --- | --- | --- |
-| `ModelTable` | [ModelTable.tsx](../../../../apps/packages/product-ui/src/patterns/ModelTable.tsx) | Model-config table rows, composes `Badge`/`Switch`. |
-| `PrStatusBadge` | [PrStatusBadge.tsx](../../../../apps/packages/product-ui/src/patterns/PrStatusBadge.tsx) | PR status dot (`PrStatusDot`), icon-overlay wrapper (`PrStatusIconOverlay`), and tooltip-text helper (`prStatusTooltip`); hand-rolls its own tone map, composes nothing. |
-| `ProductPageShell` | [ProductPageShell.tsx](../../../../apps/packages/product-ui/src/patterns/ProductPageShell.tsx) | General product page shell, composes `PageContentFrame` + `PageHeader`. |
-| `SettingsEmptyState` | [SettingsEmptyState.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsEmptyState.tsx) | Settings-scoped empty state (compact/full sizes). |
-| `SettingsEyebrow` | [SettingsEyebrow.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsEyebrow.tsx) | Settings section eyebrow label. |
-| `SettingsPageHeader` | [SettingsPageHeader.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsPageHeader.tsx) | Flat settings page header (title/description/action). |
-| `SettingsRow` | [SettingsRow.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsRow.tsx) | Settings row (label/description/control), fixed 240px control-width companion for menus. |
-| `SettingsSaveFooter` | [SettingsSaveFooter.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsSaveFooter.tsx) | Settings save/revert footer with a status badge, composes `Badge` + `Button`. |
-| `SettingsScopeTabs` | [SettingsScopeTabs.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsScopeTabs.tsx) | User/org/repo/agents underline scope-switcher tabs, composes `Button`. |
-| `SettingsSection` | [SettingsSection.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsSection.tsx) | Settings section (title/description), composes `SettingsEyebrow`. |
-| `secrets/SecretManagementPanel` | [secrets/SecretManagementPanel.tsx](../../../../apps/packages/product-ui/src/patterns/secrets/SecretManagementPanel.tsx) | Presentational secrets-management pattern (list, editor/delete dialogs, scope notice are private internals of this one export). |
+| `app-shell` | [app-shell.tsx](../../../../apps/packages/product-client/src/primitives/icons/app-shell.tsx) | App-shell tab, terminal, review, and split-panel glyphs. |
+| `core` | [core.tsx](../../../../apps/packages/product-client/src/primitives/icons/core.tsx) | General navigation, action, history, and utility glyphs. |
+| `platform` | [platform.tsx](../../../../apps/packages/product-client/src/primitives/icons/platform.tsx) | Platform, deployment, account, and device glyphs. |
+| `product` | [product.tsx](../../../../apps/packages/product-client/src/primitives/icons/product.tsx) | Product workflow, agent, plan, and state glyphs. |
+| `status` | [status.tsx](../../../../apps/packages/product-client/src/primitives/icons/status.tsx) | Semantic status glyphs; `Spinner` remains a root primitive. |
+| `workspace` | [workspace.tsx](../../../../apps/packages/product-client/src/primitives/icons/workspace.tsx) | Workspace, file, folder, terminal, and notebook glyphs. |
+| `workspace-git` | [workspace-git.tsx](../../../../apps/packages/product-client/src/primitives/icons/workspace-git.tsx) | Git branch, commit, pull-request, and tree glyphs. |
+| `command-palette-icons` | [command-palette-icons.tsx](../../../../apps/packages/product-client/src/primitives/icons/command-palette-icons.tsx) | Icon set scoped to the command palette. |
+| `proliferate-icons` | [proliferate-icons.tsx](../../../../apps/packages/product-client/src/primitives/icons/proliferate-icons.tsx) | The Proliferate brand-mark glyph. |
+| `provider-icons` | [provider-icons.tsx](../../../../apps/packages/product-client/src/primitives/icons/provider-icons.tsx) | Auth/model-provider brand glyphs, composes `proliferate-icons` for the Proliferate entry. |
+
+#### Patterns — domain-aware (`product-client/src/components/patterns/`)
+
+| Component | Path | Purpose |
+| --- | --- | --- |
+| `ModelTable` | [ModelTable.tsx](../../../../apps/packages/product-client/src/components/patterns/ModelTable.tsx) | Model-config table rows, composes `Badge`/`Switch`. |
+| `PrStatusBadge` | [PrStatusBadge.tsx](../../../../apps/packages/product-client/src/components/patterns/PrStatusBadge.tsx) | PR status dot (`PrStatusDot`), icon-overlay wrapper (`PrStatusIconOverlay`), and tooltip-text helper (`prStatusTooltip`); hand-rolls its own tone map, composes nothing. |
+| `ProductPageShell` | [ProductPageShell.tsx](../../../../apps/packages/product-client/src/components/patterns/ProductPageShell.tsx) | General product page shell, composes `PageContentFrame` + `PageHeader`. |
+| `SettingsEmptyState` | [SettingsEmptyState.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsEmptyState.tsx) | Settings-scoped empty state (compact/full sizes). |
+| `SettingsEyebrow` | [SettingsEyebrow.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsEyebrow.tsx) | Settings section eyebrow label. |
+| `SettingsPageHeader` | [SettingsPageHeader.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx) | Flat settings page header (title/description/action). |
+| `SettingsRow` | [SettingsRow.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsRow.tsx) | Settings row (label/description/control), fixed 240px control-width companion for menus. |
+| `SettingsSaveFooter` | [SettingsSaveFooter.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsSaveFooter.tsx) | Settings save/revert footer with a status badge, composes `Badge` + `Button`. |
+| `SettingsScopeTabs` | [SettingsScopeTabs.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsScopeTabs.tsx) | User/org/repo/agents underline scope-switcher tabs, composes `Button`. |
+| `SettingsSection` | [SettingsSection.tsx](../../../../apps/packages/product-client/src/components/patterns/SettingsSection.tsx) | Settings section (title/description), composes `SettingsEyebrow`. |
+| `secrets/SecretManagementPanel` | [secrets/SecretManagementPanel.tsx](../../../../apps/packages/product-client/src/components/patterns/secrets/SecretManagementPanel.tsx) | Presentational secrets-management pattern (list, editor/delete dialogs, scope notice are private internals of this one export). |
 
 ### How to add a component
 
 1. **Design against tokens.** Use the type ramp, spacing, radii, motion and icon
    tiers above — never an arbitrary value at the component or the callsite.
 2. **Place it in the right tier**, by role, not by the feature that needed it: a
-   raw Radix/vendor wrapper or single-purpose atom goes in `ui/src/primitives/`;
-   a composition of those goes in `ui/src/patterns/` (or
-   `product-ui/src/patterns/` if it needs `product-domain`); an icon set goes in
-   `ui/src/icons/`.
-3. **Add one export-map entry** — a canonical subpath in the owning package's
-   `package.json` `exports` (`./primitives/<Component>`,
-   `./patterns/<Component>`, `./icons/<name>`). No aliases: one subpath per
-   component, matching its file name.
+   raw Radix/vendor wrapper or single-purpose atom goes in `product-client/src/primitives/`;
+   a generic composition of those goes in `product-client/src/primitives/patterns/`; a domain-aware
+   pattern that needs a `#product/domain/<file>` rule goes in
+   `product-client/src/components/patterns/`; an icon set goes in
+   `product-client/src/primitives/icons/`.
+3. **Give it one real ProductClient-internal subpath.** Root components use
+   `#product/primitives/<Component>`, generic patterns add `/patterns/`, and
+   icon modules add `/icons/`. Do not add a barrel, alias, or public host
+   export.
 4. **Add a row to the sanctioned index above** — component name, real path,
    one-line purpose, in the matching tier's table.
-5. **Consume it** via the exact export-map subpath
-   (`@proliferate/ui/primitives/Button`,
-   `@proliferate/product-ui/patterns/SettingsRow`) — never a relative import
-   across a package boundary, never a barrel.
+5. **Consume it** via the exact internal subpath
+   (`#product/primitives/Button`,
+   `#product/components/patterns/SettingsRow`) — never a relative import across
+   a package boundary, never a barrel.
 
 ## Changing The Design
 
@@ -1011,7 +1026,7 @@ changing.
 | --- | --- |
 | [check-theme.mjs](../../../../apps/packages/design/scripts/check-theme.mjs) | Everything in the section above: the generated CSS is a faithful, compilable projection of the authority, and hand-authored CSS owns no values. |
 | [check_appearance_scaling.py](../../../../scripts/check_appearance_scaling.py) | Banned class shapes at every call site (arbitrary radius/z/gap/size, non-token shadows, low-alpha foreground overlays, retired state classes, fixed text/glyph sizes, numeric durations and inline beziers, unowned `backdrop-filter`, raw hex, unsanctioned long lists). Its contract is owned by [appearance-scaling.md](../../systems/product/settings/appearance-scaling.md). |
-| [check_frontend_boundaries.py](../../../../scripts/check_frontend_boundaries.py) | Radix containment inside the library tiers and the closed `ui/src` top-level entry set, plus the broader frontend import boundaries. |
+| [check_frontend_boundaries.py](../../../../scripts/check_frontend_boundaries.py) | Radix containment inside ProductClient's library tiers, the closed `primitives/**` root/support-directory set, the nested primitives purity/layer law, and the broader frontend import boundaries. |
 | [check_docs.py](../../../../scripts/check_docs.py) | Documentation links and anchors — a renamed source file breaks CI instead of silently orphaning a reference in this document. |
 
 Local enforcement runs through
@@ -1054,8 +1069,8 @@ that gets deleted at the call site.
 | A banned class lands (arbitrary radius/z/gap/size, non-token shadow, `bg-foreground/<alpha>` ≤ 10%, `text-[…]`/`leading-[…]`, numeric duration, fixed glyph size) | `check_appearance_scaling.py` fails in pre-commit and CI, naming file and match | Replace with the semantic token utility, or obtain a written sanction — baseline growth is not a fix. |
 | A hard-coded value lands in `product.css` instead of `tokens.ts` | The token-declaration case is gated: `check_design_css_source` emits `authored-root-token` for any `--x:` in a global `:root` block and `authored-theme-block` for any `@theme`. Only a non-token literal inside a component rule (e.g. `background: #212121` in `.foo`) escapes, since `RAW_HEX_RE` is not run over design CSS — that one silently becomes a second source of truth and diverges mode-to-mode | Move the value into `tokens.ts` and regenerate. |
 | A raw `ms`/`s` literal or inline bezier lands in design CSS | `checkRawMotionAuthority` in `check-theme.mjs` fails, naming the owning rule and declaration | Use a `--duration-*`/`--ease-*`/`--activity-*` variable, or add the `/* activity-motion */` marker if it is genuinely an infinite loop. |
-| A `@radix-ui/*` import lands outside `ui/src/primitives/**` or `ui/src/patterns/**` | `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY` fails in `check_frontend_boundaries.py`, naming file and line | Move the wrapper into the library, or compose the existing library primitive. |
-| A new top-level entry is added under `ui/src` outside the six allowed dirs | `UI_SRC_TOP_LEVEL_ENTRY` fails, naming the offending entry | Move the content into `primitives/`, `patterns/`, or `icons/` per its role. |
+| A `@radix-ui/*` import lands outside a root primitive file or `product-client/src/primitives/patterns/**` | `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY` fails in `check_frontend_boundaries.py`, naming file and line | Move the wrapper into the legal tier, or compose the existing library primitive. |
+| A non-source file or unsupported directory is added at the primitives root | `PRODUCT_CLIENT_PRIMITIVES_TOP_LEVEL_ENTRY` fails, naming the offending entry | Move it to a root primitive file or the `patterns`, `icons`, `utils`, `overlays`, or `__tests__` owner. |
 | A styled component ships outside the library with no library equivalent and gets reused across surfaces | No mechanical check catches this — review only | Promote it into the matching tier per "How to add a component". |
 | Hook not installed (fresh clone, `core.hooksPath` unset) | Local commits skip both gates; failure surfaces only in CI | Run the `git-hooks` Makefile target. |
 
@@ -1068,13 +1083,13 @@ this document states is not mechanically enforced.
   gate rule restricts freehand `size-N` on an icon *button* (`ARBITRARY_SIZE_RE`
   catches only `size-[…]` brackets, and the glyph rules apply to glyph tags, not
   their wrappers). Raw boxes remain legal and live in
-  [IconButton.tsx](../../../../apps/packages/ui/src/primitives/IconButton.tsx)
+  [IconButton.tsx](../../../../apps/packages/product-client/src/primitives/IconButton.tsx)
   (`size-5`/`size-6`/`size-7`),
-  [PaneIconButton.tsx](../../../../apps/packages/ui/src/primitives/PaneIconButton.tsx)
+  [PaneIconButton.tsx](../../../../apps/packages/product-client/src/primitives/PaneIconButton.tsx)
   (`size-6`),
-  [SidebarActionButton.tsx](../../../../apps/packages/ui/src/patterns/SidebarActionButton.tsx)
+  [SidebarActionButton.tsx](../../../../apps/packages/product-client/src/primitives/patterns/SidebarActionButton.tsx)
   (`size-6`) and
-  [Button.tsx](../../../../apps/packages/ui/src/primitives/Button.tsx)
+  [Button.tsx](../../../../apps/packages/product-client/src/primitives/Button.tsx)
   (`icon-sm` = `h-7 w-7`). Closing it means either a gate rule or dropping the
   claim.
 - `apps/packages/design/dist/theme.css` is generated, not checked in, so a fresh
@@ -1084,10 +1099,6 @@ this document states is not mechanically enforced.
 - No automated rendered-visual check exists. Nothing compares a served build
   against an expected appearance, so a change that is token-correct and visually
   wrong is caught only by human inspection, with no artifact retained.
-- Nothing mechanically verifies that every `exports` subpath in `ui/src` or
-  `product-ui/src/patterns` has a row in the sanctioned index, or that every row
-  still points at a real export. Both directions are kept in sync by hand; drift
-  is a documentation bug, not a CI failure.
 - `DropdownMenu`'s four grandfathered consumers have no tracking mechanism beyond
   this document — nothing fails CI if a fifth call site starts importing
   `DropdownMenu` directly.

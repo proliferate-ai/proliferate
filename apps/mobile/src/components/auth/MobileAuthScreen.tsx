@@ -17,7 +17,7 @@ import {
   AUTH_PASSWORD_COPY,
   AUTH_SIGN_IN_COPY,
   authProviderPresentation,
-} from "@proliferate/product-domain/auth/presentation";
+} from "@proliferate/product-client/internal/domain/auth/presentation";
 
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";

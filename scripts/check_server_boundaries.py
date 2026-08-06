@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import ast
-from collections import Counter, defaultdict
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import shutil
 import sys
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "server_boundaries_allowlist.txt"
@@ -35,7 +35,24 @@ BANNED_JUNK_DRAWER_SUFFIXES = ("_helper.py", "_helpers.py", "_utils.py")
 ALLOWED_API_ORM_IMPORT = ("proliferate.db.models.auth", "User")
 ALLOWED_API_ENGINE_IMPORTS = {"get_async_session"}
 ALLOWED_SQLALCHEMY_TYPE_IMPORT = ("sqlalchemy.ext.asyncio", "AsyncSession")
+ALLOWED_WORKER_SERVICE_SQLALCHEMY_TYPE_IMPORTS = {
+    "AsyncSession",
+    "async_sessionmaker",
+}
 SERVICE_DB_METHODS = {"execute", "commit", "rollback", "add", "delete", "refresh"}
+WORKER_SERVICE_DB_METHODS = SERVICE_DB_METHODS | {
+    "add_all",
+    "connection",
+    "flush",
+    "get",
+    "get_one",
+    "merge",
+    "run_sync",
+    "scalar",
+    "scalars",
+    "stream",
+    "stream_scalars",
+}
 SERVICE_DB_SESSION_OPS_METHODS = {
     "open_async_session",
     "open_async_transaction",
@@ -71,6 +88,98 @@ SERVICE_BOUNDARY_DEBT_MODULES = {
 
 
 @dataclass(frozen=True)
+class NamedStoreBoundary:
+    store_module: str
+    protected_symbols: frozenset[str]
+    owner_label: str
+    product_owner_prefix: tuple[str, ...]
+    persistence_owner_paths: frozenset[str]
+    owner_service_hint: str
+
+
+NAMED_STORE_BOUNDARIES: dict[str, NamedStoreBoundary] = {
+    "proliferate.db.store.organizations": NamedStoreBoundary(
+        store_module="proliferate.db.store.organizations",
+        protected_symbols=frozenset(
+            {
+                "acquire_membership_activation_lock",
+                "bind_team_checkout_session",
+                "cancel_team_checkout_intent",
+                "complete_team_checkout_activation",
+                "complete_team_checkout_activation_by_id",
+                "create_pending_team_checkout_intent",
+                "get_current_team_checkout_intent",
+                "load_team_checkout_activation_for_update",
+                "load_team_checkout_intent_for_update",
+                "mark_team_checkout_activating",
+                "mark_team_checkout_activating_by_id",
+                "mark_team_checkout_failed",
+                "mark_team_checkout_failed_by_id",
+            }
+        ),
+        owner_label="Organization",
+        product_owner_prefix=(
+            "server",
+            "proliferate",
+            "server",
+            "organizations",
+        ),
+        persistence_owner_paths=frozenset(
+            {
+                "server/proliferate/db/store/organization_invitations.py",
+                "server/proliferate/db/store/organizations.py",
+            }
+        ),
+        owner_service_hint="proliferate.server.organizations.service",
+    ),
+    "proliferate.db.store.organization_invitations": NamedStoreBoundary(
+        store_module="proliferate.db.store.organization_invitations",
+        protected_symbols=frozenset(
+            {
+                "accept_pending_invitation_for_organization_email",
+                "create_or_rotate_organization_invitation",
+                "mark_invitation_delivery",
+            }
+        ),
+        owner_label="Organization",
+        product_owner_prefix=(
+            "server",
+            "proliferate",
+            "server",
+            "organizations",
+        ),
+        persistence_owner_paths=frozenset(
+            {
+                "server/proliferate/db/store/organization_invitations.py",
+                "server/proliferate/db/store/organizations.py",
+            }
+        ),
+        owner_service_hint="proliferate.server.organizations.service",
+    ),
+    "proliferate.db.store.cloud_sandboxes": NamedStoreBoundary(
+        store_module="proliferate.db.store.cloud_sandboxes",
+        protected_symbols=frozenset(
+            {
+                "accept_destroyed_cloud_sandbox_provider_observation",
+                "advance_cloud_sandbox_provider_observation_floor",
+                "apply_cloud_sandbox_provider_observation",
+                "mark_cloud_sandbox_provider_missing",
+            }
+        ),
+        owner_label="Cloud sandbox",
+        product_owner_prefix=(
+            "server",
+            "proliferate",
+            "server",
+            "cloud",
+        ),
+        persistence_owner_paths=frozenset({"server/proliferate/db/store/cloud_sandboxes.py"}),
+        owner_service_hint="proliferate.server.cloud.cloud_sandboxes.service",
+    ),
+}
+
+
+@dataclass(frozen=True)
 class Violation:
     rule_id: str
     path: Path
@@ -99,6 +208,7 @@ class AllowlistEntry:
 class SourceKind:
     is_api: bool = False
     is_service: bool = False
+    is_worker_service: bool = False
     is_service_boundary_debt: bool = False
     is_domain: bool = False
     is_product_models: bool = False
@@ -106,6 +216,7 @@ class SourceKind:
     is_orm_model: bool = False
     is_integration: bool = False
     is_product: bool = False
+    is_migration: bool = False
 
 
 def should_skip(path: Path) -> bool:
@@ -122,6 +233,20 @@ def iter_target_files(repo_root: Path) -> list[Path]:
                 continue
             files.append(path)
     return files
+
+
+def iter_migration_files(repo_root: Path) -> list[Path]:
+    migration_root = repo_root / "server" / "alembic" / "versions"
+    if not migration_root.is_dir():
+        return []
+    return sorted(migration_root.glob("*.py"))
+
+
+def iter_named_write_target_files(repo_root: Path) -> list[Path]:
+    root = repo_root / "server" / "proliferate"
+    if not root.is_dir():
+        return []
+    return [path for path in sorted(root.rglob("*.py")) if not should_skip(path)]
 
 
 def iter_structure_folders(repo_root: Path) -> list[Path]:
@@ -160,12 +285,22 @@ def _starts_with(parts: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
     return parts[: len(prefix)] == prefix
 
 
+def is_canonical_worker_service_path(path: Path) -> bool:
+    parts = logical_parts(path)
+    return (
+        len(parts) == 6
+        and _starts_with(parts, ("server", "proliferate", "server"))
+        and parts[4:] == ("worker", "service.py")
+    )
+
+
 def classify_path(path: Path) -> SourceKind:
     parts = logical_parts(path)
     is_product = _starts_with(parts, ("server", "proliferate", "server"))
     is_store = _starts_with(parts, ("server", "proliferate", "db", "store"))
     is_orm_model = _starts_with(parts, ("server", "proliferate", "db", "models"))
     is_integration = _starts_with(parts, ("server", "proliferate", "integrations"))
+    is_migration = _starts_with(parts, ("server", "alembic", "versions"))
     name = path.name
     relative = relative_path(path)
     is_agent_auth_service_concern = (
@@ -177,6 +312,7 @@ def classify_path(path: Path) -> SourceKind:
         and path.suffix == ".py"
         and name not in AGENT_AUTH_SERVICE_CONCERN_EXCLUDED_FILES
     )
+    is_worker_service = is_canonical_worker_service_path(path)
 
     return SourceKind(
         is_api=is_product and name == "api.py",
@@ -188,6 +324,7 @@ def classify_path(path: Path) -> SourceKind:
                 or is_agent_auth_service_concern
             )
         ),
+        is_worker_service=is_worker_service,
         is_service_boundary_debt=relative in SERVICE_BOUNDARY_DEBT_MODULES,
         is_domain=is_product and "domain" in path.parts,
         is_product_models=is_product and name == "models.py",
@@ -195,6 +332,7 @@ def classify_path(path: Path) -> SourceKind:
         is_orm_model=is_orm_model,
         is_integration=is_integration,
         is_product=is_product,
+        is_migration=is_migration,
     )
 
 
@@ -227,11 +365,7 @@ def is_dunder_module(path: Path) -> bool:
 
 
 def has_single_underscore_prefix(path: Path) -> bool:
-    return (
-        path.suffix == ".py"
-        and path.name.startswith("_")
-        and not path.name.startswith("__")
-    )
+    return path.suffix == ".py" and path.name.startswith("_") and not path.name.startswith("__")
 
 
 def is_banned_junk_drawer_module(path: Path) -> bool:
@@ -264,6 +398,19 @@ def is_allowed_single_file_domain_folder(
         and len(source_files) == 1
         and not child_folders
         and is_meaningful_domain_module(source_files[0])
+    )
+
+
+def is_allowed_single_file_worker_folder(
+    folder: Path,
+    source_files: list[Path],
+    child_folders: list[Path],
+) -> bool:
+    return (
+        len(source_files) == 1
+        and source_files[0].name == "service.py"
+        and is_canonical_worker_service_path(source_files[0])
+        and not child_folders
     )
 
 
@@ -321,6 +468,12 @@ class BoundaryChecker(ast.NodeVisitor):
             self._check_integration_import(node, module, names)
         if self.kind.is_product:
             self._check_product_raw_access_import(node, module)
+        if self.kind.is_migration and is_module(module, "proliferate"):
+            self.add(
+                node,
+                "MIGRATION_APP_IMPORT",
+                "Alembic revisions must be self-contained and must not import application code",
+            )
 
     def _check_api_import(self, node: ast.AST, module: str, names: set[str]) -> None:
         if is_module(module, "proliferate.db.store"):
@@ -356,9 +509,12 @@ class BoundaryChecker(ast.NodeVisitor):
 
     def _check_service_import(self, node: ast.AST, module: str, names: set[str]) -> None:
         if is_module(module, "sqlalchemy"):
-            allowed = module == ALLOWED_SQLALCHEMY_TYPE_IMPORT[0] and names <= {
-                ALLOWED_SQLALCHEMY_TYPE_IMPORT[1]
-            }
+            allowed_names = (
+                ALLOWED_WORKER_SERVICE_SQLALCHEMY_TYPE_IMPORTS
+                if self.kind.is_worker_service
+                else {ALLOWED_SQLALCHEMY_TYPE_IMPORT[1]}
+            )
+            allowed = module == ALLOWED_SQLALCHEMY_TYPE_IMPORT[0] and names <= allowed_names
             if not allowed:
                 self.add(
                     node,
@@ -536,9 +692,12 @@ class BoundaryChecker(ast.NodeVisitor):
                     "API_DB_METHOD_CALL",
                     f"api.py must not call session method .{func.attr}()",
                 )
+            service_db_methods = (
+                WORKER_SERVICE_DB_METHODS if self.kind.is_worker_service else SERVICE_DB_METHODS
+            )
             if (
                 (self.kind.is_service or self.kind.is_service_boundary_debt)
-                and func.attr in SERVICE_DB_METHODS
+                and func.attr in service_db_methods
                 and looks_like_db_handle(func.value)
             ):
                 self.add(
@@ -593,13 +752,147 @@ class BoundaryChecker(ast.NodeVisitor):
                             "Pydantic response models must not map ORM objects "
                             "with from_attributes",
                         )
-        if isinstance(func, ast.Name) and func.id == "HTTPException":
-            if self.kind.is_domain or self.kind.is_store or self.kind.is_integration:
-                self.add(
-                    node,
-                    "HTTP_EXCEPTION_FORBIDDEN",
-                    "HTTPException is banned outside HTTP boundary code",
-                )
+        if (
+            isinstance(func, ast.Name)
+            and func.id == "HTTPException"
+            and (self.kind.is_domain or self.kind.is_store or self.kind.is_integration)
+        ):
+            self.add(
+                node,
+                "HTTP_EXCEPTION_FORBIDDEN",
+                "HTTPException is banned outside HTTP boundary code",
+            )
+
+
+def _dotted_name(node: ast.AST) -> tuple[str, ...] | None:
+    if isinstance(node, ast.Name):
+        return (node.id,)
+    if isinstance(node, ast.Attribute):
+        prefix = _dotted_name(node.value)
+        if prefix is not None:
+            return (*prefix, node.attr)
+    return None
+
+
+class NamedCrossDomainWriteChecker(ast.NodeVisitor):
+    def __init__(self, path: Path, repo_root: Path) -> None:
+        self.path = path
+        self.repo_root = repo_root
+        self.module_aliases: dict[str, set[str]] = defaultdict(set)
+        self.imported_modules: set[str] = set()
+        self.violations: list[Violation] = []
+
+    def check(self, tree: ast.Module) -> list[Violation]:
+        self._collect_import_bindings(tree)
+        self.visit(tree)
+        return self.violations
+
+    def _collect_import_bindings(self, tree: ast.Module) -> None:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                self._collect_import_from(node)
+            elif isinstance(node, ast.Import):
+                self._collect_import(node)
+
+    def _collect_import_from(self, node: ast.ImportFrom) -> None:
+        module = node.module or ""
+        boundary = NAMED_STORE_BOUNDARIES.get(module)
+        if boundary is not None:
+            for alias in node.names:
+                if alias.name == "*":
+                    for symbol in sorted(boundary.protected_symbols):
+                        self._add(node, boundary, symbol)
+                elif alias.name in boundary.protected_symbols:
+                    self._add(node, boundary, alias.name)
+
+        for alias in node.names:
+            imported_module = f"{module}.{alias.name}" if module else alias.name
+            if imported_module in NAMED_STORE_BOUNDARIES:
+                local_name = alias.asname or alias.name
+                self.module_aliases[local_name].add(imported_module)
+
+    def _collect_import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            if alias.name not in NAMED_STORE_BOUNDARIES:
+                continue
+            if alias.asname is not None:
+                self.module_aliases[alias.asname].add(alias.name)
+            else:
+                self.imported_modules.add(alias.name)
+
+    def _is_owner(self, boundary: NamedStoreBoundary) -> bool:
+        try:
+            relative = self.path.relative_to(self.repo_root)
+        except ValueError:
+            return False
+        if _starts_with(relative.parts, boundary.product_owner_prefix):
+            return True
+        return relative.as_posix() in boundary.persistence_owner_paths
+
+    def _add(
+        self,
+        node: ast.AST,
+        boundary: NamedStoreBoundary,
+        symbol: str,
+    ) -> None:
+        if self._is_owner(boundary):
+            return
+        qualified_symbol = f"{boundary.store_module}.{symbol}"
+        self.violations.append(
+            Violation(
+                rule_id="NAMED_CROSS_DOMAIN_WRITE",
+                path=self.path,
+                lineno=getattr(node, "lineno", 1),
+                message=(
+                    f"{qualified_symbol} is a protected {boundary.owner_label} "
+                    "store mutation; cross-domain callers must use "
+                    f"{boundary.owner_service_hint}"
+                ),
+            )
+        )
+
+    def _resolve_store_modules(self, node: ast.AST) -> set[str]:
+        dotted = _dotted_name(node)
+        if dotted is None:
+            return set()
+        if len(dotted) == 1:
+            return set(self.module_aliases.get(dotted[0], set()))
+        full_module = ".".join(dotted)
+        if full_module in self.imported_modules:
+            return {full_module}
+        return set()
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        dotted = _dotted_name(node)
+        if dotted is not None and len(dotted) >= 2:
+            symbol = dotted[-1]
+            candidate_modules: set[str] = set()
+            if len(dotted) == 2:
+                candidate_modules.update(self.module_aliases.get(dotted[0], set()))
+            full_module = ".".join(dotted[:-1])
+            if full_module in self.imported_modules:
+                candidate_modules.add(full_module)
+
+            for module in sorted(candidate_modules):
+                boundary = NAMED_STORE_BOUNDARIES[module]
+                if symbol in boundary.protected_symbols:
+                    self._add(node, boundary, symbol)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        ):
+            symbol = node.args[1].value
+            for module in sorted(self._resolve_store_modules(node.args[0])):
+                boundary = NAMED_STORE_BOUNDARIES[module]
+                if symbol in boundary.protected_symbols:
+                    self._add(node, boundary, symbol)
+        self.generic_visit(node)
 
 
 def parse_source(path: Path) -> ast.Module:
@@ -613,6 +906,18 @@ def check_paths(paths: list[Path]) -> list[Violation]:
         tree = parse_source(path)
         checker.visit(tree)
         violations.extend(checker.violations)
+    return violations
+
+
+def check_named_cross_domain_writes(
+    paths: list[Path],
+    repo_root: Path = REPO_ROOT,
+) -> list[Violation]:
+    violations: list[Violation] = []
+    for path in paths:
+        tree = parse_source(path)
+        checker = NamedCrossDomainWriteChecker(path, repo_root)
+        violations.extend(checker.check(tree))
     return violations
 
 
@@ -665,6 +970,8 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
             if path.is_dir() and not should_skip(path) and path.name != "__pycache__"
         ]
         if is_allowed_single_file_domain_folder(folder, source_files, child_folders):
+            continue
+        if is_allowed_single_file_worker_folder(folder, source_files, child_folders):
             continue
         if is_background_tasks_folder(folder):
             continue
@@ -758,9 +1065,7 @@ def print_summary(
     violations: list[Violation],
     allowlist: dict[tuple[str, str], AllowlistEntry],
 ) -> None:
-    observed = Counter(
-        (violation.rule_id, violation.relative_path()) for violation in violations
-    )
+    observed = Counter((violation.rule_id, violation.relative_path()) for violation in violations)
     if not observed:
         return
     print("Observed server boundary debt:")
@@ -772,7 +1077,7 @@ def print_summary(
 
 
 def reexec_with_python_312() -> None:
-    if sys.version_info >= (3, 12):
+    if sys.version_info >= (3, 12):  # noqa: UP036 - bootstrap may start under older Python
         return
     python_312 = shutil.which("python3.12")
     if python_312 is None:
@@ -784,13 +1089,18 @@ def reexec_with_python_312() -> None:
 
 def main() -> int:
     reexec_with_python_312()
-    if sys.version_info < (3, 12):
+    if sys.version_info < (3, 12):  # noqa: UP036 - emit a useful bootstrap failure
         print("Server boundary check requires Python 3.12+ to parse server source.")
         return 2
 
-    paths = iter_target_files(REPO_ROOT)
+    paths = [*iter_target_files(REPO_ROOT), *iter_migration_files(REPO_ROOT)]
+    named_write_paths = iter_named_write_target_files(REPO_ROOT)
     allowlist = load_allowlist()
-    violations = [*check_paths(paths), *check_structure(REPO_ROOT)]
+    violations = [
+        *check_paths(paths),
+        *check_named_cross_domain_writes(named_write_paths),
+        *check_structure(REPO_ROOT),
+    ]
     failing, stale = apply_allowlist(violations, allowlist)
 
     if not failing and not stale:

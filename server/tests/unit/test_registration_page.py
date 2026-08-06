@@ -26,7 +26,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.models.organizations import OrganizationInvitation, OrganizationMembership
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.server.organizations.membership_policy import claim_instance_organization
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 OWNER_EMAIL = "owner@example.com"
 INVITED_EMAIL = "teammate@example.com"

@@ -5,8 +5,9 @@ import {
   Lightbulb,
   MessageSquare,
 } from "lucide-react";
-import { ArrowUpRight, Discord, Mail } from "@proliferate/ui/icons";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { ArrowUpRight } from "#product/primitives/icons/core";
+import { Discord, Mail } from "#product/primitives/icons/platform";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { PROLIFERATE_DOCS_URL } from "#product/config/capabilities";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import type { WebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";

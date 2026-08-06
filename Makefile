@@ -88,10 +88,6 @@ DEV_FRONTEND_ARTIFACTS := \
 	cloud/sdk/dist \
 	cloud/sdk-react/dist \
 	apps/packages/design/dist \
-	apps/packages/product-domain/dist \
-	apps/packages/ui/dist \
-	apps/packages/product-ui/dist \
-	apps/packages/product-surfaces/dist \
 	apps/packages/product-client/dist
 PROFILE_DB_READY_COMMAND = make server-db-ready;
 PROFILE_DB_ENSURE_COMMAND = LOCAL_PGHOST="$(LOCAL_PGHOST)" LOCAL_PGPORT="$(LOCAL_PGPORT)" LOCAL_PGUSER="$(LOCAL_PGUSER)" LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME";
@@ -112,7 +108,6 @@ endif
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
-        dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
@@ -376,10 +371,6 @@ serve:
 	@$(SERVER_ENV_SOURCE) \
 	$(LOCAL_CODEX_ACP_ENV) \
 	$(CARGO) run --bin anyharness -- serve
-
-dev-automation-worker:
-	@echo "Automation scheduler is parked while automations are retargeted to repo environments."
-	@echo "make run PROFILE=<name> does not start automation workers in this stack."
 
 dev-mobile-auth:
 	@node scripts/dev-mobile-auth.mjs
@@ -1453,7 +1444,7 @@ stripe-setup-test:
 	node scripts/stripe-setup-test-mode.mjs --write-env-local
 
 lint-server:
-	cd server && .venv/bin/ruff check proliferate/ tests/ && .venv/bin/ruff format --check proliferate/ tests/ && .venv/bin/mypy proliferate/
+	cd server && uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/ && uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/ && uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py --compare-ref origin/main
 
 # --- Checks ---
 
@@ -1535,10 +1526,6 @@ cloud-sdk-react-build: cloud-sdk-build
 
 shared-build:
 	pnpm --filter @proliferate/design build
-	pnpm --filter @proliferate/product-domain build
-	pnpm --filter @proliferate/ui build
-	pnpm --filter @proliferate/product-ui build
-	pnpm --filter @proliferate/product-surfaces build
 	pnpm --filter @proliferate/product-client build
 
 # SKIP_RUST=1 skips both cargo builds — for frontend-only worktrees (UI waves)

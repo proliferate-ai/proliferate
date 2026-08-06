@@ -12,10 +12,10 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 import {
   buildTurnPresentation,
-} from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+} from "#product/domain/chats/transcript/transcript-presentation";
 import {
   toolItem,
-} from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
+} from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import claudeFixtureJson from "../../../../../../../../fixtures/contracts/native-subagent-transcript/claude.json";
 import codexFixtureJson from "../../../../../../../../fixtures/contracts/native-subagent-transcript/codex.json";
 import {

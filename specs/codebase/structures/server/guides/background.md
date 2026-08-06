@@ -1,3 +1,5 @@
+Status: target
+
 # Background Work
 
 Background work is everything the product does outside the request lifecycle:
@@ -17,8 +19,8 @@ background work is the same unit — a **task** — and only the trigger differs
 | **Beat** (periodic) | on a clock, via `redbeat` | scheduler polls, surviving reconciler passes, batched telemetry |
 | **Outbox relay** (on-demand) | when a committed state change demands follow-up work | execution jobs that must not be lost |
 
-There are no bespoke `while True` loops and no per-domain worker processes in
-the target. A scheduler is a Beat-fired task that polls due work and writes run
+There are no bespoke `while True` loops and no per-domain worker processes. A
+scheduler is a Beat-fired task that polls due work and writes run
 rows plus outbox rows; it does not execute. A reconciler is a Beat-fired task
 that survives only for **external-truth drift** and enqueues heavy corrective
 work as on-demand tasks. A durable job is a task delivered by the relay,
@@ -40,15 +42,18 @@ Two homes, split by a single boundary: substrate versus product logic.
 
 `background/**` is plumbing. It knows how to run a task, when to fire periodic
 ones, and how to turn a committed outbox row into a dispatched task. It owns no
-business logic. A task module is a thin wrapper: it opens a database session at
-the task boundary, calls the owning domain's public service, and maps failures
-to retries.
+business logic. A task module is a thin wrapper: it owns the database
+engine/session boundary, calls the owning domain's public service, and maps
+failures to retries.
 
 `server/<domain>/**` owns the work itself. A task for a domain calls that
-domain's service exactly as an HTTP handler would. The service follows the same
-layer law as API-facing code: it takes `db: AsyncSession`, never commits, never
-imports SQLAlchemy or constructs vendor clients, and calls store functions for
-data and integrations through their public API.
+domain's service. The service follows the same layer law as API-facing code:
+it never commits, imports SQLAlchemy query APIs, or constructs vendor clients,
+and it calls store functions for data and integrations through their public
+API. It normally takes `db: AsyncSession`. A worker service that alternates
+bounded database phases with foreign I/O may instead take a task-created
+session factory, open sessions only around store calls, and release them before
+the external call.
 
 ## Axes
 
@@ -63,7 +68,7 @@ fires because a committed state change needs follow-up   -> outbox relay task
 And place the work it runs:
 
 ```text
-the task wrapper itself (open session, call service)    -> background/tasks/<area>.py
+the task wrapper itself (own DB boundary, call service) -> background/tasks/<area>.py
 worker-facing orchestration (pick due, dispatch, record) -> server/<domain>/worker/service.py
 pure computation shared with HTTP paths                  -> server/<domain>/domain/
 ```
@@ -81,7 +86,7 @@ server/proliferate/background/
   beat_schedule.py     # periodic registry: every X -> task Y (redbeat entries)
   relay.py             # outbox -> Celery: read committed rows, dispatch, mark relayed
   tasks/
-    <area>.py          # thin @app.task wrappers; open session; call domain service
+    <area>.py          # thin @app.task wrappers; own DB boundary; call domain service
 
 server/<domain>/
   service.py           # API-facing and, when modest, worker-facing orchestration
@@ -176,23 +181,29 @@ metrics contain only the fixed operation and a bounded safe code.
 
 Thin task wrappers — the boundary between the broker and a domain.
 
-- Owns: the `@app.task` function, the database session opened at the task
-  boundary, the call into the owning domain's public service, and the mapping of
-  failures to retries.
-- Imports: `celery_app`, the owning domain's service, the session factory.
+- Owns: the `@app.task` function, the database engine/session boundary, the call
+  into the owning domain's public service, and the mapping of failures to
+  retries. A synchronous task using `asyncio.run()` creates and disposes its
+  engine inside that event-loop lifecycle rather than reusing a module-global
+  async engine across firings.
+- Imports: `celery_app`, the owning domain's service, and the session machinery.
 - Never holds: business logic, SQLAlchemy queries or ORM imports, or raw vendor
   clients. A task that grows logic has put it in the wrong layer — push it into
   the domain's service or `domain/`.
 
 ```python
-# background/tasks/automations.py
-@app.task(bind=True, max_retries=5)
-def execute_automation_run(self, run_id: str) -> None:
-    async def _run() -> None:
-        async with async_session_factory() as db:
-            async with db.begin():
-                await automations_worker_service.execute_run(db, run_id=UUID(run_id))
-    asyncio.run(_run())
+# background/tasks/customerio_sync.py
+async def _run_engagement_sync() -> None:
+    engine = create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        connect_args={"statement_cache_size": 0},
+    )
+    try:
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        await run_customerio_engagement_sync(session_factory)
+    finally:
+        await engine.dispose()
 ```
 
 ## `server/<domain>/worker/service.py`
@@ -203,9 +214,14 @@ substantial and distinct from the API-facing service.
 - Owns: picking due work, dispatching to the right execution, recording results,
   and handling failures, as ordinary service functions.
 - Imports: `db/store`, `domain/`, `integrations` through their public API.
-- Same layer law as any service: takes `db: AsyncSession`, never commits (the
-  task owns the transaction boundary), never imports SQLAlchemy, never
-  constructs vendor clients.
+- Same layer law as any service: normally takes `db: AsyncSession`, never
+  commits, never imports SQLAlchemy query APIs, and never constructs vendor
+  clients. When foreign I/O must alternate with multiple bounded database
+  phases, it may take the task-created `async_sessionmaker[AsyncSession]`, open
+  sessions only around direct store calls, and release each before foreign I/O.
+  The task creates and disposes the engine; the service cannot import settings
+  or global engine helpers, construct an engine, issue SQL, or call session
+  query/commit/rollback methods.
 
 When the worker-facing surface is modest, these functions live in the domain's
 ordinary `service.py` and there is no `worker/` subfolder. Two `service.py`
@@ -231,8 +247,10 @@ share `domain/` and the stores.
 - `background/**` imports no domain service except through a task module, and
   only `relay.py` touches stores (outbox writes plus read-only bounded
   operational snapshots).
-- No task module imports ORM or constructs vendor clients; it opens a session at
-  the boundary and threads `db` through the normal service/store layers.
+- No task module imports ORM or constructs vendor clients. It owns the
+  current-event-loop engine/session-factory lifetime and either opens the
+  session itself or passes the factory to the narrow bounded worker-service
+  pattern.
 
 ## Smells
 
@@ -247,3 +265,86 @@ share `domain/` and the stores.
   promote the worker-facing one into `worker/service.py`
 - a `background/` module reaching into a domain's internals → route by task kind;
   the domain's public service owns the work
+
+## Current gaps
+
+Each unchecked item is a concrete difference from the target, and the
+`Status: target` label remains until every item is removed.
+
+- [ ] **Billing reconciliation.**
+      [`_billing_reconciler_loop`](../../../../../server/proliferate/server/billing/reconciler.py)
+      is started by `start_billing_reconciler` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) when
+      `cloud_billing_mode` is `observe` or `enforce`;
+      `run_background_workers` makes the starter a no-op. Each pass runs
+      immediately, reports unexpected failures through `report_critical` and
+      continues, then sleeps
+      `max(BILLING_RECONCILE_INTERVAL_SECONDS, 30)` seconds. The
+      [Billing contract](../../../platforms/product/billing.md) describes the
+      normal interval as fifteen minutes. Conversion is parked because ordinary
+      self-host deployment does not run the Celery worker, Beat, or broker
+      plane; moving this pass to Beat first would silently stop enforcement and
+      reconciliation there.
+- [ ] **Anonymous Server version telemetry.**
+      [`_sender_loop`](../../../../../server/proliferate/server/anonymous_telemetry/worker.py)
+      is started by `start_server_anonymous_telemetry_sender` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) whenever
+      anonymous telemetry is enabled. It is not gated by
+      `run_background_workers`; it emits once immediately and then every 24
+      hours, while failures are captured and logged and the loop continues.
+      Conversion is parked for the same deployment-parity reason: self-host API
+      installations currently emit this heartbeat without a Celery worker or
+      Beat process, so a Beat-only move would silently remove it.
+- [ ] **Agent Gateway enrollment backfill.**
+      [`_backfill_loop`](../../../../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      is started by `start_agent_gateway_enrollment_backfill` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) when both
+      Agent Gateway and `run_background_workers` are enabled. It runs
+      immediately, catches unexpected failures, reports them through
+      `report_critical`, and continues, then sleeps
+      `agent_gateway_backfill_interval_seconds`. Conversion remains
+      analysis-only until deployment parity, singleton and overlap behavior,
+      the existing feature and worker gates, immediate-first-run cadence, and
+      retry and replay behavior are characterized for a Beat-fired task.
+- [ ] **Agent Gateway usage import.**
+      [`_usage_import_loop`](../../../../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      is started by `start_agent_gateway_usage_import` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) under the
+      same Agent Gateway and `run_background_workers` gates. It runs
+      immediately, catches unexpected failures, reports them through
+      `report_critical`, and continues, then sleeps
+      `agent_gateway_usage_import_interval_seconds`. Conversion remains
+      analysis-only until deployment parity, singleton and overlap behavior,
+      the existing gates, immediate-first-run cadence, and retry and replay
+      behavior are characterized for a Beat-fired task, including safe replay
+      of LiteLLM spend-log paging and credit-exhaustion effects.
+- [ ] **Agent Gateway LLM top-up.**
+      [`_topup_loop`](../../../../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      is started by `start_agent_gateway_llm_topups` from the
+      [`main.py` lifespan](../../../../../server/proliferate/main.py) only when
+      Agent Gateway, top-up configuration, and `run_background_workers` enable
+      it. It runs immediately, catches unexpected failures, reports them
+      through `report_critical`, and continues, then sleeps
+      `agent_gateway_topup_interval_seconds`. Conversion remains analysis-only
+      until deployment parity, singleton and overlap behavior, the existing
+      gates, immediate-first-run cadence, retry and replay behavior for charge
+      and top-up effects, and exact configuration parity are characterized for
+      a Beat-fired task.
+- [ ] **One-off health enqueue store client.**
+      [`enqueue_health.py`](../../../../../server/proliferate/background/enqueue_health.py)
+      is a one-off deployment proof command, not a task or loop, but it writes
+      directly through the background-outbox store. This is a concrete
+      exception to the target body's rule that `relay.py` is the only
+      `background/**` store client. It remains a placement and law gap; this
+      documentation slice does not decide whether the utility moves or the
+      target law later gains a narrow deployment exception.
+
+Deployment evidence: the ordinary production self-host
+[`docker-compose.production.yml`](../../../../../server/deploy/docker-compose.production.yml)
+defines the base API stack but no RabbitMQ, Celery worker, or Beat service. The
+development [`docker-compose.yml`](../../../../../server/docker-compose.yml)
+makes `worker` and `beat` opt-in through the `background` profile.
+[`run_background_workers`](../../../../../server/proliferate/config.py) defaults
+to true, and the current [`main.py` lifespan](../../../../../server/proliferate/main.py)
+keeps periodic work in the API process unless each starter's own gates disable
+it.

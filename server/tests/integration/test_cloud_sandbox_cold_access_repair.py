@@ -36,8 +36,8 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.gateway import service as gateway_service
 from proliferate.server.cloud.materialization import operation, runner
 from proliferate.server.cloud.materialization import service as materialization_service
-from proliferate.utils.crypto import encrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.encryption.fernet import encrypt_text
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @pytest.fixture(autouse=True)
@@ -99,8 +99,12 @@ async def _seed_sandbox(
         provider_sandbox_id=None,
         status=status,
         anyharness_base_url="https://runtime.invalid" if stamped else None,
-        runtime_token_ciphertext=encrypt_text("runtime-token") if stamped else None,
-        anyharness_data_key_ciphertext=encrypt_text("data-key") if stamped else None,
+        runtime_token_ciphertext=encrypt_text("runtime-token", secret=settings.cloud_secret_key)
+        if stamped
+        else None,
+        anyharness_data_key_ciphertext=encrypt_text("data-key", secret=settings.cloud_secret_key)
+        if stamped
+        else None,
         destroyed_at=now if destroyed else None,
     )
     db.add(sandbox)

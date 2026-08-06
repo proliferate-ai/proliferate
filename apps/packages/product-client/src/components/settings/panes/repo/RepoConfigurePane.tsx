@@ -1,15 +1,15 @@
 import { useMemo } from "react";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import {
   SETTINGS_CONTROL_WIDTH_CLASS,
   SettingsRow,
-} from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsSaveFooter } from "@proliferate/product-ui/patterns/SettingsSaveFooter";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+} from "#product/components/patterns/SettingsRow";
+import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import {
   EnvironmentSearchSelect,
   type EnvironmentSearchSelectOption,
-} from "@proliferate/ui/patterns/EnvironmentSearchSelect";
+} from "#product/primitives/patterns/EnvironmentSearchSelect";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { useRepositorySettings } from "#product/hooks/settings/workflows/use-repository-settings";
 import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";

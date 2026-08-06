@@ -9,7 +9,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from proliferate.constants.organizations import ORGANIZATION_ROLE_OWNER
 from proliferate.db.store.cloud_secrets import CloudSecretSetPayload
 from proliferate.integrations import redis_lock
 from proliferate.server.cloud.materialization import locks, operation
@@ -68,9 +67,6 @@ async def test_personal_organization_secret_burst_schedules_each_mutation_once(
             return personal_after
         return organization_after
 
-    async def _membership(*_args: object, **_kwargs: object) -> object:
-        return SimpleNamespace(role=ORGANIZATION_ROLE_OWNER)
-
     async def _no_materialization(*_args: object, **_kwargs: object) -> None:
         return None
 
@@ -95,11 +91,6 @@ async def test_personal_organization_secret_burst_schedules_each_mutation_once(
         _organization,
     )
     monkeypatch.setattr(secrets_service.secret_store, "upsert_secret_env_var", _upsert)
-    monkeypatch.setattr(
-        secrets_service.organization_store,
-        "get_active_membership",
-        _membership,
-    )
     monkeypatch.setattr(
         secrets_service,
         "_load_user_global_materialization",

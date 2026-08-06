@@ -64,7 +64,7 @@ from proliferate.db.store.billing_subjects import (
     ensure_personal_billing_subject,
 )
 from proliferate.server.cloud.webhooks import service as webhook_service
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 from tests.integration.billing_accounting_helpers import patch_global_session_factory
 
 

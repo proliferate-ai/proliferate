@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
 import { DiffLineContent } from "#product/components/content/ui/diff/DiffLineContent";
 import {
   DiffCollapsedContextCluster,

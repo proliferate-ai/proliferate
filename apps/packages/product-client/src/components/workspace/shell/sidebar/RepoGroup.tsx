@@ -1,13 +1,16 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { ChevronRight, CloudIcon, FolderClosed, FolderFilled, FolderRemote, MoreHorizontal, Plus, Settings, Trash } from "@proliferate/ui/icons";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
+import { AppShellNewChatIcon } from "#product/primitives/icons/app-shell";
+import { Settings, Trash } from "#product/primitives/icons/core";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { FolderClosed, FolderFilled, FolderRemote } from "#product/primitives/icons/workspace";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
 import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
+import { getShortcutNativeAccelerator } from "#product/lib/domain/shortcuts/native-accelerators";
 import type { NewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
 import {
   confirmRepoRemoval,
@@ -16,14 +19,14 @@ import {
 } from "#product/lib/domain/workspaces/sidebar/repo-context-menu";
 import {
   buildRepoGroupMenuModel,
+  buildRepoGroupCreationMenuModel,
   useRepoGroupNativeContextMenu,
   type RepoGroupMenuAction,
   type RepoGroupMenuHandlers,
 } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
-import { DESKTOP_POINTER_COPY } from "#product/copy/workspaces/desktop-pointer-copy";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
-import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
-import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
+import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
+import { ProductSidebarRepoGroupHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
 
 interface RepoGroupProps {
   name: string;
@@ -31,6 +34,7 @@ interface RepoGroupProps {
   environmentKind?: RepoGroupEnvironmentKind;
   children: ReactNode;
   onToggleCollapsed: () => void;
+  onNewChat?: () => void;
   onNewWorkspace?: () => void;
   onNewLocalWorkspace?: () => void;
   onCloudWorkspaceAction?: () => void;
@@ -38,7 +42,7 @@ interface RepoGroupProps {
   cloudWorkspaceLabel?: string;
   /**
    * False when this host cannot create local workspaces at all (Web). The
-   * create popover then offers only the cloud action, so it stops describing
+   * context menu then offers only the cloud action, so it stops describing
    * that action as the "cloud" one.
    */
   localWorkspacesSupported?: boolean;
@@ -68,6 +72,7 @@ export function RepoGroup({
   environmentKind = "local",
   children,
   onToggleCollapsed,
+  onNewChat,
   onNewWorkspace,
   onNewLocalWorkspace,
   onCloudWorkspaceAction,
@@ -107,7 +112,7 @@ export function RepoGroup({
     }
   };
   const removeConfirmationCopy = repoRemovalConfirmationCopy(name, environmentKind !== "local");
-  const menuModel = buildRepoGroupMenuModel({
+  const managementMenuModel = buildRepoGroupMenuModel({
     environmentKind,
     isGitHubRepo,
     canSetUpCloud: canSetUpCloud && !!onSetUpCloud,
@@ -116,7 +121,41 @@ export function RepoGroup({
     canOpenRepositorySettings: !!onOpenSettings,
     canRemoveRepo: !!onRemoveRepo,
   });
+  const showLocalWorkspaceActions = localWorkspacesSupported && environmentKind !== "cloud";
+  const creationMenuModel = buildRepoGroupCreationMenuModel({
+    showLocalWorkspaceActions,
+    cloudWorkspaceLabel: onCloudWorkspaceAction && cloudWorkspaceLabel
+      ? cloudWorkspaceLabel
+      : null,
+    cloudWorkspaceEnabled,
+    cloudWorkspaceTooltip,
+    shortcuts: {
+      local: {
+        accelerator: getShortcutNativeAccelerator(SHORTCUTS.newLocal) ?? undefined,
+        label: getShortcutDisplayLabel(SHORTCUTS.newLocal),
+      },
+      worktree: {
+        accelerator: getShortcutNativeAccelerator(SHORTCUTS.newWorktree) ?? undefined,
+        label: getShortcutDisplayLabel(SHORTCUTS.newWorktree),
+      },
+      cloud: {
+        accelerator: getShortcutNativeAccelerator(SHORTCUTS.newCloud) ?? undefined,
+        label: getShortcutDisplayLabel(SHORTCUTS.newCloud),
+      },
+    },
+  });
+  const menuModel = [
+    ...creationMenuModel,
+    ...managementMenuModel.map((action, index) => (
+      index === 0 && creationMenuModel.length > 0
+        ? { ...action, separatorBefore: true }
+        : action
+    )),
+  ];
   const menuHandlers: RepoGroupMenuHandlers = {
+    "new-local-workspace": onNewLocalWorkspace,
+    "new-worktree": onNewWorkspace,
+    "new-cloud-workspace": onCloudWorkspaceAction,
     "set-up-cloud": onSetUpCloud,
     "add-to-this-mac": onAddToThisMac,
     "cloud-settings": onOpenCloudSettings,
@@ -124,7 +163,7 @@ export function RepoGroup({
     "remove-repository": handleRequestRemove,
   };
   const { onContextMenuCapture } = useRepoGroupNativeContextMenu(menuModel, menuHandlers);
-  const handleCreatePopoverOpenChange = (open: boolean) => {
+  const handleContextMenuOpenChange = (open: boolean) => {
     if (!newWorkspaceCommandScope) {
       return;
     }
@@ -142,133 +181,29 @@ export function RepoGroup({
       }
     };
   }, [clearActiveNewWorkspaceScope, newWorkspaceCommandScope?.id]);
-  const showLocalWorkspaceActions = localWorkspacesSupported && environmentKind !== "cloud";
 
+  const repositoryIcon = (
+    <RepoGroupEnvironmentIcon kind={environmentKind} expanded={!collapsed} />
+  );
   const headerRow = (
     <ProductSidebarRepoGroupHeader
       label={name}
       collapsed={collapsed}
-      icon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded={false} />}
-      expandedIcon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded />}
-      hoverIcon={(
-        <ChevronRight
-          className={`icon-compact transition-transform ${collapsed ? "" : "rotate-90"}`}
-        />
-      )}
+      icon={repositoryIcon}
+      hoverIcon={repositoryIcon}
       onToggleCollapsed={onToggleCollapsed}
       onContextMenuCapture={onContextMenuCapture}
       action={(
-        <>
-        <PopoverButton
-          trigger={
-            <SidebarActionButton
-              title="New workspace"
-              alwaysVisible
-              className="rounded-md opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
-            >
-              <Plus className="icon-paired" />
-            </SidebarActionButton>
-          }
-          side="right"
-          stopPropagation
-          className={`w-64 ${POPOVER_SURFACE_CLASS}`}
-          onOpenChange={handleCreatePopoverOpenChange}
-        >
-          {(close) => (
-            <>
-              {showLocalWorkspaceActions && (
-                <>
-                  <PopoverMenuItem
-                    icon={<SidebarWorkspaceVariantIcon variant="local" className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />}
-                    label="New local workspace"
-                    trailing={(
-                      <ShortcutBadge
-                        label={getShortcutDisplayLabel(SHORTCUTS.newLocal)}
-                        className={CREATE_WORKSPACE_SHORTCUT_CLASS}
-                      />
-                    )}
-                    onClick={() => { close(); onNewLocalWorkspace?.(); }}
-                  />
-                  <PopoverMenuItem
-                    icon={<SidebarWorkspaceVariantIcon variant="worktree" className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />}
-                    label="New worktree"
-                    trailing={(
-                      <ShortcutBadge
-                        label={getShortcutDisplayLabel(SHORTCUTS.newWorktree)}
-                        className={CREATE_WORKSPACE_SHORTCUT_CLASS}
-                      />
-                    )}
-                    onClick={() => { close(); onNewWorkspace?.(); }}
-                  />
-                </>
-              )}
-              {onCloudWorkspaceAction && cloudWorkspaceLabel && (
-                cloudWorkspaceEnabled ? (
-                  <PopoverMenuItem
-                    icon={<CloudIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />}
-                    label={cloudWorkspaceLabel}
-                    trailing={(
-                      <ShortcutBadge
-                        label={getShortcutDisplayLabel(SHORTCUTS.newCloud)}
-                        className={CREATE_WORKSPACE_SHORTCUT_CLASS}
-                      />
-                    )}
-                    onClick={() => { close(); onCloudWorkspaceAction(); }}
-                  />
-                ) : (
-                  <Tooltip
-                    content={cloudWorkspaceTooltip ?? "Cloud workspaces require a reachable control plane."}
-                    className="block w-full"
-                  >
-                    <PopoverMenuItem
-                      aria-disabled="true"
-                      onClick={(event) => { event.preventDefault(); }}
-                      icon={<CloudIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />}
-                      label={cloudWorkspaceLabel}
-                      trailing={(
-                        <ShortcutBadge
-                          label={getShortcutDisplayLabel(SHORTCUTS.newCloud)}
-                          className={CREATE_WORKSPACE_SHORTCUT_CLASS}
-                        />
-                      )}
-                      className="cursor-not-allowed opacity-60 hover:bg-transparent focus:bg-transparent"
-                    />
-                  </Tooltip>
-                )
-              )}
-              {!localWorkspacesSupported && (
-                <p className="mt-1 border-t border-border px-2 pb-0.5 pt-2 text-ui-sm text-muted-foreground">
-                  {DESKTOP_POINTER_COPY.sidebarCreateWorkspace}
-                </p>
-              )}
-            </>
-          )}
-        </PopoverButton>
-        {menuModel.length > 0 ? (
-          <PopoverButton
-            trigger={
-              <SidebarActionButton
-                title="Repository options"
-                alwaysVisible
-                className="opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
-              >
-                <MoreHorizontal className="icon-paired" />
-              </SidebarActionButton>
-            }
-            side="right"
-            stopPropagation
-            className={`w-52 ${POPOVER_SURFACE_CLASS}`}
+        onNewChat ? (
+          <SidebarActionButton
+            title={`New chat in ${name}`}
+            alwaysVisible
+            onClick={onNewChat}
+            className="[&_svg]:icon-indicator"
           >
-            {(close) => (
-              <RepoContextMenuContent
-                model={menuModel}
-                handlers={menuHandlers}
-                onClose={close}
-              />
-            )}
-          </PopoverButton>
-        ) : null}
-        </>
+            <AppShellNewChatIcon className="icon-indicator" />
+          </SidebarActionButton>
+        ) : null
       )}
     />
   );
@@ -281,6 +216,7 @@ export function RepoGroup({
         triggerMode="contextMenu"
         stopPropagation
         className={`w-52 ${POPOVER_SURFACE_CLASS}`}
+        onOpenChange={handleContextMenuOpenChange}
       >
         {(close) => (
           <RepoContextMenuContent
@@ -323,15 +259,31 @@ function RepoGroupEnvironmentIcon({
   // Remote-capable repos use the fused folder+globe glyph —
   // one icon, never a badge overlay.
   if (kind === "cloud" || kind === "local_cloud") {
-    return <FolderRemote className="icon-paired shrink-0" />;
+    return <FolderRemote className="icon-indicator shrink-0" />;
   }
 
   const FolderIcon = expanded ? FolderFilled : FolderClosed;
-  return <FolderIcon className="icon-paired shrink-0" />;
+  return <FolderIcon className="icon-indicator shrink-0" />;
 }
 
 function repoMenuActionIcon(id: RepoGroupMenuAction["id"]) {
   switch (id) {
+    case "new-local-workspace":
+      return (
+        <SidebarWorkspaceVariantIcon
+          variant="local"
+          className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]"
+        />
+      );
+    case "new-worktree":
+      return (
+        <SidebarWorkspaceVariantIcon
+          variant="worktree"
+          className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]"
+        />
+      );
+    case "new-cloud-workspace":
+      return <CloudIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />;
     case "set-up-cloud":
     case "add-to-this-mac":
     case "cloud-settings":
@@ -356,14 +308,26 @@ function RepoContextMenuContent({
     <>
       {model.map((action, index) => (
         <div key={action.id}>
-          {action.destructive && index > 0 ? (
+          {(action.separatorBefore || action.destructive) && index > 0 ? (
             <div className="my-1 h-px bg-border" />
           ) : null}
           <PopoverMenuItem
             icon={repoMenuActionIcon(action.id)}
             label={action.label}
+            title={action.disabledReason}
+            disabled={action.disabled}
+            trailing={action.shortcutLabel ? (
+              <ShortcutBadge
+                label={action.shortcutLabel}
+                className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+              />
+            ) : null}
             className={action.destructive ? "text-destructive hover:text-destructive" : undefined}
-            onClick={() => { onClose(); handlers[action.id]?.(); }}
+            onClick={() => {
+              if (action.disabled) return;
+              onClose();
+              handlers[action.id]?.();
+            }}
           />
         </div>
       ))}

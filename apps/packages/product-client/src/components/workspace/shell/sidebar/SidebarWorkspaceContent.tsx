@@ -15,10 +15,10 @@ import { visibleSidebarGroupItems } from "#product/lib/domain/workspaces/sidebar
 import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
-import { SkeletonBlock } from "#product/components/feedback/Skeleton";
+import { SkeletonBlock } from "#product/primitives/Skeleton";
 import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
-import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
+import { ProductSidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/ProductSidebarShowToggleRow";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
 import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 
@@ -41,6 +41,7 @@ interface SidebarWorkspaceContentProps {
     target: CloudWorkspaceRepoTarget,
     repoGroupKeyToExpand: string,
   ) => void;
+  onNewChatForRepository: (sourceRoot: string) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onOpenPullRequest: (url: string) => void;
@@ -51,8 +52,8 @@ interface SidebarWorkspaceContentProps {
     kind: WorkspaceAvailabilityCommandKind,
   ) => void;
   onWorkspaceHover?: () => void;
-  shortcutRevealVisible: boolean;
   shortcutLabelByWorkspaceId: ReadonlyMap<string, string>;
+  shortcutRevealVisible: boolean;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onRenameWorkspace: (
@@ -100,14 +101,15 @@ export function SidebarWorkspaceContent({
   onCreateWorktreeWorkspace,
   onCreateLocalWorkspace,
   onCreateCloudWorkspace,
+  onNewChatForRepository,
   onSelectWorkspace,
   onIndicatorAction,
   onOpenPullRequest,
   onMarkWorkspaceDone,
   onWorkspaceAvailabilityCommand,
   onWorkspaceHover,
-  shortcutRevealVisible,
   shortcutLabelByWorkspaceId,
+  shortcutRevealVisible,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
   onRenameWorkspace,
@@ -173,7 +175,6 @@ export function SidebarWorkspaceContent({
       repoRootId: group.repoRootId,
       cloudRepoTarget: group.cloudRepoTarget,
     });
-
     const environmentKind = resolveRepoGroupEnvironmentKind(group, configuredCloudRepoKeys);
     // Local workspaces need both a local checkout for this repo and a host that
     // can run one. Where neither holds, the create popover offers exactly one
@@ -195,6 +196,7 @@ export function SidebarWorkspaceContent({
         environmentKind={environmentKind}
         localWorkspacesSupported={isDesktopHost}
         onToggleCollapsed={() => onToggleRepoCollapsed(group.sourceRoot)}
+        onNewChat={() => onNewChatForRepository(group.sourceRoot)}
         onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId, group.sourceRoot)}
         onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot, group.sourceRoot)}
         newWorkspaceCommandScope={newWorkspaceCommandScope}
@@ -295,7 +297,7 @@ export function SidebarWorkspaceContent({
               />
             ))}
             {toggleLabel && (
-              <SidebarShowToggleRow
+              <ProductSidebarShowToggleRow
                 label={toggleLabel}
                 onClick={() => onToggleRepoShowMore(group.sourceRoot)}
               />

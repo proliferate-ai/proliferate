@@ -23,6 +23,7 @@ from proliferate.integrations.github import (
     list_github_app_installations,
     list_github_app_user_installations,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app.models import (
@@ -49,7 +50,6 @@ from proliferate.server.cloud.repos.service import (
     DEFAULT_REPO_VISIBILITY,
     list_cloud_repositories,
 )
-from proliferate.utils.time import utcnow
 
 _STATE_AUDIENCE = "github-app-cloud"
 _STATE_KIND_USER_AUTH = "user_authorization"

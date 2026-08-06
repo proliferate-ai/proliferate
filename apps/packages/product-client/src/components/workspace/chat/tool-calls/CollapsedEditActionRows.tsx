@@ -5,8 +5,8 @@ import type {
 } from "@anyharness/sdk";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
-import { basename } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
+import { basename } from "#product/domain/chats/tools/collapsed-action-labels";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { ActionRowIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 import { GenericActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedGenericActionRow";
@@ -17,9 +17,9 @@ import {
   FILE_REFERENCE_MENU_CLASS,
   FileReferenceMenuContent,
 } from "#product/components/workspace/file-references/FileReferenceMenu";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowUpRight } from "@proliferate/ui/icons";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { Button } from "#product/primitives/Button";
+import { ArrowUpRight } from "#product/primitives/icons/core";
 
 export function EditRows({ item }: { item: ToolCallItem }) {
   const fileChanges = item.contentParts.filter(

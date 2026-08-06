@@ -9,10 +9,10 @@ import {
   buildLaunchSessionConfigUpdates,
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
-import { latestCloudTranscriptSeq } from "@proliferate/product-domain/chats/cloud/transcript-view";
-import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
-import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
+import { latestCloudTranscriptSeq } from "@proliferate/product-client/internal/domain/chats/cloud/transcript-view";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-client/internal/domain/chats/cloud/transcript-view";
+import { cloudCommandReadiness } from "@proliferate/product-client/internal/domain/workspaces/cloud-work-inventory";
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
 import { savePendingMobilePrompt } from "../../../lib/access/cloud/pending-mobile-prompt-store";

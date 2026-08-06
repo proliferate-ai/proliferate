@@ -33,7 +33,7 @@ from proliferate.server.cloud.integrations.action_approvals.domain.actions impor
 from proliferate.server.cloud.integrations.action_approvals.transactions import (
     consume_action_for_execution_committed,
 )
-from proliferate.utils.crypto import encrypt_json
+from proliferate.lib.infra.encryption.json import encrypt_json
 from tests.integration.test_cloud_integration_gateway_api import (
     GATEWAY_URL,
     _authed_user,
@@ -550,7 +550,8 @@ async def test_account_credential_rotation_invalidates_prior_approval(
                 "refreshToken": "rotated-refresh",
                 "expiresAt": None,
                 "scopes": [],
-            }
+            },
+            secret=settings.cloud_secret_key,
         ),
         credential_format="oauth-bundle-v1",
         auth_status="ready",

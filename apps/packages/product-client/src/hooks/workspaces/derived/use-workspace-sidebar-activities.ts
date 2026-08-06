@@ -3,7 +3,7 @@ import {
   collectWorkspaceSidebarActivityStates,
   collectWorkspaceSidebarActivityStatesWithErrorAttention,
   type SidebarSessionActivityState,
-} from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/sessions/activity";
 import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
 import type { SessionDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";

@@ -6,14 +6,14 @@ import {
   useCreateAgentApiKey,
   useRevokeAgentApiKey,
 } from "@proliferate/cloud-sdk-react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
-import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { Button } from "#product/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { SettingsRow } from "#product/components/patterns/SettingsRow";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { AGENT_API_KEYS_COPY } from "#product/copy/settings/agent-api-keys-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";

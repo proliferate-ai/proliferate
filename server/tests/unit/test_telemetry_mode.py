@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from proliferate.config import Settings, settings
-from proliferate.utils.telemetry_mode import (
+from proliferate.lib.product.telemetry.mode import (
     get_server_telemetry_mode,
     is_anonymous_telemetry_enabled,
     is_vendor_telemetry_enabled,

@@ -339,7 +339,7 @@ from proliferate.server.billing.snapshot_state import load_snapshot_state_for_su
 from proliferate.server.billing.snapshots import build_billing_snapshot
 from proliferate.server.cloud.agent_gateway.topups import reactivate_subject_if_credited
 from proliferate.integrations.litellm import LiteLLMIntegrationError
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 USER_ID = UUID(os.environ["SEED_USER_ID"])
 LEDGER = os.environ["SEED_LEDGER"]
@@ -557,7 +557,7 @@ from sqlalchemy import delete
 from proliferate.db.engine import async_session_factory
 from proliferate.db.models.billing import BillingGrant
 from proliferate.db.models.cloud.agent_gateway import LlmCreditGrant
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 RECEIPT_FILE = os.environ["SEED_RECEIPT_FILE"]
 

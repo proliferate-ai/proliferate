@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 
 interface PaneSideOverlayProps {
   open: boolean;

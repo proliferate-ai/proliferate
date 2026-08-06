@@ -9,9 +9,9 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
+from proliferate.lib.product.telemetry.mode import is_vendor_telemetry_enabled
 from proliferate.server.release import sanitize_component_release_override
 from proliferate.server.version import runtime_version_pin
-from proliferate.utils.telemetry_mode import is_vendor_telemetry_enabled
 
 _ANYHARNESS_DEFER_STARTUP_RETENTION_ENV = "ANYHARNESS_DEFER_STARTUP_RETENTION"
 _ANYHARNESS_WORKTREES_ROOT_ENV = "ANYHARNESS_WORKTREES_ROOT"

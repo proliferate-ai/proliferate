@@ -11,7 +11,7 @@ from proliferate.db.models.anonymous_telemetry import (
     AnonymousTelemetryInstall,
     AnonymousTelemetryLocalInstall,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)

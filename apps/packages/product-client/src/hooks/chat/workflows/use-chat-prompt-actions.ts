@@ -32,7 +32,7 @@ import { createPendingSessionId } from "#product/lib/workflows/sessions/session-
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
-import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import { finishOrCancelMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";

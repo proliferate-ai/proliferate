@@ -1,0 +1,1 @@
+"""Product account-entry domain."""

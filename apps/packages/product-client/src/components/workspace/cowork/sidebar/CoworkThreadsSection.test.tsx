@@ -20,15 +20,15 @@ const coworkState = vi.hoisted(() => ({
   isCreatingThread: false,
 }));
 
-vi.mock("#product/components/feedback/Skeleton", () => ({
+vi.mock("#product/primitives/Skeleton", () => ({
   SkeletonBlock: () => <div data-testid="threads-skeleton" />,
 }));
 
-vi.mock("@proliferate/ui/icons", () => ({
+vi.mock("#product/primitives/icons/core", () => ({
   Plus: () => <span data-testid="plus-icon" />,
 }));
 
-vi.mock("@proliferate/ui/patterns/SidebarActionButton", () => ({
+vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     disabled,
@@ -52,7 +52,7 @@ vi.mock("#product/components/workspace/shell/sidebar/SidebarIndicators", () => (
   ),
 }));
 
-vi.mock("@proliferate/product-ui/sidebar/ProductSidebarLayout", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/ProductSidebarLayout", () => ({
   ProductSidebarSectionHeader: ({
     actions,
     label,
@@ -67,7 +67,7 @@ vi.mock("@proliferate/product-ui/sidebar/ProductSidebarLayout", () => ({
   ),
 }));
 
-vi.mock("@proliferate/product-ui/sidebar/ProductSidebarThreads", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/ProductSidebarThreads", () => ({
   ProductSidebarThreadRow: ({
     active,
     label,
@@ -96,8 +96,8 @@ vi.mock("#product/components/workspace/cowork/sidebar/CoworkThreadItem", () => (
   ),
 }));
 
-vi.mock("#product/components/workspace/shell/sidebar/SidebarShowToggleRow", () => ({
-  SidebarShowToggleRow: ({ label }: { label: string }) => <button type="button">{label}</button>,
+vi.mock("#product/components/workspace/shell/sidebar/ProductSidebarShowToggleRow", () => ({
+  ProductSidebarShowToggleRow: ({ label }: { label: string }) => <button type="button">{label}</button>,
 }));
 
 vi.mock("#product/hooks/access/anyharness/cowork/use-cowork-status", () => ({

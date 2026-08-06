@@ -11,16 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db import engine as db_engine
 from proliferate.integrations import anonymous_telemetry as anonymous_telemetry_client
 from proliferate.integrations.sentry import capture_server_sentry_exception
+from proliferate.lib.product.telemetry.mode import (
+    get_server_telemetry_mode,
+    is_anonymous_telemetry_enabled,
+)
 from proliferate.server.anonymous_telemetry.service import (
     AnonymousTelemetryEvent,
     TelemetrySurface,
     VersionPayload,
     load_or_create_local_install_id,
     record_anonymous_telemetry,
-)
-from proliferate.utils.telemetry_mode import (
-    get_server_telemetry_mode,
-    is_anonymous_telemetry_enabled,
 )
 
 logger = logging.getLogger(__name__)

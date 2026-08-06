@@ -1,11 +1,11 @@
 import type { Session } from "@anyharness/sdk";
-import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
+import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import {
   pendingConfigChangesForSessionIntents,
-} from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
+} from "#product/domain/sessions/intents/session-intent-selectors";
 import {
   sessionIntentsForSession,
-} from "@proliferate/product-domain/sessions/intents/session-intent-state";
+} from "#product/domain/sessions/intents/session-intent-state";
 import {
   materializeSessionRecord,
 } from "#product/hooks/sessions/workflows/session-creation-local-state";

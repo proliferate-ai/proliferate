@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from uuid import UUID, uuid4
 
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,39 @@ class ClientDailyActivityUpsert:
     platform: str | None
     route_or_screen: str | None
     received_at: datetime
+
+
+@dataclass(frozen=True)
+class LatestClientActivityValue:
+    actor_user_id: UUID
+    last_seen_at: datetime
+
+
+async def list_latest_client_activity(
+    db: AsyncSession,
+    *,
+    actor_user_ids: tuple[UUID, ...],
+) -> tuple[LatestClientActivityValue, ...]:
+    if not actor_user_ids:
+        return ()
+    rows = (
+        await db.execute(
+            select(
+                ClientDailyActivity.actor_user_id,
+                func.max(ClientDailyActivity.last_seen_at).label("last_seen_at"),
+            )
+            .where(ClientDailyActivity.actor_user_id.in_(actor_user_ids))
+            .group_by(ClientDailyActivity.actor_user_id)
+        )
+    ).all()
+    return tuple(
+        LatestClientActivityValue(
+            actor_user_id=row.actor_user_id,
+            last_seen_at=row.last_seen_at,
+        )
+        for row in rows
+        if row.actor_user_id is not None and row.last_seen_at is not None
+    )
 
 
 async def upsert_client_daily_activity(

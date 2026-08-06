@@ -1,5 +1,5 @@
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
 import type { CloudIntegrationView } from "#product/lib/domain/cloud/integrations";
 import {
