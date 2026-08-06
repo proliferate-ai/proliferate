@@ -19,7 +19,9 @@ import { POPOVER_FRAME_IMPORTANT_CLASS } from "./popover-surface";
  * description under it, and the button pair as compact 24px controls where only
  * the primary action carries a fill. Padding is 12px, not sonner's 16px —
  * these are one- or two-line notices, and the extra inset made every toast
- * read as a dialog.
+ * read as a dialog. The close control sits inside the right edge and reveals
+ * on toast hover or keyboard focus. Sonner's default hangs it outside the
+ * top-left corner, which our deliberate overflow cap clips into a stray slash.
  *
  * `!` prefixes are load-bearing: sonner styles the same elements through
  * `[data-sonner-toast][data-styled="true"]` selectors that outrank a plain
@@ -50,7 +52,7 @@ export const MAX_VISIBLE_TOASTS = 3;
 const TOAST_MAX_HEIGHT_CLASS = "!max-h-[168px] !overflow-hidden";
 
 const kitClassNames = {
-  toast: `${POPOVER_FRAME_IMPORTANT_CLASS} !p-3 !gap-2 !text-ui-sm ${TOAST_MAX_HEIGHT_CLASS}`,
+  toast: `${POPOVER_FRAME_IMPORTANT_CLASS} group/toast !py-3 !pl-3 !pr-9 !gap-2 !text-ui-sm ${TOAST_MAX_HEIGHT_CLASS}`,
   title: "!text-ui-sm !font-medium !text-foreground",
   description: "!text-ui-sm !text-muted-foreground",
   icon: "!mr-2 !items-start",
@@ -60,7 +62,7 @@ const kitClassNames = {
   cancelButton:
     "!h-6 !rounded-md !border !border-input !bg-transparent !px-2 !text-ui-sm !text-muted-foreground hover:!bg-hover hover:!text-foreground active:!bg-active",
   closeButton:
-    "!border-transparent !bg-transparent !text-muted-foreground hover:!bg-hover hover:!text-foreground",
+    "[--toast-close-button-start:auto] [--toast-close-button-end:8px] [--toast-close-button-transform:translateY(-50%)] !top-1/2 !border-transparent !bg-transparent !text-muted-foreground !opacity-0 !transition-[opacity,background,color] !duration-hover group-hover/toast:!opacity-100 hover:!bg-hover hover:!text-foreground focus-visible:!opacity-100",
 };
 
 /**

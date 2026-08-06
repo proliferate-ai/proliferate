@@ -5,17 +5,14 @@ import {
   Pencil,
   Trash,
 } from "#product/primitives/icons/core";
-import { CloudIcon } from "#product/primitives/icons/platform";
 import { Folder } from "#product/primitives/icons/workspace";
 import {
-  GitBranch,
   GitBranchIcon,
   GitPullRequest,
 } from "#product/primitives/icons/workspace-git";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
-import { Tooltip } from "#product/primitives/Tooltip";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
@@ -27,10 +24,6 @@ import type {
   WorkspaceAvailabilityCommand,
   WorkspaceAvailabilityCommandKind,
 } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
-import {
-  prStatusViewFromGitStatus,
-  sidebarGitGlyphForStatus,
-} from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import {
   SidebarStatusIndicatorView,
@@ -66,9 +59,8 @@ interface WorkspaceItemProps {
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
   /**
-   * Composed git/PR status. Drives the left trailing identity glyph and tone,
-   * its tooltip, and the "Open pull request" menu item. Rows without a real
-   * PR fall back to worktree/cloud identity when applicable.
+   * Composed git/PR status. Drives the persistent PR glyph tone, its tooltip,
+   * the separate attention alert, and the "Open pull request" menu item.
    */
   gitStatus?: WorkspaceGitStatus | null;
   /** Renders the trailing unseen-activity dot. */
@@ -133,12 +125,7 @@ export function WorkspaceItem({
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
-  const gitGlyph = sidebarGitGlyphForStatus(gitStatus);
-  const prStatusView = gitGlyph ? prStatusViewFromGitStatus(gitStatus) : null;
-  const gitDetail = gitGlyph && prStatusView
-    ? <SidebarWorkspaceGitGlyph glyph={gitGlyph} status={prStatusView} />
-    : null;
-  const trailingIdentity = gitDetail ?? workspaceVariantIdentity(variant);
+  const trailingIdentity = <SidebarWorkspaceGitGlyph status={gitStatus} />;
   const pullRequestUrl = gitStatus?.pr?.url ?? null;
   const pullRequestNumber = gitStatus?.pr?.number ?? null;
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
@@ -385,29 +372,4 @@ export function WorkspaceItem({
       trigger={<div>{contextMenu}</div>}
     />
   );
-}
-
-function workspaceVariantIdentity(variant: SidebarWorkspaceVariant) {
-  if (variant === "worktree") {
-    return (
-      <Tooltip content="Worktree" className="inline-flex shrink-0 items-center justify-center">
-        <span role="img" aria-label="Worktree">
-          <GitBranch
-            className="icon-indicator text-sidebar-status-worktree [font-size:var(--text-sidebar-row)]"
-            strokeWidth={1.75}
-          />
-        </span>
-      </Tooltip>
-    );
-  }
-  if (variant === "cloud") {
-    return (
-      <Tooltip content="Cloud workspace" className="inline-flex shrink-0 items-center justify-center">
-        <span role="img" aria-label="Cloud workspace">
-          <CloudIcon className="icon-indicator text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)]" />
-        </span>
-      </Tooltip>
-    );
-  }
-  return null;
 }

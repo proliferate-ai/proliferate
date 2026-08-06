@@ -14,6 +14,7 @@ import { createMemoryProductStorage, type MemoryProductStorage } from "#product/
 import type { ProductStorage } from "@proliferate/product-client/host/product-host";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
 import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
+import { installLocalStorageMock } from "#product/components/home/screen/HomeNextScreen.test-support";
 
 const screenMocks = vi.hoisted(() => {
   const handleHomeAction = vi.fn();
@@ -170,24 +171,6 @@ vi.mock("#product/components/workspace/chat/input/ChatComposerActions", () => ({
     </button>
   ),
 }));
-
-function installLocalStorageMock(options?: { throwOnSet?: boolean }) {
-  const values = new Map<string, string>();
-  Object.defineProperty(window, "localStorage", {
-    configurable: true,
-    value: {
-      get length() { return values.size; },
-      clear: () => values.clear(),
-      getItem: (key: string) => values.get(key) ?? null,
-      key: (index: number) => Array.from(values.keys())[index] ?? null,
-      removeItem: (key: string) => values.delete(key),
-      setItem: (key: string, value: string) => {
-        if (options?.throwOnSet) throw new Error("localStorage write failed");
-        values.set(key, String(value));
-      },
-    },
-  });
-}
 
 function resetHomeNext() {
   screenMocks.productHost.desktop = {};
@@ -368,7 +351,8 @@ describe("HomeNextScreen model availability notices", () => {
       { id: "agent-defaults", title: "Configure default harnesses", icon: "sliders" },
     );
     render(<HomeNextScreen />);
-    expect(document.querySelector('[data-home-composer-vertical-balance="onboarding"] .translate-y-5')).toBeTruthy();
+    expect(document.querySelector("[data-home-onboarding-region]")).toBeTruthy();
+    expect(document.querySelector("[data-home-composer-dock]")).toBeTruthy();
 
     expect(screen.getByText("Add a GitHub repo")).toBeTruthy();
     expect(screen.getByText("Configure default harnesses")).toBeTruthy();
@@ -400,8 +384,21 @@ describe("HomeNextScreen composer control-row parity", () => {
     expect(screen.getByTestId("composer-leading-controls")).toBeTruthy();
     expect(screen.getByTestId("composer-trailing-controls")).toBeTruthy();
     const column = screen.getByLabelText("Prompt").closest('[class~="max-w-transcript-thread"]');
-    expect(column?.className).toContain(CHAT_COLUMN_CLASSNAME);
+    expect(column?.className).toContain("max-w-transcript-thread");
     expect(column?.parentElement?.className).toContain(CHAT_SURFACE_GUTTER_CLASSNAME);
+  });
+
+  it("attaches the launch utility bar above the bottom-docked composer", () => {
+    render(<HomeNextScreen />);
+
+    const utilityBar = document.querySelector("[data-home-launch-utility-bar]");
+    const composer = screen.getByLabelText("Prompt").closest('[data-focus-zone="chat"]');
+    expect(utilityBar).not.toBeNull();
+    expect(composer).not.toBeNull();
+    expect(
+      utilityBar!.compareDocumentPosition(composer!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(composer?.closest("[data-home-composer-dock]")).not.toBeNull();
   });
 
   it("feeds the clusters sessionless chat-equivalent props", () => {

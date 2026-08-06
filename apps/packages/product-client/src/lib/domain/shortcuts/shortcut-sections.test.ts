@@ -34,7 +34,9 @@ describe("buildShortcutSections", () => {
     ]);
 
     const tabs = sections.find((section) => section.title === "Tabs");
+    const workspaces = sections.find((section) => section.title === "Workspaces");
     const currentWorkspace = sections.find((section) => section.title === "Current Workspace");
+    expect(findEntry(workspaces, "Open new chat")?.labels).toEqual(["⌘N"]);
     expect(findEntry(tabs, "Previous tab")?.labels).toEqual(["⌘⇧[", "⌘⌥←", "⌃⇧⇥"]);
     expect(findEntry(tabs, "Close other tabs")?.labels).toEqual(["⌘⌥O", "⌘⇧O"]);
     expect(findEntry(tabs, "New chat")?.labels).toEqual(["⌘T"]);

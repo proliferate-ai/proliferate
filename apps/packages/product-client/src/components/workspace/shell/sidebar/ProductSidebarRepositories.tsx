@@ -157,7 +157,9 @@ export function ProductSidebarWorkspaceRow({
       {trailingLabel}
     </span>
   ) : null;
-  const hasTrailingCells = Boolean(trailingIdentity || statusCell);
+  const visibleShortcutLabel = shortcutRevealVisible ? shortcutLabel : null;
+  const hasBaseTrailingCells = Boolean(trailingIdentity || statusCell);
+  const hasTrailingCells = Boolean(hasBaseTrailingCells || visibleShortcutLabel);
 
   return (
     <SidebarRowSurface
@@ -208,36 +210,49 @@ export function ProductSidebarWorkspaceRow({
           ) : null}
         </div>
 
-        {(hasTrailingCells || shortcutLabel || hoverAction) ? (
-          <div className={`grid h-5 min-w-5 shrink-0 items-center justify-items-end ${detail ? "ml-[5px]" : "ml-1.5"
+        {(hasTrailingCells || hoverAction) ? (
+          <div className={`flex h-5 min-w-5 shrink-0 items-center justify-end ${detail ? "ml-[5px]" : "ml-1.5"
             }`}>
             {hasTrailingCells ? (
               <div
                 data-sidebar-trailing-cells
-                className={`col-start-1 row-start-1 flex items-center justify-end gap-1.5 transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
-                    ? "opacity-0"
-                    : "group-hover:opacity-0 group-focus-within:opacity-0"
-                  }`}
+                className={`relative flex items-center justify-end gap-1.5 transition-opacity duration-hover ${hoverAction
+                  ? "group-hover:opacity-0 group-focus-within:opacity-0"
+                  : ""
+                }`}
               >
                 {trailingIdentity ? (
-                  <span className="flex size-5 shrink-0 items-center justify-center">
+                  <span
+                    data-sidebar-trailing-identity
+                    className={`flex size-5 shrink-0 items-center justify-center ${
+                      visibleShortcutLabel && !statusCell ? "opacity-0" : ""
+                    }`}
+                  >
                     {trailingIdentity}
                   </span>
                 ) : null}
                 {statusCell ? (
-                  <span className="flex size-5 shrink-0 items-center justify-center">
+                  <span
+                    data-sidebar-trailing-status
+                    className={`flex size-5 shrink-0 items-center justify-center ${
+                      visibleShortcutLabel ? "opacity-0" : ""
+                    }`}
+                  >
                     {statusCell}
                   </span>
                 ) : null}
+                {visibleShortcutLabel ? (
+                  <ShortcutBadge
+                    label={visibleShortcutLabel}
+                    data-sidebar-shortcut-overlay={hasBaseTrailingCells ? true : undefined}
+                    className={`h-fit shrink-0 text-sidebar-muted-foreground ${
+                      hasBaseTrailingCells
+                        ? "absolute right-0 top-1/2 -translate-y-1/2"
+                        : ""
+                    }`}
+                  />
+                ) : null}
               </div>
-            ) : null}
-
-            {shortcutLabel ? (
-              <ShortcutBadge
-                label={shortcutLabel}
-                className={`col-start-1 row-start-1 h-fit !w-0 shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-hover ${shortcutRevealVisible ? "opacity-100" : ""
-                  }`}
-              />
             ) : null}
           </div>
         ) : null}

@@ -9,7 +9,7 @@ import { DotCellLoader } from "#product/primitives/DotCellLoader";
 import type { SidebarStatusIndicator } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { SidebarStatusGlyph } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
-import type { PrStatusView } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
+import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
@@ -88,30 +88,53 @@ function renderedGlyphMarkup(node: ReactNode): string {
 }
 
 describe("SidebarWorkspaceGitGlyph", () => {
-  it("renders an open PR as a 14px muted branch glyph with a success dot", () => {
-    const markup = renderedGlyphMarkup(
-      <SidebarWorkspaceGitGlyph
-        glyph={{ conflicted: false, tooltip: null }}
-        status={{ kind: "open" } as PrStatusView}
-      />,
-    );
-
-    expect(markup).toContain("icon-indicator");
-    expect(markup).toContain("text-sidebar-muted-foreground");
-    expect(markup).toContain("--pr-status-dot-color:var(--color-success)");
-    expect(markup).toContain("<circle");
+  const status = (overrides: Partial<WorkspaceGitStatus> = {}): WorkspaceGitStatus => ({
+    branch: "feature/sidebar",
+    dirty: false,
+    conflicted: false,
+    ahead: 0,
+    behind: 0,
+    hasUpstream: true,
+    pr: {
+      state: "open",
+      number: 805,
+      url: "https://github.com/acme/repo/pull/805",
+      checks: "none",
+      reviewDecision: "none",
+    },
+    attention: "none",
+    capturedAt: "2026-08-04T00:00:00.000Z",
+    source: "live",
+    ...overrides,
   });
 
-  it("renders a merged PR as the muted merge glyph without a status dot", () => {
+  it("renders a PR as the stable purple identity", () => {
     const markup = renderedGlyphMarkup(
-      <SidebarWorkspaceGitGlyph
-        glyph={{ conflicted: false, tooltip: null }}
-        status={{ kind: "merged" } as PrStatusView}
-      />,
+      <SidebarWorkspaceGitGlyph status={status()} />,
     );
 
     expect(markup).toContain("icon-indicator");
-    expect(markup).toContain("text-sidebar-muted-foreground");
-    expect(markup).not.toContain("--pr-status-dot-color");
+    expect(markup).toContain("gap-1");
+    expect(markup).toContain("text-sidebar-status-worktree");
+    expect(markup).toContain("PR #805 · Open");
+  });
+
+  it("keeps a dim PR identity when status is unavailable", () => {
+    const markup = renderedGlyphMarkup(
+      <SidebarWorkspaceGitGlyph status={null} />,
+    );
+
+    expect(markup).toContain("text-sidebar-muted-foreground/60");
+    expect(markup).toContain("Pull request status unavailable");
+  });
+
+  it("renders attention as a separate orange alert", () => {
+    const markup = renderedGlyphMarkup(
+      <SidebarWorkspaceGitGlyph status={status({ attention: "ci_failing" })} />,
+    );
+
+    expect(markup).toContain("text-sidebar-status-worktree");
+    expect(markup).toContain("text-sidebar-status-waiting");
+    expect(markup).toContain("Pull request checks failing");
   });
 });

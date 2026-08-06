@@ -138,13 +138,9 @@ type MdCodeProps = MdElementProps & {
 // scoped font-size and line-height so chat rules stay out of the login bundle.
 const LI_CLASSNAME = "pl-0.5";
 // Prose elements (paragraphs, headings, lists, blockquotes) fill the full
-// thread column — same width as wide blocks (tables, code) and the composer
-// column below them (both max-w-transcript-thread), so an assistant message
-// reads at the same measure the user is typing into. The narrower
-// --container-transcript-readable (40rem) token still exists for any
-// consumer that wants a tighter reading measure, but conversation prose no
-// longer applies it: see the single-measure note on `markdownClassName`
-// below.
+// shared 40rem thread column — the same width as wide blocks (tables, code),
+// the composer below, and the new-chat flow — so the measure does not change
+// when a session starts. See the single-measure note on `markdownClassName`.
 const PROSE_MEASURE_CLASSNAME = "max-w-full";
 
 // Markdown component overrides are the React element *types* for every
@@ -188,7 +184,7 @@ const STATIC_MARKDOWN_COMPONENTS = {
     // query) restructure applied at every MarkdownBody consumer (transcript
     // rows, plan cards, tool-detail panels). That restructure is out of
     // scope for this pass; this table stays at max-w-full
-    // (container-relative to the 48rem thread column) as a conscious
+    // (container-relative to the 48rem shared chat column) as a conscious
     // partial adoption rather than an unreachable cap.
     <div
       className="my-4 min-w-0 max-w-full overflow-hidden rounded-lg border"
@@ -368,14 +364,11 @@ export const MarkdownBody = memo(function MarkdownBody({
     [content, isStreaming],
   );
   const markdownClassName = [
-    // Single measure: the thread column (config/chat-layout.ts) widens to the 48rem
-    // --container-transcript-thread token, and BOTH wide blocks (tables,
-    // code — see the `table` override below) and prose elements fill it
+    // Single measure: the thread column (config/chat-layout.ts) uses the same 48rem
+    // --container-transcript-thread token as the new-chat flow, and BOTH
+    // wide blocks (tables, code — see the `table` override below) and prose fill it
     // (PROSE_MEASURE_CLASSNAME is max-w-full too), so an assistant message
-    // reads at the same width the user is typing into. The 40rem
-    // --container-transcript-readable token still exists for consumers that
-    // want a tighter reading measure, but conversation prose no longer
-    // applies it.
+    // reads at the same width the user is typing into before and after launch.
     "chat-markdown min-w-0 max-w-full text-foreground break-words",
     "[&_li>p]:my-0",
     "[&_li>ol]:mt-2 [&_li>ol]:mb-0",

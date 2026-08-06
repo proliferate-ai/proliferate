@@ -57,7 +57,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     const isSmall = contentWidth < 84;
     const showBadge = !isSmall;
     const showStatus = showBadge && badge != null;
-    const showShortcut = Boolean(shortcutLabel) && !isSmall;
+    const showShortcut = Boolean(shortcutLabel) && shortcutRevealVisible && !isSmall;
 
     return (
       <div
@@ -116,9 +116,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
           {showShortcut && shortcutLabel ? (
             <ShortcutBadge
               label={shortcutLabel}
-              className={`workspace-shell-tab__shortcut pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 ${
-                shortcutRevealVisible ? "opacity-100" : ""
-              }`}
+              className="workspace-shell-tab__shortcut pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground"
             />
           ) : null}
           {canClose && (

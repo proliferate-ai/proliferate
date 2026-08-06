@@ -18,14 +18,10 @@ import {
   ProductSidebarFrame,
   ProductSidebarScrollableContent,
 } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
-import {
-  isDefaultSidebarWorkspaceTypes,
-} from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+import { isDefaultSidebarWorkspaceTypes } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import { buildConfiguredCloudRepoKeys } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
-import {
-  titleForStartBlockReason,
-} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+import { titleForStartBlockReason } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
@@ -58,6 +54,7 @@ import { startMeasurementOperation } from "#product/lib/infra/measurement/measur
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
+import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-repository-header-new-chat";
 
 interface ArchiveConfirmationState {
   workspaceId: string;
@@ -316,6 +313,7 @@ export const MainSidebar = memo(function MainSidebar() {
     setRepositoriesCollapsed(!repositoriesCollapsed);
   }, [repositoriesCollapsed, setRepositoriesCollapsed]);
   const filtersActive = !isDefaultSidebarWorkspaceTypes(workspaceTypes);
+  const handleStartRepositoryHeaderChat = useRepositoryHeaderNewChat(groups, actions);
   const sidebarShortcutLabelById = useMemo(
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
     [sidebarShortcutTargetIds],
@@ -371,6 +369,7 @@ export const MainSidebar = memo(function MainSidebar() {
             workspaceTypes={workspaceTypes}
             onToggleRepositoriesCollapsed={handleToggleRepositoriesCollapsed}
             onToggleWorkspaceType={toggleSidebarWorkspaceType}
+            onNewChat={handleStartRepositoryHeaderChat}
             onAddRepo={actions.handleAddRepo}
           />
 
@@ -392,14 +391,15 @@ export const MainSidebar = memo(function MainSidebar() {
                 onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
                 onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
                 onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
+                onNewChatForRepository={actions.handleGoHomeForRepository}
                 onSelectWorkspace={actions.handleSelectWorkspace}
                 onIndicatorAction={actions.handleSidebarIndicatorAction}
                 onOpenPullRequest={actions.handleOpenPullRequest}
                 onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
                 onWorkspaceAvailabilityCommand={handleWorkspaceAvailabilityCommand}
                 onWorkspaceHover={handleWorkspaceHover}
-                shortcutRevealVisible={shortcutRevealVisible}
                 shortcutLabelByWorkspaceId={sidebarShortcutLabelById}
+                shortcutRevealVisible={shortcutRevealVisible}
                 onArchiveWorkspace={handleArchiveWorkspace}
                 onUnarchiveWorkspace={handleUnarchiveWorkspace}
                 onRenameWorkspace={handleRenameWorkspace}

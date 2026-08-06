@@ -113,33 +113,6 @@ export function prStatusViewFromGitStatus(
   };
 }
 
-export interface SidebarGitGlyph {
-  /** attention === "conflicts" — render the detail glyph in destructive tone. */
-  conflicted: boolean;
-  /** Tooltip content; null renders the glyph without a tooltip. */
-  tooltip: string | null;
-}
-
-/**
- * Compact PR detail glyph for sidebar rows: rendered only when the row has a
- * real PR (open/draft/merged/closed). No PR (authoritative "none") and unknown
- * PR data (`pr: null`) both omit it — there is no branch-glyph fallback.
- * Conflict attention keeps the destructive tone on PR rows; conflicted rows
- * without a PR surface attention through other status affordances.
- */
-export function sidebarGitGlyphForStatus(
-  status: WorkspaceGitStatus | null | undefined,
-): SidebarGitGlyph | null {
-  if (!status?.pr || status.pr.state === "none") {
-    return null;
-  }
-  const conflicted = status.attention === "conflicts";
-  return {
-    conflicted,
-    tooltip: conflicted ? "Merge conflicts in worktree" : prStatusCompoundLabel(status),
-  };
-}
-
 /** "#805" — compact PR number label for workspaces-page rows (§4.1). */
 export function prNumberLabelFromGitStatus(
   status: WorkspaceGitStatus | null | undefined,

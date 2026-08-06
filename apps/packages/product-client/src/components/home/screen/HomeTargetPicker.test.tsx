@@ -138,7 +138,9 @@ describe("HomeTargetPicker", () => {
       selectedRepository: null,
     });
 
-    expect(screen.getByRole("button", { name: /No project/i })).toBeTruthy();
+    const projectButton = screen.getByRole("button", { name: /No project/i });
+    expect(projectButton.className).toContain("h-7");
+    expect(projectButton.className).toContain("px-2.5");
     expect(screen.queryByRole("button", { name: /No repository/i })).toBeNull();
   });
 

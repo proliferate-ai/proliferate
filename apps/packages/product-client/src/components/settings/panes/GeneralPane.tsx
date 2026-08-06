@@ -10,7 +10,6 @@ import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTa
 import { useAvailableEditors } from "#product/hooks/access/tauri/shell/use-available-editors";
 import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
 import { emitTurnEnd } from "#product/lib/infra/events/turn-end-events";
-import type { DefaultNewWorkspaceMode } from "#product/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 type SettingsOpenTargetIconId =
@@ -36,16 +35,11 @@ const BRANCH_PREFIX_OPTIONS = [
   { id: "proliferate" as const, label: "Proliferate" },
   { id: "github_username" as const, label: "GitHub username" },
 ];
-const NEW_WORKSPACE_MODE_OPTIONS: { id: DefaultNewWorkspaceMode; label: string }[] = [
-  { id: "worktree", label: "Worktree" },
-  { id: "local", label: "Local" },
-];
 export function GeneralPane() {
   const { data: editors = EMPTY_EDITORS } = useAvailableEditors();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,
-    defaultNewWorkspaceMode: state.defaultNewWorkspaceMode,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
@@ -72,9 +66,6 @@ export function GeneralPane() {
   const currentBranchPrefixLabel = BRANCH_PREFIX_OPTIONS.find(
     (option) => option.id === preferences.branchPrefixType,
   )?.label ?? "None";
-  const currentNewWorkspaceModeLabel = NEW_WORKSPACE_MODE_OPTIONS.find(
-    (option) => option.id === preferences.defaultNewWorkspaceMode,
-  )?.label ?? "Worktree";
 
   return (
     <section className="space-y-6">
@@ -118,26 +109,6 @@ export function GeneralPane() {
                   label: option.label,
                   selected: preferences.branchPrefixType === option.id,
                   onSelect: () => preferences.set("branchPrefixType", option.id),
-                })),
-              }]}
-            />
-          </SettingsRow>
-
-          <SettingsRow
-            label="New workspace"
-            description="What ⌘N creates by default"
-          >
-            <SettingsMenu
-              label={currentNewWorkspaceModeLabel}
-              className={SETTINGS_CONTROL_WIDTH_CLASS}
-              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
-              groups={[{
-                id: "new-workspace-mode",
-                options: NEW_WORKSPACE_MODE_OPTIONS.map((option) => ({
-                  id: option.id,
-                  label: option.label,
-                  selected: preferences.defaultNewWorkspaceMode === option.id,
-                  onSelect: () => preferences.set("defaultNewWorkspaceMode", option.id),
                 })),
               }]}
             />

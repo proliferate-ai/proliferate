@@ -166,7 +166,7 @@ export function CommandPaletteInput({
 }: CommandPaletteInputProps) {
   return (
     <Command.Input
-      className={`w-full min-w-0 bg-transparent text-composer text-foreground outline-none placeholder:text-muted-foreground ${className ?? ""}`}
+      className={`w-full min-w-0 bg-transparent text-body text-foreground outline-none placeholder:text-muted-foreground ${className ?? ""}`}
       data-telemetry-mask
       {...props}
     />
@@ -210,7 +210,7 @@ export function CommandPaletteItem({
 }: CommandPaletteItemProps) {
   return (
     <Command.Item
-      className={`flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-[5px] text-composer text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-hover ${className ?? ""}`}
+      className={`flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-[5px] text-body text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-hover ${className ?? ""}`}
       {...props}
     />
   );

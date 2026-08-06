@@ -147,7 +147,7 @@ describe("WorkspaceItem", () => {
     expect(cells?.children).toHaveLength(2);
   });
 
-  it("falls back to worktree identity for an authoritative no-PR branch", () => {
+  it("keeps a dim PR identity for an authoritative no-PR branch", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -164,10 +164,10 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "Worktree" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "No pull request" })).toBeTruthy();
   });
 
-  it("falls back to worktree identity when PR data is unknown", () => {
+  it("keeps a dim PR identity when PR data is unknown", () => {
     renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
@@ -176,15 +176,29 @@ describe("WorkspaceItem", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "Worktree" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Pull request status unavailable" })).toBeTruthy();
   });
 
-  it("uses cloud identity when there is no PR or worktree", () => {
+  it("keeps the PR identity in place for cloud workspaces", () => {
     renderWithProductHost(
       <WorkspaceItem name="Cloud workspace" variant="cloud" />,
     );
 
-    expect(screen.getByRole("img", { name: "Cloud workspace" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Pull request status unavailable" })).toBeTruthy();
+  });
+
+  it("shows git attention beside the PR identity", () => {
+    renderWithProductHost(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        gitStatus={makeGitStatus({ attention: "changes_requested" })}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Pull request changes requested" }))
+      .toBeTruthy();
   });
 
   it("shows the unread dot in the right slot when the row needs review", () => {

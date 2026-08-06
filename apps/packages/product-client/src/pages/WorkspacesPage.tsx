@@ -82,7 +82,7 @@ export function WorkspacesPage() {
           ) : null}
           onWorkspaceSelect={actions.handleSelectWorkspace}
           onCreate={() => appCommands.newWorktreeWorkspace.execute("palette")}
-          createShortcutLabel={getShortcutDisplayLabel(SHORTCUTS.newDefault)}
+          createShortcutLabel={getShortcutDisplayLabel(SHORTCUTS.newWorktree)}
         />
       </div>
     </MainSidebarPageShell>

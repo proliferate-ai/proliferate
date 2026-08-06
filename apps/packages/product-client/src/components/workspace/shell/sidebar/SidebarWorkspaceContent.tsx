@@ -41,6 +41,7 @@ interface SidebarWorkspaceContentProps {
     target: CloudWorkspaceRepoTarget,
     repoGroupKeyToExpand: string,
   ) => void;
+  onNewChatForRepository: (sourceRoot: string) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onOpenPullRequest: (url: string) => void;
@@ -51,8 +52,8 @@ interface SidebarWorkspaceContentProps {
     kind: WorkspaceAvailabilityCommandKind,
   ) => void;
   onWorkspaceHover?: () => void;
-  shortcutRevealVisible: boolean;
   shortcutLabelByWorkspaceId: ReadonlyMap<string, string>;
+  shortcutRevealVisible: boolean;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onRenameWorkspace: (
@@ -100,14 +101,15 @@ export function SidebarWorkspaceContent({
   onCreateWorktreeWorkspace,
   onCreateLocalWorkspace,
   onCreateCloudWorkspace,
+  onNewChatForRepository,
   onSelectWorkspace,
   onIndicatorAction,
   onOpenPullRequest,
   onMarkWorkspaceDone,
   onWorkspaceAvailabilityCommand,
   onWorkspaceHover,
-  shortcutRevealVisible,
   shortcutLabelByWorkspaceId,
+  shortcutRevealVisible,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
   onRenameWorkspace,
@@ -173,7 +175,6 @@ export function SidebarWorkspaceContent({
       repoRootId: group.repoRootId,
       cloudRepoTarget: group.cloudRepoTarget,
     });
-
     const environmentKind = resolveRepoGroupEnvironmentKind(group, configuredCloudRepoKeys);
     // Local workspaces need both a local checkout for this repo and a host that
     // can run one. Where neither holds, the create popover offers exactly one
@@ -195,6 +196,7 @@ export function SidebarWorkspaceContent({
         environmentKind={environmentKind}
         localWorkspacesSupported={isDesktopHost}
         onToggleCollapsed={() => onToggleRepoCollapsed(group.sourceRoot)}
+        onNewChat={() => onNewChatForRepository(group.sourceRoot)}
         onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId, group.sourceRoot)}
         onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot, group.sourceRoot)}
         newWorkspaceCommandScope={newWorkspaceCommandScope}

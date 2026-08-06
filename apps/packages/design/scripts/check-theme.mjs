@@ -341,10 +341,23 @@ for (const metric of ["size", "lineHeight", "letterSpacing"]) {
     `typography.${metric} drifted from the closed semantic ramp`,
   );
 }
-// Closed-ramp invariant: chat prose leads the composer by exactly 7px.
+// Closed-ramp invariants: transcript prose gets the more generous reading
+// leading while the composer stays compact inside its fixed-height surface.
 assert(
-  typography.lineHeight.chat === typography.size.composer + 7,
-  "chat line-height must stay composer font-size + 7",
+  typography.size.chat === typography.size.ui + 1,
+  "chat font-size must stay exactly one step above compact UI text",
+);
+assert(
+  typography.size.composer === typography.size.chat,
+  "composer and chat font-size must stay on the same reading rung",
+);
+assert(
+  typography.lineHeight.chat === typography.size.chat + 8,
+  "chat line-height must stay chat font-size + 8",
+);
+assert(
+  typography.lineHeight.composer === typography.size.composer + 6,
+  "composer line-height must stay composer font-size + 6",
 );
 
 /* ------------------------------------------------------------------ *

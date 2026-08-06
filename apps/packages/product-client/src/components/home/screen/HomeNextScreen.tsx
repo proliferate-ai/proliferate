@@ -8,9 +8,9 @@ import {
   ComposerTrailingControls,
 } from "#product/components/workspace/chat/input/ChatInputControlRow";
 import {
-  CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "#product/config/chat-layout";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { Button } from "#product/primitives/Button";
 import { useHomeNextLaunchControls } from "#product/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "#product/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
@@ -136,169 +136,177 @@ export function HomeNextScreen() {
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
-      {/* A visible onboarding row pulls the primary composer above the main
-          viewport center. Keep the same 8rem total scroll padding, bias it
-          6rem/2rem, then finish the measured 1280×720 correction on the stack
-          itself so the composer—not the combined composer/card block—centers. */}
-      <main
-        className={`flex min-h-0 flex-1 items-center justify-center overflow-auto ${
-          homeOnboardingVisible ? "pb-8 pt-24" : "py-16"
-        } ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
-        data-home-composer-vertical-balance={homeOnboardingVisible ? "onboarding" : "default"}
-      >
-        <div className={`${CHAT_COLUMN_CLASSNAME} ${homeOnboardingVisible ? "translate-y-5" : ""}`}>
-          {/* Hero heading (spec §1.1): 28px / 400 / centered; the project name
-              is an inline menu trigger with a pill hover fill. */}
-          <div className="mb-5 flex flex-col items-center text-center">
-            <h1 className="max-w-full whitespace-pre-wrap text-hero font-normal text-foreground">
-              <span className="group/title inline-block max-w-full">
-                {promptTarget ? (
-                  <>
-                    {"What should we build in "}
-                    <HomeProjectMenu
-                      trigger={(
-                        <Button
-                          type="button"
-                          variant="unstyled"
-                          size="unstyled"
-                          aria-label={`Change project: ${promptTarget}`}
-                          className="relative z-0 inline-block cursor-pointer whitespace-pre outline-none after:absolute after:-inset-x-1.5 after:inset-y-0 after:-z-10 after:rounded-xl after:content-[''] hover:after:bg-hover focus-visible:after:bg-hover data-[state=open]:after:bg-active"
-                        >
-                          {promptTarget}
-                        </Button>
-                      )}
-                      coworkAvailable={desktopTargetsAvailable}
-                      side="bottom"
-                      destination={destination}
-                      repositories={homeNext.repositories}
-                      selectedRepository={homeNext.selectedRepository}
-                      onSelectRepository={(sourceRoot) => {
-                        patchTargetSelection({
-                          destination: "repository",
-                          repositorySelection: { kind: "repository", sourceRoot },
-                          repoLaunchKind: launchKindForRepository(sourceRoot),
-                        });
-                      }}
-                      onSelectCowork={() => {
-                        patchTargetSelection({ destination: "cowork" });
-                      }}
-                      onAddRepository={() => handleHomeAction("add-repository")}
-                    />
-                    ?
-                  </>
-                ) : (
-                  "What should we build?"
-                )}
-              </span>
-            </h1>
-          </div>
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className={`flex min-h-0 flex-1 basis-0 items-end justify-center pb-24 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
+          <div className="relative mx-auto w-full max-w-transcript-thread">
+            <div className="flex flex-col items-center text-center">
+              <h1 className="max-w-full whitespace-pre-wrap text-hero font-medium text-foreground select-none">
+                <span className="group/title inline-block max-w-full">
+                  {promptTarget ? (
+                    <>
+                      {"What should we build in "}
+                      <HomeProjectMenu
+                        trigger={(
+                          <Button
+                            type="button"
+                            variant="unstyled"
+                            size="unstyled"
+                            aria-label={`Change project: ${promptTarget}`}
+                            className="inline-block cursor-pointer whitespace-pre underline decoration-dotted decoration-1 decoration-foreground/50 underline-offset-4 outline-none transition-opacity hover:opacity-65 focus-visible:opacity-65 data-[state=open]:opacity-65"
+                          >
+                            {promptTarget}
+                          </Button>
+                        )}
+                        coworkAvailable={desktopTargetsAvailable}
+                        side="bottom"
+                        destination={destination}
+                        repositories={homeNext.repositories}
+                        selectedRepository={homeNext.selectedRepository}
+                        onSelectRepository={(sourceRoot) => {
+                          patchTargetSelection({
+                            destination: "repository",
+                            repositorySelection: { kind: "repository", sourceRoot },
+                            repoLaunchKind: launchKindForRepository(sourceRoot),
+                          });
+                        }}
+                        onSelectCowork={() => {
+                          patchTargetSelection({ destination: "cowork" });
+                        }}
+                        onAddRepository={() => handleHomeAction("add-repository")}
+                      />
+                      ?
+                    </>
+                  ) : (
+                    "What should we build?"
+                  )}
+                </span>
+              </h1>
+            </div>
 
-          <HomeComposerForm
-            targetDisabledReason={homeNext.targetDisabledReason}
-            modelAvailabilityState={homeNext.modelAvailabilityState}
-            canLaunchTarget={homeNext.canLaunchTarget}
-            modelSelection={homeNext.effectiveModelSelection}
-            modeId={homeNext.effectiveModeId}
-            launchControlValues={homeLaunchControls.launchControlValues}
-            launchTarget={homeNext.launchTarget}
-            controlsSlot={(
-              <ComposerLeadingControls
-                runtimeControlsDisabled={false}
-                modelSelectorProps={homeModelSelectorProps}
-                agentKind={homeAgentKind}
-                sessionConfigControls={homeSessionConfigControls}
-                activeSessionId={null}
-              />
-            )}
-            controlsTrailingSlot={(
-              <ComposerTrailingControls
-                runtimeControlsDisabled={false}
-                isEditingQueuedPrompt={false}
-                chatDisabled={false}
-                isSubmitting={false}
-                supportsAttachments={false}
-                canAttachFiles={false}
-                activeSessionId={null}
-                onAttachFile={() => {}}
-              />
-            )}
-            targetPickerSlot={(
-              <HomeTargetPicker
-                desktopTargetsAvailable={desktopTargetsAvailable}
-                destination={destination}
-                repoLaunchKind={repoLaunchKind}
-                repositories={homeNext.repositories}
-                selectedRepository={homeNext.selectedRepository}
-                selectedBranchName={homeNext.selectedBranchName}
-                branchOptions={homeNext.branchOptions}
-                branchLoading={homeNext.branchQuery.isLoading}
-                cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
-                sshTargetOptions={homeNext.sshTargetOptions}
-                selectedSshTargetId={selectedSshTargetId}
-                sshTargetsLoading={homeNext.sshTargetsLoading}
-                onSelectCowork={() => {
-                  patchTargetSelection({ destination: "cowork" });
-                }}
-                onSelectRepository={(sourceRoot) => {
-                  patchTargetSelection({
-                    destination: "repository",
-                    repositorySelection: { kind: "repository", sourceRoot },
-                    repoLaunchKind: launchKindForRepository(sourceRoot),
-                  });
-                }}
-                onSelectRuntime={(launchKind, targetId = null) => {
-                  if (!desktopTargetsAvailable && launchKind !== "cloud") return;
-                  patchTargetSelection({
-                    repoLaunchKind: launchKind,
-                    selectedSshTargetId: launchKind === "ssh" ? targetId : selectedSshTargetId,
-                  });
-                }}
-                onSelectBranch={(branchName) => {
-                  patchTargetSelection({ baseBranchOverride: branchName });
-                }}
-                onAddRepository={() => handleHomeAction("add-repository")}
-                onConfigureCloud={configureCloud}
-              />
-            )}
-            modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
-              <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
-                <span>{modelAvailabilityNotice.text}</span>
-                {modelAvailabilityNotice.actionLabel ? (
+            {homeOnboardingVisible ? (
+              <div
+                className="absolute inset-x-[29px] top-full mt-8"
+                data-home-onboarding-region
+              >
+                <DebugProfiler id="home-onboarding">
+                  <HomeOnboardingCards
+                    cards={onboardingCards}
+                    isAddingRepo={isAddingRepo}
+                    onSelect={(card) => handleHomeAction(card.id)}
+                    authSetup={authSetupStep}
+                    modelProbe={modelProbeState}
+                    onOpenAgents={() => handleHomeAction("agent-settings")}
+                    onDismissModelProbe={dismissModelProbeCard}
+                  />
+                </DebugProfiler>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 basis-0" />
+
+        <div
+          className={`relative z-raised shrink-0 pb-4 pt-1.5 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
+          data-home-composer-dock
+        >
+          <div className="mx-auto w-full max-w-transcript-thread">
+            <HomeComposerForm
+              targetDisabledReason={homeNext.targetDisabledReason}
+              modelAvailabilityState={homeNext.modelAvailabilityState}
+              canLaunchTarget={homeNext.canLaunchTarget}
+              modelSelection={homeNext.effectiveModelSelection}
+              modeId={homeNext.effectiveModeId}
+              launchControlValues={homeLaunchControls.launchControlValues}
+              launchTarget={homeNext.launchTarget}
+              controlsSlot={(
+                <ComposerLeadingControls
+                  runtimeControlsDisabled={false}
+                  modelSelectorProps={homeModelSelectorProps}
+                  agentKind={homeAgentKind}
+                  sessionConfigControls={homeSessionConfigControls}
+                  activeSessionId={null}
+                />
+              )}
+              controlsTrailingSlot={(
+                <ComposerTrailingControls
+                  runtimeControlsDisabled={false}
+                  isEditingQueuedPrompt={false}
+                  chatDisabled={false}
+                  isSubmitting={false}
+                  supportsAttachments={false}
+                  canAttachFiles={false}
+                  activeSessionId={null}
+                  onAttachFile={() => {}}
+                />
+              )}
+              targetPickerSlot={(
+                <HomeTargetPicker
+                  desktopTargetsAvailable={desktopTargetsAvailable}
+                  destination={destination}
+                  repoLaunchKind={repoLaunchKind}
+                  repositories={homeNext.repositories}
+                  selectedRepository={homeNext.selectedRepository}
+                  selectedBranchName={homeNext.selectedBranchName}
+                  branchOptions={homeNext.branchOptions}
+                  branchLoading={homeNext.branchQuery.isLoading}
+                  cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
+                  sshTargetOptions={homeNext.sshTargetOptions}
+                  selectedSshTargetId={selectedSshTargetId}
+                  sshTargetsLoading={homeNext.sshTargetsLoading}
+                  onSelectCowork={() => {
+                    patchTargetSelection({ destination: "cowork" });
+                  }}
+                  onSelectRepository={(sourceRoot) => {
+                    patchTargetSelection({
+                      destination: "repository",
+                      repositorySelection: { kind: "repository", sourceRoot },
+                      repoLaunchKind: launchKindForRepository(sourceRoot),
+                    });
+                  }}
+                  onSelectRuntime={(launchKind, targetId = null) => {
+                    if (!desktopTargetsAvailable && launchKind !== "cloud") return;
+                    patchTargetSelection({
+                      repoLaunchKind: launchKind,
+                      selectedSshTargetId: launchKind === "ssh" ? targetId : selectedSshTargetId,
+                    });
+                  }}
+                  onSelectBranch={(branchName) => {
+                    patchTargetSelection({ baseBranchOverride: branchName });
+                  }}
+                  onAddRepository={() => handleHomeAction("add-repository")}
+                  onConfigureCloud={configureCloud}
+                />
+              )}
+              modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
+                <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
+                  <span>{modelAvailabilityNotice.text}</span>
+                  {modelAvailabilityNotice.actionLabel ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleHomeAction("agent-settings")}
+                      className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                    >
+                      {modelAvailabilityNotice.actionLabel}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+              submitDisabledReasonCtaSlot={
+                repoLaunchKind === "cloud" && homeNext.cloudRepoAction.kind === "configure" ? (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleHomeAction("agent-settings")}
+                    onClick={() => configureCloud()}
                     className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
                   >
-                    {modelAvailabilityNotice.actionLabel}
+                    {homeNext.cloudRepoAction.label}
                   </Button>
-                ) : null}
-              </div>
-            ) : null}
-            submitDisabledReasonCtaSlot={
-              repoLaunchKind === "cloud" && homeNext.cloudRepoAction.kind === "configure" ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => configureCloud()}
-                  className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                >
-                  {homeNext.cloudRepoAction.label}
-                </Button>
-              ) : null
-            }
-            onboardingSlot={(
-              <HomeOnboardingCards
-                cards={onboardingCards}
-                isAddingRepo={isAddingRepo}
-                onSelect={(card) => handleHomeAction(card.id)}
-                authSetup={authSetupStep}
-                modelProbe={modelProbeState}
-                onOpenAgents={() => handleHomeAction("agent-settings")}
-                onDismissModelProbe={dismissModelProbeCard}
-              />
-            )}
-          />
+                ) : null
+              }
+            />
+          </div>
         </div>
       </main>
     </div>

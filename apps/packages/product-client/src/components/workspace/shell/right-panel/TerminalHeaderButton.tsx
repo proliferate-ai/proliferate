@@ -91,12 +91,10 @@ export function TerminalHeaderButton({
           data-dirty={unread ? true : undefined}
           aria-hidden="true"
         />
-        {shortcutLabel ? (
+        {shortcutRevealVisible && shortcutLabel ? (
           <ShortcutBadge
             label={shortcutLabel}
-            className={`right-panel-shortcut-badge opacity-0 transition-opacity duration-hover ${
-              shortcutRevealVisible ? "opacity-100" : ""
-            }`}
+            className="right-panel-shortcut-badge"
           />
         ) : null}
       </span>

@@ -96,15 +96,14 @@ export function TargetPickerMenuItem({
 interface HomeTargetRowItemProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon?: ReactNode;
-  /** Value ("proliferate", "New worktree") — 13px weight 400 muted. */
+  /** Value ("proliferate", "New worktree") shown in the attached utility bar. */
   value: string;
   disclosure?: boolean;
 }
 
 /**
- * Home footer item (UX spec §1.3, anchor `_externalFooterItem`):
- * inline "value ▾" trigger — 13px text, value weight 400 truncated,
- * 12px `--faint` chevron, pill hover fill.
+ * Home utility-bar item: compact inline "icon value ▾" trigger with a
+ * quiet pill hover fill.
  */
 export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItemProps>(
   function HomeTargetRowItem(
@@ -118,7 +117,7 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
         variant="unstyled"
         size="unstyled"
         className={twMerge(
-          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-ui text-muted-foreground outline-none transition-colors enabled:hover:bg-hover enabled:active:bg-active enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-active data-[state=open]:text-foreground",
+          "flex h-7 min-w-0 select-none items-center gap-1.5 whitespace-nowrap rounded-full border border-transparent px-2.5 py-0 text-body text-foreground outline-none transition-colors enabled:hover:bg-hover enabled:active:bg-active disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-active",
           className,
         )}
         {...props}
@@ -128,7 +127,7 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
           <span className="min-w-0 max-w-60 truncate font-normal">{value}</span>
         </span>
         {disclosure ? (
-          <ChevronDown className="icon-compact shrink-0 text-faint" />
+          <ChevronDown className="icon-compact shrink-0 text-foreground" />
         ) : null}
       </Button>
     );
