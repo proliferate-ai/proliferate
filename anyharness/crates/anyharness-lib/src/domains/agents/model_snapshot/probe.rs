@@ -34,8 +34,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::domains::agents::model::AgentKind;
-use crate::domains::agents::readiness::service::resolve_agent_unrouted;
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::readiness::service::resolve_agent_unrouted_by_kind;
 use crate::domains::agents::route_auth::{
     self, GatewayModelPlan, ProbeAuthMaterial, RouteAuthError,
 };
@@ -125,21 +124,6 @@ impl ProbeRunner for AcpProbeRunner {
                 detail: format!("unknown harness kind '{}'", request.harness_kind),
             });
         };
-        // Resolved here, not inside `probe_agent`: `live/` never fetches from a
-        // domain service (LIVE_DOMAIN_STORE_IMPORT), so the fact crosses the
-        // live boundary as a value on `ProbeOptions`, not as an import.
-        // Unrouted: artifact paths only; a route supplies credentials, not
-        // binaries — materialize_for_probe below layers those on separately.
-        let registry = built_in_registry();
-        let Some(descriptor) = registry
-            .iter()
-            .find(|descriptor| descriptor.kind == agent_kind)
-        else {
-            return Err(ProbeError::Failed {
-                detail: format!("agent kind {} not in registry", agent_kind.as_str()),
-            });
-        };
-        let resolved = resolve_agent_unrouted(descriptor, &request.runtime_home);
 
         let cancel = CancellationToken::new();
         // Dropping the caller's future fires the token, so a cancelled probe still
@@ -151,6 +135,31 @@ impl ProbeRunner for AcpProbeRunner {
         std::thread::Builder::new()
             .name(thread_name)
             .spawn(move || {
+                // Resolved here, on the dedicated thread, NOT in the async fn's own
+                // body: this is a blocking FS scan plus a `node --version`
+                // subprocess (readiness/compatibility.rs), and the async fn above
+                // runs on a shared tokio worker that every other in-flight probe
+                // (and unrelated async work on this runtime) also depends on.
+                // Blocking that worker here would stall them all; this thread
+                // blocks only itself. Resolved before `materialize_for_probe`
+                // below, so a bad agent kind still fails before the scratch is
+                // touched — the property this PR's review called out as worth
+                // keeping. Unrouted: artifact paths only; a route supplies
+                // credentials, not binaries — materialize_for_probe below layers
+                // those on separately. Goes through `resolve_agent_unrouted_by_kind`
+                // (not a hand-rolled registry lookup) so this call site, the
+                // `catalog-probe` CLI, and the probe-materialization test share
+                // the one lookup-then-resolve implementation.
+                let resolved =
+                    match resolve_agent_unrouted_by_kind(&agent_kind, &request.runtime_home) {
+                        Ok(resolved) => resolved,
+                        Err(error) => {
+                            let _ = done_tx.send(Err(ProbeError::Failed {
+                                detail: error.to_string(),
+                            }));
+                            return;
+                        }
+                    };
                 let runtime = match tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()

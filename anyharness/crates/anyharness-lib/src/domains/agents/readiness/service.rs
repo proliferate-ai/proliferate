@@ -60,20 +60,32 @@ pub fn resolve_agent_unrouted(
 /// [`resolve_agent_unrouted`], but looking the descriptor up by [`AgentKind`]
 /// against the built-in registry first. For callers that only have the kind
 /// (every `live::sessions::probe::ProbeOptions` builder: `AcpProbeRunner::run`,
-/// the `catalog-probe` CLI, and probe-materialization tests), so the
-/// registry-lookup-then-resolve pair — required at each of those call sites
-/// once `live/` stopped doing it internally (grid plan PR 7) — has one
-/// implementation instead of three.
+/// the `catalog-probe` CLI, and the probe-materialization test all call this
+/// directly), so the registry-lookup-then-resolve pair — required at each of
+/// those call sites once `live/` stopped doing it internally (grid plan PR 7)
+/// — has one implementation instead of three, including the "kind not in
+/// registry" error text.
 pub fn resolve_agent_unrouted_by_kind(
     kind: &AgentKind,
     runtime_home: &Path,
 ) -> Result<ResolvedAgent, AgentKindNotRegisteredError> {
     let registry = crate::domains::agents::registry::built_in_registry();
-    let descriptor = registry
+    let descriptor = find_descriptor_by_kind(&registry, kind)?;
+    Ok(resolve_agent_unrouted(descriptor, runtime_home))
+}
+
+/// The lookup half of [`resolve_agent_unrouted_by_kind`], split out so the
+/// not-in-registry arm is testable against a hand-built slice instead of only
+/// the real bundled registry (which always carries every [`AgentKind`]
+/// variant today, so the error arm is otherwise unreachable from a test).
+fn find_descriptor_by_kind<'a>(
+    registry: &'a [AgentDescriptor],
+    kind: &AgentKind,
+) -> Result<&'a AgentDescriptor, AgentKindNotRegisteredError> {
+    registry
         .iter()
         .find(|descriptor| &descriptor.kind == kind)
-        .ok_or_else(|| AgentKindNotRegisteredError(kind.as_str().to_string()))?;
-    Ok(resolve_agent_unrouted(descriptor, runtime_home))
+        .ok_or_else(|| AgentKindNotRegisteredError(kind.as_str().to_string()))
 }
 
 #[derive(Debug, thiserror::Error)]
