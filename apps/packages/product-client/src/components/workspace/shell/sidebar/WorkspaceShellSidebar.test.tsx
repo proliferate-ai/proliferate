@@ -11,11 +11,30 @@ vi.mock("#product/components/diagnostics/DebugProfiler", () => ({
 }));
 
 vi.mock("#product/components/workspace/shell/sidebar/MainSidebar", () => ({
-  MainSidebar: () => <div data-testid="main-sidebar-body" />,
+  MainSidebar: ({ showRightBorder }: { showRightBorder?: boolean }) => (
+    <div
+      data-testid="main-sidebar-body"
+      data-show-right-border={showRightBorder ? "true" : "false"}
+    >
+      <button type="button">Main navigation item</button>
+    </div>
+  ),
 }));
 
 vi.mock("#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls", () => ({
-  WorkspaceSidebarHeaderControls: () => <div data-testid="sidebar-header-controls" />,
+  WorkspaceSidebarHeaderControls: ({
+    onToggleSidebar,
+  }: {
+    onToggleSidebar: () => void;
+  }) => (
+    <button data-testid="sidebar-header-controls" onClick={onToggleSidebar}>
+      Toggle
+    </button>
+  ),
+}));
+
+vi.mock("#product/components/app/sidebar/SidebarUpdateFooterButton", () => ({
+  SidebarUpdateFooterButton: () => <div data-testid="sidebar-update-control" />,
 }));
 
 const coarsePointer = vi.hoisted(() => ({ value: false }));
@@ -24,9 +43,18 @@ vi.mock("#product/hooks/ui/layout/use-coarse-pointer", () => ({
   useCoarsePointer: () => coarsePointer.value,
 }));
 
-function renderSidebar(open = false) {
+function renderSidebar(
+  open = false,
+  onToggleSidebar: (options?: { snapGeometry?: boolean }) => void = () => {},
+  showAnimatedDivider = false,
+) {
   const result = render(
-    <WorkspaceShellSidebar open={open} width={280} onToggleSidebar={() => {}} />,
+    <WorkspaceShellSidebar
+      open={open}
+      width={280}
+      showAnimatedDivider={showAnimatedDivider}
+      onToggleSidebar={onToggleSidebar}
+    />,
   );
   const panel = document.getElementById("main-sidebar");
   if (!panel) {
@@ -36,7 +64,11 @@ function renderSidebar(open = false) {
   if (!trigger) {
     throw new Error("peek trigger did not render");
   }
-  return { ...result, panel, trigger };
+  const holdZone = document.querySelector("[data-sidebar-peek-hold-zone]");
+  if (!holdZone) {
+    throw new Error("peek hold zone did not render");
+  }
+  return { ...result, panel, trigger, holdZone };
 }
 
 function peekState(panel: HTMLElement): string | null {
@@ -66,11 +98,8 @@ describe("WorkspaceShellSidebar hover peek", () => {
   });
 
   /**
-   * The whole point of the grace period. The collapsed layout puts the "Show
-   * sidebar" toggle in the header, OUTSIDE the peeked panel, so travelling to it
-   * fires `mouseleave` on the panel. Closing on that instant meant the panel
-   * faded out and the resulting click faded it straight back in — two
-   * animations for one gesture.
+   * The grace period lets the pointer travel from the panel into persistent
+   * window chrome without starting a visible close/reopen cycle.
    */
   it("keeps the peek open across a brief exit and re-entry", () => {
     const { panel, trigger } = renderSidebar();
@@ -95,7 +124,7 @@ describe("WorkspaceShellSidebar hover peek", () => {
     expect(peekState(panel)).toBe("open");
   });
 
-  it("closes the peek once the grace period elapses", () => {
+  it("finishes the peek exit after the grace and exit durations", () => {
     const { panel, trigger } = renderSidebar();
     fireEvent.mouseEnter(trigger);
     fireEvent.mouseLeave(panel);
@@ -104,7 +133,68 @@ describe("WorkspaceShellSidebar hover peek", () => {
       vi.advanceTimersByTime(motion.delay.hoverCardHideMs);
     });
 
+    expect(peekState(panel)).toBe("closing");
+
+    act(() => {
+      vi.advanceTimersByTime(motion.duration.exitMs);
+    });
     expect(peekState(panel)).toBe("closed");
+  });
+
+  it("does not arm from the pinned toggle or header hold zone", () => {
+    const { panel, holdZone, getByTestId } = renderSidebar();
+
+    fireEvent.mouseEnter(holdZone);
+    fireEvent.mouseEnter(getByTestId("sidebar-header-controls"));
+
+    expect(peekState(panel)).toBe("closed");
+  });
+
+  it("centers the pinned toggle in the shared title row", () => {
+    const { getByTestId } = renderSidebar();
+    const pinnedChrome = getByTestId("sidebar-header-controls").parentElement?.parentElement;
+
+    expect(pinnedChrome?.className).toContain("top-0");
+    expect(pinnedChrome?.className).toContain("h-[46px]");
+  });
+
+  it("keeps the pinned toggle before sidebar navigation in keyboard order", () => {
+    const { getAllByRole, getByRole, getByTestId } = renderSidebar(true);
+    const buttons = getAllByRole("button");
+
+    expect(buttons.indexOf(getByTestId("sidebar-header-controls")))
+      .toBeLessThan(buttons.indexOf(getByRole("button", { name: "Main navigation item" })));
+  });
+
+  it("renders a full-height divider at the animated edge when requested", () => {
+    renderSidebar(true, () => {}, true);
+    const divider = document.querySelector("[data-workspace-left-divider]");
+
+    expect(divider).not.toBeNull();
+    expect(divider?.className).toContain("inset-y-0");
+    expect(divider?.getAttribute("style")).toContain("--workspace-left-width");
+  });
+
+  it("leaves the full-height workspace shell as the open divider owner", () => {
+    const { getByTestId } = renderSidebar(true);
+
+    expect(getByTestId("main-sidebar-body").getAttribute("data-show-right-border"))
+      .toBe("false");
+  });
+
+  it("lets the header hold zone cancel a peek that is mid-fade-out", () => {
+    const { panel, trigger, holdZone } = renderSidebar();
+    fireEvent.mouseEnter(trigger);
+    fireEvent.mouseLeave(panel);
+    act(() => {
+      vi.advanceTimersByTime(motion.delay.hoverCardHideMs);
+    });
+    expect(peekState(panel)).toBe("closing");
+
+    fireEvent.mouseEnter(holdZone);
+
+    expect(peekState(panel)).toBe("open");
+    expect(panel.className).toContain("translate-x-0");
   });
 
   /**
@@ -163,6 +253,80 @@ describe("WorkspaceShellSidebar hover peek", () => {
     // start from hidden rather than inheriting this hover.
     expect(peekState(panel)).toBe("inactive");
     expect(panel.className).toContain("opacity-100");
+  });
+
+  it("fades in place during toggle-close, then restores the peek offset", () => {
+    const { panel, rerender } = renderSidebar(true);
+
+    rerender(<WorkspaceShellSidebar open={false} width={280} onToggleSidebar={() => {}} />);
+
+    expect(peekState(panel)).toBe("toggle-closing");
+    expect(panel.className).toContain("translate-x-0");
+    expect(panel.className).not.toContain("-translate-x-2");
+    expect(panel.className).toContain("transition-opacity");
+
+    act(() => {
+      vi.advanceTimersByTime(motion.duration.panelMs);
+    });
+
+    expect(peekState(panel)).toBe("closed");
+    expect(panel.className).toContain("-translate-x-2");
+  });
+
+  it("repaints the peek offset before peeking immediately after a toggle-close", () => {
+    const { panel, trigger, rerender } = renderSidebar(true);
+    rerender(<WorkspaceShellSidebar open={false} width={280} onToggleSidebar={() => {}} />);
+
+    fireEvent.mouseEnter(trigger);
+    expect(peekState(panel)).toBe("preparing");
+    expect(panel.className).toContain("transition-none");
+    expect(panel.className).toContain("-translate-x-2");
+
+    act(() => {
+      vi.advanceTimersByTime(40);
+    });
+
+    expect(peekState(panel)).toBe("open");
+    expect(panel.className).toContain("translate-x-0");
+    expect(panel.className).toContain("duration-panel");
+  });
+
+  it("requests a geometry snap when the persistent toggle pins a peek", () => {
+    const onToggleSidebar = vi.fn();
+    const { panel, trigger, getByTestId } = renderSidebar(false, onToggleSidebar);
+    fireEvent.mouseEnter(trigger);
+    expect(peekState(panel)).toBe("open");
+
+    fireEvent.click(getByTestId("sidebar-header-controls"));
+
+    expect(onToggleSidebar).toHaveBeenCalledWith({ snapGeometry: true });
+  });
+
+  it("keeps a mid-exit peek fully visible when pinning snaps it open", () => {
+    const onToggleSidebar = vi.fn();
+    const { panel, trigger, getByTestId, rerender } = renderSidebar(false, onToggleSidebar);
+    fireEvent.mouseEnter(trigger);
+    fireEvent.mouseLeave(panel);
+    act(() => {
+      vi.advanceTimersByTime(motion.delay.hoverCardHideMs);
+    });
+    expect(peekState(panel)).toBe("closing");
+
+    fireEvent.click(getByTestId("sidebar-header-controls"));
+    expect(onToggleSidebar).toHaveBeenCalledWith({ snapGeometry: true });
+
+    rerender(
+      <WorkspaceShellSidebar
+        open
+        width={280}
+        snapGeometry
+        onToggleSidebar={onToggleSidebar}
+      />,
+    );
+    expect(peekState(panel)).toBe("inactive");
+    expect(panel.className).toContain("opacity-100");
+    expect(panel.className).toContain("transition-none");
+    expect(panel.className).not.toContain("duration-enter");
   });
 
   it("keeps the collapsed panel out of the tab order until it peeks", () => {

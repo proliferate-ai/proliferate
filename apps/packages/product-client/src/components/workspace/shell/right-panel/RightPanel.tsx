@@ -22,7 +22,6 @@ interface RightPanelProps {
   onStateChange: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
   terminalActivationRequest: RightPanelTerminalActivationRequest | null;
   focusRequestToken?: number;
-  onTogglePanel: () => void;
   onTerminalActivationRequestHandled: (request: RightPanelTerminalActivationRequest) => void;
 }
 

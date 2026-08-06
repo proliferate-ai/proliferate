@@ -1,7 +1,7 @@
 import { useProductHost } from "#product/host/ProductHostProvider";
 
 /**
- * Left inset that clears the macOS window buttons in a 40px title row.
+ * Left inset that clears the macOS window buttons in a 46px title row.
  * Only apply it through `useMacWindowControlsInsetClass` — a host without
  * those buttons (Web, Windows, Linux) must not reserve the gap, or the space
  * reads as a broken hole at the top of the surface.

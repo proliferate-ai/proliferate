@@ -1,5 +1,6 @@
 const MAC_TRAFFIC_LIGHT_X: f64 = 13.0;
-const MAC_HEADER_HEIGHT: f64 = 40.0;
+// Matches the shared workspace header and right-panel tab-system height.
+const MAC_HEADER_HEIGHT: f64 = 46.0;
 
 #[tauri::command]
 pub fn apply_macos_window_chrome(window: tauri::Window) -> Result<(), String> {

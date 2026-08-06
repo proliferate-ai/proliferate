@@ -1,6 +1,33 @@
 /* Authenticated-only interaction styles stay behind the lazy product boundary
  * so chat affordances do not consume the public login shell's CSS budget. */
 
+@property --workspace-left-width {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --workspace-right-width {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+.standard-workspace-shell {
+  --workspace-left-geometry-duration: var(--duration-panel);
+  transition-property: --workspace-left-width, --workspace-right-width;
+  transition-duration: var(--workspace-left-geometry-duration), var(--duration-panel);
+  transition-timing-function: var(--ease-out-cubic), var(--ease-out-cubic);
+}
+
+.standard-workspace-shell[data-snap-left-geometry="true"] {
+  --workspace-left-geometry-duration: 0ms;
+}
+
+.standard-workspace-shell[data-manual-workspace-geometry="true"] {
+  transition: none;
+}
+
 /* Transcript Markdown owns one scoped semantic type contract. The body scale
    comes from its surrounding message (or the secondary-chat fallback), while
    the hierarchy derives from runtime appearance tokens instead of frozen px

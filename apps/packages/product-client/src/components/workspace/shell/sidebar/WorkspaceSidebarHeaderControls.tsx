@@ -13,13 +13,10 @@ interface WorkspaceSidebarHeaderControlsProps {
 }
 
 /**
- * Top-left window chrome: the sidebar toggle, plus whatever the caller needs
- * reachable even while the sidebar itself is gone. The update control lives
- * in the sidebar footer while the sidebar is open, but that footer unmounts
- * along with the rest of the panel when it collapses — a caller rendering
- * this component for the collapsed state passes the update button in as
- * `trailing` so it stays a normal tab-focusable element in the always-on
- * chrome, rather than something a hover-only peek has to surface.
+ * Persistent top-left window chrome: the sidebar toggle, plus whatever must
+ * remain reachable while the sidebar is collapsed. The owning shell mounts
+ * this once above both the sidebar and content surfaces so the glyph never
+ * moves or fades during a toggle.
  *
  * The macOS window-controls inset is resolved here rather than passed in by
  * callers, so every call site gets the same host check instead of each one

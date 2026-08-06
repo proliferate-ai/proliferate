@@ -45,17 +45,28 @@ export function WorkspaceShellRightRail({
         // explicit toggle animates the collapse the drag triggered, and
         // `prefers-reduced-motion` zeroes `--duration-panel` so the panel snaps
         // shut instead.
-        className="isolate shrink-0 overflow-hidden transition-[width] duration-panel ease-standard"
-        style={{ width: open ? width : 0 }}
+        className="relative isolate shrink-0 overflow-hidden bg-sidebar-background"
+        style={{ width: "var(--workspace-right-width)" }}
+        data-right-panel-rail
       >
         <DebugProfiler id="workspace-right-panel">
-          {/* Pinning the panel body at the domain minimum keeps its content laid
-              out at a legible width while the container width animates to 0, so
-              a collapse slides the panel out instead of crushing its chrome. */}
-          <div className="h-full" style={{ minWidth: RIGHT_PANEL_MIN_WIDTH }}>
+          <div
+            className={`absolute inset-y-0 right-0 transition-opacity will-change-opacity ${
+              open
+                ? "pointer-events-auto opacity-100 duration-enter ease-out-cubic"
+                : "pointer-events-none opacity-0 duration-exit ease-out-cubic"
+            }`}
+            style={{ width: Math.max(width, RIGHT_PANEL_MIN_WIDTH) }}
+            inert={!open}
+            data-right-panel-content
+          >
             <RightPanel isOpen={open} {...rightPanelProps} />
           </div>
         </DebugProfiler>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 z-raised w-px bg-border"
+        />
       </div>
     </>
   );

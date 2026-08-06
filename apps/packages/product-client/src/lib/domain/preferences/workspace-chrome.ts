@@ -85,11 +85,15 @@ export function resolveStandardWorkspaceChromeClasses({
     // opaque regardless of chrome mode, so a transparent shell only ever
     // exposed window vibrancy through the header/footer/right-panel bands —
     // rendering them as off-shade stripes on every theme.
-    contentShell: [
-      "bg-background",
-      sidebarOpen && !transparent ? "rounded-tl-2xl border-l border-border" : "",
-      sidebarOpen && !transparent && showContentTopBorder ? "border-t" : "",
-    ].filter(Boolean).join(" "),
+    contentShell: transparent
+      ? "bg-background"
+      : [
+          "bg-background border-l transition-[border-color,border-top-left-radius] duration-panel ease-out-cubic",
+          showContentTopBorder ? "border-t" : "",
+          sidebarOpen
+            ? "rounded-tl-2xl border-border"
+            : "rounded-tl-none border-transparent",
+        ].filter(Boolean).join(" "),
     header,
   };
 }

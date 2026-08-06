@@ -37,7 +37,6 @@ export interface UseRightPanelControllerOptions {
   onStateChange: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
   terminalActivationRequest: RightPanelTerminalActivationRequest | null;
   focusRequestToken?: number;
-  onTogglePanel: () => void;
   onTerminalActivationRequestHandled: (request: RightPanelTerminalActivationRequest) => void;
 }
 
@@ -53,7 +52,6 @@ export function useRightPanelController({
   onStateChange,
   terminalActivationRequest,
   focusRequestToken = 0,
-  onTogglePanel,
   onTerminalActivationRequestHandled,
 }: UseRightPanelControllerOptions) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -186,6 +184,5 @@ export function useRightPanelController({
     onCreateTerminal: actions.handleCreateTerminal,
     onOpenRepoSettings: actions.handleOpenRepoSettings,
     onReorderHeaderEntry: actions.handleReorderHeaderEntry,
-    onTogglePanel,
   };
 }

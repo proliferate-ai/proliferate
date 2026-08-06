@@ -60,7 +60,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         })}`}
         style={{ width: sidebarOpen ? sidebarWidth : 0 }}
       >
-        <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
+        <div className="flex h-[46px] shrink-0 items-center" data-tauri-drag-region="true">
           <div className={`flex h-full items-center gap-2 ${macWindowControlsInsetClass}`}>
             <IconButton
               tone="sidebar"
@@ -92,7 +92,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
       >
         <div
-          className="absolute left-0 right-0 top-0 z-20 h-10"
+          className="absolute left-0 right-0 top-0 z-20 h-[46px]"
           data-tauri-drag-region="true"
         >
           {!sidebarOpen && (
