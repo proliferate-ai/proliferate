@@ -467,3 +467,27 @@ with everything).
 - **Then**: PR 6a → 6b → 7, the structural core.
 - **Then**: PR 8 → 9; PR 11 docs PR anytime; PR 10.x cadence begins.
 - PR 12 brief and PR 13 wait for the train to be quiet + rulings.
+
+## Merge choreography (state 2026-08-05, Pablo merges)
+
+Open stack, in merge order:
+
+1. **#1651** `codex/anyharness-grid-checker` @ 87147cce2 — PR 1, checker.
+   Review chain closed (initial F1–F9 → hardening → delta re-review no-P1 →
+   P2 closure, byte-identical). Merge first.
+2. **#1654** `codex/anyharness-api-store-escapes` @ 762f38925 — PR 3, base =
+   #1651's branch. After #1651 merges: retarget base to main. Its tree
+   predates the P2-closure checker commits (87147cce2), so the retarget
+   merge/update brings those in — proven forward-compatible: the P2-closure
+   checker runs exit-0 against the descendant tree with its own allowlist.
+3. **#1657** `codex/anyharness-sql-fold-workspaces` @ 6845e1f9f — PR 5a,
+   base = #1654's branch. After #1654 merges: retarget to main. Carries the
+   anchor-test repoint (retention_policy.rs:29 → completions.rs:128) that
+   the P2-closure test file needs on this tree; the base-sync that brings
+   in 87147cce2's test file will surface exactly one anchor subTest failure
+   until this PR's repoint is applied on top — merge order handles it, but
+   if the checker files and PR 5a's fold land out of order, re-run the
+   anchor repoint (one line).
+
+PR 6a (`codex/anyharness-mobility-valve`, in build) stacks on #1651's
+branch and joins the queue behind #1657.
