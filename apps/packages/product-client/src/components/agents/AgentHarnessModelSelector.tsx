@@ -1,8 +1,8 @@
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { Check, ChevronDown } from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { Check, ChevronDown } from "#product/primitives/icons/core";
+import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 
 export interface AgentHarnessModelOption {
   id: string;

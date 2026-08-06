@@ -1,9 +1,9 @@
 import { type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cloud } from "lucide-react";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { resolveRepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { Button } from "#product/primitives/Button";
+import { resolveRepositoryReadiness } from "#product/domain/repos/repo-readiness";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";

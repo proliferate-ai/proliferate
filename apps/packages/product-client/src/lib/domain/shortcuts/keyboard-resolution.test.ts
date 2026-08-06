@@ -56,7 +56,7 @@ describe("resolveKeyboardShortcut", () => {
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
-    // Plain Ctrl+N is the "New workspace" default binding (workspace.new-default).
+    // Plain Ctrl+N is the "Open new chat" default binding (workspace.new-default).
     expect(resolveKeyboardShortcut({
       key: "n",
       code: "KeyN",
@@ -217,7 +217,7 @@ describe("resolveKeyboardShortcut", () => {
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
-    // Plain Cmd+N is the "New workspace" default binding (workspace.new-default).
+    // Plain Cmd+N is the "Open new chat" default binding (workspace.new-default).
     expect(resolveKeyboardShortcut({
       key: "n",
       code: "KeyN",

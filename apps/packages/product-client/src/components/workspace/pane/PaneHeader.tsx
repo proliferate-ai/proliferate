@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { twMerge } from "#product/primitives/utils/tw-merge";
 
 export function PaneHeader({
   left,

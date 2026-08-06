@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
-import { SkeletonBlock } from "#product/components/feedback/Skeleton";
-import { Plus } from "@proliferate/ui/icons";
-import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
+import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { Plus } from "#product/primitives/icons/core";
+import { ProductSidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/ProductSidebarShowToggleRow";
 import { useCoworkStatus } from "#product/hooks/access/anyharness/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useCoworkThreads } from "#product/hooks/access/anyharness/cowork/use-cowork-threads";
@@ -10,10 +10,10 @@ import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creat
 import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
+import { SidebarActionButton } from "#product/primitives/patterns/SidebarActionButton";
 import { CoworkThreadItem } from "#product/components/workspace/cowork/sidebar/CoworkThreadItem";
-import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
-import { ProductSidebarThreadRow } from "@proliferate/product-ui/sidebar/ProductSidebarThreads";
+import { ProductSidebarSectionHeader } from "#product/components/workspace/shell/sidebar/ProductSidebarLayout";
+import { ProductSidebarThreadRow } from "#product/components/workspace/shell/sidebar/ProductSidebarThreads";
 
 const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 
@@ -162,7 +162,7 @@ export function CoworkThreadsSection() {
                 />
               ))}
               {toggleLabel && (
-                <SidebarShowToggleRow
+                <ProductSidebarShowToggleRow
                   label={toggleLabel}
                   onClick={handleToggleExpanded}
                 />

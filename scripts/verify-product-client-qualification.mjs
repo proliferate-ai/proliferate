@@ -51,7 +51,7 @@ function run(command, args, cwd) {
 // ---------------------------------------------------------------------------
 function buildEverything() {
   // product-client build chains cloud-sdk + anyharness sdk/sdk-react +
-  // product-domain, then tsc-emits the package (ProductClient entry included).
+  // its nested domain proof, then tsc-emits the package (entry included).
   run("pnpm", ["--filter", "@proliferate/product-client", "build"], ".");
   // Host builds additionally consume shared product CSS and the Cloud SDK React
   // provider, so those dists must exist too.

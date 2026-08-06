@@ -3,11 +3,11 @@ import {
   type ReactNode,
   useCallback,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
-import { InlinePathMentionIcon } from "@proliferate/ui/icons";
-import { CHAT_TRANSCRIPT_LINK_CLASS } from "@proliferate/product-ui/chat/transcript/TranscriptLinkStyles";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { InlinePathMentionIcon } from "#product/primitives/icons/workspace";
+import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
+import { PopoverButton } from "#product/primitives/PopoverButton";
 import {
   FILE_REFERENCE_MENU_CLASS,
   FileReferenceMenuContent,

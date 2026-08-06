@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { usePutCloudSecretEnvVar } from "@proliferate/cloud-sdk-react";
-import { Plus } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { SecretManagementPanel } from "@proliferate/product-ui/patterns/secrets/SecretManagementPanel";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { Plus } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
+import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
 import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useToastStore } from "#product/stores/toast/toast-store";

@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { FileIcon } from "@proliferate/ui/icons";
+import { FileIcon } from "#product/primitives/icons/workspace";
 import {
   CursorIcon,
   FinderIcon,

@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { resolveComposerDockSlots } from "@proliferate/product-domain/chats/composer/resolve-dock-slots";
+import { resolveComposerDockSlots } from "#product/domain/chats/composer/resolve-dock-slots";
 import { CloudRuntimeAttachedPanel } from "#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
 import { WorkspaceArrivalAttachedPanel } from "#product/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
 import { TodoTrackerPanel, TodoTrackerStrip } from "#product/components/workspace/chat/input/TodoTrackerPanel";

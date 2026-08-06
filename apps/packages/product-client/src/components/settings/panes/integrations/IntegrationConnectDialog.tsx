@@ -6,12 +6,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@proliferate/ui/primitives/Dialog";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
+} from "#product/primitives/Dialog";
+import { Button } from "#product/primitives/Button";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { Select } from "#product/primitives/Select";
 import type {
   IntegrationCatalogSettingField,
 } from "@proliferate/cloud-sdk/client/integrations";

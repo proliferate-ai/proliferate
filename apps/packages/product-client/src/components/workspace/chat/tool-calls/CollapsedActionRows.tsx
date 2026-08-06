@@ -3,11 +3,11 @@ import type {
   FileReadContentPart,
   ToolCallItem,
 } from "@anyharness/sdk";
-import { classifyCollapsedAction } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
+import { classifyCollapsedAction } from "#product/domain/chats/transcript/transcript-collapsed-actions";
 import {
   getToolCallParsedCommands,
   type ParsedToolCommand,
-} from "@proliferate/product-domain/chats/transcript/transcript-tool-commands";
+} from "#product/domain/chats/transcript/transcript-tool-commands";
 import {
   basename,
   deriveReadPathTarget,
@@ -15,7 +15,7 @@ import {
   formatListingLabel,
   formatParsedCommandLabel,
   formatSearchLabel,
-} from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
+} from "#product/domain/chats/tools/collapsed-action-labels";
 import { CommandActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedCommandActionRow";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { EditRows } from "#product/components/workspace/chat/tool-calls/CollapsedEditActionRows";

@@ -15,7 +15,7 @@ import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-vi
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { makeTestProductHost } from "#product/test/product-host-fixtures";
-import { normalizeDraftAttachments } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import { normalizeDraftAttachments } from "#product/domain/chats/composer/prompt-display-parts";
 
 const originalCreateObjectUrl = URL.createObjectURL;
 const originalRevokeObjectUrl = URL.revokeObjectURL;

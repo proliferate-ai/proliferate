@@ -1,4 +1,3 @@
-import type { BadgeTone } from "@proliferate/ui/primitives/Badge";
 import type {
   IntegrationAuthKind,
   IntegrationHealthVerdict,
@@ -17,9 +16,15 @@ export function integrationAuthKindLabel(authKind: IntegrationAuthKind): string 
   }
 }
 
+export type IntegrationHealthBadgeTone =
+  | "neutral"
+  | "success"
+  | "warning"
+  | "destructive";
+
 export interface IntegrationHealthBadge {
   label: string;
-  tone: BadgeTone;
+  tone: IntegrationHealthBadgeTone;
 }
 
 /** Badge presentation for a health verdict. */

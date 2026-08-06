@@ -9,7 +9,7 @@ import {
   resolveChatSessionIdsToHide,
   uniqueIds,
 } from "#product/lib/domain/workspaces/tabs/visibility";
-import { resolveSessionErrorAttentionKey } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionErrorAttentionKey } from "#product/domain/sessions/activity";
 import {
   failLatencyFlow,
   startLatencyFlow,

@@ -6,7 +6,7 @@ import { useSessionDirectoryStore } from "#product/stores/sessions/session-direc
 
 // Drive the busy count off a plain `busy` flag on each entry so the test does
 // not depend on the full directory-entry / activity shapes.
-vi.mock("@proliferate/product-domain/sessions/activity", () => ({
+vi.mock("#product/domain/sessions/activity", () => ({
   isSessionSlotBusy: (snapshot: { busy?: boolean } | null) =>
     snapshot?.busy === true,
 }));

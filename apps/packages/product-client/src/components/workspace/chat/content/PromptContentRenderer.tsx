@@ -6,9 +6,9 @@ import {
   normalizeDraftAttachments,
   type PromptDisplayAttachmentPart,
   type PromptDisplayPart,
-} from "@proliferate/product-domain/chats/composer/prompt-display-parts";
-import type { PromptDraftAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
-import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+} from "#product/domain/chats/composer/prompt-display-parts";
+import type { PromptDraftAttachmentDescriptor } from "#product/domain/chats/composer/prompt-attachment-rules";
+import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderTranscriptLink } from "#product/components/workspace/chat/transcript/transcript-markdown";
 
 type PromptContentRendererVariant = "transcript" | "compact";

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
-import { ComposerTextarea } from "@proliferate/ui/patterns/ComposerTextarea";
-import { ComposerTextareaFrame } from "@proliferate/ui/patterns/ComposerTextareaFrame";
+import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
+import { ComposerTextarea } from "#product/primitives/patterns/ComposerTextarea";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
 import { DraftAttachmentPreviewList } from "#product/components/workspace/chat/content/PromptContentRenderer";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import { PromptAttachmentViewer } from "#product/components/workspace/files/PromptAttachmentViewer";
 import { ViewerHeaderButton } from "#product/components/workspace/shell/right-panel/ViewerHeaderButton";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
-import type { PromptAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
+import type { PromptAttachmentDescriptor } from "#product/domain/chats/composer/prompt-attachment-rules";
 import {
   viewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";

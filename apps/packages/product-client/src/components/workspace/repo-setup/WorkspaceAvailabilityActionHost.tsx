@@ -8,8 +8,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@proliferate/ui/primitives/AlertDialog";
-import { RadioCardGroup } from "@proliferate/ui/primitives/RadioCardGroup";
+} from "#product/primitives/AlertDialog";
+import { RadioCardGroup } from "#product/primitives/RadioCardGroup";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { remoteRepoKey } from "#product/lib/domain/workspaces/cloud/logical-workspace-source";
 import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";

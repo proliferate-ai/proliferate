@@ -1,8 +1,8 @@
 import { KeyRound } from "lucide-react";
-import { SecretManagementPanel } from "@proliferate/product-ui/patterns/secrets/SecretManagementPanel";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { Button } from "#product/primitives/Button";
 import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";

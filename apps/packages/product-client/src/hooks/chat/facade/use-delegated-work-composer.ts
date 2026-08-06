@@ -5,7 +5,7 @@ import {
   deriveDelegatedWorkSummary,
   type DelegatedWorkSummary,
   type DelegatedWorkSummaryCandidate,
-} from "@proliferate/product-domain/chats/subagents/delegated-work";
+} from "#product/domain/chats/subagents/delegated-work";
 import type { DelegatedAgentIdentity } from "#product/lib/domain/delegated-work/model";
 import {
   type DelegatedAgentTriggerCandidate,

@@ -9,9 +9,9 @@ import type {
   ToolCallItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Robot } from "@proliferate/ui/icons";
-import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { Button } from "#product/primitives/Button";
+import { Robot } from "#product/primitives/icons/product";
+import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { SubagentLaunchLedger } from "#product/components/workspace/chat/transcript/SubagentLaunchLedger";
 import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
@@ -25,14 +25,14 @@ import {
   resolveSubagentLaunchDisplay,
   isSubagentExecutionStateRunning,
   isSubagentWorkComplete,
-} from "@proliferate/product-domain/chats/subagents/subagent-launch";
+} from "#product/domain/chats/subagents/subagent-launch";
 import {
   formatSubagentHeaderVerb,
   isSubagentProvisioningAction,
-} from "@proliferate/product-domain/chats/subagents/subagent-tool-presentation";
+} from "#product/domain/chats/subagents/subagent-tool-presentation";
 import {
   buildTranscriptDisplayBlocks,
-} from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+} from "#product/domain/chats/transcript/transcript-presentation";
 import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import {
   collectDescendantItems,

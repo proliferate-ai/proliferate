@@ -6,12 +6,12 @@ import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
 import {
   CollapseAll,
   ExpandAll,
-  Search,
-} from "@proliferate/ui/icons";
-import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
-import { PopoverButton, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
+} from "#product/primitives/icons/workspace";
+import { Search } from "#product/primitives/icons/core";
+import { PaneIconButton } from "#product/primitives/PaneIconButton";
+import { PopoverButton, POPOVER_SURFACE_CLASS } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
+import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import type { GitReviewFileEntry } from "#product/lib/domain/workspaces/changes/git-review-entries";
 

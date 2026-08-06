@@ -37,7 +37,7 @@ import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-co
 import { useSessionErrorAcknowledgement } from "#product/hooks/sessions/lifecycle/use-session-error-acknowledgement";
 import { useSelectedCloudRuntimeRehydration } from "#product/hooks/workspaces/lifecycle/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { canAttachPromptContent } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
+import { canAttachPromptContent } from "#product/domain/chats/composer/prompt-attachment-rules";
 import {
   canAcceptChatFileDrop,
   isFileDrag,

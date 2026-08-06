@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
+import { Button } from "#product/primitives/Button";
+import { Label } from "#product/primitives/Label";
+import { RangeSlider } from "#product/primitives/RangeSlider";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { setDevRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
 import { useUpdater, type UpdaterErrorSource } from "#product/hooks/access/tauri/use-updater";

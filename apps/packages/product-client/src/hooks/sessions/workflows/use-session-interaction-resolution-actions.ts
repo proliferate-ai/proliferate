@@ -12,7 +12,7 @@ import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   sessionIntentsForSession,
-} from "@proliferate/product-domain/sessions/intents/session-intent-state";
+} from "#product/domain/sessions/intents/session-intent-state";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";

@@ -13,7 +13,7 @@ import {
   scrubTelemetryData,
   scrubTelemetryEvent,
   scrubTelemetryText,
-} from "@proliferate/product-domain/telemetry/scrub";
+} from "@proliferate/product-client/internal/domain/telemetry/scrub";
 
 import { webEnv } from "../../config/env";
 import { shouldDropExpectedWebSentryEvent } from "./sentry-event-filter";

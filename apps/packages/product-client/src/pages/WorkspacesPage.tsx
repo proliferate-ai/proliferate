@@ -4,8 +4,8 @@ import {
   WorkspacesCommandList,
   type WorkspacesCommandGroupView,
   type WorkspacesCommandItemView,
-} from "@proliferate/product-ui/workspaces/WorkspacesCommandList";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+} from "#product/components/workspace/repo-setup/WorkspacesCommandList";
+import { Tooltip } from "#product/primitives/Tooltip";
 import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
@@ -82,7 +82,7 @@ export function WorkspacesPage() {
           ) : null}
           onWorkspaceSelect={actions.handleSelectWorkspace}
           onCreate={() => appCommands.newWorktreeWorkspace.execute("palette")}
-          createShortcutLabel={getShortcutDisplayLabel(SHORTCUTS.newDefault)}
+          createShortcutLabel={getShortcutDisplayLabel(SHORTCUTS.newWorktree)}
         />
       </div>
     </MainSidebarPageShell>

@@ -1,5 +1,5 @@
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Label } from "@proliferate/ui/primitives/Label";
+import { Checkbox } from "#product/primitives/Checkbox";
+import { Label } from "#product/primitives/Label";
 
 interface SupportCheckboxRowProps {
   checked: boolean;

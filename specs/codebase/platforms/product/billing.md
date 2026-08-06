@@ -334,14 +334,14 @@ receipt/alert wiring this still needs.
 
 **T1 — the UI never fabricates plan or balance on a failed read.** Desktop
 and Web reuse
-[`BillingSettingsSurface`](../../../../apps/packages/product-surfaces/src/settings/BillingSettingsSurface.tsx),
+[`BillingSettingsSurface`](../../../../apps/packages/product-client/src/components/settings/panes/billing/BillingSettingsSurface.tsx),
 which reads the selected owner's plan and both unit balances independently
 and preserves loading, error, deployment-disabled, and absent-data states —
 never a default plan, active status, zero balance, or sample compute
 balance when the backend read is unavailable. Plan status reflects returned
 entitlement/health fields including holds, payment health, legacy status,
 and unlimited access. Pinned by
-[`BillingSettingsSurface.test.tsx`](../../../../apps/packages/product-surfaces/src/settings/BillingSettingsSurface.test.tsx).
+[`BillingSettingsSurface.test.tsx`](../../../../apps/packages/product-client/src/components/settings/panes/billing/BillingSettingsSurface.test.tsx).
 Mobile's smaller personal
 [`Billing section`](../../../../apps/mobile/src/components/settings/MobileSettingsScreen.tsx)
 shows plan/usage and portal/checkout/refill actions and does not reuse the
@@ -486,7 +486,7 @@ Stripe integration unit tests
 
 - **U1** `BillingSettingsSurface` shows an error state, not defaults, on
   failed reads.
-  [`BillingSettingsSurface.test.tsx`](../../../../apps/packages/product-surfaces/src/settings/BillingSettingsSurface.test.tsx).
+  [`BillingSettingsSurface.test.tsx`](../../../../apps/packages/product-client/src/components/settings/panes/billing/BillingSettingsSurface.test.tsx).
 - **U2** `SidebarConsumptionCard` renders each meter only from returned
   units.
   [`SidebarConsumptionCard.test.tsx`](../../../../apps/packages/product-client/src/components/app/sidebar/SidebarConsumptionCard.test.tsx).
@@ -558,7 +558,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] **U3.** The standalone upgrade/refill startup-state components (out
       of credit → upgrade; low/exhausted → refill) are not on `main` yet.
       Net-new deliverable per the 2026-07-28 ruling; lands via PR #1570
-      (`product-ui/patterns/BillingGateState` + `PlaygroundLibrary`
+      (`product-client/components/patterns/BillingGateState` + `PlaygroundLibrary`
       registration).
 - [ ] **M2 live proof.** The free-tier anti-abuse key (GitHub identity, not
       account) is unit-true in

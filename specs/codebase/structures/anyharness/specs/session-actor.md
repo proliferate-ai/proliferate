@@ -736,7 +736,7 @@ event-emitting hooks run synchronously under the sink lock (observer pass,
   advisor, domain-op phases); the sink advances next_seq only by envelopes
   returned/published back to it
 actor never decides product MCP selection
-actor never imports product-domain services — product reactions arrive as
+actor never imports product feature services — product reactions arrive as
   observers, the advisor, and domain ops via ActorCapabilities
 actor never validates raw HTTP request shapes
 ```

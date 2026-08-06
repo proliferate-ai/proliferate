@@ -2,15 +2,15 @@ import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
   isPromptOutboxPlacementBusy,
   resolvePromptOutboxPlacement,
-} from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
+} from "#product/domain/sessions/intents/session-intent-selectors";
 import {
   promptIntentsForSession,
-} from "@proliferate/product-domain/sessions/intents/session-intent-state";
+} from "#product/domain/sessions/intents/session-intent-state";
 import { finishLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import {
   finishOrCancelMeasurementOperation,

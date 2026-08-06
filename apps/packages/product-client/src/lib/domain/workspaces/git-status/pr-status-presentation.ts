@@ -1,9 +1,25 @@
-import type { PrStatusKind, PrStatusView } from "@proliferate/product-ui/patterns/PrStatusBadge";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import type {
   WorkspaceGitStatus,
   WorkspacePrStatus,
 } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+
+export type PrStatusKind =
+  | "open"
+  | "checks_failing"
+  | "pending"
+  | "changes_requested"
+  | "draft"
+  | "merged"
+  | "closed";
+
+export interface PrStatusView {
+  kind: PrStatusKind;
+  /** PR number, when known (rendered in the tooltip as `#805`). */
+  number?: number | null;
+  /** Optional custom tooltip label; defaults to `PR #{n} · {State}`. */
+  label?: string | null;
+}
 
 const PR_STATE_LABEL: Record<Exclude<WorkspacePrStatus["state"], "none">, string> = {
   open: "Open",
@@ -94,33 +110,6 @@ export function prStatusViewFromGitStatus(
     kind,
     number: pr.number,
     label: prStatusCompoundLabel(status),
-  };
-}
-
-export interface SidebarGitGlyph {
-  /** attention === "conflicts" — render the detail glyph in destructive tone. */
-  conflicted: boolean;
-  /** Tooltip content; null renders the glyph without a tooltip. */
-  tooltip: string | null;
-}
-
-/**
- * Compact PR detail glyph for sidebar rows: rendered only when the row has a
- * real PR (open/draft/merged/closed). No PR (authoritative "none") and unknown
- * PR data (`pr: null`) both omit it — there is no branch-glyph fallback.
- * Conflict attention keeps the destructive tone on PR rows; conflicted rows
- * without a PR surface attention through other status affordances.
- */
-export function sidebarGitGlyphForStatus(
-  status: WorkspaceGitStatus | null | undefined,
-): SidebarGitGlyph | null {
-  if (!status?.pr || status.pr.state === "none") {
-    return null;
-  }
-  const conflicted = status.attention === "conflicts";
-  return {
-    conflicted,
-    tooltip: conflicted ? "Merge conflicts in worktree" : prStatusCompoundLabel(status),
   };
 }
 

@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-import type { ChatKind } from "@proliferate/product-domain/chats/model";
+import type { ChatKind } from "@proliferate/product-client/internal/domain/chats/model";
 
 import { colors, radius } from "../../styles/tokens";
 import { MobileIcon, type MobileIconName } from "./MobileIcon";

@@ -41,12 +41,12 @@ equivalent native setting.
   smaller than surrounding reading text, label/icon optical sizing that moves
   together, and stable compact-control hit areas.
 - **Intentional differences:** Proliferate retains eight independent UI and
-  readable-code presets, existing fonts and hierarchy, the 46rem chat column,
-  themes, and separate window zoom.
+  readable-code presets, existing fonts and hierarchy, the 48rem shared chat
+  column, themes, and separate window zoom.
 - **Founder-approved Proliferate mock:**
   [Default and Extra Large scale contract](appearance-scaling-mock.svg). The
-  founder approved the mock direction and complete-coverage rule on
-  2026-07-19.
+  founder approved the complete-coverage rule on 2026-07-19 and the unified
+  11–18px reading ramp on 2026-08-05.
 
 ![Default and Extra Large proportional appearance scaling](appearance-scaling-mock.svg)
 
@@ -85,13 +85,13 @@ READABLE_CODE_FONT_SCALES[id].monacoFontSize
 | Preset | Message/composer | Readable code target |
 | --- | ---: | ---: |
 | Extra Extra Small | 11px | 11px |
-| Extra Small | 11.5px | 11.5px |
-| Small | 12px | 12px |
-| Default | 13px | 13px |
-| Large | 14px | 14px |
-| Extra Large | 15px | 15px |
-| Extra Extra Large | 16px | 16px |
-| Extra Extra Extra Large | 17px | 17px |
+| Extra Small | 12px | 12px |
+| Small | 13px | 13px |
+| Default | 14px | 14px |
+| Large | 15px | 15px |
+| Extra Large | 16px | 16px |
+| Extra Extra Large | 17px | 17px |
+| Extra Extra Extra Large | 18px | 18px |
 
 Editor, diff, and terminal line heights remain readable, strictly monotonic,
 and greater than their font sizes; they do not need to equal prose line height.
@@ -108,7 +108,7 @@ and greater than their font sizes; they do not need to equal prose line height.
   untyped owned strings and icon-only controls. Role-specific utilities still
   override that fallback, and the unchanged `html` root keeps rem-based layout
   geometry independent from the UI font preference.
-- Paired row/button icons default to `1.15em` of their owning label. Compact,
+- Paired row/button icons default to `1.230769em` of their owning label. Compact,
   large, and display tiers remain proportional to a semantic text owner.
 - Visible glyphs scale inside their existing accessible target. Pointer hit
   areas and structural row heights stay fixed unless an existing responsive
@@ -124,17 +124,23 @@ targets are not glyph icons and do not become font-relative.
 ## Ownership and implementation seams
 
 - `apps/packages/product-client/src/lib/domain/preferences/appearance.ts`
-  owns UI, readable-code, window-zoom, and semantic glyph ladders.
+  owns UI, readable-code, window-zoom, and semantic glyph ladders. This remains
+  a connected Desktop/Web `src/lib/domain/**` owner; it is not moved into the
+  sibling Mobile-safe `src/domain/**` subtree.
 - `apps/packages/product-client/src/config/theme.ts` applies the resolved text
   and readable-code root variables through `applyAppearancePreference`; the
   stable `em` glyph ratios resolve from design CSS against those text owners.
 - `apps/packages/design/src/css/product.css` owns Default CSS fallbacks and
   global semantic utilities.
-- `apps/packages/ui/src/utils/tw-merge.ts` preserves custom semantic utilities
-  where Tailwind merge classification requires registration.
-- Production consumers live under
-  `apps/packages/{ui,product-ui,product-client}`. Component-local aliases must
+- [tw-merge.ts](../../../../../apps/packages/product-client/src/primitives/utils/tw-merge.ts)
+  preserves custom semantic utilities where Tailwind merge classification
+  requires registration.
+- Production consumers live under `apps/packages/product-client/src` and
+  `apps/desktop/src`. Component-local aliases must
   not preserve a fixed-size path.
+- `apps/packages/product-client/src/domain/**` is headless. The source guard
+  scans it as part of the package root, but it must produce no styling, DOM,
+  primitive, or appearance-consumer dependency.
 - Focused appearance/drift tests and a repository source guard own regression
   enforcement.
 
@@ -182,8 +188,8 @@ failing repository check before merge.
 ## Non-goals
 
 - Mobile/native appearance controls.
-- Font-family, weight, color, spacing/density, chat-width, or window-zoom
-  redesign.
+- Font-family, weight, color, spacing/density, other typography roles, or
+  window-zoom redesign.
 - Scaling raster media, avatars, borders, shadows, or hit targets as glyphs.
 - Redesigning individual product surfaces while migrating semantic sizing.
 - Raising bundle caps or absorbing unrelated JavaScript/Rust failures.
@@ -192,8 +198,8 @@ failing repository check before merge.
 
 - At all eight presets, Monaco, xterm, diffs, code blocks, and file-source views
   equal same-named message/composer font size.
-- Default computes to 13px for message and every readable-code surface; Extra
-  Large computes to 15px.
+- Default computes to 14px for message and every readable-code surface; Extra
+  Large computes to 16px.
 - UI, readable-code, and window-zoom preferences remain independent in storage
   and application.
 - The production source guard finds zero raw fixed text sizes outside canonical

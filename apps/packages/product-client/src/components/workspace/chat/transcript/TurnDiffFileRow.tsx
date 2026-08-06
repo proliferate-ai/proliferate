@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff/ChatDiffLineWrapContextMenu";
-import { ArrowUpRight } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ArrowUpRight } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
 
 interface TurnDiffFileRowProps {
   filePath: string;

@@ -3,10 +3,10 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { CloudUpload } from "@proliferate/ui/icons";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { CloudUpload } from "#product/primitives/icons/platform";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { OrganizationLogo } from "#product/components/settings/panes/organization/OrganizationLogo";
 import type { OrganizationRecord } from "#product/lib/domain/organizations/organization-records";
 

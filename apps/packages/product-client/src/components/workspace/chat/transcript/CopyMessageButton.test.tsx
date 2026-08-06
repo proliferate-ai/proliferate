@@ -10,6 +10,32 @@ afterEach(() => {
 
 describe("CopyMessageButton", () => {
 
+  it("gives the button enough square clearance to avoid clipping the glyph", () => {
+    const { container } = render(
+      <CopyMessageButton content="Answer" visibilityClassName="opacity-100" />,
+    );
+
+    expect(container.querySelector("button")?.className).toContain("!size-icon-button-sm !p-0");
+  });
+
+  it("sizes the glyph to the transcript's icon-paired ratio", () => {
+    const { container } = render(
+      <CopyMessageButton content="Answer" visibilityClassName="opacity-100" />,
+    );
+
+    const glyphClassName = container.querySelector("button svg")?.getAttribute("class") ?? "";
+    expect(glyphClassName).toContain("icon-paired");
+    expect(glyphClassName).not.toContain("icon-control");
+  });
+
+  it("uses the tertiary foreground tone at rest, matching the adjacent date", () => {
+    const { container } = render(
+      <CopyMessageButton content="Answer" visibilityClassName="opacity-100" />,
+    );
+
+    expect(container.querySelector("button")?.className).toContain("!text-foreground-tertiary");
+  });
+
   it("renders the timestamp before the copy button by default", () => {
     const { container } = render(
       <CopyMessageButton

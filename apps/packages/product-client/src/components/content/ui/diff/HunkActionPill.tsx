@@ -1,6 +1,6 @@
-import { Minus, Plus, Undo } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { Minus, Plus, Undo } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
+import { Tooltip } from "#product/primitives/Tooltip";
 
 export type HunkActionMode = "unstaged" | "staged";
 

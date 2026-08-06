@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { ExternalLink, MessageSquare } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { ExternalLink } from "#product/primitives/icons/core";
+import { MessageSquare } from "#product/primitives/icons/product";
+import { Button } from "#product/primitives/Button";
+import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import type { CoworkCodingAction } from "@proliferate/product-domain/chats/tools/cowork-coding-tool-presentation";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
+import type { CoworkCodingAction } from "#product/domain/chats/tools/cowork-coding-tool-presentation";
 
 const CHAT_ACTION_TEXT_CLASS =
   "text-chat";

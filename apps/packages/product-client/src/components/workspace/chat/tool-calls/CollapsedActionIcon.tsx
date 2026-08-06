@@ -1,10 +1,10 @@
-import type { CollapsedActionKind } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
+import type { CollapsedActionKind } from "#product/domain/chats/transcript/transcript-collapsed-actions";
 import {
   CommandWindow,
   FilePenActivity,
   ReadBook,
-  SearchActivity,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/workspace";
+import { SearchActivity } from "#product/primitives/icons/core";
 
 /**
  * One semantic glyph map for both collapsed activity headers and their

@@ -28,7 +28,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR)
 
 # Only the roots the guard owns, and only files that still exist in the worktree.
 frontend_files=$(printf '%s\n' "$staged" | grep -E \
-  '^(apps/packages/(ui|product-ui|product-surfaces|product-client)/src/.*\.(ts|tsx)|apps/desktop/src/.*\.(ts|tsx)|apps/packages/design/src/css/(dom|product)\.css|apps/packages/design/src/tokens\.ts)$' \
+  '^(apps/packages/product-client/src/.*\.(ts|tsx)|apps/desktop/src/.*\.(ts|tsx)|apps/packages/design/src/css/(dom|product)\.css|apps/packages/design/src/tokens\.ts)$' \
   || true)
 
 status=0

@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
+import { Label } from "#product/primitives/Label";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { isValidEnvVarName } from "#product/lib/domain/settings/harness-auth-sources";
 
 export interface ApiKeyCreatorSubmit {

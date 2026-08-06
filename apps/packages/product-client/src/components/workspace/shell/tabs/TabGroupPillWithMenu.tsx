@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "#product/components/workspace/shell/tabs/TabContextMenu";
 import { TabGroupPill } from "#product/components/workspace/shell/tabs/TabGroupPill";

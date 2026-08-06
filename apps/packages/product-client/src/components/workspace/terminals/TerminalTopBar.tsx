@@ -1,17 +1,17 @@
 import { useState } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { Button } from "#product/primitives/Button";
+import { IconButton } from "#product/primitives/IconButton";
+import { Input } from "#product/primitives/Input";
+import { PopoverButton } from "#product/primitives/PopoverButton";
 import {
   Check,
   ChevronDown,
   Pencil,
   Plus,
-  Terminal as TerminalIcon,
   X,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/core";
+import { Terminal as TerminalIcon } from "#product/primitives/icons/workspace";
 
 interface TerminalTopBarProps {
   terminals: readonly TerminalRecord[];

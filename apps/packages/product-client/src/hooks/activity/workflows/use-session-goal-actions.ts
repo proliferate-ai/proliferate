@@ -5,7 +5,7 @@ import {
   useClearSessionGoalMutation,
   useSetSessionGoalMutation,
 } from "@anyharness/sdk-react";
-import type { GoalWire } from "@proliferate/product-domain/activity/goal";
+import type { GoalWire } from "#product/domain/activity/goal";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import {

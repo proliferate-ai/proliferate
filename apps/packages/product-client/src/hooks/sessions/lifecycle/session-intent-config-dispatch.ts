@@ -5,13 +5,13 @@ import type { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import {
   getAuthoritativeConfigValue,
   shouldAcceptAuthoritativeLiveConfig,
-} from "@proliferate/product-domain/sessions/pending-config";
+} from "#product/domain/sessions/pending-config";
 import {
   resolveStatusFromExecutionSummary,
-} from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/sessions/activity";
 import type {
   SessionUpdateConfigIntent,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
+} from "#product/domain/sessions/intents/session-intent-model";
 import {
   getSessionClientAndWorkspace,
 } from "#product/lib/access/anyharness/session-runtime";

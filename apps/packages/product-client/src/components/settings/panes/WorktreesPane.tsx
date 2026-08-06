@@ -1,4 +1,4 @@
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { WorktreeStorageSection } from "#product/components/settings/panes/environments/WorktreeStorageSection";
 
 export function WorktreesPane() {

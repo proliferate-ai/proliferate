@@ -1,6 +1,6 @@
-import { ChevronRight } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { ChevronRight } from "#product/primitives/icons/core";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import {
   getProviderSecretEnvVar,

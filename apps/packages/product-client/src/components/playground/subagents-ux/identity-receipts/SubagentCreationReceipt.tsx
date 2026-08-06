@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronDown, ChevronRight } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ChevronDown, ChevronRight } from "#product/primitives/icons/core";
 import { shortDelegatedWorkId } from "#product/lib/domain/delegated-work/identity";
 import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 

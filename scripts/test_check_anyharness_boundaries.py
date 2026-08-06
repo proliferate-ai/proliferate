@@ -403,6 +403,63 @@ class DomainValveLiveReexportTest(BoundaryRuleTestCase):
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0].lineno, 1)
 
+    def test_pub_use_split_across_lines_still_fires(self) -> None:
+        # The `pub use` keyword and its path can sit on separate lines. Matching
+        # the prefix against only the first line let this spelling launder a live
+        # power silently.
+        violations = self.run_rules(
+            {
+                "domains/sessions/runtime.rs": (
+                    "pub use\n    crate::live::sessions::LiveSessionHandle;\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].lineno, 1)
+
+    def test_split_pub_use_of_model_shape_still_passes(self) -> None:
+        # The split spelling must not smuggle the `::model` exemption away either.
+        violations = self.run_rules(
+            {
+                "domains/sessions/runtime.rs": (
+                    "pub use\n    crate::live::sessions::model::LiveSessionSnapshot;\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT"), [])
+
+    def test_split_private_use_still_passes(self) -> None:
+        # Splitting a private `use` does not turn it into a re-export.
+        violations = self.run_rules(
+            {
+                "domains/sessions/runtime.rs": (
+                    "use\n    crate::live::sessions::LiveSessionManager;\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT"), [])
+
+    def test_restricted_pub_visibilities_fire(self) -> None:
+        # `pub(crate)`, `pub(super)` and `pub(in ..)` all republish beyond the
+        # valve module, so each is laundering.
+        for visibility in ["pub(crate)", "pub(super)", "pub(in crate::domains)"]:
+            with self.subTest(visibility=visibility):
+                violations = self.run_rules(
+                    {
+                        "domains/sessions/runtime.rs": (
+                            f"{visibility} use crate::live::sessions::LiveSessionManager;\n"
+                        )
+                    }
+                )
+
+                self.assertEqual(
+                    len(self.for_rule(violations, "DOMAIN_VALVE_LIVE_REEXPORT")), 1
+                )
+
     def test_non_valve_domain_file_is_not_checked_by_this_rule(self) -> None:
         # A non-valve file re-exporting live is already a DOMAIN_LIVE_VALVE hit;
         # this rule exists for the files that rule cannot see.
@@ -610,6 +667,50 @@ class DomainContractImportTest(BoundaryRuleTestCase):
         matches = self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0].lineno, 1)
+
+    def test_root_brace_group_import_counts_once(self) -> None:
+        # `use {` puts the leaf on a continuation line that carries no `use`
+        # prefix. Guarding the line pass by "is a use-statement head" let the
+        # inline pass fire on line 2 while the import pass fired on line 1,
+        # counting one import twice.
+        violations = self.run_rules(
+            {
+                "domains/goals/runtime.rs": (
+                    "use {\n    anyharness_contract::v1::Goal,\n};\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].lineno, 1)
+
+    def test_root_brace_group_pub_use_counts_once(self) -> None:
+        violations = self.run_rules(
+            {
+                "domains/goals/runtime.rs": (
+                    "pub use {\n    anyharness_contract::v1::Goal,\n};\n"
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")), 1)
+
+    def test_inline_contract_path_below_a_use_statement_still_fires(self) -> None:
+        # Skipping use-statement lines must not spill over into ordinary code:
+        # the fn signature on line 3 is a genuine inline path.
+        violations = self.run_rules(
+            {
+                "domains/goals/service.rs": (
+                    "use {\n    crate::domains::goals::model::GoalRecord,\n};\n"
+                    "fn map(input: anyharness_contract::v1::Goal) -> GoalRecord {}\n"
+                )
+            }
+        )
+
+        matches = self.for_rule(violations, "DOMAIN_CONTRACT_IMPORT")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].lineno, 4)
 
     def test_two_import_lines_count_twice(self) -> None:
         violations = self.run_rules(
@@ -914,6 +1015,74 @@ class DomainSqlOutsideStoreTest(BoundaryRuleTestCase):
         )
 
         self.assertEqual(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE"), [])
+
+    def test_bare_select_keyword_literals_do_not_match(self) -> None:
+        # `"SELECT"` as an entire string literal is a keyword constant or a serde
+        # rename, never a query. The `(?!")` exclusion covers exactly that shape.
+        violations = self.run_rules(
+            {
+                "domains/workflows/service.rs": (
+                    '    const KEYWORD: &str = "SELECT";\n'
+                    '    #[serde(rename = "SELECT")]\n'
+                )
+            }
+        )
+
+        self.assertEqual(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE"), [])
+
+    def test_built_query_fragment_still_matches(self) -> None:
+        # The exclusion must stay narrow: `"SELECT "` with trailing space is a
+        # real query being concatenated, so it must keep matching.
+        violations = self.run_rules(
+            {
+                "domains/workflows/service.rs": (
+                    '    let sql = "SELECT ".to_string() + &columns;\n'
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE")), 1)
+
+    def test_bare_select_head_in_raw_string_still_matches(self) -> None:
+        # A lone `SELECT` at line end inside a raw string is how the real
+        # migrations spell a split query; it must not be swept up by the
+        # keyword-literal exclusion.
+        violations = self.run_rules(
+            {"domains/workflows/service.rs": "        SELECT\n            id\n"}
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE")), 1)
+
+    def test_known_limitation_uppercase_verb_in_message_string_matches(self) -> None:
+        # PINNED LIMITATION, not desired behaviour: `"UPDATE failed .."` is
+        # lexically identical to `"UPDATE sessions .."`, so no regex can tell them
+        # apart. Such a hit is a seedable false positive. If this test ever starts
+        # failing because the match disappeared, confirm real split UPDATEs are
+        # still caught before celebrating.
+        violations = self.run_rules(
+            {
+                "domains/workflows/service.rs": (
+                    '    anyhow::bail!("UPDATE failed for session {id}");\n'
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE")), 1)
+
+    def test_known_limitation_sql_in_block_comment_matches(self) -> None:
+        # PINNED LIMITATION: strip_line_comment only understands `//`, so SQL
+        # inside a `/* .. */` block is scanned as code.
+        violations = self.run_rules(
+            {
+                "domains/workflows/service.rs": (
+                    "    /*\n"
+                    "     * SELECT * FROM workflow_runs WHERE id = ?1\n"
+                    "     */\n"
+                )
+            }
+        )
+
+        self.assertEqual(len(self.for_rule(violations, "DOMAIN_SQL_OUTSIDE_STORE")), 1)
 
 
 class AllowlistRatchetTest(unittest.TestCase):

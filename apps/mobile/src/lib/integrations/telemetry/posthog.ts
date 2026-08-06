@@ -1,7 +1,7 @@
 import { PostHog } from "posthog-react-native";
 import type { PostHogOptions } from "posthog-react-native";
 import type { AuthUser } from "@proliferate/cloud-sdk";
-import { scrubTelemetryData } from "@proliferate/product-domain/telemetry/scrub";
+import { scrubTelemetryData } from "@proliferate/product-client/internal/domain/telemetry/scrub";
 
 import type { MobileTelemetryConfig } from "./config";
 

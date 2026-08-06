@@ -3,7 +3,7 @@ import {
   cloudRepoActionStateFromReadiness,
   type CloudWorkspaceRepoTarget,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import { resolveRepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
+import { resolveRepositoryReadiness } from "#product/domain/repos/repo-readiness";
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";

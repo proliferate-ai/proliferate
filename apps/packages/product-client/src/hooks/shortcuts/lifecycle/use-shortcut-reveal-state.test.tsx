@@ -3,7 +3,6 @@
 import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  SHORTCUT_REVEAL_DELAY_MS,
   SHORTCUT_REVEAL_RESET_EVENT,
   useShortcutRevealState,
 } from "#product/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
@@ -19,7 +18,6 @@ function ShortcutRevealProbe() {
 
 describe("useShortcutRevealState", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
       userAgent: "Mac OS X",
@@ -32,12 +30,10 @@ describe("useShortcutRevealState", () => {
 
   afterEach(() => {
     cleanup();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it("reveals after the primary modifier is held for the delay", () => {
-    expect(SHORTCUT_REVEAL_DELAY_MS).toBe(1000);
+  it("reveals immediately while the primary modifier is held", () => {
     const { result } = renderHook(() => useShortcutRevealState());
 
     act(() => {
@@ -45,12 +41,6 @@ describe("useShortcutRevealState", () => {
         key: "Meta",
         metaKey: true,
       }));
-      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS - 1);
-    });
-    expect(result.current).toBe(false);
-
-    act(() => {
-      vi.advanceTimersByTime(1);
     });
     expect(result.current).toBe(true);
   });
@@ -63,7 +53,6 @@ describe("useShortcutRevealState", () => {
         key: "Meta",
         metaKey: true,
       }));
-      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS);
     });
     expect(result.current).toBe(true);
 
@@ -84,13 +73,15 @@ describe("useShortcutRevealState", () => {
         key: "Meta",
         metaKey: true,
       }));
-      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS / 2);
+    });
+    expect(result.current).toBe(true);
+
+    act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", {
         key: "n",
         code: "KeyN",
         metaKey: true,
       }));
-      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS);
     });
 
     expect(result.current).toBe(false);
@@ -104,7 +95,6 @@ describe("useShortcutRevealState", () => {
         key: "Meta",
         metaKey: true,
       }));
-      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS);
     });
     expect(result.current).toBe(true);
 
@@ -122,7 +112,6 @@ describe("useShortcutRevealState", () => {
         key: "Meta",
         metaKey: true,
       }));
-      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS);
     });
     expect(result.current).toBe(true);
 
@@ -136,7 +125,6 @@ describe("useShortcutRevealState", () => {
         key: "Meta",
         metaKey: true,
       }));
-      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS);
     });
     expect(result.current).toBe(true);
 
@@ -165,7 +153,6 @@ describe("useShortcutRevealState", () => {
         key: "Meta",
         metaKey: true,
       }));
-      vi.advanceTimersByTime(SHORTCUT_REVEAL_DELAY_MS);
     });
 
     expect(screen.getByLabelText("shortcut reveal visible").textContent).toBe("true");

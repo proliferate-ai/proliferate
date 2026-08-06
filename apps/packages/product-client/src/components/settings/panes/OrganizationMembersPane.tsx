@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { OrganizationInvitationsSection } from "#product/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "#product/components/settings/panes/organization/OrganizationMembersSection";
-import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
-import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
-import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";

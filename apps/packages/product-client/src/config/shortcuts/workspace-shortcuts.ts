@@ -5,7 +5,7 @@ export const WORKSPACE_SHORTCUTS = {
     id: "workspace.new-default",
     label: "⌘N",
     nonMacLabel: "Ctrl+N",
-    description: "New workspace",
+    description: "Open new chat",
     owner: "js",
     match: { kind: "fixed-code", code: "KeyN", meta: true, shift: false, alt: false },
     allowInInputs: true,

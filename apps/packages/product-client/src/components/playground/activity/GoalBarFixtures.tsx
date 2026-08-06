@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { GoalBar } from "@proliferate/product-ui/activity/GoalBar";
+import { GoalBar } from "#product/components/workspace/activity/GoalBar";
 import type { ScenarioKey } from "#product/config/playground";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import {

@@ -22,7 +22,7 @@ import { listSessionReviews } from "#product/lib/access/anyharness/reviews";
 import { getCoworkManagedWorkspaces } from "#product/lib/access/anyharness/cowork";
 import {
   collectSubagentSessionRelationshipHints,
-} from "@proliferate/product-domain/chats/subagents/session-relationship-hints";
+} from "#product/domain/chats/subagents/session-relationship-hints";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";

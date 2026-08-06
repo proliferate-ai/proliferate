@@ -1,4 +1,4 @@
-import { canonicalRepoKey } from "@proliferate/product-domain/repos/repo-id";
+import { canonicalRepoKey } from "#product/domain/repos/repo-id";
 
 /**
  * PR 6 — the ONE pure cross-target Git relation resolver. It classifies a local

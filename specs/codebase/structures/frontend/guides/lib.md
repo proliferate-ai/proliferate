@@ -45,7 +45,10 @@ lib/
 ## Per folder
 
 ### `lib/domain/**`
-Pure product decisions and models for **one app**. App-local; **promote a rule to `product-domain` when ≥2 apps need the same decision or view model** (app-local first).
+Pure product decisions and models for **one app or the connected Desktop/Web
+client**. Keep them local first; promote a rule to
+`apps/packages/product-client/src/domain/**` when Mobile and another client need
+the same decision or view model.
 
 **Owns:** validation/normalization · status labels, tones, icons, display metadata · workspace/session/chat projection (view) models · pure reducers · **pure side-effect planners**.
 
@@ -109,12 +112,15 @@ Generic technical machinery with **no product vocabulary and no vendor**.
 - `domain` is pure (data in/out); the moment it needs I/O, a client, or a store, it isn't domain.
 - `workflows` reach the world only through `deps`, and `deps` are **capabilities, not pure helpers**.
 - Keep the three access-ish layers distinct: **`access` = your backends · `integrations` = third-party providers · `infra` = no external system.**
-- **App-local first:** promote a pure rule to `product-domain` only when ≥2 apps need it.
+- **Local first:** promote a pure rule to ProductClient's nested `src/domain/**`
+  only when Mobile and another client need it. The nested owner has the same
+  purity rules and cannot import upward into connected ProductClient.
 - No `utils.ts`/`helpers.ts`/`misc.ts` — name the concept.
 
 ## Placement & testing
 
-- Pure decision/model/reducer/**planner** → `domain` (or `product-domain` if shared).
+- Pure decision/model/reducer/**planner** → `lib/domain`, or ProductClient
+  `src/domain/**` if shared with Mobile.
 - Multi-step sequence → `workflows`.
 - Raw backend/platform access → `access`.
 - Third-party provider wiring → `integrations`.

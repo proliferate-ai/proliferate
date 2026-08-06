@@ -48,7 +48,9 @@ Rules:
 - Avoid setter names that imply orchestration, such as `submit`, `sync`,
   `load`, `refresh`, or `bootstrap`.
 - Non-trivial normalization, equality, schema upgrade, and indexing helpers
-  live in `lib/domain/**`.
+  live in `lib/domain/**`, or in `apps/packages/product-client/src/domain/**`
+  when the same pure rule is shared with Mobile. Neither domain owner stores
+  state.
 
 ## Store Persistence
 
@@ -97,7 +99,7 @@ other external systems.
 hooks/access/<system>/**       # app-owned query/mutation hooks
 @anyharness/sdk-react          # generic AnyHarness query/mutation hooks
 @proliferate/cloud-sdk-react   # generic Cloud query/mutation hooks
-product-surfaces               # shared Desktop/Web Cloud surfaces
+product-client/hooks/access    # shared connected Desktop/Web resource access
 ```
 
 - Do not copy refetchable server/runtime data into Zustand as a cache.
@@ -108,6 +110,9 @@ product-surfaces               # shared Desktop/Web Cloud surfaces
   directly.
 - Generated response types or SDK types are the source of truth for remote
   transport shapes.
+- ProductClient `src/domain/**` may project those transport shapes into
+  serializable models, but it owns no Query cache, Zustand store, provider,
+  hook, or persistence lifecycle.
 
 ## Providers
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SessionStreamHandle } from "@anyharness/sdk";
-import { isExpectedSessionStreamStaleCloseError } from "@proliferate/product-domain/telemetry/session-stream-stale-close";
+import { isExpectedSessionStreamStaleCloseError } from "#product/domain/telemetry/session-stream-stale-close";
 
 import { closeStaleSessionStreamHandle } from "#product/hooks/sessions/lifecycle/session-stream-handle";
 

@@ -6,7 +6,7 @@ import {
   type CloudWorkFilters,
   type CloudWorkRecencyGroupView,
   type CloudWorkItemView,
-} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+} from "@proliferate/product-client/internal/domain/workspaces/cloud-work-inventory";
 
 import type { MobileCloudChat } from "../../../navigation/navigation-model";
 

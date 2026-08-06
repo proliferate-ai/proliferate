@@ -20,7 +20,7 @@ vi.mock("#product/components/workspace/shell/sidebar/MainSidebar", () => ({
   MainSidebar: () => <div data-testid="main-sidebar" />,
 }));
 
-vi.mock("@proliferate/ui/primitives/IconButton", () => ({
+vi.mock("#product/primitives/IconButton", () => ({
   IconButton: ({
     children,
     onClick,
@@ -36,7 +36,7 @@ vi.mock("@proliferate/ui/primitives/IconButton", () => ({
   ),
 }));
 
-vi.mock("@proliferate/ui/icons", () => ({
+vi.mock("#product/primitives/icons/app-shell", () => ({
   SplitPanelLeft: () => <span data-testid="split-panel-icon" />,
 }));
 

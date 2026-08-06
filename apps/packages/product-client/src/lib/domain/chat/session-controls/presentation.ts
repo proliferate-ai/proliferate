@@ -5,4 +5,4 @@ export {
   type ConfiguredSessionControlValue,
   type SessionControlIconKey,
   type SupportedLiveControlKey,
-} from "@proliferate/product-domain/chats/session-controls/presentation";
+} from "#product/domain/chats/session-controls/presentation";

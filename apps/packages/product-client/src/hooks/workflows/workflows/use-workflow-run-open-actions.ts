@@ -1,12 +1,8 @@
 import type { ManagedWorkflowOpenTarget } from "@proliferate/cloud-sdk";
+import type { WorkflowRunOpenResult } from "#product/lib/domain/workflows/workflow-run-state";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
-
-export interface WorkflowRunOpenResult {
-  opened: boolean;
-  message?: string;
-}
 
 export function useWorkflowRunOpenActions() {
   const { refreshCloudWorkspace } = useCloudWorkspaceActions();

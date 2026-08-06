@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, renderHook } from "@testing-library/react";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
@@ -69,6 +69,7 @@ describe("useAppShortcuts", () => {
     cleanup();
     clearShortcutHandlerRegistryForTests();
     document.body.innerHTML = "";
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -180,13 +181,15 @@ describe("useAppShortcuts", () => {
 
     expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
     expect(createCoworkThread).toHaveBeenCalledTimes(1);
+    expect(actions.goHome.execute).not.toHaveBeenCalled();
     expect(actions.newLocalWorkspace.execute).not.toHaveBeenCalled();
     expect(actions.newWorktreeWorkspace.execute).not.toHaveBeenCalled();
 
     rerender(<GlobalShortcutOwner actions={actions} />);
     expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
     expect(createCoworkThread).toHaveBeenCalledTimes(1);
-    expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledTimes(1);
+    expect(actions.goHome.execute).toHaveBeenCalledTimes(1);
+    expect(actions.newWorktreeWorkspace.execute).not.toHaveBeenCalled();
 
     rerender(
       <GlobalShortcutOwner actions={actions}>
@@ -195,16 +198,41 @@ describe("useAppShortcuts", () => {
     );
     expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
     expect(createCoworkThread).toHaveBeenCalledTimes(2);
-    expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledTimes(1);
+    expect(actions.goHome.execute).toHaveBeenCalledTimes(1);
   });
 
-  it("preserves the normal Cmd-N action outside Cowork", () => {
+  it("opens New Chat and focuses its composer outside Cowork", () => {
+    vi.useFakeTimers();
     const actions = commandActions();
+    const chatZone = document.createElement("div");
+    chatZone.setAttribute("data-focus-zone", "chat");
+    const composer = document.createElement("textarea");
+    chatZone.append(composer);
+    document.body.append(chatZone);
     renderHook(() => useAppShortcuts(actions));
 
     expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
-    expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledTimes(1);
+    expect(actions.goHome.execute).toHaveBeenCalledWith("shortcut");
+    expect(actions.newWorktreeWorkspace.execute).not.toHaveBeenCalled();
     expect(actions.newLocalWorkspace.execute).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(document.activeElement).toBe(composer);
+  });
+
+  it("keeps the explicit local, worktree, and cloud creation shortcuts", () => {
+    const actions = commandActions();
+    renderHook(() => useAppShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.new-local", { source: "keyboard" })).toBe(true);
+    expect(runShortcutHandler("workspace.new-worktree", { source: "keyboard" })).toBe(true);
+    expect(runShortcutHandler("workspace.new-cloud", { source: "keyboard" })).toBe(true);
+
+    expect(actions.newLocalWorkspace.execute).toHaveBeenCalledWith("shortcut");
+    expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledWith("shortcut");
+    expect(actions.newCloudWorkspace.execute).toHaveBeenCalledWith("shortcut");
   });
 
   describe("app.open-support gating", () => {

@@ -1,4 +1,4 @@
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { AgentGlyph } from "#product/components/playground/subagents-ux/popover-pane/AgentGlyph";
 import type { PrototypeAgent } from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures";
 

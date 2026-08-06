@@ -5,10 +5,10 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
-import { TypewriterRevealText } from "@proliferate/ui/primitives/TypewriterRevealText";
-import { X } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
+import { TypewriterRevealText } from "#product/primitives/TypewriterRevealText";
+import { X } from "#product/primitives/icons/core";
 
 interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {
   isActive: boolean;
@@ -57,7 +57,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     const isSmall = contentWidth < 84;
     const showBadge = !isSmall;
     const showStatus = showBadge && badge != null;
-    const showShortcut = Boolean(shortcutLabel) && !isSmall;
+    const showShortcut = Boolean(shortcutLabel) && shortcutRevealVisible && !isSmall;
 
     return (
       <div
@@ -116,9 +116,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
           {showShortcut && shortcutLabel ? (
             <ShortcutBadge
               label={shortcutLabel}
-              className={`workspace-shell-tab__shortcut pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 ${
-                shortcutRevealVisible ? "opacity-100" : ""
-              }`}
+              className="workspace-shell-tab__shortcut pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground"
             />
           ) : null}
           {canClose && (

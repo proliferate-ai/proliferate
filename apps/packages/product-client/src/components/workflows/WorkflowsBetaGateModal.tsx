@@ -1,5 +1,5 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
+import { Button } from "#product/primitives/Button";
+import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { WORKFLOW_BETA_COPY } from "#product/copy/workflows/workflow-copy";
 
 /**

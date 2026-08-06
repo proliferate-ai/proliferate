@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
-import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
+import { resolveSessionViewState } from "#product/domain/sessions/activity";
 import { replaySessionHistory } from "#product/lib/domain/sessions/stream/stream-state";
 import {
   applyHistoryStateToStores,

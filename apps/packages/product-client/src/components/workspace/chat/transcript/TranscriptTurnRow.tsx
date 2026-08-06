@@ -13,34 +13,34 @@ import {
   TurnShell,
   resolveTurnTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
-import { goalMetMarkerLabel } from "@proliferate/product-domain/activity/goal";
+import { goalMetMarkerLabel } from "#product/domain/activity/goal";
 import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
 import { TurnItemSequence } from "#product/components/workspace/chat/transcript/TurnItemSequence";
 import {
   findTailAssistantProseRootId,
   getAssistantProseContent,
   resolveTurnPromptTiming,
-} from "@proliferate/product-domain/chats/transcript/transcript-rendering";
+} from "#product/domain/chats/transcript/transcript-rendering";
 import {
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
-} from "@proliferate/product-domain/chats/transcript/transcript-trailing-status";
+} from "#product/domain/chats/transcript/transcript-trailing-status";
 import {
   resolveAssistantTurnActionTime,
-} from "@proliferate/product-domain/chats/transcript/transcript-action-time";
+} from "#product/domain/chats/transcript/transcript-action-time";
 import {
   collectTurnFileRevertPatchEntries,
-} from "@proliferate/product-domain/chats/transcript/turn-file-patches";
+} from "#product/domain/chats/transcript/turn-file-patches";
 import {
   latestCompletedTurn,
-} from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
+} from "#product/domain/chats/transcript/last-turn-file-changes";
 import {
   resolveTurnStoppedNotice,
-} from "@proliferate/product-domain/chats/transcript/turn-stopped-presentation";
-import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
-import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+} from "#product/domain/chats/transcript/turn-stopped-presentation";
+import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
+import type { TurnDisplayBlock } from "#product/domain/chats/transcript/transcript-presentation";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
+import type { SessionViewState } from "#product/domain/sessions/activity";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useAssistantRevealFrontier } from "#product/hooks/chat/ui/use-assistant-reveal-frontier";
 import { TurnDocumentReferenceCard } from "#product/components/workspace/chat/transcript/TurnDocumentReferenceCard";

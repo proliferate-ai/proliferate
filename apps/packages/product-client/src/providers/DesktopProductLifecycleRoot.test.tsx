@@ -30,7 +30,7 @@ vi.mock("#product/hooks/cloud/lifecycle/use-desktop-worker-enrollment", () => ({
   useDesktopWorkerEnrollment: lifecycleMocks.useDesktopWorkerEnrollment,
 }));
 
-vi.mock("@proliferate/product-domain/sessions/activity", () => ({
+vi.mock("#product/domain/sessions/activity", () => ({
   isSessionSlotBusy: (snapshot: { busy?: boolean } | null) =>
     snapshot?.busy === true,
 }));

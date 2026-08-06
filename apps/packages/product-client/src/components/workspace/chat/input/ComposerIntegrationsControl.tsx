@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { ArrowUpRight, Globe, Settings } from "@proliferate/ui/icons";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { Button } from "#product/primitives/Button";
+import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { PopoverButton } from "#product/primitives/PopoverButton";
+import { ArrowUpRight, Settings } from "#product/primitives/icons/core";
+import { Globe } from "#product/primitives/icons/platform";
+import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
 import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
 import { useComposerIntegrationsState } from "#product/hooks/cloud/derived/use-composer-integrations-state";
 import {

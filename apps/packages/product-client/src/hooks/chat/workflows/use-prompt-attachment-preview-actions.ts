@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type {
   PromptDisplayAttachmentPart,
-} from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+} from "#product/domain/chats/composer/prompt-display-parts";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { removeViewerTargetFromRightPanelState } from "#product/lib/domain/workspaces/shell/right-panel-state";

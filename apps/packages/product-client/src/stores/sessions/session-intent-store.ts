@@ -16,12 +16,12 @@ import {
   type SessionIntent,
   type SessionResolveInteractionIntent,
   type SessionUpdateConfigIntent,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
+} from "#product/domain/sessions/intents/session-intent-model";
 import {
   pruneEchoedOutboxTombstones,
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
-} from "@proliferate/product-domain/sessions/intents/session-intent-reconciliation";
+} from "#product/domain/sessions/intents/session-intent-reconciliation";
 import {
   bindSessionIntentMaterialization,
   getPromptEntryByPromptId,
@@ -30,7 +30,7 @@ import {
   sessionIntentsForSession,
   upsertSessionIntent,
   type SessionIntentStateShape,
-} from "@proliferate/product-domain/sessions/intents/session-intent-state";
+} from "#product/domain/sessions/intents/session-intent-state";
 import { recordStoreActionDebugActivity } from "#product/lib/infra/measurement/measurement-port";
 import { isDebugMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
 import { now as measurementNow } from "#product/lib/infra/measurement/measurement-port";

@@ -7,7 +7,7 @@ import {
 } from "#product/hooks/sessions/lifecycle/session-intent-config-dispatch";
 import {
   pendingConfigChangesForSessionIntents,
-} from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
+} from "#product/domain/sessions/intents/session-intent-selectors";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 const mocks = vi.hoisted(() => ({

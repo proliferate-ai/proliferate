@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { FileReferenceBadge } from "#product/components/workspace/file-references/FileReferenceBadge";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-chat";

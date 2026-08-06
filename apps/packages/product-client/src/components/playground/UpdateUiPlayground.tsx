@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Badge } from "#product/primitives/Badge";
 import { UPDATE_PREVIEW_STATES } from "#product/config/update-playground";
 import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
 import { UpdateUiPlaygroundControls } from "#product/components/playground/UpdateUiPlaygroundControls";

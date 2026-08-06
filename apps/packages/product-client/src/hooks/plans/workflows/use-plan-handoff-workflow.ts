@@ -18,7 +18,7 @@ import type { SessionActivationOutcome } from "#product/hooks/sessions/workflows
 import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
+import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import { buildPlanHandoffPrompt } from "#product/lib/domain/plans/handoff-prompt";
 import {
   listPlanHandoffModeOptions,
@@ -38,7 +38,7 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import type { ToastErrorInput } from "@proliferate/ui/utils/toast-model";
+import type { ToastErrorInput } from "#product/primitives/utils/toast-model";
 
 // Owns the plan handoff dialog form and submit workflow wiring. Does not own session runtime.
 export function usePlanHandoffWorkflow({

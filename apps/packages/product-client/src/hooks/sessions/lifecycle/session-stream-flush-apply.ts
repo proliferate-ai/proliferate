@@ -27,16 +27,16 @@ import { markWorkspaceViewedAt } from "#product/stores/preferences/workspace-ui-
 import { isDocumentVisibleAndFocused } from "#product/hooks/ui/document/use-document-focus-visibility";
 import {
   pendingConfigChangesForSessionIntents,
-} from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
+} from "#product/domain/sessions/intents/session-intent-selectors";
 import {
   sessionIntentsForSession,
-} from "@proliferate/product-domain/sessions/intents/session-intent-state";
+} from "#product/domain/sessions/intents/session-intent-state";
 import {
   reconcilePendingConfigChanges,
   type PendingSessionConfigChanges,
-} from "@proliferate/product-domain/sessions/pending-config";
+} from "#product/domain/sessions/pending-config";
 import { buildSessionStreamBatchPatch } from "#product/lib/domain/sessions/stream-patch";
-import { shouldClearOptimisticPendingPromptForEnvelope } from "@proliferate/product-domain/chats/pending-prompts/pending-prompts";
+import { shouldClearOptimisticPendingPromptForEnvelope } from "#product/domain/chats/pending-prompts/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
 } from "#product/hooks/sessions/lifecycle/session-stream-side-effects";

@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +16,7 @@ import {
   runShortcutHandler,
 } from "#product/lib/domain/shortcuts/registry";
 import { useSupportModalStore } from "#product/stores/support/support-modal-store";
+import { useShortcutRevealStore } from "#product/stores/shortcuts/shortcut-reveal-store";
 
 const updaterMocks = vi.hoisted(() => ({
   isSupported: vi.fn(() => false),
@@ -69,6 +70,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   clearShortcutHandlerRegistryForTests();
+  useShortcutRevealStore.setState({ visible: false });
 });
 
 function renderSettingsSidebar({
@@ -294,6 +296,8 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
     });
 
+    expect(screen.queryByText("⌘1")).toBeNull();
+    act(() => useShortcutRevealStore.getState().setVisible(true));
     expect(screen.getByText("⌘1")).toBeTruthy();
 
     expect(runShortcutHandler("settings.section-by-index", {
@@ -356,6 +360,8 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
     });
 
+    expect(screen.queryByText("⌘1")).toBeNull();
+    act(() => useShortcutRevealStore.getState().setVisible(true));
     expect(screen.getByText("⌘1")).toBeTruthy();
 
     expect(runShortcutHandler("settings.section-by-index", {

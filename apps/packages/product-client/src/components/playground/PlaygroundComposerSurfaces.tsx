@@ -1,14 +1,14 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { ArrowRight } from "@proliferate/ui/icons";
-import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
+import { Button } from "#product/primitives/Button";
+import { Textarea } from "#product/primitives/Textarea";
+import { ArrowRight } from "#product/primitives/icons/core";
+import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import { ChatInputControlRow } from "#product/components/workspace/chat/input/ChatInputControlRow";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerFileMentionSearch } from "#product/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
-import { ComposerTextarea } from "@proliferate/ui/patterns/ComposerTextarea";
-import { ComposerTextareaFrame } from "@proliferate/ui/patterns/ComposerTextareaFrame";
+import { ComposerTextarea } from "#product/primitives/patterns/ComposerTextarea";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,

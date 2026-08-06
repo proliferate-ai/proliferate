@@ -1,6 +1,8 @@
-import { FileIcon, Link2, Spinner, X } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import type { PromptDisplayAttachmentPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import { FileIcon } from "#product/primitives/icons/workspace";
+import { Link2, X } from "#product/primitives/icons/core";
+import { Spinner } from "#product/primitives/Spinner";
+import { Button } from "#product/primitives/Button";
+import type { PromptDisplayAttachmentPart } from "#product/domain/chats/composer/prompt-display-parts";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { PlanReferenceAttachmentCard } from "#product/components/workspace/chat/content/PlanReferenceAttachmentCard";
 import { usePromptAttachmentUrl } from "#product/hooks/access/anyharness/sessions/use-prompt-attachment-url";

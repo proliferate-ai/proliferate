@@ -9,7 +9,7 @@
 import type {
   RepoAuthoritySnapshot,
   RepoAuthorityStatus,
-} from "@proliferate/product-domain/repos/repo-readiness";
+} from "@proliferate/product-client/internal/domain/repos/repo-readiness";
 
 /** GitHub App user-authorization status wire values the resolver cares about. */
 export type MobileUserAuthorizationState =

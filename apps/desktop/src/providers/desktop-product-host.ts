@@ -1,4 +1,4 @@
-import type { AuthMethod } from "@proliferate/product-domain/auth/model";
+import type { AuthMethod } from "@proliferate/product-client/internal/domain/auth/model";
 import type {
   AuthCallback,
   LoginRequest,

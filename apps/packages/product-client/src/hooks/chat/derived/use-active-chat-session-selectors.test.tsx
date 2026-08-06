@@ -2,7 +2,7 @@
 
 import { createTranscriptState } from "@anyharness/sdk";
 import type { SessionLiveConfigSnapshot } from "@anyharness/sdk";
-import type { PendingSessionConfigChanges } from "@proliferate/product-domain/sessions/pending-config";
+import type { PendingSessionConfigChanges } from "#product/domain/sessions/pending-config";
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {

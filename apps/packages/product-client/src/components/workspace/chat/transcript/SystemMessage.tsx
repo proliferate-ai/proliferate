@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Settings } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { Settings } from "#product/primitives/icons/core";
 
 export interface SystemMessageProps {
   content: string;

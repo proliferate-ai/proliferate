@@ -1,26 +1,26 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { CloudRepoPickerProps } from "@proliferate/product-ui/repos/CloudRepoPicker";
-import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   resolveRepositoryReadiness,
   type RepositoryCapabilityRequirement,
-} from "@proliferate/product-domain/repos/repo-readiness";
-import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
+} from "#product/domain/repos/repo-readiness";
 import {
   AddRepoFlow,
   type AddRepoFlowOption,
-} from "@proliferate/product-ui/repos/AddRepoFlow";
-import {
-  useAddCloudEnvironment,
-} from "@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud-environment";
+} from "#product/components/workspace/repo-setup/AddRepoFlow";
+import { useAddCloudEnvironment } from "#product/hooks/workspaces/workflows/use-add-cloud-environment";
 import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";
+import type {
+  CloudRepoPickerBlockerView,
+  CloudRepoPickerProps,
+} from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
@@ -143,6 +143,7 @@ export function AddRepoFlowHost() {
       query: [["source", "github_app_installation_callback"]],
     }),
     onOpenExternalUrl: host.links.openExternal,
+    onCopyText: host.clipboard.writeText,
     onRepositorySelected: (repo) => {
       handoffToCloud();
       beginCloudIntent({
@@ -185,6 +186,7 @@ export function AddRepoFlowHost() {
       query: [["source", "github_app_installation_callback"]],
     }),
     onOpenExternalUrl: host.links.openExternal,
+    onCopyText: host.clipboard.writeText,
     // The clone path never adds a Cloud environment; select is overridden below.
     onEnvironmentAdded: () => {},
   });
@@ -287,6 +289,8 @@ export function AddRepoFlowHost() {
       ? { ...clonePicker, blocker: preflightBlockers.clone }
       : clonePicker)
     : null;
+  const renderedCloudPicker: CloudRepoPickerProps | null = resolvedCloudPicker;
+  const renderedClonePicker: CloudRepoPickerProps | null = resolvedClonePicker;
 
   return (
     <AddRepoFlow
@@ -296,8 +300,8 @@ export function AddRepoFlowHost() {
       adding={isAddingRepo}
       entryNote={files ? null : DESKTOP_POINTER_COPY.addRepository}
       error={step.kind === "cloud" ? null : flowError}
-      cloudPicker={resolvedCloudPicker}
-      clonePicker={resolvedClonePicker}
+      cloudPicker={renderedCloudPicker}
+      clonePicker={renderedClonePicker}
       onPickOption={handlePickOption}
       onBack={handleBack}
       onClose={handleClose}

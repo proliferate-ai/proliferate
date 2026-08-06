@@ -1,4 +1,4 @@
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
 interface DelegatedAgentReceiptNameProps {

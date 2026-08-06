@@ -1,15 +1,16 @@
-import { Button } from "@proliferate/ui/primitives/Button";
-import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { Button } from "#product/primitives/Button";
+import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { ExternalLink, StickyNote } from "@proliferate/ui/icons";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { ExternalLink } from "#product/primitives/icons/core";
+import { StickyNote } from "#product/primitives/icons/product";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import { useState } from "react";
 import type {
   SubagentExecutionState,
   SubagentProvisioningStatus,
-} from "@proliferate/product-domain/chats/subagents/subagent-launch";
+} from "#product/domain/chats/subagents/subagent-launch";
 
 interface SubagentLaunchLedgerProps {
   prompt: string | null;

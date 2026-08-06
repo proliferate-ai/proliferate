@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
+import { Button } from "#product/primitives/Button";
+import { Input } from "#product/primitives/Input";
 
 import { useOrgSlugSsoSignIn } from "#product/hooks/auth/workflows/use-org-slug-sso-sign-in";
 import { getRedirectTarget } from "#product/lib/domain/auth/login-redirect";

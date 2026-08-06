@@ -1,20 +1,22 @@
 import { useMemo, useRef, useState, type CSSProperties } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "#product/primitives/Button";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
-} from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+} from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import {
   ArrowUpRight,
   Check,
   ChevronDown,
+  MoreHorizontal,
+} from "#product/primitives/icons/core";
+import {
   CollapseAll,
   ExpandAll,
   FolderTree,
-  MoreHorizontal,
-} from "@proliferate/ui/icons";
-import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
+} from "#product/primitives/icons/workspace";
+import { PaneIconButton } from "#product/primitives/PaneIconButton";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";

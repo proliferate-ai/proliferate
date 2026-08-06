@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROLIFERATE_DARK_THEME } from "@proliferate/product-ui/code/code-theme-tokens";
+import { PROLIFERATE_DARK_THEME } from "#product/lib/infra/editor/code-theme-tokens";
 import { highlightMarkdownDiffLines } from "#product/lib/infra/editor/highlighting";
 
 // Expected colors come from the generated palette, not repeated hex literals:

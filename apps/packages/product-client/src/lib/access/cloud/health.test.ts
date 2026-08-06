@@ -5,7 +5,7 @@ import {
 } from "#product/lib/access/cloud/health";
 import {
   EXPECTED_CONTROL_PLANE_PROBE_TIMEOUT_ERROR_NAME,
-} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
+} from "#product/domain/telemetry/control-plane-probe-timeout";
 
 describe("control plane health", () => {
   afterEach(() => {

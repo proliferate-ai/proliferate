@@ -1,6 +1,8 @@
 import { ComputeTargetSwatch } from "#product/components/compute/ComputeTargetSwatch";
-import { CloudIcon, Monitor, Terminal, Tree } from "@proliferate/ui/icons";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { CloudIcon, Monitor } from "#product/primitives/icons/platform";
+import { Terminal } from "#product/primitives/icons/workspace";
+import { Tree } from "#product/primitives/icons/workspace-git";
+import { Tooltip } from "#product/primitives/Tooltip";
 import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
 import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 

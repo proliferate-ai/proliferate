@@ -861,13 +861,9 @@ export const themeTokens = {
     provenance: "[SHIPPED:raw-hex-move]",
   },
   /**
-   * Transcript measure. Readable Markdown prose is capped at
-   * `--thread-content-max-width: 40rem`, and wide blocks (tables, images,
-   * code) are allowed to spill to `--markdown-wide-block-max-width: 64rem`.
-   * Named in Tailwind's `--container-*` namespace so consumers write
-   * `max-w-transcript-readable` / `max-w-transcript-wide` instead of an
-   * arbitrary bracket width — a consistency choice, not something the
-   * appearance gate forces (the gate has no max-w rule).
+   * Narrow 40rem measure for prose-heavy surfaces outside the unified chat
+   * flow. Named in Tailwind's `--container-*` namespace so consumers can use
+   * `max-w-transcript-readable` instead of an arbitrary bracket width.
    */
   "--container-transcript-readable": {
     dark: "40rem",
@@ -875,10 +871,9 @@ export const themeTokens = {
     provenance: "[RETUNE:layout/transcript-measure]",
   },
   /**
-   * Two-tier measure: the thread column itself (avatars, action rows, wide
-   * blocks) widens to 48rem while readable prose stays capped at
-   * `--container-transcript-readable` (40rem, applied directly on the
-   * Markdown body). See ChatColumn.ts and MarkdownBody.tsx.
+   * Shared 48rem chat column for the launch composer, active composer, and
+   * transcript. The narrower readable token remains available to prose-heavy
+   * surfaces outside this unified chat flow.
    */
   "--container-transcript-thread": {
     dark: "48rem",
@@ -957,13 +952,13 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--diffs-font-size": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[SHIPPED]",
   },
   "--diffs-line-height": {
-    dark: "calc(var(--diffs-font-size, 13px) * 1.8)",
-    light: "calc(var(--diffs-font-size, 13px) * 1.8)",
+    dark: "calc(var(--diffs-font-size, 14px) * 1.8)",
+    light: "calc(var(--diffs-font-size, 14px) * 1.8)",
     provenance: "[SHIPPED]",
   },
   "--diffs-min-number-column-width": {
@@ -1059,7 +1054,7 @@ export const themeTokens = {
    * The single interactive-control height. Every compact control that sits in a
    * row with its peers — composer model/mode/integration/add-file/send buttons,
    * segmented controls, header pills, settings toggles — is 28px tall at the
-   * same 12px `--text-ui` label. The composer already shipped that height at
+   * same 13px `--text-ui` label. The composer already shipped that height at
    * ~70 call sites, so this token names the shipped winner rather than
    * introducing a new one; `--size-icon-button-lg` and
    * `--workspace-shell-action-size` are the same 1.75rem, which is the
@@ -1104,16 +1099,14 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   /**
-   * [RETUNE:icons/sidebar-indicator] — the sidebar row's trailing activity
-   * glyphs (waiting clock, running spinner, error/warning badge) render at
-   * 14px inside a 20px centered cell in the reference, against the same 12px
-   * row text. 1.166667em is exactly 14px at that base — between
-   * `--icon-compact` (12px, too small) and `--icon-control` (16px, visibly
-   * too big), neither of which matches on screen.
+   * Sidebar row glyphs use the row text's 13px optical size inside their
+   * larger alignment wells. Keeping this role separate from `--icon-compact`
+   * lets the sidebar remain independently tunable even though both currently
+   * resolve to the same ratio.
    */
   "--icon-indicator": {
-    dark: "1.166667em",
-    light: "1.166667em",
+    dark: "1em",
+    light: "1em",
     provenance: "[RETUNE:icons/sidebar-indicator]",
   },
   "--icon-large": {
@@ -1137,7 +1130,7 @@ export const themeTokens = {
    * sidebar's `RowActionIconButton` kebab) rendered their glyph at
    * `--icon-control` (16px), which read 50-60% too big against the
    * reference sidebar on screen even though the ratio math looked correct.
-   * `0.875em` lands at 10.5px against the sidebar row's 12px text — the
+   * `0.875em` lands at 11.4px against the sidebar row's 13px text — the
    * smallest inline-glyph tier, reserved for these row-trailing controls
    * whose 24px hit box is unusually large relative to their glyph.
    */
@@ -1187,8 +1180,8 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--readable-code-font-size": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[SHIPPED]",
   },
   "--readable-code-line-height": {
@@ -1207,13 +1200,13 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--scratch-font-size": {
-    dark: "var(--text-message, var(--text-composer, 13px))",
-    light: "var(--text-message, var(--text-composer, 13px))",
+    dark: "var(--text-message, var(--text-chat, 14px))",
+    light: "var(--text-message, var(--text-chat, 14px))",
     provenance: "[SHIPPED]",
   },
   "--scratch-line-height": {
-    dark: "var(--text-message--line-height, var(--text-composer--line-height, 21px))",
-    light: "var(--text-message--line-height, var(--text-composer--line-height, 21px))",
+    dark: "var(--text-message--line-height, var(--text-chat--line-height, 22px))",
+    light: "var(--text-message--line-height, var(--text-chat--line-height, 22px))",
     provenance: "[SHIPPED]",
   },
   "--scratch-list-marker-leading-space": {
@@ -1294,8 +1287,8 @@ export const themeTokens = {
     provenance: "[RETUNE:layout/transcript-measure]",
   },
   "--text-body": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body--letter-spacing": {
@@ -1304,13 +1297,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body--line-height": {
-    dark: "20px",
-    light: "20px",
+    dark: "21px",
+    light: "21px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body-emphasis": {
-    dark: "14px",
-    light: "14px",
+    dark: "15px",
+    light: "15px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body-emphasis--letter-spacing": {
@@ -1319,13 +1312,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body-emphasis--line-height": {
-    dark: "21px",
-    light: "21px",
+    dark: "22px",
+    light: "22px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat--letter-spacing": {
@@ -1334,18 +1327,18 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat--line-height": {
-    dark: "20px",
-    light: "20px",
+    dark: "22px",
+    light: "22px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat-meta": {
-    dark: "calc(var(--text-chat, 13px) - 2px)",
-    light: "calc(var(--text-chat, 13px) - 2px)",
+    dark: "calc(var(--text-chat, 14px) - 2px)",
+    light: "calc(var(--text-chat, 14px) - 2px)",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-composer": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[SHIPPED]",
   },
   "--text-composer--letter-spacing": {
@@ -1359,8 +1352,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-heading": {
-    dark: "16px",
-    light: "16px",
+    dark: "17px",
+    light: "17px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-heading--letter-spacing": {
@@ -1369,8 +1362,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-heading--line-height": {
-    dark: "23px",
-    light: "23px",
+    dark: "24px",
+    light: "24px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-hero": {
@@ -1389,18 +1382,18 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-message": {
-    dark: "var(--text-composer)",
-    light: "var(--text-composer)",
+    dark: "var(--text-chat)",
+    light: "var(--text-chat)",
     provenance: "[SHIPPED]",
   },
   "--text-message--letter-spacing": {
-    dark: "var(--text-composer--letter-spacing)",
-    light: "var(--text-composer--letter-spacing)",
+    dark: "var(--text-chat--letter-spacing)",
+    light: "var(--text-chat--letter-spacing)",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-message--line-height": {
-    dark: "var(--text-composer--line-height)",
-    light: "var(--text-composer--line-height)",
+    dark: "var(--text-chat--line-height)",
+    light: "var(--text-chat--line-height)",
     provenance: "[SHIPPED]",
   },
   /**
@@ -1449,8 +1442,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-brand": {
-    dark: "16px",
-    light: "16px",
+    dark: "17px",
+    light: "17px",
     provenance: "[SHIPPED]",
   },
   "--text-sidebar-brand--letter-spacing": {
@@ -1459,13 +1452,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-brand--line-height": {
-    dark: "23px",
-    light: "23px",
+    dark: "24px",
+    light: "24px",
     provenance: "[SHIPPED]",
   },
   "--text-sidebar-nav": {
-    dark: "12px",
-    light: "12px",
+    dark: "13px",
+    light: "13px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-nav--letter-spacing": {
@@ -1474,13 +1467,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-nav--line-height": {
-    dark: "17px",
-    light: "17px",
+    dark: "18px",
+    light: "18px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-row": {
-    dark: "12px",
-    light: "12px",
+    dark: "13px",
+    light: "13px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-row--letter-spacing": {
@@ -1489,8 +1482,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-row--line-height": {
-    dark: "17px",
-    light: "17px",
+    dark: "18px",
+    light: "18px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-title": {
@@ -1509,8 +1502,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-ui": {
-    dark: "12px",
-    light: "12px",
+    dark: "13px",
+    light: "13px",
     provenance: "[SHIPPED]",
   },
   "--text-ui--letter-spacing": {
@@ -1519,13 +1512,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-ui--line-height": {
-    dark: "17px",
-    light: "17px",
+    dark: "18px",
+    light: "18px",
     provenance: "[SHIPPED]",
   },
   "--text-ui-sm": {
-    dark: "11px",
-    light: "11px",
+    dark: "12px",
+    light: "12px",
     provenance: "[SHIPPED]",
   },
   "--text-ui-sm--letter-spacing": {
@@ -1534,13 +1527,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-ui-sm--line-height": {
-    dark: "15px",
-    light: "15px",
+    dark: "16px",
+    light: "16px",
     provenance: "[SHIPPED]",
   },
   "--text-workspace-title": {
-    dark: "14px",
-    light: "14px",
+    dark: "15px",
+    light: "15px",
     provenance: "[SHIPPED]",
   },
   "--text-workspace-title--letter-spacing": {
@@ -1549,8 +1542,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-workspace-title--line-height": {
-    dark: "21px",
-    light: "21px",
+    dark: "22px",
+    light: "22px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--tracking-heading": {

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { SplitPanelLeft } from "@proliferate/ui/icons";
+import { IconButton } from "#product/primitives/IconButton";
+import { SplitPanelLeft } from "#product/primitives/icons/app-shell";
 import { useResize } from "#product/hooks/ui/layout/use-resize";
 import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";

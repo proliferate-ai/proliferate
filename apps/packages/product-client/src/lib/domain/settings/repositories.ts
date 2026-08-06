@@ -1,6 +1,6 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
-import { canonicalRepoKey } from "@proliferate/product-domain/repos/repo-id";
+import { canonicalRepoKey } from "#product/domain/repos/repo-id";
 
 export type RepositoryAvailability = "local" | "local_cloud" | "cloud";
 

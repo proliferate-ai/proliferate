@@ -1,0 +1,101 @@
+import type { HTMLAttributes, ReactNode } from "react";
+
+import { SidebarRowSurface } from "#product/primitives/patterns/SidebarRowSurface";
+
+export interface ProductSidebarThreadRowProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick" | "onSelect"> {
+  active?: boolean;
+  /**
+   * Legacy LEADING-well indicator slot (web row-view consumers). Desktop
+   * thread rows put live activity in `trailingStatus` instead, matching the
+   * workspace rows' right-slot convention.
+   */
+  status?: ReactNode;
+  label: ReactNode;
+  subtitle?: string | null;
+  detail?: ReactNode;
+  trailingLabel?: string | null;
+  /**
+   * Activity indicator (spinner / waiting / error) in the TRAILING cell,
+   * same precedence as ProductSidebarWorkspaceRow: it wins over
+   * `trailingLabel` and fades out on hover/focus like the other trailing
+   * content.
+   */
+  trailingStatus?: ReactNode;
+  hoverAction?: ReactNode;
+  expandControl?: ReactNode;
+  onSelect?: () => void;
+}
+
+export function ProductSidebarThreadRow({
+  active = false,
+  status = null,
+  label,
+  subtitle = null,
+  detail = null,
+  trailingLabel = null,
+  trailingStatus = null,
+  hoverAction = null,
+  expandControl = null,
+  onSelect,
+  className = "",
+  ...props
+}: ProductSidebarThreadRowProps) {
+  const hasSubtitle = Boolean(subtitle);
+
+  return (
+    <SidebarRowSurface
+      active={active}
+      onPress={onSelect}
+      className={`${hasSubtitle ? "h-[40px]" : "h-[30px]"} pl-2 pr-1 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
+      {...props}
+    >
+      {hoverAction ? (
+        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-hover group-hover:opacity-100 group-focus-within:opacity-100">
+          {hoverAction}
+        </div>
+      ) : null}
+      <div className="flex w-full items-center gap-1.5">
+        <div className="flex w-4 shrink-0 items-center justify-center">
+          {status}
+        </div>
+
+        {/* pl-0.5 matches ProductSidebarWorkspaceRow's leading-well-to-label
+            gap exactly, so a thread row's title lands at the same left edge
+            as a workspace row's title (both sit under the same 16px-wide
+            leading well). */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 pl-0.5">
+          <div className={`flex min-w-0 flex-1 ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} truncate text-sidebar-foreground`}>
+            <span className="max-w-full truncate">
+              {label}
+            </span>
+            {hasSubtitle ? (
+              <span className="max-w-full truncate text-ui-sm leading-3 text-sidebar-muted-foreground">
+                {subtitle}
+              </span>
+            ) : null}
+          </div>
+          {detail ? (
+            <div className="flex min-w-[24px] shrink-0 items-center justify-end gap-1 text-sidebar-muted-foreground">
+              {detail}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
+          {trailingStatus ? (
+            <div className="flex h-5 items-center justify-end transition-opacity duration-hover group-focus-within:opacity-0 group-hover:opacity-0">
+              {trailingStatus}
+            </div>
+          ) : trailingLabel && !active && !expandControl ? (
+            // Same end-anchored 20px cell as the activity glyphs, so thread
+            // times sit on the workspace rows' indicator axis.
+            <div className="flex h-5 min-w-5 items-center justify-center truncate text-ui tabular-nums text-sidebar-muted-foreground group-focus-within:opacity-0 group-hover:opacity-0">
+              {trailingLabel}
+            </div>
+          ) : null}
+          {expandControl}
+        </div>
+      </div>
+    </SidebarRowSurface>
+  );
+}

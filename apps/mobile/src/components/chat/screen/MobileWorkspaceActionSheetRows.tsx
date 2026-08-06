@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { CloudSessionProjection } from "@proliferate/cloud-sdk";
-import { normalizeCloudComposerModelLabel, type CloudChatComposerControlOptionView } from "@proliferate/product-domain/chats/cloud/composer-controls";
+import { normalizeCloudComposerModelLabel, type CloudChatComposerControlOptionView } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import {
   formatMobileWorkspaceActionSessionStatus,

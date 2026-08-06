@@ -10,8 +10,8 @@ import {
   Copy,
   Plus,
   Trash,
-} from "@proliferate/ui/icons";
-import { PaneOptionsMenuItem } from "@proliferate/ui/patterns/PaneOptionsMenuItem";
+} from "#product/primitives/icons/core";
+import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
 import {
   ScratchCodeMirrorEditor,
   type ScratchCodeMirrorEditorHandle,

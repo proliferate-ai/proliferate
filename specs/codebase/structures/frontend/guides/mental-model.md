@@ -32,7 +32,7 @@ Every file is one of four things. Hooks are the only layer allowed to mix them.
 | --- | --- | --- |
 | **State** | memory | `useState`, `stores/**`, React Query, `providers/**` |
 | **Access** | transport to systems | `hooks/access/**`, `lib/access/**`, SDK packages |
-| **Work** | logic | `lib/domain/**`, `lib/workflows/**`, `lib/infra/**` |
+| **Work** | logic | `lib/domain/**`, `lib/workflows/**`, `lib/infra/**`, shared `product-client/src/domain/**` |
 | **Composition** | the glue | `hooks/**`, `components/**` |
 
 ## State: Place By Source Of Truth
@@ -77,7 +77,7 @@ Three stages of pure work, none of which touch React.
 
 | Stage | Address | Signature | Owns |
 | --- | --- | --- | --- |
-| **Domain** | `lib/domain/**` | `(data) -> decision` | validation, projections, view models, presentation maps, reducers, side-effect *planners* |
+| **Domain** | `lib/domain/**`; shared `product-client/src/domain/**` | `(data) -> decision` | validation, projections, view models, presentation maps, reducers, side-effect *planners* |
 | **Workflow** | `lib/workflows/**` | `async (input, deps)` | ordered sequences, branching on fetched data, retries, rollback, recovery |
 | **Infra** | `lib/infra/**` | generic fn | persistence, scheduling, ids, batching, measurement |
 
@@ -149,43 +149,47 @@ usages. Always ask: is this decision made anywhere else?
   ordering). Anything runtime-dependent is not config.
 - **`copy/**`** holds human-facing words. The mapping from product state to
   label/tone/icon is *not* copy - it is a presentation map in
-  `lib/domain/**/presentation.ts` (or `product-domain` if shared).
-- **Telemetry** is spread by layer with one tree and one provider: providers own
-  bootstrap, hooks emit typed events and capture exceptions, the event catalog
-  is `lib/domain/telemetry`, transport is `lib/integrations/telemetry`.
-  Components do not import telemetry. Payloads stay low-cardinality and carry no
-  prompts, paths, repo names, or secrets.
+  `lib/domain/**/presentation.ts` (or ProductClient `src/domain/**` if shared
+  with Mobile).
+- **Telemetry** is split at the host boundary while retaining one product tree.
+  ProductClient's `TelemetryProvider`, hooks, and `lib/domain/telemetry/**`
+  catalog own product event meaning. They emit through `ProductHost.telemetry`.
+  Desktop implements that transport under `lib/integrations/telemetry/**`; Web
+  implements it under `browser/telemetry/**`; Mobile keeps its native provider
+  and integration. Components do not import telemetry. Payloads stay
+  low-cardinality and carry no prompts, paths, repo names, or secrets.
 
-## Shared Packages
+## Shared Packages And Nested Owners
 
-Two foundations plus a three-layer DOM stack. See
+One connected app over two nested lower layers plus the Design package. See
 [../packages/README.md](../packages/README.md) for the authoritative table.
 
 ```text
-DOM stack (Desktop/Web):        Foundations (consumed by everyone):
-  product-surfaces   connected    product-domain   pure shared rules
-  product-ui         presentation                   (the Mobile sharing point)
-  ui                 primitives    design           tokens + css (the look)
-  design             css/tokens
+product-client/src/
+  domain/       pure shared rules (the Mobile-safe sharing point)
+  primitives/   Desktop/Web DOM library
+  components/ · hooks/ · stores/ · providers/ · lib/
+                connected shared Desktop/Web client
+
+design/         tokens + CSS; React Native-safe token values
 ```
 
 - **design** - shared design *values*, not just css: tokens, DOM css, and
   React-Native-safe token values. Mobile consumes the tokens, not the css.
-- **ui** - the single DOM primitive system (Button, Dialog, Input, layout).
-  Hard invariant: no DOM primitive is defined anywhere else, even a renamed
-  wrapper. Need a variant? Add it to `ui`.
-- **product-ui** - presentational product components: data in, callbacks out.
-  Composes `ui` + `product-domain`. No SDK, access, stores, or routes.
-- **product-surfaces** - the *connected* sibling of `product-ui`: product
-  presentation wired to **Cloud** (SDK React hooks + mutations). No app stores,
-  routes, Tauri, or local AnyHarness runtime - those are passed in as callbacks.
-  It is small by design; most surfaces need local runtime and stay app-local.
-- **product-domain** - pure shared decisions, the twin of app `lib/domain`, and
-  the primary sharing point for Mobile. No React, DOM, SDK clients, or stores.
+- **product-client** - the shared Desktop/Web product. Components own product
+  presentation, access hooks own SDK/query state, workflow hooks sequence
+  actions, native capability enters through the typed host contract, and its
+  nested `primitives/**` subtree owns the single DOM primitive system. That
+  subtree may depend only on `design`, React/DOM-safe libraries, and itself.
+- **product-client `src/domain/**`** - pure shared decisions, the twin of app or
+  connected `lib/domain`, and the primary sharing point for Mobile. No React,
+  DOM, SDK clients, stores, primitives, or higher ProductClient layers.
 
-Platform matrix: Desktop/Web use all five; Mobile uses only `design`
-(react-native tokens), `product-domain`, and SDK packages - never the DOM
-packages.
+Platform matrix: Desktop/Web mount ProductClient and may use concrete domain
+subpaths from host adapters. Mobile uses only `design` React Native tokens, SDK
+packages, and concrete
+`@proliferate/product-client/internal/domain/<file>` modules—never the package
+root or its DOM layers.
 
 ## The Placement Algorithm
 
@@ -193,8 +197,8 @@ Three questions, in order, give every file exactly one home.
 
 1. **What substance is this?** state / access / pure work / render / content.
 2. **What is the source of truth, and who else needs it?** Places state and
-   decides whether a decision is shared (`product-domain`) or app-local
-   (`lib/domain`).
+   decides whether a decision is shared with Mobile (`product-client/src/domain`)
+   or app/connected-client local (`lib/domain`).
 3. **What is the lowest layer that can own it cleanly?** Places everything else.
 
 ## Debugging: Symptom To Root Concept

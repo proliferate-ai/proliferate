@@ -1,19 +1,19 @@
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
-import { Robot } from "@proliferate/ui/icons";
+import { Button } from "#product/primitives/Button";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { Robot } from "#product/primitives/icons/product";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import type {
   SubagentMcpReceiptPresentation,
-} from "@proliferate/product-domain/chats/subagents/subagent-tool-presentation";
+} from "#product/domain/chats/subagents/subagent-tool-presentation";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import {
   delegatedWorkStatusCategoryFromLabel,
 } from "#product/lib/domain/delegated-work/presentation";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import type { ToolActionStatus } from "./ToolActionRow";
 
 const CHAT_ACTION_TEXT_CLASS =

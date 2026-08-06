@@ -33,6 +33,19 @@
 #   signal. Reaching any other domain innard through an AppState field — a service
 #   that exposes a store, a runtime that hands back a repository — has no such
 #   name to key off and stays a judgment call for review, not a rule.
+#   The store pattern is also bound to the identifier `state`, which is how every
+#   api/** handler param is spelled today; `app_state.foo_store` or a rebound clone
+#   evades it, and that too is review's job.
+#
+# - SQL detection is lexical, so an uppercase SQL verb heading an ordinary string
+#   matches. `bail!("UPDATE failed for {id}")` is indistinguishable from
+#   `"UPDATE sessions SET .."` without parsing Rust, so a hit like that is a
+#   seedable false positive, not a defect — say so in the reason and move on.
+#   Two narrower cases are handled: the exact literal `"SELECT"` (a keyword
+#   constant or serde rename) is excluded, while `"SELECT " + cols` still counts.
+#   SQL quoted inside a `/* .. */` block comment also counts, because comment
+#   stripping only understands `//`. All of these shapes are pinned by unit tests
+#   so the limitation stays visible instead of drifting.
 
 DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs 1 strict-mirror goal runtime uses SetSessionGoalRequest to drive the sidecar ext method; contract mapping pending move above the API boundary
 DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 1 strict-mirror loop runtime uses SetSessionLoopRequest to drive the sidecar ext method; contract mapping pending move above the API boundary

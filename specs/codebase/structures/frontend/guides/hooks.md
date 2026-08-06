@@ -27,7 +27,11 @@ The **type folder is the required leaf**; a **subdomain is optional**, only when
 
 - **Hooks may call hooks. Plain functions in `lib/**` must not call hooks.**
 - Access hooks may call `lib/access/**`, SDK clients, and shared Cloud SDK React hooks; anything wrapping a raw external request goes under `hooks/access/<system>/**`.
-- **Platform-bound hooks stay in the owning app** — Tauri hooks are desktop-only; DOM-subscription hooks don't exist on mobile. A shared/cross-platform hook must not import a platform-specific access hook.
+- **Raw platform hooks stay in the owning app.** ProductClient may own a
+  Desktop-only capability hook behind the typed `ProductHost.desktop` bridge,
+  but that hook must not import Tauri or the Desktop app. DOM-subscription hooks
+  do not exist on Mobile, and a genuinely cross-platform hook must not import a
+  platform-specific capability hook.
 
 ## The hook types (index)
 
@@ -55,7 +59,7 @@ Refs, local state, effects, DOM/native subscriptions, timers, platform UI APIs. 
 ### Access hooks — external-system wrappers
 ```text
 hooks/access/cloud/billing/use-cloud-billing.ts
-hooks/access/anyharness/runtime/use-runtime-workspaces.ts
+hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache.ts
 hooks/access/cloud/automations/query-keys.ts        # keys live beside the owner
 hooks/access/cloud/automations/use-automations.ts
 ```
@@ -121,8 +125,13 @@ Avoid `useEffect(fn)` with no dependency array unless every-render execution is 
 
 ## Cross-platform binding
 
-- Tauri/DOM/RN-native behavior is **platform-specific**: the hook lives in the owning app (or behind a platform boundary), never in a shared package.
-- A **shared/cross-platform hook must be platform-neutral** — it must not import a platform-bound access hook.
+- Raw Tauri/DOM/RN-native behavior is **platform-specific** and lives in the
+  owning app. ProductClient may own bridge-backed Tauri capability hooks for
+  its Desktop product behavior; they mount only when `host.desktop` exists and
+  never import raw Tauri APIs.
+- A **shared/cross-platform hook must be platform-neutral** — it must not import
+  a platform-bound access hook. A Desktop-only ProductClient hook is explicitly
+  capability-bound, not cross-platform.
 - **Mobile (React Native) has no DOM** — generic `hooks/ui` DOM mechanics don't apply there; mobile uses native equivalents.
 
 ## Naming
@@ -139,12 +148,14 @@ Avoid `useEffect(fn)` with no dependency array unless every-render execution is 
 - **Return stable references** — memoize returned callbacks/objects so consumers and effects don't thrash.
 - Components must not call `queryClient.invalidateQueries` or sequence multiple store setters — put that in a workflow hook.
 - **Errors flow by layer:** access surfaces a typed error → workflow decides the UX (toast/retry) → component renders. Hooks don't swallow errors; components don't parse raw error payloads.
-- Query/mutation wrappers for external systems live in `hooks/access/**`, not product-domain hook folders.
+- Query/mutation wrappers for external systems live in `hooks/access/**`, never
+  in ProductClient's pure `src/domain/**` subtree.
 - Another hook is only warranted when the extracted code owns React behavior.
 
 ## Placement & testing
 
 - Raw external calls → `lib/access/**` or `hooks/access/**`.
-- Pure product decisions → `lib/domain/**` or `product-domain`.
+- Pure product decisions → `lib/domain/**`, or
+  `product-client/src/domain/**` when shared with Mobile.
 - Real multi-step sequences → `lib/workflows/**`.
 - **Test the pure `lib/workflows` function, not the rendered hook** — push testable logic into `lib` with `(input, deps)` so tests don't render; only render-test what genuinely owns React behavior. Focused tests live next to risky domain/workflow logic.

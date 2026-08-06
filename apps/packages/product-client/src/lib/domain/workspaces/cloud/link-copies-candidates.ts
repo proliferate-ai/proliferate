@@ -1,5 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { canonicalRepoKey } from "@proliferate/product-domain/repos/repo-id";
+import { canonicalRepoKey } from "#product/domain/repos/repo-id";
 import {
   normalizeLogicalWorkspaceBranchKey,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";

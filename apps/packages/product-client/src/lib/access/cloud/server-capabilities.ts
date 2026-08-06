@@ -5,7 +5,7 @@ import {
 } from "#product/lib/domain/capabilities/server-capability-contract";
 import {
   createExpectedControlPlaneProbeTimeoutError,
-} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
+} from "#product/domain/telemetry/control-plane-probe-timeout";
 
 const SERVER_CAPABILITIES_TIMEOUT_MS = 2_500;
 

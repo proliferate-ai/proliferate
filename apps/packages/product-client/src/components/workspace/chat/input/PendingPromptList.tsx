@@ -1,12 +1,12 @@
 import { useCallback } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { ArrowUpRight, GripVertical, Pencil, X } from "@proliferate/ui/icons";
-import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { Button } from "#product/primitives/Button";
+import { Tooltip } from "#product/primitives/Tooltip";
+import { ArrowUpRight, GripVertical, Pencil, X } from "#product/primitives/icons/core";
+import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { usePendingPromptQueue } from "#product/hooks/chat/ui/use-pending-prompt-queue";
 import { useVerticalReorder } from "#product/hooks/chat/ui/use-vertical-reorder";
-import type { PendingPromptQueueRow } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+import type { PendingPromptQueueRow } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 
 export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];

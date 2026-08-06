@@ -10,10 +10,10 @@ import {
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   type CloudLaunchComposerSelection,
   type PendingConfigChange,
-} from "@proliferate/product-domain/chats/cloud/composer-controls";
+} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 import {
   cloudCommandReadiness,
-} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+} from "@proliferate/product-client/internal/domain/workspaces/cloud-work-inventory";
 
 import { useVisualViewportKeyboardInset } from "../../hooks/ui/keyboard/use-visual-viewport-keyboard-inset";
 import { useMobileChatData } from "../../hooks/chat/derived/use-mobile-chat-data";

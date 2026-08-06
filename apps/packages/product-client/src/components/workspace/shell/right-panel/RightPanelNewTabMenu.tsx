@@ -4,12 +4,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@proliferate/ui/primitives/DropdownMenu";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+} from "#product/primitives/DropdownMenu";
+import { IconButton } from "#product/primitives/IconButton";
 import {
   AppShellPlusIcon,
   AppShellTerminalIcon,
-} from "@proliferate/ui/icons";
+} from "#product/primitives/icons/app-shell";
 import type { RightPanelNewTabMenuDefault } from "#product/lib/infra/right-panel-new-tab-menu";
 
 interface RightPanelNewTabMenuProps {

@@ -2,14 +2,14 @@ import {
   getPendingSessionConfigChange,
   reconcilePendingConfigChanges,
   type PendingSessionConfigChanges,
-} from "@proliferate/product-domain/sessions/pending-config";
+} from "#product/domain/sessions/pending-config";
 import {
   pendingConfigChangesForSessionIntents,
-} from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
+} from "#product/domain/sessions/intents/session-intent-selectors";
 import type {
   SessionUpdateConfigIntent,
-} from "@proliferate/product-domain/sessions/intents/session-intent-model";
-import { sessionIntentsForSession } from "@proliferate/product-domain/sessions/intents/session-intent-state";
+} from "#product/domain/sessions/intents/session-intent-model";
+import { sessionIntentsForSession } from "#product/domain/sessions/intents/session-intent-state";
 import type { SessionEventEnvelope, SessionLiveConfigSnapshot, TranscriptState } from "@anyharness/sdk";
 import { useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
