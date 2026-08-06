@@ -10,8 +10,30 @@ vi.mock("#product/hooks/organizations/lifecycle/use-organization-selection-lifec
   useOrganizationSelectionLifecycle: vi.fn(),
 }));
 
+const focusChatInputOnActivation = vi.hoisted(() => vi.fn(() => true));
+
+vi.mock("#product/lib/domain/focus-zone", () => ({
+  focusChatInputOnActivation,
+}));
+
 vi.mock("#product/pages/WorkflowsPage", () => ({
   WorkflowsPage: () => <section data-testid="workflows" />,
+}));
+
+vi.mock("#product/pages/DesktopWorkspaceDeepLinkPage", () => ({
+  DesktopWorkspaceDeepLinkPage: () => <section data-testid="workspace-deep-link" />,
+}));
+
+vi.mock("#product/pages/MainPage", () => ({
+  MainPage: () => null,
+}));
+
+vi.mock("#product/pages/SettingsPage", () => ({
+  SettingsPage: () => null,
+}));
+
+vi.mock("#product/pages/WorkspacesPage", () => ({
+  WorkspacesPage: () => <section data-testid="workspaces" />,
 }));
 
 let mainMounts = 0;
@@ -63,26 +85,37 @@ describe("AuthenticatedAppHost", () => {
   afterEach(() => {
     cleanup();
     mainMounts = 0;
+    vi.clearAllMocks();
   });
 
-  it("keeps the workspace mounted behind Settings and restores it on return", () => {
+  it("keeps the workspace mounted but inert behind Settings and restores focus on return", async () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <AuthenticatedAppHost MainComponent={TestMain} SettingsComponent={TestSettings} />
       </MemoryRouter>,
     );
 
-    expect(screen.getByTestId("workspace").dataset.visible).toBe("true");
+    const workspace = screen.getByTestId("workspace");
+    const workspaceHost = workspace.parentElement!;
+    expect(workspace.dataset.visible).toBe("true");
+    expect(workspaceHost.hasAttribute("inert")).toBe(false);
     expect(mainMounts).toBe(1);
+    expect(focusChatInputOnActivation).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText("Open settings"));
 
     expect(screen.getByTestId("settings").dataset.returnTo).toBe("/");
-    expect(screen.getByTestId("workspace").dataset.visible).toBe("false");
+    expect(workspace.dataset.visible).toBe("false");
+    expect(workspaceHost.getAttribute("aria-hidden")).toBe("true");
+    expect(workspaceHost.hasAttribute("inert")).toBe(true);
+    expect(focusChatInputOnActivation).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText("Back"));
 
-    expect(screen.getByTestId("workspace").dataset.visible).toBe("true");
+    expect(workspace.dataset.visible).toBe("true");
+    expect(workspaceHost.hasAttribute("aria-hidden")).toBe(false);
+    expect(workspaceHost.hasAttribute("inert")).toBe(false);
+    await waitFor(() => expect(focusChatInputOnActivation).toHaveBeenCalledOnce());
   });
 
   it("keeps the workspace mounted while on Workflows and restores it without remounting", () => {
@@ -97,7 +130,9 @@ describe("AuthenticatedAppHost", () => {
     fireEvent.click(screen.getByText("Open workflows"));
 
     expect(screen.getByTestId("workflows")).toBeTruthy();
-    expect(screen.getByTestId("workspace").dataset.visible).toBe("false");
+    const workspace = screen.getByTestId("workspace");
+    expect(workspace.dataset.visible).toBe("false");
+    expect(workspace.parentElement?.hasAttribute("inert")).toBe(true);
 
     fireEvent.click(screen.getByText("Go home"));
 

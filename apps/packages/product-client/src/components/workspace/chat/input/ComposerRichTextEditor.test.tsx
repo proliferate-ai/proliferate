@@ -34,6 +34,7 @@ afterEach(() => {
     );
   }
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 beforeEach(() => {
   originalRangeRectDescriptor = Object.getOwnPropertyDescriptor(
@@ -42,6 +43,7 @@ beforeEach(() => {
   );
   vi.stubGlobal("DragEvent", class DragEvent extends Event {});
   vi.stubGlobal("ClipboardEvent", class ClipboardEvent extends Event {});
+  vi.spyOn(window, "scrollBy").mockImplementation(() => {});
 });
 
 describe("ComposerRichTextEditor", () => {
@@ -294,10 +296,11 @@ describe("ComposerRichTextEditor", () => {
     expect(composingSubmit).not.toHaveBeenCalled();
   });
 
-  it("shows a one-pixel replacement caret only after valid geometry", async () => {
+  it("shows an editor-owned one-pixel caret only after valid local geometry", async () => {
     mockRangeRect({ height: 15, left: 24, top: 18 });
     const harness = renderEditor();
     await harness.ready();
+    mockComposerBounds(harness.root, harness.frame);
     harness.root.style.setProperty("--color-text-caret", "rgb(1, 2, 3)");
 
     act(() => {
@@ -306,15 +309,19 @@ describe("ComposerRichTextEditor", () => {
     });
 
     const caret = await waitFor(() => {
-      const nextCaret = document.body.querySelector<HTMLElement>(
+      const nextCaret = harness.frame.querySelector<HTMLElement>(
         "[data-chat-composer-caret]",
       );
       expect(nextCaret?.style.display).toBe("block");
       return nextCaret!;
     });
+    expect(caret.parentElement).toBe(harness.frame);
+    expect(caret.style.position).toBe("absolute");
+    expect(caret.style.zIndex).toBe("");
     expect(caret.style.width).toBe("1px");
     expect(caret.style.height).toBe("15px");
-    expect(caret.style.left).toBe("24px");
+    expect(caret.style.left).toBe("14px");
+    expect(caret.style.top).toBe("10px");
     expect(caret.style.backgroundColor).toBe("rgb(1, 2, 3)");
     expect(harness.root.style.caretColor).toBe("transparent");
 
@@ -351,6 +358,7 @@ describe("ComposerRichTextEditor", () => {
     mockRangeRect({ height: 0, left: 24, top: 18 });
     const harness = renderEditor();
     await harness.ready();
+    mockComposerBounds(harness.root, harness.frame);
 
     act(() => {
       harness.root.focus();
@@ -359,9 +367,74 @@ describe("ComposerRichTextEditor", () => {
 
     await waitFor(() => expect(harness.root.style.caretColor).toBe(""));
     expect(
-      document.body.querySelector<HTMLElement>("[data-chat-composer-caret]")
+      harness.frame.querySelector<HTMLElement>("[data-chat-composer-caret]")
         ?.style.display,
     ).not.toBe("block");
+  });
+
+  it("keeps the native caret when the selection rectangle escapes the editor", async () => {
+    mockRangeRect({ height: 15, left: 240, top: 18 });
+    const harness = renderEditor();
+    await harness.ready();
+    mockComposerBounds(harness.root, harness.frame);
+
+    act(() => {
+      harness.root.focus();
+      resetText(harness.editor, "outside");
+    });
+
+    await waitFor(() => expect(harness.root.style.caretColor).toBe(""));
+    expect(
+      harness.frame.querySelector<HTMLElement>("[data-chat-composer-caret]")
+        ?.style.display,
+    ).not.toBe("block");
+  });
+
+  it("restores the native caret whenever the mounted editor becomes hidden or inert", async () => {
+    mockRangeRect({ height: 15, left: 24, top: 18 });
+    const harness = renderEditor();
+    await harness.ready();
+    mockComposerBounds(harness.root, harness.frame);
+
+    act(() => {
+      harness.root.focus();
+      resetText(harness.editor, "visibility");
+    });
+
+    const caret = harness.frame.querySelector<HTMLElement>("[data-chat-composer-caret]")!;
+    await waitFor(() => expect(caret.style.display).toBe("block"));
+
+    harness.container.setAttribute("aria-hidden", "true");
+    await waitFor(() => expect(caret.style.display).toBe("none"));
+    expect(harness.root.style.caretColor).toBe("");
+
+    harness.container.removeAttribute("aria-hidden");
+    await waitFor(() => expect(caret.style.display).toBe("block"));
+    expect(harness.root.style.caretColor).toBe("transparent");
+
+    harness.container.setAttribute("inert", "");
+    await waitFor(() => expect(caret.style.display).toBe("none"));
+    expect(harness.root.style.caretColor).toBe("");
+  });
+
+  it("remeasures local caret geometry when the editor frame resizes", async () => {
+    const notifyResize = stubCapturingResizeObserver();
+    mockRangeRect({ height: 15, left: 24, top: 18 });
+    const harness = renderEditor();
+    await harness.ready();
+    mockComposerBounds(harness.root, harness.frame);
+
+    act(() => {
+      harness.root.focus();
+      resetText(harness.editor, "resize");
+    });
+
+    const caret = harness.frame.querySelector<HTMLElement>("[data-chat-composer-caret]")!;
+    await waitFor(() => expect(caret.style.left).toBe("14px"));
+
+    mockRangeRect({ height: 15, left: 54, top: 18 });
+    act(() => notifyResize());
+    await waitFor(() => expect(caret.style.left).toBe("44px"));
   });
 });
 
@@ -379,8 +452,13 @@ function renderEditor(overrides: Partial<ComposerRichTextEditorProps> = {}) {
   let props = { ...defaults, ...overrides };
   const rendered = render(<ComposerRichTextEditor {...props} />);
   const root = rendered.container.querySelector<HTMLElement>("[data-chat-composer-editor]")!;
+  const frame = rendered.container.querySelector<HTMLElement>(
+    "[data-chat-composer-editor-frame]",
+  )!;
   return {
+    container: rendered.container,
     get editor() { return editor!; },
+    frame,
     root,
     ready: () => waitFor(() => expect(editor).toBeTruthy()),
     rerender(next: Partial<ComposerRichTextEditorProps>) {
@@ -388,6 +466,58 @@ function renderEditor(overrides: Partial<ComposerRichTextEditorProps> = {}) {
       rendered.rerender(<ComposerRichTextEditor {...props} />);
     },
     unmount: rendered.unmount,
+  };
+}
+
+function mockComposerBounds(root: HTMLElement, frame: HTMLElement) {
+  vi.spyOn(frame, "getBoundingClientRect").mockReturnValue(
+    domRect({ height: 34, left: 10, top: 8, width: 200 }),
+  );
+  vi.spyOn(root, "getBoundingClientRect").mockReturnValue(
+    domRect({ height: 30, left: 12, top: 10, width: 180 }),
+  );
+}
+
+function domRect({
+  height,
+  left,
+  top,
+  width,
+}: {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+}): DOMRect {
+  return {
+    bottom: top + height,
+    height,
+    left,
+    right: left + width,
+    toJSON: () => ({}),
+    top,
+    width,
+    x: left,
+    y: top,
+  } as DOMRect;
+}
+
+function stubCapturingResizeObserver(): () => void {
+  const callbacks: ResizeObserverCallback[] = [];
+  class CapturingResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      callbacks.push(callback);
+    }
+
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal("ResizeObserver", CapturingResizeObserver);
+  return () => {
+    for (const callback of callbacks) {
+      callback([], {} as ResizeObserver);
+    }
   };
 }
 

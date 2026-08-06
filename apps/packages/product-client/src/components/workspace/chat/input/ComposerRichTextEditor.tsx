@@ -80,6 +80,8 @@ export function ComposerRichTextEditor({
   className = "",
 }: ComposerRichTextEditorProps) {
   const eventTimeStampRef = useRef<number | undefined>(undefined);
+  const caretRef = useRef<HTMLSpanElement | null>(null);
+  const editorFrameRef = useRef<HTMLDivElement | null>(null);
   const initialConfig = {
     namespace: "ProliferateChatComposer",
     nodes: COMPOSER_NODES,
@@ -101,7 +103,11 @@ export function ComposerRichTextEditor({
   };
   return (
     <LexicalComposer initialConfig={initialConfig}>
-      <div data-chat-composer-editor-frame className="relative min-h-[inherit]">
+      <div
+        ref={editorFrameRef}
+        data-chat-composer-editor-frame
+        className="relative min-h-[inherit]"
+      >
         <RichTextPlugin
           contentEditable={(
             <ContentEditable
@@ -142,6 +148,18 @@ export function ComposerRichTextEditor({
           )}
           ErrorBoundary={LexicalErrorBoundary}
         />
+        <span
+          ref={caretRef}
+          aria-hidden="true"
+          data-chat-composer-caret
+          style={{
+            backgroundColor: "currentColor",
+            display: "none",
+            pointerEvents: "none",
+            position: "absolute",
+            width: "1px",
+          }}
+        />
       </div>
       <HistoryPlugin />
       <ListPlugin />
@@ -153,7 +171,7 @@ export function ComposerRichTextEditor({
         onCommandKey={onCommandKey}
       />
       <ComposerLinkPastePlugin markdownTransformers={OUTPUT_TRANSFORMERS} />
-      <ComposerCaretPlugin />
+      <ComposerCaretPlugin caretRef={caretRef} frameRef={editorFrameRef} />
       <ComposerNativeEventTimestampPlugin eventTimeStampRef={eventTimeStampRef} />
       <ComposerEditorBridge
         value={value}
@@ -314,4 +332,3 @@ function selectionIsInList(): boolean {
   }
   return $isListItemNode(node);
 }
-

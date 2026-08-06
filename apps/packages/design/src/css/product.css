@@ -327,8 +327,8 @@ body {
 
 /* The composer uses a fail-safe one-pixel visual caret because current macOS
    WebKit paints its redesigned native caret at two CSS pixels. Layout-critical
-   styles are inline on the overlay; this rule is the native fallback whenever
-   the overlay cannot resolve a valid collapsed selection. */
+   styles are inline on the editor-owned visual caret; this rule is the native
+   fallback whenever that caret cannot resolve a valid collapsed selection. */
 [data-chat-composer-editor] {
   caret-color: var(--color-text-caret);
 }

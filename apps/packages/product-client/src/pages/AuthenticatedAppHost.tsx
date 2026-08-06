@@ -7,6 +7,7 @@ import { SettingsPage } from "#product/pages/SettingsPage";
 import { WorkflowsPage } from "#product/pages/WorkflowsPage";
 import { WorkspacesPage } from "#product/pages/WorkspacesPage";
 import { useOrganizationSelectionLifecycle } from "#product/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
+import { focusChatInputOnActivation } from "#product/lib/domain/focus-zone";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
 type SettingsRouteComponent = ComponentType<{ returnTo?: string }>;
@@ -33,6 +34,15 @@ export function AuthenticatedAppHost({
   }, [isSettingsRoute, location.hash, location.pathname, location.search]);
 
   const isHomeRoute = location.pathname === APP_ROUTES.home;
+  const wasHomeRouteRef = useRef(isHomeRoute);
+  useEffect(() => {
+    const becameHomeRoute = isHomeRoute && !wasHomeRouteRef.current;
+    wasHomeRouteRef.current = isHomeRoute;
+    if (becameHomeRoute) {
+      focusChatInputOnActivation();
+    }
+  }, [isHomeRoute]);
+
   // The workspace shell stays mounted (hidden) across every authenticated
   // route: cold-mounting it on return from /workflows or /workspaces is
   // seconds of synchronous hydration work.
@@ -47,6 +57,7 @@ export function AuthenticatedAppHost({
       <div
         aria-hidden={isHomeRoute ? undefined : "true"}
         className={workspaceHostClassName}
+        inert={isHomeRoute ? undefined : true}
       >
         <MainComponent workspaceVisible={isHomeRoute} />
       </div>

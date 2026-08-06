@@ -79,10 +79,10 @@ export function focusChatInputOnActivation(): boolean {
     return false;
   }
   // Hidden routes (settings and friends) keep the composer mounted behind an
-  // overlay inside an aria-hidden host, where it is still programmatically
-  // focusable; never focus a composer the user cannot see.
+  // overlay inside an aria-hidden, inert host; never focus a composer the user
+  // cannot see.
   const chatZone = document.querySelector(`[${FOCUS_ZONE_ATTR}="chat"]`);
-  if (!chatZone || chatZone.closest('[aria-hidden="true"]')) {
+  if (!chatZone || chatZone.closest('[aria-hidden="true"], [inert]')) {
     return false;
   }
   return focusChatInput();
