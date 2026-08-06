@@ -25,7 +25,7 @@ anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs 825 Tra
 anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 classifier tests incl. gateway route activation + bedrock flag-only detection
 anyharness/crates/anyharness-lib/src/domains/agents/auth/launch_facts.rs 657 Track D provider_config credential facts: a source's already-resolved env map classifies per-key against the registry's declared flag vocabulary (registry_flag_vars), producing EnvFlag for mode-switch flags (e.g. CLAUDE_CODE_USE_BEDROCK) and presence-only Env for everything else, same secrets rule as api_key; the vocabulary unions auth.slots[] with providerConfig[] (D3-rust)
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1893 existing AnyHarness oversized file (catalog-owned unattended default replaces local fallback helper)
-anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1520 existing AnyHarness oversized file
+anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 851 existing AnyHarness oversized file (shrunk from 1520: the live-reaching use cases moved to domains/mobility/runtime/, grid PR 6a)
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/goals/service_tests.rs 682 goal service regression tests for pending_op idempotency
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1510 existing AnyHarness oversized test file

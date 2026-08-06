@@ -245,13 +245,13 @@ pub async fn prepare_repo_root_mobility_destination(
         .assert_can_prepare_mobility_destination_for_repo_root(&repo_root_id)
         .map_err(map_access_error)?;
 
-    let mobility_service = state.mobility_service.clone();
+    let mobility_runtime = state.mobility_runtime.clone();
     let requested_branch = req.requested_branch;
     let requested_base_sha = req.requested_base_sha;
     let destination_id = req.destination_id;
     let preferred_workspace_name = req.preferred_workspace_name;
 
-    let prepared = mobility_service
+    let prepared = mobility_runtime
         .prepare_repo_root_destination(
             &repo_root_id,
             &requested_branch,

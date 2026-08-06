@@ -1,3 +1,4 @@
+mod mobility;
 mod product_mcp;
 mod sessions;
 mod workflows;
@@ -40,8 +41,7 @@ use crate::domains::loops::service::LoopService;
 use crate::domains::loops::store::LoopStore;
 use crate::domains::materialization::service::MaterializationService;
 use crate::domains::materialization::store::MaterializationOperationStore;
-use crate::domains::mobility::service::MobilityService;
-use crate::domains::mobility::store::MobilityStore;
+use crate::domains::mobility::runtime::MobilityRuntime;
 use crate::domains::plans::runtime::PlanRuntime;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
@@ -161,7 +161,7 @@ pub struct AppState {
     pub workspace_purge_service: Arc<WorkspacePurgeService>,
     pub workspace_retention_service: Arc<WorkspaceRetentionService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
-    pub mobility_service: Arc<MobilityService>,
+    pub mobility_runtime: Arc<MobilityRuntime>,
     pub materialization_service: Arc<MaterializationService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
@@ -511,17 +511,17 @@ impl AppState {
             session_runtime.clone(),
             runtime_home.clone(),
         ));
-        let mobility_service = Arc::new(MobilityService::new(
-            workspace_service.clone(),
-            workspace_runtime.clone(),
-            MobilityStore::new(db.clone()),
-            session_service.clone(),
-            session_runtime.clone(),
-            subagent_service.clone(),
-            ReviewStore::new(db.clone()),
-            workspace_access_gate.clone(),
-            terminal_service.clone(),
-        ));
+        let mobility_runtime = mobility::wire_mobility(mobility::MobilityWiringDeps {
+            db: db.clone(),
+            runtime_home: runtime_home.clone(),
+            workspace_service: workspace_service.clone(),
+            workspace_runtime: workspace_runtime.clone(),
+            session_service: session_service.clone(),
+            session_runtime: session_runtime.clone(),
+            subagent_service: subagent_service.clone(),
+            workspace_access_gate: workspace_access_gate.clone(),
+            terminal_service: terminal_service.clone(),
+        });
         let materialization_service = Arc::new(MaterializationService::new(
             workspace_runtime.clone(),
             repo_root_service.clone(),
@@ -611,7 +611,7 @@ impl AppState {
             workspace_purge_service,
             workspace_retention_service,
             worktree_inventory_service,
-            mobility_service,
+            mobility_runtime,
             materialization_service,
             plan_service,
             plan_runtime,
