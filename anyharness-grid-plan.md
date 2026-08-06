@@ -507,14 +507,16 @@ Open stack, in merge order:
    if the checker files and PR 5a's fold land out of order, re-run the
    anchor repoint (one line).
 
-4. **#1658** `codex/anyharness-mobility-valve` — PR 6a, base = #1651's
-   branch. Built @ 211179e15 from the pre-P2-closure base; base-sync onto
-   87147cce2 in flight (test-file collision: the mobility anchor test
-   repoint must be re-applied on the 90-test suite). Adversarial review
-   runs at the synced head. After #1651 merges: retarget to main
-   (independent of #1654/#1657 — different files, no allowlist overlap:
-   6a touches DOMAIN_LIVE_VALVE rows, 3/5a touch API_STORE_ESCAPE/SQL/
-   POLICY rows).
+4. **#1658** `codex/anyharness-mobility-valve` @ bac5b1667 — PR 6a,
+   base = #1651's branch. Base-synced onto 87147cce2 (clean; anchor
+   repoint survived, 90/90). Adversarial review CLEAN — the disclosed
+   service.rs reconstruction audited 48/48 items accounted, all deltas
+   forced-by-move; PathBuf equivalence proven; Cargo check & test green
+   at head. After #1651 merges: retarget to main (independent of
+   #1654/#1657 — no allowlist-row overlap: 6a touches DOMAIN_LIVE_VALVE,
+   3/5a touch API_STORE_ESCAPE/SQL/POLICY). Nits parked: 9-arg
+   MobilityRuntime::new should become a wiring-deps struct; vestigial
+   Clone derive on MobilityService (pre-existing).
 
 Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
 the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
