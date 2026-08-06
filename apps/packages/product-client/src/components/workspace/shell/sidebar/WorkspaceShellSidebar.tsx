@@ -35,7 +35,7 @@ export function WorkspaceShellSidebar({
   const body = (
     <DebugProfiler id="workspace-sidebar-frame">
       <div className="flex h-full min-h-0 flex-col">
-        <div className="h-10 shrink-0" data-tauri-drag-region="true" />
+        <div className="h-[46px] shrink-0" data-tauri-drag-region="true" />
         <div className="flex-1 min-h-0 overflow-hidden">
           <MainSidebar showRightBorder={false} />
         </div>
@@ -107,7 +107,7 @@ export function WorkspaceShellSidebar({
       </div>
 
       <div
-        className={`absolute left-0 top-0 z-overlay h-10 ${
+        className={`absolute left-0 top-0 z-overlay h-[46px] ${
           !open && peekVisible ? "pointer-events-auto" : "pointer-events-none"
         }`}
         style={{ width: "var(--workspace-left-header-dwell)" }}

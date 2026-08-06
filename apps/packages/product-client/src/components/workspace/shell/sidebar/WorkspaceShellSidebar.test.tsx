@@ -151,11 +151,12 @@ describe("WorkspaceShellSidebar hover peek", () => {
   });
 
   it("centers the pinned toggle in the shared title row", () => {
-    const { getByTestId } = renderSidebar();
+    const { getByTestId, holdZone } = renderSidebar();
     const pinnedChrome = getByTestId("sidebar-header-controls").parentElement?.parentElement;
 
     expect(pinnedChrome?.className).toContain("top-0");
     expect(pinnedChrome?.className).toContain("h-[46px]");
+    expect(holdZone.className).toContain("h-[46px]");
   });
 
   it("keeps the pinned toggle before sidebar navigation in keyboard order", () => {
