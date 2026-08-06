@@ -6,8 +6,8 @@ use anyharness_contract::v1::{
 };
 
 use super::InboundDoor;
-use crate::acp::permission_context::permission_context_from_meta;
-use crate::acp::permission_payload::{bound_raw_json, permission_options};
+use crate::integrations::acp::permission_context::permission_context_from_meta;
+use crate::integrations::acp::permission_payload::{bound_raw_json, permission_options};
 use crate::live::sessions::model::{
     PermissionAdvice, PermissionQuestionView, SessionObserverContext,
 };

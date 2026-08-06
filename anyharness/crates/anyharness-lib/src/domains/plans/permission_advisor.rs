@@ -37,9 +37,9 @@ use anyharness_contract::v1::{
     ProposedPlanDecisionState, ProposedPlanNativeResolutionState, SessionEventEnvelope,
 };
 
-use crate::acp::permission_payload::{permission_option_mappings, permission_options};
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::{PlanEventContext, PlanService};
+use crate::integrations::acp::permission_payload::{permission_option_mappings, permission_options};
 use crate::live::sessions::model::{
     PendingInteractionLink, PermissionAdvice, PermissionAdvisor, PermissionQuestionView,
     SessionObserverContext,
