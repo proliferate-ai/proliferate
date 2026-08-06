@@ -3,8 +3,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TranscriptVirtualizationMode } from "#product/domain/chats/transcript/transcript-virtualization-config";
 import {
   buildRenderableRows,
-  estimateRenderableRowHeight,
-  estimateRenderableRowsHeight,
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
   TRANSCRIPT_TOP_PADDING_PX,
@@ -20,6 +18,7 @@ import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcrip
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { useTranscriptVirtualAnchorCapture } from "#product/hooks/chat/ui/use-transcript-virtual-anchor-capture";
+import { useTranscriptVirtualMeasurementModel } from "#product/hooks/chat/ui/use-transcript-virtual-measurement-model";
 
 const VIRTUALIZER_OVERSCAN = 8;
 
@@ -78,19 +77,29 @@ export function VirtualizedTranscriptRowList({
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
   );
+  const {
+    estimateSize,
+    estimatedRowsHeight,
+    getItemKey,
+    rowCompositionKey,
+  } = useTranscriptVirtualMeasurementModel({
+    activeSessionId,
+    renderableRows,
+    selectedWorkspaceId,
+  });
   // initialOffset is consumed only when the virtualizer mounts. Avoid reducing
   // the entire transcript again on every scroll-driven virtualizer render.
   const estimatedInitialBottomOffset = useMemo(
     () => TRANSCRIPT_TOP_PADDING_PX
-      + estimateRenderableRowsHeight(renderableRows)
+      + estimatedRowsHeight
       + structuralBottomInsetPx,
-    [renderableRows, structuralBottomInsetPx],
+    [estimatedRowsHeight, structuralBottomInsetPx],
   );
   const virtualizer = useVirtualizer({
     count: renderableRows.length,
     getScrollElement: () => scrollRef.current,
-    getItemKey: (index) => renderableRows[index]?.key ?? index,
-    estimateSize: (index) => estimateRenderableRowHeight(renderableRows[index]),
+    getItemKey,
+    estimateSize,
     overscan: VIRTUALIZER_OVERSCAN,
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
     paddingEnd: structuralBottomInsetPx,
@@ -98,12 +107,11 @@ export function VirtualizedTranscriptRowList({
     useAnimationFrameWithResizeObserver: true,
   });
   const pendingAnchorRef = useTranscriptVirtualAnchorCapture({
-    activeSessionId,
     getVirtualItems: () => virtualizer.getVirtualItems(),
     pinnedRef,
     renderableRows,
+    rowCompositionKey,
     scrollRef,
-    selectedWorkspaceId,
   });
   // Content-search jump-to-match: bring an off-screen row into view so its
   // painted marks mount before the overlay queries the DOM for the active one.

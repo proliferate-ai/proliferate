@@ -84,4 +84,42 @@ describe("AutoHideScrollArea", () => {
     expect(thumb.style.height).toBe("30px");
     expect(thumb.style.transform).toBe("translateY(30px)");
   });
+
+  it("restores thumb geometry after horizontal mode remounts it", () => {
+    const rendered = render(
+      <AutoHideScrollArea className="h-80">
+        <div>content</div>
+      </AutoHideScrollArea>,
+    );
+    const viewport = rendered.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+    Object.defineProperty(viewport, "scrollHeight", { value: 3_000, configurable: true });
+    viewport.scrollTop = 300;
+
+    act(() => {
+      fireEvent.scroll(viewport);
+      flushFrames();
+    });
+    expect(rendered.container.querySelector<HTMLElement>("[aria-hidden='true'] > div")?.style.height)
+      .toBe("30px");
+
+    rendered.rerender(
+      <AutoHideScrollArea className="h-80" allowHorizontal>
+        <div>content</div>
+      </AutoHideScrollArea>,
+    );
+    expect(rendered.container.querySelector("[aria-hidden='true'] > div")).toBeNull();
+
+    rendered.rerender(
+      <AutoHideScrollArea className="h-80">
+        <div>content</div>
+      </AutoHideScrollArea>,
+    );
+    const remountedThumb = rendered.container.querySelector<HTMLElement>(
+      "[aria-hidden='true'] > div",
+    );
+    expect(remountedThumb?.style.height).toBe("30px");
+    expect(remountedThumb?.style.transform).toBe("translateY(30px)");
+    expect(remountedThumb?.style.pointerEvents).toBe("auto");
+  });
 });

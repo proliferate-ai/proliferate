@@ -6,11 +6,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import { VirtualizedTranscriptRowList } from "./VirtualizedTranscriptRowList";
 
+const observedVirtualizerOptions = vi.hoisted(() => [] as Array<{
+  estimateSize: unknown;
+  getItemKey: unknown;
+}>);
+
+vi.mock("@tanstack/react-virtual", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-virtual")>();
+  return {
+    ...actual,
+    useVirtualizer: (
+      options: Parameters<typeof actual.useVirtualizer>[0],
+    ) => {
+      observedVirtualizerOptions.push({
+        estimateSize: options.estimateSize,
+        getItemKey: options.getItemKey,
+      });
+      return actual.useVirtualizer(options);
+    },
+  };
+});
+
 const ROWS: TranscriptVirtualRow[] = [
   { kind: "pending_prompt", key: "pending-prompt:session-1" },
 ];
 
 beforeEach(() => {
+  observedVirtualizerOptions.length = 0;
   class TestResizeObserver {
     observe() {}
     unobserve() {}
@@ -59,6 +81,67 @@ describe("VirtualizedTranscriptRowList", () => {
     const button = container.querySelector('[aria-label="Scroll to bottom"]');
     expect(button).toBeTruthy();
     expect(button?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("preserves measurement accessors across an unchanged scroll render", () => {
+    const props = makeProps();
+    const rendered = render(<VirtualizedTranscriptRowList {...props} />);
+    const firstOptions = observedVirtualizerOptions.at(-1);
+    const optionCountBeforeScroll = observedVirtualizerOptions.length;
+    expect(firstOptions).toBeTruthy();
+
+    const viewport = getViewport(rendered.container);
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+    Object.defineProperty(viewport, "scrollHeight", { value: 2_000, configurable: true });
+    viewport.scrollTop = 120;
+    act(() => {
+      fireEvent.scroll(viewport);
+    });
+    const nextOptions = observedVirtualizerOptions.at(-1);
+
+    expect(observedVirtualizerOptions.length).toBeGreaterThan(optionCountBeforeScroll);
+    expect(nextOptions?.getItemKey).toBe(firstOptions?.getItemKey);
+    expect(nextOptions?.estimateSize).toBe(firstOptions?.estimateSize);
+  });
+
+  it("rotates measurement accessors only when ordered row composition changes", () => {
+    const props = makeProps();
+    const rendered = render(<VirtualizedTranscriptRowList {...props} />);
+    const firstOptions = observedVirtualizerOptions.at(-1);
+
+    rendered.rerender(
+      <VirtualizedTranscriptRowList
+        {...props}
+        rows={ROWS.map((row) => ({ ...row }))}
+      />,
+    );
+    const contentUpdateOptions = observedVirtualizerOptions.at(-1);
+    expect(contentUpdateOptions?.getItemKey).toBe(firstOptions?.getItemKey);
+    expect(contentUpdateOptions?.estimateSize).toBe(firstOptions?.estimateSize);
+
+    rendered.rerender(
+      <VirtualizedTranscriptRowList
+        {...props}
+        activeSessionId="session-2"
+      />,
+    );
+    const sessionUpdateOptions = observedVirtualizerOptions.at(-1);
+    expect(sessionUpdateOptions?.getItemKey).not.toBe(firstOptions?.getItemKey);
+    expect(sessionUpdateOptions?.estimateSize).not.toBe(firstOptions?.estimateSize);
+
+    rendered.rerender(
+      <VirtualizedTranscriptRowList
+        {...props}
+        activeSessionId="session-2"
+        rows={[
+          ...ROWS,
+          { kind: "pending_prompt", key: "pending-prompt:session-2" },
+        ]}
+      />,
+    );
+    const compositionUpdateOptions = observedVirtualizerOptions.at(-1);
+    expect(compositionUpdateOptions?.getItemKey).not.toBe(sessionUpdateOptions?.getItemKey);
+    expect(compositionUpdateOptions?.estimateSize).not.toBe(sessionUpdateOptions?.estimateSize);
   });
 
   it("reveals the scroll-to-bottom affordance after a user wheels up", () => {

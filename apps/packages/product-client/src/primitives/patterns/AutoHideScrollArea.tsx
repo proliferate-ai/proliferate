@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -72,6 +73,28 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       onViewportScrollRef.current = onViewportScroll;
     }, [onViewportScroll]);
 
+    const applyThumbStateToDom = useCallback((state: ScrollThumbState) => {
+      const track = thumbTrackRef.current;
+      const thumb = thumbRef.current;
+      if (!track || !thumb) {
+        return;
+      }
+      track.style.opacity = state.visible && state.size > 0 ? "1" : "0";
+      thumb.style.pointerEvents = state.visible && state.size > 0 ? "auto" : "none";
+      thumb.style.height = `${state.size}px`;
+      thumb.style.transform = `translateY(${state.offset}px)`;
+    }, []);
+
+    const setThumbTrackNode = useCallback((node: HTMLDivElement | null) => {
+      thumbTrackRef.current = node;
+      applyThumbStateToDom(thumbStateRef.current);
+    }, [applyThumbStateToDom]);
+
+    const setThumbNode = useCallback((node: HTMLDivElement | null) => {
+      thumbRef.current = node;
+      applyThumbStateToDom(thumbStateRef.current);
+    }, [applyThumbStateToDom]);
+
     const clearHideTimer = () => {
       if (hideTimerRef.current != null) {
         window.clearTimeout(hideTimerRef.current);
@@ -84,15 +107,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
         return;
       }
       thumbStateRef.current = next;
-      const track = thumbTrackRef.current;
-      const thumb = thumbRef.current;
-      if (!track || !thumb) {
-        return;
-      }
-      track.style.opacity = next.visible && next.size > 0 ? "1" : "0";
-      thumb.style.pointerEvents = next.visible && next.size > 0 ? "auto" : "none";
-      thumb.style.height = `${next.size}px`;
-      thumb.style.transform = `translateY(${next.offset}px)`;
+      applyThumbStateToDom(next);
     };
 
     const updateThumb = (visible = false) => {
@@ -260,12 +275,12 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
 
         {!allowHorizontal && (
           <div
-            ref={thumbTrackRef}
+            ref={setThumbTrackNode}
             aria-hidden="true"
             className="pointer-events-none absolute right-[3px] top-[3px] bottom-[3px] w-1.5 opacity-0 transition-opacity duration-hover"
           >
             <div
-              ref={thumbRef}
+              ref={setThumbNode}
               className="pointer-events-auto absolute right-0 w-1.5 rounded-full bg-scrollbar-thumb transition-colors duration-hover hover:bg-scrollbar-thumb-active"
               style={{
                 height: 0,

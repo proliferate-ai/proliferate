@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
 import type {
   ContentHeightScrollAnchor,
   TranscriptRenderableRow,
@@ -18,30 +18,20 @@ export interface TranscriptVirtualScrollAnchor extends ContentHeightScrollAnchor
 }
 
 export function useTranscriptVirtualAnchorCapture({
-  activeSessionId,
   getVirtualItems,
   pinnedRef,
   renderableRows,
+  rowCompositionKey,
   scrollRef,
-  selectedWorkspaceId,
 }: {
-  activeSessionId: string;
   getVirtualItems: () => readonly TranscriptVirtualItemSnapshot[];
   pinnedRef: RefObject<boolean>;
   renderableRows: readonly TranscriptRenderableRow[];
+  rowCompositionKey: string;
   scrollRef: RefObject<HTMLDivElement | null>;
-  selectedWorkspaceId: string | null;
 }): RefObject<TranscriptVirtualScrollAnchor | null> {
   const captureAnchorRef = useRef<() => void>(() => {});
   const pendingAnchorRef = useRef<TranscriptVirtualScrollAnchor | null>(null);
-  const rowCompositionKey = useMemo(
-    () => [
-      selectedWorkspaceId ?? "workspace",
-      activeSessionId,
-      ...renderableRows.map((row) => row.key),
-    ].join("\0"),
-    [activeSessionId, renderableRows, selectedWorkspaceId],
-  );
 
   // Keep the capture closure current without reading layout. The keyed cleanup
   // below invokes the last committed closure only when row composition changes.
