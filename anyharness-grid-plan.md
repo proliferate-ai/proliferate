@@ -430,6 +430,18 @@ PR follows the ruling. **One cargo build.**
   but it is the accessor the doctrine dislikes; deleting it is the
   domain-side sequel to PR 3 once those callers get facade methods.
   Candidate for a PR 3b or fold into the 10.x cadence.
+- (from PR 5a's review) The `INSERT INTO repo_roots` test fixture is
+  6×-duplicated; 5a folded 3 copies into `repo_roots/test_support.rs`.
+  Remaining inline copies: `workspaces/deletion_tests.rs:74`,
+  `sessions/deletion_tests.rs:52`, `api/http/workspaces_purge.rs:505`
+  (all checker-invisible test code; deletion_tests uses different
+  timestamps so the helper needs a timestamp param to fold them).
+  Fold in whichever PR next touches those files.
+- (from PR 5a's review) Refactor lesson worth generalizing: when a split
+  moves a guard out of the only write path (unbypassable → convention),
+  the SAME PR must add a seam test proving the outer layer still rejects
+  and the row is unwritten — existing tests won't catch the guard's
+  deletion because they were written when it couldn't be bypassed.
 
 ## PR 13 — Crate splits + visibility ratchet (violation #7, capstone)
 
