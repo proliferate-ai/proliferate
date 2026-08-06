@@ -516,6 +516,45 @@ API_STORE_ESCAPE 2 rows (health.rs benign, workspaces_purge.rs cfg-test);
 POLICY_PURITY 1 row (workflows/control/policy.rs); DOMAIN_SQL_OUTSIDE_STORE
 6 files/38.
 
+## Wave 2 — open PRs (state 2026-08-05 evening, Pablo merges)
+
+Both built off post-squash main; independent of each other (no allowlist-row
+or file overlap); merge in either order, no retarget needed.
+
+1. **#1665** `codex/anyharness-mobility-policy` @ dc70e43c4 — PR 6b,
+   mobility resolve/decide/execute. New `runtime/mobility_policy.rs` (pure,
+   POLICY_PURITY-policed) + 26 hand-built-fact tests; destroy_source and
+   preflight restructured. All 26 CI checks green. Adversarial review
+   CLEAN (2 nits, both PR-body wording — fixed in body): TWO benign
+   ordering improvements (local-park default-branch rejection moved before
+   effects; session-list resolution moved before terminal closes), preflight
+   blocker order byte-identical and pinned by test, TOCTOU no-regression
+   (handler holds exclusive lease + admission permits), policy-home single
+   (is_supported_agent_kind one definition). No allowlist/pin/anchor
+   changes. service.rs untouched at 851.
+2. **#1668** `codex/anyharness-sql-fold-rest` @ d0cf13738 — PR 5b+5c.
+   SQL folds: plans/service.rs → PlanStore `_in_tx` methods (byte-equal
+   queries, same tx); decision_op + activity/feeds fixtures →
+   SessionStore::insert (column-by-column equivalence proven vs migration
+   defaults); sessions/links/completions.rs → store/link_completions.rs
+   byte-identical with a load-bearing re-export shim (proven: deleting it
+   breaks 5 callers). 5c: probe.rs fetch closed by passing
+   `ProbeOptions.resolved: ResolvedAgent` in (shape, not power).
+   catalog_probe.rs split 606→196+428 (never raise a pin).
+   DOMAIN_SQL_OUTSIDE_STORE 6/38 → 2/2; LIVE_DOMAIN_STORE_IMPORT 7/19 →
+   6/18; 3 anchor repoints, suite 90. All CI green (builder was
+   compile-blind by machine constraint; review compiled + ran targeted
+   tests). Review CLEAN, 2 P2s being closed on-branch: helper-doc
+   overclaim ("one implementation instead of three" while 2 call sites
+   hand-roll), and the resolve's blocking FS scan + `node --version`
+   subprocess landing on an async worker without spawn_blocking.
+   Ride-along find: pre-existing timezone-dependent sweep test → issue
+   #1669 (touch -t fed a UTC stamp; fails west of UTC, green in CI).
+
+After both merge: valve debt = the 7 stragglers (PR 7/7b) + materialization;
+live/sessions returns to zero non-test fetches; SQL debt = 2 engine-invisible
+cfg(test) rows.
+
 Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
 the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
 facade-laundered live power; replaced with a plain `runtime_home: PathBuf`
