@@ -648,7 +648,6 @@ extraction and replacement are:
 
 - [landed extraction proof](migration/d1g.md);
 - [application-entry contract](entry-contract.md);
-- [source move ledger](move-ledger.md);
 - [Desktop product move record](migration/d1h.md);
 - [legacy Web replacement record](migration/d1i.md); and
 - [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json).

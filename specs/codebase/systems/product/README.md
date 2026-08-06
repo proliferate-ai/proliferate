@@ -13,12 +13,9 @@ restating folder rules or low-level reusable contracts.
 | Product auth | Account sign-in, linked providers, email/password, product-readiness gates, reviewer accounts, and auth surface UX. | [auth/README.md](auth/README.md) |
 | Organization invitations | Organization invite links, pending invitation grants, desktop join behavior, and admin member/invite UX. | [organizations/invitations.md](organizations/invitations.md) |
 | Pending workspace shell | Pending workspace entry, projected session shell, optimistic prompts, and workspace/session materialization handoff. | [workspaces/pending-shell.md](workspaces/pending-shell.md) |
-| Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access, dispatch UX, and cloud/local parity. | [clients/cloud-local-parity.md](clients/cloud-local-parity.md); the dispatch spec built on the reverted claim/exposure substrate was removed and a rewrite is planned. |
 | Chat | Chat lifecycle, composer, and transcript behavior. | [chat/README.md](chat/README.md) |
 | Workspace files, mobility boundary, and terminals | User-facing workspace file, shell, dispatch, and terminal behavior; current migration absence and retained runtime mobility boundary. | [workspaces/README.md](workspaces/README.md) |
-| Mobile cloud client | Mobile auth, cloud chat, sessions, automations, settings, device/mobile-web smoke, and mobile acceptance matrix. | [clients/mobile-cloud.md](clients/mobile-cloud.md) |
 | Workflows | User-owned workflow definitions, ordered stages and prompt steps, catalog-backed harness validation, revisioning, optional default repository configuration, and definition-authoring UX. | [workflows/definitions.md](workflows/definitions.md) |
-| Automations | Scheduled/manual automations and the parked Slack bot contract. | [automations/README.md](automations/README.md) |
 | Engagement | Customer.io transport, code-owned profile attributes and lifecycle events, and current enable/no-op gates. | [engagement/README.md](engagement/README.md) |
 | Agents | The agent-systems overview map (distribution, auth, gateway, model catalog), plus delegated-work UX and cowork artifact lifecycle. | [agents/README.md](agents/README.md) |
 | Settings and appearance | Settings/admin information architecture, Appearance scaling, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings/README.md](settings/README.md) |

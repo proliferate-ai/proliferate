@@ -4,8 +4,8 @@
   [`web-desktop-client-unification.md`](../README.md)
 - Application-entry contract:
   [`web-desktop-product-client-entry-contract.md`](../entry-contract.md)
-- Move ledger:
-  [`web-desktop-product-client-move-ledger.md`](../move-ledger.md)
+- Move ledger: `web-desktop-product-client-move-ledger.md` (consumed and
+  removed after the move landed; see Git history)
 - Pipeline ledger:
   [`../../developing/deploying/web-desktop-unification-rollout.md`](../../../../../../developing/deploying/web-desktop-unification-rollout.md)
 
@@ -150,8 +150,8 @@ cutover baseline.
 
 ## Move ledger summary counts
 
-Full ledger:
-[`web-desktop-product-client-move-ledger.md`](../move-ledger.md).
+Full ledger: `web-desktop-product-client-move-ledger.md` (consumed and removed
+after the move landed; see Git history).
 Source root `apps/desktop/src` = **2220 files at base**. Checked by
 `scripts/check-product-client-move-ledger.py` (every disk path has exactly one
 classification, no target collisions, no unclassified product file):

@@ -55,7 +55,8 @@ the [rollout procedure](../../../../../../developing/deploying/web-desktop-unifi
   Mechanics), merge `9757e86de`, plus doc link-fix `1d0043756` (this base).
 - Parent architecture: [`../README.md`](../README.md)
 - Application-entry contract: [`../entry-contract.md`](../entry-contract.md)
-- Move ledger: [`../move-ledger.md`](../move-ledger.md)
+- Move ledger: `../move-ledger.md` (consumed and removed after the move
+  landed; see Git history)
 - Pipeline ledger:
   [`../../../../../../developing/deploying/web-desktop-unification-rollout.md`](../../../../../../developing/deploying/web-desktop-unification-rollout.md)
 - Approved contract:

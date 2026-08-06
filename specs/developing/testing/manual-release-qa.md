@@ -29,10 +29,6 @@ records, and reports a QA pass.
 
 Read feature specs when the release touches their workflows:
 
-- [../../codebase/systems/product/clients/cloud-local-parity.md](../../codebase/systems/product/clients/cloud-local-parity.md)
-  for Web/Mobile/Desktop cloud workspace parity and fixture matrix
-- [../../codebase/systems/product/clients/mobile-cloud.md](../../codebase/systems/product/clients/mobile-cloud.md)
-  for mobile cloud-client smoke coverage
 - [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md)
   for billing, credits, Stripe checkout, refill, and portal smoke coverage
 - [../../codebase/systems/product/chat/composer.md](../../codebase/systems/product/chat/composer.md)
@@ -168,9 +164,9 @@ the change crosses a shared contract.
 | Surface | Minimum manual smoke | Supporting docs |
 | --- | --- | --- |
 | Desktop | Sign in, open a workspace, send a prompt, reload transcript, verify settings affected by the release, and inspect updater behavior only when packaging/updater changed. | [../local/README.md](../local/README.md), [../../codebase/structures/desktop-native/README.md](../../codebase/structures/desktop-native/README.md) |
-| Web | Sign in through the profile or staging URL, open/create the affected workspace, send a prompt when commandability is in scope, reload, and verify settings/modal/deep-link behavior. | [../../codebase/systems/product/clients/cloud-local-parity.md](../../codebase/systems/product/clients/cloud-local-parity.md) |
-| Mobile web | Source the profile launch env, run mobile web against the same profile, verify auth state, navigation, chat, sessions, automations, and settings touched by the release. | [../local/mobile.md](../local/mobile.md), [../../codebase/systems/product/clients/mobile-cloud.md](../../codebase/systems/product/clients/mobile-cloud.md) |
-| Native mobile | Verify the same user workflow in simulator/device when native OAuth, SecureStore, deep links, keyboard, safe-area, or TestFlight behavior changed. | [../local/mobile.md](../local/mobile.md), [../../codebase/systems/product/clients/mobile-cloud.md](../../codebase/systems/product/clients/mobile-cloud.md) |
+| Web | Sign in through the profile or staging URL, open/create the affected workspace, send a prompt when commandability is in scope, reload, and verify settings/modal/deep-link behavior. | [../../codebase/systems/product/clients/web-desktop-unification/README.md](../../codebase/systems/product/clients/web-desktop-unification/README.md) |
+| Mobile web | Source the profile launch env, run mobile web against the same profile, verify auth state, navigation, chat, sessions, automations, and settings touched by the release. | [../local/mobile.md](../local/mobile.md) |
+| Native mobile | Verify the same user workflow in simulator/device when native OAuth, SecureStore, deep links, keyboard, safe-area, or TestFlight behavior changed. | [../local/mobile.md](../local/mobile.md) |
 | Server/API | Exercise changed API paths locally or in staging, verify auth/permission behavior, and confirm migrations/tests passed. | [../../codebase/structures/server/README.md](../../codebase/structures/server/README.md) |
 | AnyHarness runtime | Start a real session, stream transcript events, execute the changed tool/session/workspace behavior, and verify contract compatibility with Desktop/Web/Mobile callers. | [../../codebase/structures/anyharness/README.md](../../codebase/structures/anyharness/README.md) |
 | Cloud sandbox and Worker | Through mounted APIs, ensure the personal sandbox row, save/materialize a cloud repo environment, create a Cloud workspace, verify authenticated AnyHarness gateway access, and then verify optional Worker enrollment, heartbeat-derived liveness, and reported versions independently. | [../operating/cloud-provisioning-failure.md](../operating/cloud-provisioning-failure.md), [../operating/worker-enrollment-failure.md](../operating/worker-enrollment-failure.md), [../../codebase/structures/proliferate-worker/README.md](../../codebase/structures/proliferate-worker/README.md) |

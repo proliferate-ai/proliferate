@@ -15,3 +15,8 @@
 
 Completed incremental delivery specs live in Git history. Current architecture
 and migration state live in the [parent system contract](../README.md).
+
+Two same-named files disambiguate by path, not name:
+`apps/desktop/src/lib/access/browser/product-storage.ts` (retained; raw-Tauri
+host-capability impl) and `apps/packages/product-client/src/lib/infra/persistence/product-storage.ts`
+(the moved generic `ProductStorageContext` helper).
