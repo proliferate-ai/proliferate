@@ -27,8 +27,13 @@ function loadTargets(files: DesktopFilesBridge, pathKind: PathKind): Promise<Ope
   }
   let targetsPromise = targetsByKind.get(pathKind);
   if (!targetsPromise) {
-    targetsPromise = files.listOpenTargets(pathKind).catch(() => [] as OpenTarget[]);
+    targetsPromise = files.listOpenTargets(pathKind);
     targetsByKind.set(pathKind, targetsPromise);
+    void targetsPromise.catch(() => {
+      if (targetsByKind.get(pathKind) === targetsPromise) {
+        targetsByKind.delete(pathKind);
+      }
+    });
   }
   return targetsPromise;
 }
@@ -82,9 +87,17 @@ export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDe
       return;
     }
     setTargets(null);
-    void loadTargets(files, pathKind).then((loaded) => {
-      if (!cancelled) setTargets(loaded);
-    });
+    void loadTargets(files, pathKind).then(
+      (loaded) => {
+        if (!cancelled) setTargets(loaded);
+      },
+      () => {
+        // Keep the unresolved state so an explicit open action retries target
+        // discovery instead of treating a transient bridge failure as an
+        // authoritative empty target list.
+        if (!cancelled) setTargets(null);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -95,7 +108,15 @@ export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDe
       if (!files) {
         throw new Error("Local file access is not available.");
       }
-      const list = targets ?? (await loadTargets(files, pathKind));
+      let list = targets;
+      if (list === null) {
+        try {
+          list = await loadTargets(files, pathKind);
+          setTargets(list);
+        } catch {
+          return false;
+        }
+      }
       const preferred = resolvePreferredOpenTarget(openableTargets(list), { defaultOpenInTargetId });
       if (!preferred) return false;
       const { path } = splitPathLineSuffix(absolutePath);

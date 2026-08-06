@@ -325,7 +325,9 @@ describe("useFileReferenceActions", () => {
 
   it("keeps an external file retryable when its Desktop target fails", async () => {
     statMocks.kind = null;
-    editorMocks.openInDefaultEditor.mockResolvedValue(false);
+    editorMocks.openInDefaultEditor
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
     const { result } = renderHook(
       () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
       { wrapper: workspaceWrapper("/repo") },
@@ -341,6 +343,14 @@ describe("useFileReferenceActions", () => {
         .toBe("Could not open this path. Click to retry.");
     });
     expect(result.current.canOpenPrimary).toBe(true);
+
+    await act(async () => {
+      await expect(result.current.openPrimary()).resolves.toBe("open-external");
+    });
+    await waitFor(() => {
+      expect(result.current.primaryUnavailableReason).toBeNull();
+    });
+    expect(editorMocks.openInDefaultEditor).toHaveBeenCalledTimes(2);
   });
 
   it("keeps external path resolution retryable when the Desktop bridge rejects", async () => {
