@@ -3,6 +3,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
 } from "react";
@@ -229,10 +230,18 @@ export function MessageList({
   // transcript — not a single turn's blocks. Derived once here and threaded
   // to every turn row via context. Keyed off the effective (deferred while
   // typing) transcript so it stays consistent with what the rows render.
+  const proposedPlanToolCallIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const previousProposedPlanToolCallIds = proposedPlanToolCallIdsRef.current;
   const proposedPlanToolCallIds = useMemo(
-    () => collectToolCallIdsWithProposedPlan(effectiveTranscriptViewState.transcript),
-    [effectiveTranscriptViewState.transcript],
+    () => collectToolCallIdsWithProposedPlan(
+      effectiveTranscriptViewState.transcript,
+      previousProposedPlanToolCallIds,
+    ),
+    [effectiveTranscriptViewState.transcript, previousProposedPlanToolCallIds],
   );
+  useLayoutEffect(() => {
+    proposedPlanToolCallIdsRef.current = proposedPlanToolCallIds;
+  }, [proposedPlanToolCallIds]);
 
   const handleTranscriptScroll = useCallback((sample?: { programmatic: boolean }) => {
     // Tag the scroll source: a persistent stream of `source.programmatic`
@@ -302,6 +311,7 @@ export function MessageList({
       turn={input.turn}
       transcript={input.transcript}
       latestTurnId={input.latestTurnId}
+      latestCompletedTurnId={input.latestCompletedTurnId}
       latestLiveExplorationBlock={input.latestLiveExplorationBlock}
       latestLiveStatus={input.latestLiveStatus}
       outboxStartedAtByPromptId={input.outboxStartedAtByPromptId}

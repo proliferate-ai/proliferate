@@ -1,6 +1,7 @@
 import type {
   TranscriptItem,
   TranscriptState,
+  ToolCallItem,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { ReasoningBlock } from "#product/components/workspace/chat/tool-calls/ReasoningBlock";
@@ -74,11 +75,9 @@ export function TranscriptItemBlock({
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
-  const toolCallIdsWithProposedPlan = useProposedPlanToolCallIds();
   const sessionId = useTranscriptSessionId();
   const openSession = useTranscriptOpenSession();
   const canOpenSession = useTranscriptCanOpenSession();
-  const recordRelationshipHint = useSessionDirectoryStore((state) => state.recordRelationshipHint);
   const reportAssistantRevealState = useCallback((state: AssistantMessageRevealState) => {
     recordAssistantRevealProgress(item.itemId, state);
     onAssistantRevealStateChange?.(item.itemId, state);
@@ -116,7 +115,7 @@ export function TranscriptItemBlock({
               parentTitle={transcript.sessionMeta.title}
               onOpenChild={canOpenChild
                 ? (targetSessionId) => {
-                  recordRelationshipHint(targetSessionId, {
+                  useSessionDirectoryStore.getState().recordRelationshipHint(targetSessionId, {
                     kind: wakeProvenance.type === "subagentWake"
                       ? "subagent_child"
                       : childRole === "cowork-coding-child"
@@ -213,48 +212,13 @@ export function TranscriptItemBlock({
       );
 
     case "tool_call": {
-      if (isClaudeExitPlanModeCall(item)) {
-        if (hasProposedPlanForToolCallItem(toolCallIdsWithProposedPlan, item)) {
-          return null;
-        }
-        const body = extractClaudePlanBody(item) ?? "";
-        return (
-          <div data-transcript-activity-shell className="flex justify-start relative">
-            <div className="flex flex-col w-full max-w-full space-y-1 break-words">
-              <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
-                <ClaudePlanCard
-                  content={body}
-                  isStreaming={item.status === "in_progress"}
-                />
-              </TranscriptActivityBlock>
-            </div>
-          </div>
-        );
-      }
-      const modeSwitchDisplay = deriveModeSwitchDisplay(item);
-      if (modeSwitchDisplay) {
-        return (
-          <div data-transcript-activity-shell className="flex justify-start relative">
-            <div className="flex flex-col w-full max-w-full break-words">
-              <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
-                <ModeTransitionDivider label={modeSwitchDisplay.label} />
-              </TranscriptActivityBlock>
-            </div>
-          </div>
-        );
-      }
       return (
-        <div data-transcript-activity-shell className="flex justify-start relative">
-          <div className="flex flex-col w-full max-w-full space-y-1 break-words">
-            <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
-              <TranscriptToolCallItemBlock
-                item={item}
-                workspaceId={workspaceId}
-                onOpenArtifact={onOpenArtifact}
-              />
-            </TranscriptActivityBlock>
-          </div>
-        </div>
+        <ToolCallTranscriptItem
+          item={item}
+          animateActivityEntry={animateActivityEntry}
+          workspaceId={workspaceId}
+          onOpenArtifact={onOpenArtifact}
+        />
       );
     }
 
@@ -283,4 +247,65 @@ export function TranscriptItemBlock({
     default:
       return null;
   }
+}
+
+function ToolCallTranscriptItem({
+  item,
+  animateActivityEntry,
+  workspaceId,
+  onOpenArtifact,
+}: {
+  item: ToolCallItem;
+  animateActivityEntry: boolean;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+}) {
+  // Only tool calls participate in proposed-plan suppression. Keeping this
+  // context subscription out of the generic item component prevents a rare
+  // plan transition from invalidating every mounted prose/thought item.
+  const toolCallIdsWithProposedPlan = useProposedPlanToolCallIds();
+
+  if (isClaudeExitPlanModeCall(item)) {
+    if (hasProposedPlanForToolCallItem(toolCallIdsWithProposedPlan, item)) {
+      return null;
+    }
+    const body = extractClaudePlanBody(item) ?? "";
+    return (
+      <div data-transcript-activity-shell className="flex justify-start relative">
+        <div className="flex flex-col w-full max-w-full space-y-1 break-words">
+          <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
+            <ClaudePlanCard
+              content={body}
+              isStreaming={item.status === "in_progress"}
+            />
+          </TranscriptActivityBlock>
+        </div>
+      </div>
+    );
+  }
+  const modeSwitchDisplay = deriveModeSwitchDisplay(item);
+  if (modeSwitchDisplay) {
+    return (
+      <div data-transcript-activity-shell className="flex justify-start relative">
+        <div className="flex flex-col w-full max-w-full break-words">
+          <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
+            <ModeTransitionDivider label={modeSwitchDisplay.label} />
+          </TranscriptActivityBlock>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div data-transcript-activity-shell className="flex justify-start relative">
+      <div className="flex flex-col w-full max-w-full space-y-1 break-words">
+        <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
+          <TranscriptToolCallItemBlock
+            item={item}
+            workspaceId={workspaceId}
+            onOpenArtifact={onOpenArtifact}
+          />
+        </TranscriptActivityBlock>
+      </div>
+    </div>
+  );
 }

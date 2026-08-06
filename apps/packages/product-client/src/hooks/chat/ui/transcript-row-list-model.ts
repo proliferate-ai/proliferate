@@ -54,6 +54,7 @@ export interface TranscriptRowListBaseProps {
   onLoadOlderHistory: () => void;
   onScrollSample: (sample?: TranscriptScrollSample) => void;
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
+  getRowRenderRevision?: (row: TranscriptVirtualRow) => unknown;
   columnClassName?: string;
   gutterClassName?: string;
   scrollHandleRef?: RefObject<ChatTranscriptScrollHandle | null>;

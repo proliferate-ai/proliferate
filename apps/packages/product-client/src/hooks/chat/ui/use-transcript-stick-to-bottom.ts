@@ -153,16 +153,29 @@ export function useTranscriptStickToBottom({
     if (!viewport) {
       return;
     }
+    const requestedTop = resolveAutoFollowScrollTop(
+      viewport,
+      autoFollowBottomInsetRef.current,
+      consumedAutoFollowBottomInsetRef.current,
+    );
+    const reachableTop = Math.min(
+      requestedTop,
+      Math.max(0, viewport.scrollHeight - viewport.clientHeight),
+    );
+    if (Math.abs(viewport.scrollTop - reachableTop) <= PROGRAMMATIC_MATCH_TOL_PX) {
+      // Keep direction tracking aligned even when the browser (or the
+      // virtualizer's initial offset) already placed us at the target. Without
+      // this baseline, the first small upward user scroll can look downward
+      // relative to the stale pre-mount position and immediately re-pin.
+      lastScrollTopRef.current = viewport.scrollTop;
+      return;
+    }
     // Pin against the real DOM scroll height, never virtualizer.scrollToIndex:
     // index scrolling positions by the *estimated* size of unmeasured rows
     // (e.g. the row appended by this very update) and visibly bounces when the
     // measurement corrects a frame later.
     notifyProgrammaticScroll(() => {
-      viewport.scrollTop = resolveAutoFollowScrollTop(
-        viewport,
-        autoFollowBottomInsetRef.current,
-        consumedAutoFollowBottomInsetRef.current,
-      );
+      viewport.scrollTop = requestedTop;
     });
   }, [notifyProgrammaticScroll, scrollRef]);
 
@@ -238,13 +251,7 @@ export function useTranscriptStickToBottom({
         glueFrameRef.current = null;
         return;
       }
-      notifyProgrammaticScroll(() => {
-        viewport.scrollTop = resolveAutoFollowScrollTop(
-          viewport,
-          autoFollowBottomInsetRef.current,
-          consumedAutoFollowBottomInsetRef.current,
-        );
-      });
+      scrollToBottom();
       const height = viewport.scrollHeight;
       if (height === lastHeight) {
         stableFrames += 1;
@@ -260,7 +267,7 @@ export function useTranscriptStickToBottom({
       glueFrameRef.current = requestAnimationFrame(tick);
     };
     glueFrameRef.current = requestAnimationFrame(tick);
-  }, [notifyProgrammaticScroll, scrollRef]);
+  }, [scrollRef, scrollToBottom]);
 
   // Session re-entry: snap instantly, then glue for a few frames so the
   // measurement backlog of freshly mounted rows (virtualizer estimates

@@ -32,6 +32,7 @@ export interface ChatTranscriptTurnRowRenderInput {
   turn: TurnRecord;
   transcript: TranscriptState;
   latestTurnId: string | null;
+  latestCompletedTurnId: string | null;
   latestLiveExplorationBlock: Extract<TurnDisplayBlock, { kind: "collapsed_actions" }> | null;
   latestLiveStatus: ReactNode;
   outboxStartedAtByPromptId: ReadonlyMap<string, string>;

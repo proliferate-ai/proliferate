@@ -998,29 +998,18 @@ describe("transcript virtualization config", () => {
     expect(parseTranscriptVirtualizationMode(null)).toBe("auto");
   });
 
-  it("enables virtualization automatically only for large row counts", () => {
+  it("keeps auto virtualization enabled from the first row", () => {
     expect(resolveTranscriptVirtualizationEnabled({
       mode: "auto",
-      rowCount: 79,
-      autoRowThreshold: 80,
-    })).toBe(false);
-    expect(resolveTranscriptVirtualizationEnabled({
-      mode: "auto",
-      rowCount: 80,
-      autoRowThreshold: 80,
     })).toBe(true);
   });
 
   it("allows explicit on/off overrides", () => {
     expect(resolveTranscriptVirtualizationEnabled({
       mode: "on",
-      rowCount: 1,
-      autoRowThreshold: 80,
     })).toBe(true);
     expect(resolveTranscriptVirtualizationEnabled({
       mode: "off",
-      rowCount: 1000,
-      autoRowThreshold: 80,
     })).toBe(false);
   });
 });

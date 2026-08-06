@@ -15,6 +15,7 @@ import {
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 
 const EMPTY_OUTBOX_STARTED_AT_BY_PROMPT_ID = new Map<string, string>();
+const EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS: ReadonlySet<string> = new Set();
 
 export function buildOutboxStartedAtByPromptId(
   entries: readonly PromptOutboxEntry[],
@@ -81,12 +82,16 @@ export function getAssistantProseContent(
 
 export function collectToolCallIdsWithProposedPlan(
   transcript: TranscriptState,
-): Set<string> {
+  previous: ReadonlySet<string> = EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS,
+): ReadonlySet<string> {
   const toolCallIds = new Set<string>();
   for (const item of Object.values(transcript.itemsById)) {
     if (item.kind === "proposed_plan") {
       addProposedPlanSourceIds(item.plan, toolCallIds);
     }
+  }
+  if (areSetsEqual(toolCallIds, previous)) {
+    return previous;
   }
   return toolCallIds;
 }
@@ -111,6 +116,10 @@ function addProposedPlanSourceIds(
   if (plan.sourceItemId) {
     output.add(plan.sourceItemId);
   }
+}
+
+function areSetsEqual<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {
+  return left.size === right.size && [...left].every((value) => right.has(value));
 }
 
 export function findTrailingLiveExplorationBlock(

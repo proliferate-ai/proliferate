@@ -18,6 +18,7 @@ export const MemoizedVirtualTranscriptRow = memo(function MemoizedVirtualTranscr
   rowIndex: number;
   virtualIndex: number;
   renderRow: TranscriptVirtualRowRenderer;
+  renderRevision: unknown;
   measureElement: (element: Element | null) => void;
 }) {
   const rowContext = useMemo(
@@ -40,6 +41,6 @@ export const MemoizedVirtualTranscriptRow = memo(function MemoizedVirtualTranscr
   prev.row === next.row
   && prev.rowIndex === next.rowIndex
   && prev.virtualIndex === next.virtualIndex
-  && prev.renderRow === next.renderRow
+  && prev.renderRevision === next.renderRevision
   && prev.measureElement === next.measureElement
 );

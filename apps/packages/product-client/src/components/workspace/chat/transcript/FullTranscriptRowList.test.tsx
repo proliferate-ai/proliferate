@@ -178,6 +178,25 @@ describe("FullTranscriptRowList", () => {
     const disabled = container.querySelectorAll("button[disabled]");
     expect(disabled).toHaveLength(0);
   });
+
+  it("uses renderer identity as the safe revision fallback", () => {
+    const props = makeProps(vi.fn(), 50);
+    const rendered = render(
+      <FullTranscriptRowList
+        {...props}
+        renderRow={() => <div>first renderer</div>}
+      />,
+    );
+
+    rendered.rerender(
+      <FullTranscriptRowList
+        {...props}
+        renderRow={() => <div>next renderer</div>}
+      />,
+    );
+
+    expect(rendered.getByText("next renderer")).toBeTruthy();
+  });
 });
 
 function stubCapturingResizeObserver(): () => void {
