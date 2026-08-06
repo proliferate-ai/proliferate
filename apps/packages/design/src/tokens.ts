@@ -875,10 +875,9 @@ export const themeTokens = {
     provenance: "[RETUNE:layout/transcript-measure]",
   },
   /**
-   * Two-tier measure: the thread column itself (avatars, action rows, wide
-   * blocks) widens to 48rem while readable prose stays capped at
-   * `--container-transcript-readable` (40rem, applied directly on the
-   * Markdown body). See ChatColumn.ts and MarkdownBody.tsx.
+   * Shared 48rem chat column for the launch composer, active composer, and
+   * transcript. The narrower readable token remains available to prose-heavy
+   * surfaces outside this unified chat flow.
    */
   "--container-transcript-thread": {
     dark: "48rem",
@@ -957,13 +956,13 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--diffs-font-size": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[SHIPPED]",
   },
   "--diffs-line-height": {
-    dark: "calc(var(--diffs-font-size, 13px) * 1.8)",
-    light: "calc(var(--diffs-font-size, 13px) * 1.8)",
+    dark: "calc(var(--diffs-font-size, 14px) * 1.8)",
+    light: "calc(var(--diffs-font-size, 14px) * 1.8)",
     provenance: "[SHIPPED]",
   },
   "--diffs-min-number-column-width": {
@@ -1185,8 +1184,8 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--readable-code-font-size": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[SHIPPED]",
   },
   "--readable-code-line-height": {
@@ -1205,13 +1204,13 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--scratch-font-size": {
-    dark: "var(--text-message, var(--text-composer, 13px))",
-    light: "var(--text-message, var(--text-composer, 13px))",
+    dark: "var(--text-message, var(--text-chat, 14px))",
+    light: "var(--text-message, var(--text-chat, 14px))",
     provenance: "[SHIPPED]",
   },
   "--scratch-line-height": {
-    dark: "var(--text-message--line-height, var(--text-composer--line-height, 21px))",
-    light: "var(--text-message--line-height, var(--text-composer--line-height, 21px))",
+    dark: "var(--text-message--line-height, var(--text-chat--line-height, 22px))",
+    light: "var(--text-message--line-height, var(--text-chat--line-height, 22px))",
     provenance: "[SHIPPED]",
   },
   "--scratch-list-marker-leading-space": {
@@ -1292,8 +1291,8 @@ export const themeTokens = {
     provenance: "[RETUNE:layout/transcript-measure]",
   },
   "--text-body": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body--letter-spacing": {
@@ -1302,13 +1301,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body--line-height": {
-    dark: "20px",
-    light: "20px",
+    dark: "21px",
+    light: "21px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body-emphasis": {
-    dark: "14px",
-    light: "14px",
+    dark: "15px",
+    light: "15px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body-emphasis--letter-spacing": {
@@ -1317,13 +1316,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-body-emphasis--line-height": {
-    dark: "21px",
-    light: "21px",
+    dark: "22px",
+    light: "22px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat--letter-spacing": {
@@ -1332,18 +1331,18 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat--line-height": {
-    dark: "20px",
-    light: "20px",
+    dark: "22px",
+    light: "22px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-chat-meta": {
-    dark: "calc(var(--text-chat, 13px) - 2px)",
-    light: "calc(var(--text-chat, 13px) - 2px)",
+    dark: "calc(var(--text-chat, 14px) - 2px)",
+    light: "calc(var(--text-chat, 14px) - 2px)",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-composer": {
-    dark: "13px",
-    light: "13px",
+    dark: "14px",
+    light: "14px",
     provenance: "[SHIPPED]",
   },
   "--text-composer--letter-spacing": {
@@ -1357,8 +1356,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-heading": {
-    dark: "16px",
-    light: "16px",
+    dark: "17px",
+    light: "17px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-heading--letter-spacing": {
@@ -1367,8 +1366,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-heading--line-height": {
-    dark: "23px",
-    light: "23px",
+    dark: "24px",
+    light: "24px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-hero": {
@@ -1387,18 +1386,18 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-message": {
-    dark: "var(--text-composer)",
-    light: "var(--text-composer)",
+    dark: "var(--text-chat)",
+    light: "var(--text-chat)",
     provenance: "[SHIPPED]",
   },
   "--text-message--letter-spacing": {
-    dark: "var(--text-composer--letter-spacing)",
-    light: "var(--text-composer--letter-spacing)",
+    dark: "var(--text-chat--letter-spacing)",
+    light: "var(--text-chat--letter-spacing)",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-message--line-height": {
-    dark: "var(--text-composer--line-height)",
-    light: "var(--text-composer--line-height)",
+    dark: "var(--text-chat--line-height)",
+    light: "var(--text-chat--line-height)",
     provenance: "[SHIPPED]",
   },
   /**
@@ -1447,8 +1446,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-brand": {
-    dark: "16px",
-    light: "16px",
+    dark: "17px",
+    light: "17px",
     provenance: "[SHIPPED]",
   },
   "--text-sidebar-brand--letter-spacing": {
@@ -1457,13 +1456,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-brand--line-height": {
-    dark: "23px",
-    light: "23px",
+    dark: "24px",
+    light: "24px",
     provenance: "[SHIPPED]",
   },
   "--text-sidebar-nav": {
-    dark: "12px",
-    light: "12px",
+    dark: "13px",
+    light: "13px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-nav--letter-spacing": {
@@ -1472,13 +1471,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-nav--line-height": {
-    dark: "17px",
-    light: "17px",
+    dark: "18px",
+    light: "18px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-row": {
-    dark: "12px",
-    light: "12px",
+    dark: "13px",
+    light: "13px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-row--letter-spacing": {
@@ -1487,8 +1486,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-sidebar-row--line-height": {
-    dark: "17px",
-    light: "17px",
+    dark: "18px",
+    light: "18px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-title": {
@@ -1507,8 +1506,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-ui": {
-    dark: "12px",
-    light: "12px",
+    dark: "13px",
+    light: "13px",
     provenance: "[SHIPPED]",
   },
   "--text-ui--letter-spacing": {
@@ -1517,13 +1516,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-ui--line-height": {
-    dark: "17px",
-    light: "17px",
+    dark: "18px",
+    light: "18px",
     provenance: "[SHIPPED]",
   },
   "--text-ui-sm": {
-    dark: "11px",
-    light: "11px",
+    dark: "12px",
+    light: "12px",
     provenance: "[SHIPPED]",
   },
   "--text-ui-sm--letter-spacing": {
@@ -1532,13 +1531,13 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-ui-sm--line-height": {
-    dark: "15px",
-    light: "15px",
+    dark: "16px",
+    light: "16px",
     provenance: "[SHIPPED]",
   },
   "--text-workspace-title": {
-    dark: "14px",
-    light: "14px",
+    dark: "15px",
+    light: "15px",
     provenance: "[SHIPPED]",
   },
   "--text-workspace-title--letter-spacing": {
@@ -1547,8 +1546,8 @@ export const themeTokens = {
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--text-workspace-title--line-height": {
-    dark: "21px",
-    light: "21px",
+    dark: "22px",
+    light: "22px",
     provenance: "[RETUNE:type/closed-ramp]",
   },
   "--tracking-heading": {

@@ -138,7 +138,7 @@ export function HomeNextScreen() {
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className={`flex min-h-0 flex-1 basis-0 items-end justify-center pb-24 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
-          <div className="relative mx-auto w-full max-w-transcript-readable">
+          <div className="relative mx-auto w-full max-w-transcript-thread">
             <div className="flex flex-col items-center text-center">
               <h1 className="max-w-full whitespace-pre-wrap text-hero font-medium text-foreground select-none">
                 <span className="group/title inline-block max-w-full">
@@ -210,7 +210,7 @@ export function HomeNextScreen() {
           className={`relative z-raised shrink-0 pb-4 pt-1.5 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
           data-home-composer-dock
         >
-          <div className="mx-auto w-full max-w-transcript-readable">
+          <div className="mx-auto w-full max-w-transcript-thread">
             <HomeComposerForm
               targetDisabledReason={homeNext.targetDisabledReason}
               modelAvailabilityState={homeNext.modelAvailabilityState}

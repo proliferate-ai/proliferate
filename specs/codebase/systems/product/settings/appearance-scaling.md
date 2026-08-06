@@ -41,12 +41,12 @@ equivalent native setting.
   smaller than surrounding reading text, label/icon optical sizing that moves
   together, and stable compact-control hit areas.
 - **Intentional differences:** Proliferate retains eight independent UI and
-  readable-code presets, existing fonts and hierarchy, the 40rem shared chat
+  readable-code presets, existing fonts and hierarchy, the 48rem shared chat
   column, themes, and separate window zoom.
 - **Founder-approved Proliferate mock:**
   [Default and Extra Large scale contract](appearance-scaling-mock.svg). The
-  founder approved the mock direction and complete-coverage rule on
-  2026-07-19.
+  founder approved the complete-coverage rule on 2026-07-19 and the unified
+  11–18px reading ramp on 2026-08-05.
 
 ![Default and Extra Large proportional appearance scaling](appearance-scaling-mock.svg)
 
@@ -85,13 +85,13 @@ READABLE_CODE_FONT_SCALES[id].monacoFontSize
 | Preset | Message/composer | Readable code target |
 | --- | ---: | ---: |
 | Extra Extra Small | 11px | 11px |
-| Extra Small | 11.5px | 11.5px |
-| Small | 12px | 12px |
-| Default | 13px | 13px |
-| Large | 14px | 14px |
-| Extra Large | 15px | 15px |
-| Extra Extra Large | 16px | 16px |
-| Extra Extra Extra Large | 17px | 17px |
+| Extra Small | 12px | 12px |
+| Small | 13px | 13px |
+| Default | 14px | 14px |
+| Large | 15px | 15px |
+| Extra Large | 16px | 16px |
+| Extra Extra Large | 17px | 17px |
+| Extra Extra Extra Large | 18px | 18px |
 
 Editor, diff, and terminal line heights remain readable, strictly monotonic,
 and greater than their font sizes; they do not need to equal prose line height.
@@ -198,8 +198,8 @@ failing repository check before merge.
 
 - At all eight presets, Monaco, xterm, diffs, code blocks, and file-source views
   equal same-named message/composer font size.
-- Default computes to 13px for message and every readable-code surface; Extra
-  Large computes to 15px.
+- Default computes to 14px for message and every readable-code surface; Extra
+  Large computes to 16px.
 - UI, readable-code, and window-zoom preferences remain independent in storage
   and application.
 - The production source guard finds zero raw fixed text sizes outside canonical

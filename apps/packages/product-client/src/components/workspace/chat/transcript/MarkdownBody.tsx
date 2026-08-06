@@ -364,8 +364,8 @@ export const MarkdownBody = memo(function MarkdownBody({
     [content, isStreaming],
   );
   const markdownClassName = [
-    // Single measure: the thread column (config/chat-layout.ts) uses the same 40rem
-    // --container-transcript-readable token as the new-chat flow, and BOTH
+    // Single measure: the thread column (config/chat-layout.ts) uses the same 48rem
+    // --container-transcript-thread token as the new-chat flow, and BOTH
     // wide blocks (tables, code — see the `table` override below) and prose fill it
     // (PROSE_MEASURE_CLASSNAME is max-w-full too), so an assistant message
     // reads at the same width the user is typing into before and after launch.
