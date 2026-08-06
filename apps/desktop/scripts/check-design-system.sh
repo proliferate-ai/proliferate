@@ -76,21 +76,6 @@ for f in $TYPE_HITS; do
   FAIL=1
 done
 
-# tailwind-merge must be imported via the configured wrapper: the stock config
-# classifies our custom text-* size tokens as COLORS and silently deletes them
-# on merge. Only the wrapper module itself may import the library. This rule
-# scans apps/web too (every workspace that depends on tailwind-merge); web is
-# deliberately NOT in TYPE_ROOTS — its px conventions are untouched here.
-TW_MERGE_ROOTS=("${TYPE_ROOTS[@]}" ../web/src)
-TW_MERGE_MODULE="../packages/product-client/src/primitives/utils/tw-merge.ts"
-RAW_TW_HITS=$(grep -rln 'from "tailwind-merge"' "${TW_MERGE_ROOTS[@]}" 2>/dev/null || true)
-for f in $RAW_TW_HITS; do
-  if [[ "$f" != "$TW_MERGE_MODULE" ]]; then
-    echo "FAIL [raw tailwind-merge import — use #product/primitives/utils/tw-merge]: $f"
-    FAIL=1
-  fi
-done
-
 if [[ $FAIL -eq 1 ]]; then
   echo
   echo "Design-system check failed. Spell type through the semantic tokens"

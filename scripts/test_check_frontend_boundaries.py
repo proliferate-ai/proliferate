@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts import check_frontend_boundaries as check_module
+from scripts import frontend_imports as frontend_imports_module
 from scripts import report_frontend_structure as structure_module
 from scripts.frontend_imports import collect_imports, collect_module_specifiers
 
@@ -151,6 +152,167 @@ class RadixImportBoundaryTest(unittest.TestCase):
                 violations = check_module.find_radix_import_violations()
 
         self.assertEqual(violations, [])
+
+
+class TailwindMergeImportBoundaryTest(unittest.TestCase):
+    def write_files(self, directory: Path, files: dict[str, str]) -> None:
+        for name, content in files.items():
+            path = directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+
+    def run_rule(
+        self,
+        root: Path,
+    ) -> list[tuple[str, str, int]]:
+        product_client_src = root / "apps/packages/product-client/src"
+        roots = [
+            root / "apps/desktop/src",
+            root / "apps/web/src",
+            root / "apps/mobile/src",
+            root / "apps/packages/design/src",
+            product_client_src,
+        ]
+        with patch.multiple(
+            check_module,
+            REPO_ROOT=root,
+            PRODUCT_CLIENT_PRIMITIVES_SRC=product_client_src / "primitives",
+            ALL_FRONTEND_SRC_ROOTS=roots,
+        ):
+            return sorted(
+                (violation.relative_path, violation.rule_id, violation.lineno)
+                for violation in check_module.find_tailwind_merge_import_violations()
+            )
+
+    def test_only_configured_product_client_wrapper_imports_tailwind_merge(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_files(
+                root,
+                {
+                    "apps/packages/product-client/src/primitives/utils/tw-merge.ts": (
+                        'import { extendTailwindMerge } from "tailwind-merge";\n'
+                    ),
+                    "apps/packages/product-client/src/components/Consumer.tsx": (
+                        'import { twMerge } from "#product/primitives/utils/tw-merge";\n'
+                    ),
+                    "apps/web/src/PackageName.ts": (
+                        'export const packageName = "tailwind-merge";\n'
+                    ),
+                },
+            )
+
+            violations = self.run_rule(root)
+
+        self.assertEqual(violations, [])
+
+    def test_direct_tailwind_merge_module_loads_fail_in_every_frontend_root(
+        self,
+    ) -> None:
+        cases = [
+            (
+                "apps/packages/product-client/src/components/Static.tsx",
+                'import { twMerge } from "tailwind-merge";\n',
+            ),
+            (
+                "apps/desktop/src/Dynamic.ts",
+                'export const load = () => import("tailwind-" + "merge");\n',
+            ),
+            (
+                "apps/web/src/CommonJs.ts",
+                'export const merge = require("tailwind-merge");\n',
+            ),
+            (
+                "apps/mobile/src/ImportEquals.ts",
+                'import twMerge = require("tailwind-merge");\n',
+            ),
+            (
+                "apps/packages/design/src/ReExport.ts",
+                'export { twMerge } from "tailwind-merge/subpath";\n',
+            ),
+            (
+                "apps/desktop/src/__tests__/TailwindMerge.test.ts",
+                'vi.mock("tailwind-merge", () => ({}));\n',
+            ),
+        ]
+
+        for relative_path, source in cases:
+            with self.subTest(path=relative_path):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory).resolve()
+                    self.write_files(root, {relative_path: source})
+
+                    violations = self.run_rule(root)
+
+                self.assertEqual(
+                    violations,
+                    [
+                        (
+                            relative_path,
+                            "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                            1,
+                        )
+                    ],
+                )
+
+    def test_obscured_package_spelling_remains_parser_backed(self) -> None:
+        cases = [
+            r'import { twMerge } from "tailw\u0069nd-merge";' "\n",
+            r'import { twMerge } from "tailwind-\u006derge";' "\n",
+            'import("tail" + "wind-merge");\n',
+            'require("tailwind-" + "mer" + "ge");\n',
+            (
+                r'import("\u0074\u0061\u0069\u006c\u0077\u0069\u006e'
+                r'\u0064\u002d\u006d\u0065\u0072\u0067\u0065");' "\n"
+            ),
+            'jest.mock("tail" + "wind-" + "merge/" + "default-config");\n',
+            'import(`tail${"wind"}-merge`);\n',
+            (
+                'import(("tail" + (true ? "wind" : "unused") + '
+                '"-merge") as string);\n'
+            ),
+        ]
+
+        for source in cases:
+            with self.subTest(source=source):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory).resolve()
+                    relative_path = "apps/web/src/Obscured.ts"
+                    self.write_files(root, {relative_path: source})
+
+                    violations = self.run_rule(root)
+
+                self.assertEqual(
+                    violations,
+                    [
+                        (
+                            relative_path,
+                            "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                            1,
+                        )
+                    ],
+                )
+
+    def test_each_source_is_tokenized_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_files(
+                root,
+                {
+                    "apps/desktop/src/Candidate.ts": (
+                        'import("tail" + "wind-merge");\n'
+                    ),
+                },
+            )
+            with patch.object(
+                frontend_imports_module,
+                "tokenize_typescript",
+                wraps=frontend_imports_module.tokenize_typescript,
+            ) as tokenize_typescript:
+                violations = self.run_rule(root)
+
+        self.assertEqual(len(violations), 1)
+        tokenize_typescript.assert_called_once()
 
 
 class ProductClientPrimitivesTopLevelShapeTest(unittest.TestCase):

@@ -87,10 +87,9 @@ export const CONTROL_HEIGHT_TOKEN_IDS = ["control"] as const;
 
 /**
  * The one true twMerge: knows the design-package font-size tokens. Import it
- * from here — never from "tailwind-merge" directly. check-design-system.sh
- * enforces this across desktop, web, and the shared UI packages — every
- * workspace that depends on tailwind-merge (mobile is React Native and has
- * no tailwind-merge surface).
+ * from here — never from "tailwind-merge" directly. The repository frontend
+ * boundary checker enforces this across every frontend source root, including
+ * test files.
  */
 export const twMerge = extendTailwindMerge<"icon-size">({
   extend: {

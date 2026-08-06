@@ -15,6 +15,7 @@ try:
         Token,
         collect_imports,
         collect_module_specifiers,
+        could_contain_literal_sequence,
         tokenize_typescript,
     )
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
@@ -23,6 +24,7 @@ except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
         Token,
         collect_imports,
         collect_module_specifiers,
+        could_contain_literal_sequence,
         tokenize_typescript,
     )
 
@@ -264,6 +266,14 @@ def iter_frontend_files() -> list[Path]:
 
 def relative(path: Path) -> str:
     return path.relative_to(REPO_ROOT).as_posix()
+
+
+def read_source_text(path: Path, cache: dict[Path, str] | None = None) -> str:
+    if cache is None:
+        return path.read_text()
+    if path not in cache:
+        cache[path] = path.read_text()
+    return cache[path]
 
 
 def is_under(relative_path: str, prefix: str) -> bool:
@@ -2708,17 +2718,27 @@ def find_product_client_violations(path: Path) -> list[Violation]:
     return violations
 
 
-def find_radix_import_violations() -> list[Violation]:
+def find_radix_import_violations(
+    paths: list[Path] | None = None,
+    *,
+    source_cache: dict[Path, str] | None = None,
+) -> list[Violation]:
     """Rule: `@radix-ui/*` imports are legal only in root primitive files and
     the nested `patterns/` tier per the component-library taxonomy in
     specs/codebase/platforms/product/design-system.md.
     """
     violations: list[Violation] = []
-    for path in iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS, include_tests=True):
+    candidates = (
+        paths
+        if paths is not None
+        else iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS, include_tests=True)
+    )
+    for path in candidates:
         rel = relative(path)
         if is_ui_component_library_path(rel):
             continue
-        for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
+        text = read_source_text(path, source_cache)
+        for lineno, raw_line in enumerate(text.splitlines(), start=1):
             if is_block_comment_line(raw_line):
                 continue
             line = strip_line_comment(raw_line)
@@ -2737,6 +2757,50 @@ def find_radix_import_violations() -> list[Violation]:
                         ),
                     )
                 )
+    return violations
+
+
+def find_tailwind_merge_import_violations(
+    paths: list[Path] | None = None,
+    *,
+    source_cache: dict[Path, str] | None = None,
+) -> list[Violation]:
+    """Keep Tailwind class merging behind the configured ProductClient wrapper.
+
+    The stock package does not know ProductClient's semantic text utilities and
+    can discard them as conflicting color classes.  The wrapper extends that
+    configuration, so every frontend caller must import it instead of reaching
+    the package directly.
+    """
+
+    violations: list[Violation] = []
+    wrapper_path = PRODUCT_CLIENT_PRIMITIVES_SRC / "utils" / "tw-merge.ts"
+    candidates = (
+        paths
+        if paths is not None
+        else iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS, include_tests=True)
+    )
+    for path in candidates:
+        if path == wrapper_path:
+            continue
+        text = read_source_text(path, source_cache)
+        if not could_contain_literal_sequence(text, "tailwind-merge"):
+            continue
+        for statement in collect_module_specifiers(path, text):
+            if not is_package_source(statement.source, "tailwind-merge"):
+                continue
+            violations.append(
+                Violation(
+                    "TAILWIND_MERGE_IMPORT_OUTSIDE_WRAPPER",
+                    path,
+                    statement.lineno,
+                    (
+                        "tailwind-merge may only be imported by "
+                        "apps/packages/product-client/src/primitives/utils/tw-merge.ts; "
+                        "use #product/primitives/utils/tw-merge"
+                    ),
+                )
+            )
     return violations
 
 
@@ -2879,7 +2943,20 @@ def collect_violations() -> list[Violation]:
         violations.extend(find_product_client_domain_violations(path))
     for path in iter_files_in_roots([MOBILE_SRC], include_tests=True):
         violations.extend(find_mobile_product_client_import_violations(path))
-    violations.extend(find_radix_import_violations())
+    all_frontend_paths = iter_files_in_roots(
+        ALL_FRONTEND_SRC_ROOTS, include_tests=True
+    )
+    frontend_source_cache: dict[Path, str] = {}
+    violations.extend(
+        find_radix_import_violations(
+            all_frontend_paths, source_cache=frontend_source_cache
+        )
+    )
+    violations.extend(
+        find_tailwind_merge_import_violations(
+            all_frontend_paths, source_cache=frontend_source_cache
+        )
+    )
     violations.extend(find_primitives_top_level_violations())
     violations.extend(find_warning_ink_violations())
     return violations
