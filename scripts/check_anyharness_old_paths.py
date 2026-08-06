@@ -26,8 +26,13 @@ BLOCKED_PATHS = [
     # the older manager/broker/actor split redundant -- none of those subpaths
     # (or a resurrected mod.rs) can exist without the parent directory existing
     # first -- so they are folded into this single entry rather than kept
-    # alongside it.
+    # alongside it. The dir entry alone would miss the file-module shape
+    # (`src/acp.rs`, no directory needed), so it is paired with an explicit
+    # `.rs` entry too, matching every other module-move pair in this list
+    # (sessions/sessions.rs, workspaces/workspaces.rs, terminals/terminals.rs,
+    # connection/connection.rs).
     "anyharness/crates/anyharness-lib/src/acp",
+    "anyharness/crates/anyharness-lib/src/acp.rs",
 ]
 
 
