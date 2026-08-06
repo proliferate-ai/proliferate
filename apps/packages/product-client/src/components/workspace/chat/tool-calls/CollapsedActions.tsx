@@ -21,7 +21,6 @@ interface CollapsedActionsProps {
   autoFollow?: boolean;
   /** Keep the trailing exploration phase visually live between tool events. */
   liveContinuation?: boolean;
-  onOpenChanges?: () => void;
 }
 
 export function CollapsedActions({
@@ -29,7 +28,6 @@ export function CollapsedActions({
   transcript,
   autoFollow = false,
   liveContinuation = false,
-  onOpenChanges,
 }: CollapsedActionsProps) {
   const hasActiveAction = itemIds.some((itemId) => {
     const item = transcript.itemsById[itemId];
@@ -53,7 +51,6 @@ export function CollapsedActions({
   const summaryIcon = currentAction
     ? <CollapsedActionIcon kind={currentAction.kind} />
     : <CollapsedActionIcon kind={resolveCollapsedActionsLeadingKind(actionSummary)} />;
-  const summaryOpensChanges = containsEdits && Boolean(onOpenChanges) && !isLiveAction;
 
   function toggleExpanded() {
     const nextExpanded = !expanded;
@@ -70,12 +67,9 @@ export function CollapsedActions({
           size="unstyled"
           data-chat-transcript-ignore
           data-active={isLiveAction ? "true" : undefined}
-          aria-expanded={summaryOpensChanges ? undefined : expanded}
-          title={summaryOpensChanges ? "Open changes" : undefined}
+          aria-expanded={expanded}
           className="h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-normal font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:text-foreground"
-          onClick={summaryOpensChanges
-            ? onOpenChanges
-            : toggleExpanded}
+          onClick={toggleExpanded}
         >
           <span className="inline-flex min-w-0 shrink items-center gap-1.5 truncate">
             <span
@@ -95,38 +89,15 @@ export function CollapsedActions({
                 : summary}
             </span>
           </span>
-          {!summaryOpensChanges && (
-            <ChevronRightActivity
-              aria-hidden="true"
-              className={`icon-compact shrink-0 text-current transition-transform duration-disclosure ${
-                expanded
-                  ? "rotate-90 opacity-100"
-                  : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
-              }`}
-            />
-          )}
+          <ChevronRightActivity
+            aria-hidden="true"
+            className={`icon-compact shrink-0 text-current transition-transform duration-disclosure ${
+              expanded
+                ? "rotate-90 opacity-100"
+                : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
+            }`}
+          />
         </Button>
-        {summaryOpensChanges && (
-          <Button
-            type="button"
-            variant="unstyled"
-            size="unstyled"
-            data-chat-transcript-ignore
-            aria-label={expanded ? "Collapse edited files" : "Expand edited files"}
-            aria-expanded={expanded}
-            onClick={toggleExpanded}
-            className="size-5 shrink-0 rounded-none bg-transparent p-0 text-ui text-current hover:bg-transparent focus-visible:text-foreground"
-          >
-            <ChevronRightActivity
-              aria-hidden="true"
-              className={`text-ui icon-compact text-current transition-transform duration-disclosure ${
-                expanded
-                  ? "rotate-90 opacity-100"
-                  : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
-              }`}
-            />
-          </Button>
-        )}
       </div>
       <AnimatedCollapsibleContent expanded={expanded}>
         <div className="mt-1 flex flex-col gap-1">

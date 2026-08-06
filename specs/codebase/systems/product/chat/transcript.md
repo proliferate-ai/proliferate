@@ -256,14 +256,17 @@ search/read row may say `Read files` while using the search glyph). Semantic
 icons and labels share the same 60%-foreground ink, and the icon box scales
 with transcript text instead of using a fixed pixel size. The disclosure
 chevron remains layout-reserved but hidden until hover/focus or expansion.
+Clicking the completed activity summary, including a summary containing edits,
+toggles its ledger; the summary does not route to the Changes pane.
 Every row revealed inside an activity ledger repeats its own semantic glyph
 (including mixed parsed shell operations), at the same text-relative size and
 inherited ink as its label. Completed command details use `Ran …`; only the
 active command uses `Running …`. An edit detail shows one pen glyph followed by
 an inherited-color, dotted-underlined filename, not a second file-type glyph.
-When a transcript patch is available, clicking the edit row toggles its inline
-diff; clicking the trailing open-file arrow opens the file without changing the
-row's expanded state. The row retains the file-reference context menu. Edit
+When a transcript patch is available, clicking the edit row outside its
+filename toggles the inline diff. Clicking either the filename or the trailing
+open-file arrow opens the file without changing the row's expanded state. The
+row retains the file-reference context menu. Edit
 counts remain neutral beside the filename until row hover or focus within the
 row gives additions and deletions their semantic colors.
 
