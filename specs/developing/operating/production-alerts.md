@@ -6,9 +6,7 @@ identity, and the dedicated dark issue-tracker webhook contact point.
 Use this runbook to understand what each production alert detects, where to
 look first when it fires, and how to reproduce or roll back the rule-identity
 overlay and the tracker contact point. The end-to-end support boundary is owned
-by [`../../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../codebase/systems/engineering/issue-lifecycle/support-loop.md);
-the frozen slice contract is
-[`../../codebase/systems/engineering/issue-lifecycle/grafana-rules-delivery.md`](../../codebase/systems/engineering/issue-lifecycle/grafana-rules-delivery.md).
+by [`../../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../codebase/systems/engineering/issue-lifecycle/support-loop.md).
 
 ## Fixed production target
 
