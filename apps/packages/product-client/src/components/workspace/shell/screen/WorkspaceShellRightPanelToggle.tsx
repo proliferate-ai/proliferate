@@ -32,7 +32,7 @@ export function WorkspaceShellRightPanelToggle({
         {shortcutRevealVisible ? (
           <ShortcutBadge
             label={getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel)}
-            className="pointer-events-none absolute -right-1 -bottom-1 z-20 text-muted-foreground"
+            className="pointer-events-none absolute -right-1 -bottom-1 z-raised text-muted-foreground"
           />
         ) : null}
       </IconButton>
