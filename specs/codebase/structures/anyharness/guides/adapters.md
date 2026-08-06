@@ -490,6 +490,23 @@ workspace state.
 Adapter outputs should be typed capability results, not HTTP responses and not
 product presentation models.
 
+Use free functions by default. Use a struct only when it holds dependencies,
+cache, config, subprocess state, or test-injectable behavior:
+
+```text
+Good as functions:
+  read_workspace_file(root, path)
+  parse_git_status(output)
+  build_safe_path(root, relative_path)
+
+Good as structs:
+  WorkspaceFileSearchCache
+  ProcessService
+  BrowserSessionController
+```
+
+If a struct has no fields, it probably should be a function.
+
 ## Error Ownership
 
 Adapter errors should describe local capability failures:

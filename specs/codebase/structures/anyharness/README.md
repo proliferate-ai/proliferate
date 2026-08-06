@@ -209,9 +209,6 @@ Guides:
   other guides cohere: the eight jobs, the use-case pipeline
   (resolve -> decide -> execute), the mapping and error doctrines, the
   parameter test, proportionality, and the placement algorithm.
-- [guides/system-architecture.md](guides/system-architecture.md) for the full
-  AnyHarness source organization model: `api`, `app`, `domains`, `live`,
-  `adapters`, `integrations`, `persistence`, and `observability`.
 - [guides/crates.md](guides/crates.md) for crate ownership:
   `anyharness`, `anyharness-contract`, `anyharness-credential-discovery`, and
   `anyharness-lib`.
@@ -376,13 +373,17 @@ anyharness/crates/
         mcp/
         agent_cli/
         acp/                     # only when protocol mechanics earn it
-      origin.rs
+      origin.rs                 # advisory provenance only, see below
       process_env.rs
       lib.rs
 ```
 
 Do not add new top-level AnyHarness folders without updating this doc and the
 focused guide that owns the layer.
+
+`origin.rs` is advisory provenance, not authority. It may describe where a
+request/session/workspace came from. It should not decide auth, ownership,
+billing, mutability, or sandbox policy.
 
 ## Hard Rules
 

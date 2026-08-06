@@ -2,9 +2,8 @@
 
 This spec describes the current split live session actor. It is specific to
 the actor portion of the AnyHarness session engine and assumes the broader
-architecture in
-[guides/system-architecture.md](../guides/system-architecture.md) and the
-session engine overview in [session-engine.md](session-engine.md).
+architecture in [../README.md](../README.md) and the session engine overview
+in [session-engine.md](session-engine.md).
 
 Implementation:
 
@@ -376,7 +375,7 @@ diagnostics/
   stuck-turn and state diagnostics if it outgrows turn/diagnostics.rs
 ```
 
-Use the concern grammar from `guides/system-architecture.md`:
+Use the concern grammar from [guides/live-runtime.md](../guides/live-runtime.md):
 
 ```text
 mod.rs
