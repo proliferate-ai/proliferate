@@ -91,8 +91,8 @@ requires separately approved remediation scope and the applicable runbook.
   publish, promote, or roll back a managed-cloud E2B runtime template.
 - [../operating/analytics/sentry.md](../operating/analytics/sentry.md): inspect
   Sentry projects, releases, alerts, privacy behavior, and support tags.
-- [../deploying/ci-cd.md](../deploying/ci-cd.md): investigate deploy and release
-  failures.
+- [../deploying/README.md](../deploying/README.md): investigate deploy and
+  release failures.
 
 ## Closeout
 

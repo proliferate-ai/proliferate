@@ -67,10 +67,10 @@ the cells whose isolation contract permits it.
 ## Candidate Artifacts
 
 The implemented bounded handoff is the candidate-only, local-file-only
-`CandidateBuildMapV1` in
-[`candidate-build-handoff.md`](candidate-build-handoff.md). Each current world
-resolver requires its exact artifact set; the runner validates source identity,
-shape, local files, and every digest before setup. The complete remote/full
+`CandidateBuildMapV1` contract (`tests/release/src/artifacts/build-map.ts`).
+Each current world resolver requires its exact artifact set; the runner
+validates source identity, shape, local files, and every digest before setup.
+The complete remote/full
 manifest below — portable remote locators, retained N-1, and cross-run
 digest-verified downloads — is later work layered on that contract.
 

@@ -6,8 +6,7 @@
   [`web-desktop-product-client-entry-contract.md`](../entry-contract.md)
 - Move ledger: `web-desktop-product-client-move-ledger.md` (consumed and
   removed after the move landed; see Git history)
-- Pipeline ledger:
-  [`../../developing/deploying/web-desktop-unification-rollout.md`](../../../../../../developing/deploying/web-desktop-unification-rollout.md)
+- Next slice: [`d1h.md`](d1h.md) (the Desktop product move)
 
 This is the landed record proving that
 `@proliferate/product-client`'s toolchain can compile and ship every import and

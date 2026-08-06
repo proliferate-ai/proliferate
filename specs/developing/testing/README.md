@@ -4,15 +4,6 @@ How tests are organized across the repo: what each tier owns, where test files
 live, what gates merges vs releases, and how a change decides which tests it
 must add. [`core-release-validation.md`](core-release-validation.md) owns the
 complete target guarantee and qualification semantics;
-[`qualification-runner-core.md`](qualification-runner-core.md) owns the frozen
-test-runner foundation: run identity, normalized terminal states, and
-diagnostic/strict behavior;
-[`candidate-build-handoff.md`](candidate-build-handoff.md) owns the frozen
-candidate build map (`CandidateBuildMapV1`), its runner validation, and the
-bounded candidate-artifact evidence first introduced in report V2;
-[`exact-test-matrix.md`](exact-test-matrix.md) owns the frozen exact-cell
-planning and execution contract, one explicit result per selected cell, and
-the current report V3 aggregate;
 [`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md),
 [`tier-3-scenario-contract.md`](tier-3-scenario-contract.md), and
 [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) own the live world

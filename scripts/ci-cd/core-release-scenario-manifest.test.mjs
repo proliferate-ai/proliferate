@@ -11,16 +11,11 @@ const manifestPath = path.join(testingDir, "core-release-scenario-manifest.json"
 const tier3ContractPath = path.join(testingDir, "tier-3-scenario-contract.md");
 const tier4ContractPath = path.join(testingDir, "tier-4-scenario-contract.md");
 const worldsContractPath = path.join(testingDir, "release-worlds-and-fixtures.md");
-const migrationContractPath = path.join(
-  repoRoot,
-  "specs/developing/deploying/web-desktop-unification-rollout.md",
-);
 const contract = readFileSync(contractPath, "utf8");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const tier3Contract = readFileSync(tier3ContractPath, "utf8");
 const tier4Contract = readFileSync(tier4ContractPath, "utf8");
 const worldsContract = readFileSync(worldsContractPath, "utf8");
-const migrationContract = readFileSync(migrationContractPath, "utf8");
 
 function contractScenarioIds() {
   return [...contract.matchAll(/^\| `(T([234])-[^`]+)` \|/gm)].map((match) => ({
@@ -281,18 +276,13 @@ test("runtime activation authority is Worker mailbox to Supervisor, never Worker
   assert.doesNotMatch(`${runtimeRow}\n${workerRow}`, /Worker (?:downloads|swaps|restarts|activates)/i);
 });
 
-test("every local link in the canonical testing and migration contracts resolves", () => {
+test("every local link in the canonical testing contracts resolves", () => {
   const unresolved = [];
   for (const { contents, baseDir, label } of [
     { contents: contract, baseDir: testingDir, label: "core" },
     { contents: tier3Contract, baseDir: testingDir, label: "tier3" },
     { contents: tier4Contract, baseDir: testingDir, label: "tier4" },
     { contents: worldsContract, baseDir: testingDir, label: "worlds" },
-    {
-      contents: migrationContract,
-      baseDir: path.dirname(migrationContractPath),
-      label: "web-desktop migration",
-    },
   ]) {
     for (const match of contents.matchAll(/\]\(([^)]+)\)/g)) {
       const target = match[1].trim();

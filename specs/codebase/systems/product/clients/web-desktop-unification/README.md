@@ -652,10 +652,9 @@ extraction and replacement are:
 - [legacy Web replacement record](migration/d1i.md); and
 - [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json).
 
-The next step is to qualify Desktop and hosted Web against the shared
-implementation and cut over hosted Web. The remaining order and cutover gates
-live in the
-[rollout procedure](../../../../../developing/deploying/web-desktop-unification-rollout.md).
+Desktop and hosted Web were qualified against the shared implementation and
+cut over. The phase-6 first-load budget ruling and cutover gate are recorded
+in [the Desktop product move record](migration/d1h.md#phase-6--hosted-web-first-load-budget-wdu-1247-d1).
 
 Related authoritative docs:
 
@@ -668,7 +667,7 @@ Related authoritative docs:
 - Telemetry:
   [`../../../../structures/frontend/guides/telemetry.md`](../../../../structures/frontend/guides/telemetry.md)
 - CI/CD and release:
-  [`../../../../../developing/deploying/ci-cd.md`](../../../../../developing/deploying/ci-cd.md)
+  [`../../../../../developing/deploying/README.md`](../../../../../developing/deploying/README.md)
 - Testing:
   [`../../../../../developing/testing/README.md`](../../../../../developing/testing/README.md)
 
