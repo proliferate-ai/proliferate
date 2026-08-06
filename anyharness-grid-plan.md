@@ -633,6 +633,38 @@ cfg(test) rows.
    `src/acp/**` doc references (docs deferred program-wide; the specs
    README.md:303 already anticipated "earned integrations/acp/**").
 
+6. **#1673** `codex/anyharness-materialization-valve` @ b2e5c5fc5 — PR 7,
+   materialization runtime valve. New `runtime.rs` (290) + wiring
+   `app/materialization.rs` (52); service.rs 625→419 (max-lines row
+   DELETED — under the 600 cap); DOMAIN_LIVE_VALVE row removed, stanza
+   11/20 → 10/19 (measured). Review verdict: no P1 — behavior
+   preservation mechanically proven (byte-identical move modulo the
+   two intentional call rewires; sessions-before-terminals decision
+   order intact; no caller bypasses the admission check — the service
+   no longer has the method, so bypass is impossible by construction).
+   Shared-state design call verified as PARITY, not new coupling (main
+   had one store + one locks map; branch has one of each, shared by
+   Clone in app/materialization.rs). New real-PTY test
+   `explicit_busy_destination_with_active_terminal_returns_workspace_busy`
+   pins the terminal-busy branch (previously untested);
+   reviewer's independent structural-deletion control fired. P2
+   disposition: the app/mod.rs pin moved 693→694 — reviewer claimed a
+   struct rename lands 693, but the builder FALSIFIED that empirically
+   three ways (rustfmt wraps the whole 114-char statement, not the
+   head; only sub-4-char names collapse it; the unqualified-import
+   alternative nets 694 anyway). Ruled: accept 694 as a documented
+   exception (allowlist reason text + body carry the full mechanism
+   and falsified alternatives). P3 accepted as-is: pub widening on
+   MaterializationOperationLocks is warning-driven (private_interfaces
+   on the two pub `new()` signatures), disclosed in body.
+   **Merge-choreography note: collides with #1670/#1671 on app/mod.rs
+   + the max_lines pin row (694 here vs 690 there off different
+   bases) — whichever merges second re-measures and re-pins.**
+   Flake signature worth remembering: under machine starvation the PTY
+   test can panic inside `lock_env()`, poisoning the process-global
+   ENV_MUTEX and cascading failures across 7 unrelated test files —
+   a whole-suite materialization cascade in CI = starvation, not code.
+
 Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
 the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
 facade-laundered live power; replaced with a plain `runtime_home: PathBuf`
