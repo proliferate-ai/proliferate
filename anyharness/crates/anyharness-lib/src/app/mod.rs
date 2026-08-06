@@ -82,7 +82,6 @@ use crate::domains::workspaces::restore_runtime::RestoreWorktreeRuntime;
 use crate::domains::workspaces::retention::WorkspaceRetentionService;
 use crate::domains::workspaces::retire_preflight::RetirePreflightChecker;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
-use crate::domains::workspaces::service::WorkspaceService;
 use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
 use crate::domains::workspaces::store::{
     WorkspaceAccessStore, WorkspaceStore, WorktreeRetentionPolicyStore,
@@ -206,7 +205,6 @@ impl AppState {
             vec![Arc::new(CoworkDeleteParticipant)],
         );
         let repo_root_service = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
-        let workspace_service = Arc::new(WorkspaceService::new(WorkspaceStore::new(db.clone())));
         let workspace_runtime = Arc::new(WorkspaceRuntime::new(
             WorkspaceStore::new(db.clone()),
             workspace_delete_workflow.clone(),
@@ -514,7 +512,6 @@ impl AppState {
         let mobility_runtime = mobility::wire_mobility(mobility::MobilityWiringDeps {
             db: db.clone(),
             runtime_home: runtime_home.clone(),
-            workspace_service: workspace_service.clone(),
             workspace_runtime: workspace_runtime.clone(),
             session_service: session_service.clone(),
             session_runtime: session_runtime.clone(),

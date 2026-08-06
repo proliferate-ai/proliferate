@@ -20,7 +20,6 @@ pub mod retention;
 pub mod retention_policy;
 pub mod retire_preflight;
 pub mod runtime;
-pub mod service;
 pub mod setup_runtime;
 pub mod store;
 pub mod types;
