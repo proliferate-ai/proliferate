@@ -16,7 +16,8 @@ import uuid
 import sqlalchemy as sa
 
 from alembic import op
-from proliferate.utils.crypto import encrypt_text
+from proliferate.config import settings
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 
 # revision identifiers, used by Alembic.
 revision: str = "f7a8b9c0d1e2"
@@ -219,10 +220,14 @@ def _backfill_oauth_accounts() -> None:
                 "auth_identity_id": identity_id,
                 "provider": row["oauth_name"],
                 "access_token_ciphertext": (
-                    encrypt_text(row["access_token"]) if row["access_token"] else None
+                    encrypt_text(row["access_token"], secret=settings.cloud_secret_key)
+                    if row["access_token"]
+                    else None
                 ),
                 "refresh_token_ciphertext": (
-                    encrypt_text(row["refresh_token"]) if row["refresh_token"] else None
+                    encrypt_text(row["refresh_token"], secret=settings.cloud_secret_key)
+                    if row["refresh_token"]
+                    else None
                 ),
                 "scopes_json": json.dumps(scopes),
                 "expires_at": expires_at,

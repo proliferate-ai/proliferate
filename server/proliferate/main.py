@@ -14,24 +14,32 @@ from sqlalchemy.exc import SQLAlchemyError
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.auth  # noqa: F401
+
+# Retained automation tables must stay registered in SQLAlchemy metadata.
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
 import proliferate.db.models.support  # noqa: F401
 import proliferate.db.models.workflows  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
-from proliferate.auth.desktop.api import router as desktop_router
-from proliferate.auth.identity.api import router as identity_auth_router
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.profile_api import router as user_profile_router
-from proliferate.auth.sso.api import router as sso_auth_router
 from proliferate.config import get_cors_allow_origins, settings
 from proliferate.constants.app import APP_NAME
 from proliferate.db import engine as db_engine
 from proliferate.db.migrations import validate_database_schema
 from proliferate.errors import ProliferateError
 from proliferate.integrations.sentry import flush_server_sentry, init_server_sentry
+from proliferate.lib.product.telemetry.mode import (
+    get_server_telemetry_mode,
+    is_vendor_telemetry_enabled,
+)
+from proliferate.middleware.logging import configure_server_logging
 from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
+from proliferate.server.accounts.desktop.api import router as desktop_router
+from proliferate.server.accounts.identity.api import router as identity_auth_router
+from proliferate.server.accounts.sso.api import router as sso_auth_router
 from proliferate.server.ai_magic.api import router as ai_magic_router
 from proliferate.server.analytics.api import router as analytics_router
 from proliferate.server.anonymous_telemetry.api import router as anonymous_telemetry_router
@@ -40,9 +48,6 @@ from proliferate.server.anonymous_telemetry.worker import (
     stop_server_anonymous_telemetry_sender,
 )
 from proliferate.server.artifact_runtime.api import router as artifact_runtime_router
-
-# AUTOMATIONS PARKED: retarget to RepoEnvironment in a later PR before remounting.
-# from proliferate.server.automations.api import router as automations_router
 from proliferate.server.billing.api import router as billing_router
 from proliferate.server.billing.reconciler import (
     start_billing_reconciler,
@@ -75,6 +80,7 @@ from proliferate.server.organizations.registration_pages import (
 )
 from proliferate.server.organizations.sso.api import router as organization_sso_router
 from proliferate.server.organizations.usage.api import router as organization_usage_router
+from proliferate.server.release import resolve_server_release_id
 from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.support.api import router as support_router
@@ -83,7 +89,6 @@ from proliferate.server.version import server_version
 from proliferate.server.web_app import mount_web_app
 from proliferate.server.workflows.api import invocations_router as workflow_invocations_router
 from proliferate.server.workflows.api import router as workflows_router
-from proliferate.utils.logging import configure_server_logging
 
 
 def _normalize_api_prefix(raw_prefix: str) -> str:
@@ -195,13 +200,16 @@ async def _proliferate_error_handler(
     _request: Request,
     error: ProliferateError,
 ) -> JSONResponse:
-    detail = {
-        "code": error.code,
-        "message": error.message,
-    }
-    extra_detail = getattr(error, "extra_detail", None)
-    if isinstance(extra_detail, dict):
-        detail.update(extra_detail)
+    if isinstance(error, AuthFlowError):
+        detail: str | dict[str, object] = error.message
+    else:
+        detail = {
+            "code": error.code,
+            "message": error.message,
+        }
+        extra_detail = getattr(error, "extra_detail", None)
+        if isinstance(extra_detail, dict):
+            detail.update(extra_detail)
     return JSONResponse(
         status_code=error.status_code,
         content={"detail": detail},
@@ -253,7 +261,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     configure_server_logging()
-    init_server_sentry()
+    init_server_sentry(
+        enabled=is_vendor_telemetry_enabled(),
+        telemetry_mode=get_server_telemetry_mode(),
+        release_resolver=lambda: resolve_server_release_id(settings.sentry_release),
+    )
     api_prefix = _normalize_api_prefix(settings.api_path_prefix)
 
     app = FastAPI(
@@ -336,9 +348,6 @@ def create_app() -> FastAPI:
         prefix=f"{api_prefix}/v1",
         tags=["organizations"],
     )
-    # AUTOMATIONS PARKED: /v1/automations/* is intentionally disabled until the
-    # domain is retargeted from deleted cloud_repo_config rows to RepoEnvironment.
-    # app.include_router(automations_router, prefix=f"{api_prefix}/v1", tags=["automations"])
     app.include_router(devtools_router, prefix=f"{api_prefix}/v1", tags=["devtools"])
 
     # Serve the compiled ProductClient Web application (self-hosted Web) after

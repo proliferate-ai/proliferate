@@ -27,13 +27,14 @@ from proliferate.integrations.anyharness.models import RemoteGitStatusSnapshot
 from proliferate.integrations.github.repos import GitHubRepoBranches
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.integrations.anyharness.models import ResolvedRemoteWorkspace
+from proliferate.db.store import cloud_workspace_materializations as materialization_store
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.server.cloud.workspaces import service as workspaces_service
 from proliferate.server.cloud.workspaces.materializations import (
     service as materializations_service,
 )
 from proliferate.server.cloud.workspaces.models import (
     CreateCloudWorkspaceRequest,
-    CreateMaterializationIntentRequest,
     ReportMaterializationRequest,
 )
 
@@ -185,13 +186,42 @@ def _patch_preflight(
 
 
 async def _intent(db, seed, body_install: str = _INSTALL):
+    workspace = await cloud_workspace_store.get_cloud_workspace_for_user(
+        db, seed.user.id, seed.workspace.id
+    )
+    assert workspace is not None
     return await materializations_service.create_local_materialization_intent(
         db,
         user_id=seed.user.id,
-        workspace_id=seed.workspace.id,
-        body=CreateMaterializationIntentRequest(
-            targetKind="local_desktop", desktopInstallId=body_install
-        ),
+        workspace=workspace,
+        desktop_install_id=body_install.strip(),
+    )
+
+
+async def _materialization(db: AsyncSession, materialization_id: uuid.UUID):
+    materialization = await materialization_store.load_materialization(
+        db, materialization_id, lock_row=True
+    )
+    assert materialization is not None
+    return materialization
+
+
+async def _report(
+    db: AsyncSession,
+    materialization_id: uuid.UUID,
+    body: ReportMaterializationRequest,
+):
+    return await materializations_service.report_materialization(
+        db,
+        materialization=await _materialization(db, materialization_id),
+        body=body,
+    )
+
+
+async def _unlink(db: AsyncSession, materialization_id: uuid.UUID) -> None:
+    await materializations_service.unlink_materialization(
+        db,
+        materialization=await _materialization(db, materialization_id),
     )
 
 
@@ -215,13 +245,34 @@ async def test_intent_success_clean_published_source(
 
 
 @pytest.mark.asyncio
-async def test_intent_rejects_lost_workspace(db_session: AsyncSession) -> None:
-    seed = await _seed(db_session, lost=True)
+async def test_intent_uses_pre_authorized_workspace_and_install(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed = await _seed(db_session, with_worker=False, lost=True)
+    await _seed_managed_materialization(db_session, seed)
+    _patch_preflight(monkeypatch, snapshot=_snapshot())
+    await _intent(db_session, seed)
 
-    with pytest.raises(CloudApiError) as excinfo:
-        await _intent(db_session, seed)
 
-    assert excinfo.value.code == "workspace_lost"
+@pytest.mark.asyncio
+async def test_report_uses_pre_authorized_locked_materialization(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed = await _seed(db_session, with_worker=False)
+    await _seed_managed_materialization(db_session, seed)
+    _patch_preflight(monkeypatch, snapshot=_snapshot())
+    intent = await _intent(db_session, seed)
+    updated = await _report(
+        db_session,
+        uuid.UUID(intent.materialization.id),
+        ReportMaterializationRequest(
+            generation=intent.materialization.generation,
+            state="hydrated",
+            observedHeadSha=_HEAD,
+            observedBranch=_BRANCH,
+        ),
+    )
+    assert updated.state == "hydrated"
 
 
 @pytest.mark.asyncio
@@ -276,19 +327,6 @@ async def test_intent_blocked_when_branch_absent_on_github(
     with pytest.raises(CloudApiError) as excinfo:
         await _intent(db_session, seed)
     assert excinfo.value.code == "materialization_source_blocked"
-
-
-@pytest.mark.asyncio
-async def test_intent_requires_owned_install(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    seed = await _seed(db_session, with_worker=False)
-    await _seed_managed_materialization(db_session, seed)
-    _patch_preflight(monkeypatch, snapshot=_snapshot())
-
-    with pytest.raises(CloudApiError) as excinfo:
-        await _intent(db_session, seed)
-    assert excinfo.value.code == "desktop_install_not_owned"
 
 
 @pytest.mark.asyncio
@@ -367,12 +405,10 @@ async def test_reintent_after_hydrated_bumps_generation(
     _patch_preflight(monkeypatch, snapshot=_snapshot())
 
     first = await _intent(db_session, seed)
-    await materializations_service.report_materialization(
+    await _report(
         db_session,
-        user_id=seed.user.id,
-        workspace_id=seed.workspace.id,
-        materialization_id=uuid.UUID(first.materialization.id),
-        body=ReportMaterializationRequest(
+        uuid.UUID(first.materialization.id),
+        ReportMaterializationRequest(
             generation=first.materialization.generation,
             state="hydrated",
             observedHeadSha=_HEAD,
@@ -402,12 +438,10 @@ async def test_reintent_after_failed_bumps_generation(
     _patch_preflight(monkeypatch, snapshot=_snapshot())
 
     first = await _intent(db_session, seed)
-    await materializations_service.report_materialization(
+    await _report(
         db_session,
-        user_id=seed.user.id,
-        workspace_id=seed.workspace.id,
-        materialization_id=uuid.UUID(first.materialization.id),
-        body=ReportMaterializationRequest(
+        uuid.UUID(first.materialization.id),
+        ReportMaterializationRequest(
             generation=first.materialization.generation,
             state="failed",
             failureCode="clone_failed",
@@ -431,12 +465,10 @@ async def test_report_exact_sha_and_branch_hydrates(
     _patch_preflight(monkeypatch, snapshot=_snapshot())
     intent = await _intent(db_session, seed)
 
-    updated = await materializations_service.report_materialization(
+    updated = await _report(
         db_session,
-        user_id=seed.user.id,
-        workspace_id=seed.workspace.id,
-        materialization_id=uuid.UUID(intent.materialization.id),
-        body=ReportMaterializationRequest(
+        uuid.UUID(intent.materialization.id),
+        ReportMaterializationRequest(
             generation=intent.materialization.generation,
             state="hydrated",
             observedHeadSha=_HEAD,
@@ -459,12 +491,10 @@ async def test_report_wrong_sha_rejected(
     intent = await _intent(db_session, seed)
 
     with pytest.raises(CloudApiError) as excinfo:
-        await materializations_service.report_materialization(
+        await _report(
             db_session,
-            user_id=seed.user.id,
-            workspace_id=seed.workspace.id,
-            materialization_id=uuid.UUID(intent.materialization.id),
-            body=ReportMaterializationRequest(
+            uuid.UUID(intent.materialization.id),
+            ReportMaterializationRequest(
                 generation=intent.materialization.generation,
                 state="hydrated",
                 observedHeadSha="wrong",
@@ -484,12 +514,10 @@ async def test_report_wrong_branch_rejected(
     intent = await _intent(db_session, seed)
 
     with pytest.raises(CloudApiError) as excinfo:
-        await materializations_service.report_materialization(
+        await _report(
             db_session,
-            user_id=seed.user.id,
-            workspace_id=seed.workspace.id,
-            materialization_id=uuid.UUID(intent.materialization.id),
-            body=ReportMaterializationRequest(
+            uuid.UUID(intent.materialization.id),
+            ReportMaterializationRequest(
                 generation=intent.materialization.generation,
                 state="hydrated",
                 observedHeadSha=_HEAD,
@@ -509,12 +537,10 @@ async def test_report_stale_generation_rejected_without_mutation(
     intent = await _intent(db_session, seed)
 
     with pytest.raises(CloudApiError) as excinfo:
-        await materializations_service.report_materialization(
+        await _report(
             db_session,
-            user_id=seed.user.id,
-            workspace_id=seed.workspace.id,
-            materialization_id=uuid.UUID(intent.materialization.id),
-            body=ReportMaterializationRequest(
+            uuid.UUID(intent.materialization.id),
+            ReportMaterializationRequest(
                 generation=intent.materialization.generation - 1,
                 state="hydrated",
                 observedHeadSha=_HEAD,
@@ -541,21 +567,14 @@ async def test_completion_racing_unlink_loses_via_generation(
     stale_generation = intent.materialization.generation
 
     # Unlink bumps generation and soft-deletes.
-    await materializations_service.unlink_materialization(
-        db_session,
-        user_id=seed.user.id,
-        workspace_id=seed.workspace.id,
-        materialization_id=mat_id,
-    )
+    await _unlink(db_session, mat_id)
 
     # A completion report carrying the pre-unlink generation must lose.
     with pytest.raises(CloudApiError) as excinfo:
-        await materializations_service.report_materialization(
+        await _report(
             db_session,
-            user_id=seed.user.id,
-            workspace_id=seed.workspace.id,
-            materialization_id=mat_id,
-            body=ReportMaterializationRequest(
+            mat_id,
+            ReportMaterializationRequest(
                 generation=stale_generation,
                 state="hydrated",
                 observedHeadSha=_HEAD,
@@ -586,22 +605,7 @@ async def test_unlink_only_local_and_is_non_destructive(
     )
     assert managed is not None
 
-    # Managed rows cannot be unlinked through this action.
-    with pytest.raises(CloudApiError) as excinfo:
-        await materializations_service.unlink_materialization(
-            db_session,
-            user_id=seed.user.id,
-            workspace_id=seed.workspace.id,
-            materialization_id=managed.id,
-        )
-    assert excinfo.value.code == "materialization_not_unlinkable"
-
-    await materializations_service.unlink_materialization(
-        db_session,
-        user_id=seed.user.id,
-        workspace_id=seed.workspace.id,
-        materialization_id=uuid.UUID(intent.materialization.id),
-    )
+    await _unlink(db_session, uuid.UUID(intent.materialization.id))
     # Managed row and the workspace itself untouched.
     still_managed = await store.get_active_managed_cloud_materialization(
         db_session, cloud_workspace_id=seed.workspace.id
@@ -620,12 +624,10 @@ async def test_read_selection_and_redaction(
     _patch_preflight(monkeypatch, snapshot=_snapshot())
     intent = await _intent(db_session, seed)
     # Hydrate the local row so it is a healthy selection candidate.
-    await materializations_service.report_materialization(
+    await _report(
         db_session,
-        user_id=seed.user.id,
-        workspace_id=seed.workspace.id,
-        materialization_id=uuid.UUID(intent.materialization.id),
-        body=ReportMaterializationRequest(
+        uuid.UUID(intent.materialization.id),
+        ReportMaterializationRequest(
             generation=intent.materialization.generation,
             state="hydrated",
             observedHeadSha=_HEAD,
@@ -1081,12 +1083,6 @@ async def test_repo_less_workspace_reads_and_rejects_intent(
         "get_cloud_workspace_for_user",
         _repo_less_lookup,
     )
-    monkeypatch.setattr(
-        materializations_service.cloud_workspace_store,
-        "get_cloud_workspace_for_user",
-        _repo_less_lookup,
-    )
-
     # Read path: repo/repoEnvironmentId are null, no crash; managed row present.
     detail = await workspaces_service.get_cloud_workspace_detail(
         db_session, seed.user.id, seed.workspace.id
@@ -1098,7 +1094,13 @@ async def test_repo_less_workspace_reads_and_rejects_intent(
     # Intent path: cleanly rejected for a repo-less workspace.
     _patch_preflight(monkeypatch, snapshot=_snapshot())
     with pytest.raises(CloudApiError) as excinfo:
-        await _intent(db_session, seed)
+        # Production access supplies this exact pre-authorized snapshot.
+        await materializations_service.create_local_materialization_intent(
+            db_session,
+            user_id=seed.user.id,
+            workspace=repo_less,
+            desktop_install_id=_INSTALL,
+        )
     assert excinfo.value.code == "materialization_source_unavailable"
 
 
@@ -1117,12 +1119,10 @@ async def test_other_install_id_is_redacted(
     await _seed_managed_materialization(db_session, seed)
     _patch_preflight(monkeypatch, snapshot=_snapshot())
     intent = await _intent(db_session, seed)
-    await materializations_service.report_materialization(
+    await _report(
         db_session,
-        user_id=seed.user.id,
-        workspace_id=seed.workspace.id,
-        materialization_id=uuid.UUID(intent.materialization.id),
-        body=ReportMaterializationRequest(
+        uuid.UUID(intent.materialization.id),
+        ReportMaterializationRequest(
             generation=intent.materialization.generation,
             state="hydrated",
             observedHeadSha=_HEAD,

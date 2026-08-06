@@ -181,3 +181,13 @@ def server_release_id() -> str:
         server_git_sha(),
         require=_release_identity_required(),
     )
+
+
+def resolve_server_release_id(configured_release: str | None) -> str:
+    """Resolve a configured Server release or build the canonical fallback."""
+    if configured_release is not None and is_canonical_release_id(
+        configured_release,
+        component="proliferate-server",
+    ):
+        return configured_release
+    return server_release_id()

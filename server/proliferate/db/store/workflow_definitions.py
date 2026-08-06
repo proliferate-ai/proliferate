@@ -11,7 +11,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.workflows import WorkflowDefinition
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)

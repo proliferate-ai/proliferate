@@ -24,6 +24,8 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@v7
+
       - name: Check max source file length
         run: python3 scripts/check_max_lines.py
 
@@ -32,6 +34,11 @@ jobs:
 
       - name: Check AnyHarness old flat paths
         run: python3 scripts/check_anyharness_old_paths.py
+
+      - name: Check Proliferate server old paths
+        run: |
+          python3 -m unittest scripts/test_check_server_old_paths.py
+          python3 scripts/check_server_old_paths.py
 
       - name: Check Proliferate Worker structure
         run: python3 scripts/check_proliferate_worker_structure.py
@@ -59,6 +66,13 @@ jobs:
 
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
+
+      - name: Test server boundary checker
+        run: >-
+          uv run --python 3.12 --with pytest==9.1.1
+          pytest --noconftest -p no:cacheprovider -c /dev/null -q
+          server/tests/unit/test_server_boundary_checker.py
+          server/tests/unit/test_server_boundary_checker_named_writes.py
 
       - name: Check server layer boundaries
         run: python3 scripts/check_server_boundaries.py

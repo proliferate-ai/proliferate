@@ -98,7 +98,7 @@ async def seed_github_app_authorization(
     from proliferate.server.cloud.github_app.service import (
         refresh_github_app_installation_cache,
     )
-    from proliferate.utils.time import utcnow
+    from proliferate.lib.infra.time.wall_clock import utcnow
 
     state_path = Path(
         os.environ.get("RELEASE_E2E_GITHUB_APP_SEED_STATE", "").strip()

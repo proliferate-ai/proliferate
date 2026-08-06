@@ -22,6 +22,11 @@ does **not** run agent sessions (AnyHarness does).
 Plus the meta-rule: **lowest layer that can own it cleanly**, and dependencies
 point one way.
 
+These rules define the ownership direction. Known current migration debt and
+unenforced target rules are enumerated in the
+[Server Grid current gaps](guides/grid-ownership-model.md#current-gaps); reviewed
+allowlists remain the operating exceptions until those gaps close.
+
 ---
 
 ## 2. 20k-Foot Detailed View
@@ -33,8 +38,8 @@ server/proliferate/
   main.py · config.py · errors.py
   constants/<area>.py        # hardcoded policy values
   middleware/                # cross-cutting HTTP lifecycle
-  permissions.py             # org-authz factory deps + verdict types (leaf, imported everywhere)
-  auth/                      # actor authn deps + viewer/desktop/identity APIs + crypto utils
+  permissions.py             # request-time owner/org deps + public authorization seam
+  auth/                      # actor authn, dependency-free authz, identity/session/protocol leaf
   lib/                       # reusable cross-domain logic (leaf below domains)
     infra/ product/ capabilities/
   background/                # Celery substrate: app, config, beat, relay, tasks
@@ -52,10 +57,10 @@ server/proliferate/
 | Layer | Owns | Never |
 | --- | --- | --- |
 | `api.py` | parse → call service → return | `db/store` import, `AsyncSession` methods, SQLAlchemy, business logic, inline auth, try/except around the handler |
-| `service.py` | business logic, orchestration, invariants, validation | open sessions, SQLAlchemy, `select/insert/db.execute`, `commit`, inline auth |
+| `service.py` | business logic, orchestration, invariants, validation | open sessions except the bounded worker-service exception below, SQLAlchemy query APIs, `select/insert/db.execute`, `commit`, inline auth |
 | `domain/**` | pure rules: validators, state machines, calculators, mappings, **planners** | `async def`, DB/ORM, FastAPI, integrations, I/O — *returns data* |
 | `db/store/**` | query construction + execution; returns **frozen dataclasses** | commit, open sessions; ORM never leaves here |
-| `db/models/**` | ORM table definitions only | imports nothing (leaf) |
+| `db/models/**` | ORM table definitions only | importing services, stores, or integrations |
 | `integrations/<vendor>` | typed vendor adapters | importing server domain code (leaf; public via `__init__`) |
 
 ### The type pipeline — the server's "state model"
@@ -77,8 +82,12 @@ ORM (db/models)  ──store returns──►  @dataclass(frozen=True)  ──mo
   while a transaction is open. They are different things.
 - **Stores take `db: AsyncSession`, never commit, never open sessions.**
 - **HTTP:** the `get_async_session` dep owns the transaction (commit on success,
-  rollback on exception). **Workers:** open a session at the entry point
-  (`async with session_factory() as db: async with db.begin(): …`).
+  rollback on exception). **Workers:** the task normally opens a session at the
+  entry point (`async with session_factory() as db: async with db.begin(): …`).
+  A worker service that must alternate bounded database phases with foreign I/O
+  may receive the task-created session factory and open a fresh session around
+  each store-only phase. The task still owns current-event-loop engine creation
+  and disposal.
 - **Never hold a connection across foreign I/O.** Short transactions only; for
   vendor-interleaving flows, commit → release → call → fresh short transaction.
   This is why the **outbox** exists (commit intent in one txn, do the side effect
@@ -88,11 +97,14 @@ ORM (db/models)  ──store returns──►  @dataclass(frozen=True)  ──mo
 ### Dependency direction
 
 ```text
-api → service → store → models → SQLAlchemy        (nothing else imports SQLAlchemy)
+api → service → store → models → SQLAlchemy query/schema mechanics
 service → integrations / domain / other domains' public services (writes) or stores (reads)
 domain → pure (no FastAPI/SQLAlchemy/store/integrations/HTTP)
-auth/** → importable by every layer
-workers → call services, not stores; own the transaction at the entry
+auth/authorization.py → dependency-free authorization vocabulary
+permissions.py → auth deps + stores/services needed for request owner/org context
+background task shims → domain services
+domain worker/service → stores + public integration APIs; task shims own the
+                        engine/factory lifetime and pass it for bounded phases
 ```
 
 ---
@@ -103,7 +115,8 @@ workers → call services, not stores; own the transaction at the entry
 ```text
 request → middleware → api handler
    Depends(current_product_user)        # authn (actor dep)
-   Depends(require_org_role(org_id, …)) # permissions.py: org standing → OwnerContext
+   Depends(current_path_org_admin)       # path org standing → CurrentOrgUser
+   Depends(require_owner_role("admin")) # selected owner standing → OwnerContext
    Depends(<domain>_user_can_<action>)  # access.py: lookup + check → resource or 403/404
    db = Depends(get_async_session)
    → service(db, …)
@@ -126,7 +139,8 @@ One owning domain per resource; never two domains writing the same ORM resource.
 **Service decomposition — the five legal moves** (when `service.py` grows): (1)
 internal sectioning (~700–800 lines), (2) extract pure logic to
 `domain/<concern>.py`, (3) promote a subdomain (own api/service/models), (4) move
-vendor specifics to `integrations/<vendor>/`, (5) add a worker entry point.
+vendor specifics to `integrations/<vendor>/`, (5) promote worker-facing
+orchestration to `worker/service.py`.
 **Sibling helper files are not a move.**
 
 **External-side-effect pattern (outbox):** a named orchestration function owns an
@@ -148,8 +162,12 @@ outbox row and let a worker do the call.
 ### `server/<domain>/service.py`
 - Business logic, orchestration, invariants. Takes `db`, threads it to stores,
   calls integrations + `domain/`, raises domain errors.
-- **Never:** open sessions, import SQLAlchemy, run `select/insert/db.execute`,
+- **Never:** open sessions outside the bounded `worker/service.py` exception,
+  import SQLAlchemy query APIs, run `select/insert/db.execute`,
   `commit/rollback`, inline auth, or call another service's private helpers.
+  The exception accepts only a task-created session factory, surrounds store
+  calls with short session scopes, and releases them before foreign I/O; it
+  never owns an engine or global session entry point.
 
 ### `server/<domain>/models.py`
 - Pydantic request/response schemas; constructor functions take **dataclasses**.
@@ -165,8 +183,8 @@ outbox row and let a worker do the call.
 ### `server/<domain>/access.py`
 - Resource-access route deps: look up the resource, check the user can touch it,
   return it (or raise 403/404). Read-only.
-- **Never:** mutating writes, business logic, inline authz helpers (compose the
-  `proliferate.permissions` factories).
+- **Never:** mutating writes, business logic, inline org-standing helpers
+  (compose the applicable dependency from `proliferate.permissions`).
 
 ### `server/<domain>/errors.py`
 - Domain error types subclassing the shared base, with a `code`. Types only.
@@ -190,17 +208,23 @@ outbox row and let a worker do the call.
   here; product domains orchestrate results.
 
 ### `auth/**` / `permissions.py`
-- Authorization is enforced at the endpoint via `Depends()`; services get a
-  pre-authorized context and run no auth checks. `auth/dependencies.py` owns
-  user actor deps (`current_active_user`, `current_product_user`); the Cloud
+- New and refactored paths enforce org standing and resource access at the
+  endpoint via `Depends()`; existing inline service checks remain migration
+  debt. [auth/dependencies.py](../../../../server/proliferate/auth/dependencies.py)
+  owns the user actor deps (`current_active_user`, `current_limited_user`,
+  `current_product_user`, and `current_organization_actor`); the Cloud
   runtime-worker domain owns its opaque-bearer `WorkerAuthContext` dependency.
-  `permissions.py` (server
-  root) = org-authorization factory deps (`require_org_role(org_id, roles)`,
-  `require_org_membership`) returning `OwnerContext`, plus `PolicyVerdict`. It is
-  a leaf importing neither `auth/**` nor `server/<domain>/**`; cross-domain authz
-  always comes from `proliferate.permissions`, never another service. `auth/` also
-  owns the `viewer_api/`, `desktop_api/`, `identity_api/` surfaces and `utils/`
-  crypto primitives.
+  [auth/authorization.py](../../../../server/proliferate/auth/authorization.py)
+  owns dependency-free owner/policy vocabulary and the pure
+  `require_org_role(context, roles)` check.
+  [permissions.py](../../../../server/proliferate/permissions.py) re-exports that
+  vocabulary and owns request-time owner selection, membership resolution,
+  request/RLS context, `require_owner_role(*roles)`, and the `current_org_*` and
+  `current_path_org_*` dependencies. It is request composition, not an
+  import-free leaf. `auth/` remains below product domains for credentials,
+  sessions, provider protocol, identity persistence, and transport-neutral Auth
+  failures. [server/accounts/**](../../../../server/proliferate/server/accounts)
+  owns the Desktop, Identity, and SSO account-entry surfaces and orchestration.
 
 ### `background/**` / `server/<domain>/worker/service.py`
 - One background model: a Celery task. **Beat** fires periodic ones (scheduler
@@ -209,9 +233,12 @@ outbox row and let a worker do the call.
   `celery_app.py`, `config.py`, `beat_schedule.py`, `relay.py`, thin `tasks/`;
   the work a task performs lives in the domain's `worker/service.py` (or
   `service.py`), same layer law (call services/stores, no ORM, no vendor client).
-  The task opens the session at its boundary. There are no per-domain `worker.py`,
-  `reconciler.py`, or `scheduler.py` process or loop files. Request-driven
-  external-process claim/heartbeat/report surfaces are APIs, not background work.
+  The task owns the database engine/session-factory lifetime. It normally opens
+  the session itself, but may pass its task-local factory to a worker service
+  that needs bounded store phases separated from foreign I/O. There are no
+  per-domain `worker.py`, `reconciler.py`, or `scheduler.py` process or loop
+  files. Request-driven external-process claim/heartbeat/report surfaces are
+  APIs, not background work.
 
 ### `lib/**`
 - Reusable cross-domain logic owned by no single domain: `infra/` (generic, no
@@ -227,13 +254,17 @@ outbox row and let a worker do the call.
   literals in service/api/store files are forbidden. No `localhost` outside config.
 
 ### `middleware/**`
-- Cross-cutting HTTP lifecycle only (request context, tracing, correlation ids).
-  No product logic.
+- Cross-cutting application and HTTP lifecycle only: request context, tracing,
+  correlation IDs, and application logging setup. `logging.py` configures the
+  server logger during application startup, attaches request correlation
+  context, and stamps the canonical release identity. It does not own release
+  policy or product orchestration.
 
 **Cross-cutting hygiene:** canonical files never prefixed/suffixed; no junk-drawer
 modules (`helpers.py`/`utils.py`/`misc.py`); no single-file folders (except
-`domain/`); a folder is all-subfolders or all-flat; never `datetime.utcnow()`
-(use `datetime.now(timezone.utc)`). Size thresholds are CI-enforced
+`domain/` and canonical `worker/service.py`); a folder is all-subfolders or
+all-flat; never `datetime.utcnow()`
+(use [proliferate.lib.infra.time.wall_clock.utcnow](../../../../server/proliferate/lib/infra/time/wall_clock.py)). Size thresholds are CI-enforced
 (`check_max_lines.py`); boundaries by `check_server_boundaries.py`.
 
 ---
@@ -380,7 +411,8 @@ through the Worker. The server calls or proxies to AnyHarness directly.
 
 ### Conventions (enforced)
 - **UUID primary keys** (`gen_random_uuid()`); no integer PKs for new resources.
-- **`TIMESTAMPTZ` everywhere**; never naive `TIMESTAMP`; `datetime.now(timezone.utc)`.
+- **`TIMESTAMPTZ` everywhere**; never naive `TIMESTAMP`; generic application
+  timestamps use [proliferate.lib.infra.time.wall_clock.utcnow](../../../../server/proliferate/lib/infra/time/wall_clock.py).
 - **Soft delete** via `deleted_at TIMESTAMPTZ NULL`, never `is_deleted`; default to
   hard delete.
 - **No lazy ORM access past the store boundary** (the reason stores return

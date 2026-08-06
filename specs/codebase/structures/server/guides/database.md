@@ -326,6 +326,15 @@ async def run_billing_reconcile_pass() -> None:
         # commits on context exit, rolls back on exception
 ```
 
+A worker service that must alternate repeated read-only database phases with
+foreign I/O may instead receive an `async_sessionmaker[AsyncSession]` created by
+the task. The task creates and disposes the engine within the current
+`asyncio.run()` lifecycle. The worker service opens one bounded session around
+direct store calls, materializes frozen values, closes the session, and only
+then performs foreign I/O. This exception does not permit the service to import
+settings or global engine helpers, construct an engine, issue SQL, call session
+query methods, commit, or roll back.
+
 ### Narrower atomicity within a request
 
 When a service needs an inner transaction smaller than the request, use
@@ -370,8 +379,9 @@ updated_at   TIMESTAMPTZ  NOT NULL     DEFAULT now()
 - **Always UTC** at the application boundary.
 - **DB defaults `now()`** for `created_at` / `updated_at`. Don't set them in
   app code unless overriding.
-- **Python:** `datetime.now(timezone.utc)`. Ban `datetime.utcnow()` (returns
-  naive — silent timezone bug source).
+- **Python:** obtain generic application UTC timestamps from
+  [proliferate.lib.infra.time.wall_clock.utcnow](../../../../../server/proliferate/lib/infra/time/wall_clock.py).
+  Ban `datetime.utcnow()` (returns naive — silent timezone bug source).
 
 ### Soft delete
 

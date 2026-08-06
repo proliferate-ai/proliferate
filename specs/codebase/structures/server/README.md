@@ -62,10 +62,11 @@ server/proliferate/
   auth/
     dependencies.py
     users.py
-    viewer_api/
-    desktop_api/
-    identity_api/
-    utils/
+    api.py
+    profile_api.py
+    desktop/                 # leaf models and callback pages
+    identity/                # credential, session, provider-protocol, and persistence leaf
+    sso/
 
   db/
     engine.py
@@ -88,6 +89,10 @@ server/proliferate/
   middleware/
 
   server/
+    accounts/
+      desktop/               # Desktop account-entry API and orchestration
+      identity/              # web/mobile account-entry API and orchestration
+      sso/                   # SSO account-entry API and orchestration
     <domain>/
       api.py
       service.py
@@ -115,10 +120,11 @@ Use this as a routing map. The focused guides own the detailed rules.
 
 | Area | Path | Owns | Canon |
 | --- | --- | --- | --- |
-| App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle. | This doc |
+| App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle, and application logging setup that attaches request correlation context and stamps release identity. | This doc |
 | Settings and constants | `config.py`, `constants/<area>.py` | Env-derived runtime settings and shared hardcoded product/protocol values. | [guides/config.md](guides/config.md) |
 | Reusable cross-domain logic | `lib/infra/**`, `lib/product/**`, `lib/capabilities/**` | Generic machinery, cross-domain pure product logic, and reusable orchestration over integrations — owned by no single domain. | [guides/lib.md](guides/lib.md) |
-| Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication deps (user + worker), org-authorization factory deps and verdict types, resource-access deps, pure product-policy verdicts. | [guides/auth.md](guides/auth.md) |
+| Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication primitives, dependency-free authorization vocabulary, request-time owner/org resolution, resource-access deps, and pure product-policy verdicts. | [guides/auth.md](guides/auth.md) |
+| Accounts | `server/accounts/**` | Product account-entry routes and orchestration: user resolution/creation, identity placement, admin-email enforcement, SSO coordination, and product side effects. | [guides/auth.md](guides/auth.md) |
 | Database | `db/models/**`, `db/store/**` | ORM schema, query execution, transactions, row locks, ORM -> dataclass type boundary. | [guides/database.md](guides/database.md) |
 | Domain transport | `server/<domain>/api.py`, `server/<domain>/models.py` | HTTP route handling and Pydantic request/response schemas. | [guides/domains.md](guides/domains.md) |
 | Domain logic | `server/<domain>/service.py`, `server/<domain>/domain/**`, `server/<domain>/<subdomain>/` | Business orchestration, pure product rules, and promoted product concepts. | [guides/domains.md](guides/domains.md) |
@@ -141,9 +147,14 @@ Persistence rule:
 - `api.py` is transport only. It may receive FastAPI deps and pass the request
   session to services; it must not import stores, SQLAlchemy, or run auth
   checks inline.
-- `service.py` owns orchestration and receives `db: AsyncSession` from its
-  caller. It must not open sessions, commit, import SQLAlchemy, or execute
-  queries directly.
+- `service.py` owns orchestration and normally receives `db: AsyncSession` from
+  its caller. It must not commit, import SQLAlchemy query APIs, or execute
+  queries directly. A `worker/service.py` that alternates bounded database
+  phases with foreign I/O may instead receive a task-created
+  `async_sessionmaker[AsyncSession]`, open sessions only around store calls,
+  and release each session before foreign I/O. The task owns current-event-loop
+  engine creation and disposal; the worker service cannot import settings or
+  global engine helpers, construct an engine, or call session database methods.
 - All database access lives in `db/store/**`. Stores take `db: AsyncSession`,
   construct queries, return frozen dataclasses, and never commit or open
   sessions.
@@ -165,14 +176,22 @@ Persistence rule:
   `integrations/`), and `lib/capabilities/` orchestrates integrations. No
   `lib/**` file imports `db/store` or `server/<domain>/**`. A concern enters
   `lib/` only at its second domain consumer.
-- Authorization is enforced at the endpoint via `Depends()`; services receive a
-  pre-authorized context and run no auth checks. All actor deps
-  (`current_active_user`, `current_product_user`) live in
-  `auth/dependencies.py`; the runtime-worker bearer dependency lives with the
-  Cloud runtime-worker domain; org-authorization factory deps and verdict types
-  (`require_org_role`, `require_org_membership`, `OwnerContext`, `PolicyVerdict`)
-  live in `permissions.py` at the server root; resource-access deps live in
-  `server/<domain>/access.py`; and product policy verdicts live in
+- New and refactored authorization paths enforce standing and resource access at
+  the endpoint via `Depends()`; services receive resolved context rather than
+  becoming a hidden permission layer. Existing inline checks are migration
+  debt, not a second recommended pattern. User actor deps
+  (`current_active_user`, `current_limited_user`, `current_product_user`, and
+  `current_organization_actor`) live in
+  [auth/dependencies.py](../../../../server/proliferate/auth/dependencies.py),
+  while the runtime-worker bearer dependency lives with the Cloud
+  runtime-worker domain. Dependency-free authorization vocabulary and the pure
+  `require_org_role(context, roles)` check live in
+  [auth/authorization.py](../../../../server/proliferate/auth/authorization.py).
+  [permissions.py](../../../../server/proliferate/permissions.py) re-exports that
+  vocabulary and owns request-time owner/org selection, membership resolution,
+  RLS context, `require_owner_role(*roles)`, and the `current_org_*` and
+  `current_path_org_*` dependencies. Resource-access deps live in
+  `server/<domain>/access.py`; product-policy verdicts live in
   `server/<domain>/domain/policy.py`.
 - Services raise product/domain errors. A global FastAPI exception handler
   translates `ProliferateError` subclasses to HTTP responses.
@@ -192,12 +211,14 @@ Persistence rule:
   `domain/`, a promoted subdomain, an integration, or the owning service. There
   is no `utils/` bucket.
 - Single-file folders are forbidden, except `server/**/domain/` may contain
-  one meaningful pure-domain module.
+  one meaningful pure-domain module and a canonical `worker/` may contain only
+  `service.py`.
 - A parent folder is either flat or organized into subfolders consistently.
   Mixed shapes are forbidden.
 - Cross-domain reads go through stores. Cross-domain writes go through the
   owning domain's public service functions.
-- `datetime.utcnow()` is forbidden. Use `datetime.now(timezone.utc)`.
+- `datetime.utcnow()` is forbidden. Generic application wall-clock timestamps
+  use [proliferate.lib.infra.time.wall_clock.utcnow](../../../../server/proliferate/lib/infra/time/wall_clock.py).
 - New resource tables use UUID primary keys, timezone-aware timestamps, and
   `deleted_at TIMESTAMPTZ NULL` for soft delete when soft delete is needed.
 
@@ -206,6 +227,8 @@ Persistence rule:
 Always start with this file. Then read the focused guide for the layer you are
 changing:
 
+- [guides/grid-ownership-model.md](guides/grid-ownership-model.md) — target
+  cross-layer ownership model and its explicit current gaps
 - [guides/domains.md](guides/domains.md)
 - [guides/database.md](guides/database.md)
 - [guides/auth.md](guides/auth.md)
@@ -244,17 +267,41 @@ only layer that imports SQLAlchemy query APIs. `integrations/**` is a leaf and
 does not import server domain code. `lib/**` is a leaf below the domains: it
 never imports `server/<domain>/**` or `db/store`, `lib/product/` never imports
 `integrations/`, and a concern enters `lib/` only at its second domain consumer.
-`auth/**` may be imported by every layer for authentication, and cross-domain
-authorization always comes from `proliferate.permissions` (a leaf importing
-neither `auth/**` nor `server/<domain>/**`). Background tasks call domain
-services; the relay is the only `background/**` module that touches a store, and
-only the outbox store.
+The dependency-free authorization types in
+[auth/authorization.py](../../../../server/proliferate/auth/authorization.py)
+sit below request composition. Domain code imports the public authorization
+seam from [permissions.py](../../../../server/proliferate/permissions.py), which
+is not an import-free leaf: it composes actor deps, stores, billing services,
+and request/RLS context. The rest of `auth/**` remains below product domains;
+product account-entry orchestration belongs to
+[server/accounts/**](../../../../server/proliferate/server/accounts). Background
+tasks call domain services. The relay owns outbox mutations and also reads the
+bounded Managed Workflow observability snapshot; current background-store
+exceptions are recorded in the [Background guide](guides/background.md).
 
 ## CI-Enforced Repo Shape
 
 `scripts/check_max_lines.py` enforces the hard column for server layers and
 falls back to the repo-wide 600-line ceiling for server files without a
 server-specific hard threshold.
+
+The Server CI lint job installs the exact `server/uv.lock` development
+environment on Python 3.12, runs Ruff, and runs strict mypy through
+`server/scripts/check_mypy_baseline.py`. Existing mypy debt is recorded by
+file, error code, normalized message, and multiplicity in a shrink-only
+baseline. A new diagnostic, a baseline increase relative to the comparison Git
+revision, or a stale entry after a fix fails the check. `make lint-server` uses
+the same frozen environment. Pull requests compare with their base SHA, pushes
+compare with the event's pre-push SHA, and reusable/manual calls must provide an
+explicit trusted comparison SHA; a newly created release tag rechecks against
+its commit parent after the main-push gate. After fixing existing diagnostics,
+ratchet the baseline down with:
+
+```bash
+cd server
+uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py \
+  --compare-ref origin/main --write-baseline
+```
 
 | Layer | Soft: split before | Hard: split or justify |
 | --- | --- | --- |

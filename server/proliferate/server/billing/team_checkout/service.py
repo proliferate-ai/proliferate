@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import timedelta
+from typing import cast
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
@@ -20,18 +21,11 @@ from proliferate.db.store.organization_records import (
     CheckoutIntentRecord,
     CheckoutIntentWithOrganizationRecord,
 )
-from proliferate.db.store.organizations import (
-    acquire_membership_activation_lock,
-    bind_team_checkout_session,
-    cancel_team_checkout_intent,
-    create_pending_team_checkout_intent,
-    get_current_team_checkout_intent,
-)
 from proliferate.integrations import stripe as stripe_billing
+from proliferate.lib.infra.time.wall_clock import utcnow
+from proliferate.server.billing.errors import BillingServiceError
 from proliferate.server.billing.models import (
     BillingReturnSurface,
-    BillingServiceError,
-    utcnow,
 )
 from proliferate.server.billing.pricing import (
     configured_managed_cloud_overage_price_id,
@@ -43,6 +37,7 @@ from proliferate.server.billing.team_checkout.models import (
     TeamCheckoutIntentResponse,
     TeamCheckoutResponse,
 )
+from proliferate.server.organizations import service as organization_service
 from proliferate.server.organizations.domain.profile import (
     clean_organization_name,
     derive_logo_domain_from_email,
@@ -204,7 +199,7 @@ async def _create_stripe_session_for_team_checkout_intent(
             status_code=502,
         )
     async with db.begin():
-        bound = await bind_team_checkout_session(
+        bound = await organization_service.bind_team_checkout_session(
             db,
             intent_id=intent_record.intent.id,
             stripe_checkout_session_id=checkout.id,
@@ -240,23 +235,18 @@ async def create_team_checkout_session(
     await validate_pro_subscription_price_configuration()
 
     async with db.begin():
-        await acquire_membership_activation_lock(db, user.id)
-        existing = await get_current_team_checkout_intent(db, user.id)
-        if existing is not None:
-            intent_record = existing
-        else:
-            intent_record = await create_pending_team_checkout_intent(
-                db,
-                created_by_user_id=user.id,
-                team_name=clean_name,
-                logo_domain=derive_logo_domain_from_email(user.email),
-                idempotency_key=(
-                    f"team-checkout-intent:{user.id}:"
-                    f"{_idempotency_shape_suffix(clean_name, len(normalized_invites))}"
-                ),
-                invite_emails=normalized_invites,
-                expires_at=utcnow() + timedelta(hours=24),
-            )
+        intent_record = await organization_service.ensure_pending_team_checkout_intent(
+            db,
+            cast(organization_service.OrganizationActor, user),
+            team_name=clean_name,
+            logo_domain=derive_logo_domain_from_email(user.email),
+            idempotency_key=(
+                f"team-checkout-intent:{user.id}:"
+                f"{_idempotency_shape_suffix(clean_name, len(normalized_invites))}"
+            ),
+            invite_emails=normalized_invites,
+            expires_at=utcnow() + timedelta(hours=24),
+        )
 
     return await _create_stripe_session_for_team_checkout_intent(
         db,
@@ -272,7 +262,10 @@ async def get_current_team_checkout(
     user: AuthenticatedUser,
 ) -> CurrentTeamCheckoutResponse:
     async with db.begin():
-        record = await get_current_team_checkout_intent(db, user.id)
+        record = await organization_service.get_current_team_checkout_intent(
+            db,
+            cast(organization_service.OrganizationActor, user),
+        )
     return CurrentTeamCheckoutResponse(
         intent=_team_checkout_intent_response(record) if record is not None else None,
     )
@@ -284,10 +277,10 @@ async def cancel_current_team_checkout(
     intent_id: UUID,
 ) -> CurrentTeamCheckoutResponse:
     async with db.begin():
-        record = await cancel_team_checkout_intent(
+        record = await organization_service.cancel_team_checkout_intent(
             db,
-            intent_id=intent_id,
-            created_by_user_id=user.id,
+            cast(organization_service.OrganizationActor, user),
+            intent_id,
         )
     return CurrentTeamCheckoutResponse(
         intent=_team_checkout_intent_response(record) if record is not None else None,

@@ -9,8 +9,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from uuid import UUID
 
+from proliferate.lib.infra.time.elapsed import duration_ms
 from proliferate.server.cloud.event_logging import log_cloud_event
-from proliferate.utils.time import duration_ms
 
 
 @asynccontextmanager

@@ -12,7 +12,7 @@ import pytest
 from proliferate.integrations.sandbox import ProviderSandboxState
 from proliferate.server.cloud.worker import orphan_sandboxes as reaper
 from proliferate.server.cloud.worker import service
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 NOW = utcnow()
 

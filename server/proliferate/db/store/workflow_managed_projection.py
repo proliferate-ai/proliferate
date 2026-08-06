@@ -12,7 +12,7 @@ from proliferate.db.store.workflow_managed_execution import (
     lock_managed_execution_row,
     snapshot_managed_execution,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def apply_projection(

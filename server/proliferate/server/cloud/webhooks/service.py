@@ -31,6 +31,7 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
     verify_e2b_webhook_signature,
 )
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.authorization import (
     record_cloud_sandbox_billing_block,
     resolve_cloud_sandbox_billing_block,
@@ -54,7 +55,6 @@ from proliferate.server.cloud.runtime.domain.provider_events import (
 )
 from proliferate.server.cloud.webhooks.models import E2BWebhookEvent, E2BWebhookReceipt
 from proliferate.server.cloud.webhooks.transactions import commit_webhook_phase
-from proliferate.utils.time import utcnow
 
 _E2B_WEBHOOK_ERROR_RESPONSE = {
     "unconfigured": ("webhook_unavailable", 503),

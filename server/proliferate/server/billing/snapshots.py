@@ -27,6 +27,7 @@ from proliferate.db.models.billing import (
     UsageSegment,
 )
 from proliferate.db.store.billing import sum_meter_quantity_cents_for_subject
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing import snapshot_state
 from proliferate.server.billing.domain.accounting import (
     active_pro_period_start,
@@ -47,7 +48,6 @@ from proliferate.server.billing.models import (
     BillingSnapshot,
     GrantAllocation,
     duration_seconds,
-    utcnow,
 )
 from proliferate.server.billing.policy import free_v2_policy, pro_policy, unlimited_numeric_policy
 from proliferate.server.billing.pricing import (

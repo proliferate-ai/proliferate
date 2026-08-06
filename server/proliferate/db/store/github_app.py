@@ -12,13 +12,14 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.models.cloud.github_app import (
     GitHubAppAuthorization,
     GitHubAppInstallation,
     GitHubAppInstallationRepository,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_text
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 _CACHE_FRESHNESS_SECONDS = 600
 
@@ -130,10 +131,10 @@ def _authorization_value(row: GitHubAppAuthorization) -> GitHubAppAuthorizationV
         user_id=row.user_id,
         github_user_id=row.github_user_id,
         github_login=row.github_login,
-        access_token=decrypt_text(row.access_token_ciphertext)
+        access_token=decrypt_text(row.access_token_ciphertext, secret=settings.cloud_secret_key)
         if row.access_token_ciphertext
         else None,
-        refresh_token=decrypt_text(row.refresh_token_ciphertext)
+        refresh_token=decrypt_text(row.refresh_token_ciphertext, secret=settings.cloud_secret_key)
         if row.refresh_token_ciphertext
         else None,
         token_expires_at=row.token_expires_at,
@@ -225,9 +226,13 @@ async def upsert_github_app_authorization(
         db.add(row)
     row.github_user_id = authorization.github_user_id
     row.github_login = authorization.github_login
-    row.access_token_ciphertext = encrypt_text(authorization.access_token)
+    row.access_token_ciphertext = encrypt_text(
+        authorization.access_token, secret=settings.cloud_secret_key
+    )
     row.refresh_token_ciphertext = (
-        encrypt_text(authorization.refresh_token) if authorization.refresh_token else None
+        encrypt_text(authorization.refresh_token, secret=settings.cloud_secret_key)
+        if authorization.refresh_token
+        else None
     )
     row.token_expires_at = authorization.expires_at
     row.refresh_token_expires_at = authorization.refresh_token_expires_at
@@ -281,9 +286,11 @@ async def replace_github_app_authorization_if_unchanged(
             .values(
                 github_user_id=authorization.github_user_id,
                 github_login=authorization.github_login,
-                access_token_ciphertext=encrypt_text(authorization.access_token),
+                access_token_ciphertext=encrypt_text(
+                    authorization.access_token, secret=settings.cloud_secret_key
+                ),
                 refresh_token_ciphertext=(
-                    encrypt_text(authorization.refresh_token)
+                    encrypt_text(authorization.refresh_token, secret=settings.cloud_secret_key)
                     if authorization.refresh_token
                     else None
                 ),

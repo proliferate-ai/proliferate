@@ -108,7 +108,6 @@ endif
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
-        dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
@@ -372,10 +371,6 @@ serve:
 	@$(SERVER_ENV_SOURCE) \
 	$(LOCAL_CODEX_ACP_ENV) \
 	$(CARGO) run --bin anyharness -- serve
-
-dev-automation-worker:
-	@echo "Automation scheduler is parked while automations are retargeted to repo environments."
-	@echo "make run PROFILE=<name> does not start automation workers in this stack."
 
 dev-mobile-auth:
 	@node scripts/dev-mobile-auth.mjs
@@ -1449,7 +1444,7 @@ stripe-setup-test:
 	node scripts/stripe-setup-test-mode.mjs --write-env-local
 
 lint-server:
-	cd server && .venv/bin/ruff check proliferate/ tests/ && .venv/bin/ruff format --check proliferate/ tests/ && .venv/bin/mypy proliferate/
+	cd server && uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/ && uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/ && uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py --compare-ref origin/main
 
 # --- Checks ---
 

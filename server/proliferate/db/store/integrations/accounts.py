@@ -20,7 +20,7 @@ from proliferate.db.models.cloud.integrations import (
     CloudIntegrationPolicy,
 )
 from proliferate.db.store.integrations import definitions as definitions_store
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)

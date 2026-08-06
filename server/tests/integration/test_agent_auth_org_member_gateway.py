@@ -51,7 +51,7 @@ from proliferate.server.cloud.agent_gateway.enrollment import (
 from proliferate.server.cloud.materialization.materialize.agent_auth import (
     build_agent_auth_state,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 from tests.integration.agent_gateway_topups_shared import StubLiteLLM
 
 

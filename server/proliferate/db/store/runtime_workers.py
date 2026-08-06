@@ -28,7 +28,7 @@ from proliferate.db.models.cloud.runtime_workers import (
     CloudRuntimeWorker,
     CloudRuntimeWorkerEnrollment,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 def hash_runtime_token(*, domain: str, token: str) -> str:

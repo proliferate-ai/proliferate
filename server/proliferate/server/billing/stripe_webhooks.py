@@ -82,7 +82,8 @@ from proliferate.server.billing.domain.webhooks import (
 from proliferate.server.billing.domain.webhooks import (
     subscription_period as _subscription_period,
 )
-from proliferate.server.billing.models import BillingServiceError, StripeWebhookAck
+from proliferate.server.billing.errors import BillingServiceError
+from proliferate.server.billing.models import StripeWebhookAck
 from proliferate.server.billing.pricing import (
     billing_price_ids_from_settings,
     classify_monthly_price_id,

@@ -6,7 +6,7 @@ the provider's MCP endpoint, refreshing an OAuth access token in place when it
 is missing or about to expire. :func:`resolve_launch` additionally renders the
 endpoint URL so callers get a launch-ready ``(url, headers, query)`` triple.
 
-Credential bundles (see ``proliferate.utils.crypto``):
+Credential bundles (see ``proliferate.lib.infra.encryption.json``):
   - ``secret-fields-v1`` -> ``{"secretFields": {"<id>": "<value>", ...}}``
   - ``oauth-bundle-v1``  -> ``{issuer, resource, clientId, accessToken,
     refreshToken, expiresAt, scopes, tokenEndpoint, redirectUri}``
@@ -22,10 +22,14 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db import session_ops
 from proliferate.db.store.integrations.accounts import set_account_credentials
 from proliferate.db.store.integrations.oauth_clients import get_oauth_client
 from proliferate.integrations.integration_oauth.tokens import refresh_token
+from proliferate.lib.infra.encryption.fernet import decrypt_text
+from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import (
     HeaderTemplate,
@@ -40,8 +44,6 @@ from proliferate.server.cloud.integrations.oauth.scope_policy import (
     resolve_refreshed_oauth_scopes,
     validate_stored_oauth_scopes,
 )
-from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json
-from proliferate.utils.time import utcnow
 
 if TYPE_CHECKING:
     from proliferate.db.store.integrations.accounts import IntegrationAccountRecord
@@ -181,7 +183,7 @@ def _decode_bundle(account: IntegrationAccountRecord) -> dict[str, Any]:
             status_code=400,
         )
     try:
-        return decrypt_json(account.credential_ciphertext)
+        return decrypt_json(account.credential_ciphertext, secret=settings.cloud_secret_key)
     except Exception as exc:  # noqa: BLE001 - crypto/JSON failures collapse to one error
         raise CloudApiError(
             "integration_credentials_unreadable",
@@ -267,7 +269,9 @@ async def _refresh_oauth_bundle(
         if oauth_client is not None:
             token_endpoint_auth_method = oauth_client.token_endpoint_auth_method
             if oauth_client.client_secret_ciphertext:
-                client_secret = decrypt_text(oauth_client.client_secret_ciphertext)
+                client_secret = decrypt_text(
+                    oauth_client.client_secret_ciphertext, secret=settings.cloud_secret_key
+                )
 
     try:
         token = await refresh_token(
@@ -320,7 +324,7 @@ async def _refresh_oauth_bundle(
         await set_account_credentials(
             write_db,
             account_id=account.id,
-            credential_ciphertext=encrypt_json(new_bundle),
+            credential_ciphertext=encrypt_json(new_bundle, secret=settings.cloud_secret_key),
             credential_format="oauth-bundle-v1",
             auth_status="ready",
             token_expires_at=expires_at,

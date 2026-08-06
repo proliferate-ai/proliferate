@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
 from proliferate.db.models.support import SupportReport
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)

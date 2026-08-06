@@ -22,9 +22,9 @@ from proliferate.db.store.integrations.tool_cache import (
 )
 from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.access import resolve_launch
-from proliferate.utils.time import utcnow
 
 if TYPE_CHECKING:
     from proliferate.db.store.integrations.accounts import IntegrationAccountRecord

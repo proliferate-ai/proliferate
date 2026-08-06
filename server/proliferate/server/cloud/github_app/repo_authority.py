@@ -22,10 +22,10 @@ from proliferate.integrations.github import (
     verify_github_app_user_repo_access,
 )
 from proliferate.integrations.redis_lock import RedisLeaseError, redis_lease
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app import transactions as github_app_transactions
 from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
-from proliferate.utils.time import utcnow
 
 
 @dataclass(frozen=True)

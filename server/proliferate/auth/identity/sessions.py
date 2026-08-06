@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import HTTPException
 from fastapi_users.jwt import decode_jwt, generate_jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity import providers
 from proliferate.auth.identity.models import AccountReadinessResponse, AuthSessionResponse
 from proliferate.auth.identity.password import auth_password_credential
@@ -55,7 +55,11 @@ WEB_CSRF_HEADER = "x-proliferate-csrf"
 
 def _ensure_active_user(user: User) -> None:
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="User is inactive.")
+        raise AuthFlowError(
+            "identity_user_inactive",
+            "User is inactive.",
+            status_code=403,
+        )
 
 
 async def exchange_auth_code(
@@ -66,18 +70,34 @@ async def exchange_auth_code(
 ) -> AuthSession:
     auth_code = await consume_auth_code(db, code=code)
     if auth_code is None:
-        raise HTTPException(status_code=400, detail="Invalid, expired, or consumed auth code.")
+        raise AuthFlowError(
+            "identity_auth_code_invalid",
+            "Invalid, expired, or consumed auth code.",
+            status_code=400,
+        )
     if not verify_pkce(
         code_verifier,
         auth_code.code_challenge,
         auth_code.code_challenge_method,
     ):
-        raise HTTPException(status_code=400, detail="PKCE verification failed.")
+        raise AuthFlowError(
+            "identity_pkce_verification_failed",
+            "PKCE verification failed.",
+            status_code=400,
+        )
     if _auth_code_expired(auth_code.created_at):
-        raise HTTPException(status_code=400, detail="Auth code expired.")
+        raise AuthFlowError(
+            "identity_auth_code_expired",
+            "Auth code expired.",
+            status_code=400,
+        )
     user = await get_user_by_id(db, auth_code.user_id)
     if user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
+        raise AuthFlowError(
+            "identity_auth_code_user_not_found",
+            "User not found.",
+            status_code=400,
+        )
     return await mint_auth_session(db, user=user)
 
 
@@ -123,15 +143,31 @@ async def refresh_auth_session(db: AsyncSession, *, refresh_token: str) -> AuthS
             audience=[REFRESH_TOKEN_AUDIENCE],
         )
     except Exception as exc:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token.") from exc
+        raise AuthFlowError(
+            "identity_refresh_token_invalid",
+            "Invalid or expired refresh token.",
+            status_code=401,
+        ) from exc
     user_id = payload.get("sub")
     if not isinstance(user_id, str):
-        raise HTTPException(status_code=401, detail="Invalid refresh token payload.")
+        raise AuthFlowError(
+            "identity_refresh_token_payload_invalid",
+            "Invalid refresh token payload.",
+            status_code=401,
+        )
     user = await get_user_by_id(db, UUID(user_id))
     if user is None:
-        raise HTTPException(status_code=401, detail="User not found.")
+        raise AuthFlowError(
+            "identity_refresh_token_user_not_found",
+            "User not found.",
+            status_code=401,
+        )
     if claimed_token_generation(payload) != user_token_generation(user):
-        raise HTTPException(status_code=401, detail="Refresh token has been revoked.")
+        raise AuthFlowError(
+            "identity_refresh_token_revoked",
+            "Refresh token has been revoked.",
+            status_code=401,
+        )
     return await mint_auth_session(db, user=user)
 
 

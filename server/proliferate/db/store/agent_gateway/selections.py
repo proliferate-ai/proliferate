@@ -32,7 +32,7 @@ from proliferate.db.store.agent_gateway.records import (
     AgentAuthSelectionRecord,
     DesiredAuthSource,
 )
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 # A source is identified within a scope by (source_kind, env_var_name), the
 # scope UNIQUE minus (user, harness, surface) — plus the referenced vault

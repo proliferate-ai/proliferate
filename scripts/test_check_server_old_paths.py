@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from scripts import check_server_old_paths
+
+
+class ServerOldPathsTest(unittest.TestCase):
+    def test_passes_without_blocked_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                check_server_old_paths.existing_blocked_paths(Path(directory)),
+                [],
+            )
+
+    def test_ignores_empty_deleted_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "server/proliferate/utils").mkdir(parents=True)
+
+            self.assertEqual(check_server_old_paths.existing_blocked_paths(root), [])
+
+    def test_rejects_resurrected_utils_bucket(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            blocked_path = root / "server/proliferate/utils/time.py"
+            blocked_path.parent.mkdir(parents=True)
+            blocked_path.write_text("def utcnow(): ...\n")
+
+            self.assertEqual(
+                check_server_old_paths.existing_blocked_paths(root),
+                ["server/proliferate/utils"],
+            )

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.cloud.agent_gateway import AgentCatalogOverride
 from proliferate.db.store.agent_gateway.mappers import catalog_override_record
 from proliferate.db.store.agent_gateway.records import AgentCatalogOverrideRecord
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def upsert_catalog_override(

@@ -23,7 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
 from proliferate.db.store import cloud_workspace_materializations as materialization_store
-from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_workspace_materializations import (
@@ -49,7 +48,6 @@ from proliferate.server.cloud.workspaces.materializations.summaries import (
 )
 from proliferate.server.cloud.workspaces.models import (
     CreateCloudWorkspaceSourceMaterialization,
-    CreateMaterializationIntentRequest,
     MaterializationIntentResponse,
     MaterializationIntentSource,
     RepoRef,
@@ -88,7 +86,7 @@ async def validate_cloud_copy_local_source(
             "The local workspace is not at the requested published commit.",
             status_code=409,
         )
-    await _require_owned_install(db, user_id=user_id, desktop_install_id=install_id)
+    await _require_cloud_copy_source_install(db, user_id=user_id, desktop_install_id=install_id)
     existing = await materialization_store.get_active_local_materialization_by_runtime(
         db,
         desktop_install_id=install_id,
@@ -104,23 +102,7 @@ async def validate_cloud_copy_local_source(
     return install_id, workspace_id, worktree_path
 
 
-async def _load_user_workspace(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> CloudWorkspaceValue:
-    workspace = await cloud_workspace_store.get_cloud_workspace_for_user(
-        db,
-        user_id,
-        workspace_id,
-    )
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    return workspace
-
-
-async def _require_owned_install(
+async def _require_cloud_copy_source_install(
     db: AsyncSession,
     *,
     user_id: UUID,
@@ -284,25 +266,9 @@ async def create_local_materialization_intent(
     db: AsyncSession,
     *,
     user_id: UUID,
-    workspace_id: UUID,
-    body: CreateMaterializationIntentRequest,
+    workspace: CloudWorkspaceValue,
+    desktop_install_id: str,
 ) -> MaterializationIntentResponse:
-    workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
-    if workspace.lost_at is not None:
-        raise CloudApiError(
-            "workspace_lost",
-            "This workspace was lost with its sandbox. Delete it instead of rematerializing it.",
-            status_code=409,
-        )
-    desktop_install_id = body.desktop_install_id.strip()
-    if not desktop_install_id:
-        raise CloudApiError(
-            "invalid_desktop_install",
-            "A desktop installation id is required.",
-            status_code=400,
-        )
-    await _require_owned_install(db, user_id=user_id, desktop_install_id=desktop_install_id)
-
     # A repo-less workspace (no repository identity — e.g. a #1245 scratch
     # workspace) cannot resolve a source repo/branch/HEAD, so a local
     # materialization intent has no meaning. Reject it cleanly rather than
@@ -332,7 +298,7 @@ async def create_local_materialization_intent(
     # creates/observes the local row and commits before the second reads it.
     active = await materialization_store.lock_active_materializations_for_workspace(
         db,
-        cloud_workspace_id=workspace_id,
+        cloud_workspace_id=workspace.id,
     )
 
     existing_local = next(
@@ -420,7 +386,7 @@ async def create_local_materialization_intent(
     else:
         row = await materialization_store.create_local_desktop_intent(
             db,
-            cloud_workspace_id=workspace_id,
+            cloud_workspace_id=workspace.id,
             desktop_install_id=desktop_install_id,
             expected_head_sha=status.head_oid,
             observed_branch=source_branch,
@@ -432,7 +398,7 @@ async def create_local_materialization_intent(
             # than bumping — the concurrent-double-intent convergence case.
             existing = await materialization_store.get_active_local_materialization(
                 db,
-                cloud_workspace_id=workspace_id,
+                cloud_workspace_id=workspace.id,
                 desktop_install_id=desktop_install_id,
                 lock_row=True,
             )
@@ -479,39 +445,12 @@ async def create_local_materialization_intent(
 async def report_materialization(
     db: AsyncSession,
     *,
-    user_id: UUID,
-    workspace_id: UUID,
-    materialization_id: UUID,
+    materialization: CloudWorkspaceMaterializationValue,
     body: ReportMaterializationRequest,
 ) -> WorkspaceMaterializationSummary:
-    workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
-    row = await materialization_store.load_materialization(
-        db,
-        materialization_id,
-        lock_row=True,
-    )
-    if row is None or row.cloud_workspace_id != workspace.id:
-        raise CloudApiError(
-            "materialization_not_found",
-            "Materialization not found.",
-            status_code=404,
-        )
-    if row.target_kind != "local_desktop":
-        raise CloudApiError(
-            "materialization_not_reportable",
-            "Only local materializations can be reported.",
-            status_code=409,
-        )
-    if row.desktop_install_id is not None:
-        await _require_owned_install(
-            db,
-            user_id=user_id,
-            desktop_install_id=row.desktop_install_id,
-        )
-
     # A stale generation (including one bumped by a concurrent unlink) is
     # rejected without mutating state.
-    if body.generation != row.generation or row.unlinked_at is not None:
+    if body.generation != materialization.generation or materialization.unlinked_at is not None:
         raise CloudApiError(
             "stale_materialization_generation",
             "This materialization report is stale.",
@@ -521,13 +460,13 @@ async def report_materialization(
     observed_head_sha = (body.observed_head_sha or "").strip() or None
     observed_branch = (body.observed_branch or "").strip() or None
     if body.state == "hydrated":
-        if observed_head_sha is None or observed_head_sha != row.expected_head_sha:
+        if observed_head_sha is None or observed_head_sha != materialization.expected_head_sha:
             raise CloudApiError(
                 "materialization_sha_mismatch",
                 "The reported HEAD does not match the expected source commit.",
                 status_code=409,
             )
-        if observed_branch is None or observed_branch != row.observed_branch:
+        if observed_branch is None or observed_branch != materialization.observed_branch:
             raise CloudApiError(
                 "materialization_branch_mismatch",
                 "The reported branch does not match the expected source branch.",
@@ -536,7 +475,7 @@ async def report_materialization(
 
     updated = await materialization_store.apply_report(
         db,
-        materialization_id,
+        materialization.id,
         state=body.state,
         anyharness_workspace_id=(body.anyharness_workspace_id or "").strip() or None,
         worktree_path=(body.worktree_path or "").strip() or None,
@@ -560,35 +499,9 @@ async def report_materialization(
 async def unlink_materialization(
     db: AsyncSession,
     *,
-    user_id: UUID,
-    workspace_id: UUID,
-    materialization_id: UUID,
+    materialization: CloudWorkspaceMaterializationValue,
 ) -> None:
-    workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
-    row = await materialization_store.load_materialization(
-        db,
-        materialization_id,
-        lock_row=True,
-    )
-    if row is None or row.cloud_workspace_id != workspace.id:
-        raise CloudApiError(
-            "materialization_not_found",
-            "Materialization not found.",
-            status_code=404,
-        )
-    if row.target_kind != "local_desktop":
-        raise CloudApiError(
-            "materialization_not_unlinkable",
-            "Only local materializations can be unlinked.",
-            status_code=409,
-        )
-    if row.unlinked_at is not None:
+    if materialization.unlinked_at is not None:
         # Already unlinked — idempotent success.
         return
-    if row.desktop_install_id is not None:
-        await _require_owned_install(
-            db,
-            user_id=user_id,
-            desktop_install_id=row.desktop_install_id,
-        )
-    await materialization_store.unlink_materialization(db, materialization_id)
+    await materialization_store.unlink_materialization(db, materialization.id)

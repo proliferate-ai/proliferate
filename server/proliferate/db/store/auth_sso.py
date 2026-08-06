@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
 from proliferate.db.models.auth import SsoChallenge, SsoConnection, SsoIdentity
 from proliferate.db.models.organizations import OrganizationMembership
@@ -20,8 +21,7 @@ from proliferate.db.store.auth_sso_records import (
     sso_connection_record,
     sso_identity_record,
 )
-from proliferate.db.store.organization_records import MembershipRecord, membership_record
-from proliferate.utils.crypto import encrypt_text
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 
 
 def _now() -> datetime:
@@ -139,18 +139,24 @@ async def create_sso_connection(
         oidc_jwks_uri=oidc_jwks_uri,
         oidc_userinfo_endpoint=oidc_userinfo_endpoint,
         oidc_client_id=oidc_client_id,
-        oidc_client_secret_ciphertext=encrypt_text(oidc_client_secret)
+        oidc_client_secret_ciphertext=encrypt_text(
+            oidc_client_secret, secret=settings.cloud_secret_key
+        )
         if oidc_client_secret
         else None,
         oidc_scopes_json=json_list(oidc_scopes),
         oidc_token_endpoint_auth_method=oidc_token_endpoint_auth_method,
         saml_idp_metadata_url=saml_idp_metadata_url,
         saml_idp_metadata_xml_ciphertext=(
-            encrypt_text(saml_idp_metadata_xml) if saml_idp_metadata_xml else None
+            encrypt_text(saml_idp_metadata_xml, secret=settings.cloud_secret_key)
+            if saml_idp_metadata_xml
+            else None
         ),
         saml_idp_entity_id=saml_idp_entity_id,
         saml_sso_url=saml_sso_url,
-        saml_x509_cert_ciphertext=encrypt_text(saml_x509_cert) if saml_x509_cert else None,
+        saml_x509_cert_ciphertext=encrypt_text(saml_x509_cert, secret=settings.cloud_secret_key)
+        if saml_x509_cert
+        else None,
         saml_email_attribute=saml_email_attribute,
         created_by_user_id=actor_user_id,
         updated_by_user_id=actor_user_id,
@@ -210,7 +216,9 @@ async def update_sso_connection(
         row.oidc_client_id = values["oidc_client_id"]  # type: ignore[assignment]
     if "oidc_client_secret" in values:
         secret = values["oidc_client_secret"]
-        row.oidc_client_secret_ciphertext = encrypt_text(str(secret)) if secret else None
+        row.oidc_client_secret_ciphertext = (
+            encrypt_text(str(secret), secret=settings.cloud_secret_key) if secret else None
+        )
     if "oidc_scopes" in values:
         row.oidc_scopes_json = json_list(values["oidc_scopes"])  # type: ignore[arg-type]
     if "oidc_token_endpoint_auth_method" in values:
@@ -220,7 +228,9 @@ async def update_sso_connection(
     if "saml_idp_metadata_xml" in values:
         metadata_xml = values["saml_idp_metadata_xml"]
         row.saml_idp_metadata_xml_ciphertext = (
-            encrypt_text(str(metadata_xml)) if metadata_xml else None
+            encrypt_text(str(metadata_xml), secret=settings.cloud_secret_key)
+            if metadata_xml
+            else None
         )
     if "saml_idp_entity_id" in values:
         row.saml_idp_entity_id = values["saml_idp_entity_id"]  # type: ignore[assignment]
@@ -228,7 +238,9 @@ async def update_sso_connection(
         row.saml_sso_url = values["saml_sso_url"]  # type: ignore[assignment]
     if "saml_x509_cert" in values:
         x509_cert = values["saml_x509_cert"]
-        row.saml_x509_cert_ciphertext = encrypt_text(str(x509_cert)) if x509_cert else None
+        row.saml_x509_cert_ciphertext = (
+            encrypt_text(str(x509_cert), secret=settings.cloud_secret_key) if x509_cert else None
+        )
     if "saml_email_attribute" in values:
         row.saml_email_attribute = values["saml_email_attribute"]  # type: ignore[assignment]
 
@@ -528,48 +540,3 @@ async def upsert_sso_identity_for_user(
         identity.updated_at = now
     await db.flush()
     return sso_identity_record(identity)
-
-
-async def ensure_sso_organization_membership(
-    db: AsyncSession,
-    *,
-    organization_id: UUID,
-    user_id: UUID,
-    role: str,
-) -> MembershipRecord:
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
-        {"lock_key": f"organization-membership-active-user:{user_id}"},
-    )
-    now = _now()
-    membership = (
-        await db.execute(
-            select(OrganizationMembership)
-            .where(
-                OrganizationMembership.organization_id == organization_id,
-                OrganizationMembership.user_id == user_id,
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    if membership is None:
-        membership = OrganizationMembership(
-            organization_id=organization_id,
-            user_id=user_id,
-            role=role,
-            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-            joined_at=now,
-            removed_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(membership)
-    else:
-        membership.role = role
-        membership.status = ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
-        membership.removed_at = None
-        if membership.joined_at is None:
-            membership.joined_at = now
-        membership.updated_at = now
-    await db.flush()
-    return membership_record(membership)

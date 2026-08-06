@@ -15,7 +15,7 @@ from proliferate.constants.billing import (
     BILLING_SUBJECT_KIND_PERSONAL,
 )
 from proliferate.db.models.billing import BillingHold, BillingSubject, BillingSubscription
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 
 # Mirrors ``HEALTHY_STRIPE_SUBSCRIPTION_STATUSES`` in
 # ``proliferate.server.billing.domain.plans``, inlined because no other store

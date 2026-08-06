@@ -21,7 +21,7 @@ from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
-from proliferate.server.billing.models import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 from tests.e2e.cloud.helpers.shared import (
     DEFAULT_GITHUB_BASE_BRANCH,
     DEFAULT_GITHUB_OWNER,
@@ -66,7 +66,7 @@ async def create_seeded_workspace_and_sandbox(
     runtime_url = "https://example-runtime.invalid" if with_runtime_metadata else None
     anyharness_workspace_id = "workspace-123" if with_runtime_metadata else None
 
-    from proliferate.utils.crypto import encrypt_text
+    from proliferate.lib.infra.encryption.fernet import encrypt_text
 
     user_uuid = uuid.UUID(user_id)
     await ensure_personal_billing_subject(db_session, user_uuid)
@@ -115,7 +115,9 @@ async def create_seeded_workspace_and_sandbox(
             else CloudSandboxStatus.error
         ),
         anyharness_base_url=runtime_url,
-        runtime_token_ciphertext=encrypt_text(runtime_token) if runtime_token else None,
+        runtime_token_ciphertext=encrypt_text(runtime_token, secret=settings.cloud_secret_key)
+        if runtime_token
+        else None,
         anyharness_data_key_ciphertext=None,
         ready_at=utcnow() if sandbox_status == "running" else None,
         last_health_at=utcnow() if sandbox_status == "running" else None,

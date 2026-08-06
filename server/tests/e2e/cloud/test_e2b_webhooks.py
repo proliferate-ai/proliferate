@@ -16,7 +16,7 @@ from proliferate.constants.billing import BILLING_DECISION_ENFORCE_ACTIVE_SPEND
 from proliferate.db.models.billing import UsageSegment
 from proliferate.db.store.billing_runtime_usage import open_usage_segment_for_sandbox
 from proliferate.server.cloud.webhooks import service as webhook_service
-from proliferate.server.billing.models import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.materialization.failures import (
     PROVIDER_SANDBOX_MISSING_RECEIPT,
 )

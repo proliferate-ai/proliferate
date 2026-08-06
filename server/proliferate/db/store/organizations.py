@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from datetime import datetime
 from uuid import UUID
@@ -27,6 +28,8 @@ from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_OWNER,
+    ORGANIZATION_SLUG_FALLBACK,
+    ORGANIZATION_SLUG_MAX_LENGTH,
     ORGANIZATION_STATUS_ACTIVE,
     ORGANIZATION_STATUS_ARCHIVED,
     ORGANIZATION_STATUS_PENDING_CHECKOUT,
@@ -50,27 +53,33 @@ from proliferate.db.store.organization_records import (
     membership_record,
     organization_record,
 )
-from proliferate.utils.slug import slugify
-from proliferate.utils.time import utcnow
+from proliferate.lib.infra.time.wall_clock import utcnow
+
+_SLUG_ALLOWED = re.compile(r"[^a-z0-9]+")
+_SLUG_TRIM_CHAR = "-"
 
 # Bound the numeric-suffix search before falling back to a random token so a
 # pathological name never spins; the partial unique index is the backstop.
 _SLUG_NUMERIC_ATTEMPTS = 50
 
 
+def _slugify_organization(value: str | None, *, truncate_base: bool = True) -> str:
+    end = ORGANIZATION_SLUG_MAX_LENGTH if truncate_base else None
+    slug = _SLUG_ALLOWED.sub("-", (value or "").strip().lower()).strip(_SLUG_TRIM_CHAR)
+    return slug[:end].strip(_SLUG_TRIM_CHAR) or ORGANIZATION_SLUG_FALLBACK
+
+
 async def _slug_taken(db: AsyncSession, slug: str) -> bool:
-    existing = await db.scalar(select(Organization.id).where(Organization.slug == slug).limit(1))
-    return existing is not None
+    return bool(await db.scalar(select(Organization.id).where(Organization.slug == slug).limit(1)))
 
 
 async def allocate_organization_slug(db: AsyncSession, name: str) -> str:
     """Pick a unique, human-friendly slug derived from the org name.
 
-    Tries the bare slug first (so a team named "Acme" gets ``acme``), then a
-    numeric suffix, then a short random token. The partial unique index on
-    ``organization.slug`` remains the ultimate guard against the rare race.
+    Tries the bare slug first, then bounded numeric suffixes, then a short
+    random token. The partial unique index remains the ultimate race guard.
     """
-    base = slugify(name)
+    base = _slugify_organization(name)
     if not await _slug_taken(db, base):
         return base
     for suffix in range(2, _SLUG_NUMERIC_ATTEMPTS + 1):
@@ -84,15 +93,13 @@ async def allocate_organization_slug(db: AsyncSession, name: str) -> str:
 
 
 async def get_organization_by_slug(db: AsyncSession, slug: str) -> OrganizationRecord | None:
-    normalized = slugify(slug)
-    organization = (
-        await db.execute(
-            select(Organization).where(
-                Organization.slug == normalized,
-                Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
-            )
+    result = await db.execute(
+        select(Organization).where(
+            Organization.slug == _slugify_organization(slug, truncate_base=False),
+            Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
         )
-    ).scalar_one_or_none()
+    )
+    organization = result.scalar_one_or_none()
     return organization_record(organization) if organization is not None else None
 
 
@@ -345,6 +352,59 @@ async def get_active_membership(
     return membership_record(membership) if membership is not None else None
 
 
+def _checkout_intent_with_organization_record(
+    intent: OrganizationCheckoutIntent, organization: Organization
+) -> CheckoutIntentWithOrganizationRecord:
+    return CheckoutIntentWithOrganizationRecord(
+        checkout_intent_record(intent), organization_record(organization)
+    )
+
+
+async def ensure_sso_jit_membership(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+    role: str,
+) -> MembershipRecord:
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": f"organization-membership-active-user:{user_id}"},
+    )
+    now = utcnow()
+    membership = (
+        await db.execute(
+            select(OrganizationMembership)
+            .where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.user_id == user_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        membership = OrganizationMembership(
+            organization_id=organization_id,
+            user_id=user_id,
+            role=role,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            removed_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(membership)
+    else:
+        membership.role = role
+        membership.status = ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+        membership.removed_at = None
+        if membership.joined_at is None:
+            membership.joined_at = now
+        membership.updated_at = now
+    await db.flush()
+    return membership_record(membership)
+
+
 async def create_pending_team_checkout_intent(
     db: AsyncSession,
     *,
@@ -393,10 +453,7 @@ async def create_pending_team_checkout_intent(
     )
     db.add(intent)
     await db.flush()
-    return CheckoutIntentWithOrganizationRecord(
-        intent=checkout_intent_record(intent),
-        organization=organization_record(organization),
-    )
+    return _checkout_intent_with_organization_record(intent, organization)
 
 
 async def get_current_team_checkout_intent(
@@ -421,19 +478,14 @@ async def get_current_team_checkout_intent(
     intent, organization = row
     now = utcnow()
     if intent.status == ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING and intent.expires_at <= now:
-        intent.status = ORGANIZATION_CHECKOUT_INTENT_STATUS_EXPIRED
-        intent.updated_at = now
-        organization.status = ORGANIZATION_STATUS_ARCHIVED
-        organization.updated_at = now
+        intent.status, intent.updated_at = ORGANIZATION_CHECKOUT_INTENT_STATUS_EXPIRED, now
+        organization.status, organization.updated_at = ORGANIZATION_STATUS_ARCHIVED, now
         await db.flush()
         return None
-    return CheckoutIntentWithOrganizationRecord(
-        intent=checkout_intent_record(intent),
-        organization=organization_record(organization),
-    )
+    return _checkout_intent_with_organization_record(intent, organization)
 
 
-async def load_team_checkout_intent_for_update(
+async def _load_team_checkout_intent_for_update(
     db: AsyncSession,
     intent_id: UUID,
 ) -> tuple[OrganizationCheckoutIntent, Organization] | None:
@@ -445,10 +497,15 @@ async def load_team_checkout_intent_for_update(
             .with_for_update(of=(OrganizationCheckoutIntent, Organization))
         )
     ).one_or_none()
-    if row is None:
-        return None
-    intent, organization = row
-    return intent, organization
+    return (row[0], row[1]) if row is not None else None
+
+
+async def load_team_checkout_activation_for_update(
+    db: AsyncSession,
+    intent_id: UUID,
+) -> CheckoutIntentWithOrganizationRecord | None:
+    row = await _load_team_checkout_intent_for_update(db, intent_id)
+    return _checkout_intent_with_organization_record(*row) if row is not None else None
 
 
 async def bind_team_checkout_session(
@@ -476,7 +533,7 @@ async def cancel_team_checkout_intent(
     intent_id: UUID,
     created_by_user_id: UUID,
 ) -> CheckoutIntentWithOrganizationRecord | None:
-    row = await load_team_checkout_intent_for_update(db, intent_id)
+    row = await _load_team_checkout_intent_for_update(db, intent_id)
     if row is None:
         return None
     intent, organization = row
@@ -485,63 +542,61 @@ async def cancel_team_checkout_intent(
     if intent.status == ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING:
         now = utcnow()
         intent.status = ORGANIZATION_CHECKOUT_INTENT_STATUS_CANCELLED
-        intent.cancelled_at = now
-        intent.updated_at = now
-        organization.status = ORGANIZATION_STATUS_ARCHIVED
-        organization.updated_at = now
+        intent.cancelled_at = intent.updated_at = now
+        organization.status, organization.updated_at = ORGANIZATION_STATUS_ARCHIVED, now
         await db.flush()
-    return CheckoutIntentWithOrganizationRecord(
-        intent=checkout_intent_record(intent),
-        organization=organization_record(organization),
-    )
+    return _checkout_intent_with_organization_record(intent, organization)
 
 
-async def mark_team_checkout_activating(
+async def mark_team_checkout_activating_by_id(
     db: AsyncSession,
-    intent: OrganizationCheckoutIntent,
     *,
-    stripe_subscription_id: str | None,
+    intent_id: UUID,
+    stripe_subscription_id: str,
 ) -> None:
+    intent = await db.get(OrganizationCheckoutIntent, intent_id)
+    assert intent is not None, "Checkout intent disappeared during activation."
     intent.activation_status = ORGANIZATION_CHECKOUT_ACTIVATION_ACTIVATING
-    if stripe_subscription_id:
-        intent.stripe_subscription_id = stripe_subscription_id
+    intent.stripe_subscription_id = stripe_subscription_id
     intent.updated_at = utcnow()
     await db.flush()
 
 
-async def mark_team_checkout_failed(
+async def mark_team_checkout_failed_by_id(
     db: AsyncSession,
-    intent: OrganizationCheckoutIntent,
     *,
+    intent_id: UUID,
     activation_status: str,
     error_code: str,
     error_message: str,
     webhook_event_id: str | None,
-) -> CheckoutIntentRecord:
+) -> CheckoutIntentRecord | None:
+    if (row := await _load_team_checkout_intent_for_update(db, intent_id)) is None:
+        return None
+    intent, _ = row
     now = utcnow()
     intent.status = ORGANIZATION_CHECKOUT_INTENT_STATUS_FAILED
     intent.activation_status = activation_status
-    intent.activation_error_code = error_code
-    intent.activation_error_message = error_message
+    intent.activation_error_code, intent.activation_error_message = error_code, error_message
     intent.last_webhook_event_id = webhook_event_id
-    intent.failed_at = now
-    intent.updated_at = now
+    intent.failed_at = intent.updated_at = now
     await db.flush()
     return checkout_intent_record(intent)
 
 
-async def complete_team_checkout_activation(
+async def complete_team_checkout_activation_by_id(
     db: AsyncSession,
     *,
-    intent: OrganizationCheckoutIntent,
-    organization: Organization,
+    intent_id: UUID,
     stripe_subscription_id: str,
     stripe_customer_id: str,
     webhook_event_id: str | None,
 ) -> OrganizationWithMembershipRecord:
+    row = await _load_team_checkout_intent_for_update(db, intent_id)
+    assert row is not None, "Checkout intent disappeared during activation."
+    intent, organization = row
     now = utcnow()
-    organization.status = ORGANIZATION_STATUS_ACTIVE
-    organization.updated_at = now
+    organization.status, organization.updated_at = ORGANIZATION_STATUS_ACTIVE, now
     result = await db.execute(
         pg_insert(OrganizationMembership)
         .values(
@@ -572,14 +627,11 @@ async def complete_team_checkout_activation(
     intent.status = ORGANIZATION_CHECKOUT_INTENT_STATUS_COMPLETED
     intent.activation_status = ORGANIZATION_CHECKOUT_ACTIVATION_ACTIVATED
     intent.stripe_subscription_id = stripe_subscription_id
-    intent.stripe_customer_id = stripe_customer_id
-    intent.last_webhook_event_id = webhook_event_id
-    intent.completed_at = now
-    intent.updated_at = now
+    intent.stripe_customer_id, intent.last_webhook_event_id = stripe_customer_id, webhook_event_id
+    intent.completed_at = intent.updated_at = now
     await db.flush()
     return OrganizationWithMembershipRecord(
-        organization=organization_record(organization),
-        membership=membership_record(membership),
+        organization_record(organization), membership_record(membership)
     )
 
 

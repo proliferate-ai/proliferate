@@ -16,7 +16,6 @@ import pytest
 from fastapi import WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
 from proliferate.server.cloud.gateway import api as gateway_api
 
@@ -34,9 +33,8 @@ class _FakeSentrySdk:
 @pytest.fixture()
 def fake_sdk(monkeypatch: pytest.MonkeyPatch) -> _FakeSentrySdk:
     fake = _FakeSentrySdk()
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
     return fake
 
 

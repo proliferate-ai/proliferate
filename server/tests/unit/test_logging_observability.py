@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from typing import Any
 from unittest.mock import patch
 
@@ -11,13 +12,58 @@ import pytest
 
 from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
+import proliferate.middleware.logging as logging_module
+from proliferate.middleware.logging import JsonLogFormatter, configure_server_logging
 from proliferate.middleware.request_context import (
     bind_background_correlation_context,
     get_correlation_context,
     with_correlation_context,
 )
-from proliferate.utils import logging as logging_module
-from proliferate.utils.logging import JsonLogFormatter, configure_server_logging
+
+_MISSING = object()
+
+
+@pytest.fixture(autouse=True)
+def _restore_observability_test_state() -> Iterator[None]:
+    loggers = [logging.getLogger("proliferate"), logging.getLogger("uvicorn.error")]
+    logger_state = [
+        (
+            logger,
+            list(logger.handlers),
+            logger.level,
+            logger.propagate,
+            getattr(logger, "_proliferate_configured", _MISSING),
+        )
+        for logger in loggers
+    ]
+    handler_state = {
+        id(handler): (handler, handler.formatter, list(handler.filters))
+        for logger in loggers
+        for handler in logger.handlers
+    }
+    identity_state = (
+        logging_module._SERVER_VERSION,
+        logging_module._SERVER_GIT_SHA,
+        logging_module._RELEASE_ID,
+    )
+    yield
+    for handler, formatter, filters in handler_state.values():
+        handler.setFormatter(formatter)
+        handler.filters[:] = filters
+    for logger, handlers, level, propagate, configured in logger_state:
+        logger.handlers[:] = handlers
+        logger.setLevel(level)
+        logger.propagate = propagate
+        if configured is _MISSING:
+            if hasattr(logger, "_proliferate_configured"):
+                delattr(logger, "_proliferate_configured")
+        else:
+            logger._proliferate_configured = configured  # type: ignore[attr-defined]
+    (
+        logging_module._SERVER_VERSION,
+        logging_module._SERVER_GIT_SHA,
+        logging_module._RELEASE_ID,
+    ) = identity_state
 
 
 class TestJsonLogFormatterVersionFields:
@@ -190,9 +236,8 @@ class TestReportCritical:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         fake_sdk = _TrackingSentrySdk()
-        monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-        monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
         monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+        monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
 
         error = RuntimeError("disk full")
         sentry_integration.report_critical(
@@ -263,7 +308,7 @@ class TestCorrelationContextBackground:
     """bind_background_correlation_context sets context vars for background work."""
 
     def test_bind_sets_vars_and_returns_tokens(self) -> None:
-        bind_background_correlation_context(
+        tokens = bind_background_correlation_context(
             organization_id="org-123",
             tenant_id="ten-456",
         )
@@ -272,11 +317,8 @@ class TestCorrelationContextBackground:
             assert ctx["organization_id"] == "org-123"
             assert ctx["tenant_id"] == "ten-456"
         finally:
-            from proliferate.middleware.request_context import _CORRELATION_VARS
-
-            # Reset using with_correlation_context to clean up
-            for var in _CORRELATION_VARS.values():
-                var.set(None)
+            for token in reversed(tokens):
+                token.var.reset(token)
 
     def test_with_correlation_context_scoped(self) -> None:
         with with_correlation_context(worker_id="test-worker", organization_id="org-1"):

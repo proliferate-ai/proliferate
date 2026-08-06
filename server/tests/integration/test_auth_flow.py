@@ -7,13 +7,14 @@ from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
 import pytest
-from fastapi import HTTPException
 from fastapi_users.jwt import generate_jwt
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from proliferate.server.accounts.desktop import service as desktop_service
+from proliferate.server.accounts.identity import service as accounts_identity_service
 from proliferate.auth.desktop.models import AuthorizeParams
-from proliferate.auth.desktop import service as desktop_service
+from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity import providers as identity_providers
 from proliferate.auth.identity.sessions import WEB_CSRF_COOKIE
 from proliferate.auth.oauth import github_oauth_client, google_oauth_client
@@ -22,7 +23,7 @@ from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.models.auth import AuthIdentity, ProviderGrant, User
 from proliferate.integrations.github import GitHubUserProfile
-from proliferate.utils.crypto import encrypt_text
+from proliferate.lib.infra.encryption.fernet import encrypt_text
 from tests.helpers.desktop_auth import make_pkce_pair as _make_pkce_pair
 from tests.integration.cloud_api_helpers import configure_github_app
 
@@ -98,7 +99,9 @@ async def _link_ready_github_identity(
                 user_id=UUID(user_id),
                 auth_identity_id=identity.id,
                 provider="github",
-                access_token_ciphertext=encrypt_text("github-access-token"),
+                access_token_ciphertext=encrypt_text(
+                    "github-access-token", secret=settings.cloud_secret_key
+                ),
                 scopes_json='["repo","user","user:email"]',
                 status="ready",
             )
@@ -258,8 +261,7 @@ class TestPasswordAuthFlow:
         assert protected.status_code == 403
         assert protected.json()["detail"]["code"] == "github_link_required"
 
-        # /v1/cloud/sandbox-profiles/* was removed from the cloud API by the
-        # #803/#809 cutover; re-add coverage when the router is remounted.
+        # Sandbox-profile coverage follows the cloud API remount.
         ai_magic = await client.post(
             "/v1/ai_magic/session-titles/generate",
             headers={"Authorization": f"Bearer {payload['accessToken']}"},
@@ -678,7 +680,9 @@ class TestDesktopPKCEFlow:
             },
         )
         assert resp.status_code == 400
-        assert "PKCE" in resp.json()["detail"]
+        assert resp.json()["detail"] == (
+            "PKCE verification failed — code_verifier does not match code_challenge"
+        )
 
     @pytest.mark.asyncio
     async def test_code_cannot_be_reused(self, client: AsyncClient) -> None:
@@ -728,14 +732,12 @@ class TestDesktopPKCEFlow:
     @pytest.mark.asyncio
     async def test_unsupported_challenge_method(self, client: AsyncClient) -> None:
         user_id = await _create_user_via_manager("badmethod@example.com")
-        with pytest.raises(HTTPException) as exc_info:
-            await _create_desktop_auth_code_for_user(
-                user_id=user_id,
-                state="state-3",
-                code_challenge="whatever",
-                code_challenge_method="plain",
-            )
-        assert exc_info.value.status_code == 400
+        args = dict(state="s", code_challenge="x", code_challenge_method="plain")
+        with pytest.raises(AuthFlowError) as exc_info:
+            await _create_desktop_auth_code_for_user(user_id=user_id, **args)
+        expected_message = "Unsupported code_challenge_method. Supported: frozenset({'S256'})"
+        actual = exc_info.value.code, exc_info.value.status_code, exc_info.value.message
+        assert actual == ("desktop_code_challenge_method_unsupported", 400, expected_message)
 
     @pytest.mark.asyncio
     async def test_debug_authorize_endpoint_disabled_outside_debug(
@@ -1145,13 +1147,13 @@ class TestWebMobileProductAuthFlow:
         self._enable_identity_github(monkeypatch, "desktop-shared-github@example.com")
         schedule_mock = Mock()
         monkeypatch.setattr(
-            desktop_service,
+            accounts_identity_service,
             "schedule_customerio_desktop_authenticated_user_sync",
             schedule_mock,
         )
         schedule_signup_mock = Mock()
         monkeypatch.setattr(
-            desktop_service,
+            accounts_identity_service,
             "schedule_signup_slack_notification",
             schedule_signup_mock,
         )
@@ -1220,13 +1222,13 @@ class TestWebMobileProductAuthFlow:
         self._enable_identity_github(monkeypatch, "desktop-existing-github@example.com")
         schedule_mock = Mock()
         monkeypatch.setattr(
-            desktop_service,
+            accounts_identity_service,
             "schedule_customerio_desktop_authenticated_user_sync",
             schedule_mock,
         )
         schedule_signup_mock = Mock()
         monkeypatch.setattr(
-            desktop_service,
+            accounts_identity_service,
             "schedule_signup_slack_notification",
             schedule_signup_mock,
         )
@@ -1935,9 +1937,9 @@ class TestWebMobileProductAuthFlow:
             raise AssertionError("Google legacy profile endpoint should not be used.")
 
         async def fake_decode_google_id_token(_id_token: str) -> dict[str, object]:
-            raise identity_providers.HTTPException(
-                status_code=400,
-                detail="Google identity token could not be verified.",
+            raise identity_providers.ProviderVerificationError(
+                "identity_google_identity_token_unverified",
+                "Google identity token could not be verified.",
             )
 
         async def fake_fetch_google_userinfo(access_token: str) -> dict[str, object]:

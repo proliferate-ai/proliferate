@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.sso import service as sso_service
+from proliferate.server.accounts.sso import service as sso_service
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
     SsoJitPolicy,

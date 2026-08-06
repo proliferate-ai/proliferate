@@ -134,6 +134,6 @@ AGENT_MODEL_SNAPSHOT_SCHEMA_VERSION = 2
 
 AGENT_USAGE_IMPORT_CURSOR_ID = "default"
 
-# Fernet key derivation is versioned by this identifier (see utils/crypto.py);
+# Fernet key derivation is versioned by this identifier (see lib/infra/encryption/fernet.py);
 # matches the cloud-secret convention used by other encrypted columns.
 AGENT_GATEWAY_CIPHERTEXT_KEY_ID = "cloud-secret-v1"

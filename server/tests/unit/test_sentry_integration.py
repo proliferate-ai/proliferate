@@ -1,11 +1,104 @@
 from __future__ import annotations
 
+import ast
+from collections.abc import Callable
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
+from proliferate import main as server_main
 from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
+
+
+def test_sentry_integration_does_not_import_product_layers() -> None:
+    source_path = Path(__file__).parents[2] / "proliferate/integrations/sentry.py"
+    tree = ast.parse(source_path.read_text())
+
+    forbidden_imports = []
+    forbidden_prefixes = ("proliferate.lib.product", "proliferate.server")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(forbidden_prefixes):
+            forbidden_imports.append((node.lineno, node.module))
+        elif isinstance(node, ast.Import):
+            forbidden_imports.extend(
+                (node.lineno, alias.name)
+                for alias in node.names
+                if alias.name.startswith(forbidden_prefixes)
+            )
+
+    assert forbidden_imports == []
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("Bearer abc.DEF-123_=", "[redacted-token]"),
+        (
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl",
+            "[redacted-jwt]",
+        ),
+        ("/Users/pablo/proliferate/server/file.py", "[redacted-path]"),
+        ("/home/user/proliferate/server/file.py", "[redacted-path]"),
+        (r"C:\Users\pablo\proliferate\server.py", "[redacted-path]"),
+        ("first\r\nsecond\rthird", "first\nsecond\nthird"),
+    ],
+)
+def test_scrub_text_preserves_string_pattern_behavior(value: str, expected: str) -> None:
+    assert sentry_integration.scrub_text(value) == expected
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "authorization",
+        "cookie",
+        "token",
+        "secret",
+        "password",
+        "api_key",
+        "api-key",
+        "credential",
+        "prompt",
+        "content",
+        "stdout",
+        "stderr",
+        "request_body",
+        "body",
+        "env",
+        "file_path",
+        "path",
+    ],
+)
+def test_scrub_mapping_redacts_sensitive_key_values(key: str) -> None:
+    assert sentry_integration.scrub_mapping({key: {"nested": "value"}}) == {key: "[redacted]"}
+
+
+def test_scrub_mapping_recurses_and_preserves_container_shapes() -> None:
+    scrubbed = sentry_integration.scrub_mapping(
+        {
+            "metadata": {
+                "list": ["Bearer secret-token", 7, True, None],
+                "tuple": (
+                    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl",
+                    {"message": "/home/user/private/file.txt"},
+                ),
+            },
+            "password": {"nested": "value"},
+        }
+    )
+
+    assert scrubbed == {
+        "metadata": {
+            "list": ["[redacted-token]", 7, True, None],
+            "tuple": (
+                "[redacted-jwt]",
+                {"message": "[redacted-path]"},
+            ),
+        },
+        "password": "[redacted]",
+    }
 
 
 class _FakeScope:
@@ -50,9 +143,8 @@ class _FakeSentrySdk:
 def test_set_server_sentry_user_sets_id_only(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_sdk = _FakeSentrySdk()
 
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
 
     sentry_integration.set_server_sentry_user("user-123")
 
@@ -62,9 +154,8 @@ def test_set_server_sentry_user_sets_id_only(monkeypatch: pytest.MonkeyPatch) ->
 def test_clear_server_sentry_user_resets_user(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_sdk = _FakeSentrySdk()
 
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
 
     sentry_integration.set_server_sentry_user("user-123")
     assert fake_sdk.user == {"id": "user-123"}
@@ -76,14 +167,13 @@ def test_clear_server_sentry_user_resets_user(monkeypatch: pytest.MonkeyPatch) -
     assert fake_sdk.set_user_calls == [{"id": "user-123"}, None]
 
 
-def test_capture_server_sentry_exception_noops_when_vendor_disabled(
+def test_capture_server_sentry_exception_noops_when_adapter_not_initialized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_sdk = _FakeSentrySdk()
 
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "self_managed")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
 
     sentry_integration.capture_server_sentry_exception(RuntimeError("boom"))
 
@@ -95,9 +185,8 @@ def test_capture_server_sentry_exception_scrubs_extras_and_sets_scope_fields(
 ) -> None:
     fake_sdk = _FakeSentrySdk()
 
-    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
 
     sentry_integration.capture_server_sentry_exception(
         RuntimeError("boom"),
@@ -139,7 +228,6 @@ def test_init_server_sentry_disables_logging_event_capture(
             tags[key] = value
 
     monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
     monkeypatch.setattr(sentry_integration, "sentry_sdk", _FakeInitSentrySdk())
     monkeypatch.setattr(
@@ -158,7 +246,11 @@ def test_init_server_sentry_disables_logging_event_capture(
         lambda **kwargs: ("fastapi", kwargs),
     )
 
-    sentry_integration.init_server_sentry()
+    sentry_integration.init_server_sentry(
+        enabled=True,
+        telemetry_mode="hosted_product",
+        release_resolver=lambda: "proliferate-server@0.3.27+3c2bbf20e215",
+    )
 
     integrations = init_kwargs["integrations"]
     assert isinstance(integrations, list)
@@ -170,7 +262,37 @@ def test_init_server_sentry_disables_logging_event_capture(
     }
 
 
-def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch) -> str:
+def test_init_server_sentry_respects_injected_disabled_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    init_calls: list[dict[str, object]] = []
+    release_calls = 0
+
+    class _FakeInitSentrySdk:
+        def init(self, **kwargs: object) -> None:
+            init_calls.append(dict(kwargs))
+
+    monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
+    monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
+    monkeypatch.setattr(sentry_integration, "sentry_sdk", _FakeInitSentrySdk())
+
+    def resolve_release() -> str:
+        nonlocal release_calls
+        release_calls += 1
+        return "proliferate-server@0.3.27+3c2bbf20e215"
+
+    sentry_integration.init_server_sentry(
+        enabled=False,
+        telemetry_mode="self_managed",
+        release_resolver=resolve_release,
+    )
+
+    assert init_calls == []
+    assert release_calls == 0
+    assert sentry_integration._sentry_initialized is False
+
+
+def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch, release: str) -> str:
     init_kwargs: dict[str, object] = {}
 
     class _FakeInitSentrySdk:
@@ -181,17 +303,20 @@ def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch) -> str:
             pass
 
     monkeypatch.setattr(settings, "sentry_dsn", "https://sentry.example/123")
-    monkeypatch.setattr(settings, "telemetry_mode", "hosted_product")
     monkeypatch.setattr(sentry_integration, "_sentry_initialized", False)
     monkeypatch.setattr(sentry_integration, "sentry_sdk", _FakeInitSentrySdk())
     monkeypatch.setattr(sentry_integration, "LoggingIntegration", lambda **kwargs: kwargs)
     monkeypatch.setattr(sentry_integration, "StarletteIntegration", lambda **kwargs: kwargs)
     monkeypatch.setattr(sentry_integration, "FastApiIntegration", lambda **kwargs: kwargs)
 
-    sentry_integration.init_server_sentry()
-    release = init_kwargs["release"]
-    assert isinstance(release, str)
-    return release
+    sentry_integration.init_server_sentry(
+        enabled=True,
+        telemetry_mode="hosted_product",
+        release_resolver=lambda: release,
+    )
+    captured_release = init_kwargs["release"]
+    assert isinstance(captured_release, str)
+    return captured_release
 
 
 def test_scrub_event_preserves_top_level_deployment_environment() -> None:
@@ -223,20 +348,46 @@ def test_scrub_event_scrubs_preserved_environment_as_text() -> None:
     assert scrubbed["environment"] == "[redacted-token] [redacted-path]"
 
 
-def test_init_prefers_configured_canonical_server_release(
+def test_init_uses_exact_injected_server_release(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "sentry_release", "proliferate-server@0.3.27+3c2bbf20e215")
-    assert _init_and_capture_release(monkeypatch) == "proliferate-server@0.3.27+3c2bbf20e215"
+    release = "proliferate-server@0.3.27+3c2bbf20e215"
+    assert _init_and_capture_release(monkeypatch, release) == release
 
 
-def test_init_ignores_noncanonical_release_and_builds_server_release(
+def test_api_composition_injects_lazy_release_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A misconfigured SENTRY_RELEASE (wrong component / malformed) must not
-    # stamp the server's events; fall back to the code-built server release.
-    monkeypatch.setattr(settings, "sentry_release", "anyharness@0.3.27+3c2bbf20e215")
-    monkeypatch.setenv("SERVER_VERSION", "0.3.27")
-    monkeypatch.setenv("SERVER_GIT_SHA", "3c2bbf20e21599aa11bb22cc33dd44ee55ff6600")
-    monkeypatch.delenv("PROLIFERATE_REQUIRE_RELEASE_IDENTITY", raising=False)
-    assert _init_and_capture_release(monkeypatch) == "proliferate-server@0.3.27+3c2bbf20e215"
+    captured: dict[str, object] = {}
+    configured = "proliferate-server@0.3.27+3c2bbf20e215"
+
+    def fake_init_server_sentry(
+        *,
+        enabled: bool,
+        telemetry_mode: str,
+        release_resolver: Callable[[], str],
+    ) -> None:
+        captured.update(
+            enabled=enabled,
+            telemetry_mode=telemetry_mode,
+            release=release_resolver(),
+        )
+
+    monkeypatch.setattr(server_main, "configure_server_logging", lambda: None)
+    monkeypatch.setattr(server_main, "is_vendor_telemetry_enabled", lambda: True)
+    monkeypatch.setattr(server_main, "get_server_telemetry_mode", lambda: "hosted_product")
+    monkeypatch.setattr(
+        server_main,
+        "resolve_server_release_id",
+        lambda value: f"resolved:{value}",
+    )
+    monkeypatch.setattr(server_main, "init_server_sentry", fake_init_server_sentry)
+    monkeypatch.setattr(settings, "sentry_release", configured)
+
+    server_main.create_app()
+
+    assert captured == {
+        "enabled": True,
+        "telemetry_mode": "hosted_product",
+        "release": f"resolved:{configured}",
+    }

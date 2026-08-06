@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
-from proliferate.utils.crypto import encrypt_json
+from proliferate.config import settings
+from proliferate.lib.infra.encryption.json import encrypt_json
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 
@@ -60,7 +61,9 @@ async def test_health_reports_ready_for_connected_api_key(
     await accounts_store.set_account_credentials(
         db_session,
         account_id=account.id,
-        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "secret"}}),
+        credential_ciphertext=encrypt_json(
+            {"secretFields": {"api_key": "secret"}}, secret=settings.cloud_secret_key
+        ),
         credential_format="secret-fields-v1",
         auth_status="ready",
         token_expires_at=None,
@@ -101,7 +104,8 @@ async def test_health_reports_needs_reauth_when_oauth_refresh_fails(
                 "scopes": [],
                 "tokenEndpoint": "https://auth.linear.app/oauth/token",
                 "redirectUri": "https://api.example.com/cb",
-            }
+            },
+            secret=settings.cloud_secret_key,
         ),
         credential_format="oauth-bundle-v1",
         auth_status="ready",
@@ -145,7 +149,8 @@ async def test_health_isolates_non_cloud_probe_failure(
                 "scopes": [],
                 "tokenEndpoint": "https://auth.linear.app/oauth/token",
                 "redirectUri": "https://api.example.com/cb",
-            }
+            },
+            secret=settings.cloud_secret_key,
         ),
         credential_format="oauth-bundle-v1",
         auth_status="ready",

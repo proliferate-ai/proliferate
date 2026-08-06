@@ -11,6 +11,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_RESUME,
@@ -24,6 +25,8 @@ from proliferate.integrations.sandbox import (
     SandboxProviderUnavailableError,
     get_sandbox_provider,
 )
+from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.authorization import assert_cloud_sandbox_resume_allowed
 from proliferate.server.billing.runtime_usage import (
     converge_cloud_sandbox_provider_usage,
@@ -51,8 +54,6 @@ from proliferate.server.cloud.runtime.liveness_health import (
     verify_runtime_auth_enforced,
     wait_for_runtime_health,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_text
-from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.cloud.materialization.connect")
 
@@ -68,13 +69,15 @@ class _ProviderResumeObservedActiveError(RuntimeError):
 def _runtime_token(sandbox: CloudSandboxValue) -> str | None:
     if not sandbox.anyharness_bearer_token_ciphertext:
         return None
-    return decrypt_text(sandbox.anyharness_bearer_token_ciphertext)
+    return decrypt_text(
+        sandbox.anyharness_bearer_token_ciphertext, secret=settings.cloud_secret_key
+    )
 
 
 def _runtime_data_key(sandbox: CloudSandboxValue) -> str | None:
     if not sandbox.anyharness_data_key_ciphertext:
         return None
-    return decrypt_text(sandbox.anyharness_data_key_ciphertext)
+    return decrypt_text(sandbox.anyharness_data_key_ciphertext, secret=settings.cloud_secret_key)
 
 
 async def _destroy_unrecorded_candidate(
@@ -576,10 +579,12 @@ async def connect_ready_sandbox(
             e2b_template_ref=provider.template_version,
             anyharness_base_url=endpoint.runtime_url,
             anyharness_bearer_token_ciphertext=(
-                sandbox.anyharness_bearer_token_ciphertext or encrypt_text(runtime_token)
+                sandbox.anyharness_bearer_token_ciphertext
+                or encrypt_text(runtime_token, secret=settings.cloud_secret_key)
             ),
             anyharness_data_key_ciphertext=(
-                sandbox.anyharness_data_key_ciphertext or encrypt_text(data_key)
+                sandbox.anyharness_data_key_ciphertext
+                or encrypt_text(data_key, secret=settings.cloud_secret_key)
             ),
             expected_materialization_attempt=failure_expected_materialization_attempt,
         )

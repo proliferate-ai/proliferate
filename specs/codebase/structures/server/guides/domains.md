@@ -4,6 +4,10 @@ Backend product domains keep transport, orchestration, wire models, pure rules,
 authorization deps, errors, and non-HTTP entry points in predictable homes. A
 domain folder answers "what product area owns this?"
 
+The placements below are the rule for new and refactored code. Remaining
+inline authorization and boundary exceptions are migration debt, not alternate
+patterns that new code may copy.
+
 ## Ownership
 
 A `server/<domain>/` folder is one product area's home. It owns:
@@ -102,6 +106,10 @@ Allowed:
 
 - `db: AsyncSession` as a parameter (passed by the handler or the worker
   entry point). Service functions take this and thread it to stores.
+- In `worker/service.py` only, a task-created
+  `async_sessionmaker[AsyncSession]` when the orchestration must alternate
+  bounded store-only phases with foreign I/O. Each session closes before the
+  external call.
 - Composing multiple store function calls within a single transaction
   (the request session by default; `db.begin_nested()` for narrower
   atomicity).
@@ -113,9 +121,12 @@ Allowed:
 
 Banned:
 
-- `async_session_factory` imports. Services don't open sessions; they
-  receive them.
-- SQLAlchemy direct imports (`from sqlalchemy import ...`).
+- Global `async_session_factory` and engine-helper imports. Ordinary services
+  don't open sessions. The narrow worker exception receives a factory from its
+  task but cannot import settings, create an engine, or reach a global factory.
+- SQLAlchemy query/building imports. The narrow worker exception may import
+  only the `AsyncSession` and `async_sessionmaker` types from
+  `sqlalchemy.ext.asyncio`.
 - `select()`, `insert()`, `update()`, `delete()`, `db.execute()`. All DB
   access goes through stores.
 - `db.commit()` or `db.rollback()`. Transactions are owned by the caller
@@ -201,7 +212,10 @@ Allowed:
   any path/query params.
 - `db: AsyncSession = Depends(get_async_session)` for the lookup.
 - Calls to `db/store/**` for the resource lookup.
-- Composing `proliferate.permissions` factory deps (`require_org_role`, etc.).
+- Composing request dependencies from
+  [permissions.py](../../../../../server/proliferate/permissions.py), such as
+  `current_path_org_admin`, `current_owner_context`, or
+  `require_owner_role("owner", "admin")`.
 - Calls to `domain/policy.py` for state-based access checks.
 - Returning the resource as a frozen dataclass.
 
@@ -209,7 +223,8 @@ Banned:
 
 - Mutating writes. Access deps are read-only.
 - Business logic beyond access.
-- Inline authorization helpers (compose the `proliferate.permissions` factories).
+- Inline org-standing helpers (compose the applicable dependency from the
+  public `proliferate.permissions` seam).
 
 ### `errors.py`
 
@@ -292,8 +307,10 @@ uses it."
 
 `worker/service.py` for background work a Celery task calls. See
 [background.md](background.md). Same layer law: no ORM imports, calls service or
-store functions. The task itself is substrate in `background/**`, not a file in
-the domain.
+store functions. It normally receives `db`; when foreign I/O separates bounded
+database phases, it may receive a task-created session factory and must close
+each store-only session before the external call. The task itself is substrate
+in `background/**`, not a file in the domain.
 
 ### Forbidden
 
@@ -354,8 +371,8 @@ async def compute_subject_usage(db: AsyncSession, subject_id: UUID):
 
 The store boundary is safe — it returns frozen dataclasses, no behavior leaks.
 
-**Writes cross via service.** A service must go through another domain's
-public service functions to mutate that domain's resources:
+**Writes cross via service.** A service must go through another domain's public
+service functions to mutate that domain's resources:
 
 ```python
 # billing/service.py
@@ -374,8 +391,11 @@ The owning service runs its own policy, invariants, and audit.
 - A service calling another domain's store *write* function directly.
 - Importing a service's private helpers (`from cloud.workspaces.service
   import _internal`). Public functions only.
-- Cross-domain imports for auth infrastructure. Always use
-  `proliferate.permissions`.
+- Cross-domain imports for authorization infrastructure. Domain code uses the
+  public names re-exported by
+  [permissions.py](../../../../../server/proliferate/permissions.py), while
+  [auth/authorization.py](../../../../../server/proliferate/auth/authorization.py)
+  remains the dependency-free definition owner.
 - Two domains both writing the same ORM resource. The resource has one
   owning domain whose service is the write boundary.
 
@@ -408,13 +428,16 @@ an outside process claims, heartbeats, or reports against a Postgres lease — a
 APIs, not worker code, and stay near `api.py`/`service.py`. See
 [background.md](background.md) for the full background-work organization.
 
+A `worker/` folder containing only its canonical `service.py` is the narrow
+worker exception to the single-file-folder rule.
+
 ## Patterns
 
 - A domain folder either has subfolder children consistently or is flat.
   Mixed shapes (some subfolders, some flat sibling files belonging to a
-  subdomain) are forbidden. `domain/` is the narrow exception to the
-  single-file-folder rule: one meaningful pure-domain file is allowed when
-  the domain only has one extracted rule module.
+  subdomain) are forbidden. `domain/` may contain one meaningful pure-domain
+  file, and `worker/` may contain only its canonical `service.py`; these are the
+  narrow exceptions to the single-file-folder rule.
 - Service composes; domain decides; store persists. If you find a service
   computing a complex rule inline, the rule belongs in `domain/`. If you find
   a domain function calling a store, it's not domain.

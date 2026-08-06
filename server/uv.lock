@@ -1138,7 +1138,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = "==0.28.1" },
     { name = "httpx-oauth", specifier = ">=0.17.0" },
     { name = "kombu", specifier = ">=5.5.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.2" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = "==1.20.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },

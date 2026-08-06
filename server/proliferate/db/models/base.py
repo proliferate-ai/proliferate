@@ -1,13 +1,7 @@
-"""Shared ORM base class and helpers used across all domain model modules."""
-
-from datetime import UTC, datetime
+"""Shared ORM base class used across all domain model modules."""
 
 from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
     pass
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC)
