@@ -5,6 +5,202 @@
 #
 # This is migration debt, not permission for new code. If a cleanup reduces a
 # count, update this file in the same PR.
+#
+# The checker cannot see `#[cfg(test)]` boundaries inside otherwise-production
+# files, so a handful of counts below cover setup code in inline test mods. Those
+# entries say so in their reason and are not cleanup targets.
+#
+# Known scope limits (deliberate, not bugs to file):
+#
+# - Store-by-role files. A file named `*_store.rs` that sits outside a `store/`
+#   directory (e.g. `domains/workspaces/access_store.rs`) is a store by role but
+#   not by path. `in_domain_store` keys off `store.rs` or a `store/` path segment,
+#   so such a file is policed by DOMAIN_SQL_OUTSIDE_STORE — it reads as
+#   "SQL outside the store" — but it is NOT treated as store code by the
+#   importable-store rules (DOMAIN_STORE_API_IMPORT, DOMAIN_STORE_LIVE_IMPORT).
+#   The fix is to move the file under `store/`, which retires the SQL row and
+#   enrols it in the store rules at the same time; until then the asymmetry stands.
+#
+# - Counts are per-line, so formatting can move them. A rustfmt reflow that splits
+#   or joins an embedded SQL string, or rewraps a long signature, legitimately
+#   changes a count without changing what the code does. That is expected and the
+#   fix is a one-line count edit here, in the same PR as the reflow — not a rule
+#   change. Over-count and stale-count both fail, so the checker will tell you the
+#   new number.
+#
+# - AppState field access is only partly mechanical. API_STORE_ESCAPE catches the
+#   store case (`state.<x>_store`), because a `*_store` field name is a reliable
+#   signal. Reaching any other domain innard through an AppState field — a service
+#   that exposes a store, a runtime that hands back a repository — has no such
+#   name to key off and stays a judgment call for review, not a rule.
+#   The store pattern is also bound to the identifier `state`, which is how every
+#   api/** handler param is spelled today; `app_state.foo_store` or a rebound clone
+#   evades it, and that too is review's job.
+#
+# - SQL detection is lexical, so an uppercase SQL verb heading an ordinary string
+#   matches. `bail!("UPDATE failed for {id}")` is indistinguishable from
+#   `"UPDATE sessions SET .."` without parsing Rust, so a hit like that is a
+#   seedable false positive, not a defect — say so in the reason and move on.
+#   Two narrower cases are handled: the exact literal `"SELECT"` (a keyword
+#   constant or serde rename) is excluded, while `"SELECT " + cols` still counts.
+#   SQL quoted inside a `/* .. */` block comment also counts, because comment
+#   stripping only understands `//`. All of these shapes are pinned by unit tests
+#   so the limitation stays visible instead of drifting.
 
 DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs 1 strict-mirror goal runtime uses SetSessionGoalRequest to drive the sidecar ext method; contract mapping pending move above the API boundary
 DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 1 strict-mirror loop runtime uses SetSessionLoopRequest to drive the sidecar ext method; contract mapping pending move above the API boundary
+
+# Rule: domains/** reach live/ only via the runtime valve.
+# 12 files, 21 occurrences.
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs 4 agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/entry.rs 1 inline fully-qualified live probe type in a fn signature; target = agents runtime valve (grid plan PR 6c)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/probe.rs 3 model snapshot calls live session probe directly (3 leaves in one group import); target = agents runtime valve (grid plan PR 6c)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/test_support.rs 3 test-fixture support file (not excluded by should_skip) builds live probe snapshots; target = agents runtime valve or move under tests/ (grid plan PR 6c)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/materialization/service.rs 1 materialization service holds live terminals directly; target = materialization runtime valve (grid plan PR 6a)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1 mobility service holds live terminals directly; target = mobility runtime valve (grid plan PR 6a)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs 2 plan decision op imports actor command types (Resolution, ResolveInteractionCommandError) via the live::sessions root re-export, not ::model; target = model re-export or plans runtime valve (grid plan PR 6e)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/sessions/execution_summary.rs 1 summary reads LiveSessionExecutionSnapshot from live::sessions::handle, not ::model; target = re-export the snapshot as a model shape (grid plan PR 6d)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/sessions/subagents/hooks.rs 1 subagent hooks hold LiveSessionManager directly; target = sessions runtime valve (grid plan PR 6d)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 2 access gate holds live terminals directly (1 use-line + 1 re-import inside the inline cfg(test) mod the engine cannot see); target = workspaces runtime valve (grid plan PR 6b)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 1 retire preflight holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/setup_runtime.rs 1 workspace setup holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)
+
+# Rule: live/** never fetches from domain stores/services.
+# 7 files, 19 occurrences.
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/sessions/background_work/mod.rs 2 both inside the inline cfg(test) mod the engine cannot see (1 import + 1 SessionStore::new in a fixture); target = none, engine-invisible cfg boundary
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 1 probe reaches domain service (resolve_agent_unrouted); target = capability trait or relocation (grid plan PR 7)
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs 5 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/setup_process.rs 3 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/driver/pty.rs 3 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/handle.rs 1 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/manager.rs 4 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
+
+# Rule: api/** calls domain facades, never stores.
+# 6 files, 16 occurrences.
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/health.rs 1 in-memory health snapshot named like a store (Arc<RwLock<AgentSeedHealth>>, not SQL); matches the state.*_store pattern; benign - seeded rather than special-cased to keep the pattern simple
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/hosting.rs 2 1 handler constructs WorkspaceStore directly (1 import + 1 ctor); target = facade method (grid plan PR 3)
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/mobility.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/sessions_pending.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 1 1 handler reaches store directly; target = facade method (grid plan PR 3)
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 10 1 handler reaches store directly at :65; the other 9 are store setup inside the inline cfg(test) mod the engine cannot see; target = facade method (grid plan PR 3)
+
+# Rule: policy.rs and *_policy.rs files are pure.
+# 2 files, 3 occurrences.
+POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workflows/control/policy.rs 1 store-holding policy file: imports WorkflowRunStore at :8 and keeps it as a field, so the decision reads the DB instead of taking facts; target = pass the controlling run id in, or rename to a gate (cleanup PR TBD)
+POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workspaces/retention_policy.rs 2 misnamed policy: DB-backed store with clock (Utc::now at :44 and :66); target = split into store + pure policy (grid plan PR 8c)
+
+# Rule: SQL in domains/** lives in the store.
+# 9 files, 52 occurrences.
+#
+# Counts rose from 39 with no code change: the rule now also reads the heads of
+# SQL statements split across lines (`"UPDATE sessions` / `SET col = ?1`) and
+# conflict-resolving inserts (`INSERT OR IGNORE INTO`), which the two-keywords-on-
+# one-line patterns could not see. Most of the codebase's UPDATEs are split, so
+# the old numbers understated this debt substantially.
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/activity/feeds.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/plans/service.rs 4 plan service queries plans/plan_interaction_links inline; target = plans store methods (grid plan PR 8b)
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/sessions/links/completions.rs 30 session-link completions embed 30 SQL lines outside the store (19 previously counted + 11 now visible: 4 INSERT OR IGNORE heads, 3 split UPDATE heads, 3 SET clauses, 1 split SELECT head); target = sessions/links store (grid plan PR 8a)
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/workspace_materialization/test_support.rs 1 format!-built COUNT query in a test-support file (not excluded by should_skip); target = none, test fixture
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 2 both inside the inline cfg(test) mod the engine cannot see (1 previously counted + 1 DROP TABLE now visible); target = none, engine-invisible cfg boundary
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_store.rs 5 access store is a store by role but not by path; target = rename/move under workspaces/store/ (grid plan PR 8c)
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 1 SQL inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/retention_policy.rs 7 misnamed policy: DB-backed store with embedded SQL (6 previously counted + the split SELECT head at :29 the old patterns missed); target = split into store + pure policy (grid plan PR 8c)
+
+# Rule: the runtime valve holds live/ powers but never re-exports them
+# (DOMAIN_VALVE_LIVE_REEXPORT). Zero occurrences — the rule lands clean and has no
+# seeded debt, so any hit is new code and fails the build.
+
+# Rule: domains/** use domain twins, not wire contract types.
+# 85 files, 116 occurrences.
+#
+# Counts rose from 78 files / 86 occurrences with no code change: the rule now also
+# reads inline `anyharness_contract::` paths (fn signatures, struct literals,
+# turbofish), which no use-statement declares and the import-only pass could not
+# see. Seven files had no row at all. Reasons below distinguish an "import" (a use
+# statement) from an "inline path".
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/activity/feeds.rs 1 1 inline wire path (:311 FeedKind in a struct literal) inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/activity/model.rs 1 1 wire type import below the mapper boundary; target = activity domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/activity/service.rs 1 1 wire type import below the mapper boundary; target = activity domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/activity/session_ports.rs 1 1 wire type import below the mapper boundary; target = activity domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/activity/store.rs 1 1 wire type import below the mapper boundary; target = activity domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/health.rs 1 1 wire type import below the mapper boundary; target = agents domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/mod.rs 1 1 wire type import inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/types.rs 1 1 wire type import below the mapper boundary; target = agents domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/cowork/mcp/calls_helpers.rs 1 1 inline wire path (:31 NormalizedSessionControl fn param) below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/cowork/mcp/definition.rs 1 1 wire type import below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 3 1 wire type import + 2 inline wire paths (:120 struct field, :765 return type) below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/model.rs 1 1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs 2 2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = goals domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/service.rs 1 1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/session_ports.rs 1 1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/store.rs 1 1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/goals/wire.rs 1 1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/model.rs 1 1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 7 3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/schedule.rs 1 1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/service.rs 2 1 wire type import + 1 inline wire path (:245 struct field) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/session_ports.rs 1 1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/store.rs 1 1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/loops/wire.rs 1 1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs 1 1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/plans/document.rs 1 1 wire type import inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/plans/model.rs 1 1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/plans/permission_advisor.rs 1 1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs 4 1 wire type import + 3 inline wire paths building an OriginContext (:374-:376) inside the inline cfg(test) mod the engine cannot see; target = plans domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/plans/service.rs 1 1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/plans/store.rs 1 1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/mcp/calls.rs 1 1 inline wire path (:98 ReviewRunDetail fn param) below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/mcp/definition.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/model.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/runtime/events.rs 2 1 wire type import + 1 inline wire path (:110 match pattern) below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/runtime/feedback.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/runtime/launching.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/runtime/workflow.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/service/detail.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/service/queries.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/session_observer.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/reviews/store/feedback.rs 1 1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/active_activity_roster.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/active_goals.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/active_loops.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/delegation.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/execution_summary.rs 2 2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/extensions.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/live_config/controls.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/live_config/mod.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/live_config/raw.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/live_ports.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs 2 2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/contract.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/product_launch.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/summaries.rs 2 2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/model.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/prompt/capabilities.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/prompt/mod.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/prompt/prepare.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/prompt/provenance.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/replay.rs 2 2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/config.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork.rs 2 1 wire type import + 1 inline wire path (:20 fn param) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/interactions.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/mod.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/pending_prompts.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/replay.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime/view.rs 2 2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/runtime_event.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/service/config.rs 3 3 inline wire paths (SessionLiveConfigSnapshot in return types at :8/:35 and a HashMap value at :22) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs 4 4 inline wire paths (SessionEvent/SessionEventEnvelope at :53/:55/:73 and a turbofish deserialize at :527) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/store/persisted_payloads.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/subagents/hooks.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/subagents/mcp/calls_helpers.rs 1 1 inline wire path (:43 NormalizedSessionControl fn param) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/subagents/mcp/definition.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/subagents/transcript.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workflows/execution.rs 1 1 wire type import below the mapper boundary; target = workflows domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/access_model.rs 1 1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/creator_context.rs 1 1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/purge.rs 1 1 inline wire path (:361 WorkspaceRetireBlocker slice fn param) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs 1 1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 7 1 wire type import + 6 inline wire paths mapping git operations (:557 return type, :560-:572 variants) below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)

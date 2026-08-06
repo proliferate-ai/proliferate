@@ -3,14 +3,46 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 import re
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LIB_SRC = REPO_ROOT / "anyharness" / "crates" / "anyharness-lib" / "src"
+LIB_SRC_RELATIVE = ("anyharness", "crates", "anyharness-lib", "src")
+LIB_SRC = REPO_ROOT.joinpath(*LIB_SRC_RELATIVE)
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "anyharness_boundaries_allowlist.txt"
+
+# Tests point the scan at a fabricated tree via `scan_root(...)` (or by calling
+# `check_file`/`collect_violations` with an explicit root). When no override is
+# active the module constants win, so CLI behaviour is unchanged.
+_ROOT_OVERRIDE: Path | None = None
+
+
+def repo_root() -> Path:
+    return _ROOT_OVERRIDE if _ROOT_OVERRIDE is not None else REPO_ROOT
+
+
+def lib_src() -> Path:
+    if _ROOT_OVERRIDE is not None:
+        return _ROOT_OVERRIDE.joinpath(*LIB_SRC_RELATIVE)
+    return LIB_SRC
+
+
+@contextmanager
+def scan_root(root: Path | None):
+    """Temporarily treat `root` as the repository root for path classification."""
+    global _ROOT_OVERRIDE
+    if root is None:
+        yield
+        return
+    previous = _ROOT_OVERRIDE
+    _ROOT_OVERRIDE = Path(root).resolve()
+    try:
+        yield
+    finally:
+        _ROOT_OVERRIDE = previous
 
 HTTP_TRANSPORT_ROOTS = {"axum", "headers", "http", "http_body", "tower", "utoipa"}
 PRODUCT_DOMAIN_ROOTS = {"domains"}
@@ -40,7 +72,12 @@ SESSION_EVENT_SINK_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/live/sessions/event_sink/",
 )
 TOKEN_RE = re.compile(r"r#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*|::|[{}(),;*]")
-USE_START_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+")
+# `\b` rather than `\s+` after `use`: a statement whose path is pushed to the next
+# line leaves `use` (or `pub use`) alone on the head line, and demanding trailing
+# whitespace made such a statement invisible to the whole import pass.
+USE_START_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\b")
+# A re-export specifically, not a private import: `pub use ..`, `pub(crate) use ..`.
+PUB_USE_START_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+use\b")
 SESSION_COMMAND_USE_RE = re.compile(
     r"(?:\bSessionCommand|crate::live::sessions::actor::command::SessionCommand)\s*::"
 )
@@ -50,6 +87,143 @@ CONTRACT_REQUEST_RESPONSE_RE = re.compile(
     r"([A-Z][A-Za-z0-9_]*(?:Request|Response))\b"
 )
 
+LIB_SRC_PREFIX = "anyharness/crates/anyharness-lib/src/"
+API_PREFIX = f"{LIB_SRC_PREFIX}api/"
+DOMAINS_PREFIX = f"{LIB_SRC_PREFIX}domains/"
+LIVE_PREFIX = f"{LIB_SRC_PREFIX}live/"
+
+# The domain runtime valve: the only files in a domain allowed to hold live/
+# handles, managers and services. Everything else takes facts, not machinery.
+DOMAIN_RUNTIME_VALVE_FILES = {"runtime.rs", "live_ports.rs"}
+DOMAIN_RUNTIME_VALVE_DIR = "runtime"
+# Domains legally implement live-defined observer traits, which means importing
+# the live model shapes those traits speak in (`crate::live::<area>::model::..`).
+# That inversion is sanctioned; only "power" imports are valved.
+LIVE_MODEL_SEGMENT = "model"
+STORE_SEGMENTS = {"store"}
+STORE_OR_SERVICE_SEGMENTS = {"store", "service"}
+DOMAIN_STORE_FORBIDDEN_ROOTS = {"acp", "live"}
+POLICY_FILE_SUFFIX = "_policy.rs"
+POLICY_FILE_NAME = "policy.rs"
+CONTRACT_CRATE_ROOT = "anyharness_contract"
+
+# Inline `crate::live::<area>::<second>` path uses (fn param types, turbofish,
+# fully-qualified calls). `<second>` lets the model-shape exception apply to
+# inline uses exactly as it does to use-statements.
+LIVE_INLINE_PATH_RE = re.compile(
+    r"\bcrate::live::(?P<area>[A-Za-z_][A-Za-z0-9_]*)"
+    r"(?:::(?P<second>[A-Za-z_][A-Za-z0-9_]*))?"
+)
+STORE_METHOD_CALL_RE = re.compile(r"\.store\(\)")
+STORE_CONSTRUCTOR_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*Store::new\b")
+# A handler can also reach a domain store without naming a store type at all, by
+# reading a store field off AppState (`state.agent_seed_store.health()`). Neither
+# the import pass nor the two patterns above see that, because no store type is
+# mentioned on the line. AppState carries exactly one `*_store` field today,
+# `agent_seed_store`, and it is NOT a DB store -- it is an in-memory
+# `Arc<RwLock<AgentSeedHealth>>` snapshot that merely follows the naming law. So
+# today's single match is a benign false positive, seeded in the allowlist rather
+# than special-cased: the field-name shape is the durable signal we want to hold,
+# and a real `*_store` field added later would be caught for the right reason.
+# The pattern is bound to the identifier `state`, which every one of api/**'s
+# handler params is spelled as today (`State(state)`); an `app_state.foo_store` or
+# a rebound clone evades it. That is judgment territory, like the rest of the
+# AppState-field surface noted in the allowlist's Known scope limits stanza.
+APP_STATE_STORE_FIELD_RE = re.compile(r"\bstate\.[a-z_]*_store\b")
+# Inline `anyharness_contract::` path uses (fn signatures, struct literals,
+# turbofish) that no use-statement declares. Mirrors DOMAIN_LIVE_VALVE's
+# import-pass + line-pass pairing.
+CONTRACT_INLINE_PATH_RE = re.compile(r"\banyharness_contract::")
+POLICY_IMPURITY_RES = (
+    re.compile(r"\bUtc::now\b"),
+    re.compile(r"\bLocal::now\b"),
+    re.compile(r"\bSystemTime::now\b"),
+    re.compile(r"\bInstant::now\b"),
+    re.compile(r"\bUuid::new_v4\b"),
+    re.compile(r"\brand::"),
+)
+# Calibrated against domains/**: these patterns hit every embedded-SQL line found
+# outside store code, with no false positives in the current tree.
+#
+# The first six are whole-statement shapes that fit on one line. The next three
+# are keyword-anchored heads for the far more common case of SQL that rustfmt (or
+# the author) split across lines: `"UPDATE sessions` / `SET col = ?1` /
+# `WHERE id = ?1` each land on their own line, so a rule that demanded two
+# keywords together saw none of them. Keeping the clause heads uppercase-only and
+# anchored to a line start or an opening quote is what keeps most prose out: a
+# lowercase "select the agent" comment or log string cannot match, and `UPDATE`
+# additionally requires a lowercase table identifier after it, so `DO UPDATE SET`
+# fragments do not count twice.
+#
+# Known limits, accepted rather than chased (pinned by unit tests so they stay
+# visible):
+#   * An uppercase SQL verb heading a non-SQL string still matches --
+#     `bail!("UPDATE failed for {id}")` is lexically indistinguishable from
+#     `"UPDATE sessions SET .."`. No regex can separate them; a match here is a
+#     seedable false positive, not a defect.
+#   * `SELECT` excludes only the exact literal `"SELECT"` (a keyword constant or
+#     a serde rename), via `(?!")`. A built fragment `"SELECT " + cols` must keep
+#     matching, so the exclusion cannot extend to a quote after whitespace.
+#   * Block comments are scanned as code: strip_line_comment only understands
+#     `//`, so SQL quoted inside `/* .. */` counts.
+SQL_RES = (
+    re.compile(r"\bINSERT INTO\b"),
+    re.compile(r"\bSELECT\b.*\bFROM\b"),
+    re.compile(r"\bON CONFLICT\b"),
+    re.compile(r"\bCREATE TABLE\b"),
+    re.compile(r"\bDELETE FROM\b"),
+    re.compile(r"\bUPDATE\b.*\bSET\b"),
+    re.compile(r"\bparams!|\brusqlite::params\b"),
+    # Split-statement heads: the write verb and its table on one line, the clauses
+    # on the next.
+    re.compile(r'(?:^|")\s*SELECT\b(?!")'),
+    re.compile(r'(?:^|")\s*UPDATE\s+[a-z_]'),
+    re.compile(r"^\s*SET\b"),
+    # Conflict-resolving inserts and drops, which the two bare-verb patterns above
+    # miss because the verb and `INTO`/the table are separated by a modifier.
+    re.compile(r"\bINSERT\s+OR\s+[A-Z]+\s+INTO\b"),
+    re.compile(r"\bDROP TABLE\b"),
+)
+
+DOMAIN_LIVE_VALVE_MESSAGE = (
+    "domain code may reach live/ only through the domain's runtime valve "
+    "(runtime.rs, runtime/**, live_ports.rs) — promote this use case to the "
+    "runtime; see anyharness-structure.md"
+)
+LIVE_DOMAIN_STORE_MESSAGE = (
+    "live/ never fetches — pass facts in the launch bundle or add a capability "
+    "trait wired in app/"
+)
+API_STORE_ESCAPE_MESSAGE = (
+    "handlers call domain facades, never stores — add a facade method; "
+    "see anyharness-structure.md"
+)
+POLICY_PURITY_MESSAGE = (
+    "policy files are pure: facts in, decisions out — no clock, no ids, no "
+    "store; mint in execute"
+)
+DOMAIN_SQL_OUTSIDE_STORE_MESSAGE = (
+    "SQL belongs in the domain's store — move this query into store.rs/store/**; "
+    "see anyharness-structure.md"
+)
+DOMAIN_CONTRACT_IMPORT_MESSAGE = (
+    "domain code must not import wire contract types below the API mapper "
+    "boundary — use a domain twin; see anyharness-structure.md"
+)
+DOMAIN_VALVE_LIVE_REEXPORT_MESSAGE = (
+    "the runtime valve may hold live/ powers but must not re-export them — a "
+    "`pub use crate::live::..` republishes the power domain-wide; expose a domain "
+    "port instead; see anyharness-structure.md"
+)
+
+
+def path_relative_to_root(path: Path) -> str:
+    """Repo-relative posix path; already-relative paths pass through unchanged."""
+    try:
+        return path.relative_to(repo_root()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
 
 @dataclass(frozen=True)
 class Violation:
@@ -58,9 +232,14 @@ class Violation:
     lineno: int
     message: str
 
+    def __post_init__(self) -> None:
+        # Resolved at construction so a violation keeps its reported path after a
+        # `scan_root(...)` override is unwound.
+        object.__setattr__(self, "_relative_path", path_relative_to_root(self.path))
+
     @property
     def relative_path(self) -> str:
-        return self.path.relative_to(REPO_ROOT).as_posix()
+        return self._relative_path  # type: ignore[attr-defined]
 
     def format(self) -> str:
         return f"{self.relative_path}:{self.lineno}: [{self.rule_id}] {self.message}"
@@ -125,7 +304,7 @@ def strip_line_comment(line: str) -> str:
 
 
 def relative(path: Path) -> str:
-    return path.relative_to(REPO_ROOT).as_posix()
+    return path_relative_to_root(path)
 
 
 def is_under(relative_path: str, prefix: str) -> bool:
@@ -195,16 +374,81 @@ def in_session_event_sink(relative_path: str) -> bool:
     return any(is_under(relative_path, prefix) for prefix in SESSION_EVENT_SINK_PREFIXES)
 
 
+def domain_relative_parts(relative_path: str) -> tuple[str, ...]:
+    """The path parts below `domains/`, e.g. ('sessions', 'runtime', 'fork.rs')."""
+    if not is_under(relative_path, DOMAINS_PREFIX):
+        return ()
+    return tuple(relative_path[len(DOMAINS_PREFIX) :].split("/"))
+
+
+def in_domain_runtime_valve(relative_path: str) -> bool:
+    """Files allowed to hold live/ machinery: runtime.rs, runtime/**, live_ports.rs."""
+    parts = domain_relative_parts(relative_path)
+    if not parts:
+        return False
+    if parts[-1] in DOMAIN_RUNTIME_VALVE_FILES:
+        return True
+    return DOMAIN_RUNTIME_VALVE_DIR in parts[:-1]
+
+
+def is_live_model_import(import_path: ImportPath) -> bool:
+    """crate::live::<area>::model::.. — the sanctioned observer-trait inversion."""
+    return (
+        len(import_path.parts) >= 4
+        and import_path.parts[0] == "crate"
+        and import_path.parts[1] == "live"
+        and import_path.parts[3] == LIVE_MODEL_SEGMENT
+    )
+
+
+def in_domain_store(relative_path: str) -> bool:
+    """domains/<d>/**/store/** or a store.rs sitting inside a domain."""
+    parts = domain_relative_parts(relative_path)
+    if len(parts) < 2:
+        return False
+    if parts[-1] == "store.rs":
+        return True
+    return "store" in parts[:-1]
+
+
+def is_policy_file(relative_path: str) -> bool:
+    """`*_policy.rs` and a file named exactly `policy.rs`, anywhere under domains/**.
+
+    The suffix test alone missed `domains/<d>/**/policy.rs`, which is the same
+    thing by role and by name — a module whose whole job is deciding.
+    """
+    parts = domain_relative_parts(relative_path)
+    if not parts:
+        return False
+    return parts[-1] == POLICY_FILE_NAME or relative_path.endswith(POLICY_FILE_SUFFIX)
+
+
+def has_segment(import_path: ImportPath, segments: set[str]) -> bool:
+    return any(part in segments for part in import_path.parts)
+
+
+def is_domain_store_or_service_import(import_path: ImportPath) -> bool:
+    return import_path.starts_with_crate("domains") and has_segment(
+        import_path, STORE_OR_SERVICE_SEGMENTS
+    )
+
+
+def is_domain_store_import(import_path: ImportPath) -> bool:
+    return import_path.starts_with_crate("domains") and has_segment(
+        import_path, STORE_SEGMENTS
+    )
+
+
 def should_skip(path: Path) -> bool:
     if path.name.endswith("_tests.rs") or path.name == "tests.rs":
         return True
-    return any(part == "tests" for part in path.relative_to(LIB_SRC).parts)
+    return any(part == "tests" for part in path.relative_to(lib_src()).parts)
 
 
 def iter_anyharness_files() -> list[Path]:
     return [
         path
-        for path in sorted(LIB_SRC.rglob("*.rs"))
+        for path in sorted(lib_src().rglob("*.rs"))
         if path.is_file() and not should_skip(path)
     ]
 
@@ -227,6 +471,22 @@ def iter_use_statements(path: Path) -> list[tuple[int, list[str]]]:
             start_line = 0
 
     return statements
+
+
+def use_statement_linenos(path: Path) -> set[int]:
+    """Every line number a use statement occupies, head and continuations alike.
+
+    The line pass must not re-flag text the import pass already parsed. Testing
+    each line for a `use` prefix is not enough: in a root-brace group
+    (`use {\\n    anyharness_contract::v1::Foo,\\n};`) the interesting leaf sits on
+    a continuation line that carries no prefix, so the prefix test let the line
+    pass fire there while the import pass fired at the head — one import counted
+    twice. Skipping the statement's whole line span fixes that by construction.
+    """
+    covered: set[int] = set()
+    for start_line, lines in iter_use_statements(path):
+        covered.update(range(start_line, start_line + len(lines)))
+    return covered
 
 
 def tokenize_use_statement(start_line: int, lines: list[str]) -> list[Token]:
@@ -459,26 +719,28 @@ def check_integrations_import(
     )
 
 
-def check_session_store_import(
+def check_domain_store_import(
     violations: list[Violation],
     path: Path,
     import_path: ImportPath,
 ) -> None:
+    """Generalized from the sessions-only rule: every domain store is a leaf."""
     add_if(
         violations,
         import_path.starts_with_crate("api"),
-        "SESSION_STORE_API_IMPORT",
+        "DOMAIN_STORE_API_IMPORT",
         path,
         import_path.crate_root_line,
-        "domains/sessions/store/** must not import api/**",
+        "domain store code must not import api/** — stores are persistence leaves",
     )
     add_if(
         violations,
-        import_path.crate_root in LIVE_RUNTIME_ROOTS,
-        "SESSION_STORE_LIVE_IMPORT",
+        import_path.crate_root in DOMAIN_STORE_FORBIDDEN_ROOTS,
+        "DOMAIN_STORE_LIVE_IMPORT",
         path,
         import_path.crate_root_line,
-        "domains/sessions/store/** must not import live runtime modules",
+        "domain store code must not import live/acp runtime modules — stores are "
+        "persistence leaves",
     )
 
 
@@ -595,16 +857,208 @@ def check_domain_contract_import(
     )
 
 
+def check_domain_live_valve_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    add_if(
+        violations,
+        import_path.crate_root == "live" and not is_live_model_import(import_path),
+        "DOMAIN_LIVE_VALVE",
+        path,
+        import_path.crate_root_line,
+        DOMAIN_LIVE_VALVE_MESSAGE,
+    )
+
+
+def check_live_domain_store_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    add_if(
+        violations,
+        is_domain_store_or_service_import(import_path),
+        "LIVE_DOMAIN_STORE_IMPORT",
+        path,
+        import_path.crate_root_line,
+        LIVE_DOMAIN_STORE_MESSAGE,
+    )
+
+
+def check_api_store_escape_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    add_if(
+        violations,
+        is_domain_store_import(import_path),
+        "API_STORE_ESCAPE",
+        path,
+        import_path.crate_root_line,
+        API_STORE_ESCAPE_MESSAGE,
+    )
+
+
+def check_policy_purity_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    add_if(
+        violations,
+        has_segment(import_path, STORE_SEGMENTS) or import_path.crate_root == "adapters",
+        "POLICY_PURITY",
+        path,
+        import_path.crate_root_line,
+        POLICY_PURITY_MESSAGE,
+    )
+
+
+def check_domain_contract_crate_import(
+    violations: list[Violation],
+    path: Path,
+    start_line: int,
+    import_paths: list[ImportPath],
+) -> None:
+    """One violation per use-statement, matching the engine's import granularity."""
+    add_if(
+        violations,
+        any(import_path.root == CONTRACT_CRATE_ROOT for import_path in import_paths),
+        "DOMAIN_CONTRACT_IMPORT",
+        path,
+        start_line,
+        DOMAIN_CONTRACT_IMPORT_MESSAGE,
+    )
+
+
+def has_non_model_live_use(line: str) -> bool:
+    """An inline `crate::live::..` path use that is not a live model shape."""
+    for match in LIVE_INLINE_PATH_RE.finditer(line):
+        if match.group("second") != LIVE_MODEL_SEGMENT:
+            return True
+    return False
+
+
+def is_non_model_live_reexport(import_path: ImportPath) -> bool:
+    """A re-exported live power: `crate::live::<area>::<not-model>`."""
+    return import_path.crate_root == "live" and not is_live_model_import(import_path)
+
+
+def check_domain_valve_live_reexport(
+    violations: list[Violation],
+    path: Path,
+    start_line: int,
+    lines: list[str],
+    import_paths: list[ImportPath],
+) -> None:
+    """Valve files may hold live powers; re-exporting them launders the valve away.
+
+    One violation per re-exporting statement, not per leaf: the statement is the
+    laundering act, and a group `pub use crate::live::sessions::{A, B}` is one act.
+
+    The `pub use` prefix is matched against the statement's joined text, not just
+    its first line: `pub use\\n    crate::live::sessions::Handle;` is the same
+    re-export, and testing only line one let that spelling launder silently.
+    """
+    if not PUB_USE_START_RE.search(" ".join(line.strip() for line in lines)):
+        return
+    add_if(
+        violations,
+        any(is_non_model_live_reexport(import_path) for import_path in import_paths),
+        "DOMAIN_VALVE_LIVE_REEXPORT",
+        path,
+        start_line,
+        DOMAIN_VALVE_LIVE_REEXPORT_MESSAGE,
+    )
+
+
 def check_line_patterns(violations: list[Violation], path: Path) -> None:
     rel = relative(path)
     allow_session_private = in_live_sessions(rel)
     allow_command_tx = in_command_tx_allowed_path(rel)
     allow_app_state = in_api_or_app(rel)
     check_contract_types = is_domain_path(rel)
+    in_domains = is_under(rel, DOMAINS_PREFIX)
+    check_live_valve = in_domains and not in_domain_runtime_valve(rel)
+    check_api_store_escape = is_under(rel, API_PREFIX)
+    check_policy_purity = is_policy_file(rel)
+    check_domain_sql = in_domains and not in_domain_store(rel)
+    # live/** can construct or call a domain store inline without importing one,
+    # which the import-only rule could not see. Same rule id, same message: it is
+    # the same law, just the other half of the surface.
+    check_live_store_line = is_under(rel, LIVE_PREFIX)
+    check_contract_inline = in_domains
+    # Lines the import pass already owns. Computed once per file, for the whole
+    # span of each statement rather than just its head line -- see
+    # use_statement_linenos.
+    import_pass_linenos = use_statement_linenos(path)
 
     for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
         line = strip_line_comment(raw_line)
         is_use_line = line.lstrip().startswith("use ")
+        # The rules that share the use-statement pass must not re-count any line
+        # of a use statement, head or continuation.
+        inside_use_statement = lineno in import_pass_linenos
+        if check_live_valve and not inside_use_statement:
+            add_if(
+                violations,
+                has_non_model_live_use(line),
+                "DOMAIN_LIVE_VALVE",
+                path,
+                lineno,
+                DOMAIN_LIVE_VALVE_MESSAGE,
+            )
+        if check_api_store_escape and not inside_use_statement:
+            add_if(
+                violations,
+                STORE_METHOD_CALL_RE.search(line) is not None
+                or STORE_CONSTRUCTOR_RE.search(line) is not None
+                or APP_STATE_STORE_FIELD_RE.search(line) is not None,
+                "API_STORE_ESCAPE",
+                path,
+                lineno,
+                API_STORE_ESCAPE_MESSAGE,
+            )
+        if check_live_store_line and not inside_use_statement:
+            add_if(
+                violations,
+                STORE_METHOD_CALL_RE.search(line) is not None
+                or STORE_CONSTRUCTOR_RE.search(line) is not None,
+                "LIVE_DOMAIN_STORE_IMPORT",
+                path,
+                lineno,
+                LIVE_DOMAIN_STORE_MESSAGE,
+            )
+        if check_contract_inline and not inside_use_statement:
+            add_if(
+                violations,
+                CONTRACT_INLINE_PATH_RE.search(line) is not None,
+                "DOMAIN_CONTRACT_IMPORT",
+                path,
+                lineno,
+                DOMAIN_CONTRACT_IMPORT_MESSAGE,
+            )
+        if check_policy_purity and not inside_use_statement:
+            add_if(
+                violations,
+                any(pattern.search(line) is not None for pattern in POLICY_IMPURITY_RES),
+                "POLICY_PURITY",
+                path,
+                lineno,
+                POLICY_PURITY_MESSAGE,
+            )
+        if check_domain_sql:
+            add_if(
+                violations,
+                any(pattern.search(line) is not None for pattern in SQL_RES),
+                "DOMAIN_SQL_OUTSIDE_STORE",
+                path,
+                lineno,
+                DOMAIN_SQL_OUTSIDE_STORE_MESSAGE,
+            )
         add_if(
             violations,
             not allow_session_private and SESSION_COMMAND_USE_RE.search(line) is not None,
@@ -640,37 +1094,50 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
             )
 
 
-def check_file(path: Path) -> list[Violation]:
+def check_file(path: Path, root: Path | None = None) -> list[Violation]:
+    with scan_root(root):
+        return _check_file(path)
+
+
+def _check_file(path: Path) -> list[Violation]:
     rel = relative(path)
     violations: list[Violation] = []
-    in_api = is_under(rel, "anyharness/crates/anyharness-lib/src/api/")
-    in_domains = is_under(rel, "anyharness/crates/anyharness-lib/src/domains/")
+    in_api = is_under(rel, API_PREFIX)
+    in_domains = is_under(rel, DOMAINS_PREFIX)
+    in_live = is_under(rel, LIVE_PREFIX)
     in_core_domain = is_core_domain_path(rel)
-    in_adapters = is_under(rel, "anyharness/crates/anyharness-lib/src/adapters/")
-    in_integrations = is_under(rel, "anyharness/crates/anyharness-lib/src/integrations/")
-    in_session_store = is_under(
-        rel,
-        "anyharness/crates/anyharness-lib/src/domains/sessions/store/",
-    )
+    in_adapters = is_under(rel, f"{LIB_SRC_PREFIX}adapters/")
+    in_integrations = is_under(rel, f"{LIB_SRC_PREFIX}integrations/")
+    in_domain_store_leaf = in_domain_store(rel)
     in_event_sink = in_session_event_sink(rel)
-    in_persistence = is_under(rel, "anyharness/crates/anyharness-lib/src/persistence/")
+    in_persistence = is_under(rel, f"{LIB_SRC_PREFIX}persistence/")
+    in_live_valve = in_domains and in_domain_runtime_valve(rel)
+    in_policy = is_policy_file(rel)
 
     for start_line, lines in iter_use_statements(path):
-        for import_path in parse_use_paths(start_line, lines):
+        import_paths = parse_use_paths(start_line, lines)
+        for import_path in import_paths:
             if not import_path.parts:
                 continue
             if in_api:
                 check_api_import(violations, path, import_path)
+                check_api_store_escape_import(violations, path, import_path)
             if in_domains:
                 check_domains_import(violations, path, import_path)
+                if not in_live_valve:
+                    check_domain_live_valve_import(violations, path, import_path)
+            if in_live:
+                check_live_domain_store_import(violations, path, import_path)
+            if in_policy:
+                check_policy_purity_import(violations, path, import_path)
             if in_core_domain:
                 check_core_domain_import(violations, path, import_path)
             if in_adapters:
                 check_adapters_import(violations, path, import_path)
             if in_integrations:
                 check_integrations_import(violations, path, import_path)
-            if in_session_store:
-                check_session_store_import(violations, path, import_path)
+            if in_domain_store_leaf:
+                check_domain_store_import(violations, path, import_path)
             if in_event_sink:
                 check_event_sink_import(violations, path, import_path)
             if in_persistence:
@@ -678,50 +1145,53 @@ def check_file(path: Path) -> list[Violation]:
             check_live_session_private_import(violations, path, import_path)
             check_app_state_import(violations, path, import_path)
             check_domain_contract_import(violations, path, import_path)
+        if in_domains:
+            check_domain_contract_crate_import(violations, path, start_line, import_paths)
+        if in_live_valve:
+            check_domain_valve_live_reexport(
+                violations, path, start_line, lines, import_paths
+            )
 
     check_line_patterns(violations, path)
     return violations
 
 
-def load_allowlist() -> dict[tuple[str, str], AllowlistEntry]:
-    if not ALLOWLIST_PATH.exists():
+def load_allowlist(allowlist_path: Path | None = None) -> dict[tuple[str, str], AllowlistEntry]:
+    path = ALLOWLIST_PATH if allowlist_path is None else Path(allowlist_path)
+    if not path.exists():
         return {}
+    try:
+        label = path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        label = path.as_posix()
     entries: dict[tuple[str, str], AllowlistEntry] = {}
-    for lineno, raw_line in enumerate(ALLOWLIST_PATH.read_text().splitlines(), start=1):
+    for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
         parts = line.split(maxsplit=3)
         if len(parts) != 4:
-            raise ValueError(
-                f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)}:{lineno}: "
-                "expected RULE_ID path count reason"
-            )
+            raise ValueError(f"{label}:{lineno}: expected RULE_ID path count reason")
         rule_id, relative_path, count_raw, reason = parts
         try:
             count = int(count_raw)
         except ValueError as error:
-            raise ValueError(
-                f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)}:{lineno}: count must be an integer"
-            ) from error
+            raise ValueError(f"{label}:{lineno}: count must be an integer") from error
         if count < 1:
-            raise ValueError(
-                f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)}:{lineno}: count must be positive"
-            )
+            raise ValueError(f"{label}:{lineno}: count must be positive")
         key = (rule_id, relative_path)
         if key in entries:
-            raise ValueError(
-                f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)}:{lineno}: duplicate allowlist entry"
-            )
+            raise ValueError(f"{label}:{lineno}: duplicate allowlist entry")
         entries[key] = AllowlistEntry(rule_id, relative_path, count, reason)
     return entries
 
 
-def collect_violations() -> list[Violation]:
-    violations: list[Violation] = []
-    for path in iter_anyharness_files():
-        violations.extend(check_file(path))
-    return violations
+def collect_violations(root: Path | None = None) -> list[Violation]:
+    with scan_root(root):
+        violations: list[Violation] = []
+        for path in iter_anyharness_files():
+            violations.extend(_check_file(path))
+        return violations
 
 
 def apply_allowlist(
