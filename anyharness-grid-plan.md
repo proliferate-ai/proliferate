@@ -442,6 +442,12 @@ PR follows the ruling. **One cargo build.**
   the SAME PR must add a seam test proving the outer layer still rejects
   and the row is unwritten — existing tests won't catch the guard's
   deletion because they were written when it couldn't be bypassed.
+  Coda from closing it: the negative control found an independent DB
+  CHECK constraint (migration 0040) already guarding the column — the
+  review's data-loss scenario was overstated (real exposure: raw SQLite
+  constraint error instead of a clean 400). Lesson on the lesson: run
+  the negative control before believing a reviewer's failure scenario;
+  and check migrations for CHECK constraints when auditing guard moves.
 
 ## PR 13 — Crate splits + visibility ratchet (violation #7, capstone)
 
