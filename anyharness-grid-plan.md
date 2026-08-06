@@ -593,7 +593,20 @@ cfg(test) rows.
    → BOTH endpoints dead-end (retire: "cleanup is not complete";
    retry: refuses to resume) — a workspace stuck in this state has no
    API path out. (b) wants a product decision: which endpoint should
-   accept it? Adversarial review in flight.
+   accept it? Review verdict: CLEAN on behavior — reviewer rebuilt the
+   full 24-case decision table externally, 0 mismatches; lease scope a
+   strict subset of old; no auth-ordering leak (and none existed). Two
+   proof-strength P2s closed at **237c33f1d** (CI green, CLEAN):
+   LOCK-01 anchor half-2 was vacuous (signature-parameter token) — and
+   the reviewer's suggested fix was ALSO insufficient under the
+   reviewer's own control (hoisting the lease earlier doesn't violate
+   "lease before fence"); the anchor now pins TWO body-resident links,
+   each independently negative-controlled. The unobservable-race
+   comment rewritten to the true reason (behavior-preservation
+   fidelity); 24-case test reformulated with hand-written expectations
+   from the pre-refactor predicate (real old==new check, not a
+   tautology). session_admission_tests pin LOWERED 660→650 via anchor
+   table collapse — no pin raised.
 
 Notes for the merged future: PR 6a's spec deviation is ruled-in-diff —
 the service's `Arc<SessionRuntime>` (held only for `runtime_home()`) was
