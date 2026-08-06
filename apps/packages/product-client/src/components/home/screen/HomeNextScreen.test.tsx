@@ -14,6 +14,7 @@ import { createMemoryProductStorage, type MemoryProductStorage } from "#product/
 import type { ProductStorage } from "@proliferate/product-client/host/product-host";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
 import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
+import { installLocalStorageMock } from "#product/components/home/screen/HomeNextScreen.test-support";
 
 const screenMocks = vi.hoisted(() => {
   const handleHomeAction = vi.fn();
@@ -170,24 +171,6 @@ vi.mock("#product/components/workspace/chat/input/ChatComposerActions", () => ({
     </button>
   ),
 }));
-
-function installLocalStorageMock(options?: { throwOnSet?: boolean }) {
-  const values = new Map<string, string>();
-  Object.defineProperty(window, "localStorage", {
-    configurable: true,
-    value: {
-      get length() { return values.size; },
-      clear: () => values.clear(),
-      getItem: (key: string) => values.get(key) ?? null,
-      key: (index: number) => Array.from(values.keys())[index] ?? null,
-      removeItem: (key: string) => values.delete(key),
-      setItem: (key: string, value: string) => {
-        if (options?.throwOnSet) throw new Error("localStorage write failed");
-        values.set(key, String(value));
-      },
-    },
-  });
-}
 
 function resetHomeNext() {
   screenMocks.productHost.desktop = {};

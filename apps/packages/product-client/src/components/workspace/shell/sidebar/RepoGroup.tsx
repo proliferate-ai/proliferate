@@ -182,13 +182,15 @@ export function RepoGroup({
     };
   }, [clearActiveNewWorkspaceScope, newWorkspaceCommandScope?.id]);
 
+  const repositoryIcon = (
+    <RepoGroupEnvironmentIcon kind={environmentKind} expanded={!collapsed} />
+  );
   const headerRow = (
     <ProductSidebarRepoGroupHeader
       label={name}
       collapsed={collapsed}
-      icon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded={false} />}
-      expandedIcon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded />}
-      hoverIcon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded={!collapsed} />}
+      icon={repositoryIcon}
+      hoverIcon={repositoryIcon}
       onToggleCollapsed={onToggleCollapsed}
       onContextMenuCapture={onContextMenuCapture}
       action={(

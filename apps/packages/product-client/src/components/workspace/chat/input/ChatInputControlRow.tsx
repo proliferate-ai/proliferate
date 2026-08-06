@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
-import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
-import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
@@ -49,8 +47,8 @@ export interface ComposerLeadingControlsProps {
 }
 
 /**
- * The leading control cluster (model selector, mode, reasoning bars, fast mode,
- * goal, integrations). Shared verbatim between the in-session chat composer
+ * The leading control cluster (combined model/tuning selector, mode, goal,
+ * integrations). Shared verbatim between the in-session chat composer
  * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
  * home feeds it launch-time control descriptors instead of live-session
  * ones, and session-only controls (goal) hide via their own gating.
@@ -76,7 +74,7 @@ export function ComposerLeadingControls({
 
   return (
     <>
-      {/* 1. Model/harness selector — leftmost */}
+      {/* 1. Model, reasoning effort, and Fast mode — one intelligence control. */}
       <div
         className={`flex min-w-0 items-center ${
           runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
@@ -84,6 +82,8 @@ export function ComposerLeadingControls({
       >
         <ComposerModelSelectorControl
           modelSelectorProps={modelSelectorProps}
+          reasoningControl={controlGroups.reasoningEffortControl}
+          fastModeControl={controlGroups.fastModeControl}
           disabled={runtimeControlsDisabled}
           keyboardShortcutEnabled
         />
@@ -104,31 +104,7 @@ export function ComposerLeadingControls({
         </span>
       )}
 
-      {/* 3. Reasoning/effort bars */}
-      {controlGroups.reasoningEffortControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerReasoningEffortBars
-            control={controlGroups.reasoningEffortControl}
-          />
-        </span>
-      )}
-
-      {/* 4. Fast mode toggle */}
-      {controlGroups.fastModeControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
-        </span>
-      )}
-
-      {/* 5. Goal button */}
+      {/* 3. Goal button */}
       {canSetGoal && (
         <ComposerControlButton
           iconOnly
@@ -144,7 +120,7 @@ export function ComposerLeadingControls({
         />
       )}
 
-      {/* 6. Integrations control */}
+      {/* 4. Integrations control */}
       <ComposerIntegrationsControl />
     </>
   );

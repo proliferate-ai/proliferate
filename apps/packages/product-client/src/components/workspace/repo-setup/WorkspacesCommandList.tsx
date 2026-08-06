@@ -16,7 +16,7 @@
  * Rows are ~36px, `--accent` fill when selected; the selected row swaps the
  * date for `Go to →` (and hides the ahead/behind label). Group headings carry
  * the item count in `--faint`. An optional dashed "Create" row closes the
- * list with a ⌘N hint.
+ * list with an optional creation-shortcut hint.
  */
 import { ChevronRight, FolderPlus, GitPullRequest } from "lucide-react";
 import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
@@ -88,7 +88,7 @@ export interface WorkspacesCommandListProps {
   filterRowActions?: ReactNode;
   onWorkspaceSelect?: (workspaceId: string) => void;
   onCreate?: () => void;
-  createShortcutLabel?: string;
+  createShortcutLabel?: string | null;
   className?: string;
 }
 
@@ -99,7 +99,7 @@ export function WorkspacesCommandList({
   filterRowActions = null,
   onWorkspaceSelect,
   onCreate,
-  createShortcutLabel = "⌘N",
+  createShortcutLabel = null,
   className = "",
 }: WorkspacesCommandListProps) {
   return (
@@ -151,9 +151,11 @@ export function WorkspacesCommandList({
           >
             <FolderPlus className="icon-paired shrink-0" aria-hidden />
             <span>Create</span>
-            <span className="ml-auto text-ui-sm text-faint opacity-0 transition-opacity duration-hover group-hover:opacity-100 group-data-[selected=true]:opacity-100">
-              {createShortcutLabel}
-            </span>
+            {createShortcutLabel ? (
+              <span className="ml-auto text-ui-sm text-faint opacity-0 transition-opacity duration-hover group-hover:opacity-100 group-data-[selected=true]:opacity-100">
+                {createShortcutLabel}
+              </span>
+            ) : null}
           </CommandItem>
         ) : null}
       </CommandList>

@@ -108,7 +108,7 @@ and greater than their font sizes; they do not need to equal prose line height.
   untyped owned strings and icon-only controls. Role-specific utilities still
   override that fallback, and the unchanged `html` root keeps rem-based layout
   geometry independent from the UI font preference.
-- Paired row/button icons default to `1.15em` of their owning label. Compact,
+- Paired row/button icons default to `1.230769em` of their owning label. Compact,
   large, and display tiers remain proportional to a semantic text owner.
 - Visible glyphs scale inside their existing accessible target. Pointer hit
   areas and structural row heights stay fixed unless an existing responsive

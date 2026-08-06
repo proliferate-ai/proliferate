@@ -49,7 +49,6 @@ export function SidebarRepositoriesHeader({
         actions={(
           <div className="flex items-center gap-0.5">
             <PopoverButton
-              stopPropagation
               trigger={(
                 <SidebarActionButton
                   title="Repository options"

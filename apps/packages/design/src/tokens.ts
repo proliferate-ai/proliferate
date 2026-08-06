@@ -861,13 +861,9 @@ export const themeTokens = {
     provenance: "[SHIPPED:raw-hex-move]",
   },
   /**
-   * Transcript measure. Readable Markdown prose is capped at
-   * `--thread-content-max-width: 40rem`, and wide blocks (tables, images,
-   * code) are allowed to spill to `--markdown-wide-block-max-width: 64rem`.
-   * Named in Tailwind's `--container-*` namespace so consumers write
-   * `max-w-transcript-readable` / `max-w-transcript-wide` instead of an
-   * arbitrary bracket width — a consistency choice, not something the
-   * appearance gate forces (the gate has no max-w rule).
+   * Narrow 40rem measure for prose-heavy surfaces outside the unified chat
+   * flow. Named in Tailwind's `--container-*` namespace so consumers can use
+   * `max-w-transcript-readable` instead of an arbitrary bracket width.
    */
   "--container-transcript-readable": {
     dark: "40rem",
@@ -1058,7 +1054,7 @@ export const themeTokens = {
    * The single interactive-control height. Every compact control that sits in a
    * row with its peers — composer model/mode/integration/add-file/send buttons,
    * segmented controls, header pills, settings toggles — is 28px tall at the
-   * same 12px `--text-ui` label. The composer already shipped that height at
+   * same 13px `--text-ui` label. The composer already shipped that height at
    * ~70 call sites, so this token names the shipped winner rather than
    * introducing a new one; `--size-icon-button-lg` and
    * `--workspace-shell-action-size` are the same 1.75rem, which is the
@@ -1103,7 +1099,7 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   /**
-   * Sidebar row glyphs use the row text's 12px optical size inside their
+   * Sidebar row glyphs use the row text's 13px optical size inside their
    * larger alignment wells. Keeping this role separate from `--icon-compact`
    * lets the sidebar remain independently tunable even though both currently
    * resolve to the same ratio.
@@ -1134,7 +1130,7 @@ export const themeTokens = {
    * sidebar's `RowActionIconButton` kebab) rendered their glyph at
    * `--icon-control` (16px), which read 50-60% too big against the
    * reference sidebar on screen even though the ratio math looked correct.
-   * `0.875em` lands at 10.5px against the sidebar row's 12px text — the
+   * `0.875em` lands at 11.4px against the sidebar row's 13px text — the
    * smallest inline-glyph tier, reserved for these row-trailing controls
    * whose 24px hit box is unusually large relative to their glyph.
    */

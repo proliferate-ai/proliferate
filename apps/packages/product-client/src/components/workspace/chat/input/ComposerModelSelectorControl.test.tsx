@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { modelUnsupportedControlMessage } from "#product/lib/domain/chat/models/model-support-refusals";
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher";
@@ -28,12 +29,11 @@ function ShortcutDispatcher() {
 }
 
 function openModelOptions(container: HTMLElement) {
-  const trigger = container.querySelector<HTMLElement>("[data-composer-model-trigger]")!;
-  fireEvent.pointerDown(trigger, {
+  fireEvent.pointerDown(container.querySelector<HTMLElement>("[data-composer-model-trigger]")!, {
     button: 0,
     ctrlKey: false,
   });
-  fireEvent.click(trigger);
+  fireEvent.click(document.querySelector<HTMLElement>("[data-composer-model-menu]")!);
 }
 
 it("identifies model rows by both harness kind and model id", () => {
@@ -129,14 +129,14 @@ it("marks a refused row as disabled and explains it, rather than hiding the mode
   );
 
   openModelOptions(container);
-  const refusedRow = document.querySelector<HTMLButtonElement>('[data-model-option="opus-9"]');
+  const refusedRow = document.querySelector<HTMLElement>('[data-model-option="opus-9"]');
   expect(refusedRow).not.toBeNull();
   expect(refusedRow?.getAttribute("data-model-unsupported")).toBe("true");
-  expect(refusedRow?.disabled).toBe(true);
+  expect(refusedRow?.hasAttribute("data-disabled")).toBe(true);
   expect(refusedRow?.textContent).toContain("Not supported on this target");
 
-  const supportedRow = document.querySelector<HTMLButtonElement>('[data-model-option="haiku"]');
-  expect(supportedRow?.disabled).toBe(false);
+  const supportedRow = document.querySelector<HTMLElement>('[data-model-option="haiku"]');
+  expect(supportedRow?.hasAttribute("data-disabled")).toBe(false);
 
   if (refusedRow) fireEvent.click(refusedRow);
   expect(onSelect).not.toHaveBeenCalled();
@@ -273,11 +273,27 @@ it("toggles model options from the active macOS workspace, not a background rout
     isLoading: false,
     onSelect: vi.fn(),
   };
+  const reasoningControl: LiveSessionControlDescriptor = {
+    key: "effort",
+    label: "Reasoning effort",
+    detail: "High",
+    rawConfigId: "effort",
+    settable: true,
+    pendingState: null,
+    kind: "select",
+    options: [
+      { value: "medium", label: "Medium", selected: false },
+      { value: "high", label: "High", selected: true },
+    ],
+    onSelect: vi.fn(),
+  };
+
   const { container, unmount } = render(
     <MemoryRouter>
       <ShortcutDispatcher />
       <ComposerModelSelectorControl
         modelSelectorProps={props}
+        reasoningControl={reasoningControl}
         keyboardShortcutEnabled
       />
     </MemoryRouter>,
@@ -326,6 +342,7 @@ it("toggles model options from the active macOS workspace, not a background rout
       <ShortcutDispatcher />
       <ComposerModelSelectorControl
         modelSelectorProps={props}
+        reasoningControl={reasoningControl}
         keyboardShortcutEnabled
       />
     </MemoryRouter>,

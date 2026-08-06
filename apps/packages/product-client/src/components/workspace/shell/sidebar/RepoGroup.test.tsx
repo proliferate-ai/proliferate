@@ -114,15 +114,17 @@ vi.mock("#product/primitives/patterns/SidebarActionButton", () => ({
 }));
 
 vi.mock("#product/components/workspace/shell/sidebar/ProductSidebarRepositories", () => ({
-  ProductSidebarRepoGroupHeader: ({ action, collapsed, expandedIcon, icon, label }: {
+  ProductSidebarRepoGroupHeader: ({ action, collapsed, expandedIcon, hoverIcon, icon, label }: {
     action: ReactNode;
     collapsed: boolean;
     expandedIcon: ReactNode;
+    hoverIcon: ReactNode;
     icon: ReactNode;
     label: string;
   }) => (
     <div>
-      {collapsed ? icon : expandedIcon}
+      <span data-testid="repository-icon">{collapsed ? icon : (expandedIcon ?? icon)}</span>
+      <span data-testid="repository-hover-icon">{hoverIcon}</span>
       <span>{label}</span>
       {action}
     </div>
@@ -202,6 +204,34 @@ describe("RepoGroup", () => {
     );
 
     expect(document.querySelector('[data-icon="folder-remote"]')).toBeTruthy();
+  });
+
+  it("keeps the current local folder glyph unchanged on hover", () => {
+    const { rerender } = render(
+      <RepoGroup
+        name="Repo A"
+        collapsed={false}
+        onToggleCollapsed={vi.fn()}
+      >
+        <div>Workspace A</div>
+      </RepoGroup>,
+    );
+
+    expect(screen.getByTestId("repository-icon").querySelector('[data-icon="folder-filled"]')).toBeTruthy();
+    expect(screen.getByTestId("repository-hover-icon").querySelector('[data-icon="folder-filled"]')).toBeTruthy();
+
+    rerender(
+      <RepoGroup
+        name="Repo A"
+        collapsed
+        onToggleCollapsed={vi.fn()}
+      >
+        <div>Workspace A</div>
+      </RepoGroup>,
+    );
+
+    expect(screen.getByTestId("repository-icon").querySelector('[data-icon="folder-closed"]')).toBeTruthy();
+    expect(screen.getByTestId("repository-hover-icon").querySelector('[data-icon="folder-closed"]')).toBeTruthy();
   });
 
   it("moves creation and repository management into the shared context menu", () => {

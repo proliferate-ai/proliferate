@@ -461,17 +461,18 @@ Five tokens define how a transcript reads:
 
 | Token | Value | Role |
 | --- | --- | --- |
-| `--container-transcript-readable` | `40rem` (640px) | The shared new-chat, transcript, and composer measure. `MarkdownBody.tsx` renders prose at `max-w-full` inside this column so the width does not change when a session starts. |
-| `--container-transcript-thread` | `48rem` (768px) | A reserved wider thread tier for a future explicit breakout treatment; the primary conversation flow does not currently apply it. |
-| `--container-transcript-wide` | `56rem` (896px) | The nominal spill measure for tables, images, and code; wide blocks remain bounded by the 40rem shared chat column until a breakout restructure lands (see `MarkdownBody.tsx`'s `table` override). |
+| `--container-transcript-readable` | `40rem` (640px) | A narrower measure available to prose-heavy surfaces outside the unified chat flow. |
+| `--container-transcript-thread` | `48rem` (768px) | The shared new-chat, transcript, and composer column. `MarkdownBody.tsx` renders prose at `max-w-full` inside this column so the width does not change when a session starts. |
+| `--container-transcript-wide` | `56rem` (896px) | The nominal spill measure for tables, images, and code; wide blocks remain bounded by the 48rem shared chat column until a breakout restructure lands (see `MarkdownBody.tsx`'s `table` override). |
 | `--spacing-transcript-turn` | `1rem` (16px) | Vertical rhythm between top-level turns. |
 | `--spacing-transcript-turn-tight` | `0.25rem` (4px) | Vertical rhythm within a turn, for closely related siblings (e.g. assistant prose and its action-row footer). |
 
 The width tokens name three *available* measures even though conversation
 prose currently uses one: the new-chat flow, live transcript, composer, and
-wide blocks (tables, code) all fill the 40rem readable column, so the measure
-does not widen after launch. The 48rem thread tier and 56rem wide tier record
-the space those surfaces may use once a deliberate breakout treatment lands. Two
+wide blocks (tables, code) all fill the 48rem thread column, so the measure
+does not change after launch. The 40rem readable tier remains available to
+prose-heavy surfaces outside that flow, while the 56rem wide tier records the
+space wide blocks may use once a deliberate breakout treatment lands. Two
 spacing tiers make a real distinction vertically: turn-to-turn
 rhythm and within-turn rhythm are two different rungs, not one shared gap.
 
@@ -614,24 +615,25 @@ stay in lockstep with CSS import them and format through `motion.cssMs()`.
 
 ### Em-based glyph tiers
 
-| Token | Value | At 12px text | At 13px text | Role |
-| --- | --- | --- | --- | --- |
-| `--icon-status` | `0.55em` | 6.6px | 7.2px | Status dots. |
-| `--icon-tight` | `0.875em` | 10.5px | 11.4px | Trailing row controls that sit quieter than their text. |
-| `--icon-compact` | `1em` | 12px | 13px | Inline glyphs that match their text exactly. |
-| `--icon-indicator` | `1em` | 12px | 13px | Sidebar row navigation, repository, git, and activity glyphs inside larger alignment wells. |
-| `--icon-paired` | `1.230769em` | 14.8px | 16px | The default glyph beside prose. |
-| `--icon-control` | `1.333333em` | 16px | 17.3px | The glyph inside an icon-only control. |
-| `--icon-large` | `1.666667em` | 20px | 21.7px | Emphasized inline glyphs. |
-| `--icon-display` | `2em` | 24px | 26px | Empty-state and display glyphs. |
+| Token | Value | At 12px `ui-sm` | At 13px compact UI | At 14px reading text | Role |
+| --- | --- | --- | --- | --- | --- |
+| `--icon-status` | `0.55em` | 6.6px | 7.2px | 7.7px | Status dots. |
+| `--icon-tight` | `0.875em` | 10.5px | 11.4px | 12.3px | Trailing row controls that sit quieter than their text. |
+| `--icon-compact` | `1em` | 12px | 13px | 14px | Inline glyphs that match their text exactly. |
+| `--icon-indicator` | `1em` | 12px | 13px | 14px | Sidebar row navigation, repository, git, and activity glyphs inside larger alignment wells. |
+| `--icon-paired` | `1.230769em` | 14.8px | 16px | 17.2px | The default glyph beside prose. |
+| `--icon-control` | `1.333333em` | 16px | 17.3px | 18.7px | The glyph inside an icon-only control. |
+| `--icon-large` | `1.666667em` | 20px | 21.7px | 23.3px | Emphasized inline glyphs. |
+| `--icon-display` | `2em` | 24px | 26px | 28px | Empty-state and display glyphs. |
 
 **Sizing glyphs in `em` is what makes the Appearance font preference work.** The
 two odd-looking ratios are exact by construction: `1.230769em × 13px = 16px`, so
-a paired glyph lands at 16px beside transcript prose; `1.333333em × 12px = 16px`,
-so a control glyph lands at 16px inside a 12px `text-ui` control. Both tiers hit
-the same 16px optical target from different text sizes — and because the
-multiplier is relative, both track the user's font preference automatically,
-where a fixed `size-4` would not.
+a paired glyph lands at 16px beside compact UI text; `1.333333em × 12px = 16px`,
+so a control glyph lands at 16px when its owner uses the `ui-sm` role. At the
+current Default rung, compact UI and sidebar text are 13px while reading text
+is 14px, so the same proportional tiers resolve to the values shown above.
+Because each multiplier is relative, it tracks the user's font preference
+automatically where a fixed `size-4` would not.
 
 The sidebar indicator and compact tiers intentionally share a current `1em`
 value while retaining distinct semantic roles: sidebar glyphs can be retuned

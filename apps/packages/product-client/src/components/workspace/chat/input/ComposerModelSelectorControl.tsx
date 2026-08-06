@@ -1,41 +1,50 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 import { getSettingsSectionForHarnessKind } from "#product/lib/domain/settings/navigation-presentation";
 import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-display-name-parts";
-import { orderModelGroupsActiveFirst } from "#product/lib/domain/chat/models/order-model-groups";
+import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
 import type {
   ModelSelectorGroup,
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
-import { PopoverButton } from "#product/primitives/PopoverButton";
-import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
-import { ArrowUpRight, Check, Plus, Settings } from "#product/primitives/icons/core";
+import { ChevronDown, Plus, Settings } from "#product/primitives/icons/core";
+import { Zap } from "#product/primitives/icons/product";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
-import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
-import { ComposerPopoverSurface } from "#product/components/workspace/chat/composer/ComposerPopoverSurface";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "#product/primitives/DropdownMenu";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { ComposerFieldInlineError } from "#product/components/workspace/chat/input/ComposerFieldInlineError";
-import { MODEL_UNSUPPORTED_ROW_HINT } from "#product/lib/domain/chat/models/model-support-refusals";
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";
-import {
-  modelRowKey,
-  useModelPickerKeyboardNav,
-} from "#product/hooks/chat/ui/use-model-picker-keyboard-nav";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { ComposerModelTuningControls } from "#product/components/workspace/chat/input/ComposerModelTuningControls";
+import { ComposerModelOptionsSubmenu } from "#product/components/workspace/chat/input/ComposerModelOptionsSubmenu";
 
 interface ComposerModelSelectorControlProps {
   modelSelectorProps: ModelSelectorProps;
+  reasoningControl?: LiveSessionControlDescriptor | null;
+  fastModeControl?: LiveSessionControlDescriptor | null;
   disabled?: boolean;
   keyboardShortcutEnabled?: boolean;
 }
 
 export function ComposerModelSelectorControl({
   modelSelectorProps,
+  reasoningControl = null,
+  fastModeControl = null,
   disabled = false,
   keyboardShortcutEnabled = false,
 }: ComposerModelSelectorControlProps) {
@@ -71,6 +80,14 @@ export function ComposerModelSelectorControl({
     priority: "contextual",
   });
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
+  const selectedReasoningOption = reasoningControl?.options.find((option) => option.selected) ?? null;
+  const reasoningLabel = resolveReasoningEffortPresentation(
+    selectedReasoningOption?.value ?? null,
+    selectedReasoningOption?.label ?? reasoningControl?.detail,
+  ).shortLabel;
+  const fastModeLabel = fastModeControl
+    ? (fastModeControl.isEnabled ? "Fast" : "Default")
+    : null;
   // Stable qualification hook (attributes only): prefer the model whose
   // rendered identity matches the current chip. During live-config restore,
   // the requested launch row can remain selected while `currentModel` already
@@ -109,8 +126,9 @@ export function ComposerModelSelectorControl({
         disabled
         data-composer-model-trigger
         data-composer-selected-model={selectedModelId}
-        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-body)]" /> : undefined}
+        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
         label={triggerLabel}
+        detail={reasoningLabel}
         className="max-w-[15rem]"
       />
     );
@@ -118,51 +136,64 @@ export function ComposerModelSelectorControl({
 
   return (
     <span className="flex min-w-0 flex-col items-start gap-1">
-      <PopoverButton
-        trigger={(
+      <DropdownMenu open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DropdownMenuTrigger asChild>
           <ComposerControlButton
             emphasizeLabel
             data-composer-model-trigger
             data-composer-selected-model={selectedModelId}
-            icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-body)]" /> : undefined}
+            icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
             label={triggerLabel}
-            trailing={currentModel?.pendingState
-              ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
-              : null}
-            aria-label={`Model: ${triggerLabel}`}
+            detail={reasoningLabel}
+            trailing={(
+              <span className="flex items-center gap-1">
+                {fastModeControl?.isEnabled && (
+                  <Zap aria-hidden="true" className="icon-paired fill-current text-muted-foreground" />
+                )}
+                <PendingConfigIndicator pendingState={currentModel?.pendingState ?? null} />
+                <PendingConfigIndicator pendingState={reasoningControl?.pendingState ?? null} />
+                <PendingConfigIndicator pendingState={fastModeControl?.pendingState ?? null} />
+                <ChevronDown aria-hidden="true" className="icon-paired text-muted-foreground" />
+              </span>
+            )}
+            aria-label={`${reasoningLabel
+              ? `Model and reasoning: ${triggerLabel}, ${reasoningLabel}`
+              : `Model: ${triggerLabel}`}${fastModeControl ? `, Fast mode: ${fastModeLabel}` : ""}`}
             aria-invalid={unsupportedSelectionMessage ? true : undefined}
             aria-describedby={unsupportedSelectionMessage
               ? MODEL_UNSUPPORTED_MESSAGE_ID
               : undefined}
             className="max-w-[15rem]"
           />
-        )}
-        side="top"
-        align="start"
-        offset={2}
-        className="w-auto border-0 bg-transparent p-0 shadow-none"
-        externalOpen={pickerOpen}
-        onOpenChange={setPickerOpen}
-      >
-        {(close) => (
-          <ComposerModelPickerPopover
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side="top"
+          align="start"
+          sideOffset={2}
+          className="w-56 min-w-56"
+          onCloseAutoFocus={(event) => event.preventDefault()}
+        >
+          <ComposerModelPickerMenu
             groups={groups}
             currentModel={currentModel}
+            currentModelLabel={triggerLabel}
+            reasoningControl={reasoningControl}
+            fastModeControl={fastModeControl}
             onSelect={(selection) => {
               onSelect(selection);
-              close();
+              setPickerOpen(false);
             }}
             onAddProvider={() => {
               handleAddProvider();
-              close();
+              setPickerOpen(false);
             }}
             onSettings={() => {
               handleSettings();
-              close();
+              setPickerOpen(false);
             }}
           />
-        )}
-      </PopoverButton>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Field-scoped, so it lives with the field: the model the composer is on
           is one this target refuses, and the control above is what fixes it. */}
@@ -177,196 +208,74 @@ export function ComposerModelSelectorControl({
 
 const MODEL_UNSUPPORTED_MESSAGE_ID = "composer-model-unsupported";
 
-function ComposerModelPickerPopover({
+function ComposerModelPickerMenu({
   groups,
   currentModel,
+  currentModelLabel,
+  reasoningControl,
+  fastModeControl,
   onSelect,
   onAddProvider,
   onSettings,
 }: {
   groups: ModelSelectorGroup[];
   currentModel: ModelSelectorProps["currentModel"];
+  currentModelLabel: string;
+  reasoningControl: LiveSessionControlDescriptor | null;
+  fastModeControl: LiveSessionControlDescriptor | null;
   onSelect: (selection: ModelSelectorSelection) => void;
   onAddProvider: () => void;
   onSettings: () => void;
 }) {
-  const currentKind = currentModel?.kind ?? null;
-  const orderedGroups = orderModelGroupsActiveFirst(groups, currentKind);
-  const [search, setSearch] = useState("");
-
-  const filteredGroups = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return orderedGroups;
-    }
-
-    return orderedGroups
-      .map((group) => {
-        const groupMatches = group.providerDisplayName.toLowerCase().includes(query)
-          || group.kind.toLowerCase().includes(query);
-        if (groupMatches) {
-          return group;
-        }
-
-        const models = group.models.filter((model) => model.displayName.toLowerCase().includes(query));
-        return models.length > 0 ? { ...group, models } : null;
-      })
-      .filter((group): group is ModelSelectorGroup => group !== null);
-  }, [orderedGroups, search]);
-
-  const {
-    highlightedKey: effectiveHighlightedKey,
-    setHighlightedKey,
-    setRowRef,
-    handleSearchKeyDown,
-  } = useModelPickerKeyboardNav(filteredGroups, onSelect);
-
   return (
-    <ComposerPopoverSurface className="flex w-72 flex-col p-0">
-      <div className="shrink-0 border-b border-border">
-        <PopoverSearchField
-          value={search}
-          onChange={setSearch}
-          placeholder="Search models"
-          autoFocus
-          onKeyDown={handleSearchKeyDown}
-        />
-      </div>
-
-      <div className="max-h-80 min-h-0 overflow-y-auto [scrollbar-gutter:stable] p-1">
-        {filteredGroups.map((group, index) => (
-          <ModelPickerGroup
-            key={group.kind}
-            group={group}
-            currentKind={currentKind}
-            showSeparator={index > 0}
-            onSelect={onSelect}
-            highlightedKey={effectiveHighlightedKey}
-            onHighlight={setHighlightedKey}
-            setRowRef={setRowRef}
-          />
-        ))}
-
-        {orderedGroups.length === 0 && (
-          <p className="px-3 py-4 text-center text-ui text-muted-foreground">
-            {CHAT_MODEL_SELECTOR_LABELS.noProviders}
-          </p>
-        )}
-
-        {orderedGroups.length > 0 && filteredGroups.length === 0 && (
-          <p className="px-3 py-4 text-center text-ui text-muted-foreground">
-            No models match "{search}"
-          </p>
-        )}
-      </div>
-
-      <div className="shrink-0 border-t border-border p-1">
-        <PopoverMenuItem
-          icon={<Plus className="icon-compact shrink-0" />}
-          label="Add provider"
-          density="compact"
-          className="text-ui-sm text-muted-foreground hover:text-popover-foreground"
-          onClick={onAddProvider}
-        />
-        <PopoverMenuItem
-          icon={<Settings className="icon-compact shrink-0" />}
-          label="Settings"
-          density="compact"
-          className="text-ui-sm text-muted-foreground hover:text-popover-foreground"
-          onClick={onSettings}
-        />
-      </div>
-    </ComposerPopoverSurface>
+    <>
+      <ComposerModelOptionsSubmenu
+        groups={groups}
+        currentModel={currentModel}
+        currentModelLabel={currentModelLabel}
+        onSelect={onSelect}
+      />
+      <ComposerModelTuningControls
+        reasoningControl={reasoningControl}
+        fastModeControl={fastModeControl}
+      />
+      <DropdownMenuSeparator />
+      <AdvancedOptionsSubmenu
+        onAddProvider={onAddProvider}
+        onSettings={onSettings}
+      />
+    </>
   );
 }
 
-function ModelPickerGroup({
-  group,
-  currentKind,
-  showSeparator,
-  onSelect,
-  highlightedKey,
-  onHighlight,
-  setRowRef,
+function AdvancedOptionsSubmenu({
+  onAddProvider,
+  onSettings,
 }: {
-  group: ModelSelectorGroup;
-  currentKind: string | null;
-  showSeparator: boolean;
-  onSelect: (selection: ModelSelectorSelection) => void;
-  highlightedKey: string | null;
-  onHighlight: (key: string) => void;
-  setRowRef: (key: string, element: HTMLButtonElement | null) => void;
+  onAddProvider: () => void;
+  onSettings: () => void;
 }) {
-  const hasSelectedModel = group.models.some((model) => model.isSelected);
+  const [open, setOpen] = useState(false);
 
   return (
-    <>
-      {/* Group anatomy: hairline between groups, then a muted harness header
-          (icon + name) above the group's model rows. */}
-      {showSeparator && (
-        <div className="mt-1 w-full px-2 py-0.5">
-          <div className="h-px w-full bg-border/60" />
-        </div>
-      )}
-      <div className="flex items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-ui-sm text-muted-foreground">
-        <ProviderIcon kind={group.kind} className="icon-compact shrink-0 [font-size:var(--text-body)]" />
-        <span className="truncate">{group.providerDisplayName}</span>
-      </div>
-
-      {group.models.map((model) => {
-        const showNewChatIndicator =
-          model.actionKind === "open_new_chat"
-          && !model.isSelected
-          && !hasSelectedModel
-          && group.kind !== currentKind;
-
-        const nameParts = splitProviderDisplayName(model.displayName);
-        const rowKey = modelRowKey(group.kind, model.modelId);
-        const isHighlighted = highlightedKey === rowKey;
-
-        return (
-          <PopoverMenuItem
-            key={model.modelId}
-            ref={(element: HTMLButtonElement | null) => setRowRef(rowKey, element)}
-            data-model-option={model.modelId}
-            data-model-kind={group.kind}
-            data-model-selected={model.isSelected ? "true" : "false"}
-            data-model-unsupported={model.isUnsupported ? "true" : "false"}
-            // Disabled, not hidden: the row is the answer to "where did my model
-            // go", and the hint below it is what turns a dead row into an
-            // explanation. The primitive already carries the disabled styling.
-            disabled={model.isUnsupported}
-            aria-selected={isHighlighted}
-            onMouseEnter={() => onHighlight(rowKey)}
-            icon={<ProviderIcon kind={group.kind} className="icon-compact shrink-0 text-muted-foreground [font-size:var(--text-body)]" />}
-            label={(
-              <span className="flex items-center gap-1.5">
-                <span className="min-w-0 truncate">{nameParts.leaf}</span>
-                {nameParts.badge && (
-                  <span className="shrink-0 text-ui-sm text-muted-foreground">{nameParts.badge}</span>
-                )}
-              </span>
-            )}
-            trailing={(
-              <span className="flex size-3.5 shrink-0 items-center justify-center">
-                {showNewChatIndicator ? (
-                  <ArrowUpRight className="icon-paired shrink-0 text-muted-foreground/60" />
-                ) : model.isSelected ? (
-                  <Check className="icon-paired shrink-0 text-foreground/60" />
-                ) : null}
-              </span>
-            )}
-            labelClassName="text-body"
-            className={`px-2.5 py-2 ${
-              !model.isUnsupported && (model.isSelected || isHighlighted) ? "bg-hover" : ""
-            }`}
-            onClick={() => onSelect({ kind: group.kind, modelId: model.modelId })}
-          >
-            {model.isUnsupported ? MODEL_UNSUPPORTED_ROW_HINT : null}
-          </PopoverMenuItem>
-        );
-      })}
-    </>
+    <DropdownMenuSub open={open} onOpenChange={setOpen}>
+      <DropdownMenuSubTrigger
+        className="text-muted-foreground"
+        onClick={() => setOpen(true)}
+      >
+        Advanced
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent sideOffset={4} alignOffset={-4} className="w-56">
+        <DropdownMenuItem onSelect={onAddProvider}>
+          <Plus className="icon-compact shrink-0" />
+          <span>Add provider</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onSettings}>
+          <Settings className="icon-compact shrink-0" />
+          <span>Settings</span>
+        </DropdownMenuItem>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }
 

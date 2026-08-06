@@ -178,13 +178,13 @@ const STATIC_MARKDOWN_COMPONENTS = {
   table: (props: MdElementProps) => (
     // ui-foundation-escalation: [CHAT-04]'s RULED block adopts
     // --container-transcript-wide (56rem) for wide blocks like this table.
-    // This table uses the full 40rem --container-transcript-readable column
+    // This table uses the full 48rem --container-transcript-thread column
     // (like all prose — see markdownClassName), but 56rem exceeds that column
     // — reaching it would need a breakout (negative-margin / container-
     // query) restructure applied at every MarkdownBody consumer (transcript
     // rows, plan cards, tool-detail panels). That restructure is out of
     // scope for this pass; this table stays at max-w-full
-    // (container-relative to the 40rem shared chat column) as a conscious
+    // (container-relative to the 48rem shared chat column) as a conscious
     // partial adoption rather than an unreachable cap.
     <div
       className="my-4 min-w-0 max-w-full overflow-hidden rounded-lg border"
