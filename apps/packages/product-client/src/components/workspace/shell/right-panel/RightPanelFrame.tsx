@@ -48,7 +48,6 @@ interface RightPanelFrameProps {
   onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
   onOpenRepoSettings: () => void;
-  onTogglePanel: () => void;
   onReorderHeaderEntry: (
     entryKey: RightPanelHeaderEntryKey,
     beforeEntryKey: RightPanelHeaderEntryKey | null,
@@ -85,7 +84,6 @@ export function RightPanelFrame({
   onRenameTerminal,
   onCreateTerminal,
   onOpenRepoSettings,
-  onTogglePanel,
   onReorderHeaderEntry,
 }: RightPanelFrameProps) {
   return (
@@ -114,7 +112,6 @@ export function RightPanelFrame({
         onCreateTerminal={onCreateTerminal}
         onReorderHeaderEntry={onReorderHeaderEntry}
         onOpenRepoSettings={onOpenRepoSettings}
-        onTogglePanel={onTogglePanel}
       />
 
       <RightPanelContent

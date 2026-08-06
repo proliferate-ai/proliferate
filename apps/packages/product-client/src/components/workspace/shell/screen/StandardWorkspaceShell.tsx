@@ -1,5 +1,6 @@
 import { HomeNextScreen } from "#product/components/home/screen/HomeNextScreen";
 import {
+  type CSSProperties,
   useCallback,
   useEffect,
   useMemo,
@@ -16,11 +17,8 @@ import {
 import { WorkspaceShellActionsProvider } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { WorkspaceCommandPalette } from "#product/components/workspace/shell/command-palette/WorkspaceCommandPalette";
 import { WorkspaceShellRightRail } from "#product/components/workspace/shell/screen/WorkspaceShellRightRail";
+import { WorkspaceShellRightPanelToggle } from "#product/components/workspace/shell/screen/WorkspaceShellRightPanelToggle";
 import { WorkspaceShellSidebar } from "#product/components/workspace/shell/sidebar/WorkspaceShellSidebar";
-import {
-  WorkspaceSidebarHeaderControls,
-} from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
-import { SidebarUpdateFooterButton } from "#product/components/app/sidebar/SidebarUpdateFooterButton";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { OfflineIndicator } from "#product/components/app/OfflineIndicator";
 import { useMainScreenState } from "#product/hooks/main/facade/use-main-screen-state";
@@ -28,16 +26,16 @@ import { useMainScreenShortcuts } from "#product/hooks/main/lifecycle/use-main-s
 import { useMainScreenActions } from "#product/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { useHasMacWindowControls } from "#product/hooks/ui/layout/use-mac-window-controls";
+import { useWorkspaceShellGeometry } from "#product/hooks/workspaces/ui/use-workspace-shell-geometry";
 import { useRunWorkspaceCommand } from "#product/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceOpenInWebActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
 import { useWorkspaceRemoteAccessActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceActivityAcknowledgement } from "#product/hooks/workspaces/lifecycle/use-workspace-activity-acknowledgement";
 import {
-  resolveMainSidebarEdgeClassName,
   resolveStandardWorkspaceChromeClasses,
 } from "#product/lib/domain/preferences/workspace-chrome";
-import { useProductHost } from "#product/host/ProductHostProvider";
 import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -97,7 +95,14 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     onRightSeparatorDown,
   } = layout;
   const transparentChromeEnabled = useTransparentChromeEnabled();
-  const desktopHost = useProductHost().desktop !== null;
+  const hasMacWindowControls = useHasMacWindowControls();
+  const workspaceGeometry = useWorkspaceShellGeometry({
+    leftWidth: sidebarOpen ? sidebarWidth : 0,
+    rightWidth: hasWorkspaceShell && !hasLaunchIntentOnlyShell && rightPanelOpen
+      ? rightPanelWidth
+      : 0,
+    onToggleLeft: actions.onToggleSidebar,
+  });
   const chromeClasses = useMemo(
     () => resolveStandardWorkspaceChromeClasses({
       transparent: transparentChromeEnabled,
@@ -181,7 +186,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     onOpenWorkspaceInWeb: workspaceWebActions.openCurrentWorkspaceInWeb,
     onOpenTerminal: actions.openTerminalPanel,
     onSyncWorkspaceToWeb: workspaceRemoteAccessActions.syncToWeb,
-    onToggleLeftSidebar: actions.onToggleSidebar,
+    onToggleLeftSidebar: workspaceGeometry.toggleLeft,
     onToggleRightPanel: actions.toggleRightPanel,
   });
 
@@ -215,9 +220,21 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellShortcuts enabled={visible} />
             ) : null}
             <div
+              ref={workspaceGeometry.rootRef}
               // relative: the collapsed sidebar's hover peek is an overlay
               // anchored to this shell box, so it never displaces content.
-              className={`relative h-screen flex overflow-hidden ${chromeClasses.root}`}
+              className={`standard-workspace-shell relative h-screen flex overflow-hidden ${chromeClasses.root}`}
+              style={{
+                ...workspaceGeometry.style,
+                // Match the pre-animation collapsed header geometry exactly:
+                // controls inset + 24px toggle + 8px trailing space + the
+                // header's former 8px leading padding.
+                "--workspace-left-header-dwell": hasMacWindowControls ? "122px" : "40px",
+              } as CSSProperties}
+              data-snap-left-geometry={workspaceGeometry.snapLeft ? "true" : "false"}
+              data-manual-workspace-geometry={
+                workspaceGeometry.usesManualInterpolation ? "true" : "false"
+              }
               data-workspace-shell
               data-workspace-ui-key={selectedLogicalWorkspaceId ?? selectedWorkspaceId ?? ""}
               data-workspace-session-id={activeSessionId ?? ""}
@@ -228,12 +245,18 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellSidebar
                 open={sidebarOpen}
                 width={sidebarWidth}
-                edgeClassName={resolveMainSidebarEdgeClassName({
-                  desktop: desktopHost,
-                  transparent: transparentChromeEnabled,
-                })}
-                onToggleSidebar={actions.onToggleSidebar}
+                showAnimatedDivider={transparentChromeEnabled}
+                snapGeometry={workspaceGeometry.snapLeft}
+                onToggleSidebar={workspaceGeometry.toggleLeft}
               />
+
+              {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? (
+                <WorkspaceShellRightPanelToggle
+                  open={rightPanelOpen}
+                  onTogglePanel={actions.toggleRightPanel}
+                />
+              ) : null}
+
               {sidebarOpen && (
                 <WorkspaceResizeSeparator
                   edge="left"
@@ -254,30 +277,15 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                   >
                     <DebugProfiler id="workspace-header-frame">
                       <>
-                        {!sidebarOpen && (
-                          <WorkspaceSidebarHeaderControls
-                            className="pr-2"
-                            toggleTitle="Show sidebar"
-                            onToggleSidebar={actions.onToggleSidebar}
-                            // Collapsed, the sidebar footer that would normally
-                            // host this control is offscreen and only reachable
-                            // by hovering the peek edge. Mounting it here too
-                            // keeps it keyboard- and touch-reachable without
-                            // depending on that hover.
-                            trailing={<SidebarUpdateFooterButton />}
-                          />
-                        )}
                         {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
                           <GlobalHeader
                             selectedWorkspace={selectedWorkspace}
                             workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
-                            rightPanelOpen={rightPanelOpen}
                             runDisabled={!runCommand.canRun}
                             runLoading={runCommand.isLaunching}
                             runLabel={runCommand.runLabel}
                             runTitle={runCommand.runTitle}
                             onRun={runCommand.onRun}
-                            onTogglePanel={actions.toggleRightPanel}
                           />
                         )}
                       </>
@@ -315,7 +323,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             workspaceWebActions={workspaceWebActions}
                             workspaceRemoteAccessActions={workspaceRemoteAccessActions}
                             openTerminalPanel={actions.openTerminalPanel}
-                            onToggleLeftSidebar={actions.onToggleSidebar}
+                            onToggleLeftSidebar={workspaceGeometry.toggleLeft}
                             onToggleRightPanel={actions.toggleRightPanel}
                           />
                         </DebugProfiler>
@@ -357,10 +365,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                   onStateChange={layout.setRightPanelState}
                   terminalActivationRequest={terminalActivationRequest}
                   focusRequestToken={rightPanelFocusRequestToken}
-                  onTogglePanel={actions.toggleRightPanel}
                   onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
                 />
               </div>
+
             </div>
           </WorkspaceHeaderTabsViewModelProvider>
         </WorkspacePathProvider>

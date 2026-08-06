@@ -8,13 +8,17 @@ export function ProductSidebarFrame({
   children,
   footer = null,
   className = "",
+  showRightBorder = true,
 }: {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  showRightBorder?: boolean;
 }) {
   return (
-    <div className={`flex h-full flex-col gap-2 border-r border-border bg-sidebar text-sidebar-foreground select-none ${className}`}>
+    <div
+      className={`flex h-full flex-col gap-2 ${showRightBorder ? "border-r border-border" : ""} bg-sidebar text-sidebar-foreground select-none ${className}`}
+    >
       {children}
       {footer}
     </div>

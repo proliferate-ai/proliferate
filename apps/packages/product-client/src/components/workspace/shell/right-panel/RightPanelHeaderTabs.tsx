@@ -30,7 +30,6 @@ interface RightPanelHeaderTabsProps {
   onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
   onOpenRepoSettings: () => void;
-  onTogglePanel: () => void;
   onReorderHeaderEntry: (
     entryKey: RightPanelHeaderEntryKey,
     beforeEntryKey: RightPanelHeaderEntryKey | null,
@@ -52,7 +51,6 @@ export function RightPanelHeaderTabs({
   onRenameTerminal,
   onCreateTerminal,
   onOpenRepoSettings,
-  onTogglePanel,
   onReorderHeaderEntry,
 }: RightPanelHeaderTabsProps) {
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
@@ -128,8 +126,6 @@ export function RightPanelHeaderTabs({
 
         <RightPanelHeaderActions
           onOpenRepoSettings={onOpenRepoSettings}
-          onTogglePanel={onTogglePanel}
-          shortcutRevealVisible={shortcutRevealVisible}
         />
       </div>
     </div>

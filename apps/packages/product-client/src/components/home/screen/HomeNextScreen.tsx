@@ -135,7 +135,7 @@ export function HomeNextScreen() {
         : null;
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
-      <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
+      <div className="absolute inset-x-0 top-0 h-[46px]" data-tauri-drag-region="true" />
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className={`flex min-h-0 flex-1 basis-0 items-end justify-center pb-24 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
           <div className="relative mx-auto w-full max-w-transcript-thread">

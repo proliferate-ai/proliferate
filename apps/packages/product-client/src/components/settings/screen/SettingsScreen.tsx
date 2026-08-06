@@ -140,7 +140,7 @@ export function SettingsScreen({
     <div className="flex h-screen flex-col bg-background text-foreground" data-telemetry-block>
       <header className="shrink-0 border-b border-border">
         <div
-          className={`flex h-10 items-center gap-2 pr-3 ${
+          className={`flex h-[46px] items-center gap-2 pr-3 ${
             macWindowControlsInsetClass || "pl-3"
           }`}
           data-tauri-drag-region="true"

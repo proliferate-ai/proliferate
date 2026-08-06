@@ -17,37 +17,31 @@ import {
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { FilePen } from "#product/primitives/icons/workspace";
 import { Play } from "#product/primitives/icons/core";
-import { SplitPanel } from "#product/primitives/icons/app-shell";
 import type { Workspace } from "@anyharness/sdk";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { workspaceHeaderTitle } from "#product/lib/domain/workspaces/display/workspace-display";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
-const HEADER_ICON_BUTTON_CLASS = "workspace-shell-icon-button";
 const HEADER_RUN_BUTTON_CLASS = "workspace-shell-action-button font-medium";
 
 interface GlobalHeaderProps {
   selectedWorkspace: Workspace | undefined;
   workspacePath?: string | null;
-  rightPanelOpen: boolean;
   runDisabled?: boolean;
   runLoading?: boolean;
   runLabel?: string;
   runTitle?: string;
   onRun: () => void;
-  onTogglePanel: () => void;
 }
 
 export const GlobalHeader = memo(function GlobalHeader({
   selectedWorkspace,
   workspacePath: workspacePathProp,
-  rightPanelOpen,
   runDisabled = false,
   runLoading = false,
   runLabel = "Run",
   runTitle = "Run workspace command",
   onRun,
-  onTogglePanel,
 }: GlobalHeaderProps) {
   useDebugRenderCount("global-header");
   const [targets, setTargets] = useState<OpenTarget[]>([]);
@@ -103,7 +97,12 @@ export const GlobalHeader = memo(function GlobalHeader({
 
   return (
     <DebugProfiler id="global-header">
-      <div className="flex h-full min-w-0 flex-1 items-center gap-1 px-2">
+      <div
+        className="flex h-full min-w-0 flex-1 items-center gap-1 pr-2"
+        style={{
+          paddingLeft: "max(8px, calc(var(--workspace-left-header-dwell) - var(--workspace-left-width)))",
+        }}
+      >
         <div
           className="min-w-0 max-w-[220px] shrink-0 truncate px-1.5 font-medium text-foreground"
           style={{
@@ -123,7 +122,12 @@ export const GlobalHeader = memo(function GlobalHeader({
         </div>
 
         <DebugProfiler id="global-header-actions">
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div
+            className="flex shrink-0 items-center gap-1.5"
+            style={{
+              paddingRight: "max(0px, calc(36px - var(--workspace-right-width)))",
+            }}
+          >
             <Button
               variant="ghost"
               size="sm"
@@ -147,18 +151,6 @@ export const GlobalHeader = memo(function GlobalHeader({
                 onTargetClick={handleTargetClick}
                 preferredTarget={preferredTarget}
               />
-            )}
-            {!rightPanelOpen && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onTogglePanel}
-                aria-label="Toggle side panel"
-                title="Toggle side panel"
-                className={HEADER_ICON_BUTTON_CLASS}
-              >
-                <SplitPanel className="icon-paired" />
-              </Button>
             )}
           </div>
         </DebugProfiler>

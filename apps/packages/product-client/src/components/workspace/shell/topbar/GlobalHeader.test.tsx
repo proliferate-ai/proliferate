@@ -73,9 +73,7 @@ function renderHeader() {
     <GlobalHeader
       selectedWorkspace={undefined}
       workspacePath="/repo"
-      rightPanelOpen
       onRun={vi.fn()}
-      onTogglePanel={vi.fn()}
     />,
   );
 }
@@ -96,6 +94,17 @@ describe("GlobalHeader", () => {
     expect(title.style.lineHeight).toBe("var(--text-workspace-title--line-height)");
     expect(title.className.split(" ")).not.toContain("text-ui");
     expect(title.className.split(" ")).not.toContain("text-sidebar-nav");
+  });
+
+  it("derives left and right action dwell from the animated shell widths", () => {
+    renderHeader();
+
+    const title = screen.getByTitle("repo");
+    expect(title.parentElement?.style.paddingLeft).toBe(
+      "max(8px, calc(var(--workspace-left-header-dwell) - var(--workspace-left-width)))",
+    );
+    expect(screen.getByRole("button", { name: "Run workspace command" }).parentElement?.style.paddingRight)
+      .toBe("max(0px, calc(36px - var(--workspace-right-width)))");
   });
 
   it("does not offer a native open action without a Desktop file bridge", () => {

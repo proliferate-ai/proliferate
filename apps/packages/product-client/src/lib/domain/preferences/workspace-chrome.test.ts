@@ -30,7 +30,7 @@ describe("workspace chrome classes", () => {
       sidebarOpen: true,
     })).toEqual({
       root: "bg-sidebar",
-      contentShell: "bg-background rounded-tl-2xl border-l border-border border-t",
+      contentShell: "bg-background border-l transition-[border-color,border-top-left-radius] duration-panel ease-out-cubic border-t rounded-tl-2xl border-border",
       header: "flex h-[46px] shrink-0 items-center bg-background relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border after:content-['']",
     });
 
@@ -41,7 +41,7 @@ describe("workspace chrome classes", () => {
     expect(resolveStandardWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: false,
-    }).contentShell).toBe("bg-background");
+    }).contentShell).toBe("bg-background border-l transition-[border-color,border-top-left-radius] duration-panel ease-out-cubic border-t rounded-tl-none border-transparent");
   });
 
   it("matches cowork content chrome to the standard shell", () => {

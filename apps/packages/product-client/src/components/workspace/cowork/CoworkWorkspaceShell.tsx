@@ -130,7 +130,7 @@ export function CoworkWorkspaceShell({
           })}`}
           style={{ width: sidebarOpen ? sidebarWidth : 0 }}
         >
-          <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
+          <div className="flex h-[46px] shrink-0 items-center" data-tauri-drag-region="true">
             <div className={`flex h-full items-center gap-2 ${macWindowControlsInsetClass}`}>
               <IconButton
                 tone="sidebar"

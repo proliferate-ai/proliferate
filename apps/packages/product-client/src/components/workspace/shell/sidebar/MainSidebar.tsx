@@ -62,7 +62,7 @@ interface ArchiveConfirmationState {
   name: string;
 }
 
-export const MainSidebar = memo(function MainSidebar() {
+export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }: { showRightBorder?: boolean }) {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const { notice, dismissNotice, openChangelog } = useReleaseNotice();
@@ -325,37 +325,37 @@ export const MainSidebar = memo(function MainSidebar() {
 
   return (
     <DebugProfiler id="workspace-sidebar">
-      <ProductSidebarFrame footer={(
-        <DebugProfiler id="workspace-sidebar-footer">
-          {sidebarOpen && notice ? (
-            <ReleaseNoticeCard
-              notice={notice}
-              onDismiss={dismissNotice}
-              onOpenChangelog={openChangelog}
-            />
-          ) : null}
-          <SidebarAccountFooter />
-        </DebugProfiler>
-      )}>
-      <ProductSidebarBody>
-        <ProductSidebarBrandRow
-          icon={<ProliferateIcon className="icon-paired shrink-0" />}
-          label="Proliferate"
-        />
-        <DebugProfiler id="workspace-sidebar-primary-nav">
-          <SidebarPrimaryNavigation
-            homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
-            workspacesActive={isOnWorkspaces}
-            workflowsActive={isOnWorkflows}
-            supportActive={false}
-            onGoHome={actions.handleGoHome}
-            onGoWorkspaces={actions.handleGoWorkspaces}
-            onGoWorkflows={actions.handleGoWorkflows}
-            onOpenSupport={handleOpenSupport}
-            shortcutRevealVisible={shortcutRevealVisible}
-            shortcutLabels={primaryNavShortcutLabels}
+      <ProductSidebarFrame showRightBorder={showRightBorder} footer={(
+          <DebugProfiler id="workspace-sidebar-footer">
+            {sidebarOpen && notice ? (
+              <ReleaseNoticeCard
+                notice={notice}
+                onDismiss={dismissNotice}
+                onOpenChangelog={openChangelog}
+              />
+            ) : null}
+            <SidebarAccountFooter />
+          </DebugProfiler>
+        )}>
+        <ProductSidebarBody>
+          <ProductSidebarBrandRow
+            icon={<ProliferateIcon className="icon-paired shrink-0" />}
+            label="Proliferate"
           />
-        </DebugProfiler>
+          <DebugProfiler id="workspace-sidebar-primary-nav">
+            <SidebarPrimaryNavigation
+              homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
+              workspacesActive={isOnWorkspaces}
+              workflowsActive={isOnWorkflows}
+              supportActive={false}
+              onGoHome={actions.handleGoHome}
+              onGoWorkspaces={actions.handleGoWorkspaces}
+              onGoWorkflows={actions.handleGoWorkflows}
+              onOpenSupport={handleOpenSupport}
+              shortcutRevealVisible={shortcutRevealVisible}
+              shortcutLabels={primaryNavShortcutLabels}
+            />
+          </DebugProfiler>
 
         <ProductSidebarScrollableContent>
           <WorkspaceCleanupAttentionSection
@@ -415,15 +415,15 @@ export const MainSidebar = memo(function MainSidebar() {
           )}
           {isDesktopHost ? <CoworkThreadsSection /> : null}
         </ProductSidebarScrollableContent>
-      </ProductSidebarBody>
-      <ConfirmationDialog
-        open={archiveConfirmation !== null}
-        title="Archive workspace?"
-        description={`Move ${archiveConfirmation?.name ?? "this workspace"} out of the main sidebar. It will remain available in Settings -> Archived chats, and safe worktree cleanup may run in the background.`}
-        confirmLabel="Archive"
-        onClose={() => setArchiveConfirmation(null)}
-        onConfirm={confirmArchiveWorkspace}
-      />
+        </ProductSidebarBody>
+        <ConfirmationDialog
+          open={archiveConfirmation !== null}
+          title="Archive workspace?"
+          description={`Move ${archiveConfirmation?.name ?? "this workspace"} out of the main sidebar. It will remain available in Settings -> Archived chats, and safe worktree cleanup may run in the background.`}
+          confirmLabel="Archive"
+          onClose={() => setArchiveConfirmation(null)}
+          onConfirm={confirmArchiveWorkspace}
+        />
       </ProductSidebarFrame>
     </DebugProfiler>
   );
