@@ -13,6 +13,11 @@ reference/
 dist/
 out/
 target/
+# EAS applies the repository ignore rules when it assembles the mobile
+# monorepo archive. Keep this ProductClient source domain in that archive even
+# though its ownership-correct name matches Cargo's build-output directory.
+!apps/packages/product-client/src/lib/domain/automations/target/
+!apps/packages/product-client/src/lib/domain/automations/target/**
 apps/desktop/index.js
 # ProductClient qualification build canary output (Desktop host build)
 apps/desktop/dist-product-client-qualification/
