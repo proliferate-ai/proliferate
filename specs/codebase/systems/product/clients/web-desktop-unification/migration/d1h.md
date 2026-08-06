@@ -34,8 +34,9 @@ four rather than rebasing them away:
   `GitReviewStageAction`, `GitReviewStatusBadge`,
   `use-composer-ultra-emphasis`, `git-file-status-presentation`) — recorded as
   `move -> delete` ledger amendments rather than silently dropped, bringing the
-  amendments total to **23** (18 `retain -> move` + 5 `move -> delete`; see
-  `../move-ledger.md#amendments-ratified-during-the-move`).
+  amendments total to **23** (18 `retain -> move` + 5 `move -> delete`; the
+  amendments section of `../move-ledger.md`, consumed and removed after the
+  move landed — see Git history).
 - Landed via a **fast-gate merge per founder directive**: the founder
   authorized merging ahead of a full independent re-review given the
   mechanical nature of the reconciliation (import-path and ledger-classification
@@ -63,38 +64,6 @@ against this contract; the next contract is the legacy Web replacement (see
 This slice executes the checked ledger and codemod from D1g to move the working
 Desktop product into `@proliferate/product-client` and leave Desktop a thin
 native host. **It changes ownership and import paths, not behavior.**
-
-## Phase 6 — hosted Web first-load budget (WDU-1247-D1)
-
-The phase-6 cutover gate measured the replacement browser host's `/login`
-first-load against the legacy baseline recorded in
-[`d1i.md`](d1i.md#binding-cutover-baseline-phase-6-gate) (471,212 B JS /
-24,226 B CSS gzip-9, no route splitting). The smallest verified split still
-exceeded that baseline — inherent to unifying onto one shared design system
-and app shell, not an unshipped optimization. **Founder ruling WDU-1247-D1
-(approved 2026-07-15):** shared-shell simplicity and full shared-package
-Tailwind scanning win over a separate auth-shell CSS build boundary, with
-fail-closed gzip-9 `/login` ceilings of **JS 485,000 B / CSS 66,000 B / zero
-eager fonts, images, or audio** — encoded as `CAPS` in
-`scripts/measure-login-runtime-budget.mjs` and enforced by the required,
-non-continue-on-error `Login first-load budget (phase-6)` CI check.
-
-Two eager-shell regressions were root-caused and fixed against those caps on
-`codex/wdu-login-budget`:
-
-- **Turn-end audio** (`use-turn-end-sound.ts`): an eager `new Audio(ding)`
-  above the auth gate fetched 58.8 KB on the public login shell; fixed by
-  lazy-constructing the clip on first turn-end.
-- **xterm terminal CSS** (`product-client/src/index.css` →
-  `use-xterm-surface.ts`): the eager ProductClient entry pulled
-  `@xterm/xterm/css/xterm.css` (~1.9 KB gzip) into the login bundle; fixed by
-  co-locating the stylesheet with the lazily imported xterm runtime so it
-  rides the `AuthenticatedProductClient` chunk instead.
-
-Candidate result, measured at the durable login-ready marker
-(`[data-auth-screen="auth"]`) against a fixed anonymous API fixture: JS
-482,026 B (2,974 B headroom), CSS 65,351 B (649 B headroom), fonts/images/audio
-0 B — all pass, with thin headroom against future eager-shell growth.
 
 ## What landed and is verified
 
@@ -643,7 +612,8 @@ base-URL-explicit (no host-config default in the package).
   off-Desktop; `use-window-actions` moved with it (replacing the raw
   `apply_macos_window_chrome` Tauri op).
 - **G6 Ledger amendments.** An "Amendments (ratified during the move)" section was
-  appended to `move-ledger.md` — the binding rows are **not** rewritten. It carries
+  appended to `move-ledger.md` (since consumed and removed with that ledger;
+  see Git history) — the binding rows were **not** rewritten. It carries
   a fenced ` ```ledger-amendments ` block of **18 `retain → move` overrides** (the
   9 credentials/shell/workspace-scratch subtree files from F3 + the G1 updater
   cluster + `use-window-actions` + `use-update-restart-watcher`), each with

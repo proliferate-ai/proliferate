@@ -337,6 +337,10 @@ availability by context/role
 Tool definitions should be easy to unit test. Do not hide business logic in
 tool-list construction.
 
+Tool names stay generic (`create_artifact`, not `create_cowork_artifact`)
+because the product MCP id namespaces them at the agent surface
+(`mcp__artifacts__create_artifact`).
+
 ### `calls.rs`
 
 Owns MCP `tools/call` behavior.

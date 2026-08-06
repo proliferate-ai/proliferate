@@ -1,7 +1,20 @@
 # Plan And Code Review Agents
 
-Status: authoritative target definition for plan review agents, code review
-agents, review MCP behavior, prompts, and UI semantics.
+Status: authoritative definition of the review role contracts (reviewer and
+parent), status models, and prompt shapes. Review UI semantics live in
+[../../../../systems/product/agents/delegated-work.md](../../../../systems/product/agents/delegated-work.md);
+MCP token/role plumbing lives in [../servers.md](../servers.md).
+
+## Identity And Exposure
+
+| Field | Meaning | Normal exposure |
+| --- | --- | --- |
+| `reviewId` | Stable handle for one review run. | MCP args/responses, UI data model |
+| `reviewerId` | Stable handle for one reviewer assignment. | MCP responses, UI data model |
+| `reviewerSessionId` | Runtime session id for the reviewer session. | Internal/debug/open-session routing only |
+
+Raw persistence ids may back `reviewId` and `reviewerId`, but the UI and MCP
+copy never present them as session ids.
 
 ## Reviewer Role Contract
 
@@ -28,6 +41,22 @@ requiring `pass`, `summary`, and `critiqueMarkdown`. Submission invariants:
 - submission writes review state through the review runtime/service
 - submission may complete the round and schedule parent feedback
 - the reviewer should not need to call any other MCP tool to finish
+
+A review run is bounded by `maxRounds`; each round holds one assignment per
+reviewer, and a reviewer submits one active result per attempt (retries
+create a new attempt).
+
+## Parent Role Contract
+
+Parent sessions that own an active review run receive two tools:
+
+- `get_review_status` — workflow status read (`reviewId` optional); this is
+  not the UI critique reader.
+- `mark_review_revision_ready` — listed only when the review run can accept a
+  revision.
+
+Parent review tools are available only to the parent session that owns an
+active review run.
 
 Agent-launched reviews are intentionally separate from reviewer MCP
 submission. If parent agents are allowed to start plan/code reviews later, add

@@ -649,12 +649,13 @@ extraction and replacement are:
 - [landed extraction proof](migration/d1g.md);
 - [application-entry contract](entry-contract.md);
 - [Desktop product move record](migration/d1h.md);
-- [legacy Web replacement record](migration/d1i.md); and
-- [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json).
+- [legacy Web replacement record](migration/d1i.md);
+- [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json); and
+- [phase-6 login budget candidate ledger](migration/login-runtime-budget-candidate.json).
 
 Desktop and hosted Web were qualified against the shared implementation and
 cut over. The phase-6 first-load budget ruling and cutover gate are recorded
-in [the Desktop product move record](migration/d1h.md#phase-6--hosted-web-first-load-budget-wdu-1247-d1).
+in [the legacy Web replacement record](migration/d1i.md#phase-6--hosted-web-first-load-budget-wdu-1247-d1).
 
 Related authoritative docs:
 

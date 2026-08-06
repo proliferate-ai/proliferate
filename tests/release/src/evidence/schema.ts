@@ -16,10 +16,9 @@ import {
 
 /**
  * The versioned combined-report contract, per
- * specs/developing/testing/qualification-runner-core.md ("Combined report"),
- * specs/developing/testing/candidate-build-handoff.md (candidate-artifact
- * evidence), and specs/developing/testing/exact-test-matrix.md ("Combined
- * report V3"), which changes the semantic result unit to an exact test cell.
+ * specs/developing/testing/core-release-validation.md — historical section
+ * names: "Combined report", candidate-artifact evidence, and "Combined
+ * report V3", which changes the semantic result unit to an exact test cell.
  * One artifact per invocation/shard/attempt; validated before writing. V1 and
  * V2 are prior contracts recorded in repository history; current code emits
  * only V3.

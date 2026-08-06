@@ -839,7 +839,7 @@ release-e2e:
 		$(if $(CANDIDATE_BUILD_MAP),--candidate-build-map $(CANDIDATE_BUILD_MAP),)
 
 # Assembles a CandidateBuildMapV1 for an already-built binary
-# (specs/developing/testing/candidate-build-handoff.md). BINARY defaults to the
+# (specs/developing/testing/core-release-validation.md). BINARY defaults to the
 # release AnyHarness build; OUTPUT to tests/release/.output/candidate-build.json.
 CANDIDATE_MAP_BINARY ?= target/release/anyharness
 CANDIDATE_MAP_OUTPUT ?= tests/release/.output/candidate-build.json
@@ -849,7 +849,8 @@ qualification-candidate-build-map:
 		--output $(CANDIDATE_MAP_OUTPUT)
 
 # The real build→map→validate→materialize→launch→health→evidence proof
-# (specs/developing/testing/candidate-build-handoff.md "Real handoff smoke").
+# (specs/developing/testing/core-release-validation.md; historical section
+# name: "Real handoff smoke").
 # Builds a release-mode AnyHarness stamped with the repository VERSION and the
 # current HEAD SHA, assembles the map, launches the exact bytes against an
 # isolated runtime home/port, and requires the diagnostic runner's report

@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 
 /**
- * The candidate build map (specs/developing/testing/candidate-build-handoff.md
- * "Candidate build map"): the JSON handoff between candidate builders, the
- * qualification runner, and later world provisioners. Candidate-only and
+ * The candidate build map (specs/developing/testing/core-release-validation.md;
+ * historical section name: "Candidate build map"): the JSON handoff between
+ * candidate builders, the qualification runner, and later world
+ * provisioners. Candidate-only and
  * local_file-only in this slice; it contains build outputs, never provider
  * credentials or running endpoints.
  */

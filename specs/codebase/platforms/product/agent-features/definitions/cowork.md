@@ -8,6 +8,33 @@ using the same child-agent lifecycle as subagents plus one extra scope layer
 (the managed cowork workspace). Cowork should not have a second lifecycle
 vocabulary.
 
+## Tool Contract
+
+Workspace tools: `get_cowork_workspace_launch_options`,
+`create_cowork_workspace`, `list_cowork_workspaces`,
+`get_cowork_workspace_status`, `close_cowork_workspace`. Agent tools:
+`get_cowork_agent_launch_options`, `create_cowork_agent`,
+`list_cowork_agents`, `send_cowork_agent_message`,
+`schedule_cowork_agent_wake`, `get_cowork_agent_status`,
+`read_cowork_agent_latest_turns`, `search_cowork_agent_transcript`,
+`read_cowork_agent_events`, `close_cowork_agent`.
+
+There are no top-level `modelId` or `modeId` fields in cowork agent tools.
+Harness-specific launch configuration is carried through `harnessId` +
+`initialConfig`, and applied values come back as `appliedInitialConfig`.
+
+## Capability And Auth
+
+Every cowork MCP call is authorized against `workspace_id` +
+`parent_session_id` + `product_mcp_id: cowork`, and requires
+`workspace_delegation_enabled`. Workspace and agent access is checked by the
+cowork domain on every call:
+
+- a parent can only manage cowork workspaces it owns
+- a parent can only manage cowork agents linked to its owned cowork workspaces
+- cowork-created child agents cannot create their own nested cowork workspaces
+  unless a future policy explicitly enables that
+
 ## Identity And Compatibility
 
 | Field | Meaning | Normal exposure |
@@ -71,4 +98,7 @@ hooks, then marks the cowork-agent link closed. If closing the live session
 fails, the active link remains discoverable so a later close call can retry
 rather than orphaning hidden work.
 
-This applies to both `close_cowork_workspace` and `close_cowork_agent`.
+Applies to `close_cowork_agent` (`close_cowork_workspace` is target-only and
+unimplemented today). Closing removes work from the active delegated-work
+context; it is not worktree directory or transcript deletion unless a future
+destructive action explicitly says so.

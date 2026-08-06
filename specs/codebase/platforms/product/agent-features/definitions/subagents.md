@@ -1,7 +1,10 @@
 # Subagents Product MCP
 
-Status: authoritative target definition for the Subagents product MCP,
-subagent prompt behavior, and product/UI semantics.
+Status: authoritative definition of the Subagents product MCP identity,
+exposure, and lifecycle laws. Prompt and wake-prompt rules live in
+[prompt-and-skill-policy.md](prompt-and-skill-policy.md); UI presentation and
+close/delete semantics live in
+[../../../../systems/product/agents/delegated-work.md](../../../../systems/product/agents/delegated-work.md).
 
 A subagent is not a separate runtime primitive. It is a normal session with a
 durable parent-child link, product-scoped MCP tools, provenance, wake
@@ -24,6 +27,10 @@ MCP responses may include `sessionLinkId` and `childSessionId` compatibility
 fields so older transcript parsers, SDKs, and in-flight agent sessions keep
 working. New callers should treat those fields as compatibility aliases only.
 All examples and new code should prefer `subagentId` plus `label`.
+
+Subagents cannot create grandchildren. There are no top-level `modelId` or
+`modeId` fields in subagent tools; harness-specific launch configuration is
+carried through `initialConfig`.
 
 ## Wake Race
 

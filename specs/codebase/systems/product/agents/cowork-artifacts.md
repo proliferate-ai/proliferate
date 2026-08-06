@@ -93,6 +93,10 @@ Keep ownership split the same way the rest of the runtime is split:
   - generic file operations consult artifact-owned write protection for
     manifest and artifact-backed paths
 
+Artifact tools and delegation tools share the cowork MCP server but are
+separate contracts: artifact tools must not be used for delegated-agent
+lifecycle.
+
 Do not put artifact lifecycle logic in HTTP handlers or desktop hooks.
 
 ## 4. Manifest File Format
@@ -153,6 +157,8 @@ Artifact lifecycle is tool-owned.
   - any path currently registered as an artifact in the manifest
 - This restriction is required in v1 because artifact `updatedAt` and type/path invariants are manifest-owned.
 - Supporting files that are not registered as artifacts may still use normal file tools.
+- Artifact content and the manifest are written to temp files first and committed together, with rollback or cleanup if either commit fails. `create_artifact` rolls back the file it wrote when the manifest commit fails.
+- Artifact mutations are serialized by a per-workspace artifact lock, so concurrent creates, updates, and deletes cannot interleave manifest writes.
 
 For v1, each artifact is a single file. There is no multi-file artifact bundle contract yet.
 

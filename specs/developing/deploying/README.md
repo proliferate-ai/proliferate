@@ -4,6 +4,10 @@ Use this folder for current deployment and release procedures. The durable
 workflow and artifact topology lives in the
 [Delivery system](../../codebase/systems/engineering/delivery/README.md).
 
+When this documentation and the checked-in automation disagree, verify the
+workflow or source at the exact revision and correct the owning document in the
+same change.
+
 ## Choose a Task
 
 | Task | Procedure |

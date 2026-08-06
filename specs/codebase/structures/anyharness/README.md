@@ -311,8 +311,6 @@ which guide to read and where the code belongs.
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [../../platforms/product/mcp-runtime.md](../../platforms/product/mcp-runtime.md) |
 | Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [guides/domains.md](guides/domains.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [../../systems/product/agents/cowork-artifacts.md](../../systems/product/agents/cowork-artifacts.md) |
-| Plugin expansion: MCP plugin auth/definitions/tools or skill rendering for sessions | `anyharness-lib/src/domains/plugins/**` | `domains/plugins/**` | [guides/domains.md](guides/domains.md) |
-| Applied runtime config for a session: MCP/skill/plugin manifest, credential values, session context | `anyharness-lib/src/domains/runtime_config/**` | `domains/runtime_config/**` | [guides/domains.md](guides/domains.md) |
 | Session link graph: subagent, cowork, review-agent, fork relationships | `anyharness-lib/src/domains/sessions/links/**` | `domains/sessions/links/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md), [src/mobility.md](src/mobility.md) |
 | Durable one-prompt workflow execution in an existing workspace (run/step records, canonical-JSON replay, restart fencing) | `anyharness-lib/src/domains/workflows/**` | `domains/workflows/**` | [guides/domains.md](guides/domains.md), [../../systems/product/workflows/runs.md](../../systems/product/workflows/runs.md) |
@@ -384,6 +382,11 @@ focused guide that owns the layer.
 `origin.rs` is advisory provenance, not authority. It may describe where a
 request/session/workspace came from. It should not decide auth, ownership,
 billing, mutability, or sandbox policy.
+
+Root-level files (`lib.rs`, `origin.rs`, `process_env.rs`) are crate-root
+support modules, not layers. If one grows product meaning, live state, protocol
+mechanics, local-machine capability, or DB infrastructure, move it into the
+owning layer instead of growing a new global bucket.
 
 ## Hard Rules
 

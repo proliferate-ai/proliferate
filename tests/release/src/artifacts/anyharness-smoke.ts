@@ -15,7 +15,8 @@ import { materializeLocalArtifact } from "./materialize-local.js";
 
 /**
  * The narrow AnyHarness handoff consumer
- * (specs/developing/testing/candidate-build-handoff.md "Real handoff smoke"):
+ * (specs/developing/testing/core-release-validation.md; historical section
+ * name: "Real handoff smoke"):
  * materialize the mapped bytes into run-owned storage, launch that exact
  * binary with an isolated runtime home and an ephemeral port, require
  * `/health` status/version/runtime-home to match, and terminate reliably.

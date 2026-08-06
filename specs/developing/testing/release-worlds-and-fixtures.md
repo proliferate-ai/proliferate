@@ -861,6 +861,11 @@ dependency. There is no blocked budget in qualification: every required cell
 must produce exactly one final green result. Optional and change-untriggered
 cells are resolved as `not_required`, never disguised as blocked.
 
+Runtime-discovered values — such as the exact model a live probe selects —
+are execution evidence recorded on the result, never cell dimensions. Cell
+identity is fixed by the plan; live-probed choices must not create or rename
+cells.
+
 Diagnostic local and scheduled runs may report `blocked` or `expected_fail` so
 partially configured environments still produce useful signal. They always
 emit non-qualifying evidence, compare their blocked set with the previous run,

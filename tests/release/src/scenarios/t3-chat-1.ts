@@ -20,7 +20,8 @@ import type { PlannedCellV1 } from "../runner/result.js";
  * specs/developing/testing/scenarios.md#T3-CHAT-1
  *
  * First real matrix consumer of the exact-cell contract
- * (specs/developing/testing/exact-test-matrix.md): each harness is its own
+ * (specs/developing/testing/core-release-validation.md; historically the
+ * exact-test-matrix spec): each harness is its own
  * planned cell (`T3-CHAT-1/<lane>/harness=<kind>`), the workspace setup stays
  * batched in one `runCells()` invocation, and every assigned harness gets one
  * explicit outcome — one green harness can no longer hide a failed, blocked,
