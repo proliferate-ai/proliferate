@@ -25,40 +25,14 @@ use crate::domains::workflows::store::WorkflowRunStore;
 const WS: &str = "20000000-0000-4000-8000-000000000002";
 
 fn insert_session_row(state: &AppState, workspace_id: &str) -> String {
-    let now = chrono::Utc::now().to_rfc3339();
-    let record = crate::domains::sessions::model::SessionRecord {
-        id: uuid::Uuid::new_v4().to_string(),
-        workspace_id: workspace_id.to_string(),
-        agent_kind: "claude".to_string(),
-        native_session_id: None,
-        agent_auth_contexts: None,
-        requested_model_id: None,
-        current_model_id: None,
-        requested_mode_id: None,
-        current_mode_id: None,
-        title: None,
-        thinking_level_id: None,
-        thinking_budget_tokens: None,
-        status: "starting".to_string(),
-        created_at: now.clone(),
-        updated_at: now,
-        last_prompt_at: None,
-        closed_at: None,
-        dismissed_at: None,
-        mcp_bindings_ciphertext: None,
-        mcp_binding_summaries_json: None,
-        mcp_binding_policy: crate::domains::sessions::model::SessionMcpBindingPolicy::InternalOnly,
-        system_prompt_append: None,
-        subagents_enabled: false,
-        action_capabilities_json: None,
-        origin: Some(crate::origin::OriginContext::system_local_runtime()),
-    };
-    state
-        .session_service
-        .store()
-        .insert(&record)
-        .expect("insert session row");
-    record.id
+    let session_id = uuid::Uuid::new_v4().to_string();
+    test_support::insert_session_row(
+        state.session_service.store(),
+        workspace_id,
+        &session_id,
+        "starting",
+    );
+    session_id
 }
 
 fn controlled_fixture(state: &AppState) -> (String, String) {
@@ -650,11 +624,23 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
         "admit_session_mutation(",
         ".acquire_shared(",
     );
-    // retire: admit-all before the exclusive workspace lease.
+    // retire: admit-all before the exclusive workspace lease. Grid PR 9 moved
+    // the retire state machine (and with it the exclusive lease) out of the
+    // handler into `domains/workspaces/retire.rs`, so this one ordering now
+    // spans two files and is asserted in two halves that compose:
+    //   1. the handler admits before it calls the facade, and
+    //   2. the facade takes the exclusive lease only after the admitted id set
+    //      has been handed in — i.e. after the caller's permits are held.
     assert_admit_before_lease(
         &format!("{http}/workspaces_lifecycle.rs"),
         "retire_workspace",
         "admit_all_workspace_sessions(",
+        ".retire(",
+    );
+    assert_admit_before_lease(
+        "src/domains/workspaces/retire.rs",
+        "retire",
+        "admitted_session_ids: BTreeSet<String>",
         ".acquire_exclusive(",
     );
     // mobility export: admit-all before the MobilityWrite shared lease.
