@@ -153,6 +153,97 @@ for (const [name, value] of tokenEntries) {
   );
 }
 
+// Light neutrals come from one ink. The retired opaque slate literals are
+// checked across the whole light column so a peripheral role (for example a
+// tab underline) cannot reintroduce the old ramp outside the core color group.
+for (const retired of [
+  "#edf0f2",
+  "#d5d9de",
+  "#dde1e6",
+  "#e9ecef",
+  "#f2f4f6",
+  "#f7f8fa",
+  "#e4e7ea",
+  "#dbdfe4",
+  "#bfc5cc",
+  "#c6ccd2",
+  "#5a5f66",
+  "#646a72",
+  "#16181b",
+]) {
+  for (const [name, value] of tokenEntries) {
+    assert(
+      !value.light.toLowerCase().includes(retired),
+      `${name} reintroduced retired light neutral ${retired}`,
+    );
+  }
+}
+
+for (const [name, expected] of Object.entries({
+  "--color-foreground": "#1a1c1f",
+  "--color-background": "#ffffff",
+  "--color-surface": "#ffffff",
+  "--color-surface-elevated": "#ffffff",
+  "--color-card": "#ffffff",
+  "--color-popover": "#ffffff",
+  "--color-surface-under": "#f6f6f6",
+  "--color-sidebar": "#f6f6f6",
+  "--color-sidebar-background": "#f6f6f6",
+  "--color-surface-editor": "#fafafa",
+  "--color-primary": "#1a1c1f",
+  "--color-primary-foreground": "#ffffff",
+  "--color-composer-background": "#ffffff",
+  "--color-composer-backdrop-filter": "none",
+  "--color-composer-control-foreground": "var(--color-muted-foreground)",
+  "--color-composer-control-muted-foreground": "var(--color-faint)",
+  "--color-composer-control-active-foreground": "var(--color-foreground)",
+  "--color-composer-send-background": "var(--color-primary)",
+  "--color-composer-send-foreground": "var(--color-primary-foreground)",
+  "--color-link-foreground": "#0b6bcb",
+  "--color-info": "#0b6bcb",
+  "--color-special": "#0b6bcb",
+  "--color-ring": "#0b6bcb",
+  "--color-highlight-muted": "#0b6bcb",
+  "--color-highlight": "#e5f2ff",
+  "--color-sidebar-ring": "var(--color-ring)",
+  "--color-diff-main-surface": "var(--color-surface)",
+  "--color-diff-code-surface": "var(--color-surface-editor)",
+  "--shadow-subtle": "0 1px 2px rgba(26, 28, 31, 0.06)",
+  "--shadow-popover": "0 0 0 0.5px rgba(26, 28, 31, 0.05), 0 4px 12px rgba(26, 28, 31, 0.1)",
+  "--shadow-modal": "0 16px 40px rgba(26, 28, 31, 0.18)",
+  "--shadow-user-message": "0 1px 2px rgba(26, 28, 31, 0.05)",
+  "--color-composer-shadow": "0 0 0 0.5px rgba(26, 28, 31, 0.06), 0 1px 3px rgba(26, 28, 31, 0.08), 0 4px 12px rgba(26, 28, 31, 0.06)",
+})) {
+  assert(themeTokens[name]?.light === expected, `${name} drifted from the light palette planes`);
+}
+
+for (const [name, expected] of Object.entries({
+  "--color-foreground-secondary": "rgba(26, 28, 31, 0.65)",
+  "--color-foreground-tertiary": "rgba(26, 28, 31, 0.62)",
+  "--color-muted-foreground": "rgba(26, 28, 31, 0.65)",
+  "--color-faint": "rgba(26, 28, 31, 0.62)",
+  "--color-border-light": "rgba(26, 28, 31, 0.114)",
+  "--color-border": "rgba(26, 28, 31, 0.14)",
+  "--color-border-heavy": "rgba(26, 28, 31, 0.18)",
+  "--color-input": "rgba(26, 28, 31, 0.2)",
+  "--color-hover": "rgba(26, 28, 31, 0.053)",
+  "--color-selected": "rgba(26, 28, 31, 0.065)",
+  "--color-active": "rgba(26, 28, 31, 0.078)",
+  "--color-sidebar-foreground": "rgba(26, 28, 31, 0.85)",
+  "--color-sidebar-muted-foreground": "rgba(26, 28, 31, 0.62)",
+  "--color-surface-control": "rgba(26, 28, 31, 0.049)",
+  "--color-surface-elevated-secondary": "rgba(26, 28, 31, 0.049)",
+  "--color-muted": "rgba(26, 28, 31, 0.049)",
+  "--color-diff-panel-surface": "rgba(26, 28, 31, 0.03)",
+  "--color-scrollbar-thumb": "rgba(26, 28, 31, 0.12)",
+  "--color-scrollbar-thumb-active": "rgba(26, 28, 31, 0.24)",
+})) {
+  assert(
+    themeTokens[name]?.light === expected,
+    `${name} drifted from its single-ink light palette rung`,
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * 3. Motion authority
  * ------------------------------------------------------------------ */

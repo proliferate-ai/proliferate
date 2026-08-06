@@ -206,118 +206,114 @@ Color is expressed as roles, never as a palette. A component asks for
 Every role has a dark and a light half in the same record, so a new role cannot
 ship half-themed.
 
-### The house form: symmetric opacity
+### The house form: one neutral ink per mode
 
-Most non-literal colors are `color-mix(in oklab, …)` against the mode's own
-foreground:
+Dark foreground and edge overlays derive from white; light neutrals derive from
+one near-black ink, `#1a1c1f`. Light borders, state fills, secondary text,
+control fills, scrollbars, and shadows use that ink with role-specific alpha
+instead of an opaque gray ramp. The alpha form composes over both the white
+content plane and the tinted rail without creating a separate gray for each
+parent surface.
 
-```
-dark:  color-mix(in oklab, #ffffff 70%, transparent)
-light: color-mix(in oklab, var(--color-foreground) 70%, transparent)
-```
+The percentages are independently authored per mode because equal numeric
+alpha does not produce equal contrast over opposite backgrounds. In light mode,
+secondary text uses 65% ink while the faint tier uses 62%; the latter is the
+lowest clean two-decimal alpha that clears 4.5:1 on every measured plane,
+including the translucent control fill. The contrast contract, not numeric
+symmetry, chooses the rung.
 
-The percentage is identical in both halves. Dark mixes white into the surface,
-light mixes the near-black foreground (`#1a1c1f`) into it, and the *same* number
-produces the *same* perceived step in each mode. That symmetry is why the
-hierarchy survives a mode switch without a second set of tuned values: there is
-one ladder of percentages, applied from opposite ends.
+Dark foreground-derived roles retain `color-mix(in oklab, …)` for perceptual
+steps. Light neutral overlays use direct `rgba(26, 28, 31, alpha)` values so
+their source ink and composition are explicit. The diff-view family uses
+white-anchored `color-mix(in srgb, #ffffff …, #1a1c1f)` values because those are
+surface-on-surface blends rather than translucent overlays.
 
-`oklab` is the mixing space for foreground-derived roles because it keeps
-perceptual lightness steps even; the diff-view family mixes in `srgb`/`lab`
-because those values are surface-on-surface blends whose shipped appearance is
-tied to the space they were tuned in.
-
-> **`color-mix()` cannot live in Tailwind's `@theme`, so every mix carries a
-> resolved literal.** Each such token declares a `themeFallback` — a flat
+> **`color-mix()` cannot live in Tailwind's `@theme`, so every default/dark mix
+> projected there carries a resolved literal.** Each such mix declares a
+> `themeFallback` — a flat
 > `rgba()`/hex with no `var()` and no `color-mix()` — which the generator emits
 > into the `@theme` half while `:root` keeps the live relative expression.
-> `check-theme.mjs` requires the fallback on every `color-mix()` token and
-> requires it to be fully resolved, so `@theme` can never silently drop a color.
+> `check-theme.mjs` requires the fallback on every projected default/dark mix
+> and requires it to be fully resolved, so `@theme` can never silently drop a color.
 > The same literals are what the React Native bridge consumes.
 
 ### Surfaces
 
-A recessed-to-raised ladder in dark; light collapses most of it to white and
-carries the hierarchy with borders instead.
+A recessed-to-raised ladder in dark; light uses white content over one `#f6f6f6`
+rail, with `#fafafa` reserved for editor/code chrome. Translucent neutral washes
+separate controls from either opaque parent.
 
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
-| `--color-surface-under` | `#141414` | `#f9f9f9` | Recessed backdrop behind the app frame (sidebar rail well). |
+| `--color-surface-under` | `#141414` | `#f6f6f6` | Recessed backdrop behind the app frame. |
 | `--color-surface` / `--color-background` | `#181818` | `#ffffff` | The root app surface — also the chat/content pane background. |
-| `--color-sidebar` | `#222222` | `var(--color-surface-under)` | Sidebar body. Round-2 measurement against the reference app's dark capture: the sidebar rail sits one step ABOVE root (`#222222`), not recessed below it — supersedes the prior surface-recess ruling. |
-| `--color-surface-elevated` / `--color-card` | `#212121` | `#ffffff` / `var(--color-surface-elevated)` | Raised cards and panels. |
-| `--color-surface-elevated-secondary` | 3% white | 2% foreground | A raise expressed as a wash, for surfaces that must sit on an unknown parent. |
+| `--color-sidebar` | `#222222` | `#f6f6f6` | Sidebar body; light shares the one rail plane. |
+| `--color-sidebar-background` | `#181818` | `#f6f6f6` | Shell rail backdrop. |
+| `--color-surface-elevated` / `--color-card` | `#212121` | `#ffffff` | Raised cards and panels. |
+| `--color-surface-elevated-secondary` | 3% white | 4.9% light ink | A wash for surfaces that must sit on an unknown parent. |
 | `--color-popover` | `#2d2d2d` | `#ffffff` | Popover/menu/toast body — the highest opaque step. |
-| `--color-surface-editor` | `#282828` | `#f7f7f7` | Code/editor chrome. |
+| `--color-surface-editor` | `#282828` | `#fafafa` | Code/editor chrome. |
 | `--color-diff-code-surface` | `#111111` | `var(--color-surface-editor)` | Diff code gutter/body, deliberately below root in dark. |
-| `--color-surface-control` | `color-mix(in oklab, #2b2b2b 96%, transparent)` | `rgba(237, 237, 237, 0.4)` | Translucent control chrome (pickers, inline fields). |
-| `--color-composer-background` | `color-mix(in oklab, #2d2d2d 96%, transparent)` | `rgba(255, 255, 255, 0.864)` | The composer input surface. |
+| `--color-surface-control` / `--color-muted` | 96% dark control / `#212121` | 4.9% light ink | Control chrome and low raised fills. |
+| `--color-composer-background` | `#2d2d2d` | `#ffffff` | The fully opaque composer input surface. |
 
 The dark ladder steps `#141414 → #181818 → #212121/#222222 → #282828 → #2d2d2d`:
 roughly four to five levels of lightness per step, small enough that no step
 reads as a color change and large enough to separate two adjacent panels
-without a border. The sidebar now sits at the `#222222` rung, essentially
-alongside `--color-surface-elevated` — one step lighter than the root app
-surface it borders, reading as a raised rail rather than a recessed well.
+without a border. The sidebar sits at the `#222222` rung in dark, one step
+lighter than the root. Light deliberately has only the white content plane, the
+`#f6f6f6` rail, and the `#fafafa` editor plane; reusable fills remain alpha ink
+rather than adding opaque intermediate planes.
 
-**The composer is translucent, not a card.** Both modes let the transcript read
-through it. It is also the one surface with a per-mode backdrop treatment:
-`--color-composer-backdrop-filter` is `blur(16px)` in light and `none` in dark.
-Dark is deliberately un-blurred — WKWebView re-blurs the whole transcript on
-every keystroke, a cost the token's own comment records. The two alphas differ
-(96% dark, 86.4% light) because each was tuned for its own backdrop treatment;
-raising light to dark's 96% would cancel the blur rather than match it. The
-authored `backdrop-filter` declarations for that surface live in `product.css`,
-and the appearance gate bans the property everywhere else
-(`BACKDROP_FILTER_RE`), so no second surface can start blurring by accident.
+The composer is opaque in both modes and uses no backdrop filter. That keeps
+transcript paint out of the input surface and avoids re-blurring the transcript
+while typing.
 
 ### Borders
 
-| Token | Both modes | Where |
-| --- | --- | --- |
-| `--color-border-light` | 5% | Hairlines inside a component: list separators, table rules. |
-| `--color-border` | 8.4% | The default border for panels, inputs, cards. |
-| `--color-border-heavy` | 12% | Active/selected borders and any edge that must read as deliberate. |
+| Token | Dark | Light | Where |
+| --- | --- | --- | --- |
+| `--color-border-light` | 5% white | 11.4% light ink | Hairlines inside a component: list separators, table rules. |
+| `--color-border` | 8.4% white | 14% light ink | The default border for panels, inputs, cards. |
+| `--color-border-heavy` | 12% white | 18% light ink | Active/selected borders and deliberate edges. |
+| `--color-input` | 12% white | 20% light ink | Form-control outline. |
 
-Three steps, each roughly 1.5× the last. Because the system is near-flat (see
-[Elevation](#elevation)), these borders — not shadows — are the primary means of
-separating one surface from another, which is why the default sits at a
-fractional 8.4% rather than a round 8%: it is the shipped value the whole UI was
-tuned against.
+Light's values are stronger than the visual proposal's 4.9% / 7.8% / 11.7%
+steps because those missed the repository's 1.25:1 edge floor. The chosen alpha
+ramp keeps every weight composed from the one ink while clearing the enforced
+floor on white, the rail, and the translucent control fill.
 
 ### Text
 
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
 | `--color-foreground` | `#ffffff` | `#1a1c1f` | Primary text. |
-| `--color-foreground-secondary` | 70% | 70% | Secondary text, descriptions. |
-| `--color-foreground-tertiary` | 50% | 50% | Tertiary text, placeholders, disabled labels. |
-| `--color-muted-foreground` | 70% | `var(--color-foreground-secondary)` | The widely-used alias for secondary. |
-| `--color-faint` | 50% | `var(--color-foreground-tertiary)` | The widely-used alias for tertiary. |
+| `--color-foreground-secondary` | 70% white | 65% light ink | Secondary text, descriptions. |
+| `--color-foreground-tertiary` | 50% white | 62% light ink | Tertiary text, placeholders, disabled labels. |
+| `--color-muted-foreground` | 70% white | 65% light ink | The widely-used secondary role. |
+| `--color-faint` | 50% white | 62% light ink | The widely-used tertiary role. |
 | `--color-sidebar-foreground` | 85% | 85% | Sidebar body text: below primary, above secondary. |
-| `--color-sidebar-muted-foreground` | `rgba(255, 255, 255, 0.481)` | `var(--color-foreground-tertiary)` | Sidebar meta. |
+| `--color-sidebar-muted-foreground` | 48.1% white | 62% light ink | Sidebar meta, including controls painted on the rail. |
 
-Three steps carry text hierarchy — 100% / 70% / 50% — with 85% reserved for the
-sidebar, whose text sits on a darker surface than the rest of the app and needs
-slightly more weight to match. `muted-foreground` and `faint` are older names
-for secondary and tertiary; they are the same two steps and remain because
-hundreds of call sites use them.
+The light faint tier is deliberately close to secondary: 55% light ink resolves
+to about 3.74–3.84:1 across the actual planes, while 62% clears 4.5:1 everywhere.
+The guard measures white, rail, editor, control, muted, card, popover, and raised
+planes after alpha composition. `muted-foreground` and `faint` remain distinct
+role names because hundreds of call sites use them.
 
 ### Interaction states
 
-| Token | Both modes | State |
-| --- | --- | --- |
-| `--color-hover` | 7.8% | Pointer hover. |
-| `--color-active` | 5.2% | Press/open (`active:`, `data-[state=open]`). |
-| `--color-selected` | 3.2% | Persistent selection. |
+| Token | Dark | Light | State |
+| --- | --- | --- | --- |
+| `--color-hover` | 7.8% white | 5.3% light ink | Pointer hover. |
+| `--color-selected` | 3.2% white | 6.5% light ink | Persistent selection. |
+| `--color-active` | 5.2% white | 7.8% light ink | Press/open (`active:`, `data-[state=open]`). |
 
-One vocabulary, three values, reused everywhere. The ladder orders the states by
-*how long they last*, not by how important they are: hover 7.8% > press 5.2% >
-selected 3.2%. Transient pointer feedback is the loudest because it is gone the
-moment the pointer leaves; a selected row keeps its tint for as long as the
-selection stands, so it is the quietest of the three — loud enough to find,
-quiet enough to live with. Press sits between them because it reads *against* an
-already-hovered surface.
+One vocabulary is reused everywhere. The light ladder is ordered so selected
+carries more ink than hover and active carries more than selected; all adjacent
+steps clear the state-distinction floor. Dark retains its historical ordering,
+with the selected-direction miss recorded by the contrast ratchet rather than
+hidden.
 
 Consumers use these three roles directly — the shell, sidebar, lists and menus
 all paint from the same three tokens, so they cannot drift apart. The gate
@@ -331,31 +327,27 @@ invented where one of these three belongs.
 
 | Family | Token | Dark | Light |
 | --- | --- | --- | --- |
-| Destructive | `--color-destructive` | `#fa423e` | `#e02e2a` |
-| | `--color-destructive-subtle` | `rgba(250,66,62,0.12)` | same |
+| Destructive | `--color-destructive` | `#fa423e` | `#c02622` |
+| | `--color-destructive-subtle` | `rgba(250,66,62,0.12)` | `#fbe9e8` |
 | | `--color-destructive-foreground` | `#ffffff` | `#ffffff` |
-| Success | `--color-success` | `#40c977` | `#00a240` |
-| | `--color-success-subtle` | `rgba(64,201,119,0.14)` | same |
-| Warning | `--color-warning` | `rgba(255, 180, 50, 0.15)` | `#fff8e6` |
-| | `--color-warning-foreground` | `#ffb432` | `var(--color-foreground)` |
-| | `--color-warning-border` | `rgba(255, 180, 50, 0.25)` | `var(--color-border)` |
+| Success | `--color-success` | `#40c977` | `#0a7c3f` |
+| | `--color-success-subtle` | `rgba(64,201,119,0.14)` | `#e6f4ec` |
+| Warning | `--color-warning` | `rgba(255, 180, 50, 0.15)` | `#fdf3dc` |
+| | `--color-warning-foreground` | `#ffb432` | `#8a5a00` |
+| | `--color-warning-border` | `rgba(255, 180, 50, 0.25)` | `#e8d9ae` |
 | | `--color-warning-subtle` | `rgba(242,201,76,0.14)` | same |
-| Info | `--color-info` | `#339cff` | `#0285ff` |
+| Info | `--color-info` | `#339cff` | `#0b6bcb` |
 
-Each family is a hue plus a `-subtle` tint for fills; the `-subtle` variants are
-mode-independent because a 12–14% tint of a saturated hue reads the same over
-either background. The `warning` family is the exception in shape: its base
-token is already a tint rather than a hue, with the hue held in
-`warning-foreground`.
+Each family is independently authored per mode. These status values are outside
+the neutral retune: changing the one-ink ladder must not move success,
+destructive, warning, or review-state hues.
 
 Git and review state carry a parallel set of roles rather than reusing these:
 `--color-git-green`/`-red`/`-yellow`, `--color-diff-added`,
 `--color-diff-deleted`, `--color-pr-merged` (`#ad7bf9`/`#8250df`),
-`--color-status-in-progress`. Two are visibly derived from the semantic pair
-(`git-green` is `success`, dark for dark and light for light) and two are not
-(`--color-diff-added` is `#00a240` in *both* modes, because it must hold against
-the diff's own surfaces rather than the app background). Keeping them separate is
-what lets a diff retune its greens without moving every success badge.
+`--color-status-in-progress`. Git green matches success in each mode, but the
+roles stay separate so diff surface tints can move without changing every
+success badge.
 
 ### Accents
 
@@ -363,28 +355,17 @@ what lets a diff retune its greens without moving every success badge.
 | --- | --- | --- | --- |
 | `--color-primary` | `#ffffff` | `#1a1c1f` | Primary action fill. |
 | `--color-primary-foreground` | `#0d0d0d` | `#ffffff` | Text on that fill. |
-| `--color-link-foreground` | `#83c3ff` | `#339cff` | Links. |
-| `--color-special` | `#339cff` | `#339cff` | Accent for highlighted/special affordances. |
-| `--color-ring` | 28% | 30% | Focus ring. |
-| `--color-highlight` | `rgba(51, 156, 255, 0.12)` | `#e5f3ff` | Search/selection highlight fill. |
+| `--color-link-foreground` | `#83c3ff` | `#0b6bcb` | Links. |
+| `--color-special` | `#339cff` | `#0b6bcb` | Accent for highlighted/special affordances. |
+| `--color-ring` | 28% white | `#0b6bcb` | Focus ring. |
+| `--color-highlight` | `rgba(51, 156, 255, 0.12)` | `#e5f2ff` | Search/selection highlight fill. |
 
 **Primary is the inverted foreground pair, not a brand hue.** The primary button
 is white-on-near-black in dark and near-black-on-white in light. The product's
-one chromatic accent is a single blue hue, so blue always means "this is a link
-or a called-out thing" and never "this is the primary action". `--color-special`
-and `--color-highlight` hold that hue at `#339cff` in both modes.
-`--color-link-foreground` is the one member of the family that is *not*
-mode-independent: dark carries a lighter step of the same hue (`#83c3ff`) because
-`#339cff` link text sits too dark against the dark surfaces to read as clickable
-at prose weight, while light keeps `#339cff`, which needs the contrast the other
-way. It is still a single link token — there are no per-surface link colors.
-
-The focus ring is one of only two tokens in the whole authority where the
-symmetric-opacity rule is broken on purpose — the light half carries a different
-percentage from the dark: `--color-ring` (28% / 30%) and
-`--color-surface-elevated-secondary` (3% / 2%). Both are shipped hand-tunes, not
-derivations. Every other foreground-mix token uses the same number in both
-halves.
+one chromatic accent is blue, so blue means link, focus, information, or a
+called-out affordance and never the primary action. Light uses `#0b6bcb` for
+link, focus, info, special, and sidebar-ring roles; dark uses a brighter link
+step where prose contrast requires it. There are no per-surface link colors.
 
 ### Special-purpose palettes
 
@@ -396,9 +377,9 @@ listed by count because the individual values carry no design rule beyond
 | --- | --- | --- |
 | `--color-terminal-*` | 16 | The ANSI 8 + bright 8 set for the embedded terminal; also projected into `codeColors.terminal`. |
 | `--color-delegated-agent-*` | 8 | Per-agent identity hues, authored in `hsl()`: the dark half is a light, desaturated tint of a hue and the light half is a darker, more saturated version of the same hue, so agent 3 is recognizably "the red one" in either mode. |
-| `--color-diff-*` | 15 | Diff and review chrome: main/panel/header/code surfaces plus the chat-embedded file, turn and inline-tool headers. |
-| `--diff-view-*` | 6 | The diff *view*'s own surface family: base surface, header, context, hover, separator, context gutter number. |
-| `--diffs-*` | 16 | The diff renderer's override contract: addition/deletion/context/separator fills (each a `color-mix()` of the diff surface with the add/delete hue), plus its font, size, leading, minimum gutter width and mixer color. |
+| `--color-diff-*` | 15 | Diff and review chrome: main/panel/header/code surfaces plus the chat-embedded file, turn and inline-tool headers. Light neutral surfaces mix white toward the one light ink. |
+| `--diff-view-*` | 6 | The diff view's base, header, context, hover, separator, and context-number surfaces; light values are white-anchored mixes. |
+| `--diffs-*` | 16 | The renderer override contract: independently authored addition/deletion/context/separator fills plus type and gutter geometry. |
 | `--color-compute-target-*` | 9 | Compute-target identity colors — nine named hues, mode-independent. |
 | `--color-file-icon-*` | 5 | File-tree glyph tones (folder, accent, neutral, muted, red). |
 | `--scratch-*` | 6 | The scratch editor's type and marker geometry, derived from the message role and expressed in `em`. |
@@ -406,28 +387,23 @@ listed by count because the individual values carry no design rule beyond
 
 ## Elevation
 
-The system is near-flat by design. There are exactly three shadows:
+The system is near-flat by design. Three elevation roles are authored per mode:
 
-| Token | Value | Where |
-| --- | --- | --- |
-| `--shadow-subtle` | `0 1px 2px 0 rgb(0 0 0 / 0.05)` | Anything that sits *on* the page — reached through `--color-composer-shadow`. |
-| `--shadow-popover` | `0 4px 12px rgb(0 0 0 / 0.12)` | Anything that floats *over* the page: popovers, menus, tooltips, toasts. |
-| `--shadow-modal` | `0 25px 50px -12px rgb(0 0 0 / 0.5)` | Anything that takes *over* the page: dialogs, modal shells, the command palette. |
+| Token | Dark | Light | Where |
+| --- | --- | --- | --- |
+| `--shadow-subtle` | `0 1px 2px 0 rgb(0 0 0 / 0.05)` | `0 1px 2px rgba(26, 28, 31, 0.06)` | Elements that sit on the page. |
+| `--shadow-popover` | `0 4px 12px rgb(0 0 0 / 0.12)` | 0.5px 5% ink edge + 12px 10% ink shadow | Popovers, menus, tooltips, toasts. |
+| `--shadow-modal` | `0 25px 50px -12px rgb(0 0 0 / 0.5)` | `0 16px 40px rgba(26, 28, 31, 0.18)` | Dialogs, modal shells, command palette. |
 
-Depth is carried by borders and surface steps first, shadow second. Three roles
-are enough because shadow is only asked one question — is this element on the
-page, over it, or in front of it — and each answer is roughly an order of
-magnitude from the next in blur (2 / 12 / 50px) and opacity (5% / 12% / 50%). In
-dark especially, a shadow over a `#181818` surface does very little work, so the
-surface ladder and the border ladder do it instead. The floating surfaces pair
-their shadow with a hairline `ring-[0.5px]` rather than a heavier shadow, which is
-the same near-flat instinct applied at the edge.
+Depth is carried by borders and surface steps first, shadow second. Light shadow
+color derives from the same `#1a1c1f` ink as the neutral ladder, so elevation
+does not reintroduce a blue slate cast.
 
-Both modes share all three values: a shadow is a light-direction cue, not a
-color, so it does not invert.
+Two component roles refine the shared scale: the light user-message bubble uses
+a 5% ink 2px shadow, and the light composer combines a 0.5px ink edge with 3px
+and 12px shadow layers. Dark keeps the user-message shadow absent and aliases
+the composer to `--shadow-subtle`.
 
-One extra name rides on these roles: `--color-composer-shadow` resolves to
-`--shadow-subtle`, keeping the composer's outline shadow on the shared scale.
 From the class side, the appearance gate bans every other elevation spelling —
 `shadow-sm/md/lg/xl/2xl/inner` (stock Tailwind emits a non-token shadow),
 `shadow-floating`, `shadow-keystone`, and `shadow-[…]` — through
@@ -983,8 +959,11 @@ independent code path and then asserts, in order:
   `compile()`, so a malformed `@theme`/`@utility` block fails the design build
   instead of 500-ing a consumer app's JIT stylesheet at runtime.
 - **Provenance and fallback discipline:** every token has a provenance tag, and
-  every `color-mix()` token has a resolved `@theme` fallback (Tailwind's
-  `@theme` block cannot hold `color-mix()`).
+  every default/dark `color-mix()` projected into `@theme` has a resolved
+  fallback (Tailwind's `@theme` block cannot hold `color-mix()`).
+- **The light palette contract:** retired opaque slate literals stay absent,
+  the white/rail/editor planes and single accent stay pinned, and every neutral
+  alpha role remains on its adopted `#1a1c1f` rung.
 - **Motion authority:** each duration/ease/cadence/delay number and each
   `--duration-*`/`--ease-*`/`--activity-*` token matches `motion.ts` in both
   halves.
@@ -1017,14 +996,17 @@ consolidation:
 
 Tags are historical, not permissions. `[SHIPPED]` does not mean a value is
 protected and `[RETUNE:…]` does not mean it is still in flight — the tag records
-where the value came from, and any value is one edit plus one build away from
-changing.
+where the value came from. `tokens.ts` remains the authority; an intentional
+light-palette change also updates the exact invariant map in `check-theme.mjs`
+before rebuilding, so the architectural lock cannot drift silently with the
+value it guards.
 
 ### Gates
 
 | Gate | Purpose |
 | --- | --- |
 | [check-theme.mjs](../../../../apps/packages/design/scripts/check-theme.mjs) | Everything in the section above: the generated CSS is a faithful, compilable projection of the authority, and hand-authored CSS owns no values. |
+| [check_theme_contrast.py](../../../../scripts/check_theme_contrast.py) | Text contrast on every content, rail, editor, and control plane; border contrast on white, rail, recessed, and control surfaces; and ordered, distinguishable interaction-state fills. Pre-existing misses are exact ratchets rather than silent exemptions. |
 | [check_appearance_scaling.py](../../../../scripts/check_appearance_scaling.py) | Banned class shapes at every call site (arbitrary radius/z/gap/size, non-token shadows, low-alpha foreground overlays, retired state classes, fixed text/glyph sizes, numeric durations and inline beziers, unowned `backdrop-filter`, raw hex, unsanctioned long lists). Its contract is owned by [appearance-scaling.md](../../systems/product/settings/appearance-scaling.md). |
 | [check_frontend_boundaries.py](../../../../scripts/check_frontend_boundaries.py) | Radix containment inside ProductClient's library tiers, the closed `primitives/**` root/support-directory set, the nested primitives purity/layer law, and the broader frontend import boundaries. |
 | [check_docs.py](../../../../scripts/check_docs.py) | Documentation links and anchors — a renamed source file breaks CI instead of silently orphaning a reference in this document. |

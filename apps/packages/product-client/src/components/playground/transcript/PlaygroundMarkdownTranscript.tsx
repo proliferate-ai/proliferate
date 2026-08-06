@@ -19,7 +19,7 @@ This settled response demonstrates **strong emphasis**, *italic emphasis*, and a
 - Nested structure
   - Second-level item
     - Third-level item
-- File references keep their renderer: [MarkdownBody.tsx](/Users/pablohansen/proliferate/apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx)
+- File references keep their renderer: [MarkdownBody.tsx](/workspace/proliferate/apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx)
 
 1. First ordered item
 2. Second ordered item

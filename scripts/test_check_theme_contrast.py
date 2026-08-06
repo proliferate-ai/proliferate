@@ -13,6 +13,8 @@ import unittest
 import unittest.mock
 
 from scripts.check_theme_contrast import (
+    BORDER_PAIRS,
+    STACKED_TEXT_PAIRS,
     TEXT_PLANES,
     Measurement,
     Resolver,
@@ -213,10 +215,10 @@ class PlaneCoverage(unittest.TestCase):
     rather than silently widening the blind spot.
     """
 
-    def test_every_opaque_elevation_role_is_measured(self) -> None:
-        # Every `--color-*` role in the authority that names an opaque plane text
-        # is painted on. Transient state fills are excluded deliberately — see
-        # the note on TEXT_PLANES.
+    def test_every_text_plane_is_measured(self) -> None:
+        # Every `--color-*` role in the authority that names a plane text is
+        # painted on. Translucent planes are composited by the checker; transient
+        # state fills are excluded deliberately — see the note on TEXT_PLANES.
         expected = {
             "--color-surface",
             "--color-background",
@@ -225,6 +227,7 @@ class PlaneCoverage(unittest.TestCase):
             "--color-surface-elevated",
             "--color-surface-elevated-secondary",
             "--color-surface-control",
+            "--color-surface-editor",
             "--color-surface-under",
             "--color-muted",
             "--color-sidebar",
@@ -238,13 +241,63 @@ class PlaneCoverage(unittest.TestCase):
         for role in ("--color-hover", "--color-selected", "--color-active"):
             self.assertNotIn(role, TEXT_PLANES)
 
-    def test_the_faint_tier_is_measured_against_the_darkest_light_plane(self) -> None:
-        # The regression that shipped: #686e76 cleared 4.5:1 on white but not on
-        # the sidebar. Graded against the plane, not the page.
-        faint = Rgb(0x64, 0x6A, 0x72)
-        sidebar = Rgb(0xED, 0xF0, 0xF2)
-        self.assertGreaterEqual(contrast(faint, sidebar), 4.5)
-        self.assertLess(contrast(Rgb(0x68, 0x6E, 0x76), sidebar), 4.5)
+    def test_the_faint_tier_is_measured_after_alpha_composition(self) -> None:
+        # Alpha ink has no final color until it is composited over the plane. The
+        # rejected 55% proposal missed 4.5:1 on every light plane; 62% clears the
+        # darkest nested control fill as well as white, rail, and editor.
+        ink = Rgb(0x1A, 0x1C, 0x1F)
+        white = Rgb(0xFF, 0xFF, 0xFF)
+        rail = Rgb(0xF6, 0xF6, 0xF6)
+        control = composite(ink, 0.049, white)
+        rail_control = composite(ink, 0.049, rail)
+        planes = (
+            white,
+            rail,
+            Rgb(0xFA, 0xFA, 0xFA),
+            control,
+            rail_control,
+        )
+        for plane in planes:
+            self.assertGreaterEqual(contrast(composite(ink, 0.62, plane), plane), 4.5)
+            self.assertLess(contrast(composite(ink, 0.55, plane), plane), 4.5)
+
+    def test_sidebar_muted_ink_clears_a_control_on_its_rail(self) -> None:
+        self.assertIn(
+            (
+                "--color-sidebar-muted-foreground",
+                "--color-surface-control",
+                "--color-sidebar",
+                4.5,
+            ),
+            STACKED_TEXT_PAIRS,
+        )
+        ink = Rgb(0x1A, 0x1C, 0x1F)
+        rail = Rgb(0xF6, 0xF6, 0xF6)
+        rail_control = composite(ink, 0.049, rail)
+        self.assertGreaterEqual(contrast(composite(ink, 0.62, rail), rail), 4.5)
+        self.assertGreaterEqual(
+            contrast(composite(ink, 0.62, rail_control), rail_control), 4.5
+        )
+        self.assertLess(contrast(composite(ink, 0.61, rail_control), rail_control), 4.5)
+        self.assertLess(contrast(composite(ink, 0.60, rail), rail), 4.5)
+
+    def test_the_lightest_border_is_measured_on_every_light_parent(self) -> None:
+        expected = {
+            ("--color-border-light", "--color-surface"),
+            ("--color-border-light", "--color-sidebar"),
+            ("--color-border-light", "--color-surface-under"),
+            ("--color-border-light", "--color-surface-control"),
+        }
+        self.assertTrue(expected.issubset(set(BORDER_PAIRS)))
+
+        ink = Rgb(0x1A, 0x1C, 0x1F)
+        white = Rgb(0xFF, 0xFF, 0xFF)
+        rail = Rgb(0xF6, 0xF6, 0xF6)
+        control = composite(ink, 0.049, white)
+        rail_control = composite(ink, 0.049, rail)
+        for plane in (white, rail, control, rail_control):
+            self.assertGreaterEqual(contrast(composite(ink, 0.114, plane), plane), 1.25)
+        self.assertLess(contrast(composite(ink, 0.113, rail_control), rail_control), 1.25)
 
 
 if __name__ == "__main__":

@@ -94,15 +94,15 @@ export const themeTokens = {
   },
   "--diff-view-context-number": {
     dark: "color-mix(in lab, var(--diff-view-surface) 98.5%, var(--diffs-mixer))",
-    light: "#f2f4f6",
+    light: "color-mix(in srgb, #ffffff 96.5%, #1a1c1f)",
     themeFallback: "#292929",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diff-view-context-surface": {
     dark: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-diff-main-surface))",
-    light: "#f7f8fa",
+    light: "color-mix(in srgb, #ffffff 97.5%, #1a1c1f)",
     themeFallback: "#252525",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diff-view-header-surface": {
     dark: "var(--color-diff-header-surface)",
@@ -111,15 +111,15 @@ export const themeTokens = {
   },
   "--diff-view-hover-surface": {
     dark: "color-mix(in srgb, var(--diff-view-surface) 92%, var(--color-diff-main-surface))",
-    light: "#e9ecef",
+    light: "color-mix(in srgb, #ffffff 91%, #1a1c1f)",
     themeFallback: "#252525",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diff-view-separator-surface": {
     dark: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-foreground))",
-    light: "#dde1e6",
+    light: "color-mix(in srgb, #ffffff 88%, #1a1c1f)",
     themeFallback: "#333333",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diff-view-surface": {
     dark: "var(--color-diff-surface)",
@@ -133,9 +133,9 @@ export const themeTokens = {
   },
   "--color-active": {
     dark: "color-mix(in oklab, #ffffff 5.2%, transparent)",
-    light: "#dbdfe4",
+    light: "rgba(26, 28, 31, 0.078)",
     themeFallback: "rgba(255, 255, 255, 0.052)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-background": {
     dark: "#181818",
@@ -144,21 +144,21 @@ export const themeTokens = {
   },
   "--color-border": {
     dark: "color-mix(in oklab, #ffffff 8.4%, transparent)",
-    light: "#d5d9de",
+    light: "rgba(26, 28, 31, 0.14)",
     themeFallback: "rgba(255, 255, 255, 0.084)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-border-heavy": {
     dark: "color-mix(in oklab, #ffffff 12%, transparent)",
-    light: "#bfc5cc",
+    light: "rgba(26, 28, 31, 0.18)",
     themeFallback: "rgba(255, 255, 255, 0.12)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-border-light": {
     dark: "color-mix(in oklab, #ffffff 5%, transparent)",
-    light: "#e4e7ea",
+    light: "rgba(26, 28, 31, 0.114)",
     themeFallback: "rgba(255, 255, 255, 0.05)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-card": {
     dark: "#212121",
@@ -194,18 +194,18 @@ export const themeTokens = {
   },
   "--color-composer-control-active-foreground": {
     dark: "var(--color-foreground)",
-    light: "#16181b",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "var(--color-foreground)",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-composer-control-foreground": {
     dark: "var(--color-muted-foreground)",
-    light: "#5a5f66",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "var(--color-muted-foreground)",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-composer-control-muted-foreground": {
     dark: "var(--color-faint)",
-    light: "#646a72",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "var(--color-faint)",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-composer-send-background": {
     dark: "var(--color-foreground)",
@@ -219,8 +219,8 @@ export const themeTokens = {
   },
   "--color-composer-shadow": {
     dark: "var(--shadow-subtle)",
-    light: "0 1px 3px rgb(16 24 40 / 0.08), 0 4px 12px rgb(16 24 40 / 0.06)",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "0 0 0 0.5px rgba(26, 28, 31, 0.06), 0 1px 3px rgba(26, 28, 31, 0.08), 0 4px 12px rgba(26, 28, 31, 0.06)",
+    provenance: "[RETUNE:light/ink-tinted-elevation]",
   },
   "--color-compute-target-amber": {
     dark: "#b59a3a",
@@ -329,9 +329,9 @@ export const themeTokens = {
   },
   "--color-diff-chat-file-header-hover-surface": {
     dark: "color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground))",
-    light: "#e9ecef",
+    light: "color-mix(in srgb, #ffffff 91%, #1a1c1f)",
     themeFallback: "#2d2d2d",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--color-diff-chat-file-header-surface": {
     dark: "var(--color-diff-surface)",
@@ -340,9 +340,9 @@ export const themeTokens = {
   },
   "--color-diff-chat-inline-tool-header-hover-surface": {
     dark: "color-mix(in srgb, var(--color-diff-chat-inline-tool-header-surface) 97%, var(--color-foreground))",
-    light: "#e9ecef",
+    light: "color-mix(in srgb, #ffffff 91%, #1a1c1f)",
     themeFallback: "#282828",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--color-diff-chat-inline-tool-header-surface": {
     dark: "color-mix(in srgb, var(--color-diff-surface) 86%, var(--color-overlay))",
@@ -358,9 +358,9 @@ export const themeTokens = {
   },
   "--color-diff-chat-turn-icon-surface": {
     dark: "color-mix(in srgb, var(--color-background) 88%, var(--color-overlay))",
-    light: "#e9ecef",
+    light: "color-mix(in srgb, #ffffff 91%, #1a1c1f)",
     themeFallback: "#151515",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--color-diff-code-surface": {
     dark: "#111111",
@@ -384,15 +384,15 @@ export const themeTokens = {
   },
   "--color-diff-panel-surface": {
     dark: "color-mix(in oklab, #ffffff 3%, transparent)",
-    light: "var(--color-surface-elevated-secondary)",
+    light: "rgba(26, 28, 31, 0.03)",
     themeFallback: "rgba(255, 255, 255, 0.03)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--color-diff-sidebar-file-header-hover-surface": {
     dark: "color-mix(in srgb, var(--color-diff-sidebar-file-header-surface) 97%, var(--color-foreground))",
-    light: "#e9ecef",
+    light: "color-mix(in srgb, #ffffff 91%, #1a1c1f)",
     themeFallback: "#282828",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--color-diff-sidebar-file-header-surface": {
     dark: "var(--color-diff-chat-inline-tool-header-surface)",
@@ -401,22 +401,21 @@ export const themeTokens = {
   },
   "--color-diff-surface": {
     dark: "color-mix(in srgb, #181818 94%, #ffffff)",
-    light: "#f2f4f6",
+    light: "color-mix(in srgb, #ffffff 95%, #1a1c1f)",
     themeFallback: "#262626",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   /**
-   * The faintest legible ink. Light is authored against the DARKEST plane it
-   * lands on (the sidebar / under-surface `#edf0f2`), not against white: at
-   * `#686e76` it measured 5.15:1 on white but only 4.50:1 on the sidebar, so
-   * every sidebar timestamp and byte count sat a hair under the floor while the
-   * guard — which only measured the two white planes — read green.
+   * The faintest legible ink. Light is authored against the darkest plane it
+   * lands on, including the alpha control fill over white. The reference
+   * proposal's 55% ink resolved to only 3.74:1 there; 62% clears the 4.5:1
+   * floor on every measured light plane without introducing an opaque gray.
    */
   "--color-faint": {
     dark: "color-mix(in oklab, #ffffff 50%, transparent)",
-    light: "#646a72",
+    light: "rgba(26, 28, 31, 0.62)",
     themeFallback: "rgba(255, 255, 255, 0.5)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-file-icon-accent": {
     dark: "hsl(0 0% 89%)",
@@ -445,21 +444,21 @@ export const themeTokens = {
   },
   "--color-foreground": {
     dark: "#ffffff",
-    light: "#16181b",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "#1a1c1f",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-foreground-secondary": {
     dark: "color-mix(in oklab, #ffffff 70%, transparent)",
-    light: "#5a5f66",
+    light: "rgba(26, 28, 31, 0.65)",
     themeFallback: "rgba(255, 255, 255, 0.7)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
-  // Same tier as `--color-faint`, so it carries the same sidebar-plane value.
+  // Same tier as `--color-faint`, including its darkest-plane contrast floor.
   "--color-foreground-tertiary": {
     dark: "color-mix(in oklab, #ffffff 50%, transparent)",
-    light: "#646a72",
+    light: "rgba(26, 28, 31, 0.62)",
     themeFallback: "rgba(255, 255, 255, 0.5)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-git-green": {
     dark: "#40c977",
@@ -478,55 +477,49 @@ export const themeTokens = {
   },
   "--color-highlight": {
     dark: "rgba(51, 156, 255, 0.12)",
-    light: "#e4effc",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "#e5f2ff",
+    provenance: "[RETUNE:light/single-accent]",
   },
   "--color-highlight-muted": {
     dark: "rgba(51, 156, 255, 0.5)",
     light: "#0b6bcb",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/single-accent]",
   },
   "--color-hover": {
     dark: "color-mix(in oklab, #ffffff 7.8%, transparent)",
-    light: "#e4e7ea",
+    light: "rgba(26, 28, 31, 0.053)",
     themeFallback: "rgba(255, 255, 255, 0.078)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-info": {
     dark: "#339cff",
     light: "#0b6bcb",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/single-accent]",
   },
   "--color-input": {
     dark: "color-mix(in oklab, #ffffff 12%, transparent)",
-    light: "#c6ccd2",
+    light: "rgba(26, 28, 31, 0.2)",
     themeFallback: "rgba(255, 255, 255, 0.12)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
-  // Retuned against a measured reference capture of a dark transcript surface,
-  // whose live link/accent tone resolves to rgb(131, 195, 255) — a materially
-  // lighter, less saturated blue than the #339cff we shipped, which read as
-  // dark and heavy against the #181818 chat surface. The same reference's light
-  // theme resolves its accent to #339cff, so the light half keeps the shipped
-  // value and this token stops being mode-independent: one link tone per mode,
-  // lighter in dark, unchanged in light. Still ONE link token — no per-surface
-  // link colors. `--color-special` and `--color-highlight*` are deliberately
-  // untouched: this retune is about link legibility, not the accent family.
+  // Dark uses a lighter blue so prose links remain legible on #181818. Light
+  // joins the single #0b6bcb accent used by focus, info, and special roles.
+  // This remains one link token with no per-surface variants.
   "--color-link-foreground": {
     dark: "#83c3ff",
     light: "#0b6bcb",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/single-accent]",
   },
   "--color-muted": {
     dark: "#212121",
-    light: "#f2f4f6",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "rgba(26, 28, 31, 0.049)",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-muted-foreground": {
     dark: "color-mix(in oklab, #ffffff 70%, transparent)",
-    light: "#5a5f66",
+    light: "rgba(26, 28, 31, 0.65)",
     themeFallback: "rgba(255, 255, 255, 0.7)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-overlay": {
     dark: "#000000",
@@ -550,8 +543,8 @@ export const themeTokens = {
   },
   "--color-primary": {
     dark: "#ffffff",
-    light: "#16181b",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "#1a1c1f",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-primary-foreground": {
     dark: "#0d0d0d",
@@ -568,17 +561,17 @@ export const themeTokens = {
     dark: "color-mix(in oklab, #ffffff 28%, transparent)",
     light: "#0b6bcb",
     themeFallback: "rgba(255, 255, 255, 0.28)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/single-accent]",
   },
   "--color-scrollbar-thumb": {
     dark: "rgba(255, 255, 255, 0.08)",
-    light: "rgba(22,24,27,0.16)",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "rgba(26, 28, 31, 0.12)",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-scrollbar-thumb-active": {
     dark: "rgba(255, 255, 255, 0.16)",
-    light: "rgba(22,24,27,0.28)",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "rgba(26, 28, 31, 0.24)",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-secondary-foreground": {
     dark: "#ffffff",
@@ -587,9 +580,9 @@ export const themeTokens = {
   },
   "--color-selected": {
     dark: "color-mix(in oklab, #ffffff 3.2%, transparent)",
-    light: "#dde1e6",
+    light: "rgba(26, 28, 31, 0.065)",
     themeFallback: "rgba(255, 255, 255, 0.032)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-sidebar": {
     // Round-2 measurement against the reference app's dark capture: the
@@ -597,8 +590,8 @@ export const themeTokens = {
     // surface, not recessed to --color-surface-under. Supersedes the
     // surface-recess ruling from the prior retune.
     dark: "#222222",
-    light: "#edf0f2",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "#f6f6f6",
+    provenance: "[RETUNE:light/two-plane-system]",
   },
   "--color-sidebar-accent-foreground": {
     dark: "#ffffff",
@@ -607,19 +600,19 @@ export const themeTokens = {
   },
   "--color-sidebar-background": {
     dark: "#181818",
-    light: "#edf0f2",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "#f6f6f6",
+    provenance: "[RETUNE:light/two-plane-system]",
   },
   "--color-sidebar-foreground": {
     dark: "color-mix(in oklab, #ffffff 85%, transparent)",
-    light: "#16181b",
+    light: "rgba(26, 28, 31, 0.85)",
     themeFallback: "rgba(255, 255, 255, 0.85)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-sidebar-muted-foreground": {
     dark: "rgba(255, 255, 255, 0.481)",
-    light: "#545a61",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "rgba(26, 28, 31, 0.62)",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-sidebar-primary": {
     dark: "#ffffff",
@@ -654,7 +647,7 @@ export const themeTokens = {
   "--color-special": {
     dark: "#339cff",
     light: "#0b6bcb",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/single-accent]",
   },
   /**
    * [RETUNE:color/special-foreground] — the accent had no paired text color, so
@@ -700,14 +693,14 @@ export const themeTokens = {
    */
   "--color-surface-control": {
     dark: "color-mix(in oklab, #2b2b2b 96%, transparent)",
-    light: "#f2f4f6",
+    light: "rgba(26, 28, 31, 0.049)",
     themeFallback: "rgba(43, 43, 43, 0.96)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-surface-editor": {
     dark: "#282828",
-    light: "#f7f8fa",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "#fafafa",
+    provenance: "[RETUNE:light/two-plane-system]",
   },
   "--color-surface-elevated": {
     dark: "#212121",
@@ -716,14 +709,14 @@ export const themeTokens = {
   },
   "--color-surface-elevated-secondary": {
     dark: "color-mix(in oklab, #ffffff 3%, transparent)",
-    light: "#f2f4f6",
+    light: "rgba(26, 28, 31, 0.049)",
     themeFallback: "rgba(255, 255, 255, 0.03)",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--color-surface-under": {
     dark: "#141414",
-    light: "#edf0f2",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "#f6f6f6",
+    provenance: "[RETUNE:light/two-plane-system]",
   },
   "--color-terminal-black": {
     dark: "rgba(255, 255, 255, 0.5)",
@@ -892,21 +885,21 @@ export const themeTokens = {
   },
   "--diffs-bg-addition-hover-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-diff-added))",
-    light: "#d3ecdd",
+    light: "#d3ebdd",
     themeFallback: "#14311f",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diffs-bg-addition-number-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-added))",
-    light: "#d9efe3",
+    light: "#d9eee2",
     themeFallback: "#16241c",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diffs-bg-addition-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, var(--color-diff-added))",
-    light: "#e3f3e9",
+    light: "#e4f3ea",
     themeFallback: "#15291d",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diffs-bg-context-override": {
     dark: "var(--diff-view-context-surface)",
@@ -915,15 +908,15 @@ export const themeTokens = {
   },
   "--diffs-bg-deletion-hover-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-diff-deleted))",
-    light: "#f7d8d6",
+    light: "#f7d7d5",
     themeFallback: "#3c1c1b",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diffs-bg-deletion-number-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 91%, var(--color-diff-deleted))",
-    light: "#f9e0de",
+    light: "#f9dfdd",
     themeFallback: "#2a1a1a",
-    provenance: "[RETUNE:light/independent-scale]",
+    provenance: "[RETUNE:light/white-anchored-diffs]",
   },
   "--diffs-bg-deletion-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, var(--color-diff-deleted))",
@@ -1221,18 +1214,18 @@ export const themeTokens = {
   },
   "--shadow-modal": {
     dark: "0 25px 50px -12px rgb(0 0 0 / 0.5)",
-    light: "0 16px 40px rgb(16 24 40 / 0.16)",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "0 16px 40px rgba(26, 28, 31, 0.18)",
+    provenance: "[RETUNE:light/ink-tinted-elevation]",
   },
   "--shadow-popover": {
     dark: "0 4px 12px rgb(0 0 0 / 0.12)",
-    light: "0 4px 12px rgb(16 24 40 / 0.10)",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "0 0 0 0.5px rgba(26, 28, 31, 0.05), 0 4px 12px rgba(26, 28, 31, 0.1)",
+    provenance: "[RETUNE:light/ink-tinted-elevation]",
   },
   "--shadow-subtle": {
     dark: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-    light: "0 1px 2px rgb(16 24 40 / 0.06)",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "0 1px 2px rgba(26, 28, 31, 0.06)",
+    provenance: "[RETUNE:light/ink-tinted-elevation]",
   },
   /**
    * Lift for the user-message bubble, which only light mode needs — see
@@ -1242,8 +1235,8 @@ export const themeTokens = {
    */
   "--shadow-user-message": {
     dark: "none",
-    light: "var(--shadow-subtle)",
-    provenance: "[RETUNE:light/independent-scale]",
+    light: "0 1px 2px rgba(26, 28, 31, 0.05)",
+    provenance: "[RETUNE:light/ink-tinted-elevation]",
   },
   "--size-icon-button-lg": {
     dark: "1.75rem",
@@ -1613,8 +1606,8 @@ export const themeTokens = {
   },
   "--workspace-shell-tab-active-underline": {
     dark: "rgb(255 255 255)",
-    light: "#16181b",
-    provenance: "[TABS:active-underline]",
+    light: "var(--color-foreground)",
+    provenance: "[RETUNE:light/alpha-neutral-system]",
   },
   "--workspace-shell-tab-active-underline-size": {
     dark: "2px",
