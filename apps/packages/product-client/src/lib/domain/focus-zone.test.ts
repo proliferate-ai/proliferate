@@ -77,13 +77,14 @@ describe("focus-zone helpers", () => {
     expect(focus).toHaveBeenCalledWith({ preventScroll: false });
   });
 
-  it("does not focus a composer kept mounted inside an aria-hidden route host", () => {
+  it("does not focus a composer kept mounted inside a hidden or inert route host", () => {
     const editorQuerySelector = vi.fn();
+    const closest = vi.fn(() => ({}));
     vi.stubGlobal("document", {
       activeElement: null,
       querySelector: vi.fn(() => ({
         querySelector: editorQuerySelector,
-        closest: vi.fn(() => ({})),
+        closest,
       })),
     });
     vi.stubGlobal("window", {
@@ -91,6 +92,7 @@ describe("focus-zone helpers", () => {
     });
 
     expect(focusChatInputOnActivation()).toBe(false);
+    expect(closest).toHaveBeenCalledWith('[aria-hidden="true"], [inert]');
     expect(editorQuerySelector).not.toHaveBeenCalled();
   });
 
