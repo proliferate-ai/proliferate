@@ -23,6 +23,7 @@ interface AutoHideScrollAreaProps {
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
   onViewportScroll?: (viewport: HTMLDivElement) => void;
+  onUserScrollIntent?: (direction: -1 | 1) => void;
 }
 
 interface ScrollThumbState {
@@ -52,6 +53,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       overscrollBehaviorY,
       chainVerticalWheel = false,
       onViewportScroll,
+      onUserScrollIntent,
     },
     ref,
   ) {
@@ -60,6 +62,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
     const thumbTrackRef = useRef<HTMLDivElement>(null);
     const thumbRef = useRef<HTMLDivElement>(null);
     const onViewportScrollRef = useRef(onViewportScroll);
+    const onUserScrollIntentRef = useRef(onUserScrollIntent);
     const hideTimerRef = useRef<number | null>(null);
     const thumbFrameRef = useRef<number | null>(null);
     const pendingThumbVisibleRef = useRef(false);
@@ -72,6 +75,10 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
     useEffect(() => {
       onViewportScrollRef.current = onViewportScroll;
     }, [onViewportScroll]);
+
+    useEffect(() => {
+      onUserScrollIntentRef.current = onUserScrollIntent;
+    }, [onUserScrollIntent]);
 
     const applyThumbStateToDom = useCallback((state: ScrollThumbState) => {
       const track = thumbTrackRef.current;
@@ -207,8 +214,13 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
           Math.max(event.clientY - top - dragOffsetRef.current, 0),
           maxOffset,
         );
-        viewport.scrollTop =
+        const nextScrollTop =
           (nextOffset / maxOffset) * Math.max(scrollHeight - clientHeight, 0);
+        const scrollDelta = nextScrollTop - viewport.scrollTop;
+        if (Math.abs(scrollDelta) > THUMB_MEASUREMENT_EPSILON) {
+          onUserScrollIntentRef.current?.(scrollDelta < 0 ? -1 : 1);
+          viewport.scrollTop = nextScrollTop;
+        }
         requestThumbUpdate(true);
       };
 

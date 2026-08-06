@@ -9,6 +9,11 @@ import {
   AssistantMessage,
 } from "./AssistantMessage";
 import {
+  TranscriptScrollPriorityProvider,
+  TranscriptUserScrollProvider,
+} from "./TranscriptScrollPriorityContext";
+import { useTranscriptScrollPriority } from "#product/hooks/chat/ui/use-transcript-scroll-priority";
+import {
   selectVisibleTarget,
 } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
 import {
@@ -124,6 +129,81 @@ describe("AssistantMessage streaming reveal", () => {
       (elapsedMs * MAX_STREAM_REVEAL_CHARACTERS_PER_SECOND) / 1_000,
     );
     expect(container.textContent?.length).toBeLessThanOrEqual(maximumVisible);
+  });
+
+  it("pauses reveal commits while the user scrolls and resumes without a catch-up jump", () => {
+    const initialContent = (
+      "A live answer keeps arriving while the reader inspects earlier transcript rows. "
+    ).repeat(8);
+    const renderMessage = (content: string, userScrollActive: boolean) => (
+      <TranscriptUserScrollProvider value={userScrollActive}>
+        <AssistantMessage content={content} isStreaming />
+      </TranscriptUserScrollProvider>
+    );
+    const { container, rerender } = render(renderMessage(initialContent, false));
+
+    flushNextFrame();
+    const visibleBeforeScroll = container.textContent ?? "";
+    expect(visibleBeforeScroll.length).toBeGreaterThan(0);
+    expect(visibleBeforeScroll.length).toBeLessThan(initialContent.length);
+    expect(pendingFrames.size).toBe(1);
+
+    rerender(renderMessage(initialContent, true));
+    expect(pendingFrames.size).toBe(0);
+
+    const expandedContent = `${initialContent}${"More streamed prose. ".repeat(20)}`;
+    rerender(renderMessage(expandedContent, true));
+    expect(container.textContent).toBe(visibleBeforeScroll);
+    expect(pendingFrames.size).toBe(0);
+
+    rerender(renderMessage(expandedContent, false));
+    expect(pendingFrames.size).toBe(1);
+    flushNextFrame();
+
+    const visibleAfterResume = container.textContent ?? "";
+    const maximumFirstFrameGrowth = Math.ceil(
+      (16 * MAX_STREAM_REVEAL_CHARACTERS_PER_SECOND) / 1_000,
+    );
+    expect(visibleAfterResume.length).toBeGreaterThan(visibleBeforeScroll.length);
+    expect(
+      visibleAfterResume.length - visibleBeforeScroll.length,
+    ).toBeLessThanOrEqual(maximumFirstFrameGrowth);
+    expect(visibleAfterResume.length).toBeLessThan(expandedContent.length);
+  });
+
+  it("cancels a queued reveal frame synchronously when scroll intent arrives", () => {
+    const content = "A queued reveal must yield before the browser paints a user scroll. ".repeat(8);
+    let claimScroll: ((sample: {
+      programmatic: boolean;
+      userInitiated?: true;
+    }) => void) | null = null;
+
+    function Harness() {
+      const priority = useTranscriptScrollPriority({
+        latestValue: 1,
+        scopeKey: "workspace:session",
+      });
+      claimScroll = priority.prioritizeScrollSample;
+      return (
+        <TranscriptScrollPriorityProvider
+          isUserScrolling={priority.isUserScrolling}
+          registerSynchronousPause={priority.registerSynchronousPause}
+        >
+          <AssistantMessage content={content} isStreaming />
+        </TranscriptScrollPriorityProvider>
+      );
+    }
+
+    render(<Harness />);
+    expect(pendingFrames.size).toBe(1);
+
+    act(() => {
+      claimScroll?.({ programmatic: false, userInitiated: true });
+      // This assertion runs before React flushes the state update at the end
+      // of act, proving cancellation happened in the input call stack.
+      expect(pendingFrames.size).toBe(0);
+    });
+    expect(pendingFrames.size).toBe(0);
   });
 
   it("rewinds a corrected stream to its common prefix instead of snapping", () => {

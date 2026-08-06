@@ -60,6 +60,8 @@ import { GoalTranscriptEventRow } from "#product/components/workspace/chat/trans
 import { TranscriptPendingPromptRow } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
 import { TranscriptTurnRow } from "#product/components/workspace/chat/transcript/TranscriptTurnRow";
 import { TranscriptEntryMotionProvider } from "#product/components/workspace/chat/transcript/TranscriptEntryMotionContext";
+import { TranscriptScrollPriorityProvider } from "#product/components/workspace/chat/transcript/TranscriptScrollPriorityContext";
+import { useTranscriptScrollPriority } from "#product/hooks/chat/ui/use-transcript-scroll-priority";
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
@@ -159,9 +161,18 @@ export function MessageList({
   ]);
   const deferredTranscriptViewState = useDeferredValue(transcriptViewState);
   const typingActive = useTypingActivityStore((state) => state.typingActive);
-  const effectiveTranscriptViewState = typingActive
+  const typingPrioritizedTranscriptViewState = typingActive
     ? deferredTranscriptViewState
     : transcriptViewState;
+  const {
+    effectiveValue: effectiveTranscriptViewState,
+    isUserScrolling,
+    prioritizeScrollSample,
+    registerSynchronousPause,
+  } = useTranscriptScrollPriority({
+    latestValue: typingPrioritizedTranscriptViewState,
+    scopeKey: `${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`,
+  });
 
   // Chat content search (Cmd+F). The index hook owns match counts/navigation;
   // the paint prop + scroll handle drive highlighting and jump-to-match. All of
@@ -243,7 +254,11 @@ export function MessageList({
     proposedPlanToolCallIdsRef.current = proposedPlanToolCallIds;
   }, [proposedPlanToolCallIds]);
 
-  const handleTranscriptScroll = useCallback((sample?: { programmatic: boolean }) => {
+  const handleTranscriptScroll = useCallback((sample?: {
+    programmatic: boolean;
+    userInitiated?: true;
+  }) => {
+    prioritizeScrollSample(sample);
     // Tag the scroll source: a persistent stream of `source.programmatic`
     // samples (with no user input) means a stick-to-bottom snap / virtualizer
     // measurement feedback loop — the difference between "user scrolled" and
@@ -255,7 +270,9 @@ export function MessageList({
         ? "source.unknown"
         : sample.programmatic
           ? "source.programmatic"
-          : "source.user",
+          : sample.userInitiated
+            ? "source.user"
+            : "source.unclassified",
       count: 1,
     });
     const operationId = startMeasurementOperation({
@@ -286,7 +303,7 @@ export function MessageList({
         "chat-surface",
       ]);
     }
-  }, []);
+  }, [prioritizeScrollSample]);
 
   useEffect(() => () => {
     finishOrCancelMeasurementOperation(scrollSampleOperationRef.current, "unmount");
@@ -360,27 +377,32 @@ export function MessageList({
           onOpenSession={onOpenSession}
           canOpenSession={canOpenSession}
         >
-          <TranscriptEntryMotionProvider
-            key={`${effectiveTranscriptViewState.selectedWorkspaceId ?? "workspace"}:${effectiveTranscriptViewState.activeSessionId}`}
-            transcript={effectiveTranscriptViewState.transcript}
+          <TranscriptScrollPriorityProvider
+            isUserScrolling={isUserScrolling}
+            registerSynchronousPause={registerSynchronousPause}
           >
-            <ProposedPlanToolCallIdsProvider value={proposedPlanToolCallIds}>
-              <DebugProfiler id="transcript-row-list-router">
-                <DeferredChatTranscriptView
-                  state={effectiveTranscriptViewState}
-                  outboxActions={outboxActions}
-                  onScrollSample={handleTranscriptScroll}
-                  renderPendingPromptRow={renderPendingPromptRow}
-                  renderTurnRow={renderTurnRow}
-                  renderGoalEventRow={renderGoalEventRow}
-                  renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
-                  renderTurnTrailingStatus={renderTurnTrailingStatusRow}
-                  contentSearch={contentSearchPaint}
-                  scrollHandleRef={transcriptScrollHandleRef}
-                />
-              </DebugProfiler>
-            </ProposedPlanToolCallIdsProvider>
-          </TranscriptEntryMotionProvider>
+            <TranscriptEntryMotionProvider
+              key={`${effectiveTranscriptViewState.selectedWorkspaceId ?? "workspace"}:${effectiveTranscriptViewState.activeSessionId}`}
+              transcript={effectiveTranscriptViewState.transcript}
+            >
+              <ProposedPlanToolCallIdsProvider value={proposedPlanToolCallIds}>
+                <DebugProfiler id="transcript-row-list-router">
+                  <DeferredChatTranscriptView
+                    state={effectiveTranscriptViewState}
+                    outboxActions={outboxActions}
+                    onScrollSample={handleTranscriptScroll}
+                    renderPendingPromptRow={renderPendingPromptRow}
+                    renderTurnRow={renderTurnRow}
+                    renderGoalEventRow={renderGoalEventRow}
+                    renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
+                    renderTurnTrailingStatus={renderTurnTrailingStatusRow}
+                    contentSearch={contentSearchPaint}
+                    scrollHandleRef={transcriptScrollHandleRef}
+                  />
+                </DebugProfiler>
+              </ProposedPlanToolCallIdsProvider>
+            </TranscriptEntryMotionProvider>
+          </TranscriptScrollPriorityProvider>
         </TranscriptContextProviders>
       </DebugProfiler>
     </DebugProfiler>

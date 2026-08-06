@@ -7,8 +7,24 @@ import {
   PROGRAMMATIC_MATCH_TOL_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
   SCROLLABLE_OVERFLOW_EPSILON_PX,
+  TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
+
+const USER_SCROLL_KEYS = new Set([
+  "ArrowDown",
+  "ArrowUp",
+  "End",
+  "Home",
+  "PageDown",
+  "PageUp",
+  " ",
+]);
+const USER_SCROLL_UP_KEYS = new Set(["ArrowUp", "Home", "PageUp"]);
+
+function interactionNow(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
+}
 
 /**
  * Whether the viewport actually has room to scroll. The pre-emptive
@@ -19,6 +35,30 @@ import {
  */
 function viewportCanScroll(viewport: HTMLDivElement): boolean {
   return viewport.scrollHeight - viewport.clientHeight > SCROLLABLE_OVERFLOW_EPSILON_PX;
+}
+
+function viewportCanScrollInDirection(
+  viewport: HTMLDivElement,
+  direction: -1 | 1,
+): boolean {
+  if (!viewportCanScroll(viewport)) {
+    return false;
+  }
+  if (direction < 0) {
+    return viewport.scrollTop > DIRECTION_EPSILON_PX;
+  }
+  const maximumTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  return viewport.scrollTop < maximumTop - DIRECTION_EPSILON_PX;
+}
+
+function keyboardScrollDirection(event: KeyboardEvent): -1 | 1 | null {
+  if (!USER_SCROLL_KEYS.has(event.key)) {
+    return null;
+  }
+  if (event.key === " ") {
+    return event.shiftKey ? -1 : 1;
+  }
+  return USER_SCROLL_UP_KEYS.has(event.key) ? -1 : 1;
 }
 
 export interface UseTranscriptStickToBottomOptions {
@@ -43,6 +83,8 @@ export interface TranscriptStickToBottom {
   pinnedRef: RefObject<boolean>;
   /** Wire to AutoHideScrollArea's onViewportScroll. Owns stickiness + direction + onScrollSample. */
   onViewportScroll: (viewport: HTMLDivElement) => void;
+  /** Mark positive wheel/key/touch/scrollbar intent before its scroll event arrives. */
+  notifyUserScrollIntent: (direction: -1 | 1) => void;
   /** Snap to the active follow target (soft overlay bottom or user-chosen hard bottom). */
   scrollToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
@@ -75,6 +117,7 @@ export function useTranscriptStickToBottom({
   const glueFrameRef = useRef<number | null>(null);
   const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
   const consumedAutoFollowBottomInsetRef = useRef(0);
+  const userScrollIntentUntilRef = useRef(0);
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -111,6 +154,17 @@ export function useTranscriptStickToBottom({
     }
     markNonUserScrollPosition(viewport);
   }, [markNonUserScrollPosition, scrollRef]);
+
+  const notifyUserScrollIntent = useCallback((direction: -1 | 1) => {
+    userScrollIntentUntilRef.current =
+      interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
+    if (direction < 0) {
+      setPinned(false);
+    }
+    // Claim the frame at input time instead of waiting for the browser's later
+    // scroll event, which can otherwise race a stream/reveal animation frame.
+    onScrollSample({ programmatic: false, userInitiated: true });
+  }, [onScrollSample, setPinned]);
 
   // Registered before consumer layout effects. Preserve however much of an
   // existing overlay range the user deliberately consumed; if another card is
@@ -231,7 +285,12 @@ export function useTranscriptStickToBottom({
       consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     }
-    onScrollSample({ programmatic: false });
+    const userInitiated = interactionNow() < userScrollIntentUntilRef.current;
+    onScrollSample(
+      userInitiated
+        ? { programmatic: false, userInitiated: true }
+        : { programmatic: false },
+    );
   }, [onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
   const startGlueLoop = useCallback(() => {
@@ -280,6 +339,7 @@ export function useTranscriptStickToBottom({
     programmaticRef.current = null;
     lastScrollTopRef.current = 0;
     consumedAutoFollowBottomInsetRef.current = 0;
+    userScrollIntentUntilRef.current = 0;
     setPinned(true);
     scrollToBottom();
     startGlueLoop();
@@ -299,16 +359,19 @@ export function useTranscriptStickToBottom({
     // bottom is meaningless when there is nowhere to scroll, and acting on it
     // would strand the engine unpinned (no scroll event follows to re-pin).
     const onWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0 && viewportCanScroll(viewport)) {
-        setPinned(false);
+      const direction = event.deltaY < -DIRECTION_EPSILON_PX
+        ? -1
+        : event.deltaY > DIRECTION_EPSILON_PX
+          ? 1
+          : null;
+      if (direction !== null && viewportCanScrollInDirection(viewport, direction)) {
+        notifyUserScrollIntent(direction);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") &&
-        viewportCanScroll(viewport)
-      ) {
-        setPinned(false);
+      const direction = keyboardScrollDirection(event);
+      if (direction !== null && viewportCanScrollInDirection(viewport, direction)) {
+        notifyUserScrollIntent(direction);
       }
     };
     const onTouchStart = (event: TouchEvent) => {
@@ -316,9 +379,16 @@ export function useTranscriptStickToBottom({
     };
     const onTouchMove = (event: TouchEvent) => {
       const y = event.touches[0]?.clientY ?? touchStartY;
-      // Finger dragging down reveals content above (scrolls toward history).
-      if (y - touchStartY > DIRECTION_EPSILON_PX && viewportCanScroll(viewport)) {
-        setPinned(false);
+      const direction = y - touchStartY > DIRECTION_EPSILON_PX
+        ? -1
+        : touchStartY - y > DIRECTION_EPSILON_PX
+          ? 1
+          : null;
+      if (
+        direction !== null
+        && viewportCanScrollInDirection(viewport, direction)
+      ) {
+        notifyUserScrollIntent(direction);
       }
     };
     viewport.addEventListener("wheel", onWheel, { passive: true });
@@ -331,7 +401,7 @@ export function useTranscriptStickToBottom({
       viewport.removeEventListener("touchstart", onTouchStart);
       viewport.removeEventListener("touchmove", onTouchMove);
     };
-  }, [scrollRef, setPinned]);
+  }, [notifyUserScrollIntent, scrollRef]);
 
   // On tab/window re-show while pinned, glue to the bottom for a few frames so
   // the suspended-then-resumed measurement backlog lands as one jump. Listen to
@@ -371,6 +441,7 @@ export function useTranscriptStickToBottom({
     isPinnedToBottom,
     pinnedRef,
     onViewportScroll,
+    notifyUserScrollIntent,
     scrollToBottom,
     handleScrollToBottomClick,
     notifyProgrammaticScroll,

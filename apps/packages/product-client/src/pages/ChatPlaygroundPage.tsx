@@ -35,10 +35,14 @@ export function ChatPlaygroundPage() {
     selection.kind === "fixture" && selection.key === "git-diff-panel";
   const showAttachmentPreview =
     selection.kind === "fixture" && selection.key === "attachment-previews";
-  const focusMarkdownPresentation =
-    selection.kind === "fixture"
-    && selection.key === "markdown-presentation"
-    && params.get("focus") === "1";
+  const focusTranscript = params.get("focus") === "1"
+    && (
+      selection.kind === "recording"
+      || (
+        selection.kind === "fixture"
+        && selection.key === "markdown-presentation"
+      )
+    );
 
   const handleSelectFixture = (key: ScenarioKey) => {
     const next = new URLSearchParams(params);
@@ -54,7 +58,7 @@ export function ChatPlaygroundPage() {
 
   return (
     <div className="chat-selection-root flex h-screen flex-col bg-background text-foreground">
-      {!focusMarkdownPresentation && (
+      {!focusTranscript && (
         <>
           <header
             aria-label="Populated session preview"
@@ -84,7 +88,7 @@ export function ChatPlaygroundPage() {
           <div className={CHAT_SURFACE_GUTTER_CLASSNAME}>
             {/* Mirror the transcript root's label-size override so fixtures
                 render at product parity (text-chat resolves to message size). */}
-            <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col gap-6 [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}>
+            <div className={`${CHAT_COLUMN_CLASSNAME} flex h-full flex-col gap-6 [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}>
               <PlaygroundTranscript
                 selection={selection}
                 replay={replay}
@@ -107,7 +111,7 @@ export function ChatPlaygroundPage() {
         )}
         {showAttachmentPreview && <PlaygroundAttachmentPreviewAside />}
       </main>
-      {!focusMarkdownPresentation && (
+      {!focusTranscript && (
         <footer className="border-t border-border px-4 py-2 text-ui-sm text-muted-foreground">
           <code className="font-mono">?s={selection.raw}</code>
           <span className="mx-2">·</span>

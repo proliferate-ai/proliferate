@@ -321,6 +321,20 @@ happens only when a user scroll lands within a tight bottom band
 window — that loose window kept small upward scrolls "pinned" and let the snap
 yank the user back.
 
+Positive, direction-aware user intent also owns transcript rendering while the
+gesture is active. A wheel, scroll key, touch move, or custom-thumb drag that
+can actually move the viewport opens a 150ms priority window; a no-op gesture
+at either scroll boundary does not. Opening the window synchronously cancels
+the paced prose reveal frame, then renders from the last committed transcript
+snapshot so stream batches, row derivation, Markdown work, and measurement do
+not compete with native scroll paints. Unclassified native scroll events may
+extend an already-open window for momentum, but cannot open one; tagged
+programmatic follow and anchor writes never open or extend it. The newest
+snapshot publishes after the final sample settles, and prose reveal resumes
+from the exact visible prefix at its normal bounded rate rather than jumping to
+the buffered target. Snapshot authority updates only after a committed layout,
+so an interrupted concurrent render cannot leak state or scope into the hold.
+
 While pinned, content growth re-sticks the viewport: the non-virtualized list
 via a `ResizeObserver` on the scroll content plus a per-commit layout effect, the
 virtualized list via measured `totalContentHeight`; both call the engine's

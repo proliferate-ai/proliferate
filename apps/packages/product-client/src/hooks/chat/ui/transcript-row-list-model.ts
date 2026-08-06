@@ -2,9 +2,10 @@ import type { ReactNode, RefObject } from "react";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { ChatTranscriptScrollHandle } from "#product/hooks/chat/ui/chat-transcript-view-types";
 
-/** Classification of a viewport scroll event: our own snap vs the user. */
+/** Classification of a viewport scroll event and whether input intent proved user ownership. */
 export interface TranscriptScrollSample {
   programmatic: boolean;
+  userInitiated?: true;
 }
 
 export const TRANSCRIPT_TOP_PADDING_PX = 16;
@@ -25,6 +26,9 @@ export const DIRECTION_EPSILON_PX = 1;
 // nothing would re-pin and the scroll-to-bottom button would wrongly show while
 // already at the bottom.
 export const SCROLLABLE_OVERFLOW_EPSILON_PX = 1;
+// User input and the rendering gate share one expiry so a late native or
+// virtualizer correction cannot re-open a gate after the proven intent ended.
+export const TRANSCRIPT_USER_SCROLL_SETTLE_MS = 150;
 // Visibility-resume glue loop: hold the viewport at the bottom each frame until
 // measured scrollHeight is stable for this many consecutive frames, capped at
 // GLUE_MAX_FRAMES, so a suspended-then-resumed measurement backlog collapses

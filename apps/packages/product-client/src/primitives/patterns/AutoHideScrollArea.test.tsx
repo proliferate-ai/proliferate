@@ -122,4 +122,42 @@ describe("AutoHideScrollArea", () => {
     expect(remountedThumb?.style.transform).toBe("translateY(30px)");
     expect(remountedThumb?.style.pointerEvents).toBe("auto");
   });
+
+  it("reports custom scrollbar intent on grab and drag", () => {
+    const onUserScrollIntent = vi.fn();
+    const rendered = render(
+      <AutoHideScrollArea
+        className="h-80"
+        onUserScrollIntent={onUserScrollIntent}
+      >
+        <div>content</div>
+      </AutoHideScrollArea>,
+    );
+    const viewport = rendered.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+    Object.defineProperty(viewport, "scrollHeight", { value: 3_000, configurable: true });
+    viewport.scrollTop = 300;
+    act(() => {
+      fireEvent.scroll(viewport);
+      flushFrames();
+    });
+    const thumb = rendered.container.querySelector<HTMLElement>(
+      "[aria-hidden='true'] > div",
+    )!;
+
+    act(() => {
+      fireEvent.pointerDown(thumb, { clientY: 35 });
+    });
+    expect(onUserScrollIntent).not.toHaveBeenCalled();
+
+    act(() => {
+      fireEvent.pointerMove(window, { clientY: 20 });
+      fireEvent.pointerMove(window, { clientY: 20 });
+      fireEvent.pointerMove(window, { clientY: 50 });
+    });
+
+    expect(onUserScrollIntent).toHaveBeenCalledTimes(2);
+    expect(onUserScrollIntent).toHaveBeenNthCalledWith(1, -1);
+    expect(onUserScrollIntent).toHaveBeenNthCalledWith(2, 1);
+  });
 });
