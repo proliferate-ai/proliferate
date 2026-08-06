@@ -72,9 +72,12 @@ SESSION_EVENT_SINK_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/live/sessions/event_sink/",
 )
 TOKEN_RE = re.compile(r"r#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*|::|[{}(),;*]")
-USE_START_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+")
+# `\b` rather than `\s+` after `use`: a statement whose path is pushed to the next
+# line leaves `use` (or `pub use`) alone on the head line, and demanding trailing
+# whitespace made such a statement invisible to the whole import pass.
+USE_START_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\b")
 # A re-export specifically, not a private import: `pub use ..`, `pub(crate) use ..`.
-PUB_USE_START_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+use\s+")
+PUB_USE_START_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+use\b")
 SESSION_COMMAND_USE_RE = re.compile(
     r"(?:\bSessionCommand|crate::live::sessions::actor::command::SessionCommand)\s*::"
 )
@@ -122,6 +125,10 @@ STORE_CONSTRUCTOR_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*Store::new\b")
 # today's single match is a benign false positive, seeded in the allowlist rather
 # than special-cased: the field-name shape is the durable signal we want to hold,
 # and a real `*_store` field added later would be caught for the right reason.
+# The pattern is bound to the identifier `state`, which every one of api/**'s
+# handler params is spelled as today (`State(state)`); an `app_state.foo_store` or
+# a rebound clone evades it. That is judgment territory, like the rest of the
+# AppState-field surface noted in the allowlist's Known scope limits stanza.
 APP_STATE_STORE_FIELD_RE = re.compile(r"\bstate\.[a-z_]*_store\b")
 # Inline `anyharness_contract::` path uses (fn signatures, struct literals,
 # turbofish) that no use-statement declares. Mirrors DOMAIN_LIVE_VALVE's
@@ -136,19 +143,29 @@ POLICY_IMPURITY_RES = (
     re.compile(r"\brand::"),
 )
 # Calibrated against domains/**: these patterns hit every embedded-SQL line found
-# outside store code with zero false positives (no log strings, no identifiers
-# that merely contain a keyword).
+# outside store code, with no false positives in the current tree.
 #
 # The first six are whole-statement shapes that fit on one line. The next three
 # are keyword-anchored heads for the far more common case of SQL that rustfmt (or
 # the author) split across lines: `"UPDATE sessions` / `SET col = ?1` /
 # `WHERE id = ?1` each land on their own line, so a rule that demanded two
 # keywords together saw none of them. Keeping the clause heads uppercase-only and
-# anchored to a line start or an opening quote is what keeps prose out: English
-# never writes a bare capitalised `SELECT` at the head of a line, and a lowercase
-# "select the agent" comment or log string cannot match. `UPDATE` additionally
-# requires a lowercase table identifier after it, so `DO UPDATE SET` fragments and
-# prose like "run UPDATE both stamps" do not count twice or at all.
+# anchored to a line start or an opening quote is what keeps most prose out: a
+# lowercase "select the agent" comment or log string cannot match, and `UPDATE`
+# additionally requires a lowercase table identifier after it, so `DO UPDATE SET`
+# fragments do not count twice.
+#
+# Known limits, accepted rather than chased (pinned by unit tests so they stay
+# visible):
+#   * An uppercase SQL verb heading a non-SQL string still matches --
+#     `bail!("UPDATE failed for {id}")` is lexically indistinguishable from
+#     `"UPDATE sessions SET .."`. No regex can separate them; a match here is a
+#     seedable false positive, not a defect.
+#   * `SELECT` excludes only the exact literal `"SELECT"` (a keyword constant or
+#     a serde rename), via `(?!")`. A built fragment `"SELECT " + cols` must keep
+#     matching, so the exclusion cannot extend to a quote after whitespace.
+#   * Block comments are scanned as code: strip_line_comment only understands
+#     `//`, so SQL quoted inside `/* .. */` counts.
 SQL_RES = (
     re.compile(r"\bINSERT INTO\b"),
     re.compile(r"\bSELECT\b.*\bFROM\b"),
@@ -159,7 +176,7 @@ SQL_RES = (
     re.compile(r"\bparams!|\brusqlite::params\b"),
     # Split-statement heads: the write verb and its table on one line, the clauses
     # on the next.
-    re.compile(r'(?:^|")\s*SELECT\b'),
+    re.compile(r'(?:^|")\s*SELECT\b(?!")'),
     re.compile(r'(?:^|")\s*UPDATE\s+[a-z_]'),
     re.compile(r"^\s*SET\b"),
     # Conflict-resolving inserts and drops, which the two bare-verb patterns above
@@ -454,6 +471,22 @@ def iter_use_statements(path: Path) -> list[tuple[int, list[str]]]:
             start_line = 0
 
     return statements
+
+
+def use_statement_linenos(path: Path) -> set[int]:
+    """Every line number a use statement occupies, head and continuations alike.
+
+    The line pass must not re-flag text the import pass already parsed. Testing
+    each line for a `use` prefix is not enough: in a root-brace group
+    (`use {\\n    anyharness_contract::v1::Foo,\\n};`) the interesting leaf sits on
+    a continuation line that carries no prefix, so the prefix test let the line
+    pass fire there while the import pass fired at the head — one import counted
+    twice. Skipping the statement's whole line span fixes that by construction.
+    """
+    covered: set[int] = set()
+    for start_line, lines in iter_use_statements(path):
+        covered.update(range(start_line, start_line + len(lines)))
+    return covered
 
 
 def tokenize_use_statement(start_line: int, lines: list[str]) -> list[Token]:
@@ -925,8 +958,12 @@ def check_domain_valve_live_reexport(
 
     One violation per re-exporting statement, not per leaf: the statement is the
     laundering act, and a group `pub use crate::live::sessions::{A, B}` is one act.
+
+    The `pub use` prefix is matched against the statement's joined text, not just
+    its first line: `pub use\\n    crate::live::sessions::Handle;` is the same
+    re-export, and testing only line one let that spelling launder silently.
     """
-    if not PUB_USE_START_RE.search(lines[0]):
+    if not PUB_USE_START_RE.search(" ".join(line.strip() for line in lines)):
         return
     add_if(
         violations,
@@ -954,14 +991,18 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
     # the same law, just the other half of the surface.
     check_live_store_line = is_under(rel, LIVE_PREFIX)
     check_contract_inline = in_domains
+    # Lines the import pass already owns. Computed once per file, for the whole
+    # span of each statement rather than just its head line -- see
+    # use_statement_linenos.
+    import_pass_linenos = use_statement_linenos(path)
 
     for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
         line = strip_line_comment(raw_line)
         is_use_line = line.lstrip().startswith("use ")
-        # The new rules also share the use-statement pass, so they must not
-        # re-count `pub use` lines that `is_use_line` misses.
-        starts_use_statement = USE_START_RE.search(line) is not None
-        if check_live_valve and not starts_use_statement:
+        # The rules that share the use-statement pass must not re-count any line
+        # of a use statement, head or continuation.
+        inside_use_statement = lineno in import_pass_linenos
+        if check_live_valve and not inside_use_statement:
             add_if(
                 violations,
                 has_non_model_live_use(line),
@@ -970,7 +1011,7 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
                 lineno,
                 DOMAIN_LIVE_VALVE_MESSAGE,
             )
-        if check_api_store_escape and not starts_use_statement:
+        if check_api_store_escape and not inside_use_statement:
             add_if(
                 violations,
                 STORE_METHOD_CALL_RE.search(line) is not None
@@ -981,7 +1022,7 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
                 lineno,
                 API_STORE_ESCAPE_MESSAGE,
             )
-        if check_live_store_line and not starts_use_statement:
+        if check_live_store_line and not inside_use_statement:
             add_if(
                 violations,
                 STORE_METHOD_CALL_RE.search(line) is not None
@@ -991,7 +1032,7 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
                 lineno,
                 LIVE_DOMAIN_STORE_MESSAGE,
             )
-        if check_contract_inline and not starts_use_statement:
+        if check_contract_inline and not inside_use_statement:
             add_if(
                 violations,
                 CONTRACT_INLINE_PATH_RE.search(line) is not None,
@@ -1000,7 +1041,7 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
                 lineno,
                 DOMAIN_CONTRACT_IMPORT_MESSAGE,
             )
-        if check_policy_purity and not starts_use_statement:
+        if check_policy_purity and not inside_use_statement:
             add_if(
                 violations,
                 any(pattern.search(line) is not None for pattern in POLICY_IMPURITY_RES),
