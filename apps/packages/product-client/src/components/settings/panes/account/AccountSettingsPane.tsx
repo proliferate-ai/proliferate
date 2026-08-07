@@ -103,6 +103,7 @@ export function AccountSettingsPane({
           displayName={displayName}
           email={email}
           profileSummary={profileSummary}
+          signOut={actions.signOut}
         />
       </SettingsSection>
 
@@ -112,7 +113,7 @@ export function AccountSettingsPane({
         description={signInMethodsDescription}
         action={sectionAction}
       >
-        <div className="overflow-clip rounded-lg bg-surface-elevated-secondary">
+        <div className={ACCOUNT_PANEL_CLASS}>
           {effectiveProviders.map((row) => (
             <SignInMethodRow
               key={`${row.provider.provider}-${row.provider.accountLabel ?? row.provider.label}`}
@@ -130,7 +131,7 @@ export function AccountSettingsPane({
       {/* 3. Connected services */}
       {connectedServices.length > 0 ? (
         <SettingsSection title={connectedServicesTitle} description={connectedServicesDescription}>
-          <div className="overflow-clip rounded-lg bg-surface-elevated-secondary">
+          <div className={ACCOUNT_PANEL_CLASS}>
             {connectedServices.map((service) => (
               <ConnectedServiceRow key={service.id} service={service} />
             ))}
@@ -140,25 +141,30 @@ export function AccountSettingsPane({
 
       {/* 4. Footer */}
       {error ? <p className="text-ui text-destructive">{error}</p> : null}
-      {actions.signOut ? (
-        <div className="flex">
-          <AccountAction action={actions.signOut} variant="secondary" />
-        </div>
-      ) : null}
     </div>
   );
 }
+
+/**
+ * Rows sit in a bordered panel rather than on a raised fill. The old
+ * `bg-surface-elevated-secondary` block read as a shaded slab with no edge,
+ * which put the account's rows on a different footing from every other boxed
+ * group in Settings; a border and the card plane is the shared treatment.
+ */
+const ACCOUNT_PANEL_CLASS = "rounded-xl border border-border bg-card px-4";
 
 function AccountProfileHeader({
   avatarUrl,
   displayName,
   email,
   profileSummary,
+  signOut,
 }: {
   avatarUrl: string | null;
   displayName: string;
   email: string;
   profileSummary: string;
+  signOut?: AccountActionView;
 }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -166,13 +172,24 @@ function AccountProfileHeader({
         key={avatarUrl ?? "account-avatar"}
         avatarUrl={avatarUrl}
         displayName={displayName}
-        className="size-16 rounded-full text-title font-medium"
+        className="size-12 shrink-0 rounded-full text-heading font-medium"
       />
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="truncate text-title font-medium text-foreground">{displayName}</div>
-        <div className="truncate text-body text-muted-foreground">{email}</div>
-        <p className="text-body text-muted-foreground">{profileSummary}</p>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="truncate text-body-emphasis text-foreground">{displayName}</div>
+        <div className="truncate text-ui-sm text-muted-foreground">{email}</div>
+        <p className="text-ui-sm text-muted-foreground">{profileSummary}</p>
       </div>
+      {/*
+       * Sign out belongs on the identity it signs out of, not alone at the
+       * bottom of the pane. In the footer it was separated from the account it
+       * acts on by two unrelated sections, which is how a destructive-adjacent
+       * action ends up being read as applying to whatever sits above it.
+       */}
+      {signOut ? (
+        <div className="shrink-0 sm:ml-auto">
+          <AccountAction action={signOut} variant="secondary" />
+        </div>
+      ) : null}
     </div>
   );
 }
