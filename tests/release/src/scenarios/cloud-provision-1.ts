@@ -210,7 +210,7 @@ export const cloudProvision1: ScenarioDefinition = {
   title:
     "prove one real managed-cloud workspace: exact candidate template → real GitHub authorization → " +
     "one E2B sandbox → covered repo → one correlated gateway turn → strict cleanup",
-  registryFlowRef: "specs/developing/testing/flows.md#cloud-provision",
+  registryFlowRef: "specs/TESTING/flows.md#cloud-provision",
   lanes: ["sandbox"],
   requiredEnv: [
     "AGENT_GATEWAY_LITELLM_BASE_URL",

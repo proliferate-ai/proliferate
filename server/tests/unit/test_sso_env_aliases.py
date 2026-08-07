@@ -1,4 +1,4 @@
-"""T1-SH-2 (specs/developing/testing/self-hosting.md): SSO env-var alias
+"""T1-SH-2 (specs/TESTING/self-hosting.md): SSO env-var alias
 equivalence sweep.
 
 Every self-hosted SSO setting accepts two env names: the bare `SSO_*` form and

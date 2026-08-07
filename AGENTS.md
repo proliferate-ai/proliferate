@@ -59,8 +59,8 @@ applicable owner.
 | `anyharness/crates/anyharness*/**` | [`specs/codebase/structures/anyharness/README.md`](specs/codebase/structures/anyharness/README.md) |
 | `anyharness/crates/proliferate-worker/**` | [`specs/codebase/structures/proliferate-worker/README.md`](specs/codebase/structures/proliferate-worker/README.md) |
 | `anyharness/crates/proliferate-supervisor/**`, `install/**` | [`specs/codebase/structures/proliferate-supervisor/README.md`](specs/codebase/structures/proliferate-supervisor/README.md) |
-| `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**` | [`specs/developing/testing/README.md`](specs/developing/testing/README.md) |
-| `scripts/agent-gateway-smoke/**` | [`specs/developing/testing/README.md`](specs/developing/testing/README.md) |
+| `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**` | [`specs/TESTING.md`](specs/TESTING.md) |
+| `scripts/agent-gateway-smoke/**` | [`specs/TESTING.md`](specs/TESTING.md) |
 | `catalogs/**`, `scripts/agent-catalog/**` | [`specs/codebase/platforms/product/README.md`](specs/codebase/platforms/product/README.md) |
 | `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`guides/deploying/README.md`](guides/deploying/README.md) |
 | `.auth-env/**`, local profiles, local app identity | [`guides/local/README.md`](guides/local/README.md) |

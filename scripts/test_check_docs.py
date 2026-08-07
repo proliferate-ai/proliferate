@@ -43,7 +43,7 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/codebase/systems/engineering/observability/README.md",
             "guides/operating/README.md",
             "guides/operating/analytics/README.md",
-            "specs/developing/testing/manual-release-qa.md",
+            "specs/TESTING/manual-release-qa.md",
         }
 
         self.assertLessEqual(required_indexes, set(check_docs.REQUIRED_READMES))
@@ -71,7 +71,7 @@ class DocumentationIntegrityTest(unittest.TestCase):
             f"guides/{root}/README.md"
             for root in expected_roots - {"testing", "reference"}
         } | {
-            "specs/developing/testing/README.md",
+            "specs/TESTING.md",
             "specs/developing/reference/README.md",
         }
 

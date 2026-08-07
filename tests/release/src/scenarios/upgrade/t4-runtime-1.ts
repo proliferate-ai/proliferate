@@ -11,7 +11,7 @@ import {
 
 /**
  * T4-RUNTIME-1 — heartbeat-driven managed runtime update (existing sandbox).
- * Target guarantee: specs/developing/testing/tier-4-scenario-contract.md
+ * Target guarantee: specs/TESTING/tier-4-scenario-contract.md
  * §"T4-RUNTIME-1 — heartbeat-driven runtime update".
  *
  * The tier-4 assertion, in one line: a sandbox provisioned from the immutable
@@ -63,7 +63,7 @@ const SUPERVISOR_OWNED_RUNTIME_ENV = "RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME";
 export const t4Runtime1: ScenarioDefinition = {
   id: "T4-RUNTIME-1",
   title: "heartbeat-driven managed runtime update (existing sandbox, N-1 -> N)",
-  registryFlowRef: "specs/developing/testing/tier-4-scenario-contract.md#T4-RUNTIME-1",
+  registryFlowRef: "specs/TESTING/tier-4-scenario-contract.md#T4-RUNTIME-1",
   lanes: ["sandbox"],
   // Every input the gates below read must be declared here: the runner builds
   // ctx.env from the union of the selected cells' requiredEnv (execute.ts), so a

@@ -37,7 +37,7 @@ readiness. Before readiness, also update the body with:
 - a plain summary of the change; and
 - the commands and other evidence that prove it.
 
-Use the proof depth required by [`../../specs/developing/testing/README.md`](../../specs/developing/testing/README.md).
+Use the proof depth required by [`../../specs/TESTING.md`](../../specs/TESTING.md).
 
 If the PR has a support relationship, link it through the tracker. Confirm in
 the PR body that the relationship was linked; do not include tracker, report,

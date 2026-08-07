@@ -129,7 +129,7 @@ For every selected lane:
    verification remains pending.
 
 Release qualification and evidence requirements belong to
-[Testing](../../specs/developing/testing/README.md).
+[Testing](../../specs/TESTING.md).
 
 ## Failure Recovery
 

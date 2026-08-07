@@ -1,4 +1,4 @@
-"""T3-PROV-1 fallback seam (specs/developing/testing/scenarios.md#T3-PROV-1).
+"""T3-PROV-1 fallback seam (specs/TESTING/scenarios.md#T3-PROV-1).
 
 The scenario contract: the cold-provisioning path under test is the GitHub
 App authorization callback (`complete_github_app_user_authorization_callback`,

@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 
 /**
  * The declared inputs that determine whether an E2B template needs a rebuild
- * (specs/developing/testing/README.md: "The E2B template build is cached by
+ * (specs/TESTING.md: "The E2B template build is cached by
  * content hash of its inputs (runtime binary, Dockerfile, agent pins)").
  */
 export interface TemplateInputs {

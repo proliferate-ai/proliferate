@@ -16,7 +16,7 @@ import {
 /**
  * T4-CLOUD-1 — AnyHarness runtime binary self-update in a cloud sandbox.
  * Shipped mechanics: specs/codebase/structures/proliferate-worker/guides/lifecycle.md.
- * Target guarantee: specs/developing/testing/tier-4-scenario-contract.md.
+ * Target guarantee: specs/TESTING/tier-4-scenario-contract.md.
  *
  * The tier-4 assertion: with a sandbox already running version N, bump the
  * server's advertised `desiredVersions.anyharness` pin and let the sandbox
@@ -80,7 +80,7 @@ const STAGING_ECS_TARGET: StagingEcsTarget = {
 export const t4Cloud1: ScenarioDefinition = {
   id: "T4-CLOUD-1",
   title: "AnyHarness runtime binary self-update in a cloud sandbox",
-  registryFlowRef: "specs/developing/testing/scenarios.md#T4-CLOUD-1",
+  registryFlowRef: "specs/TESTING/scenarios.md#T4-CLOUD-1",
   lanes: ["sandbox"],
   requiredEnv: ["RELEASE_E2E_SERVER_URL", "RELEASE_E2E_STAGING_ECS_PIN_BUMP"],
   plan: () => [

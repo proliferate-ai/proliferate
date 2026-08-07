@@ -1,4 +1,4 @@
-// T2-WFDEF-1 (specs/developing/testing/scenarios.md): workflow definition
+// T2-WFDEF-1 (specs/TESTING/scenarios.md): workflow definition
 // authoring lifecycle. This is the PR1 seam: real Desktop web UI, real server,
 // and real Postgres, with AnyHarness deliberately skipped because definitions
 // do not execute yet.

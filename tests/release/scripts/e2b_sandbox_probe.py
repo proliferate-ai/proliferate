@@ -1,6 +1,6 @@
 """Direct E2B verification/action backdoor for T3-PROV-2 and T3-SEC-MAT-1.
 
-Ground truth (surveyed 2026-07-09, see specs/developing/testing/scenarios.md
+Ground truth (surveyed 2026-07-09, see specs/TESTING/scenarios.md
 #T3-PROV-2 / #T3-SEC-MAT-1): the product API never exposes a cloud sandbox's
 provider (E2B) sandbox id -- see
 server/proliferate/server/cloud/cloud_sandboxes/models.py, which serializes

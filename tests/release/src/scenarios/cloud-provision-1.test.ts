@@ -116,7 +116,7 @@ function fakeCell(): PlannedCellV1 {
   return {
     cell_id: `${CLOUD_PROVISION_1_ID}/sandbox/harness=${REPRESENTATIVE_HARNESS}`,
     scenario_id: CLOUD_PROVISION_1_ID,
-    registry_flow_ref: "specs/developing/testing/flows.md#cloud-provision",
+    registry_flow_ref: "specs/TESTING/flows.md#cloud-provision",
     runtime_lane: "sandbox",
     dimensions: { harness: REPRESENTATIVE_HARNESS },
     required_env: [],

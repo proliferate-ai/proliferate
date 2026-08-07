@@ -1,4 +1,4 @@
-// T2-SH-6 (specs/developing/testing/self-hosting.md): cloud-workspace
+// T2-SH-6 (specs/TESTING/self-hosting.md): cloud-workspace
 // provisioning stays safe when E2B is half-configured (E2B_API_KEY set,
 // E2B_TEMPLATE_NAME empty, non-debug) — the exact posture that used to raise
 // at FastAPI startup and crash-loop the whole control plane, taking auth and

@@ -1,4 +1,4 @@
-// T2-INT-1 (specs/developing/testing/scenarios.md): api_key connect + org
+// T2-INT-1 (specs/TESTING/scenarios.md): api_key connect + org
 // policy toggle.
 //
 // Scenario, per the 2026-07-08 ruling baked into scenarios.md: "no
