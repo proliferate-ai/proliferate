@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
@@ -52,14 +52,17 @@ export function WorkspaceCreationReceiptView({
   onBackFromCreation,
 }: WorkspaceCreationReceiptViewProps) {
   const labels = WORKSPACE_CREATION_RECEIPT_LABELS;
+  const logId = useId();
   const hasLog = presentation.logLines.length > 0;
   const showActions = expanded
     && (presentation.showRerun || presentation.showCreationRetry || showSeeTerminal);
 
   const handleCopy = useCallback(() => {
-    void navigator.clipboard?.writeText(
-      workspaceCreationReceiptCopyText(presentation.logLines),
-    );
+    navigator.clipboard
+      ?.writeText(workspaceCreationReceiptCopyText(presentation.logLines))
+      .catch(() => {
+        // Clipboard permission denied — nothing actionable to surface here.
+      });
   }, [presentation.logLines]);
 
   return (
@@ -72,6 +75,7 @@ export function WorkspaceCreationReceiptView({
         disabled={!hasLog}
         onClick={hasLog ? onToggleExpanded : undefined}
         aria-expanded={hasLog ? expanded : undefined}
+        aria-controls={hasLog ? logId : undefined}
         className="group/receipt h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left text-chat font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline disabled:cursor-default disabled:opacity-100"
       >
         <Fork aria-hidden="true" className="icon-compact shrink-0 text-faint" />
@@ -92,6 +96,7 @@ export function WorkspaceCreationReceiptView({
 
       {expanded && hasLog && (
         <div
+          id={logId}
           data-chat-transcript-ignore
           className="group/receipt-log relative mt-1.5 max-w-full rounded-lg border border-border"
         >
@@ -166,7 +171,19 @@ function ConnectedWorkspaceCreationReceipt({ state }: { state: WorkspaceCreation
   const [previousFailureSummary, setPreviousFailureSummary] = useState<string | null>(null);
   const [expandedOverride, setExpandedOverride] = useState<boolean | null>(null);
 
-  const presentation = presentWorkspaceCreationReceipt(source, { previousFailureSummary });
+  const basePresentation = presentWorkspaceCreationReceipt(source, { previousFailureSummary });
+  // The rerun mutation has no optimistic update — until the refetched setup
+  // status lands, the source still reads "failed". Pin the disabled
+  // "Rerunning…" state to the mutation itself so the button can't double-fire
+  // during that window.
+  const presentation = rerunSetup.isPending
+    ? {
+      ...basePresentation,
+      showRerun: true,
+      rerunDisabled: true,
+      rerunLabel: WORKSPACE_CREATION_RECEIPT_LABELS.rerunningLabel,
+    }
+    : basePresentation;
   const expanded = expandedOverride ?? presentation.defaultExpanded;
 
   const setup = source.phase === "created" ? source.setup : null;
@@ -175,7 +192,7 @@ function ConnectedWorkspaceCreationReceipt({ state }: { state: WorkspaceCreation
     : null;
 
   const handleRerun = useCallback(() => {
-    if (!materializedWorkspaceId) {
+    if (!materializedWorkspaceId || rerunSetup.isPending) {
       return;
     }
     setPreviousFailureSummary(setup?.failureSummary ?? null);
@@ -209,7 +226,7 @@ function ConnectedWorkspaceCreationReceipt({ state }: { state: WorkspaceCreation
       presentation={presentation}
       expanded={expanded}
       onToggleExpanded={() => setExpandedOverride(!expanded)}
-      showSeeTerminal={!!setup?.terminalId && (presentation.showRerun || setup.status === "failed")}
+      showSeeTerminal={!!setup?.terminalId}
       onSeeTerminal={handleSeeTerminal}
       onRerun={handleRerun}
       onRetryCreation={handleRetryCreation}

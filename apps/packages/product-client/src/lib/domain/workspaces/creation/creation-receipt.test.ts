@@ -39,6 +39,27 @@ describe("presentWorkspaceCreationReceipt", () => {
     ]);
   });
 
+  it("created + setup queued (no rerun): busy label, spinner, queued log line", () => {
+    const presentation = presentWorkspaceCreationReceipt({
+      phase: "created",
+      noun: "worktree",
+      workspacePath: "/repo/worktrees/prism",
+      materializedWorkspaceId: "workspace-1",
+      setup: setupSource({ status: "queued" }),
+    });
+
+    expect(presentation.line).toBe("Worktree created");
+    expect(presentation.busyLabel).toBe("Setup queued");
+    expect(presentation.showSpinner).toBe(true);
+    expect(presentation.defaultExpanded).toBe(false);
+    expect(presentation.showRerun).toBe(false);
+    expect(presentation.logLines).toEqual([
+      { text: "Worktree created at /repo/worktrees/prism", tone: "default" },
+      { text: "$ pnpm install", tone: "default" },
+      { text: "Setup script queued...", tone: "default" },
+    ]);
+  });
+
   it("creation-failed: defaults expanded, carries a destructive error line, and offers retry", () => {
     const presentation = presentWorkspaceCreationReceipt({
       phase: "creation-failed",
