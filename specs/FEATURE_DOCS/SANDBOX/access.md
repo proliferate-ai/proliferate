@@ -46,15 +46,15 @@ through an existing layer, not a new field.
 
 | Layer | Question | Wire representation | Where |
 | --- | --- | --- | --- |
-| Deployment | Does this server offer managed cloud at all? | `capabilities.managedCloud.status` in `GET /meta` — an absence, never an error | [meta.py](../../../../server/proliferate/server/meta.py) |
-| Subject | May this user spend right now? | HTTP 402, code `billing_credits_exhausted` \| `billing_start_blocked` | [billing/authorization.py](../../../../server/proliferate/server/billing/authorization.py) |
-| Sandbox | Is the runtime reachable right now? | HTTP 409, code `cloud_sandbox_runtime_not_ready` | [cloud_sandboxes/service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py) |
+| Deployment | Does this server offer managed cloud at all? | `capabilities.managedCloud.status` in `GET /meta` — an absence, never an error | [meta.py](../../../server/proliferate/server/meta.py) |
+| Subject | May this user spend right now? | HTTP 402, code `billing_credits_exhausted` \| `billing_start_blocked` | [billing/authorization.py](../../../server/proliferate/server/billing/authorization.py) |
+| Sandbox | Is the runtime reachable right now? | HTTP 409, code `cloud_sandbox_runtime_not_ready` | [cloud_sandboxes/service.py](../../../server/proliferate/server/cloud/cloud_sandboxes/service.py) |
 
 ### The deployment layer
 
 `GET /meta` returns a versioned capability contract
 (`SELF_HOST_CAPABILITY_CONTRACT_VERSION = 3`,
-[constants/deployment.py](../../../../server/proliferate/constants/deployment.py)).
+[constants/deployment.py](../../../server/proliferate/constants/deployment.py)).
 The block relevant here:
 
 ```ts
@@ -97,7 +97,7 @@ resume/start inside a materialization operation. Its one representation is
 `billing_credits_exhausted` or `billing_start_blocked`, plus a detail body
 carrying `decision_type` and optionally `reason` and `remaining_seconds`.
 The materialization runner
-([runner.py](../../../../server/proliferate/server/cloud/materialization/runner.py))
+([runner.py](../../../server/proliferate/server/cloud/materialization/runner.py))
 catches and logs it; everything above sees the typed 402.
 
 ### The sandbox layer
@@ -108,9 +108,9 @@ the three missing → HTTP 409 `cloud_sandbox_runtime_not_ready`. Readiness
 is readable two ways, both DB-derived: on the workspace payloads
 themselves (`pending | materializing | needs_rematerialization | ready |
 archived | error`, derived client-side in
-[cloud-workspace-status.ts](../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts))
+[cloud-workspace-status.ts](../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts))
 and via `GET /workspaces/{id}/runtime-status`
-([workspaces/api.py](../../../../server/proliferate/server/cloud/workspaces/api.py)),
+([workspaces/api.py](../../../server/proliferate/server/cloud/workspaces/api.py)),
 which adds the runtime and sandbox status axes for one workspace. Neither
 performs a live runtime call; the 409 is what a caller gets for jumping
 the gun.
@@ -141,7 +141,7 @@ the client classifies the code as a not-ready error and absorbs it on a
 provision-scale budget — 45 retries × 2 s (~90 s, sized to a full cold
 provision) against the generic not-ready budget below — rendering the
 ordinary connecting affordance while the scheduled repair runs
-([workspace-connection-retry.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts)).
+([workspace-connection-retry.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts)).
 No wake-and-poll handshake exists, and none is wanted: the retry against
 the unchanged 409 is the wait.
 
@@ -155,26 +155,26 @@ the three layers.
 The caller's path from a cloud workspace id to runtime traffic:
 
 1. **Ensure the sandbox row exists** — `POST /cloud-sandbox/ensure`
-   ([cloud_sandboxes/api.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/api.py)),
+   ([cloud_sandboxes/api.py](../../../server/proliferate/server/cloud/cloud_sandboxes/api.py)),
    billing-gated, never touches E2B (lifecycle's ensure-never-provisions
    law). This is the explicit entry point for flows that start from
    nothing; steady-state flows skip it because the row already exists.
 2. **Resolve a connection** — `getResolvedCloudWorkspaceConnection`
-   ([workspace-connection-retry.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts))
+   ([workspace-connection-retry.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts))
    loads the cloud workspace and builds gateway connection info
-   ([cloud-sandbox-gateway.ts](../../../../apps/packages/product-client/src/lib/access/cloud/cloud-sandbox-gateway.ts)).
+   ([cloud-sandbox-gateway.ts](../../../apps/packages/product-client/src/lib/access/cloud/cloud-sandbox-gateway.ts)).
    Readiness is structural, not polled: a workspace with no stamped
    runtime workspace id throws typed `workspace_not_ready` (409); no cloud
    client throws `cloud_client_unavailable` (401).
 3. **Retry flatly while not ready, on the budget the error names** — two
    fixed-delay budgets, no backoff, both in
-   [workspace-connection-retry.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts):
+   [workspace-connection-retry.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts):
    the generic not-ready budget (750 ms × 8) for `workspace_not_ready`,
    any 5xx, or a network `TypeError`, and the provision-scale budget
    (2 s × 45, ~90 s) for `cloud_sandbox_runtime_not_ready`, whose repair
    is a real provision that takes tens of seconds. Anything else
    rethrows. React Query's native `retry` is the loop
-   ([use-cloud-workspace-connection.ts](../../../../apps/packages/product-client/src/hooks/access/cloud/use-cloud-workspace-connection.ts),
+   ([use-cloud-workspace-connection.ts](../../../apps/packages/product-client/src/hooks/access/cloud/use-cloud-workspace-connection.ts),
    `staleTime` 30 s) — there is no hand-rolled poller.
 4. **Call the gateway** — the resolved connection is an ordinary
    AnyHarness client pointed at
@@ -184,9 +184,9 @@ The caller's path from a cloud workspace id to runtime traffic:
 ### The token
 
 There is no gateway-specific token. The credential is the product JWT
-(7-day lifetime, [constants/auth.py](../../../../server/proliferate/constants/auth.py)),
+(7-day lifetime, [constants/auth.py](../../../server/proliferate/constants/auth.py)),
 fetched through one swappable provider pointer
-([sandbox-gateway-access.ts](../../../../apps/packages/product-client/src/lib/access/cloud/sandbox-gateway-access.ts))
+([sandbox-gateway-access.ts](../../../apps/packages/product-client/src/lib/access/cloud/sandbox-gateway-access.ts))
 that each host arms at startup — desktop with its refreshing session
 loader, web with the in-memory session token. The pointer is re-invoked
 immediately before every gateway connection is used
@@ -194,10 +194,10 @@ immediately before every gateway connection is used
 provider's problem and the gateway code never caches a credential.
 WebSocket upgrades carry the same token in the
 `proliferate-gateway-bearer` subprotocol
-([gateway/access.py](../../../../server/proliferate/server/cloud/gateway/access.py)),
+([gateway/access.py](../../../server/proliferate/server/cloud/gateway/access.py)),
 because WS clients cannot set headers. Server-side, gateway access
 resolution (row → upstream URL + bearer) is cached per user for 60 s with
-a per-user lock ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py))
+a per-user lock ([gateway/service.py](../../../server/proliferate/server/cloud/gateway/service.py))
 and is invalidated immediately when runtime access is cleared or the row
 is destroyed. The billing permit is checked independently with a
 success-only 5 s cache; a 402 denial is never cached.
@@ -224,18 +224,18 @@ same one choreography.
 ## The client contract
 
 - **One shared parser.** `ProliferateClientError`
-  ([core.ts](../../../../cloud/sdk/src/client/core.ts)) carries `status`,
+  ([core.ts](../../../cloud/sdk/src/client/core.ts)) carries `status`,
   `code`, `details`; one shared utility classifies it into the three
   gating layers plus "not a gate". Feature code branches on the
   classification, never on raw `.code ===` string comparisons scattered at
   call sites.
 - **Gateway detail survives the transport.** `AnyHarnessError`
-  ([core.ts](../../../../anyharness/sdk/src/client/core.ts)) preserves a
+  ([core.ts](../../../anyharness/sdk/src/client/core.ts)) preserves a
   FastAPI-style nested `detail` object as `details`, so the same subject-layer
   402 representation reaches workspace presentation code unchanged.
 - **One capability parser.** The capability contract is parsed once, in
   product-client
-  ([server-capability-contract.ts](../../../../apps/packages/product-client/src/lib/domain/capabilities/server-capability-contract.ts));
+  ([server-capability-contract.ts](../../../apps/packages/product-client/src/lib/domain/capabilities/server-capability-contract.ts));
   desktop and web consume it through the package. Mobile consumes the same
   parser rather than maintaining its own version-branching copy.
 - **Representations clients may branch on** — exactly the three layer
@@ -299,14 +299,14 @@ cloud/sdk/src/client/
 
 - Capability derivation: unit tests over `build_server_capabilities`
   against `Settings` instances
-  ([test_meta_endpoint.py](../../../../server/tests/unit/test_meta_endpoint.py)).
+  ([test_meta_endpoint.py](../../../server/tests/unit/test_meta_endpoint.py)).
 - Gateway auth and proxying:
-  [test_cloud_sandbox_gateway_proxy.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_proxy.py),
-  [test_cloud_sandbox_gateway_service.py](../../../../server/tests/unit/test_cloud_sandbox_gateway_service.py).
+  [test_cloud_sandbox_gateway_proxy.py](../../../server/tests/unit/test_cloud_sandbox_gateway_proxy.py),
+  [test_cloud_sandbox_gateway_service.py](../../../server/tests/unit/test_cloud_sandbox_gateway_service.py).
 - Cold access still 409s and schedules one repair:
-  [test_cloud_sandbox_cold_access_repair.py](../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py).
+  [test_cloud_sandbox_cold_access_repair.py](../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py).
 - Client-side retry classification and the two budgets:
-  [workspace-connection-retry.test.ts](../../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.test.ts).
+  [workspace-connection-retry.test.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.test.ts).
 - Pending, landing with the gap PRs: shared-classifier unit tests; a
   contract test that the wire carries no unpopulated branchable fields.
 
@@ -315,7 +315,7 @@ cloud/sdk/src/client/
 Deltas between this document and `main`, each struck by its follow-up PR:
 
 - [ ] Two hand-written capability parsers: product-client and mobile
-      ([mobile-server-capabilities.ts](../../../../apps/mobile/src/lib/access/cloud/capabilities/mobile-server-capabilities.ts))
+      ([mobile-server-capabilities.ts](../../../apps/mobile/src/lib/access/cloud/capabilities/mobile-server-capabilities.ts))
       each reimplement the v1/v2+ derivation. Collapse mobile onto the
       shared parser.
 - [ ] Error classification is scattered: `workspace_not_ready` is

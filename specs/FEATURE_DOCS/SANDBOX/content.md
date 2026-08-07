@@ -47,11 +47,11 @@ Fences, one owner per concern:
 ```
 
 Clone paths are computed by
-[paths.py](../../../../server/proliferate/server/cloud/materialization/paths.py).
+[paths.py](../../../server/proliferate/server/cloud/materialization/paths.py).
 The worktrees root is AnyHarness's managed root
-([managed_root.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/managed_root.rs)),
+([managed_root.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/managed_root.rs)),
 declared by `ANYHARNESS_WORKTREES_ROOT` in the sandbox launch env
-([bootstrap.py](../../../../server/proliferate/server/cloud/runtime/bootstrap.py))
+([bootstrap.py](../../../server/proliferate/server/cloud/runtime/bootstrap.py))
 exactly as local dev profiles already declare it — one fence, every
 environment. The clone is per-repository-environment, not per-workspace: ten
 workspaces on one repo cost one clone plus ten worktrees sharing its object
@@ -81,7 +81,7 @@ store.
 
 One idempotent script, run over the sandbox exec channel by repository
 materialization
-([repo_environment.py](../../../../server/proliferate/server/cloud/materialization/materialize/repo_environment.py)),
+([repo_environment.py](../../../server/proliferate/server/cloud/materialization/materialize/repo_environment.py)),
 is the only writer of the shared clone:
 
 1. `git clone https://github.com/<owner>/<repo>.git` — only if no `.git`
@@ -91,7 +91,7 @@ is the only writer of the shared clone:
 3. Refuse rather than reset: a dirty checkout exits 43, local commits ahead
    of the remote exit 44; both map to a typed checkout error (HTTP 409 with
    an actionable message,
-   [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py))
+   [workspaces/service.py](../../../server/proliferate/server/cloud/workspaces/service.py))
    instead of a hard reset that eats work. Only exit 42 (not a git repo) and
    these two are classified; the clone's own working tree is expected to sit
    clean on the default branch, because user changes belong in worktrees.
@@ -99,14 +99,14 @@ is the only writer of the shared clone:
    `git reset --hard origin/<default>`.
 
 Triggers, each refreshing as a side effect: repository-environment save
-([repositories/service.py](../../../../server/proliferate/server/cloud/repositories/service.py)),
+([repositories/service.py](../../../server/proliferate/server/cloud/repositories/service.py)),
 GitHub App install/reauth completion
-([github_app/service.py](../../../../server/proliferate/server/cloud/github_app/service.py)),
+([github_app/service.py](../../../server/proliferate/server/cloud/github_app/service.py)),
 sandbox bootstrap preclone of every configured environment
-([materialize/sandbox.py](../../../../server/proliferate/server/cloud/materialization/materialize/sandbox.py)),
+([materialize/sandbox.py](../../../server/proliferate/server/cloud/materialization/materialize/sandbox.py)),
 workspace creation (synchronously, in-request), and workflow delivery at a
 frozen base ref
-([delivery.py](../../../../server/proliferate/server/workflows/worker/delivery.py)).
+([delivery.py](../../../server/proliferate/server/workflows/worker/delivery.py)).
 Concurrent triggers serialize on the per-sandbox materialization lock; lock
 timeout is a typed busy error (503), never a second concurrent refresh.
 
@@ -114,7 +114,7 @@ timeout is a typed busy error (503), never a second concurrent refresh.
 
 Deleting a repository environment is refused (409
 `cloud_repository_in_use`) while any workspace or automation references it
-([repositories/service.py](../../../../server/proliferate/server/cloud/repositories/service.py)),
+([repositories/service.py](../../../server/proliferate/server/cloud/repositories/service.py)),
 so a successful delete proves no worktree depends on the clone. The delete
 soft-deletes the row, then reclaims the clone directory from the VM after
 commit, best-effort — the same commit-then-reclaim pattern lifecycle uses
@@ -125,13 +125,13 @@ for VM destruction, with retention as the backstop for a miss.
 ### Materialize
 
 Workspace creation ends in `POST /v1/workspaces/worktrees`
-([workspaces_worktrees.rs](../../../../anyharness/crates/anyharness-lib/src/api/http/workspaces_worktrees.rs)):
+([workspaces_worktrees.rs](../../../anyharness/crates/anyharness-lib/src/api/http/workspaces_worktrees.rs)):
 repo root id, new branch name, base branch, optional setup script, checkout
 mode (`NewBranch` | `DetachedRef`), and a name-conflict policy. **Callers do
 not supply a path.** AnyHarness places every worktree under its managed
 root, the way workflow placement already does
 (`<managed root>/workflows/<run_id>`,
-[workflow_placement.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/workflow_placement.rs));
+[workflow_placement.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/workflow_placement.rs));
 placement is the runtime's concern, identical local and cloud, which is what
 makes retire and retention able to operate on everything they should.
 
@@ -139,7 +139,7 @@ Creation performs the born-fresh fetch itself, environment-neutrally:
 
 - `git fetch origin <base-branch>` before `git worktree add`, bounded by the
   same timeout wrapper the push path uses
-  ([executor.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/executor.rs))
+  ([executor.rs](../../../anyharness/crates/anyharness-lib/src/adapters/git/executor.rs))
   and with `GIT_TERMINAL_PROMPT=0`, so a hung network or missing credential
   can never stall creation or prompt.
 - On fetch success the worktree bases on the fetched remote-tracking ref,
@@ -155,18 +155,18 @@ The exact-ref path (`POST /v1/repo-roots/{id}/workspace-materializations`,
 used when adding a Cloud copy of an existing checkout) stays pinned, not
 fresh: the server verifies the expected head SHA against GitHub, and
 AnyHarness fetches then requires that exact commit
-([operations/worktrees.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs),
+([operations/worktrees.rs](../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs),
 `create_worktree_at_ref`). Client-supplied state never names a base.
 
 ### Retire
 
 `retire_worktree_materialization`
-([materialization.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/materialization.rs))
+([materialization.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/materialization.rs))
 refuses any path outside the canonical managed root, then
 `git worktree remove --force`. It runs paired — workspace delete/archive
 retires the worktree after the row write commits, best-effort — and as
 backstop, the retention pass
-([retention.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs)):
+([retention.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs)):
 
 - Keeps the N most-recently-active worktrees per repo root; default 20,
   bounds 10–100, adjustable at runtime
@@ -184,9 +184,9 @@ backstop, the retention pass
 
 **The runtime record.** AnyHarness records every workspace it creates in its
 own store
-([model.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/model.rs),
+([model.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/model.rs),
 persisted by
-[store/row.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/store/row.rs)):
+[store/row.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/store/row.rs)):
 kind, repo root, path, branches, display name, lifecycle and cleanup state.
 This record is the runtime truth in every environment — the same
 `POST /v1/workspaces/worktrees` call, the same row, whether the runtime is a
@@ -196,10 +196,10 @@ database.
 
 **The product record.** Cloud workspace creation wraps that same runtime
 call in a product-plane transaction
-([workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)):
+([workspaces/service.py](../../../server/proliferate/server/cloud/workspaces/service.py)):
 a `cloud_workspace` row — owner, kind, repository environment, display name,
 branch, base branch
-([db/models/cloud/workspaces.py](../../../../server/proliferate/db/models/cloud/workspaces.py))
+([db/models/cloud/workspaces.py](../../../server/proliferate/db/models/cloud/workspaces.py))
 — commits first, the runtime call follows, and the returned runtime
 workspace id is stamped back onto the row. The row deliberately duplicates
 the naming and branch metadata the runtime also keeps; the link between the
@@ -208,23 +208,23 @@ synced in reverse.
 
 Local creation writes no product record: the client calls the runtime
 directly
-([use-workspace-actions.ts](../../../../apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-actions.ts))
+([use-workspace-actions.ts](../../../apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-actions.ts))
 and the runtime record is the only record. The asymmetry is the point:
 
 - A local runtime lives on the same machine as the client — alive exactly
   when the app is — so listing local workspaces just asks the runtime
-  ([use-workspaces.ts](../../../../apps/packages/product-client/src/hooks/workspaces/cache/use-workspaces.ts));
+  ([use-workspaces.ts](../../../apps/packages/product-client/src/hooks/workspaces/cache/use-workspaces.ts));
   a durable second record would only be a cache that can go stale.
 - A cloud runtime is usually *not* reachable: paused, killed, or the app is
   a web tab with no VM awake. The cloud list endpoint
-  ([workspaces/api.py](../../../../server/proliferate/server/cloud/workspaces/api.py))
+  ([workspaces/api.py](../../../server/proliferate/server/cloud/workspaces/api.py))
   reads Postgres only — runtime status derives from the stored sandbox row,
   never a live health call — so the product renders every cloud workspace,
   with an honest status badge, whether or not any VM exists. The row is
   also what makes creation optimistic: it commits before the runtime is
   even asked, so the workspace appears under its target immediately (the
   client seeds the same collections cache local list results land in,
-  [collections.ts](../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/collections.ts)).
+  [collections.ts](../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/collections.ts)).
 - The row is the durable half of the marked-lost design (below): when the
   VM dies the runtime record dies with it, and the `cloud_workspace` row is
   what survives to say this workspace existed and its content is lost.
@@ -257,7 +257,7 @@ The write is deliberately boring: two keys, `user.name` and `user.email`,
 set by an idempotent `git config --global` script run over the sandbox exec
 channel during repository materialization — the same channel and shape as
 the credential-helper configuration step
-([github_credentials.py](../../../../server/proliferate/server/cloud/materialization/materialize/github_credentials.py)),
+([github_credentials.py](../../../server/proliferate/server/cloud/materialization/materialize/github_credentials.py)),
 which already writes global git config on every sandbox
 (`credential.https://github.com.helper`, the SSH→HTTPS `insteadOf`
 rewrites). Global scope is correct because the VM is single-user, and
@@ -277,21 +277,21 @@ attributed, not attested; the push authority chain
 ([github-auth.md](github-auth.md)) is the integrity
 boundary. Two bot identities stay repo-local by design and cannot leak onto
 user commits: the cowork root repo (`AnyHarness <anyharness@local.invalid>`,
-[cowork/runtime.rs](../../../../anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs))
+[cowork/runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs))
 and workflow scratch repos (`AnyHarness Workflow
 <workflow@anyharness.local>`, signing disabled,
-[operations/scratch.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/scratch.rs)).
+[operations/scratch.rs](../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/scratch.rs)).
 
 ## Disk
 
 **The disk is observable before it is fatal.** The budget is fixed by the
 E2B plan at template build time (the build declares CPU and memory only,
-[build-template.mjs](../../../../scripts/build-template.mjs); E2B has no
+[build-template.mjs](../../../scripts/build-template.mjs); E2B has no
 per-sandbox disk knob), so the lever is observation plus the paired-reclaim
 law. The runtime measures its own disk — one code path, local and cloud:
 
 - The resource-pressure collector
-  ([resource_pressure.rs](../../../../anyharness/crates/anyharness-lib/src/observability/resource_pressure.rs))
+  ([resource_pressure.rs](../../../anyharness/crates/anyharness-lib/src/observability/resource_pressure.rs))
   reports a disk axis (used/total/available bytes, percent) alongside its
   CPU (`loadAverage1m`, `normalizedPercent`) and memory (`usedBytes`,
   `totalBytes`, `percent`) axes, through the health endpoint clients
@@ -299,7 +299,7 @@ law. The runtime measures its own disk — one code path, local and cloud:
   E2B's own `Sandbox.get_metrics()` is an operator cross-check, not the
   product path.
 - `GET /v1/worktrees/inventory`
-  ([inventory.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs))
+  ([inventory.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs))
   itemizes the spend per worktree: state
   (`associated | orphan_checkout | missing_checkout | conflict`), `managed`,
   measured `storage` bytes (directory walk plus per-workspace SQLite
@@ -309,7 +309,7 @@ law. The runtime measures its own disk — one code path, local and cloud:
   orphan) already wired to delete flows in the client.
 - Disk-full during materialization is typed as disk exhaustion in the
   failure receipt
-  ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py))
+  ([failures.py](../../../server/proliferate/server/cloud/materialization/failures.py))
   with a delete-content remedy — the generic "runtime did not become ready,
   retry later" is worse than useless for ENOSPC, because retrying cannot
   free disk.
@@ -317,7 +317,7 @@ law. The runtime measures its own disk — one code path, local and cloud:
 Consumption of these signals is client-side and pull-plus-threshold: the
 composer status card shows the worktree list with sizes and the cloud
 CPU/memory/disk rows
-([EnvironmentStatusCard.tsx](../../../../apps/packages/product-client/src/components/workspace/chat/input/EnvironmentStatusCard.tsx));
+([EnvironmentStatusCard.tsx](../../../apps/packages/product-client/src/components/workspace/chat/input/EnvironmentStatusCard.tsx));
 when disk crosses the pressure threshold the client surfaces "your cloud
 machine is running low — here are your worktrees" backed by the inventory
 and its delete actions. No server-side notification job exists or is
@@ -419,7 +419,7 @@ apps/packages/product-client/src/
 
 - Clone dirty or ahead at refresh: typed checkout error (exit 43/44 → 409);
   never a silent reset. First response:
-  [cloud-provisioning-failure.md](../../../../guides/operating/cloud-provisioning-failure.md).
+  [cloud-provisioning-failure.md](../../../guides/operating/cloud-provisioning-failure.md).
 - Base-branch fetch fails at worktree create: creation proceeds on local
   state with the failure classified and surfaced; offline Desktop use is a
   legitimate instance of this path, not an error to block on.
@@ -446,16 +446,16 @@ apps/packages/product-client/src/
 ## Proof
 
 - Clone refresh, exit-code classification, transaction boundaries:
-  [test_cloud_repo_materialization_transactions.py](../../../../server/tests/integration/test_cloud_repo_materialization_transactions.py),
-  [test_cloud_workspace_materialization_service.py](../../../../server/tests/integration/test_cloud_workspace_materialization_service.py).
+  [test_cloud_repo_materialization_transactions.py](../../../server/tests/integration/test_cloud_repo_materialization_transactions.py),
+  [test_cloud_workspace_materialization_service.py](../../../server/tests/integration/test_cloud_workspace_materialization_service.py).
 - Exact-ref source verification:
-  [test_cloud_workspace_exact_ref_source.py](../../../../server/tests/integration/test_cloud_workspace_exact_ref_source.py).
+  [test_cloud_workspace_exact_ref_source.py](../../../server/tests/integration/test_cloud_workspace_exact_ref_source.py).
 - Retention and retire fencing:
-  [retention_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention_tests.rs),
-  [retire_preflight_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight_tests.rs),
-  [deletion_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion_tests.rs).
+  [retention_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention_tests.rs),
+  [retire_preflight_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight_tests.rs),
+  [deletion_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion_tests.rs).
 - Paired workspace-retire proof:
-  [test_cloud_workspace_retire_after_commit.py](../../../../server/tests/unit/test_cloud_workspace_retire_after_commit.py).
+  [test_cloud_workspace_retire_after_commit.py](../../../server/tests/unit/test_cloud_workspace_retire_after_commit.py).
 - Pending, landing with the remaining gap PRs: fetch-on-create
   classification tests; repository-environment delete reclaim; a live disk
   axis reading end to end.
@@ -487,12 +487,12 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       retire, then pair repository-environment deletion with an after-commit
       reclaim.
 - [ ] The inventory row carries no last-activity timestamp
-      ([inventory.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs)),
+      ([inventory.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs)),
       so the disk-pressure surface cannot suggest *stale* worktrees to
       delete, only big ones. Add last activity to the inventory row.
 - [ ] The clone create/refresh script bypasses AnyHarness's own repo-root
       acquisition (`acquire_repo_root` /
-      [clone.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/clone.rs)),
+      [clone.rs](../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/clone.rs)),
       so two independent "make a clone exist" code paths coexist. Fold the
       cloud clone flow into the runtime's acquisition primitives so clone
       mechanics are environment-neutral like everything else here.
