@@ -34,6 +34,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::domains::agents::model::AgentKind;
+use crate::domains::agents::readiness::service::resolve_agent_unrouted_by_kind;
 use crate::domains::agents::route_auth::{
     self, GatewayModelPlan, ProbeAuthMaterial, RouteAuthError,
 };
@@ -134,6 +135,31 @@ impl ProbeRunner for AcpProbeRunner {
         std::thread::Builder::new()
             .name(thread_name)
             .spawn(move || {
+                // Resolved here, on the dedicated thread, NOT in the async fn's own
+                // body: this is a blocking FS scan plus a `node --version`
+                // subprocess (readiness/compatibility.rs), and the async fn above
+                // runs on a shared tokio worker that every other in-flight probe
+                // (and unrelated async work on this runtime) also depends on.
+                // Blocking that worker here would stall them all; this thread
+                // blocks only itself. Resolved before `materialize_for_probe`
+                // below, so a bad agent kind still fails before the scratch is
+                // touched — the property this PR's review called out as worth
+                // keeping. Unrouted: artifact paths only; a route supplies
+                // credentials, not binaries — materialize_for_probe below layers
+                // those on separately. Goes through `resolve_agent_unrouted_by_kind`
+                // (not a hand-rolled registry lookup) so this call site, the
+                // `catalog-probe` CLI, and the probe-materialization test share
+                // the one lookup-then-resolve implementation.
+                let resolved =
+                    match resolve_agent_unrouted_by_kind(&agent_kind, &request.runtime_home) {
+                        Ok(resolved) => resolved,
+                        Err(error) => {
+                            let _ = done_tx.send(Err(ProbeError::Failed {
+                                detail: error.to_string(),
+                            }));
+                            return;
+                        }
+                    };
                 let runtime = match tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
@@ -158,6 +184,7 @@ impl ProbeRunner for AcpProbeRunner {
                     )?;
                     let options = ProbeOptions {
                         agent_kind,
+                        resolved,
                         auth_context: COMPOSED_AUTH_CONTEXT_LABEL.to_string(),
                         auth_env: materialized.env_set.clone(),
                         auth_env_remove: materialized.env_remove.clone(),

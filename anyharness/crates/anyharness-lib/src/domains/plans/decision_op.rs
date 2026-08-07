@@ -427,6 +427,8 @@ mod tests {
     use crate::app::test_support;
     use crate::domains::plans::model::{NewPlan, PlanCreateOutcome};
     use crate::domains::plans::store::PlanStore;
+    use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+    use crate::domains::sessions::store::SessionStore;
     use crate::persistence::Db;
 
     fn plan_service_with_link(option_mappings: serde_json::Value) -> (PlanService, String) {
@@ -437,16 +439,35 @@ mod tests {
             "local",
             "/tmp/workspace-1",
         );
-        db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO sessions (
-                    id, workspace_id, agent_kind, status, created_at, updated_at
-                 ) VALUES ('session-1', 'workspace-1', 'claude', 'idle', 'now', 'now')",
-                [],
-            )?;
-            Ok(())
-        })
-        .expect("seed db");
+        SessionStore::new(db.clone())
+            .insert(&SessionRecord {
+                id: "session-1".to_string(),
+                workspace_id: "workspace-1".to_string(),
+                agent_kind: "claude".to_string(),
+                native_session_id: None,
+                agent_auth_contexts: None,
+                requested_model_id: None,
+                current_model_id: None,
+                requested_mode_id: None,
+                current_mode_id: None,
+                title: None,
+                thinking_level_id: None,
+                thinking_budget_tokens: None,
+                status: "idle".to_string(),
+                created_at: "now".to_string(),
+                updated_at: "now".to_string(),
+                last_prompt_at: None,
+                closed_at: None,
+                dismissed_at: None,
+                mcp_bindings_ciphertext: None,
+                mcp_binding_summaries_json: None,
+                mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+                system_prompt_append: None,
+                subagents_enabled: true,
+                action_capabilities_json: None,
+                origin: None,
+            })
+            .expect("seed session");
         let service = PlanService::new(PlanStore::new(db));
         let created = service
             .create_completed_plan(

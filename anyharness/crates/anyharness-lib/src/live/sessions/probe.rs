@@ -15,9 +15,7 @@ use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-use crate::domains::agents::model::AgentKind;
-use crate::domains::agents::readiness::service::resolve_agent_unrouted;
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 
 use super::driver::process::spawn_agent_process;
 use super::driver::session_lifecycle::{initialize_connection, start_new_session};
@@ -28,6 +26,12 @@ const PROBE_WORKSPACE_ID: &str = "catalog-probe";
 
 pub struct ProbeOptions {
     pub agent_kind: AgentKind,
+    /// Artifact-path resolution for `agent_kind`, done by the caller before
+    /// constructing this struct (`resolve_agent_unrouted`, unrouted: artifact
+    /// paths only — a route supplies credentials, not binaries). `live/`
+    /// never fetches from a domain service itself; its whole world arrives
+    /// at birth.
+    pub resolved: ResolvedAgent,
     pub auth_context: String,
     /// Credential env vars injected into the agent process (e.g.
     /// ANTHROPIC_API_KEY). Treated as protected: merged last, never recorded
@@ -163,15 +167,7 @@ pub struct ProbeSnapshot {
 /// Must be called from within a tokio `LocalSet` (the ACP connection uses
 /// `spawn_local`).
 pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot> {
-    let registry = built_in_registry();
-    let descriptor = registry
-        .iter()
-        .find(|descriptor| descriptor.kind == options.agent_kind)
-        .ok_or_else(|| {
-            anyhow::anyhow!("agent kind {} not in registry", options.agent_kind.as_str())
-        })?;
-    // Unrouted: artifact paths only; a route supplies credentials, not binaries.
-    let resolved = resolve_agent_unrouted(descriptor, &options.runtime_home);
+    let resolved = &options.resolved;
     if resolved.agent_process.path.is_none() {
         anyhow::bail!(
             "agent process for {} is not installed; run `anyharness install-agents --agent {}` first",
@@ -224,7 +220,7 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
         ..Default::default()
     };
     let spawned = spawn_agent_process(
-        &resolved,
+        resolved,
         &workspace,
         &launch_env,
         PROBE_SESSION_ID,
@@ -280,7 +276,7 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
     let result = run_enumeration(
         &conn,
         &resolved_kind(&options),
-        &resolved,
+        resolved,
         &workspace,
         &options,
         &mut notification_rx,
