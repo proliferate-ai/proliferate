@@ -105,4 +105,41 @@ describe("useResize", () => {
     expect(() => unmount()).not.toThrow();
     expect(overlayDivs()).toHaveLength(0);
   });
+
+  it("fires onResizeEnd exactly once, at mouseup, and never for stray mouseups after it", () => {
+    const onResizeEnd = vi.fn();
+    const { result } = renderHook(() =>
+      useResize({ direction: "horizontal", size: 200, onResize: vi.fn(), onResizeEnd }));
+
+    act(() => {
+      result.current(mouseDownEvent(0));
+    });
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 30 }));
+    });
+    expect(onResizeEnd).not.toHaveBeenCalled();
+
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mouseup"));
+    });
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mouseup"));
+    });
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("fires onResizeEnd when the owner unmounts mid-drag, so the gesture's outcome is not lost", () => {
+    const onResizeEnd = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useResize({ direction: "horizontal", size: 200, onResize: vi.fn(), onResizeEnd }));
+
+    act(() => {
+      result.current(mouseDownEvent(0));
+    });
+    unmount();
+
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+  });
 });

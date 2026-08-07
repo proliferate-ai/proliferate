@@ -31,6 +31,8 @@ export interface MainScreenRightPanelState {
   setRightPanelOpen: Dispatch<SetStateAction<boolean>>;
   rightPanelWidth: number;
   setRightPanelWidth: Dispatch<SetStateAction<number>>;
+  /** True while a separator drag is actively resizing the panel. */
+  rightPanelResizing: boolean;
   rightPanelFocusRequestToken: number;
   requestRightPanelFocus: () => void;
   onRightSeparatorDown: (event: MouseEvent) => void;
@@ -74,6 +76,9 @@ export function useMainScreenRightPanel({
   );
   const setRightPanelMaterializedForWorkspace = useWorkspaceUiStore(
     (state) => state.setRightPanelMaterializedForWorkspace,
+  );
+  const setRightPanelWidthForWorkspace = useWorkspaceUiStore(
+    (state) => state.setRightPanelWidthForWorkspace,
   );
   const rightPanelDurableFallback = useMemo(
     () => resolveWithWorkspaceFallback(
@@ -206,28 +211,52 @@ export function useMainScreenRightPanel({
   // this". Collapse ends the gesture: once closed, the remainder of the same
   // drag is ignored so a jittery pointer cannot re-expand the panel from under
   // the user's cursor.
+  //
+  // While the drag is live the width is session state only: writing the
+  // durable store on every mousemove would re-serialize the whole persisted
+  // workspace-ui slice per event (see the persistence subscriber in
+  // `use-workspace-ui-lifecycle`). The gesture is one width choice, so it
+  // commits once, on release. `rightPanelResizing` is exported so the shell
+  // can drop the geometry easing while the width is pointer-driven.
   const rightPanelDragCollapsedRef = useRef(false);
+  const rightPanelDragWidthRef = useRef<number | null>(null);
+  const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const handleRightPanelDrag = useCallback(
     (rawWidth: number) => {
-      if (rightPanelDragCollapsedRef.current) {
+      if (rightPanelDragCollapsedRef.current || !workspaceUiKey) {
         return;
       }
       const outcome = resolveRightPanelDragOutcome(rawWidth);
       if (outcome.kind === "collapse") {
         rightPanelDragCollapsedRef.current = true;
-        // The last credible width stays persisted, so reopening restores the
-        // size the user had chosen rather than the panel's default.
+        // Resizing ends here so the collapse itself animates: the last
+        // credible width stays persisted, and reopening restores the size the
+        // user had chosen rather than the panel's default.
+        setRightPanelResizing(false);
         setRightPanelOpen(false);
         return;
       }
-      setRightPanelWidth(outcome.width);
+      rightPanelDragWidthRef.current = outcome.width;
+      setRightPanelSessionDurableState({
+        ...rightPanelDurableState,
+        width: outcome.width,
+      });
     },
-    [setRightPanelOpen, setRightPanelWidth],
+    [rightPanelDurableState, setRightPanelOpen, workspaceUiKey],
   );
+  const handleRightSeparatorDragEnd = useCallback(() => {
+    setRightPanelResizing(false);
+    const draggedWidth = rightPanelDragWidthRef.current;
+    rightPanelDragWidthRef.current = null;
+    if (draggedWidth !== null && workspaceUiKey) {
+      setRightPanelWidthForWorkspace(workspaceUiKey, draggedWidth);
+    }
+  }, [setRightPanelWidthForWorkspace, workspaceUiKey]);
   const beginRightSeparatorDrag = useResize({
     direction: "horizontal",
     size: rightPanelWidth,
     onResize: handleRightPanelDrag,
+    onResizeEnd: handleRightSeparatorDragEnd,
     reverse: true,
     min: 0,
     max: RIGHT_PANEL_MAX_WIDTH,
@@ -235,6 +264,8 @@ export function useMainScreenRightPanel({
   const onRightSeparatorDown = useCallback(
     (event: MouseEvent) => {
       rightPanelDragCollapsedRef.current = false;
+      rightPanelDragWidthRef.current = null;
+      setRightPanelResizing(true);
       beginRightSeparatorDrag(event);
     },
     [beginRightSeparatorDrag],
@@ -269,6 +300,7 @@ export function useMainScreenRightPanel({
     setRightPanelOpen,
     rightPanelWidth,
     setRightPanelWidth,
+    rightPanelResizing,
     rightPanelFocusRequestToken,
     requestRightPanelFocus,
     onRightSeparatorDown,

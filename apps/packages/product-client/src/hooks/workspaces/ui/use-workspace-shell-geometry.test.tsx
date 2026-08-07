@@ -21,13 +21,15 @@ function stubReducedMotion(matches: boolean): void {
 function GeometryHarness({
   leftWidth,
   rightWidth,
+  snapRight = false,
   onToggleLeft = () => {},
 }: {
   leftWidth: number;
   rightWidth: number;
+  snapRight?: boolean;
   onToggleLeft?: () => void;
 }) {
-  const geometry = useWorkspaceShellGeometry({ leftWidth, rightWidth, onToggleLeft });
+  const geometry = useWorkspaceShellGeometry({ leftWidth, rightWidth, snapRight, onToggleLeft });
   return (
     <>
       <div
@@ -105,6 +107,36 @@ describe("useWorkspaceShellGeometry", () => {
     expect(root.style.getPropertyValue("--workspace-left-width")).toBe("280px");
     expect(root.style.getPropertyValue("--workspace-right-width")).toBe("360px");
     expect(requestFrame).not.toHaveBeenCalled();
+  });
+
+  it("applies pointer-driven right widths immediately on manual renderers", () => {
+    vi.stubGlobal("CSS", {});
+    stubReducedMotion(false);
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const { getByTestId, rerender } = render(
+      <GeometryHarness leftWidth={0} rightWidth={360} />,
+    );
+
+    // A drag move with only the right width changing never schedules a tween.
+    rerender(<GeometryHarness leftWidth={0} rightWidth={480} snapRight />);
+    const root = getByTestId("geometry");
+    expect(frames).toHaveLength(0);
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("480px");
+
+    // A simultaneous left change still eases while the right lands directly.
+    rerender(<GeometryHarness leftWidth={280} rightWidth={500} snapRight />);
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("500px");
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("0px");
+
+    act(() => frames.shift()?.(0));
+    act(() => frames.shift()?.(motion.duration.panelMs));
+    expect(root.style.getPropertyValue("--workspace-left-width")).toBe("280px");
+    expect(root.style.getPropertyValue("--workspace-right-width")).toBe("500px");
   });
 
   it("clears a pending pin snap before a rapid ordinary toggle", () => {

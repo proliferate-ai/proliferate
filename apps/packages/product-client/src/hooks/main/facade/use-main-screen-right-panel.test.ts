@@ -32,7 +32,7 @@ afterEach(() => {
  * a live drag into it — the collapse latch and the reset-on-new-drag are
  * behavior of the hook's glue code, not of that pure function.
  */
-function fireDrag(onMouseDown: (event: ReactMouseEvent) => void, deltas: number[]) {
+function beginDrag(onMouseDown: (event: ReactMouseEvent) => void) {
   const preventDefault = () => {};
   const stopPropagation = () => {};
   act(() => {
@@ -40,17 +40,29 @@ function fireDrag(onMouseDown: (event: ReactMouseEvent) => void, deltas: number[
       { clientX: 0, preventDefault, stopPropagation } as unknown as ReactMouseEvent,
     );
   });
-  for (const delta of deltas) {
-    act(() => {
-      // Reverse direction (right panel is anchored to the right edge): a
-      // positive delta here is the same "drag left to widen" motion
-      // `handleRightPanelDrag`'s `reverse: true` expects.
-      document.dispatchEvent(new MouseEvent("mousemove", { clientX: -delta }));
-    });
-  }
+}
+
+function moveDrag(delta: number) {
+  act(() => {
+    // Reverse direction (right panel is anchored to the right edge): a
+    // positive delta here is the same "drag left to widen" motion
+    // `handleRightPanelDrag`'s `reverse: true` expects.
+    document.dispatchEvent(new MouseEvent("mousemove", { clientX: -delta }));
+  });
+}
+
+function releaseDrag() {
   act(() => {
     document.dispatchEvent(new MouseEvent("mouseup"));
   });
+}
+
+function fireDrag(onMouseDown: (event: ReactMouseEvent) => void, deltas: number[]) {
+  beginDrag(onMouseDown);
+  for (const delta of deltas) {
+    moveDrag(delta);
+  }
+  releaseDrag();
 }
 
 function renderRightPanel() {
@@ -135,5 +147,62 @@ describe("useMainScreenRightPanel drag wiring", () => {
     rerender();
 
     expect(result.current.rightPanelOpen).toBe(true);
+  });
+
+  it("commits the durable width once on release, not on every mousemove", () => {
+    const { result, rerender } = renderRightPanel();
+    act(() => {
+      result.current.setRightPanelOpen(true);
+    });
+    rerender();
+    const startWidth = result.current.rightPanelWidth;
+
+    beginDrag(result.current.onRightSeparatorDown);
+    moveDrag(40);
+    rerender();
+
+    // Mid-gesture: the rendered width tracks the pointer and the drag is
+    // flagged, but the durable store still holds the pre-drag width — the
+    // persistence subscriber must not run per mousemove.
+    expect(result.current.rightPanelResizing).toBe(true);
+    expect(result.current.rightPanelWidth).toBe(startWidth + 40);
+    expect(
+      useWorkspaceUiStore.getState().rightPanelDurableByWorkspace[WORKSPACE_ID]?.width,
+    ).toBe(startWidth);
+
+    releaseDrag();
+    rerender();
+
+    expect(result.current.rightPanelResizing).toBe(false);
+    expect(
+      useWorkspaceUiStore.getState().rightPanelDurableByWorkspace[WORKSPACE_ID]?.width,
+    ).toBe(startWidth + 40);
+  });
+
+  it("ends the resize at the collapse itself and commits no width for a collapse-only gesture", () => {
+    const { result, rerender } = renderRightPanel();
+    act(() => {
+      result.current.setRightPanelOpen(true);
+    });
+    rerender();
+    const startWidth = result.current.rightPanelWidth;
+    const collapseDelta = -(RIGHT_PANEL_MIN_WIDTH - RIGHT_PANEL_COLLAPSE_DRAG_THRESHOLD + 50);
+
+    beginDrag(result.current.onRightSeparatorDown);
+    moveDrag(collapseDelta);
+    rerender();
+
+    // Resizing ends at the collapse, before the mouse is released, so the
+    // close gets its eased geometry back instead of snapping shut.
+    expect(result.current.rightPanelOpen).toBe(false);
+    expect(result.current.rightPanelResizing).toBe(false);
+
+    releaseDrag();
+    rerender();
+
+    // Reopening restores the width from before the drag.
+    expect(
+      useWorkspaceUiStore.getState().rightPanelDurableByWorkspace[WORKSPACE_ID]?.width,
+    ).toBe(startWidth);
   });
 });
