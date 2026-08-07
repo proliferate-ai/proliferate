@@ -116,7 +116,7 @@ function plistVersion(appBundle) {
 
 // The three externalBin sidecars are placeholder stubs in a dev checkout (the
 // updater test only exercises the update mechanism, not the agent runtime — see
-// the gotchas in specs/developing/testing/desktop-update-testing.md). Stage tiny
+// the gotchas in specs/TESTING/desktop-update-testing.md). Stage tiny
 // executable placeholders so `tauri build` finds them without the ~10-min real
 // anyharness runtime build.
 function stageSidecarStubs() {

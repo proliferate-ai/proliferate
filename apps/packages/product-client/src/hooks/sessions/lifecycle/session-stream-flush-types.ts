@@ -1,3 +1,4 @@
+import type { SessionLiveConfigSnapshot } from "@anyharness/sdk";
 import type { StreamBatchScheduler } from "#product/domain/chats/transcript/stream-batcher";
 import type { PendingSessionConfigChange } from "#product/domain/sessions/pending-config";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
@@ -20,12 +21,11 @@ export interface SessionStreamFlushFactoryDeps {
     sessionLinkId?: string | null;
     requestHeaders?: HeadersInit;
   }) => Promise<void> | void;
-  persistReconciledModePreferences: (
+  persistReconciledControlPreferences: (
     workspaceId: string | null | undefined,
     agentKind: string | null | undefined,
-    liveConfigRawConfigId: string | null | undefined,
+    liveConfig: SessionLiveConfigSnapshot,
     reconciledChanges: PendingSessionConfigChange[],
-    liveConfigValueResolver: (rawConfigId: string) => string | null,
   ) => void;
   refreshSessionSlotMeta: (
     sessionId: string,

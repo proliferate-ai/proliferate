@@ -1,4 +1,4 @@
-// T2-SEC-1 (specs/developing/testing/scenarios.md): secrets CRUD across all
+// T2-SEC-1 (specs/TESTING/scenarios.md): secrets CRUD across all
 // three scopes (personal, organization, workspace), to the seam.
 //
 // Formerly-documented GAP, now fixed: this spec used to pin a MAJOR SURVEY

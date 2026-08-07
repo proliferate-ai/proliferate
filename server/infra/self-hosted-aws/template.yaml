@@ -79,11 +79,14 @@ Parameters:
 
   InstanceType:
     Type: String
-    Default: t4g.small
+    Default: t3.small
     AllowedValues:
-      - t4g.small
-      - t4g.medium
-      - t4g.large
+      - t3.small
+      - t3.medium
+      - t3.large
+    # The published ghcr.io/proliferate-ai/proliferate-server image is a
+    # single-arch amd64 manifest (no arm64/multi-arch index), so this must
+    # stay x86_64 to match LatestAmiId and the default RuntimeBinaryUrl below.
     Description: EC2 instance type for the self-hosted control plane.
 
   PostgresPassword:
@@ -128,8 +131,8 @@ Parameters:
 
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
-    Description: Amazon Linux 2023 arm64 AMI id.
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Amazon Linux 2023 x86_64 AMI id.
 
 Rules:
   SiteAddressRequiredWithoutSslip:
@@ -460,9 +463,10 @@ Resources:
                   ResolvedRuntimeBinaryUrl: !If
                     - HasRuntimeBinaryUrlOverride
                     - !Ref RuntimeBinaryUrl
-                    # The default instance types are all Graviton (arm64), so
-                    # the default runtime asset must be the aarch64 build.
-                    - !Sub https://github.com/proliferate-ai/proliferate/releases/download/server-v${ReleaseVersion}/anyharness-aarch64-unknown-linux-musl.tar.gz
+                    # The default instance types are x86_64 (matching the
+                    # amd64-only ghcr.io server image), so the default runtime
+                    # asset must be the x86_64 build.
+                    - !Sub https://github.com/proliferate-ai/proliferate/releases/download/server-v${ReleaseVersion}/anyharness-x86_64-unknown-linux-musl.tar.gz
                   ResolvedRuntimeBinaryChecksumUrl: !If
                     - HasRuntimeBinaryChecksumUrlOverride
                     - !Ref RuntimeBinaryChecksumUrl

@@ -8,7 +8,7 @@ credentials, dashboards, or fresh data exist in a live environment.
 Canonical owners:
 
 - [Metabase and durable analytics views](../../../specs/codebase/systems/engineering/analytics/metabase.md)
-- [Metabase operating procedure](../../../specs/developing/operating/analytics/metabase.md)
+- [Metabase operating procedure](../../../guides/operating/analytics/metabase.md)
 
 ## Artifact Map
 

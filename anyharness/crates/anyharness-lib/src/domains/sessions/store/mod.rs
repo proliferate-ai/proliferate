@@ -4,6 +4,7 @@ mod attachments;
 mod background_work;
 mod events;
 pub(crate) mod idempotent_create;
+pub(crate) mod link_completions;
 mod links;
 mod live_config;
 mod mobility;

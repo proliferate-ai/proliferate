@@ -5,7 +5,7 @@ description = "Proliferate control plane API"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.139.2",
-    "uvicorn[standard]>=0.51.0",
+    "uvicorn[standard]>=0.52.0",
     "sqlalchemy[asyncio]>=2.0.0",
     "asyncpg>=0.30.0",
     "alembic>=1.18.5",
@@ -27,7 +27,7 @@ dependencies = [
     "e2b>=2.34.0",
     "sentry-sdk[fastapi]>=2.66.1",
     "boto3>=1.43.54",
-    "botocore[crt]>=1.43.55",
+    "botocore[crt]>=1.43.59",
     "celery>=5.5.0",
     "celery-redbeat>=2.4.1",
     "kombu>=5.5.0",

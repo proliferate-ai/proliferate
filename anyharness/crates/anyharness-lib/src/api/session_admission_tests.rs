@@ -25,40 +25,14 @@ use crate::domains::workflows::store::WorkflowRunStore;
 const WS: &str = "20000000-0000-4000-8000-000000000002";
 
 fn insert_session_row(state: &AppState, workspace_id: &str) -> String {
-    let now = chrono::Utc::now().to_rfc3339();
-    let record = crate::domains::sessions::model::SessionRecord {
-        id: uuid::Uuid::new_v4().to_string(),
-        workspace_id: workspace_id.to_string(),
-        agent_kind: "claude".to_string(),
-        native_session_id: None,
-        agent_auth_contexts: None,
-        requested_model_id: None,
-        current_model_id: None,
-        requested_mode_id: None,
-        current_mode_id: None,
-        title: None,
-        thinking_level_id: None,
-        thinking_budget_tokens: None,
-        status: "starting".to_string(),
-        created_at: now.clone(),
-        updated_at: now,
-        last_prompt_at: None,
-        closed_at: None,
-        dismissed_at: None,
-        mcp_bindings_ciphertext: None,
-        mcp_binding_summaries_json: None,
-        mcp_binding_policy: crate::domains::sessions::model::SessionMcpBindingPolicy::InternalOnly,
-        system_prompt_append: None,
-        subagents_enabled: false,
-        action_capabilities_json: None,
-        origin: Some(crate::origin::OriginContext::system_local_runtime()),
-    };
-    state
-        .session_service
-        .store()
-        .insert(&record)
-        .expect("insert session row");
-    record.id
+    let session_id = uuid::Uuid::new_v4().to_string();
+    test_support::insert_session_row(
+        state.session_service.store(),
+        workspace_id,
+        &session_id,
+        "starting",
+    );
+    session_id
 }
 
 fn controlled_fixture(state: &AppState) -> (String, String) {
@@ -588,87 +562,89 @@ fn handler_body(rel_path: &str, fn_name: &str) -> String {
     rest[..end].to_string()
 }
 
-fn assert_admit_before_lease(rel_path: &str, fn_name: &str, admit: &str, lease: &str) {
+/// Assert `first` textually precedes `second` within one function's body. Both
+/// tokens must be BODY-resident: a token that appears in the signature (a
+/// parameter name, say) precedes every statement and makes the check vacuous.
+fn assert_source_order(rel_path: &str, fn_name: &str, first: &str, second: &str, why: &str) {
     let body = handler_body(rel_path, fn_name);
-    let admit_at = body
-        .find(admit)
-        .unwrap_or_else(|| panic!("{rel_path}::{fn_name}: admit token '{admit}' missing"));
-    let lease_at = body
-        .find(lease)
-        .unwrap_or_else(|| panic!("{rel_path}::{fn_name}: lease token '{lease}' missing"));
+    let first_at = body
+        .find(first)
+        .unwrap_or_else(|| panic!("{rel_path}::{fn_name}: token '{first}' missing"));
+    let second_at = body
+        .find(second)
+        .unwrap_or_else(|| panic!("{rel_path}::{fn_name}: token '{second}' missing"));
     assert!(
-        admit_at < lease_at,
-        "{rel_path}::{fn_name}: the session mutation permit ('{admit}') must be \
-         acquired BEFORE the workspace operation lease ('{lease}') — canonical \
-         LOCK-01 order permit -> operation lease"
+        first_at < second_at,
+        "{rel_path}::{fn_name}: '{first}' must come BEFORE '{second}' — {why}"
     );
+}
+
+const LOCK_01_ORDER: &str =
+    "canonical LOCK-01 order: session mutation permit -> workspace operation lease";
+
+fn assert_admit_before_lease(rel_path: &str, fn_name: &str, admit: &str, lease: &str) {
+    assert_source_order(rel_path, fn_name, admit, lease, LOCK_01_ORDER);
 }
 
 #[test]
 fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
     // Per-handler source-order guard for every handler that holds BOTH the
     // session mutation permit and a workspace operation lease. Under the old
-    // reversed order (lease first) each assertion fails; the fix makes the
-    // admit_* call outermost.
-    let http = "src/api/http";
-    // idempotent create: caller-selected id admission before SessionStart.
-    assert_admit_before_lease(
-        &format!("{http}/sessions.rs"),
-        "create_session",
-        "admit_session_mutation(",
-        ".acquire_shared(",
-    );
-    // plans: admit_plan_session before the PlanWrite shared lease.
-    for handler in ["approve_plan", "reject_plan", "handoff_plan"] {
-        assert_admit_before_lease(
-            &format!("{http}/plans.rs"),
-            handler,
-            "admit_plan_session(",
-            ".acquire_shared(",
-        );
+    // reversed order (lease first) each row fails; the fix makes the admit_*
+    // call outermost. Retire's lease is no longer in its handler (see below).
+    const ADMIT: &str = "admit_session_mutation(";
+    const ADMIT_ALL: &str = "admit_all_workspace_sessions(";
+    const PLAN: &str = "admit_plan_session(";
+    const SHARED: &str = ".acquire_shared(";
+    const EXCLUSIVE: &str = ".acquire_exclusive(";
+    const FORK_LEASE: &str = "acquire_session_exclusive_operation_lease(";
+    for (file, handler, admit, lease) in [
+        // idempotent create: caller-selected id admission before SessionStart.
+        ("sessions.rs", "create_session", ADMIT, SHARED),
+        // plans: admit_plan_session before the PlanWrite shared lease.
+        ("plans.rs", "approve_plan", PLAN, SHARED),
+        ("plans.rs", "reject_plan", PLAN, SHARED),
+        ("plans.rs", "handoff_plan", PLAN, SHARED),
+        // reviews: admit_session_mutation before the ReviewWrite shared lease.
+        ("reviews.rs", "start_plan_review", ADMIT, SHARED),
+        ("reviews.rs", "start_code_review", ADMIT, SHARED),
+        // fork: admit before the exclusive session operation lease.
+        ("sessions_fork.rs", "fork_session", ADMIT, FORK_LEASE),
+        // subagent wake: admit before the SubagentWrite shared lease.
+        ("subagents.rs", "schedule_subagent_wake", ADMIT, SHARED),
+        // retire HALF 1: the handler admits before it calls the facade.
+        ("workspaces_lifecycle.rs", "retire_workspace", ADMIT_ALL, ".retire("),
+        // mobility export: admit-all before the MobilityWrite shared lease.
+        ("mobility.rs", "export_workspace_mobility_archive", ADMIT_ALL, SHARED),
+        // mobility destroy-source: admit-all before the exclusive workspace lease.
+        ("mobility.rs", "destroy_workspace_mobility_source", ADMIT_ALL, EXCLUSIVE),
+    ] {
+        assert_admit_before_lease(&format!("src/api/http/{file}"), handler, admit, lease);
     }
-    // reviews: admit_session_mutation before the ReviewWrite shared lease.
-    for handler in ["start_plan_review", "start_code_review"] {
-        assert_admit_before_lease(
-            &format!("{http}/reviews.rs"),
-            handler,
-            "admit_session_mutation(",
-            ".acquire_shared(",
-        );
-    }
-    // fork: admit before the exclusive session operation lease.
-    assert_admit_before_lease(
-        &format!("{http}/sessions_fork.rs"),
-        "fork_session",
-        "admit_session_mutation(",
-        "acquire_session_exclusive_operation_lease(",
+    // Retire HALF 2. Grid PR 9 moved the retire state machine (and with it the
+    // exclusive lease) into `domains/workspaces/retire.rs`, so the one LOCK-01
+    // ordering now spans two files: half 1 above pins admit-before-facade-call,
+    // and these two links pin the facade's own chain. BODY-RESIDENT tokens only:
+    // an earlier version used the `admitted_session_ids:` PARAMETER, which
+    // precedes every statement, so the check was vacuous. Both links are needed
+    // — either alone still passes with the lease hoisted to the top of the fn.
+    let retire = "src/domains/workspaces/retire.rs";
+    assert_source_order(
+        retire,
+        "retire",
+        ".blocked_if_preflight_refuses(",
+        EXCLUSIVE,
+        "the advisory preflight (and the FENCE-01 proof seam sitting in its gap) \
+         must run BEFORE the exclusive lease, or a refused retire serializes on \
+         the workspace and the pre-lease proof window disappears",
     );
-    // subagent wake: admit before the SubagentWrite shared lease.
-    assert_admit_before_lease(
-        &format!("{http}/subagents.rs"),
-        "schedule_subagent_wake",
-        "admit_session_mutation(",
-        ".acquire_shared(",
-    );
-    // retire: admit-all before the exclusive workspace lease.
-    assert_admit_before_lease(
-        &format!("{http}/workspaces_lifecycle.rs"),
-        "retire_workspace",
-        "admit_all_workspace_sessions(",
-        ".acquire_exclusive(",
-    );
-    // mobility export: admit-all before the MobilityWrite shared lease.
-    assert_admit_before_lease(
-        &format!("{http}/mobility.rs"),
-        "export_workspace_mobility_archive",
-        "admit_all_workspace_sessions(",
-        ".acquire_shared(",
-    );
-    // mobility destroy-source: admit-all before the exclusive workspace lease.
-    assert_admit_before_lease(
-        &format!("{http}/mobility.rs"),
-        "destroy_workspace_mobility_source",
-        "admit_all_workspace_sessions(",
-        ".acquire_exclusive(",
+    assert_source_order(
+        retire,
+        "retire",
+        EXCLUSIVE,
+        ".reject_if_workflow_controlled(",
+        "PR1227-WORKSPACE-FENCE-01/02: the exclusive lease must be held before \
+         the admitted-set re-check runs, or the fence re-enumerates sessions in \
+         a window that still admits workflow session creation",
     );
 }

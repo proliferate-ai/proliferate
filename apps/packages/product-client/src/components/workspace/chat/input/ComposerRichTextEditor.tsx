@@ -293,10 +293,8 @@ function ComposerBehaviorPlugin({
     const unregisterEnter = editor.registerCommand(KEY_ENTER_COMMAND, (event) => {
       if (!event || event.defaultPrevented || event.isComposing) return false;
       if (onCommandKey?.(event)) return true;
-      const inList = selectionIsInList();
       const plainEnter = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
       const primaryEnter = !event.shiftKey && !event.altKey && (event.metaKey || event.ctrlKey);
-      if (plainEnter && inList) return false;
       if (!plainEnter && !primaryEnter) return false;
       event.preventDefault();
       if (!event.repeat && canSubmit) onSubmit();

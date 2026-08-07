@@ -146,7 +146,7 @@ export async function resetBillingState(): Promise<void> {
  * here are password-only; seed the legacy `oauth_account` GitHub row the
  * readiness check accepts (`_read_valid_legacy_github_account`) — the
  * direct-DB analog of local dev's seeded-GitHub-auth layer
- * (specs/developing/local/feature-worktree-auth.md).
+ * (guides/local/feature-worktree-auth.md).
  *
  * Deliberately NOT an `auth_identity` row: free-trial-v2 issuance keys off
  * `auth_identity` (`_linked_github_provider_user_id`), so this unlocks the

@@ -341,3 +341,25 @@ fn workspace_scoped_resolution_ignores_a_host_exported_credential() {
         ResolvedAgentStatus::Ready
     );
 }
+
+/// The not-in-registry arm behind [`resolve_agent_unrouted_by_kind`] (shared
+/// by `AcpProbeRunner::run`, the `catalog-probe` CLI, and the
+/// probe-materialization test — see that fn's doc comment). The bundled
+/// registry always carries every `AgentKind` variant, so this exercises
+/// [`find_descriptor_by_kind`] directly against a hand-built registry slice
+/// with one kind removed — the only way to make the arm reachable at all.
+#[test]
+fn find_descriptor_by_kind_reports_a_kind_missing_from_the_registry() {
+    let registry_missing_grok: Vec<AgentDescriptor> = built_in_registry()
+        .into_iter()
+        .filter(|descriptor| descriptor.kind != AgentKind::Grok)
+        .collect();
+
+    let error = find_descriptor_by_kind(&registry_missing_grok, &AgentKind::Grok)
+        .expect_err("grok was filtered out of this registry slice");
+    assert_eq!(error.to_string(), "agent kind grok not in registry");
+
+    // The kinds still present resolve normally — the filter did not break the
+    // happy path.
+    assert!(find_descriptor_by_kind(&registry_missing_grok, &AgentKind::Claude).is_ok());
+}

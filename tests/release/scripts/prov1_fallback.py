@@ -1,4 +1,4 @@
-"""T3-PROV-1 fallback seam (specs/developing/testing/scenarios.md#T3-PROV-1).
+"""T3-PROV-1 fallback seam (specs/TESTING/scenarios.md#T3-PROV-1).
 
 The scenario contract: the cold-provisioning path under test is the GitHub
 App authorization callback (`complete_github_app_user_authorization_callback`,
@@ -6,7 +6,7 @@ server/proliferate/server/cloud/github_app/service.py:274) calling
 `ensure_personal_cloud_sandbox_exists` + `schedule_materialize_sandbox`. That
 callback needs a real GitHub OAuth `code`, and this repo's dev GitHub App's
 callback URL is pinned to the `main` profile's port
-(specs/developing/local/feature-worktree-auth.md, Layer C) — a dedicated
+(guides/local/feature-worktree-auth.md, Layer C) — a dedicated
 `t3local` profile cannot receive it. Real attempt made and documented in the
 final report; this script is the contract's sanctioned fallback: "invoke the
 exact post-authorization service call the callback makes — never a faked

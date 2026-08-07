@@ -14,7 +14,7 @@ Examples:
 - Server changes: [specs/codebase/structures/server/README.md](./specs/codebase/structures/server/README.md)
 - AnyHarness runtime changes: [specs/codebase/structures/anyharness/README.md](./specs/codebase/structures/anyharness/README.md)
 - SDK changes: [specs/codebase/structures/sdk/README.md](./specs/codebase/structures/sdk/README.md)
-- CI/CD or release changes: [specs/developing/deploying/README.md](./specs/developing/deploying/README.md)
+- CI/CD or release changes: [guides/deploying/README.md](./guides/deploying/README.md)
 
 ## Local Development
 
@@ -35,10 +35,10 @@ make run PROFILE=<name>
 
 Give every worktree its own profile name. To reuse an existing Postgres or
 Redis service, or to develop from Windows through WSL2, follow the
-[local-development procedure](./specs/developing/local/README.md).
+[local-development procedure](./guides/local/README.md).
 
 ## Pull Requests
 
-Follow the [pull-request procedure](./specs/developing/process/pull-requests.md)
+Follow the [pull-request procedure](./guides/process/pull-requests.md)
 to prepare a focused PR, record proof, choose its metadata, and mark it ready
 for review.

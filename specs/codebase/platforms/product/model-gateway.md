@@ -90,7 +90,7 @@ asserts the Dockerfile and `server/docker-compose.yml` carry the identical
 pin and fails any bump that skips review. Bumping the pin is the
 highest-risk gateway change, since it swaps the code serving all inference
 and the pricing manifest; the procedure is in
-[gateway-models.md](../../../developing/operating/gateway-models.md).
+[gateway-models.md](../../../../guides/operating/gateway-models.md).
 
 ### Secrets
 

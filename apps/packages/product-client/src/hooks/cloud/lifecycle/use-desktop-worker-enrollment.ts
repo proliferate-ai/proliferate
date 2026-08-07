@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
+import { dismissToast } from "#product/primitives/utils/show-toast";
 import {
-  DESKTOP_WORKER_STARTUP_FAILURE_CONSEQUENCE,
-  DESKTOP_WORKER_STARTUP_FAILURE_HEADLINE,
-  DESKTOP_WORKER_STARTUP_FAILURE_TOAST_ID,
-  desktopWorkerStartupFailureCause,
+  desktopWorkerStartupFailureNotice,
+  type DesktopWorkerStartupFailureKind,
 } from "#product/copy/cloud/desktop-worker-copy";
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
 } from "#product/lib/workflows/cloud/ensure-desktop-worker";
-import { dismissToast } from "#product/primitives/utils/show-toast";
 import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
@@ -23,20 +21,66 @@ import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product
 // silently keeping the previous identity's credentials.
 let enrolledIdentityKey: string | null = null;
 
+const DESKTOP_WORKER_FAILURE_TOAST_ID = "desktop-worker-startup-failure";
+
+interface EnrollmentFailureNotification {
+  identityKey: string;
+  kind: DesktopWorkerStartupFailureKind;
+  cause: string;
+}
+
+// Enrollment retries are intentionally process-wide, so notification state is
+// process-wide too. Remounting the lifecycle root must not resurface a failure
+// the user dismissed or animate a replacement for the same failed condition.
+let activeFailureNotification: EnrollmentFailureNotification | null = null;
+let dismissedFailureNotification: EnrollmentFailureNotification | null = null;
+
 // Delay before retrying a failed enrollment. Long enough not to hammer an
 // unreachable control plane, short enough that integrations recover without
 // a restart.
 const ENROLLMENT_RETRY_DELAY_MS = 15_000;
 
-// Identity whose startup-failure toast the user closed. The retry loop keeps
-// running — cloud workspaces should recover without a restart — but a loop
-// that resurrects a dismissed error toast every 15 seconds overrides the
-// user's choice. Keyed by identity so a new sign-in or org switch, which is a
-// genuinely new attempt, gets its own report.
-let startupFailureDismissedFor: string | null = null;
-
 function identityKey(userId: string, organizationId: string | null): string {
   return `${userId}::${organizationId ?? ""}`;
+}
+
+function sameFailure(
+  failure: EnrollmentFailureNotification | null,
+  identity: string,
+  kind: DesktopWorkerStartupFailureKind,
+  cause: string,
+): boolean {
+  return failure?.identityKey === identity
+    && failure.kind === kind
+    && failure.cause === cause;
+}
+
+function clearFailureNotification(identity?: string): void {
+  const activeMatches =
+    activeFailureNotification !== null
+    && (identity === undefined || activeFailureNotification.identityKey === identity);
+  const dismissedMatches =
+    dismissedFailureNotification !== null
+    && (identity === undefined || dismissedFailureNotification.identityKey === identity);
+
+  if (activeMatches) {
+    activeFailureNotification = null;
+    dismissToast(DESKTOP_WORKER_FAILURE_TOAST_ID);
+  }
+  if (dismissedMatches) {
+    dismissedFailureNotification = null;
+  }
+}
+
+function clearFailureNotificationForOtherIdentity(identity: string): void {
+  if (
+    (activeFailureNotification !== null
+      && activeFailureNotification.identityKey !== identity)
+    || (dismissedFailureNotification !== null
+      && dismissedFailureNotification.identityKey !== identity)
+  ) {
+    clearFailureNotification();
+  }
 }
 
 // Enrollment guard transitions:
@@ -75,6 +119,7 @@ export function useDesktopWorkerEnrollment(
       return;
     }
     if (authStatus !== "authenticated" || !authUserId) {
+      clearFailureNotification();
       // Signed out: stop the worker and clear the guard so the next login
       // (any user) re-enrolls with a fresh identity.
       if (enrolledIdentityKey !== null) {
@@ -84,6 +129,7 @@ export function useDesktopWorkerEnrollment(
       return;
     }
     const nextIdentityKey = identityKey(authUserId, activeOrganizationId);
+    clearFailureNotificationForOtherIdentity(nextIdentityKey);
     if (enrolledIdentityKey === nextIdentityKey) {
       return;
     }
@@ -97,31 +143,62 @@ export function useDesktopWorkerEnrollment(
     let retryTimer: number | null = null;
     void ensureDesktopWorker(activeOrganizationId, worker, {
       onFailure: (error) => {
+        if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
+          return;
+        }
+        const notice = desktopWorkerStartupFailureNotice(error);
         if (
-          cancelled
-          || enrolledIdentityKey !== nextIdentityKey
-          || startupFailureDismissedFor === nextIdentityKey
+          sameFailure(
+            activeFailureNotification,
+            nextIdentityKey,
+            notice.kind,
+            notice.cause,
+          )
+          || sameFailure(
+            dismissedFailureNotification,
+            nextIdentityKey,
+            notice.kind,
+            notice.cause,
+          )
         ) {
           return;
         }
+        const notification = {
+          identityKey: nextIdentityKey,
+          kind: notice.kind,
+          cause: notice.cause,
+        };
+        dismissedFailureNotification = null;
+        activeFailureNotification = notification;
         showErrorToast({
-          id: DESKTOP_WORKER_STARTUP_FAILURE_TOAST_ID,
-          headline: DESKTOP_WORKER_STARTUP_FAILURE_HEADLINE,
-          consequence: DESKTOP_WORKER_STARTUP_FAILURE_CONSEQUENCE,
-          cause: desktopWorkerStartupFailureCause(error),
+          id: DESKTOP_WORKER_FAILURE_TOAST_ID,
+          headline: notice.headline,
+          consequence: notice.consequence,
+          cause: notice.cause,
+          retry: () => {
+            dismissedFailureNotification = null;
+            enrolledIdentityKey = null;
+            setRetryNonce((nonce) => nonce + 1);
+          },
           onDismiss: () => {
-            startupFailureDismissedFor = nextIdentityKey;
+            if (
+              sameFailure(
+                activeFailureNotification,
+                nextIdentityKey,
+                notice.kind,
+                notice.cause,
+              )
+            ) {
+              activeFailureNotification = null;
+              dismissedFailureNotification = notification;
+            }
           },
         });
       },
       captureException,
     }).then((enrolled) => {
       if (enrolled) {
-        // A retry made it: the persistent failure toast is now describing a
-        // state that no longer exists, so it leaves with the failure — and a
-        // dismissal recorded against the failed attempt no longer applies.
-        dismissToast(DESKTOP_WORKER_STARTUP_FAILURE_TOAST_ID);
-        startupFailureDismissedFor = null;
+        clearFailureNotification(nextIdentityKey);
         return;
       }
       if (enrolledIdentityKey !== nextIdentityKey) {

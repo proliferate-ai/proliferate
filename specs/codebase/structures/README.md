@@ -2,8 +2,8 @@
 
 Structure specs own folder rules, dependency direction, code maps, and
 ownership boundaries. They do not own complete systems, reusable platforms, or
-operator procedures; those belong under `systems/`, `platforms/`, and
-`developing/`.
+operator procedures; those belong under `systems/`, `platforms/`, and the
+repository-root `guides/`.
 
 ## System Map
 

@@ -1,4 +1,4 @@
-// T2-AUTH-5 (specs/developing/testing/scenarios.md): org-scoped SSO login
+// T2-AUTH-5 (specs/TESTING/scenarios.md): org-scoped SSO login
 // entry points.
 //
 // PR #1048 added the user-facing ways *in* to org SSO (the backend OIDC flow
@@ -21,8 +21,8 @@
 //     to an ENABLED connection returns exactly the ids the start flow needs
 //     (`organizationId`, `connectionId`, `protocol`, `displayName`) — this is
 //     the entry point's whole job;
-//   - truthfulness (self-hosting-relevant, specs/developing/testing/self-
-//     hosting.md): a connection whose `status` is 'enabled' but whose OIDC
+//   - truthfulness (self-hosting-relevant,
+//     specs/TESTING/self-hosting.md): a connection whose `status` is 'enabled' but whose OIDC
 //     config drifted incomplete afterwards (an admin edit, not something the
 //     enable endpoint itself can produce) must still report `enabled:false`
 //     with the specific reason — never a false positive that would render a

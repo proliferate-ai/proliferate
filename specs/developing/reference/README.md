@@ -13,7 +13,7 @@ or release variable in the repository.
 | Reference | Owns |
 | --- | --- |
 | [env-vars.yaml](env-vars.yaml) | Curated catalog of supported, preferred application/runtime inputs consumed by a Proliferate product process, product build, runtime, or qualification process. |
-| [environment-sources.md](environment-sources.md) | Configuration locations and precedence for local, self-hosted, hosted, client-build, and workflow surfaces. |
+| [guides/local/dev-profiles.md](../../../guides/local/dev-profiles.md) | Configuration locations and precedence for local, self-hosted, hosted, client-build, and workflow surfaces. |
 | [workspace-command-environment.md](workspace-command-environment.md) | AnyHarness workspace-command environment layers, protected metadata, and propagation. |
 
 ## Usage
@@ -22,8 +22,8 @@ or release variable in the repository.
   removed, or changes its documented default, description, secrecy, or tags.
 - Keep deployment/bootstrap-only values and workflow/release controls in their
   owning procedure rather than adding them to the curated catalog.
-- Update `environment-sources.md` when a configuration location or precedence
-  rule changes.
+- Update the `Environment Sources` section of `guides/local/dev-profiles.md`
+  when a configuration location or precedence rule changes.
 - When changing what is injected into command environments, update
   `workspace-command-environment.md` in the same PR.
 - Never copy secret values into reference documentation.

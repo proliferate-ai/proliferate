@@ -1,4 +1,3 @@
-pub mod acp;
 pub mod adapters;
 pub mod api;
 pub mod app;

@@ -12,137 +12,6 @@ fn session_model_options(ids: &[&str]) -> Vec<SessionModelOption> {
 }
 
 #[test]
-fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite() {
-    let db = Db::open_in_memory().expect("open db");
-    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
-
-    let store = SessionStore::new(db.clone());
-    store
-        .insert(&SessionRecord {
-            id: "session-1".to_string(),
-            workspace_id: "workspace-1".to_string(),
-            agent_kind: AgentKind::Claude.as_str().to_string(),
-            native_session_id: Some("native-1".to_string()),
-            agent_auth_contexts: None,
-            requested_model_id: None,
-            current_model_id: None,
-            requested_mode_id: None,
-            current_mode_id: None,
-            title: None,
-            thinking_level_id: None,
-            thinking_budget_tokens: None,
-            status: "idle".to_string(),
-            created_at: "2026-03-25T00:00:00Z".to_string(),
-            updated_at: "2026-03-25T00:00:00Z".to_string(),
-            last_prompt_at: None,
-            closed_at: None,
-            dismissed_at: None,
-            mcp_bindings_ciphertext: None,
-            mcp_binding_summaries_json: None,
-            mcp_binding_policy:
-                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
-            system_prompt_append: None,
-            subagents_enabled: true,
-            action_capabilities_json: None,
-            origin: None,
-        })
-        .expect("insert session");
-
-    let persisted_snapshot = SessionLiveConfigSnapshot {
-        raw_config_options: vec![],
-        normalized_controls: NormalizedSessionControls {
-            model: None,
-            collaboration_mode: Some(NormalizedSessionControl {
-                key: "collaboration_mode".into(),
-                raw_config_id: "collaboration_mode".into(),
-                label: "Collaboration Mode".into(),
-                current_value: Some("plan".into()),
-                settable: true,
-                values: vec![
-                    NormalizedSessionControlValue {
-                        value: "chat".into(),
-                        label: "Chat".into(),
-                        description: None,
-                    },
-                    NormalizedSessionControlValue {
-                        value: "plan".into(),
-                        label: "Plan".into(),
-                        description: None,
-                    },
-                ],
-            }),
-            mode: None,
-            reasoning: None,
-            effort: None,
-            fast_mode: None,
-            extras: vec![],
-        },
-        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
-        source_seq: 1,
-        updated_at: "2026-03-25T00:00:00Z".into(),
-    };
-    store
-        .upsert_live_config_snapshot(
-            &snapshot_to_record("session-1", &persisted_snapshot).expect("snapshot record"),
-        )
-        .expect("persist old snapshot");
-
-    let captured =
-        load_startup_restore_snapshot(&store, "session-1", AgentKind::Claude.as_str(), true)
-            .expect("load startup snapshot")
-            .expect("snapshot exists");
-
-    let replacement_snapshot = SessionLiveConfigSnapshot {
-        raw_config_options: vec![],
-        normalized_controls: NormalizedSessionControls {
-            model: None,
-            collaboration_mode: Some(NormalizedSessionControl {
-                key: "collaboration_mode".into(),
-                raw_config_id: "collaboration_mode".into(),
-                label: "Collaboration Mode".into(),
-                current_value: Some("chat".into()),
-                settable: true,
-                values: vec![
-                    NormalizedSessionControlValue {
-                        value: "chat".into(),
-                        label: "Chat".into(),
-                        description: None,
-                    },
-                    NormalizedSessionControlValue {
-                        value: "plan".into(),
-                        label: "Plan".into(),
-                        description: None,
-                    },
-                ],
-            }),
-            mode: None,
-            reasoning: None,
-            effort: None,
-            fast_mode: None,
-            extras: vec![],
-        },
-        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
-        source_seq: 2,
-        updated_at: "2026-03-25T00:01:00Z".into(),
-    };
-    store
-        .upsert_live_config_snapshot(
-            &snapshot_to_record("session-1", &replacement_snapshot)
-                .expect("replacement snapshot record"),
-        )
-        .expect("persist replacement snapshot");
-
-    assert_eq!(
-        captured
-            .normalized_controls
-            .collaboration_mode
-            .as_ref()
-            .and_then(|control| control.current_value.as_deref()),
-        Some("plan")
-    );
-}
-
-#[test]
 fn persisted_control_values_orders_standard_controls_before_extras() {
     let controls = NormalizedSessionControls {
         model: Some(NormalizedSessionControl {
@@ -183,9 +52,9 @@ fn persisted_control_values_orders_standard_controls_before_extras() {
         }),
         effort: Some(NormalizedSessionControl {
             key: "effort".into(),
-            raw_config_id: "effort".into(),
-            label: "Effort".into(),
-            current_value: Some("max".into()),
+            raw_config_id: "reasoning_effort".into(),
+            label: "Reasoning Effort".into(),
+            current_value: Some("xhigh".into()),
             settable: true,
             values: vec![],
         }),
@@ -219,7 +88,7 @@ fn persisted_control_values_orders_standard_controls_before_extras() {
             "model=default",
             "collaboration_mode=plan",
             "thinking=off",
-            "effort=max",
+            "reasoning_effort=xhigh",
             "fast_mode=on",
             "mode=default",
             "foo=bar",

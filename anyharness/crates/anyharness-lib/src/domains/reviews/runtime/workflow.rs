@@ -6,7 +6,7 @@ use super::{
     MarkReviewRevisionReadyInput, RetryReviewAssignmentInput, ReviewRuntime,
     StartCodeReviewRuntimeInput, StartPlanReviewRuntimeInput,
 };
-use crate::acp::provider_errors::OPUS_4_6_FALLBACK_MODEL_ID;
+use crate::integrations::acp::provider_errors::OPUS_4_6_FALLBACK_MODEL_ID;
 
 impl ReviewRuntime {
     pub async fn start_plan_review(

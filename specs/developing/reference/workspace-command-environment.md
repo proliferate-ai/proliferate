@@ -58,3 +58,5 @@ Commands can use the owned paths through normal shell expansion:
 ```sh
 cd "${PROLIFERATE_WORKTREE_DIR:-$PROLIFERATE_WORKSPACE_DIR}" && make dev
 ```
+
+This reference is owned by the AnyHarness runtime documentation and will move with that owner's docs restructure.

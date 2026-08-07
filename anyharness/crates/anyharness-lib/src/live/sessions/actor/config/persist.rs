@@ -167,7 +167,11 @@ pub(in crate::live::sessions::actor) fn load_startup_restore_snapshot(
     source_agent_kind: &str,
     resumes_durable_history: bool,
 ) -> anyhow::Result<Option<SessionLiveConfigSnapshot>> {
-    if !resumes_durable_history || source_agent_kind != AgentKind::Claude.as_str() {
+    let restores_persisted_config = matches!(
+        AgentKind::parse(source_agent_kind),
+        Some(AgentKind::Claude) | Some(AgentKind::Codex)
+    );
+    if !resumes_durable_history || !restores_persisted_config {
         return Ok(None);
     }
 

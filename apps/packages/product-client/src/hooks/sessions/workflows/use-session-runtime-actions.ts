@@ -40,7 +40,7 @@ export function useSessionRuntimeActions() {
   const { mountSubagentChildSession } = useLinkedSessionMounting();
   const {
     applySessionSummary,
-    persistReconciledModePreferences,
+    persistReconciledControlPreferences,
   } = useSessionSummaryActions();
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
 
@@ -178,7 +178,7 @@ export function useSessionRuntimeActions() {
   const createSessionStreamFlushController = useSessionStreamFlushControllerFactory({
     sessionStreamCache,
     mountSubagentChildSession,
-    persistReconciledModePreferences,
+    persistReconciledControlPreferences,
     refreshSessionSlotMeta,
     rehydrateSessionSlotFromHistory,
     showToast,

@@ -46,7 +46,15 @@ def scan_root(root: Path | None):
 
 HTTP_TRANSPORT_ROOTS = {"axum", "headers", "http", "http_body", "tower", "utoipa"}
 PRODUCT_DOMAIN_ROOTS = {"domains"}
-LIVE_RUNTIME_ROOTS = {"acp", "live"}
+# `acp` used to be its own crate root (`crate::acp::..`) and lived in this set.
+# Grid PR 2 moved it to `crate::integrations::acp::..`, which is not a crate root
+# at all -- it is two segments below `integrations`. Keeping a dead "acp" string
+# here would never match anything again (no crate root is spelled "acp"; the
+# old-paths check bans resurrecting `src/acp` outright) and would misdescribe
+# what the set actually catches. The acp protection now lives in
+# `is_acp_runtime_import`, OR'd into every rule below that used to key off this
+# set including "acp".
+LIVE_RUNTIME_ROOTS = {"live"}
 PRODUCT_SURFACE_DOMAINS = {"cowork", "mobility", "plans", "plugins", "reviews"}
 DOMAIN_PATH_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/domains/",
@@ -102,7 +110,9 @@ DOMAIN_RUNTIME_VALVE_DIR = "runtime"
 LIVE_MODEL_SEGMENT = "model"
 STORE_SEGMENTS = {"store"}
 STORE_OR_SERVICE_SEGMENTS = {"store", "service"}
-DOMAIN_STORE_FORBIDDEN_ROOTS = {"acp", "live"}
+# See the comment on LIVE_RUNTIME_ROOTS: "acp" stopped being a crate root when
+# grid PR 2 moved it under `integrations/`. `is_acp_runtime_import` covers it now.
+DOMAIN_STORE_FORBIDDEN_ROOTS = {"live"}
 POLICY_FILE_SUFFIX = "_policy.rs"
 POLICY_FILE_NAME = "policy.rs"
 CONTRACT_CRATE_ROOT = "anyharness_contract"
@@ -325,6 +335,23 @@ def is_product_surface_domain_import(import_path: ImportPath) -> bool:
         and import_path.parts[0] == "crate"
         and import_path.parts[1] == "domains"
         and import_path.parts[2] in PRODUCT_SURFACE_DOMAINS
+    )
+
+
+def is_acp_runtime_import(import_path: ImportPath) -> bool:
+    """`crate::integrations::acp::..` — acp moved here from its own crate root
+    in grid PR 2 (`crate::acp::..` -> `crate::integrations::acp::..`). It is
+    still live-runtime machinery (an ACP session actor's permission/error
+    surface), so every rule that used to catch it via LIVE_RUNTIME_ROOTS /
+    DOMAIN_STORE_FORBIDDEN_ROOTS containing "acp" ORs this in instead — the
+    crate-root sets can no longer name it directly since "acp" is not a crate
+    root anymore.
+    """
+    return (
+        len(import_path.parts) >= 3
+        and import_path.parts[0] == "crate"
+        and import_path.parts[1] == "integrations"
+        and import_path.parts[2] == "acp"
     )
 
 
@@ -625,7 +652,8 @@ def check_api_import(
 ) -> None:
     add_if(
         violations,
-        import_path.crate_root in LIVE_RUNTIME_ROOTS,
+        import_path.crate_root in LIVE_RUNTIME_ROOTS
+        or is_acp_runtime_import(import_path),
         "API_LIVE_RUNTIME_IMPORT",
         path,
         import_path.crate_root_line,
@@ -679,7 +707,7 @@ def check_adapters_import(
     )
     add_if(
         violations,
-        crate_root in LIVE_RUNTIME_ROOTS,
+        crate_root in LIVE_RUNTIME_ROOTS or is_acp_runtime_import(import_path),
         "ADAPTERS_LIVE_RUNTIME_IMPORT",
         path,
         import_path.crate_root_line,
@@ -735,12 +763,13 @@ def check_domain_store_import(
     )
     add_if(
         violations,
-        import_path.crate_root in DOMAIN_STORE_FORBIDDEN_ROOTS,
+        import_path.crate_root in DOMAIN_STORE_FORBIDDEN_ROOTS
+        or is_acp_runtime_import(import_path),
         "DOMAIN_STORE_LIVE_IMPORT",
         path,
         import_path.crate_root_line,
-        "domain store code must not import live/acp runtime modules — stores are "
-        "persistence leaves",
+        "domain store code must not import live/integrations::acp runtime modules "
+        "— stores are persistence leaves",
     )
 
 
@@ -783,7 +812,7 @@ def check_persistence_import(
     )
     add_if(
         violations,
-        crate_root in LIVE_RUNTIME_ROOTS,
+        crate_root in LIVE_RUNTIME_ROOTS or is_acp_runtime_import(import_path),
         "PERSISTENCE_RUNTIME_IMPORT",
         path,
         import_path.crate_root_line,

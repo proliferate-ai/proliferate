@@ -24,7 +24,7 @@ import { useSessionTranscriptStore } from "#product/stores/sessions/session-tran
 const mocks = vi.hoisted(() => ({
   getSessionClientAndWorkspace: vi.fn(),
   mutateAsync: vi.fn(),
-  persistDefaultSessionModePreference: vi.fn(),
+  persistDefaultSessionControlPreference: vi.fn(),
   showToast: vi.fn(),
   showErrorToast: vi.fn(),
   upsertWorkspaceSessionRecord: vi.fn(),
@@ -49,8 +49,8 @@ vi.mock("#product/lib/access/anyharness/session-runtime", () => ({
   getSessionClientAndWorkspace: mocks.getSessionClientAndWorkspace,
 }));
 
-vi.mock("#product/hooks/sessions/workflows/session-mode-preferences", () => ({
-  persistDefaultSessionModePreference: mocks.persistDefaultSessionModePreference,
+vi.mock("#product/hooks/sessions/workflows/session-control-preferences", () => ({
+  persistDefaultSessionControlPreference: mocks.persistDefaultSessionControlPreference,
 }));
 
 vi.mock("#product/hooks/sessions/lifecycle/use-session-history-hydration", () => ({
@@ -168,7 +168,7 @@ describe("useSessionIntentDispatcher config timeout", () => {
       cause: "request timed out",
     }));
     expect(getSessionRecord("session-1")?.modeId).toBe("bypass");
-    expect(mocks.persistDefaultSessionModePreference).toHaveBeenCalledTimes(1);
+    expect(mocks.persistDefaultSessionControlPreference).toHaveBeenCalledTimes(1);
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -182,7 +182,7 @@ describe("useSessionIntentDispatcher config timeout", () => {
       status: "failed",
     });
     expect(mocks.showErrorToast).toHaveBeenCalledTimes(1);
-    expect(mocks.persistDefaultSessionModePreference).toHaveBeenCalledTimes(1);
+    expect(mocks.persistDefaultSessionControlPreference).toHaveBeenCalledTimes(1);
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
   });
 
@@ -250,7 +250,7 @@ describe("useSessionIntentDispatcher config timeout", () => {
     expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
     expect(mocks.showErrorToast).toHaveBeenCalledTimes(1);
     expect(getSessionRecord("session-1")?.modeId).toBe("bypass");
-    expect(mocks.persistDefaultSessionModePreference).toHaveBeenCalledTimes(1);
+    expect(mocks.persistDefaultSessionControlPreference).toHaveBeenCalledTimes(1);
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
   });
 });

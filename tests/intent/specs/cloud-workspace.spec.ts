@@ -1,4 +1,4 @@
-// T2-WS-1 (specs/developing/testing/scenarios.md): cloud workspace create
+// T2-WS-1 (specs/TESTING/scenarios.md): cloud workspace create
 // request path, to the seam.
 //
 // Formerly-documented GAP, now fixed: this spec used to pin a MAJOR SURVEY

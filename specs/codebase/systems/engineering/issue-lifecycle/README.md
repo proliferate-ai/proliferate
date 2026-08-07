@@ -5,9 +5,9 @@
 - [Observability](../observability/README.md) owns Sentry and structured-log
   event production, scrubbing, and correlation before evidence enters this
   system.
-- [Production alerts](../../../../developing/operating/production-alerts.md)
+- [Production alerts](../../../../../guides/operating/production-alerts.md)
   owns the live alert-rule identities and the tracker contact point.
-- [Issue triage](../../../../developing/debugging/issue-triage.md) owns the
+- [Issue triage](../../../../../guides/debugging/issue-triage.md) owns the
   agent operating procedure.
 
 The currently shipped private support-capture path is documented under the

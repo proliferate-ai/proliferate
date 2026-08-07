@@ -14,7 +14,7 @@ read_env_value() {
   local key="$1"
   local line
 
-  line="$(grep -m1 "^${key}=" "$ENV_FILE" || true)"
+  line="$(grep "^${key}=" "$ENV_FILE" | tail -n1 || true)"
   if [[ -z "$line" ]]; then
     return 0
   fi

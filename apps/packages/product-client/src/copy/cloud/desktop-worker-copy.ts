@@ -1,21 +1,30 @@
-/**
- * The startup-failure report, split the way `showError` demands: a fixed
- * headline, the consequence, and the exception as a separate `cause` that only
- * the Details strip renders. The old single-string form interpolated the
- * exception into the headline — the exact shape the toast redesign retired.
- *
- * The id is stable so the enrollment retry loop replaces its live toast
- * instead of stacking an identical report per attempt.
- */
-export const DESKTOP_WORKER_STARTUP_FAILURE_TOAST_ID = "desktop-worker-startup";
+const WORKER_CREDENTIALS_LOCKED_DETAIL =
+  "Cannot replace worker credentials while a Proliferate Worker is still running.";
 
-export const DESKTOP_WORKER_STARTUP_FAILURE_HEADLINE =
-  "Cloud integrations worker failed to start";
+export type DesktopWorkerStartupFailureKind =
+  | "credentials_locked"
+  | "startup_failed";
 
-export const DESKTOP_WORKER_STARTUP_FAILURE_CONSEQUENCE =
-  "Cloud workspaces are unavailable until it starts.";
+export interface DesktopWorkerStartupFailureNotice {
+  kind: DesktopWorkerStartupFailureKind;
+  headline: string;
+  consequence: string;
+  cause: string;
+}
 
-export function desktopWorkerStartupFailureCause(error: unknown): string {
+export function desktopWorkerStartupFailureNotice(
+  error: unknown,
+): DesktopWorkerStartupFailureNotice {
   const detail = error instanceof Error ? error.message : String(error ?? "");
-  return detail.trim().length > 0 ? detail.trim() : "Unknown error";
+  const cause = detail.trim().length > 0 ? detail.trim() : "Unknown error";
+  const credentialsLocked = cause.includes(WORKER_CREDENTIALS_LOCKED_DETAIL);
+
+  return {
+    kind: credentialsLocked ? "credentials_locked" : "startup_failed",
+    headline: "Cloud integrations unavailable",
+    consequence: credentialsLocked
+      ? "An earlier Proliferate Worker is still running. Quit other Proliferate apps; if none are open, restart your computer, then retry."
+      : "Proliferate will keep trying in the background. Retry now, or dismiss this notice.",
+    cause,
+  };
 }

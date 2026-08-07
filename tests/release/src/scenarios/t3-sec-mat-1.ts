@@ -31,7 +31,7 @@ import {
 
 /**
  * T3-SEC-MAT-1 — secrets materialize.
- * specs/developing/testing/scenarios.md#T3-SEC-MAT-1
+ * specs/TESTING/scenarios.md#T3-SEC-MAT-1
  *
  * #1042: the `current_product_user` gate lifted 2026-07-09 (PR #1023); the
  * personal secret PUT already succeeded for real. This finishes the rest:
@@ -68,7 +68,7 @@ import {
 export const t3SecMat1: ScenarioDefinition = {
   id: "T3-SEC-MAT-1",
   title: "secrets materialize",
-  registryFlowRef: "specs/developing/testing/scenarios.md#T3-SEC-MAT-1",
+  registryFlowRef: "specs/TESTING/scenarios.md#T3-SEC-MAT-1",
   lanes: ["sandbox"],
   requiredEnv: ["RELEASE_E2E_SERVER_URL"],
   plan: () => [
@@ -274,7 +274,7 @@ async function runWorkspaceFileSecretHalf(
   } catch (error) {
     // The seed script re-imports the local server's Settings, which requires
     // the running profile's full ambient env (JWT_SECRET, DEBUG, etc. -- see
-    // specs/developing/local/feature-worktree-auth.md), not just
+    // guides/local/feature-worktree-auth.md), not just
     // RELEASE_E2E_LOCAL_DATABASE_URL. `githubAppSeedAvailable` only checks
     // for a seed credential, not a fully-sourced profile shell, so a
     // same-class environmental failure surfaces here rather than in that

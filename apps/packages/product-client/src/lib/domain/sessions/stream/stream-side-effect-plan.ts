@@ -72,7 +72,7 @@ export type OrderedStreamSideEffect =
 
 export interface BatchedStreamSideEffectPlan {
   eventEffects: PlannedStreamEventEffect[];
-  persistReconciledModePreferences: ReconciledStreamConfigIntent[];
+  persistReconciledControlPreferences: ReconciledStreamConfigIntent[];
   invalidateWorkspaceCollections: boolean;
   invalidateGitStatus: boolean;
   invalidatePrStatus: boolean;
@@ -243,7 +243,7 @@ export function planBatchedStreamSideEffects(input: {
 
   return {
     eventEffects,
-    persistReconciledModePreferences: input.reconciledIntents,
+    persistReconciledControlPreferences: input.reconciledIntents,
     invalidateWorkspaceCollections,
     invalidateGitStatus,
     invalidatePrStatus,

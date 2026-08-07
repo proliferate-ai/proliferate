@@ -9,6 +9,13 @@
 //! Direction is one-way: the runtime wraps the service and delegates down
 //! (preflight calls `export_workspace_archive` for its size estimate), never
 //! the reverse.
+//!
+//! Each use case here reads as one pipeline: resolve every fact, hand them to
+//! `mobility_policy` for the decision, then execute. `mobility_policy.rs` is the
+//! single decision home for the live mobility use cases; the durable export
+//! path's own pure rules stay next to it in `service.rs` (the runtime cannot
+//! move them without inverting the direction above), and the policy delegates
+//! to them rather than restating them.
 
 use std::sync::Arc;
 
@@ -21,13 +28,16 @@ use crate::domains::reviews::store::ReviewStore;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::subagents::service::SubagentService;
-use crate::domains::terminals::model::{TerminalRecord, TerminalStatus};
+use crate::domains::terminals::model::TerminalRecord;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::terminals::TerminalService;
 
 mod destroy_source;
 mod install;
+mod mobility_policy;
+#[cfg(test)]
+mod mobility_policy_tests;
 mod preflight;
 mod prepare_destination;
 
@@ -86,7 +96,7 @@ impl MobilityRuntime {
             .list_terminals(workspace_id)
             .await
             .into_iter()
-            .filter(is_active_terminal)
+            .filter(mobility_policy::terminal_is_active)
             .collect()
     }
 
@@ -94,14 +104,7 @@ impl MobilityRuntime {
         self.terminal_service
             .list_terminals_blocking(workspace_id)
             .into_iter()
-            .filter(is_active_terminal)
+            .filter(mobility_policy::terminal_is_active)
             .collect()
     }
-}
-
-fn is_active_terminal(terminal: &TerminalRecord) -> bool {
-    matches!(
-        terminal.status,
-        TerminalStatus::Starting | TerminalStatus::Running
-    )
 }

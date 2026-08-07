@@ -2354,7 +2354,7 @@ async fn retire_fails_closed_against_workflow_control_acquired_after_admission_s
     }
 
     // Park retire between its advisory preflight and the exclusive lease.
-    use crate::api::http::workspaces_lifecycle::retire_barriers;
+    use crate::domains::workspaces::retire::retire_barriers;
     let (reached_tx, reached_rx) = tokio::sync::oneshot::channel();
     let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
     retire_barriers::install(
@@ -2651,7 +2651,7 @@ async fn retire_fails_closed_against_session_bound_then_terminalized_after_admis
 
     // Park retire between its advisory preflight and the exclusive lease. The
     // up-front admission snapshot is empty (no session yet).
-    use crate::api::http::workspaces_lifecycle::retire_barriers;
+    use crate::domains::workspaces::retire::retire_barriers;
     let (reached_tx, reached_rx) = tokio::sync::oneshot::channel();
     let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
     retire_barriers::install(

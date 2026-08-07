@@ -142,7 +142,7 @@ make dev-list
 make run PROFILE=main
 ```
 
-See [dev profiles](./specs/developing/local/dev-profiles.md) for profile state, ports,
+See [dev profiles](./guides/local/dev-profiles.md) for profile state, ports,
 generated Tauri config, and app labels.
 
 </details>
@@ -156,9 +156,9 @@ Self-hosting the full Proliferate Cloud control plane is in **beta**. The
 deployment path works today via Docker Compose, with polished end-to-end docs
 on the way.
 
-- **Docker Compose:** [self-hosted-deploy.md](./specs/developing/deploying/self-hosted-deploy.md) —
+- **Docker Compose:** [self-hosted-deploy.md](./guides/deploying/self-hosted-deploy.md) —
   Caddy + Postgres + API, with bootstrap and update scripts
-- **AWS (one-click):** [self-hosted-aws.md](./specs/developing/deploying/self-hosted-aws.md) —
+- **AWS (one-click):** [self-hosted-aws.md](./guides/deploying/self-hosted-aws.md) —
   CloudFormation wrapper that provisions the stack on EC2
 - **Configuration:** [`server/deploy/.env.production.example`](./server/deploy/.env.production.example)
   documents every required and optional setting

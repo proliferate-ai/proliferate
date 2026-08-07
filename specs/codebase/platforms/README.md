@@ -10,7 +10,7 @@ end-user or operator workflow.
 Do not create a category directory until it owns a real cross-system contract.
 Engineering domains currently belong under [Systems](../systems/README.md),
 while contributor and operator procedures belong under
-[Developing](../../developing/README.md).
+[Developing](../../../guides/README.md).
 
 Use [Structures](../structures/README.md) for source-area organization and
 [Systems](../systems/README.md) for complete product or engineering domains.

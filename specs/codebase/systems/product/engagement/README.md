@@ -5,7 +5,7 @@ attributes and lifecycle event produced by current code, and the gates that
 make the integration active or inert. Customer.io campaigns, segments,
 templates, ids, and activation state are mutable provider configuration, not
 repository law. Discover and operate them through the
-[Customer.io procedure](../../../../developing/operating/analytics/customerio.md).
+[Customer.io procedure](../../../../../guides/operating/analytics/customerio.md).
 
 ## Applicability And Data Boundary
 
@@ -133,6 +133,6 @@ Code-level coverage lives in:
 - `server/tests/integration/test_product_engagement_store.py`
 - `server/tests/integration/test_desktop_auth_customerio.py`
 
-Use the [Customer.io operating procedure](../../../../developing/operating/analytics/customerio.md)
+Use the [Customer.io operating procedure](../../../../../guides/operating/analytics/customerio.md)
 to verify current configuration and delivery without treating live provider
 state as canonical documentation.

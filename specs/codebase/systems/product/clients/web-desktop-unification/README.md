@@ -668,7 +668,7 @@ Related authoritative docs:
 - Telemetry:
   [`../../../../structures/frontend/guides/telemetry.md`](../../../../structures/frontend/guides/telemetry.md)
 - CI/CD and release:
-  [`../../../../../developing/deploying/README.md`](../../../../../developing/deploying/README.md)
+  [`../../../../../../guides/deploying/README.md`](../../../../../../guides/deploying/README.md)
 - Testing:
   [`../../../../../developing/testing/README.md`](../../../../../developing/testing/README.md)
 

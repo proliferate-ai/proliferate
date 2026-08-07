@@ -78,6 +78,31 @@ const DEFAULT_LIVE_SESSION_CONTROL_KEYS = new Set<DefaultLiveSessionControlKey>(
 
 const CODEX_DEFAULT_APPROVAL_MODE_ID = "auto";
 
+export function withUpdatedDefaultLiveSessionControlValueByAgentKind(
+  current: DefaultLiveSessionControlValuesByAgentKind,
+  agentKind: string,
+  key: DefaultLiveSessionControlKey,
+  value: string,
+): DefaultLiveSessionControlValuesByAgentKind {
+  const trimmedAgentKind = agentKind.trim();
+  const trimmedValue = value.trim();
+  if (!trimmedAgentKind || !trimmedValue) {
+    return current;
+  }
+
+  if (current[trimmedAgentKind]?.[key] === trimmedValue) {
+    return current;
+  }
+
+  return {
+    ...current,
+    [trimmedAgentKind]: {
+      ...(current[trimmedAgentKind] ?? {}),
+      [key]: trimmedValue,
+    },
+  };
+}
+
 export function sanitizeDefaultSessionModeByAgentKind(
   value: unknown,
 ): Record<string, string> {
