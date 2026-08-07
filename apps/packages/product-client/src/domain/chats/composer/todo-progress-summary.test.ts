@@ -62,6 +62,18 @@ describe("hasTodoStepAdvanced", () => {
     expect(hasTodoStepAdvanced(previous, next)).toBe(false);
   });
 
+  it("is true when the final step completes even though the clamped step number holds", () => {
+    const previous = summarizeTodoProgress([
+      { content: "a", status: "completed" },
+      { content: "b", status: "in_progress" },
+    ]);
+    const next = summarizeTodoProgress([
+      { content: "a", status: "completed" },
+      { content: "b", status: "completed" },
+    ]);
+    expect(hasTodoStepAdvanced(previous, next)).toBe(true);
+  });
+
   it("is true when the total entry count changes even if the step number does not", () => {
     const previous = summarizeTodoProgress([
       { content: "a", status: "completed" },

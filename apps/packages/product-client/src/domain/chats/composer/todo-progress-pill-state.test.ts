@@ -28,13 +28,9 @@ describe("todoPillReducer", () => {
     });
   });
 
-  it("unpins on hover-off but leaves visibility/fade untouched", () => {
+  it("stays pinned through hover-off (the leave-grace keeps the checklist reachable)", () => {
     const pinned: TodoPillState = { visible: true, fading: false, pinned: true };
-    expect(todoPillReducer(pinned, { type: "hover_off" })).toEqual({
-      visible: true,
-      fading: false,
-      pinned: false,
-    });
+    expect(todoPillReducer(pinned, { type: "hover_off" })).toEqual(pinned);
   });
 
   it("starts fading when not pinned", () => {
@@ -46,9 +42,13 @@ describe("todoPillReducer", () => {
     });
   });
 
-  it("ignores fade_start while pinned", () => {
+  it("fade_start ends the leave-grace: unpins and starts fading", () => {
     const pinned: TodoPillState = { visible: true, fading: false, pinned: true };
-    expect(todoPillReducer(pinned, { type: "fade_start" })).toEqual(pinned);
+    expect(todoPillReducer(pinned, { type: "fade_start" })).toEqual({
+      visible: true,
+      fading: true,
+      pinned: false,
+    });
   });
 
   it("hides once the linger timer fires while not pinned", () => {
@@ -59,10 +59,5 @@ describe("todoPillReducer", () => {
   it("ignores hide while pinned (a re-hover raced the timer)", () => {
     const pinned: TodoPillState = { visible: true, fading: false, pinned: true };
     expect(todoPillReducer(pinned, { type: "hide" })).toEqual(pinned);
-  });
-
-  it("resets to hidden when the tracker disappears", () => {
-    const shown: TodoPillState = { visible: true, fading: false, pinned: true };
-    expect(todoPillReducer(shown, { type: "tracker_cleared" })).toEqual(INITIAL_TODO_PILL_STATE);
   });
 });

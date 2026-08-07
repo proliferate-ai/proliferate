@@ -4,10 +4,12 @@ import { DotCellLoader } from "#product/primitives/DotCellLoader";
 import { Spinner } from "#product/primitives/Spinner";
 import { CheckCircleFilled, Circle } from "#product/primitives/icons/status";
 import { usePrefersReducedMotion } from "#product/hooks/ui/motion/use-prefers-reduced-motion";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { useActiveTodoTracker } from "#product/hooks/chat/derived/use-active-todo-tracker";
 import {
   hasTodoStepAdvanced,
   summarizeTodoProgress,
+  type TodoProgressSummary,
 } from "#product/domain/chats/composer/todo-progress-summary";
 import {
   INITIAL_TODO_PILL_STATE,
@@ -47,7 +49,7 @@ export function TodoProgressPillView({
       data-todo-progress-pill
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="pointer-events-auto flex cursor-default items-center gap-1.5 rounded-full bg-popover px-3 py-[5px] text-ui-sm text-muted-foreground shadow-popover ring-[0.5px] ring-border hover:text-foreground"
+      className="pointer-events-auto flex cursor-pointer items-center gap-1.5 rounded-full bg-popover px-3 py-[5px] text-ui-sm text-muted-foreground shadow-popover ring-[0.5px] ring-border hover:text-foreground"
       style={{
         opacity: faded ? 0 : 1,
         transition: animateFade ? "opacity var(--duration-dissolve) var(--ease-standard)" : "none",
@@ -76,13 +78,24 @@ function ChecklistStatusIcon({ status }: { status: string }) {
 
 /**
  * Pure hover checklist — every entry in the plan, one row each. Rendered
- * above the pill only while it is hovered/pinned.
+ * above the pill while it is hover-pinned; carries its own hover handlers so
+ * crossing the gap from the pill keeps the pin alive.
  */
-export function TodoProgressChecklistCard({ entries }: { entries: PlanEntry[] }) {
+export function TodoProgressChecklistCard({
+  entries,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  entries: PlanEntry[];
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+}) {
   return (
     <div
       data-todo-progress-card
-      className="pointer-events-auto w-fit max-w-[520px] rounded-lg bg-popover px-1 py-2 shadow-popover ring-[0.5px] ring-border"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className="pointer-events-auto max-h-64 w-fit max-w-[min(520px,calc(100%-1rem))] overflow-y-auto rounded-lg bg-popover px-1 py-2 shadow-popover ring-[0.5px] ring-border"
     >
       {entries.map((entry, index) => (
         <div key={index} className="flex items-center gap-2 px-3 py-1 text-ui">
@@ -98,21 +111,34 @@ export function TodoProgressChecklistCard({ entries }: { entries: PlanEntry[] })
   );
 }
 
+interface TodoPillSnapshot {
+  summary: TodoProgressSummary;
+  entries: PlanEntry[];
+}
+
 /**
- * Connected floating pill: watches `useActiveTodoTracker()` for step
+ * The per-session pill engine: watches `useActiveTodoTracker()` for step
  * advances and drives `todoPillReducer` through show -> linger -> fade ->
- * hide, or pin/checklist on hover. Mount this once, absolutely positioned
- * above the composer dock (see `ChatComposerDock`'s `floatingSlot`).
+ * hide, or pin/checklist on hover. Keyed by session (see `TodoProgressPill`
+ * below), so cross-session tracker deltas can never read as an advance.
+ *
+ * Rendering works off the last non-null tracker snapshot rather than the
+ * live tracker: when a completed plan leaves the transcript the pill keeps
+ * lingering through its scheduled fade instead of being yanked mid-linger.
  */
-export function TodoProgressPill() {
+function SessionTodoProgressPill() {
   const tracker = useActiveTodoTracker();
   const reducedMotion = usePrefersReducedMotion();
   const [state, dispatch] = useReducer(todoPillReducer, INITIAL_TODO_PILL_STATE);
-  const previousSummaryRef = useRef<ReturnType<typeof summarizeTodoProgress>>(null);
+  const previousSummaryRef = useRef<TodoProgressSummary | null>(null);
+  const snapshotRef = useRef<TodoPillSnapshot | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const summary = tracker ? summarizeTodoProgress(tracker.entries) : null;
+  if (tracker && summary) {
+    snapshotRef.current = { summary, entries: tracker.entries };
+  }
 
   // Shared by the step-advance effect below and the hover handlers further
   // down: every new "reason to show/fade the pill" starts by clearing
@@ -130,9 +156,10 @@ export function TodoProgressPill() {
 
   useEffect(() => {
     if (!summary) {
+      // Tracker gone (plan finished or left the transcript): forget the
+      // baseline so a future plan's first appearance shows no pill, but let
+      // any in-flight linger/fade timers run out against the snapshot.
       previousSummaryRef.current = null;
-      clearTimers();
-      dispatch({ type: "tracker_cleared" });
       return;
     }
 
@@ -149,13 +176,14 @@ export function TodoProgressPill() {
     // `summary` is a fresh object every render (derived from the live
     // transcript); only its values matter for the advance check.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary?.currentStepNumber, summary?.total]);
+  }, [summary?.completedCount, summary?.currentStepNumber, summary?.total]);
 
   // Unmount safety net: clears whatever timers — step-advance or
-  // hover-driven — happen to be pending when the composer/session unmounts.
+  // hover-driven — happen to be pending when the session/composer unmounts.
   useEffect(() => clearTimers, []);
 
-  if (!tracker || !summary || !state.visible) {
+  const snapshot = snapshotRef.current;
+  if (!snapshot || !state.visible) {
     return null;
   }
 
@@ -179,10 +207,16 @@ export function TodoProgressPill() {
   }
 
   return (
-    <div className="pointer-events-none flex flex-col items-center gap-2">
-      {state.pinned && <TodoProgressChecklistCard entries={tracker.entries} />}
+    <div role="status" className="pointer-events-none flex w-full flex-col items-center gap-2">
+      {state.pinned && (
+        <TodoProgressChecklistCard
+          entries={snapshot.entries}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        />
+      )}
       <TodoProgressPillView
-        label={summary.label}
+        label={snapshot.summary.label}
         faded={!reducedMotion && state.fading}
         animateFade={!reducedMotion}
         onMouseEnter={handleMouseEnter}
@@ -190,4 +224,19 @@ export function TodoProgressPill() {
       />
     </div>
   );
+}
+
+/**
+ * Connected floating pill. Mount this once, absolutely positioned above the
+ * composer dock (see `ChatComposerDock`'s `floatingSlot`). Keyed by the
+ * active session so switching sessions resets the engine wholesale — a
+ * different session's plan state must neither read as a step advance nor
+ * inherit a lingering pill.
+ */
+export function TodoProgressPill() {
+  const activeSessionId = useActiveSessionId();
+  if (!activeSessionId) {
+    return null;
+  }
+  return <SessionTodoProgressPill key={activeSessionId} />;
 }

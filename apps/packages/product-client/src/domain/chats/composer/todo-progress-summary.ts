@@ -35,6 +35,10 @@ export function summarizeTodoProgress(entries: PlanEntry[]): TodoProgressSummary
  * The pill only appears on a step *advancing* — never on a tracker's first
  * appearance (matches the design's "nothing is shown by default"). A
  * `previous` of `null` therefore never counts as an advance.
+ *
+ * `completedCount` participates alongside `currentStepNumber` because the
+ * final step completing doesn't move the clamped step number (5/5 stays
+ * 5/5) yet is exactly the advance the pill exists to announce.
  */
 export function hasTodoStepAdvanced(
   previous: TodoProgressSummary | null,
@@ -43,5 +47,7 @@ export function hasTodoStepAdvanced(
   if (!previous || !next) {
     return false;
   }
-  return next.currentStepNumber !== previous.currentStepNumber || next.total !== previous.total;
+  return next.completedCount !== previous.completedCount
+    || next.currentStepNumber !== previous.currentStepNumber
+    || next.total !== previous.total;
 }
