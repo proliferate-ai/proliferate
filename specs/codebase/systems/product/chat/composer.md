@@ -180,6 +180,12 @@ Rules:
   catalog identity after alias/normalization resolution.
 - Runtime live config values are preserved for update calls, but they are not
   the rendered product name when a catalog match exists.
+- After AnyHarness confirms a user-selected model, working mode, reasoning,
+  effort, or speed value in a standard workspace, ProductClient persists that
+  value as the per-agent launch default. New chats in the current workspace and
+  newly created workspaces use those persisted controls; catalog defaults
+  remain the fallback until the user selects a value. Cowork working-mode and
+  tuning changes do not update standard-workspace launch defaults.
 - [Model Catalog](../../../platforms/product/model-catalog.md) owns whether a
   selection is current, `update_current_chat`, or `open_new_chat`; Composer
   presents that action and does not derive it from live setter availability.

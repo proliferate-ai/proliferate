@@ -200,7 +200,7 @@ function baseInput(overrides?: {
     recordSessionRelationshipHint: vi.fn(),
     getSessionRelationship: vi.fn((sessionId: string) =>
       sessionId === "session-1" ? sessionRelationship : null),
-    persistReconciledModePreferences: vi.fn(),
+    persistReconciledControlPreferences: vi.fn(),
     refreshSessionSlotMeta: vi.fn(),
     showToast: vi.fn(),
     clearActiveSummaryRefreshTimer: vi.fn(),

@@ -1,9 +1,9 @@
 import type {
   SessionEventEnvelope,
+  SessionLiveConfigSnapshot,
   TranscriptState,
 } from "@anyharness/sdk";
 import {
-  getAuthoritativeConfigValue,
   type PendingSessionConfigChange,
   type PendingSessionConfigChanges,
 } from "#product/domain/sessions/pending-config";
@@ -69,12 +69,11 @@ export function applyBatchedStreamSideEffects(input: {
   ) => void;
   getSessionRelationship: (sessionId: string) => SessionRelationship | null;
   acknowledgeWorkspaceActivity?: (workspaceId: string, timestamp: string) => void;
-  persistReconciledModePreferences: (
+  persistReconciledControlPreferences: (
     workspaceId: string | null | undefined,
     agentKind: string | null | undefined,
-    liveConfigRawConfigId: string | null | undefined,
+    liveConfig: SessionLiveConfigSnapshot,
     reconciledChanges: PendingSessionConfigChange[],
-    liveConfigValueResolver: (rawConfigId: string) => string | null,
   ) => void;
   refreshSessionSlotMeta: (
     sessionId: string,
@@ -123,13 +122,12 @@ export function applyBatchedStreamSideEffects(input: {
     }
   }
 
-  for (const intent of plan.persistReconciledModePreferences) {
-    input.persistReconciledModePreferences(
+  for (const intent of plan.persistReconciledControlPreferences) {
+    input.persistReconciledControlPreferences(
       input.workspaceId,
       input.agentKind,
-      intent.liveConfig.normalizedControls.mode?.rawConfigId ?? null,
+      intent.liveConfig,
       intent.reconciledChanges,
-      (rawConfigId) => getAuthoritativeConfigValue(intent.liveConfig, rawConfigId),
     );
   }
 

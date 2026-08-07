@@ -260,7 +260,7 @@ function createTestController(options?: {
   return createSessionStreamFlushController({
     sessionStreamCache: createTestSessionStreamCache(),
     mountSubagentChildSession: vi.fn(),
-    persistReconciledModePreferences: vi.fn(),
+    persistReconciledControlPreferences: vi.fn(),
     refreshSessionSlotMeta: options?.refreshSessionSlotMeta ?? vi.fn(),
     rehydrateSessionSlotFromHistory: options?.rehydrateSessionSlotFromHistory ?? vi.fn().mockResolvedValue(false),
     showToast: vi.fn(),

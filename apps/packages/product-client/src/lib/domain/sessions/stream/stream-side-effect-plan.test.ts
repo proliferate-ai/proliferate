@@ -315,7 +315,7 @@ describe("planBatchedStreamSideEffects", () => {
       ],
     });
 
-    expect(plan.persistReconciledModePreferences).toEqual([
+    expect(plan.persistReconciledControlPreferences).toEqual([
       {
         liveConfig,
         reconciledChanges: [reconciledChange],

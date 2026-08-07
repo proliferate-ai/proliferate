@@ -1,4 +1,8 @@
-import type { SetSessionConfigOptionResponse } from "@anyharness/sdk";
+import type {
+  NormalizedSessionControl,
+  SessionLiveConfigSnapshot,
+  SetSessionConfigOptionResponse,
+} from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CONFIG_INTENT_DISPATCH_TIMEOUT_MS,
@@ -8,7 +12,15 @@ import {
 import {
   pendingConfigChangesForSessionIntents,
 } from "#product/domain/sessions/intents/session-intent-selectors";
+import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import {
+  createEmptySessionRecord,
+  putSessionRecord,
+} from "#product/stores/sessions/session-records";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 const mocks = vi.hoisted(() => ({
   getSessionClientAndWorkspace: vi.fn(),
@@ -24,6 +36,13 @@ describe("dispatchConfigIntent", () => {
     vi.clearAllMocks();
     mocks.mutateAsync.mockReset();
     useSessionIntentStore.getState().clear();
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
+    useUserPreferencesStore.setState({
+      ...USER_PREFERENCE_DEFAULTS,
+      _hydrated: false,
+      _persistedMetadata: {},
+    });
     mocks.getSessionClientAndWorkspace.mockResolvedValue({
       workspaceId: "workspace-1",
       materializedSessionId: "runtime-session-1",
@@ -129,6 +148,34 @@ describe("dispatchConfigIntent", () => {
     }));
   });
 
+  it("persists an applied Codex effort as the next-session default", async () => {
+    const initialLiveConfig = codexLiveConfig("low", "off", 1);
+    putSessionRecord(createEmptySessionRecord("session-1", "codex", {
+      workspaceId: "workspace-1",
+      materializedSessionId: "runtime-session-1",
+      liveConfig: initialLiveConfig,
+      modelId: "gpt-5.6-sol",
+    }));
+    const intent = useSessionIntentStore.getState().enqueueConfig({
+      intentId: "config-effort",
+      clientSessionId: "session-1",
+      materializedSessionId: "runtime-session-1",
+      workspaceId: "workspace-1",
+      configId: "reasoning_effort",
+      value: "xhigh",
+    });
+    const deps = createDeps(vi.fn());
+    mocks.mutateAsync.mockResolvedValue(codexConfigResponse("xhigh", "off"));
+
+    await dispatchConfigIntent(intent, deps);
+
+    expect(
+      useUserPreferencesStore.getState().defaultLiveSessionControlValuesByAgentKind,
+    ).toEqual({
+      codex: { effort: "xhigh" },
+    });
+  });
+
   it("accepts the POST acknowledgement without timing out on later invalidations", async () => {
     vi.useFakeTimers();
     const intent = useSessionIntentStore.getState().enqueueConfig({
@@ -179,7 +226,7 @@ describe("dispatchConfigIntent", () => {
 function createDeps(onFailure: (message: string) => void): ConfigIntentDispatchDeps {
   return {
     cloudClient: null,
-    getWorkspaceSurface: vi.fn(),
+    getWorkspaceSurface: vi.fn(() => "standard"),
     setSessionConfigOptionMutation: {
       mutateAsync: mocks.mutateAsync,
     } as unknown as ConfigIntentDispatchDeps["setSessionConfigOptionMutation"],
@@ -203,6 +250,66 @@ function configResponse(modeId: string): SetSessionConfigOptionResponse {
       updatedAt: "2026-07-18T00:00:00.000Z",
     },
   } as SetSessionConfigOptionResponse;
+}
+
+function codexConfigResponse(
+  effort: string,
+  fastMode: string,
+): SetSessionConfigOptionResponse {
+  const liveConfig = codexLiveConfig(effort, fastMode, 2);
+  return {
+    applyState: "applied",
+    liveConfig,
+    session: {
+      id: "runtime-session-1",
+      workspaceId: "workspace-1",
+      agentKind: "codex",
+      modelId: "gpt-5.6-sol",
+      modeId: "auto",
+      status: "idle",
+      title: null,
+      createdAt: "2026-08-06T00:00:00.000Z",
+      updatedAt: "2026-08-06T00:00:01.000Z",
+      liveConfig,
+    },
+  } as SetSessionConfigOptionResponse;
+}
+
+function codexLiveConfig(
+  effort: string,
+  fastMode: string,
+  sourceSeq: number,
+): SessionLiveConfigSnapshot {
+  return {
+    updatedAt: `2026-08-06T00:00:0${sourceSeq}.000Z`,
+    sourceSeq,
+    rawConfigOptions: [],
+    promptCapabilities: { image: false, audio: false, embeddedContext: false },
+    normalizedControls: {
+      extras: [],
+      model: null,
+      mode: null,
+      collaborationMode: null,
+      reasoning: null,
+      effort: control("effort", "reasoning_effort", effort),
+      fastMode: control("fast_mode", "fast_mode", fastMode),
+    },
+  } as SessionLiveConfigSnapshot;
+}
+
+function control(
+  key: string,
+  rawConfigId: string,
+  currentValue: string,
+): NormalizedSessionControl {
+  return {
+    key,
+    rawConfigId,
+    label: key,
+    settable: true,
+    currentValue,
+    values: [{ value: currentValue, label: currentValue }],
+  };
 }
 
 function deferred<T>() {
