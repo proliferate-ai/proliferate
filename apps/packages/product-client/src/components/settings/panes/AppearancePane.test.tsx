@@ -107,22 +107,31 @@ describe("AppearancePane previews", () => {
 
     // ArrowRight moves selection forward (Light → Dark) and updates roving tabindex.
     lightRadio.focus();
-    fireEvent.keyDown(lightRadio, { key: "ArrowRight" });
+    // fireEvent returns false when the handler called preventDefault. Without
+    // that, arrows would scroll the settings pane while also changing the theme.
+    expect(fireEvent.keyDown(lightRadio, { key: "ArrowRight" })).toBe(false);
     expect(darkRadio.getAttribute("aria-checked")).toBe("true");
     expect(lightRadio.getAttribute("aria-checked")).toBe("false");
     expect(darkRadio.getAttribute("tabindex")).toBe("0");
     expect(lightRadio.getAttribute("tabindex")).toBe("-1");
+    // Roving tabindex is only half the contract: DOM focus has to travel with
+    // the selection, or the user arrows to Dark and then Tab escapes from a
+    // tabindex=-1 element to somewhere unrelated.
+    expect(document.activeElement).toBe(darkRadio);
 
-    // ArrowLeft moves backward (Dark → Light).
+    // ArrowLeft moves backward (Dark → Light), focus following again.
     fireEvent.keyDown(darkRadio, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(lightRadio);
     expect(lightRadio.getAttribute("aria-checked")).toBe("true");
     expect(darkRadio.getAttribute("aria-checked")).toBe("false");
 
-    // ArrowDown wraps: from Dark (the last) to System (the first).
+    // ArrowDown wraps: from Dark (the last) to System (the first). Focus has to
+    // make the wrap too — this is the jump most likely to be dropped.
     fireEvent.click(darkRadio);
     fireEvent.keyDown(darkRadio, { key: "ArrowDown" });
     expect(systemRadio.getAttribute("aria-checked")).toBe("true");
     expect(darkRadio.getAttribute("aria-checked")).toBe("false");
+    expect(document.activeElement).toBe(systemRadio);
 
     // ArrowUp wraps: from System (the first) to Dark (the last).
     fireEvent.keyDown(systemRadio, { key: "ArrowUp" });
@@ -136,6 +145,22 @@ describe("AppearancePane previews", () => {
     // End jumps to the last radio.
     fireEvent.keyDown(systemRadio, { key: "End" });
     expect(darkRadio.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("leaves modified arrow keys to their owners", () => {
+    const { getByRole } = render(<AppearancePane />);
+
+    // ⌘⌥←/→ are the registered prev/next-tab accelerators. A radio group that
+    // grabs modified arrows would change the user's theme as a side effect of a
+    // tab switch, so the group must decline them and leave the event alone.
+    fireEvent.click(getByRole("radio", { name: "Light" }));
+    const lightRadio = getByRole("radio", { name: "Light" });
+
+    for (const modifier of ["metaKey", "ctrlKey", "altKey", "shiftKey"] as const) {
+      expect(fireEvent.keyDown(lightRadio, { key: "ArrowRight", [modifier]: true })).toBe(true);
+      expect(getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe("true");
+      expect(getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("false");
+    }
   });
 
   it("keeps every preview size off hardcoded pixels", () => {

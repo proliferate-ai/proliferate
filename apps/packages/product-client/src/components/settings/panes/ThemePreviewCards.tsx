@@ -139,6 +139,15 @@ export function ThemePreviewCards({ value, onChange }: ThemePreviewCardsProps) {
   const buttonRefs = useRef(new Map<ColorMode, HTMLButtonElement>());
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // A modified arrow is somebody else's chord, not ours: ⌘⌥←/→ are the
+    // registered prev/next-tab accelerators. The global dispatcher normally
+    // eats those in the capture phase, but an unconsumed chord would otherwise
+    // fall through to here and silently retarget the user's theme. WAI-ARIA
+    // radio groups ignore modified arrows.
+    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+      return;
+    }
+
     const currentIndex = CARD_ORDER.indexOf(value);
     let nextIndex: number | undefined;
 
