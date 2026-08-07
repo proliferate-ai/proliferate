@@ -78,7 +78,7 @@ function ChatContent({
       return (
         <ChatPreMessageCanvas
           bottomInsetPx={dockSafeAreaPx}
-          topSlot={<WorkspaceCreationReceipt />}
+          topSlot={<WorkspaceCreationReceipt pendingOnly />}
         >
           <ChatLoadingHero />
         </ChatPreMessageCanvas>
@@ -96,7 +96,7 @@ function ChatContent({
       return (
         <ChatPreMessageCanvas
           bottomInsetPx={dockSafeAreaPx}
-          topSlot={<WorkspaceCreationReceipt />}
+          topSlot={<WorkspaceCreationReceipt pendingOnly />}
         >
           <ChatReadyHero />
         </ChatPreMessageCanvas>

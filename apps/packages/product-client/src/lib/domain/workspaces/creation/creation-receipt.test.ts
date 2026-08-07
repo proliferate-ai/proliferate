@@ -1,10 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
   presentWorkspaceCreationReceipt,
+  resolveFirstWorkspaceSessionId,
   workspaceCreationReceiptCopyText,
   type WorkspaceCreationReceiptSetupSource,
   type WorkspaceCreationReceiptSource,
 } from "./creation-receipt";
+
+describe("resolveFirstWorkspaceSessionId", () => {
+  it("returns null for missing or empty session lists", () => {
+    expect(resolveFirstWorkspaceSessionId(undefined)).toBeNull();
+    expect(resolveFirstWorkspaceSessionId([])).toBeNull();
+  });
+
+  it("picks the earliest createdAt regardless of list order", () => {
+    expect(resolveFirstWorkspaceSessionId([
+      { id: "session-b", createdAt: "2026-01-02T00:00:00.000Z" },
+      { id: "session-a", createdAt: "2026-01-01T00:00:00.000Z" },
+      { id: "session-c", createdAt: "2026-01-03T00:00:00.000Z" },
+    ])).toBe("session-a");
+  });
+
+  it("breaks createdAt ties toward the smaller id for stability", () => {
+    expect(resolveFirstWorkspaceSessionId([
+      { id: "session-b", createdAt: "2026-01-01T00:00:00.000Z" },
+      { id: "session-a", createdAt: "2026-01-01T00:00:00.000Z" },
+    ])).toBe("session-a");
+  });
+});
 
 function setupSource(
   overrides: Partial<WorkspaceCreationReceiptSetupSource> = {},

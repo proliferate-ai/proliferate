@@ -1,19 +1,22 @@
 import { useMemo } from "react";
-import { useSetupStatusQuery } from "@anyharness/sdk-react";
+import { useSetupStatusQuery, useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
 import {
   buildPendingWorkspaceUiKey,
   resolvePendingWorkspacePath,
   type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { summarizeSetupFailure } from "#product/lib/domain/workspaces/creation/arrival";
-import type {
-  WorkspaceCreationReceiptNoun,
-  WorkspaceCreationReceiptSource,
+import {
+  resolveFirstWorkspaceSessionId,
+  type WorkspaceCreationReceiptNoun,
+  type WorkspaceCreationReceiptSource,
 } from "#product/lib/domain/workspaces/creation/creation-receipt";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { shouldUseLocalRuntimeWorkspaceSessionsQuery } from "#product/lib/domain/workspaces/tabs/workspace-session-query-target";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 
 export interface WorkspaceCreationReceiptState {
@@ -38,15 +41,18 @@ function pendingNoun(entry: PendingWorkspaceEntry): WorkspaceCreationReceiptNoun
 /**
  * Presence probe for the workspace-creation receipt: returns the stable
  * receipt key when the current selection warrants a receipt row, null
- * otherwise. Kept cheap (store + collection reads only) so the transcript
- * pane can decide whether to emit the row at all.
+ * otherwise. Kept cheap (store + collection reads plus the already-cached
+ * workspace sessions query) so the transcript pane can decide whether to
+ * emit the row at all.
  *
  * Receipts derive from server truth with no storage of their own:
- * - a worktree workspace always carries its receipt (creation is intrinsic
- *   to worktrees, and setup state is re-queryable forever);
+ * - a worktree workspace carries its receipt in its FIRST session only (the
+ *   session born with the creation; later sessions must not replay it);
  * - a local-created workspace shows one only while its arrival event is
- *   live (plain opened folders must not read as "created");
- * - a pending local/worktree creation shows the creating/failed receipt.
+ *   live (plain opened folders must not read as "created"), same
+ *   first-session scope;
+ * - a pending local/worktree creation shows the creating/failed receipt
+ *   (there is only one session at that point, so no gating applies).
  */
 export function useWorkspaceCreationReceiptKey(): string | null {
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
@@ -55,13 +61,35 @@ export function useWorkspaceCreationReceiptKey(): string | null {
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const activeMaterializedSessionId = useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? state.entriesById[activeSessionId]?.materializedSessionId ?? null
+      : null
+  );
   const { data: workspaceCollections } = useWorkspaces();
+  const { materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
+  // Rides the same query/cache entry as the workspace header tabs; only
+  // needed once a materialized (non-pending) workspace is selected.
+  const { data: workspaceSessions } = useWorkspaceSessionsQuery({
+    workspaceId: materializedWorkspaceId,
+    enabled:
+      !isReceiptPendingSource(pendingWorkspaceEntry)
+      && shouldUseLocalRuntimeWorkspaceSessionsQuery({
+        workspaceId: materializedWorkspaceId,
+        hotPaintPending,
+      }),
+  });
 
   return useMemo(() => {
     if (isReceiptPendingSource(pendingWorkspaceEntry)) {
       return buildPendingWorkspaceUiKey(pendingWorkspaceEntry);
     }
-    const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    const { workspaceUiKey } = resolveSelectedWorkspaceIdentity({
       selectedLogicalWorkspaceId,
       materializedWorkspaceId: selectedWorkspaceId,
     });
@@ -72,6 +100,18 @@ export function useWorkspaceCreationReceiptKey(): string | null {
       (candidate) => candidate.id === materializedWorkspaceId,
     ) ?? null;
     if (!workspace) {
+      return null;
+    }
+    // First-session scope: hold the receipt until the sessions list can
+    // prove the active session is the workspace's first. Hidden (not
+    // flashed) while the list or the active session's materialized id is
+    // still loading.
+    const firstSessionId = resolveFirstWorkspaceSessionId(workspaceSessions);
+    if (
+      !firstSessionId
+      || !activeMaterializedSessionId
+      || firstSessionId !== activeMaterializedSessionId
+    ) {
       return null;
     }
     if (workspace.kind === "worktree") {
@@ -85,11 +125,14 @@ export function useWorkspaceCreationReceiptKey(): string | null {
     }
     return null;
   }, [
+    activeMaterializedSessionId,
+    materializedWorkspaceId,
     pendingWorkspaceEntry,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     workspaceArrivalEvent,
     workspaceCollections?.workspaces,
+    workspaceSessions,
   ]);
 }
 

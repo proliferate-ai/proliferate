@@ -13,6 +13,30 @@ import { WORKSPACE_CREATION_RECEIPT_LABELS } from "#product/copy/workspaces/work
 
 export type WorkspaceCreationReceiptNoun = "worktree" | "workspace";
 
+/**
+ * The receipt belongs to the workspace's first session only — the session
+ * that came into being with the creation. Later sessions in the same
+ * workspace must not replay it. "First" is derived from server truth
+ * (earliest `createdAt`, ties broken by id for stability), so reloads agree.
+ */
+export function resolveFirstWorkspaceSessionId(
+  sessions: readonly { id: string; createdAt: string }[] | undefined,
+): string | null {
+  if (!sessions || sessions.length === 0) {
+    return null;
+  }
+  let first = sessions[0];
+  for (const candidate of sessions.slice(1)) {
+    if (
+      candidate.createdAt < first.createdAt
+      || (candidate.createdAt === first.createdAt && candidate.id < first.id)
+    ) {
+      first = candidate;
+    }
+  }
+  return first.id;
+}
+
 export interface WorkspaceCreationReceiptSetupSource {
   /** Trimmed setup command; null when no setup script is involved. */
   command: string | null;

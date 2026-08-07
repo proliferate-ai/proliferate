@@ -241,9 +241,22 @@ function ConnectedWorkspaceCreationReceipt({ state }: { state: WorkspaceCreation
  * nothing when the selection carries no receipt. Keyed by receipt identity so
  * rerun/expansion state resets across creations.
  */
-export function WorkspaceCreationReceipt() {
+export function WorkspaceCreationReceipt({
+  pendingOnly = false,
+}: {
+  /**
+   * Pre-message canvas mounts set this: before a transcript exists the
+   * receipt may only surface in-flight creation progress and failures.
+   * The settled "created" receipt belongs to the transcript flow — it
+   * renders after the first user message, never pinned above the canvas.
+   */
+  pendingOnly?: boolean;
+} = {}) {
   const state = useWorkspaceCreationReceiptState();
   if (!state) {
+    return null;
+  }
+  if (pendingOnly && !state.pendingEntry) {
     return null;
   }
   return <ConnectedWorkspaceCreationReceipt key={state.receiptKey} state={state} />;

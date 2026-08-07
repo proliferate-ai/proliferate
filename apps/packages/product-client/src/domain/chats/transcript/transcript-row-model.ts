@@ -124,12 +124,17 @@ export function buildTranscriptRowModel({
   const seenTurnIds = new Set<string>();
   const goalRows = bucketGoalEventRows(goalEvents, transcript);
 
-  if (workspaceReceiptKey) {
-    rows.push({
+  // The receipt reads as the opening of the agent's first response: it
+  // renders after the first user message (the first turn's leading
+  // user-message row, or the local prompt rows when no turn is renderable
+  // yet), never pinned above the conversation.
+  const workspaceReceiptRow: TranscriptRow | null = workspaceReceiptKey
+    ? {
       kind: "workspace_receipt",
       key: `workspace-receipt:${workspaceReceiptKey}`,
-    });
-  }
+    }
+    : null;
+  let workspaceReceiptEmitted = false;
 
   rows.push(...goalRows.beforeFirstTurn);
 
@@ -151,9 +156,12 @@ export function buildTranscriptRowModel({
       continue;
     }
 
+    const hostsWorkspaceReceipt = workspaceReceiptRow !== null && seenTurnIds.size === 0;
     seenTurnIds.add(turnId);
     const turnGoalRows = goalRows.byTurnId.get(turnId) ?? EMPTY_GOAL_ROWS;
-    const needsLeadingSplit = turnGoalRows.length > 0;
+    // The receipt host turn also forces the leading user-message split so
+    // the receipt can slot directly after the prompt.
+    const needsLeadingSplit = turnGoalRows.length > 0 || hostsWorkspaceReceipt;
     const goalSeqBoundaries = turnGoalRows.map((row) => row.event.seq);
     const { rows: turnRows } = buildTurnRows(
       turn,
@@ -169,7 +177,12 @@ export function buildTranscriptRowModel({
       turn,
       transcript,
     );
-    rows.push(...interleavedRows);
+    if (hostsWorkspaceReceipt) {
+      rows.push(...insertWorkspaceReceiptRow(interleavedRows, workspaceReceiptRow, transcript));
+      workspaceReceiptEmitted = true;
+    } else {
+      rows.push(...interleavedRows);
+    }
   }
 
   if (visibleOptimisticPrompt) {
@@ -185,6 +198,18 @@ export function buildTranscriptRowModel({
       key: buildOutboxPromptRowKey(entry.clientPromptId),
       clientPromptId: entry.clientPromptId,
     });
+  }
+
+  // No renderable turn hosts the receipt yet (brand-new workspace, or the
+  // only turn is hidden behind its local prompt echo): the receipt follows
+  // the local prompt rows so it still lands after the user's message. An
+  // empty transcript renders no receipt at all.
+  if (
+    workspaceReceiptRow
+    && !workspaceReceiptEmitted
+    && (visibleOptimisticPrompt !== null || visibleOutboxEntries.length > 0)
+  ) {
+    rows.push(workspaceReceiptRow);
   }
 
   if (cache) {
@@ -438,6 +463,42 @@ function interleaveGoalRowsBySeq(
   }
 
   return result;
+}
+
+/**
+ * Places the workspace receipt row directly after the host turn's leading
+ * user-message row (carved out by the forced leading split), so the receipt
+ * opens the agent's response. Falls back to before the turn's rows when the
+ * turn does not start with a user message.
+ */
+function insertWorkspaceReceiptRow(
+  turnRows: readonly TranscriptRow[],
+  receiptRow: TranscriptRow,
+  transcript: TranscriptState,
+): TranscriptRow[] {
+  const firstTurnRowIndex = turnRows.findIndex((row) => row.kind === "turn");
+  if (firstTurnRowIndex === -1) {
+    return [...turnRows, receiptRow];
+  }
+  const firstTurnRow = turnRows[firstTurnRowIndex] as Extract<TranscriptRow, { kind: "turn" }>;
+  const insertIndex = isUserMessageOnlyTurnRow(firstTurnRow, transcript)
+    ? firstTurnRowIndex + 1
+    : firstTurnRowIndex;
+  return [
+    ...turnRows.slice(0, insertIndex),
+    receiptRow,
+    ...turnRows.slice(insertIndex),
+  ];
+}
+
+function isUserMessageOnlyTurnRow(
+  row: Extract<TranscriptRow, { kind: "turn" }>,
+  transcript: TranscriptState,
+): boolean {
+  const blocks = row.renderPresentation.displayBlocks;
+  return blocks.length > 0 && blocks.every((block) =>
+    block.kind === "item"
+    && transcript.itemsById[block.itemId]?.kind === "user_message");
 }
 
 export function buildTurnContentRowKey(
