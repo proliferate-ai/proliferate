@@ -27,6 +27,7 @@ report the exact contradiction. Do not silently redefine either one.
 ```text
 specs/
 ├── README.md
+├── OBSERVABILITY.md  Per-PR observability standard (consider it in every PR)
 ├── TESTING.md        Per-PR testing standard (consider it in every PR)
 ├── TESTING/          Release-validation depth behind TESTING.md
 ├── codebase/

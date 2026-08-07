@@ -1,0 +1,134 @@
+# Observability Standard
+
+How Proliferate stays observable: which signal a change should emit, where
+each signal goes, and what must never travel with it. Consider this document
+in every PR: state the change's observability delta — or an explicit "none" —
+in the PR description. System depth lives in
+[`specs/codebase/systems/engineering/observability/`](codebase/systems/engineering/observability/README.md);
+this page is the per-PR decision layer over it.
+
+## The model
+
+Four signal surfaces, deliberately separate:
+
+- **Sentry** — exceptions, traces, breadcrumbs, critical-failure markers.
+  Hosted-product components only, DSN-gated; a missing DSN or disabled
+  telemetry must no-op, never block startup or handling work. Provider
+  delivery is diagnostic and never a product request's success condition.
+- **Structured server logs** — non-debug server logs are JSON with timestamp,
+  level, message, canonical `release_id`, and correlation context
+  (`server/proliferate/middleware/logging.py`). In the hosted stack they feed
+  CloudWatch/Grafana; this — not Sentry — is the alert-evaluation source.
+- **PostHog** — hosted-client product analytics. Autocapture and automatic
+  page views are off; only explicitly permitted typed events are sent.
+- **Anonymous telemetry** — first-party install-level `VERSION` /
+  `ACTIVATION` / `USAGE` records, enabled in every deployment mode unless
+  disabled. Vendor telemetry (Sentry, PostHog) is `hosted_product` only.
+
+Sentry and logs correlate through release and request/product identifiers —
+never by copying evidence bodies between systems. Server request telemetry
+binds a generated request id, sanitized route, id-only user, and allowlisted
+correlation fields, and clears the Sentry user at request teardown. The
+logical cloud sandbox is `target_id`; the provider sandbox is `sandbox_id`;
+the two must remain distinct.
+
+## Instrumenting a new feature
+
+Choose by what actually happened, not by convenience — do not `raise` to flag
+a non-failure, and reserve paging for real paging conditions: a `warning`
+anomaly that fires constantly trains everyone to ignore the fatal ones.
+
+| Signal | Where it goes | How it's named | What enforces it |
+| --- | --- | --- | --- |
+| Server operation genuinely failed | Let the exception propagate; auto-captured as a `proliferate-server` Sentry issue | Grouped by stack; release/environment/surface tags attached by the SDK init | Scrubber in `server/proliferate/integrations/sentry.py` |
+| Anomaly the user didn't feel (latency budget exceeded, invariant violated, unexpected-but-recovered branch) | `capture_server_sentry_exception(..., level="warning", fingerprint=[...])` — request still succeeds; emit on threshold, not per call (the budget lives in code, not in an alert rule) | Stable `fingerprint` is the dedup key — one issue accrues occurrences instead of spawning thousands; tags `anomaly=<slug>`, `surface=<area>`; bounded scalars in `extras` | Review |
+| Page-worthy "must never happen" invariant | `report_critical(...)` — fatal Sentry event tagged `critical_failure=true` **and** the `CRITICAL_FAILURE` structured-log marker | The marker is the exact log identity | Grafana rule `bfrmh7e7x2k8wd` alerts on the marker in `/ecs/proliferate-prod` |
+| Rust runtime diagnostics | One `#[tracing::instrument]` span per use-case entry; phase timings are span events, not hand-rolled `Instant::now()` pairs | Fields (`flow_id`/`flow_kind`/`prompt_id`) declared once on the span; observability context never appears in a function signature | Review (span doctrine); `tracing_error_reaches_the_sentry_client` tests guard Sentry delivery |
+| Frontend product analytics | Typed catalog `apps/packages/product-client/src/lib/domain/telemetry/events.ts` → `trackProductEvent(...)` fanout (vendor, anonymous, or both) | Stable event names; payloads are enums, booleans, counts, versions, provider kinds — never arbitrary string bags | Typed event map; hosted PostHog events are explicitly permitted, others become at most Sentry breadcrumbs |
+| Frontend exception | Capture from hooks or error boundaries, never ordinary render components; mark `meta.telemetryHandled = true` so global React Query handlers don't double-report | Low-cardinality tags only: `domain`, `action`, `provider`, `workspace_kind`, `route`; diagnostic values in scrubbed extras | Shared `scrubTelemetryEvent` scrubber (`apps/packages/product-client/src/domain/telemetry/scrub.ts`) |
+| Install-level adoption signal | Anonymous telemetry record → `POST /v1/telemetry/anonymous` | Fixed record types `VERSION` / `ACTIVATION` / `USAGE` with fixed milestone and counter names | Server-side schema validation on the endpoint |
+
+One capture path per failure: for a handled AnyHarness failure, ProductClient
+capture is suppressed only when the cause chain carries an exact
+`urn:proliferate:anyharness:incident:<uuid>` RFC 7807 instance — the runtime
+already owned that capture and returned the receipt.
+
+## Scrubbing and redaction
+
+Never send: email, display name, prompt or transcript content, terminal
+output, file contents, repository names, raw file paths, request bodies,
+cookies, authorization headers, tokens, secrets, environment values, or raw
+provider responses. Correlation identifiers are diagnostic metadata, not
+permission to copy user content into a vendor. Raw provider output is never a
+safe Sentry grouping key or exception message. Scrubbers are the backstop,
+not a license — callers keep content out of tracing fields in the first place.
+
+The scrubbers are deliberately asymmetric; know which side of each line a
+change sits on:
+
+- **Who scrubs:** the server, the Web/Desktop/Mobile clients (via the shared
+  `scrubTelemetryEvent` envelope wrapper), AnyHarness, Worker, and Supervisor
+  all install explicit before-send scrubbers. **Desktop-native does not** —
+  it transmits stack traces without an explicit scrubber (known gap, needs a
+  separate implementation PR).
+- **Deliberately preserved through scrubbing:** the top-level Sentry
+  `environment` field (snapshot, scrub, restore) and the `runtime_env` tag on
+  Worker/Supervisor events whose only allowed live value is `e2b`. Every
+  other env-like key stays redacted; raw environment maps never pass.
+- **Structural, not length, bounds:** client payload scrubbing bounds depth,
+  array positions, and object properties (`[circular]`, `[truncated]`) but
+  does not truncate strings by length — what you put in a string field ships.
+- **Replay:** Web and Mobile set both replay rates to zero. Desktop sets
+  normal session replay to zero; masked error replay can still retain
+  identifier-bearing route metadata (known gap). PostHog replay is off by
+  default; when explicitly enabled, recorded page metadata can contain route
+  ids even though capture-event URL properties are stripped. A new surface
+  that can display prompts, files, paths, or credentials gets
+  `[data-telemetry-block]` / `[data-telemetry-mask]` unless there is a
+  reviewed reason not to.
+- **Child-agent stderr never reaches Sentry:** AnyHarness marks it with a
+  dedicated tracing target the Sentry layer ignores; a startup failure keeps
+  at most eight lines / 1,024 UTF-8 bytes per line locally and returns a
+  typed `AGENT_STARTUP_FAILED` problem instead.
+- **Anonymous telemetry is the strictest tier:** install UUID and fixed
+  low-cardinality fields only — no user identity, raw error strings, or any
+  free-form/high-cardinality string, in any deployment mode.
+
+## The incident behind the delivery rules
+
+Production incident 2026-06-14 → 2026-07-15: a `sentry`-only crate bump left
+`sentry-tracing` behind, splitting `sentry-core` into two linked instances;
+the tracing layer captured into a clientless Hub and **every runtime ERROR
+event was silently dropped while local logs still showed the errors**. Hence
+two standing rules: the Rust workspace's `sentry`, `sentry-anyhow`, and
+`sentry-tracing` dependencies must resolve to a single `sentry-core` instance
+(the `tracing_error_reaches_the_sentry_client` tests in AnyHarness, Worker,
+and Supervisor fail on any new divergence), and a missing Sentry event is
+never evidence that the operation did not fail — structured/local logs are
+the fallback evidence source.
+
+## Deciding a change's observability delta
+
+1. New failure path? Pick a row from the table above — propagate, `warning`
+   anomaly with a stable fingerprint, or `report_critical`.
+2. New user-visible flow? Decide whether it earns a typed product event and
+   whether that event is permitted for PostHog.
+3. New surface rendering user content? Apply the replay block/mask selectors.
+4. New identifier worth correlating on? It must join the server request
+   telemetry allowlist — it is not automatically forwarded.
+5. Touched a scrubber, telemetry gate, DSN wiring, or the Sentry crate pins?
+   Say so explicitly; these paths carry the known gaps and the incident above.
+6. Nothing observable changed? State "none" — that is a valid answer, silence
+   is not.
+
+Depth: [`observability/README.md`](codebase/systems/engineering/observability/README.md)
+and [`sentry.md`](codebase/systems/engineering/observability/sentry.md) (system
+contract), [`frontend/guides/telemetry.md`](codebase/structures/frontend/guides/telemetry.md),
+[`anyharness/guides/observability.md`](codebase/structures/anyharness/guides/observability.md)
+(span doctrine), [`engineering/analytics/`](codebase/systems/engineering/analytics/README.md)
+(anonymous telemetry, PostHog, Metabase),
+[`guides/operating/production-alerts.md`](../guides/operating/production-alerts.md)
+(the six Grafana rules), [`guides/operating/analytics/`](../guides/operating/analytics/README.md)
+(operating Sentry/PostHog), and
+[`issue-lifecycle/`](codebase/systems/engineering/issue-lifecycle/README.md)
+(how provider evidence becomes tracked issues).
