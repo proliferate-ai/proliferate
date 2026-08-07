@@ -20,6 +20,7 @@ export function VirtualTranscriptViewport({
   nonDisplacingBottomInsetPx,
   contentRef,
   measureElement,
+  onUserScrollIntent,
   onViewportScroll,
   renderableRows,
   renderRow,
@@ -38,6 +39,7 @@ export function VirtualTranscriptViewport({
   contentRef?: RefObject<HTMLDivElement | null>;
   gutterClassName?: string;
   measureElement: (element: Element | null) => void;
+  onUserScrollIntent: (direction: -1 | 1) => void;
   onViewportScroll: (viewport: HTMLDivElement) => void;
   renderableRows: readonly TranscriptRenderableRow[];
   renderRow: TranscriptRowListBaseProps["renderRow"];
@@ -52,6 +54,7 @@ export function VirtualTranscriptViewport({
     <AutoHideScrollArea
       className="h-full"
       ref={scrollRef}
+      onUserScrollIntent={onUserScrollIntent}
       onViewportScroll={onViewportScroll}
       contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}
     >

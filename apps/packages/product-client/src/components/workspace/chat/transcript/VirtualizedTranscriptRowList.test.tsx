@@ -149,6 +149,7 @@ describe("VirtualizedTranscriptRowList", () => {
     const viewport = getViewport(container);
     Object.defineProperty(viewport, "scrollHeight", { value: 2000, configurable: true });
     Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+    viewport.scrollTop = 1_700;
 
     act(() => {
       fireEvent.wheel(viewport, { deltaY: -80 });

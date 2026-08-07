@@ -49,7 +49,7 @@ export function PlaygroundRecordingTranscript({
   }
 
   return (
-    <div className="h-[min(720px,calc(100vh-13rem))] min-h-[420px]">
+    <div className="flex h-[min(720px,calc(100vh-13rem))] min-h-[420px] flex-col">
       <MessageList
         activeSessionId={replay.sessionId}
         selectedWorkspaceId={selectedWorkspaceId ?? replay.workspaceId}

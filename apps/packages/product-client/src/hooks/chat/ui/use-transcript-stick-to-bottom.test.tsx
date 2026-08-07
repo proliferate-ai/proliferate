@@ -242,13 +242,15 @@ describe("useTranscriptStickToBottom", () => {
     }
   });
 
-  it("does not unpin on a downward wheel", () => {
-    const handle = renderHarness();
-    setMetrics(handle.current.viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
+  it("does not claim a downward wheel at the hard bottom", () => {
+    const onScrollSample = vi.fn();
+    const handle = renderHarness(onScrollSample);
+    setMetrics(handle.current.viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 700 });
     act(() => {
       fireEvent.wheel(handle.current.viewport, { deltaY: 20 });
     });
     expect(handle.current.api.isPinnedToBottom).toBe(true);
+    expect(onScrollSample).not.toHaveBeenCalled();
   });
 
   it("stays pinned on an upward wheel when the content is not scrollable", () => {
@@ -294,6 +296,62 @@ describe("useTranscriptStickToBottom", () => {
     // A genuine user scroll up unpins.
     userScroll(handle, 600);
     expect(handle.current.api.isPinnedToBottom).toBe(false);
+  });
+
+  it("marks scroll priority only from recent positive input intent", () => {
+    let now = 100;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const onScrollSample = vi.fn();
+    const handle = renderHarness(onScrollSample);
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 1_000, clientHeight: 300, scrollTop: 600 });
+
+    // An unmarked browser or virtualizer correction cannot claim user input.
+    dispatchScroll(handle);
+    expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: false });
+
+    // Wheel intent claims the frame immediately, before its native scroll.
+    act(() => {
+      fireEvent.wheel(viewport, { deltaY: -40 });
+    });
+    expect(onScrollSample).toHaveBeenLastCalledWith({
+      programmatic: false,
+      userInitiated: true,
+    });
+
+    viewport.scrollTop = 520;
+    dispatchScroll(handle);
+    expect(onScrollSample).toHaveBeenLastCalledWith({
+      programmatic: false,
+      userInitiated: true,
+    });
+
+    // Once the shared intent/gate window expires, a later correction is
+    // unclassified and cannot re-open the rendering hold.
+    now += 151;
+    viewport.scrollTop = 518;
+    dispatchScroll(handle);
+    expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: false });
+  });
+
+  it("unpins from upward custom-thumb intent before any scroll event", () => {
+    const onScrollSample = vi.fn();
+    const handle = renderHarness(onScrollSample);
+
+    act(() => {
+      handle.current.api.notifyUserScrollIntent(1);
+    });
+    expect(handle.current.api.pinnedRef.current).toBe(true);
+
+    act(() => {
+      handle.current.api.notifyUserScrollIntent(-1);
+    });
+    expect(handle.current.api.pinnedRef.current).toBe(false);
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+    expect(onScrollSample).toHaveBeenLastCalledWith({
+      programmatic: false,
+      userInitiated: true,
+    });
   });
 
   it("does not leak the programmatic marker when the write changes nothing (watchdog)", () => {
@@ -353,7 +411,7 @@ describe("useTranscriptStickToBottom", () => {
   it("re-pins and snaps on the scroll-to-bottom button click", () => {
     const handle = renderHarness();
     const { viewport } = handle.current;
-    setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 0 });
+    setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 400 });
 
     act(() => {
       fireEvent.wheel(viewport, { deltaY: -50 });

@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   MarkdownBody,
   type MarkdownCodeBlockRenderer,
@@ -22,6 +28,10 @@ import {
   STREAM_REVEAL_IDLE_MS,
   STREAM_REVEAL_SETTLE_MS,
 } from "#product/config/assistant-message-reveal";
+import {
+  useTranscriptScrollPauseRegistration,
+  useTranscriptUserScrollActive,
+} from "./TranscriptScrollPriorityContext";
 
 // Assistant prose has one source-ordered reveal frontier. The visible content
 // is always a prefix, while recent words keep independent opacity animations.
@@ -46,6 +56,7 @@ export function AssistantMessageContent({
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
 }) {
+  const userScrollActive = useTranscriptUserScrollActive();
   const [visibleContent, setVisibleContent] = useState(() =>
     initialVisibleContent(content, animateReveal, initialVisibleLength),
   );
@@ -70,16 +81,16 @@ export function AssistantMessageContent({
     revealPhaseRef.current = phase;
     setRevealPhase(phase);
   };
-  const cancelFlush = () => {
+  const cancelFlush = useCallback(() => {
     if (flushFrameRef.current === null) return;
     window.cancelAnimationFrame(flushFrameRef.current);
     flushFrameRef.current = null;
-  };
+  }, []);
   const commitVisibleContent = (nextContent: string) => {
     visibleContentRef.current = nextContent;
     setVisibleContent(nextContent);
   };
-  const cancelSettle = () => {
+  const cancelSettle = useCallback(() => {
     if (settleDelayRef.current !== null) {
       window.clearTimeout(settleDelayRef.current);
       settleDelayRef.current = null;
@@ -88,7 +99,15 @@ export function AssistantMessageContent({
       window.clearTimeout(settleFinishRef.current);
       settleFinishRef.current = null;
     }
-  };
+  }, []);
+  const pauseReveal = useCallback(() => {
+    cancelFlush();
+    cancelSettle();
+    lastFlushAtRef.current = 0;
+    lastVisibleCommitAtRef.current = 0;
+    revealCharacterBudgetRef.current = 0;
+  }, [cancelFlush, cancelSettle]);
+  useTranscriptScrollPauseRegistration(pauseReveal);
   const beginSettle = () => {
     cancelSettle();
     if (revealPhaseRef.current === "idle") return;
@@ -171,6 +190,11 @@ export function AssistantMessageContent({
       return;
     }
 
+    if (userScrollActive) {
+      pauseReveal();
+      return;
+    }
+
     if (!content.startsWith(visible)) {
       cancelFlush();
       cancelSettle();
@@ -210,12 +234,12 @@ export function AssistantMessageContent({
     commitRevealPhase("active");
     scheduleFlush();
     return cancelFlush;
-  }, [animateReveal, content, isStreaming]);
+  }, [animateReveal, content, isStreaming, pauseReveal, userScrollActive]);
 
   useEffect(() => () => {
     cancelFlush();
     cancelSettle();
-  }, []);
+  }, [cancelFlush, cancelSettle]);
 
   const splitContent = useMemo(
     () => splitAssistantContent(visibleContent),

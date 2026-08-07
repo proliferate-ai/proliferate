@@ -77,6 +77,7 @@ export function FullTranscriptRowList({
     isPinnedToBottom,
     pinnedRef,
     onViewportScroll,
+    notifyUserScrollIntent,
     scrollToBottom,
     handleScrollToBottomClick,
     notifyProgrammaticScroll,
@@ -259,6 +260,7 @@ export function FullTranscriptRowList({
       <AutoHideScrollArea
         className="h-full"
         ref={scrollRef}
+        onUserScrollIntent={notifyUserScrollIntent}
         onViewportScroll={handleViewportScroll}
         contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}
       >

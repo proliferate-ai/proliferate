@@ -63,6 +63,7 @@ export function VirtualizedTranscriptRowList({
     isPinnedToBottom,
     pinnedRef,
     onViewportScroll,
+    notifyUserScrollIntent,
     scrollToBottom,
     handleScrollToBottomClick,
     notifyProgrammaticScroll,
@@ -373,6 +374,7 @@ export function VirtualizedTranscriptRowList({
         contentRef={contentRef}
         gutterClassName={gutterClassName}
         measureElement={virtualizer.measureElement}
+        onUserScrollIntent={notifyUserScrollIntent}
         onViewportScroll={handleViewportScroll}
         renderableRows={renderableRows}
         renderRow={renderRow}

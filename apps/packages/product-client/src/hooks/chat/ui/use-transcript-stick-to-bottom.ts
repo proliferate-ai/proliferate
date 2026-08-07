@@ -6,19 +6,13 @@ import {
   GLUE_STABLE_FRAMES,
   PROGRAMMATIC_MATCH_TOL_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
-  SCROLLABLE_OVERFLOW_EPSILON_PX,
+  TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
+import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
 
-/**
- * Whether the viewport actually has room to scroll. The pre-emptive
- * intent-to-leave listeners must not unpin when the content fits entirely in the
- * viewport: that gesture produces no scroll event, so `onViewportScroll` never
- * runs to re-pin, leaving the engine stuck unpinned and the scroll-to-bottom
- * button wrongly visible while already at the bottom.
- */
-function viewportCanScroll(viewport: HTMLDivElement): boolean {
-  return viewport.scrollHeight - viewport.clientHeight > SCROLLABLE_OVERFLOW_EPSILON_PX;
+function interactionNow(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
 export interface UseTranscriptStickToBottomOptions {
@@ -43,6 +37,8 @@ export interface TranscriptStickToBottom {
   pinnedRef: RefObject<boolean>;
   /** Wire to AutoHideScrollArea's onViewportScroll. Owns stickiness + direction + onScrollSample. */
   onViewportScroll: (viewport: HTMLDivElement) => void;
+  /** Mark positive wheel/key/touch/scrollbar intent before its scroll event arrives. */
+  notifyUserScrollIntent: (direction: -1 | 1) => void;
   /** Snap to the active follow target (soft overlay bottom or user-chosen hard bottom). */
   scrollToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
@@ -75,6 +71,7 @@ export function useTranscriptStickToBottom({
   const glueFrameRef = useRef<number | null>(null);
   const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
   const consumedAutoFollowBottomInsetRef = useRef(0);
+  const userScrollIntentUntilRef = useRef(0);
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -111,6 +108,17 @@ export function useTranscriptStickToBottom({
     }
     markNonUserScrollPosition(viewport);
   }, [markNonUserScrollPosition, scrollRef]);
+
+  const notifyUserScrollIntent = useCallback((direction: -1 | 1) => {
+    userScrollIntentUntilRef.current =
+      interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
+    if (direction < 0) {
+      setPinned(false);
+    }
+    // Claim the frame at input time instead of waiting for the browser's later
+    // scroll event, which can otherwise race a stream/reveal animation frame.
+    onScrollSample({ programmatic: false, userInitiated: true });
+  }, [onScrollSample, setPinned]);
 
   // Registered before consumer layout effects. Preserve however much of an
   // existing overlay range the user deliberately consumed; if another card is
@@ -231,7 +239,12 @@ export function useTranscriptStickToBottom({
       consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     }
-    onScrollSample({ programmatic: false });
+    const userInitiated = interactionNow() < userScrollIntentUntilRef.current;
+    onScrollSample(
+      userInitiated
+        ? { programmatic: false, userInitiated: true }
+        : { programmatic: false },
+    );
   }, [onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
   const startGlueLoop = useCallback(() => {
@@ -280,58 +293,15 @@ export function useTranscriptStickToBottom({
     programmaticRef.current = null;
     lastScrollTopRef.current = 0;
     consumedAutoFollowBottomInsetRef.current = 0;
+    userScrollIntentUntilRef.current = 0;
     setPinned(true);
     scrollToBottom();
     startGlueLoop();
   }, [scrollToBottom, setPinned, startGlueLoop]);
 
-  // Pre-emptive intent-to-leave: flip the pin ref synchronously when the user
-  // acts, BEFORE the next per-frame snap effect reads it, so the snap bails and
-  // the user actually escapes. The scroll-event classifier alone loses this race
-  // because a snap can overwrite scrollTop before the scroll event is read.
-  useEffect(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) {
-      return;
-    }
-    let touchStartY = 0;
-    // All three listeners gate on `viewportCanScroll`: an intent to leave the
-    // bottom is meaningless when there is nowhere to scroll, and acting on it
-    // would strand the engine unpinned (no scroll event follows to re-pin).
-    const onWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0 && viewportCanScroll(viewport)) {
-        setPinned(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") &&
-        viewportCanScroll(viewport)
-      ) {
-        setPinned(false);
-      }
-    };
-    const onTouchStart = (event: TouchEvent) => {
-      touchStartY = event.touches[0]?.clientY ?? 0;
-    };
-    const onTouchMove = (event: TouchEvent) => {
-      const y = event.touches[0]?.clientY ?? touchStartY;
-      // Finger dragging down reveals content above (scrolls toward history).
-      if (y - touchStartY > DIRECTION_EPSILON_PX && viewportCanScroll(viewport)) {
-        setPinned(false);
-      }
-    };
-    viewport.addEventListener("wheel", onWheel, { passive: true });
-    viewport.addEventListener("keydown", onKeyDown);
-    viewport.addEventListener("touchstart", onTouchStart, { passive: true });
-    viewport.addEventListener("touchmove", onTouchMove, { passive: true });
-    return () => {
-      viewport.removeEventListener("wheel", onWheel);
-      viewport.removeEventListener("keydown", onKeyDown);
-      viewport.removeEventListener("touchstart", onTouchStart);
-      viewport.removeEventListener("touchmove", onTouchMove);
-    };
-  }, [scrollRef, setPinned]);
+  // Establish input ownership before the visibility lifecycle can resume the
+  // pinned glue loop.
+  useTranscriptUserScrollIntent({ scrollRef, notifyUserScrollIntent });
 
   // On tab/window re-show while pinned, glue to the bottom for a few frames so
   // the suspended-then-resumed measurement backlog lands as one jump. Listen to
@@ -371,6 +341,7 @@ export function useTranscriptStickToBottom({
     isPinnedToBottom,
     pinnedRef,
     onViewportScroll,
+    notifyUserScrollIntent,
     scrollToBottom,
     handleScrollToBottomClick,
     notifyProgrammaticScroll,
