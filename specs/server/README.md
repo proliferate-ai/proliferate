@@ -181,7 +181,7 @@ translation inconsistent and hard to test.
 **Rule:** services raise product errors; the global handler translates them to
 HTTP. `HTTPException` is legal only at authentication, org/resource-access, and
 explicitly declared non-JSON transport boundaries. Error codes are globally
-unique.
+unique by convention; that uniqueness is not yet mechanically checked (gap 6).
 
 **Result:** the HTTP format changes once, while product failures remain typed
 and independently testable.
@@ -244,15 +244,18 @@ or persistence detail.
 | Shared code becomes a junk drawer | `SRV-LIB-2/4/5/6` | Three audiences, two-consumer entry ticket, and reverse ratchet |
 | Auth decisions hide in orchestration | `SRV-SEAM-1` | Four endpoint-composed boundaries |
 | Background work has divergent failure models | `SRV-BG-3` | One Celery execution model |
-| Service cycles block refactors | `SRV-TOPO-3` | Generated graph and acyclic-component gate |
-| Third-party packages leak into product code | `SRV-PKG-2` | Explicit package-audience map |
+| Service cycles block refactors | `SRV-TOPO-3` | `GAP`: generated graph and acyclic-component gate are documented rules, not gates (gap 9) |
+| Third-party packages leak into product code | `SRV-PKG-2` | `GAP`: explicit package-audience map is a documented rule, not a gate (gap 9) |
 
 ## Foreign-Read Doctrine
 
 Foreign reads are legal only when the exact consumer and store operation appear
-in the ownership ledger. A ledger row grants no module-wide permission and
-stale rows fail the checker. If a required read is not declared, the caller must
-either add the reviewed read edge or consume an owner service contract.
+in the ownership ledger. A ledger row grants no module-wide permission, and
+stale rows are meant to be pruned. The ledger is maintained by review rather
+than by the checker: `check_server_boundaries.py` has no ledger table, so
+neither the declarations nor their staleness are mechanically enforced (gap 2).
+If a required read is not declared, the caller must either add the reviewed read
+edge or consume an owner service contract.
 
 The small declaration cost makes schema-change blast radius queryable: the
 owner can answer “who reads this store?” without reconstructing history.
@@ -286,9 +289,10 @@ If every answer is yes or not applicable, the change aligns with the grid.
 
 ## Current gaps
 
-Everything above this section is current, enforced behavior. Each item below is
-a named rule the model asserts that no checker holds yet — public debt, not a
-softer version of the rule.
+Everything above this section is the current operating model, with each rule's
+enforcement status stated inline where it is not mechanically checked. Each item
+below is a named rule the model asserts that no checker holds yet — public debt,
+not a softer version of the rule.
 
 - [ ] **Coordinate enforcement is not present.** Current CI runs the bounded,
   path-classified

@@ -123,6 +123,11 @@ and are forbidden for work whose loss is a correctness bug. Loose,
 fire-and-forget notifications with explicit at-most-once tolerance may enqueue a
 task directly without the outbox, but the looseness must be deliberate.
 
+**External-side-effect pattern (outbox):** a named orchestration function owns an
+explicit multi-transaction sequence — write "pending" + commit → external call
+(no open txn) → write result + commit — *or*, preferably, write the intent + an
+outbox row and let a worker do the call.
+
 Managed Workflow execution is a current outbox consumer with exactly three
 bounded operations: `workflows.deliver`, `workflows.observe`, and
 `workflows.cancel`. Their domain service uses persisted generation CAS so broker
@@ -266,9 +271,10 @@ share `domain/` and the stores.
 
 ## Current gaps
 
-Everything above this section is current, enforced behavior. Each unchecked item
-below is a concrete path that still departs from it — public debt, not a softer
-version of the rule.
+Everything above this section is the current operating model, with each rule's
+enforcement status stated inline where it is not mechanically checked. Each
+unchecked item below is a concrete path that still departs from it — public debt,
+not a softer version of the rule.
 
 - [ ] **Billing reconciliation.**
       [`_billing_reconciler_loop`](../../server/proliferate/server/billing/reconciler.py)

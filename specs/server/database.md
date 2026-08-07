@@ -53,6 +53,27 @@ classes (a primary entity plus its junction tables).
   inheritance trees.
 - Importing `db/store/**`, `service.py`, integrations, or business code.
 
+### Key current model families
+
+- **Sandbox access** (`db/models/cloud/sandboxes.py`): personal
+  `cloud_sandbox` lifecycle, provider id, and encrypted AnyHarness access.
+- **Repository configuration** (`db/models/cloud/repositories.py`):
+  `repo_config`, `repo_environment`, and
+  `cloud_repo_environment_materialization`.
+- **Cloud workspace records** (`db/models/cloud/workspaces.py`): repository
+  environment, branch/base branch, archive state, and optional
+  `anyharness_workspace_id`.
+- **Optional runtime Worker** (`db/models/cloud/runtime_workers.py`): Worker,
+  one-time enrollment, and integration-gateway token records.
+- **Sandbox secret materialization** (`db/models/cloud/secrets.py`): persisted
+  runtime/repository secret-application state.
+- **Billing, orgs, auth, and other product domains**: each retains its own
+  `db/models/**` and `db/store/**` owner.
+
+Target, command-queue, exposure, and Cloud session-projection tables were
+removed. Runtime session/event truth remains in AnyHarness rather than a Cloud
+projection ledger.
+
 ## `db/store/`
 
 All DB access lives here.

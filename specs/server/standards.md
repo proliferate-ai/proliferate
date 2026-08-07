@@ -9,7 +9,7 @@ These standards apply to backend/control-plane code under:
 The Python control plane lives under `server/proliferate/**`. The hosted
 artifact viewer under `server/artifact-runtime/**` has its own contract; when a
 change touches that tree, also read
-[../../../../server/artifact-runtime/README.md](../../server/artifact-runtime/README.md).
+[../../server/artifact-runtime/README.md](../../server/artifact-runtime/README.md).
 
 ## Goals
 
@@ -120,7 +120,7 @@ Use this as a routing map. The focused guides own the detailed rules.
 
 | Area | Path | Owns | Canon |
 | --- | --- | --- | --- |
-| App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle, and application logging setup that attaches request correlation context and stamps release identity. | This doc |
+| App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle, and application logging setup that attaches request correlation context and stamps release identity. It does not own release policy or product orchestration. | This doc |
 | Settings and constants | `config.py`, `constants/<area>.py` | Env-derived runtime settings and shared hardcoded product/protocol values. | [config.md](config.md) |
 | Reusable cross-domain logic | `lib/infra/**`, `lib/product/**`, `lib/capabilities/**` | Generic machinery, cross-domain pure product logic, and reusable orchestration over integrations — owned by no single domain. | [lib.md](lib.md) |
 | Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication primitives, dependency-free authorization vocabulary, request-time owner/org resolution, resource-access deps, and pure product-policy verdicts. | [auth.md](auth.md) |
