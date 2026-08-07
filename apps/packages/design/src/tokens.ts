@@ -1938,6 +1938,15 @@ export const themePreviewColors = {
     pillSoft: "#232323",
     hairline: "#2A2A2A",
   },
+  /**
+   * Syntax fills for the pane's hand-drawn code preview. The preview is a
+   * five-line still life, not a real editor, so it carries the design's
+   * display palette rather than a Shiki theme; only the keyword pink lacks a
+   * live custom property, so it is the only literal.
+   */
+  syntax: {
+    keyword: "#FB5D8F",
+  },
 } as const;
 
 /**

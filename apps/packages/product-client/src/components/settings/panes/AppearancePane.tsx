@@ -1,10 +1,9 @@
-import type { CSSProperties } from "react";
 import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SettingsRow } from "#product/components/patterns/SettingsRow";
 import { SettingsMenu } from "#product/primitives/patterns/SettingsMenu";
 import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
 import { Button } from "#product/primitives/Button";
-import { DiffViewer } from "#product/components/content/ui/DiffViewer";
+import { AppearanceCodePreview } from "#product/components/settings/panes/AppearanceCodePreview";
 import { ThemePreviewCards } from "#product/components/settings/panes/ThemePreviewCards";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
@@ -42,42 +41,18 @@ const PREVIEW_PANEL_CLASS = "overflow-hidden rounded-xl border border-border bg-
 const CONTROL_WIDTH_CLASS = "w-40";
 
 /**
- * The previews below are the point of this pane, so they are the real
- * renderers with canned content — not lookalike markup. `DiffViewer` brings the
- * product's own syntax theme, row tints, and change gutters; `UserMessage` and
- * `AssistantMessage` bring the transcript's own bubble and prose treatment. A
- * hand-built imitation would drift from the real thing the first time either
- * was restyled, which is the exact failure a preview exists to prevent.
- *
- * Neither needs wiring to the font-size settings: both resolve their sizes from
- * the same `--text-message` and readable-code custom properties the controls
- * below write, so changing a setting re-renders them for free.
+ * The chat preview is the real transcript renderers with canned content — a
+ * hand-built imitation would drift from the real thing the first time they
+ * were restyled. The code preview is the opposite call: `AppearanceCodePreview`
+ * is a bespoke five-line drawing, because the real DiffViewer carries review
+ * chrome (file header, context shading, scroll containment) that reads as
+ * noise in a settings pane. Both resolve their sizes from the same
+ * `--text-message` and readable-code custom properties the controls below
+ * write, so changing a setting re-renders them for free.
  */
-const WORKSPACE_PREVIEW_PATCH = [
-  "@@ -1,5 +1,5 @@",
-  " const ws: Workspace = {",
-  "-  runtime: \"local\",",
-  "-  branch: \"main\",",
-  "-  agents: 2,",
-  "+  runtime: \"cloud\",",
-  "+  branch: \"pablo/ui\",",
-  "+  agents: 4,",
-  " };",
-].join("\n");
-
 const CHAT_PREVIEW_PROMPT = "Move this workspace to the cloud and keep my branch.";
 const CHAT_PREVIEW_RESPONSE =
   "Moving the workspace to a cloud sandbox now — your branch `pablo/ui` comes along with changes and history intact.";
-
-/**
- * The split viewer inherits its plane from `--diff-view-surface`, which is
- * normally supplied by the diff card that hosts it. This pane hosts it
- * directly, so it names the plane itself instead of letting the variable
- * resolve to nothing and paint a transparent gutter.
- */
-const PREVIEW_DIFF_STYLE = {
-  "--diff-view-surface": "var(--color-background)",
-} as CSSProperties;
 
 export function AppearancePane() {
   const [mode, setMode] = useColorMode();
@@ -98,19 +73,8 @@ export function AppearancePane() {
       </SettingsSection>
 
       <SettingsSection title="Code preview">
-        <div className={PREVIEW_PANEL_CLASS} style={PREVIEW_DIFF_STYLE}>
-          <DiffViewer
-            patch={WORKSPACE_PREVIEW_PATCH}
-            filePath="workspace.ts"
-            layout="split"
-            wrapLongLines
-            className="py-2"
-            // The preview is a fixed six-line snippet that always fits, so it
-            // must not also behave like a scroll container: a nested scroller
-            // here would swallow the settings page's own wheel events.
-            overscrollBehavior="auto"
-            chainVerticalWheel
-          />
+        <div className={PREVIEW_PANEL_CLASS}>
+          <AppearanceCodePreview />
         </div>
       </SettingsSection>
 

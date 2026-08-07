@@ -62,9 +62,8 @@ describe("AppearancePane previews", () => {
     const { getByText, getAllByText } = render(<AppearancePane />);
 
     expect(getByText(/Move this workspace to the cloud/)).toBeTruthy();
-    // The addition side of the canned diff — proof the split diff actually
-    // parsed rather than falling back to an empty viewer. The branch name also
-    // appears as inline code in the chat preview, hence getAll.
+    // The addition side of the drawn diff, plus the same branch name as inline
+    // code in the chat preview, hence getAll.
     expect(getAllByText(/pablo\/ui/).length).toBeGreaterThanOrEqual(2);
   });
 

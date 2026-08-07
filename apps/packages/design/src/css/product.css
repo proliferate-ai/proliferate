@@ -972,6 +972,31 @@ mark.content-find-active {
   border-top: 1px solid color-mix(in srgb, var(--diffs-fg) 18%, transparent);
 }
 
+/* ---- Appearance pane code preview ----
+   The settings code preview is a five-line still life drawn to the design
+   mock, not a hosted diff viewer. Its change gutters reuse the product's
+   markers: a solid 3px bar for additions and the striped bar for deletions. */
+.appearance-code-preview {
+  line-height: 1.95;
+}
+
+.appearance-code-preview [data-gutter] {
+  flex: none;
+  width: 3px;
+}
+
+.appearance-code-preview [data-gutter="addition"] {
+  background-color: var(--color-success);
+}
+
+.appearance-code-preview [data-gutter="deletion"] {
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--color-destructive) 0 3px,
+    transparent 3px 5px
+  );
+}
+
 /* ---- Base styles ---- */
 html,
 body {
