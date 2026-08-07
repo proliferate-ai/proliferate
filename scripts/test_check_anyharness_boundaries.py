@@ -605,7 +605,7 @@ class DomainStoreImportTest(BoundaryRuleTestCase):
                 "domains/sessions/store/events.rs": (
                     "use crate::api::http::ApiError;\n"
                     "use crate::live::sessions::LiveSessionManager;\n"
-                    "use crate::acp::permission_payload::permission_options;\n"
+                    "use crate::integrations::acp::permission_payload::permission_options;\n"
                 )
             }
         )

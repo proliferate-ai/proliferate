@@ -36,7 +36,7 @@ use anyharness_contract::v1::{
 
 use super::model::PlanRecord;
 use super::service::{PlanDecisionError, PlanEventContext, PlanService};
-use crate::acp::permission_payload::permission_option_mappings;
+use crate::integrations::acp::permission_payload::permission_option_mappings;
 // NOTE: `Resolution` and `ResolveInteractionCommandError` live in
 // `live/sessions/actor/command.rs`, but `actor` is a private module of
 // `live::sessions`; this file uses the public root re-exports.

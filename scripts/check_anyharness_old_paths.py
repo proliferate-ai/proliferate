@@ -21,17 +21,18 @@ BLOCKED_PATHS = [
     "anyharness/crates/anyharness-lib/src/adapters/git/revert_patches.rs",
     "anyharness/crates/anyharness-lib/src/terminals",
     "anyharness/crates/anyharness-lib/src/terminals.rs",
-    "anyharness/crates/anyharness-lib/src/acp/background_work",
-    "anyharness/crates/anyharness-lib/src/acp/event_sink",
-    "anyharness/crates/anyharness-lib/src/acp/event_sink.rs",
-    "anyharness/crates/anyharness-lib/src/acp/manager.rs",
-    "anyharness/crates/anyharness-lib/src/acp/mcp_elicitation",
-    "anyharness/crates/anyharness-lib/src/acp/mcp_elicitation.rs",
-    "anyharness/crates/anyharness-lib/src/acp/permission_broker",
-    "anyharness/crates/anyharness-lib/src/acp/permission_broker.rs",
-    "anyharness/crates/anyharness-lib/src/acp/replay_actor.rs",
-    "anyharness/crates/anyharness-lib/src/acp/runtime_client.rs",
-    "anyharness/crates/anyharness-lib/src/acp/session_actor.rs",
+    # Grid PR 2 moved the whole `acp/` module to `integrations/acp/`. Banning the
+    # directory itself makes every previously-listed `src/acp/<sub>` entry from
+    # the older manager/broker/actor split redundant -- none of those subpaths
+    # (or a resurrected mod.rs) can exist without the parent directory existing
+    # first -- so they are folded into this single entry rather than kept
+    # alongside it. The dir entry alone would miss the file-module shape
+    # (`src/acp.rs`, no directory needed), so it is paired with an explicit
+    # `.rs` entry too, matching every other module-move pair in this list
+    # (sessions/sessions.rs, workspaces/workspaces.rs, terminals/terminals.rs,
+    # connection/connection.rs).
+    "anyharness/crates/anyharness-lib/src/acp",
+    "anyharness/crates/anyharness-lib/src/acp.rs",
 ]
 
 

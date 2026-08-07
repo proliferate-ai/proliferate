@@ -2,11 +2,11 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{SessionExecutionPhase, StopReason};
 use tokio::sync::mpsc;
 
-use crate::acp::provider_errors::{
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::integrations::acp::provider_errors::{
     classify_network_connection_error, classify_provider_rate_limit_error, NETWORK_CONNECTION_CODE,
     PROVIDER_RATE_LIMIT_CODE,
 };
-use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics};
