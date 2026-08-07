@@ -21,6 +21,11 @@ updates:
       - dependency-name: "expo-*"
       - dependency-name: "react-native"
       - dependency-name: "react-native-*"
+      # Pinned to 1.386.8 to keep /login first-load JS under the 490 KB budget gate
+      # (scripts/measure-login-runtime-budget.mjs). Later versions (1.410.6+) exceed
+      # the cap. Upgrades must be manually verified against the budget gate. Downgraded
+      # from 1.410.6 (no known advisories as of 2026-08-07; see PR #1692).
+      - dependency-name: "posthog-js"
       # Major upgrades are handled deliberately (they need manual migration work),
       # not as routine auto-PRs — this is what stops the recurring major-bump churn.
       - dependency-name: "*"
