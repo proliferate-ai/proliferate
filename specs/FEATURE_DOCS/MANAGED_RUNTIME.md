@@ -56,7 +56,7 @@ otherwise:
 
 A durable identity always wins over an enrollment token still present in the configuration. An invalid or revoked durable token does not trigger automatic re-enrollment.
 
-The integration-gateway authorization value is distinct from `worker_token`. On fresh enrollment it is written atomically to `integration-gateway.json` with private directory/file permissions. That process retains the response in memory and, after each successful authenticated heartbeat, restores the file only when it differs. This converges a delayed predecessor write.
+The integration-gateway authorization value is distinct from `worker_token`. On fresh enrollment it is written atomically to `integration-gateway.json` with private directory/file permissions. That process retains the response in memory and, after each successful authenticated heartbeat, restores the file only when it differs. This converges a delayed predecessor write. A heartbeat that succeeded immediately before revocation can race one final stale write; after rejection the predecessor stops writing, and the active successor repairs that race on its next successful heartbeat.
 
 Source: [`proliferate-worker/src/identity/`](../../anyharness/crates/proliferate-worker/src/identity/), [`store/identity.rs`](../../anyharness/crates/proliferate-worker/src/store/identity.rs), [`integration_gateway.rs`](../../anyharness/crates/proliferate-worker/src/integration_gateway.rs)
 
