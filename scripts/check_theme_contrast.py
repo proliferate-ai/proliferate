@@ -18,27 +18,26 @@ landed at 3.28:1 at 11px, and the persistent `selected` state read weaker than
 the transient `hover`. Those are all mechanically detectable, so they are
 detected here rather than re-discovered by eye.
 
-Text is measured against EVERY opaque plane the product paints it on, not just
-the page: in light mode six of those planes are near-white and three are not, so
-measuring only `surface` and `background` left the sidebar, the under-surface,
-and the one-step-off-white fills unchecked. That blind spot is exactly where the
-faint tier was failing while this check reported green, so the plane list is the
-contract too — a new elevation role belongs in `TEXT_PLANES`.
+Text is measured against EVERY plane the product paints it on, not just the
+page: in light mode the editor, rail, and translucent control fills all differ
+from white, so measuring only `surface` and `background` left them unchecked.
+That blind spot is exactly where the faint tier was failing while this check
+reported green, so the plane list is the contract too — a new elevation role
+belongs in `TEXT_PLANES`.
 
 Floors (both modes, no per-mode exemptions):
-  * body text        >= 7.0:1   against every opaque plane
-  * secondary text   >= 4.5:1   against every opaque plane
-  * faint text       >= 4.5:1   against every opaque plane
+  * body text        >= 7.0:1   against every measured plane
+  * secondary text   >= 4.5:1   against every measured plane
+  * faint text       >= 4.5:1   against every measured plane
   * borders          >= 1.25:1  against the surface they divide
   * hover/selected/active mutually distinguishable, AND selected carries more
     ink than hover — a persistent state may never read fainter than a
     transient one.
 
-Four measured pairs do not meet those floors and are NOT silently exempted: they
-are pinned in `DECLARED_DEVIATIONS` with their exact measured ratio, so each one
-is visible in review and can only ever improve. Two are pre-existing dark-mode
-facts outside the light retune's scope; two are approved light values that miss
-by a hundredth. See that table for the per-entry reasoning.
+Five measured dark-mode pairs do not meet those floors and are NOT silently
+exempted: they are pinned in `DECLARED_DEVIATIONS` with their exact measured
+ratio, so each one is visible in review and can only ever improve. See that
+table for the per-entry reasoning.
 
 Exit codes: 0 = all floors met (or met as pinned), 1 = at least one violation.
 
@@ -87,7 +86,7 @@ TEXT_ROLES: tuple[tuple[str, float], ...] = (
     # gating against and previously was not.
     ("--color-link-foreground", SECONDARY_FLOOR),
 )
-# Every opaque plane the product actually paints text on, not just the two the
+# Every plane the product actually paints text on, not just the two the
 # page starts from. In light mode `surface`, `background`, `card`, `popover`,
 # `surface-elevated` and `surface-control` are all near-white, so measuring only
 # the first two left the three darkest light planes — the sidebar, the
@@ -104,16 +103,23 @@ TEXT_PLANES: tuple[str, ...] = (
     "--color-surface-elevated",
     "--color-surface-elevated-secondary",
     "--color-surface-control",
+    "--color-surface-editor",
     "--color-surface-under",
     "--color-muted",
     "--color-sidebar",
 )
 
-# Each border role is measured against the plane it actually divides.
+# Each border role is measured against the plane it actually divides. The
+# lightest edge is additionally proven on the rail, recessed plane, and
+# translucent control fill because the light system promises one border rung
+# that composes on every parent rather than per-surface gray forks.
 BORDER_PAIRS: tuple[tuple[str, str], ...] = (
     ("--color-border", "--color-surface"),
     ("--color-border", "--color-background"),
     ("--color-border-light", "--color-surface"),
+    ("--color-border-light", "--color-sidebar"),
+    ("--color-border-light", "--color-surface-under"),
+    ("--color-border-light", "--color-surface-control"),
     ("--color-border-heavy", "--color-surface"),
     ("--color-input", "--color-surface"),
 )
@@ -123,6 +129,18 @@ BORDER_PAIRS: tuple[tuple[str, str], ...] = (
 SIDEBAR_PAIRS: tuple[tuple[str, str, float], ...] = (
     ("--color-sidebar-foreground", "--color-sidebar", BODY_FLOOR),
     ("--color-sidebar-muted-foreground", "--color-sidebar", SECONDARY_FLOOR),
+)
+
+# Some sidebar ink sits inside a translucent control painted on the rail. That
+# nested stack must be composed in order; measuring either role against the rail
+# alone misses the file-tree search and badge treatment.
+STACKED_TEXT_PAIRS: tuple[tuple[str, str, str, float], ...] = (
+    (
+        "--color-sidebar-muted-foreground",
+        "--color-surface-control",
+        "--color-sidebar",
+        SECONDARY_FLOOR,
+    ),
 )
 
 STATE_ROLES = ("--color-hover", "--color-selected", "--color-active")
@@ -141,16 +159,20 @@ DECLARED_DEVIATIONS: dict[tuple[str, str], tuple[float, str]] = {
         "pre-existing dark value, untouched by the light retune; raising it "
         "changes every hairline divider in dark mode and needs its own review",
     ),
-    ("light", "--color-border-light against --color-surface"): (
-        1.24,
-        "approved light value #e4e7ea measures 1.24:1, one hundredth under the "
-        "floor; it is the deliberate hairline weight and doubles as the hover "
-        "fill, so it was not nudged to clear an arbitrary rounding boundary",
+    ("dark", "--color-border-light against --color-sidebar"): (
+        1.156,
+        "newly measured dark rail pair, outside the light retune; pinned here "
+        "so it cannot regress before the dark hairline system is reviewed",
     ),
-    ("light", "--color-selected vs --color-active"): (
-        1.019,
-        "approved #dde1e6 vs #dbdfe4 differ by one step by design — selected and "
-        "active are adjacent, and both are separately distinguishable from hover",
+    ("dark", "--color-border-light against --color-surface-under"): (
+        1.127,
+        "newly measured dark recessed-plane pair, outside the light retune; "
+        "pinned here so it cannot regress before the dark hairline system is reviewed",
+    ),
+    ("dark", "--color-border-light against --color-surface-control"): (
+        1.164,
+        "newly measured dark control-fill pair, outside the light retune; "
+        "pinned here so it cannot regress before the dark hairline system is reviewed",
     ),
     ("dark", "--color-selected carries at least as much ink as --color-hover"): (
         1.08,
@@ -540,8 +562,30 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
             )
         )
 
+    for role, overlay, base_plane, floor in STACKED_TEXT_PAIRS:
+        base = planes.get(base_plane)
+        if base is None:
+            continue
+        nested_plane = resolved(overlay, base)
+        if nested_plane is None:
+            continue
+        ink = resolved(role, nested_plane)
+        if ink is None:
+            continue
+        measurements.append(
+            Measurement(
+                mode,
+                f"{role} on {overlay} over {base_plane}",
+                contrast(ink, nested_plane),
+                floor,
+                f"{ink.hex()} on {nested_plane.hex()}",
+            )
+        )
+
     for role, plane in BORDER_PAIRS:
-        backdrop = resolved(plane)
+        # Reuse the page-composited plane so translucent fills such as
+        # `--color-surface-control` are measured as people actually see them.
+        backdrop = planes.get(plane)
         if backdrop is None:
             continue
         stroke = resolved(role, backdrop)

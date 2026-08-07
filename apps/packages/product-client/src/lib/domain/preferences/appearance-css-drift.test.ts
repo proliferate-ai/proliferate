@@ -293,6 +293,17 @@ describe("generated design-package semantic text tokens", () => {
 describe("right-panel tab typography", () => {
   const rightPanelRule = readRule(productCss, /\.right-panel-tab-system\s*\{([\s\S]*?)\}/);
 
+  it("derives the light sticky backdrop from the light surface", () => {
+    const lightRule = readRule(
+      productCss,
+      /:root\[data-mode="light"\] \.right-panel-tab-system\s*\{([\s\S]*?)\}/,
+    );
+    expect(lightRule).toContain(
+      "--right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-surface) 88%, transparent);",
+    );
+    expect(lightRule).not.toContain("#181818");
+  });
+
   it("consumes compact UI, control-weight, and control-icon tokens", () => {
     expect(rightPanelRule).toContain("font-size: var(--text-ui-sm);");
     expect(rightPanelRule).toContain("line-height: var(--text-ui-sm--line-height);");
@@ -473,16 +484,22 @@ describe("tab and sidebar status tokens across modes", () => {
   });
 
   it("keeps the light column on the adopted readable inks, not dark's bright ones", () => {
-    // The exact light literals adopted with the independent light column: a
-    // near-black underline and darkened status inks that hold contrast on a
-    // white sidebar. Locked so "fix light mode" edits can't quietly regress
-    // to the dark palette's values, which are unreadable on light surfaces.
+    // The underline follows the light palette's single neutral ink authority;
+    // status colors keep their independently authored accessible literals.
+    expect(readDeclaration(lightRoot, "--workspace-shell-tab-active-underline")).toBe(
+      "var(--color-foreground)",
+    );
+    expect(readDeclaration(lightRoot, "--color-foreground")).toBe(
+      rgbToHex([0x1a, 0x1c, 0x1f]),
+    );
+
+    // Locked so light-mode edits cannot quietly regress statuses to the dark
+    // palette's values, which are unreadable on light surfaces.
     // Expressed as RGB channels (like the composer locks above): tokens.ts
     // owns the literal spelling, so no second raw-hex literal lives here.
     const LIGHT_STATUS_INKS: ReadonlyArray<
       readonly [token: string, channels: readonly [number, number, number]]
     > = [
-      ["--workspace-shell-tab-active-underline", [0x16, 0x18, 0x1b]],
       ["--color-sidebar-status-error", [0xc0, 0x26, 0x22]],
       ["--color-sidebar-status-unseen", [0x0b, 0x6b, 0xcb]],
       ["--color-sidebar-status-waiting", [0x8a, 0x5a, 0x00]],
