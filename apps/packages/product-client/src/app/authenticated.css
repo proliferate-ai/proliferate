@@ -15,13 +15,22 @@
 
 .standard-workspace-shell {
   --workspace-left-geometry-duration: var(--duration-panel);
+  --workspace-right-geometry-duration: var(--duration-panel);
   transition-property: --workspace-left-width, --workspace-right-width;
-  transition-duration: var(--workspace-left-geometry-duration), var(--duration-panel);
+  transition-duration: var(--workspace-left-geometry-duration), var(--workspace-right-geometry-duration);
   transition-timing-function: var(--ease-out-cubic), var(--ease-out-cubic);
 }
 
 .standard-workspace-shell[data-snap-left-geometry="true"] {
   --workspace-left-geometry-duration: 0ms;
+}
+
+/* A live separator drag drives the right width from the pointer: easing it
+   would trail the cursor by the panel duration and keep both panes re-laying
+   out long after each move. Open/close keeps the eased transition — including
+   the collapse a drag past the threshold triggers, which clears this flag. */
+.standard-workspace-shell[data-snap-right-geometry="true"] {
+  --workspace-right-geometry-duration: 0ms;
 }
 
 .standard-workspace-shell[data-manual-workspace-geometry="true"] {

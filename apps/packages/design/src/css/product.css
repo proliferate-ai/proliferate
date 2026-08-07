@@ -777,6 +777,20 @@ mark.content-find-active {
   contain-intrinsic-size: auto var(--diffs-line-height);
 }
 
+/*
+ * Block-level virtualization for the file viewer's rendered-document preview.
+ * A large Markdown file re-wraps every block whenever the pane width changes —
+ * which during a separator drag is every frame — so top-level blocks outside
+ * the scrollport skip layout and paint instead, and a resize (or scroll) only
+ * pays for the visible slice. `auto` in contain-intrinsic-size remembers each
+ * block's real rendered height after first paint; the fallback approximates
+ * one prose line for blocks that have never rendered.
+ */
+.file-preview-virtualized > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 24px;
+}
+
 .composer-diff-simple-line {
   --diff-view-surface: var(--color-diff-main-surface);
   --diff-view-header-surface: var(--diff-view-surface);

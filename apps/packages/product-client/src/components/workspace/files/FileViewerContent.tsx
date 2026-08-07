@@ -82,10 +82,12 @@ function RichPreview({
     // The reference viewer keeps the rendered-markdown gutter tight —
     // document padding, not page margins. The first block's own top margin
     // (e.g. h1 mt-5) would double the top gap, so strip it.
+    // file-preview-virtualized: off-scrollport blocks skip layout/paint, so a
+    // huge rendered document stays cheap to re-wrap while the panel resizes.
     <div className="file-source-scroll h-full min-h-0 min-w-0 overflow-auto bg-background px-4 py-4">
       <MarkdownBody
         content={content}
-        className="[&>*:first-child]:mt-0"
+        className="file-preview-virtualized [&>*:first-child]:mt-0"
         renderCodeBlock={renderDesktopCodeBlock}
         // This body is the file's own bytes, not conversation content. The
         // surface flag keeps message-only reading affordances (the inline-code

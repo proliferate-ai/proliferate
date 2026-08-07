@@ -87,6 +87,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     rightPanelOpen,
     rightPanelState,
     rightPanelWidth,
+    rightPanelResizing,
     rightPanelFocusRequestToken,
     terminalActivationRequest,
     publishDialog,
@@ -101,6 +102,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     rightWidth: hasWorkspaceShell && !hasLaunchIntentOnlyShell && rightPanelOpen
       ? rightPanelWidth
       : 0,
+    snapRight: rightPanelResizing,
     onToggleLeft: actions.onToggleSidebar,
   });
   const chromeClasses = useMemo(
@@ -232,6 +234,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 "--workspace-left-header-dwell": hasMacWindowControls ? "122px" : "40px",
               } as CSSProperties}
               data-snap-left-geometry={workspaceGeometry.snapLeft ? "true" : "false"}
+              data-snap-right-geometry={rightPanelResizing ? "true" : "false"}
               data-manual-workspace-geometry={
                 workspaceGeometry.usesManualInterpolation ? "true" : "false"
               }

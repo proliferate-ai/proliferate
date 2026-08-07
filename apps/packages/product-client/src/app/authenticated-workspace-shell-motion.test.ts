@@ -14,6 +14,8 @@ describe("authenticated workspace shell motion", () => {
     expect(stylesheet).toContain("var(--duration-panel)");
     expect(stylesheet).toContain("var(--ease-out-cubic)");
     expect(stylesheet).toContain("[data-snap-left-geometry=\"true\"]");
+    expect(stylesheet).toContain("[data-snap-right-geometry=\"true\"]");
+    expect(stylesheet).toContain("--workspace-right-geometry-duration: 0ms");
     expect(stylesheet).toContain("[data-manual-workspace-geometry=\"true\"]");
   });
 });

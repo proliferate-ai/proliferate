@@ -7,6 +7,12 @@ interface UseResizeOptions {
   size: number;
   /** Called on every mouse move with the proposed new size in px */
   onResize: (size: number) => void;
+  /**
+   * Called once when the gesture ends — the mouseup, or the owner unmounting
+   * mid-drag. Lets a consumer treat the drag as one gesture (e.g. persist the
+   * final size once) instead of reacting to every intermediate move.
+   */
+  onResizeEnd?: () => void;
   /** If true, dragging right/down shrinks (for panels anchored to right/bottom edge) */
   reverse?: boolean;
   min?: number;
@@ -21,6 +27,7 @@ export function useResize({
   direction,
   size,
   onResize,
+  onResizeEnd,
   reverse = false,
   min = 0,
   max = Infinity,
@@ -61,19 +68,22 @@ export function useResize({
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
         activeDragCleanupRef.current = null;
+        onResizeEnd?.();
       };
 
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
       activeDragCleanupRef.current = handleMouseUp;
     },
-    [direction, size, onResize, reverse, min, max],
+    [direction, size, onResize, onResizeEnd, reverse, min, max],
   );
 
   // Mirrors handleMouseUp's teardown without firing onResize or removing the
   // listeners twice: a normal mouseup already nulls the ref before this could
   // ever run for that gesture, so this only fires for the unmount-mid-drag
-  // case handleMouseUp was never going to see.
+  // case handleMouseUp was never going to see. Ending via unmount still fires
+  // onResizeEnd — the gesture is over either way, and a consumer persisting
+  // the final size must not lose it just because the surface went away.
   useEffect(() => () => {
     activeDragCleanupRef.current?.();
   }, []);

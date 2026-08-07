@@ -263,6 +263,7 @@ function mainScreenLayout(overrides: Partial<MainScreenLayoutState> = {}): {
       setCommandPaletteOpen: vi.fn(),
       rightPanelWidth: 420,
       setRightPanelWidth: vi.fn(),
+      rightPanelResizing: false,
       onLeftSeparatorDown: vi.fn(),
       onRightSeparatorDown: vi.fn(),
       ...overrides,
