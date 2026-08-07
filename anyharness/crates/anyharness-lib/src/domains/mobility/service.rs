@@ -16,7 +16,7 @@ use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
 use crate::domains::workspaces::model::WorkspaceRecord;
-use crate::domains::workspaces::service::WorkspaceService;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::{
     adapters::files::safety::resolve_safe_path,
     adapters::git::{types::GitOperation, GitService},
@@ -49,7 +49,7 @@ pub enum MobilityError {
 
 #[derive(Clone)]
 pub struct MobilityService {
-    workspace_service: Arc<WorkspaceService>,
+    workspace_runtime: Arc<WorkspaceRuntime>,
     session_service: Arc<SessionService>,
     subagent_service: Arc<SubagentService>,
     access_gate: Arc<WorkspaceAccessGate>,
@@ -60,14 +60,14 @@ pub struct MobilityService {
 
 impl MobilityService {
     pub fn new(
-        workspace_service: Arc<WorkspaceService>,
+        workspace_runtime: Arc<WorkspaceRuntime>,
         session_service: Arc<SessionService>,
         subagent_service: Arc<SubagentService>,
         access_gate: Arc<WorkspaceAccessGate>,
         runtime_home: PathBuf,
     ) -> Self {
         Self {
-            workspace_service,
+            workspace_runtime,
             session_service,
             subagent_service,
             access_gate,
@@ -219,7 +219,7 @@ impl MobilityService {
         &self,
         workspace_id: &str,
     ) -> Result<WorkspaceRecord, MobilityError> {
-        self.workspace_service
+        self.workspace_runtime
             .get_workspace(workspace_id)?
             .ok_or_else(|| MobilityError::WorkspaceNotFound(workspace_id.to_string()))
     }

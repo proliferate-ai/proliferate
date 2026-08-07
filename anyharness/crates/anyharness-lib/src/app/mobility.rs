@@ -16,14 +16,12 @@ use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
-use crate::domains::workspaces::service::WorkspaceService;
 use crate::live::terminals::TerminalService;
 use crate::persistence::Db;
 
 pub(super) struct MobilityWiringDeps {
     pub db: Db,
     pub runtime_home: PathBuf,
-    pub workspace_service: Arc<WorkspaceService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
@@ -36,7 +34,7 @@ pub(super) struct MobilityWiringDeps {
 /// Only the valve escapes to `AppState`; the service is reachable through it.
 pub(super) fn wire_mobility(deps: MobilityWiringDeps) -> Arc<MobilityRuntime> {
     let service = Arc::new(MobilityService::new(
-        deps.workspace_service,
+        deps.workspace_runtime.clone(),
         deps.session_service.clone(),
         deps.subagent_service.clone(),
         deps.workspace_access_gate.clone(),

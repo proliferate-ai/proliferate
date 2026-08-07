@@ -6,6 +6,7 @@ use super::test_support::{
 };
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::store::RepoRootStore;
+use crate::domains::workspaces::branch_refresh::WorkspaceBranchRefreshCoordinator;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::store::WorkspaceStore;
@@ -380,6 +381,55 @@ fn background_branch_refresh_persists_changed_branch_and_throttles() {
     assert_eq!(throttled.schedule.scheduled_count, 0);
     assert_eq!(throttled.schedule.skipped_throttled_count, 1);
     assert_eq!(runtime.scheduled_branch_refresh_batches_for_test(), 1);
+}
+
+/// PR 8 safety pin: `MobilityService::load_workspace` goes through
+/// `WorkspaceRuntime::get_workspace`, which schedules a BACKGROUND branch
+/// refresh against a record snapshot. destroy-source / park-local delete that
+/// row while the refresh may still be queued, so the refresh worker must
+/// re-read the row and skip it — a late refresh can never resurrect or rewrite
+/// a destroyed workspace.
+#[test]
+fn branch_refresh_skips_a_row_deleted_after_the_snapshot_was_taken() {
+    let source = TempDirGuard::new("runtime-branch-refresh-deleted-source");
+    let runtime_home = TempDirGuard::new("runtime-branch-refresh-deleted-home");
+    init_repo(source.path());
+
+    let db = Db::open_in_memory().expect("open db");
+    let runtime = make_runtime(&db, runtime_home.path());
+    let workspace = runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("create workspace")
+        .workspace;
+
+    // The snapshot mobility's `get_workspace` hands to the refresh coordinator,
+    // captured while the row is still live.
+    let stale_snapshot = runtime
+        .get_workspace(&workspace.id)
+        .expect("get workspace")
+        .expect("workspace exists");
+
+    // Rename the branch so an eligible refresh would otherwise WRITE.
+    run_git(source.path(), ["branch", "-m", "renamed"]);
+    // destroy-source / park-local wins the race and deletes the row.
+    runtime
+        .delete_workspace_record(&workspace.id)
+        .expect("delete workspace record");
+
+    // Now the queued refresh runs, holding only the stale snapshot.
+    let outcome = WorkspaceBranchRefreshCoordinator::new().run_refresh_for_test(
+        WorkspaceStore::new(db.clone()),
+        std::slice::from_ref(&stale_snapshot),
+    );
+
+    // It must skip on the re-read: no write, no resurrection.
+    assert_eq!(outcome.schedule.scheduled_count, 1);
+    assert_eq!(outcome.skipped_missing_count, 1);
+    assert_eq!(outcome.updated_count, 0);
+    assert!(WorkspaceStore::new(db.clone())
+        .find_by_id(&workspace.id)
+        .expect("load stored workspace")
+        .is_none());
 }
 
 #[test]
