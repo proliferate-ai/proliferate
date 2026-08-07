@@ -1,6 +1,8 @@
 # Docs structure (target)
 
-One authority rule replaces the current five-lifecycle model: **if it's not current, it's not in this repo.** Current means current behavior, current policy including its exact exceptions, current procedures, and current evidence. Approved-but-unbuilt designs are not current: delivery specs and multi-PR plans live outside the canonical read path - PRs, issues, and `programs/` (below). When a delivery spec or program retires, its surviving decisions graduate in that same retiring PR: mechanical rules → lint records, rejected approaches → tried-and-rejected rows, cross-plane invariants → feature-doc laws. Nothing valuable dies in a PR body. Anything in the tree is operating truth, updated in the same PR that changes behavior. The tree serves agents and humans alike - it is the reference for both, not an agent-only artifact.
+Description: the target model and live slice registry for restructuring this repo's documentation system into the AGENTS.md-routed tree.
+
+One authority rule replaces the current five-lifecycle model: **if it's not current, it's not in this repo.** Current means current behavior, current policy including its exact exceptions, current procedures, and current evidence. Approved-but-unbuilt designs are not current: delivery specs and multi-PR plans live outside the canonical read path - PRs, issues, and the Implementation sections of `adrs/` records (below). When a delivery spec or program retires, its surviving decisions graduate in that same retiring PR: mechanical rules → lint records, rejected approaches → tried-and-rejected rows, cross-plane invariants → feature-doc laws. Nothing valuable dies in a PR body. Anything in the tree is operating truth, updated in the same PR that changes behavior. The tree serves agents and humans alike - it is the reference for both, not an agent-only artifact.
 
 Two independent questions decide where a learning goes - placement and verification, never conflated:
 
@@ -78,9 +80,8 @@ Every rule names its enforcement mode: `compiler | lint | test | review`. Mechan
     - NOT guides: `developing/testing/*` depth → `specs/TESTING/`; the two `reference/` tables are reference, not task-shaped - `environment-sources` folds into `dev-profiles`' config section, `workspace-command-environment` belongs to the ANYHARNESS owner docs
 
 - `adrs/` - architectural decision records. The specing doc IS the record (ruled 2026-08-07): every non-trivial feature is specced as an ADR up front (the spec format and the ADR format are one thing) (Orientation / Current context / Design options / Implementation slices / Validation derived from the grid), immutable once approved, and it STAYS after ship as the permanent why. Every record opens with a one-line `Description:` header so `grep 'Description:' adrs/` is the index - no separate index file to rot. Current behavior still graduates into owner docs / feature docs at ship; the ADR keeps the rationale and the rejected options.
-
-- `programs/` - multi-PR orchestration in flight, OUTSIDE the canonical read path: nothing routes here, agents doing normal work never read it. Scope narrowed 2026-08-07: the design content lives in the ADR; programs/ carries only the execution machinery - the slice registry / dependency graph and per-slice state (base SHA, approval) - so slice N+1 reconciles against what slice N actually shipped, not against a stale plan
-    - Deleted when the program ships; the harvest rule at the top moves surviving behavior into owner docs (rationale is already permanent in the ADR)
+    - There is NO separate `programs/` dir (removed 2026-08-07): multi-PR orchestration lives in the ADR's own Implementation section - the slice registry / dependency graph and per-slice state (base SHA, approval), amended as slices ship so slice N+1 reconciles against what slice N actually shipped. The decision sections freeze at approval; the Implementation registry is the one part that stays live until the work ships.
+    - Outside the normal read path: nothing routes here for day-to-day work - you come here when you want the why behind a decision, or you're executing one
 
 - `lints/` - rules as data, by owner (`lints/server/`, `lints/frontend/`, `lints/anyharness/`, ...): rule records + exception ledgers, consumed by the checkers (one engine shape = one shared rule schema; native tools like Clippy/ESLint are fine behind shared rule IDs; checkers live in `scripts/` per existing convention). Rule IDs (SRV-STORE-3) are citable vocabulary. Exemplar: `server-grid-rules.md` → `lints/server/*.toml`
     - **The record IS the doc.** The rule record (TOML) is canonical: id, scope, the rule, the legal alternative, the why (with the incident, dated, if there was one), a good/bad example, exact exceptions, owner. The CI diagnostic is GENERATED from the record - a bare "error: banned" teaches nothing; the message is a remediation prompt. Family-level rationale lives in the owner README.
@@ -116,7 +117,9 @@ Known collision to resolve during migration: the server currently has two prose 
 ## Structure alignment rulings (2026-08-07)
 
 Founder-ruled against the live AGENTS.md-TOC sketch: `adrs/` added with ADR-as-the-spec semantics
-and `programs/` narrowed to orchestration (both applied in the tree above); per-PR
+and `programs/` REMOVED outright (second ruling, same day - orchestration lives in the ADR's
+Implementation section; this file moved from `programs/docs-restructure/OUTLINE.md` to
+`adrs/docs-restructure.md` accordingly, becoming the first record); per-PR
 testing/observability enforcement = review-mode + PR template (applied above; slice D16);
 `DESIGN_SYSTEM.md` naming (slice D4); `FEATURE_DOCS/` home confirmed as already ruled. Owner-dir
 placement re-ruled explicitly 2026-08-07 (second pass): `specs/anyharness|server|frontend`,
@@ -132,7 +135,7 @@ adversarial verify pass (refuters per moved/deleted doc — the method validated
 
 ### Wave 0 — unblocked (theatre deletion #1667 merged @3ff09e50a was the precondition)
 
-- **D1 — land this program.** Rebase this branch onto main, append this registry, mark ready. No
+- **D1 — land this ADR.** Rebase this branch onto main, append this registry, mark ready. Lands as `adrs/docs-restructure.md`, the first record. No
   canonical-path changes. State: this PR.
 - **D2 — `guides/`.** 1:1 move of `specs/developing/` into `guides/{local,debugging,deploying,operating,process}`
   per the inventory above. `reference/environment-sources.md` folds into `dev-profiles`' config
@@ -149,10 +152,10 @@ adversarial verify pass (refuters per moved/deleted doc — the method validated
   links. Gate: the in-flight branch editing that file lands (pro-76-streaming-micro-bumps).
 - **D5 — `specs/OBSERVABILITY.md`.** ≤150-line distill (instrumenting-a-new-feature table,
   scrubber asymmetries, motivating incident); system depth stays with the observability docs.
-- **D15 — `adrs/` bootstrap.** Stand up the dir + the ADR format contract (section anatomy incl.
-  the grid-derived Validation section, `Description:` header convention) + the AGENTS.md router
-  row. Backfill only the workflow-V1 ADR as the worked exemplar; no mass backfill. Gate: D3 + D5
-  pushed (router-row contention).
+- **D15 — ADR format contract.** The dir itself lands with D1 (this file). D15 adds the format
+  contract (section anatomy incl. the grid-derived Validation section, `Description:` header
+  convention) + the AGENTS.md router row. Backfill only the workflow-V1 ADR as the worked
+  exemplar; no mass backfill. Gate: D3 + D5 pushed (router-row contention).
 - **D16 — PR template: Testing + Observability sections.** `.github/` edit implementing the
   review-mode enforcement ruled 2026-08-07. Constitution-adjacent: founder-reviewed personally.
   Gate: D3 + D5 merged (the sections cite both docs).
@@ -179,6 +182,7 @@ adversarial verify pass (refuters per moved/deleted doc — the method validated
   anatomy above.
 - **D13 — `PRODUCT_SENSE.md`.** Drafted, then a live founder taste ruling.
 - **D14 — tombstone sweep.** Delete tombstones + `specs/codebase` residue at zero inbound; this
-  program dir deletes itself per the harvest rule. Preconditions surfaced by the D2 review round:
+  ADR stays (records are permanent); its Implementation registry gets a final all-shipped state.
+  Preconditions surfaced by the D2 review round:
   a live Grafana re-apply must land first (alert runbook URLs currently traverse tombstones), and
   `check_docs.py` gains a `guides/` root guard when the `specs/developing` guard retires.
