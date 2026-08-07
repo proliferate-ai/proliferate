@@ -32,6 +32,7 @@ Every rule names its enforcement mode: `compiler | lint | test | review`. Mechan
         - `specs/FRONTEND/` - same shape
         - Thin single-file standards for the small owners: supervisor, worker, desktop-native, sdk. Supervisor and worker do distinct work with distinct standards even though they run in tandem - the tandem story itself lives in `FEATURE_DOCS/MANAGED_RUNTIME.md`.
     - Touching a cross-plane system (sandbox, billing, model routing, ...)? The "touching `<globs>` → read `<doc>`" rows live right here, pointing into `specs/FEATURE_DOCS/`. No CI ceremony attached.
+    - Want to deeply understand a specific architectural decision? → `adrs/` (grep for `Description:` to get the one-line summary of each record)
     - Looking to do something that doesn't have to do with writing / editing code? (releasing, debugging prod, local setup) → `guides/`
     - Keeps the existing path-glob source router table, retargeted at this tree
     - Keeps repository-wide rules (no barrels, delete dead code, attribution lint, etc.)
@@ -44,10 +45,11 @@ Every rule names its enforcement mode: `compiler | lint | test | review`. Mechan
     - Only changes when a plane is added or a seam moves
 
 - `specs/` - everything to do with building in this repository
-    - `DESIGN.md` - the design system, whole: the why behind every token, component + styles library references, ratchet pointers
+    - `DESIGN_SYSTEM.md` - the design system, whole: the why behind every token, component + styles library references, ratchet pointers
     - `PRODUCT_SENSE.md` - sparse cross-product judgment primitives: the taste calls a competent model could get wrong (style, copy, naming, tone), each with a good/bad example. System-specific taste lives with that system. Enforced by review - legitimately, not as a GAP.
-    - `TESTING.md` - how we engineer with tests. Must be considered in every single PR. ≤150 lines: the 4-tier model, the no-fake-sandbox / no-mock-LLM ruling, per-PR expectations. Depth (tier contracts, release worlds, release validation) lives in `specs/TESTING/`
+    - `TESTING.md` - how we engineer with tests. Must be considered in every single PR (where feasible). ≤150 lines: the 4-tier model, the no-fake-sandbox / no-mock-LLM ruling, per-PR expectations. Depth (tier contracts, release worlds, release validation) lives in `specs/TESTING/`
     - `OBSERVABILITY.md` - how we keep everything observable. Must be considered in every single PR. ≤150 lines: instrumenting-a-new-feature table, scrubber asymmetries, the incident that motivates the rules
+    - Enforcement of both per-PR obligations (ruled 2026-08-07): review-mode backed by the PR template - required Testing and Observability sections in the PR body (state the tier(s) added or why none is feasible; state the observability delta or an explicit "none"). No mechanical body-parsing check unless a `GAP - #issue` later earns one. The template edit is constitution-adjacent (`.github/`) and gets its own slice.
     - `GENERATED/` - reproducible checked-in references (DB schema etc.), regenerate command + owning test named in its README, never hand-edited
     - `FEATURE_DOCS/` - cross-plane systems that are core and required to understand deeply
         - `README.md` - a plain index of the folder, plus the admission bar stated harshly at the top: a feature doc exists only when the system spans planes and no code location could host the knowledge. If a comment, lint, or test could carry it, it does not get a doc. (Routing lives in `AGENTS.md`; each doc's own header carries its `Read before touching` globs.)
@@ -75,9 +77,10 @@ Every rule names its enforcement mode: `compiler | lint | test | review`. Mechan
     - `process/` - `pull-requests` (labels, review flow, agent review)
     - NOT guides: `developing/testing/*` depth → `specs/TESTING/`; the two `reference/` tables are reference, not task-shaped - `environment-sources` folds into `dev-profiles`' config section, `workspace-command-environment` belongs to the ANYHARNESS owner docs
 
-- `programs/` - multi-PR program plans in flight. OUTSIDE the canonical read path: nothing routes here, agents doing normal work never read it
-    - One dir per program: immutable revisioned slice specs (spec ID, base SHA, approval state) plus a program outline carrying the slice dependency graph - so slice N+1 reconciles against what slice N actually shipped, not against a stale plan
-    - Deleted when the program ships, with surviving decisions graduated per the harvest rule at the top
+- `adrs/` - architectural decision records. The specing doc IS the record (ruled 2026-08-07): new work of decision weight is specced as an ADR up front (Orientation / Current context / Design options / Implementation slices / Validation derived from the grid), immutable once approved, and it STAYS after ship as the permanent why. Every record opens with a one-line `Description:` header so `grep 'Description:' adrs/` is the index - no separate index file to rot. Current behavior still graduates into owner docs / feature docs at ship; the ADR keeps the rationale and the rejected options.
+
+- `programs/` - multi-PR orchestration in flight, OUTSIDE the canonical read path: nothing routes here, agents doing normal work never read it. Scope narrowed 2026-08-07: the design content lives in the ADR; programs/ carries only the execution machinery - the slice registry / dependency graph and per-slice state (base SHA, approval) - so slice N+1 reconciles against what slice N actually shipped, not against a stale plan
+    - Deleted when the program ships; the harvest rule at the top moves surviving behavior into owner docs (rationale is already permanent in the ADR)
 
 - `lints/` - rules as data, by owner (`lints/server/`, `lints/frontend/`, `lints/anyharness/`, ...): rule records + exception ledgers, consumed by the checkers (one engine shape = one shared rule schema; native tools like Clippy/ESLint are fine behind shared rule IDs; checkers live in `scripts/` per existing convention). Rule IDs (SRV-STORE-3) are citable vocabulary. Exemplar: `server-grid-rules.md` → `lints/server/*.toml`
     - **The record IS the doc.** The rule record (TOML) is canonical: id, scope, the rule, the legal alternative, the why (with the incident, dated, if there was one), a good/bad example, exact exceptions, owner. The CI diagnostic is GENERATED from the record - a bare "error: banned" teaches nothing; the message is a remediation prompt. Family-level rationale lives in the owner README.
@@ -110,6 +113,16 @@ Known collision to resolve during migration: the server currently has two prose 
 - No copied payload/schema dumps - point at the source path instead. Interface SEMANTICS are welcome: optionality, compatibility windows, typed errors, producer/consumer responsibilities
 - No "last updated" stamps or changelogs - git owns history; dates live only inside laws and rejections
 
+## Structure alignment rulings (2026-08-07)
+
+Founder-ruled against the live AGENTS.md-TOC sketch: `adrs/` added with ADR-as-the-spec semantics
+and `programs/` narrowed to orchestration (both applied in the tree above); per-PR
+testing/observability enforcement = review-mode + PR template (applied above; slice D16);
+`DESIGN_SYSTEM.md` naming (slice D4); `FEATURE_DOCS/` home confirmed as already ruled. One
+ambiguity left open deliberately: the ruling answer said "top-level" for the owner dirs while this
+tree keeps them at `specs/ANYHARNESS|SERVER|FRONTEND` (CAPS) — confirm placement before D7
+executes; nothing before Wave 1 depends on it.
+
 ## Slice registry (execution plan, 2026-08-06)
 
 Every slice ends at pushed + CI green + agent-reviewed; the founder merges. Distill slices get an
@@ -131,11 +144,18 @@ adversarial verify pass (refuters per moved/deleted doc — the method validated
   parity test hardcodes doc paths — flagged, founder-reviewed. Open rulings carried in the PR:
   fate of legacy `flows.md`/`scenarios.md`; `manual-release-qa.md` placement (proposal:
   `specs/TESTING/`). Gate: D2 (shared router rows).
-- **D4 — `specs/DESIGN.md`.** Promote `specs/codebase/platforms/product/design-system.md`;
-  retarget theme-checker scripts + inbound links. Gate: the in-flight branch editing that file
-  lands (pro-76-streaming-micro-bumps).
+- **D4 — `specs/DESIGN_SYSTEM.md`** (renamed from DESIGN.md, ruled 2026-08-07). Promote
+  `specs/codebase/platforms/product/design-system.md`; retarget theme-checker scripts + inbound
+  links. Gate: the in-flight branch editing that file lands (pro-76-streaming-micro-bumps).
 - **D5 — `specs/OBSERVABILITY.md`.** ≤150-line distill (instrumenting-a-new-feature table,
   scrubber asymmetries, motivating incident); system depth stays with the observability docs.
+- **D15 — `adrs/` bootstrap.** Stand up the dir + the ADR format contract (section anatomy incl.
+  the grid-derived Validation section, `Description:` header convention) + the AGENTS.md router
+  row. Backfill only the workflow-V1 ADR as the worked exemplar; no mass backfill. Gate: D3 + D5
+  pushed (router-row contention).
+- **D16 — PR template: Testing + Observability sections.** `.github/` edit implementing the
+  review-mode enforcement ruled 2026-08-07. Constitution-adjacent: founder-reviewed personally.
+  Gate: D3 + D5 merged (the sections cite both docs).
 
 ### Wave 1 — owner dirs, gated on the in-flight structure programs (they ARE steps 1–3)
 
