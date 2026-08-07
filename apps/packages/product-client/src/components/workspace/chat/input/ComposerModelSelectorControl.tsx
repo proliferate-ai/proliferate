@@ -5,47 +5,25 @@ import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 import { getSettingsSectionForHarnessKind } from "#product/lib/domain/settings/navigation-presentation";
 import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-display-name-parts";
-import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import type {
-  ModelSelectorGroup,
-  ModelSelectorProps,
-  ModelSelectorSelection,
-} from "#product/lib/domain/chat/models/model-selector-types";
-import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
 import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
-import { ChevronDown, Plus, Settings } from "#product/primitives/icons/core";
-import { Zap } from "#product/primitives/icons/product";
+import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "#product/primitives/DropdownMenu";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 import { ComposerFieldInlineError } from "#product/components/workspace/chat/input/ComposerFieldInlineError";
+import { ComposerModelPickerPopover } from "#product/components/workspace/chat/input/ComposerModelPickerPopover";
 import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { ComposerModelTuningControls } from "#product/components/workspace/chat/input/ComposerModelTuningControls";
-import { ComposerModelOptionsSubmenu } from "#product/components/workspace/chat/input/ComposerModelOptionsSubmenu";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 
 interface ComposerModelSelectorControlProps {
   modelSelectorProps: ModelSelectorProps;
-  reasoningControl?: LiveSessionControlDescriptor | null;
-  fastModeControl?: LiveSessionControlDescriptor | null;
   disabled?: boolean;
   keyboardShortcutEnabled?: boolean;
 }
 
 export function ComposerModelSelectorControl({
   modelSelectorProps,
-  reasoningControl = null,
-  fastModeControl = null,
   disabled = false,
   keyboardShortcutEnabled = false,
 }: ComposerModelSelectorControlProps) {
@@ -89,15 +67,16 @@ export function ComposerModelSelectorControl({
       restoreComposerFocusOnCloseRef.current = true;
     }
   }, [keyboardFocusRestoreEnabled]);
+  useEffect(() => {
+    if (pickerOpen || !restoreComposerFocusOnCloseRef.current) {
+      return;
+    }
+    restoreComposerFocusOnCloseRef.current = false;
+    if (keyboardFocusRestoreEnabled) {
+      focusChatInput();
+    }
+  }, [keyboardFocusRestoreEnabled, pickerOpen]);
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
-  const selectedReasoningOption = reasoningControl?.options.find((option) => option.selected) ?? null;
-  const reasoningLabel = resolveReasoningEffortPresentation(
-    selectedReasoningOption?.value ?? null,
-    selectedReasoningOption?.label ?? reasoningControl?.detail,
-  ).shortLabel;
-  const fastModeLabel = fastModeControl
-    ? (fastModeControl.isEnabled ? "Fast" : "Default")
-    : null;
   // Stable qualification hook (attributes only): prefer the model whose
   // rendered identity matches the current chip. During live-config restore,
   // the requested launch row can remain selected while `currentModel` already
@@ -136,9 +115,8 @@ export function ComposerModelSelectorControl({
         disabled
         data-composer-model-trigger
         data-composer-selected-model={selectedModelId}
-        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
+        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-body)]" /> : undefined}
         label={triggerLabel}
-        detail={reasoningLabel}
         className="max-w-[15rem]"
       />
     );
@@ -146,74 +124,52 @@ export function ComposerModelSelectorControl({
 
   return (
     <span className="flex min-w-0 flex-col items-start gap-1">
-      <DropdownMenu open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DropdownMenuTrigger asChild>
+      <PopoverButton
+        trigger={(
           <ComposerControlButton
             emphasizeLabel
             data-composer-model-trigger
             data-composer-selected-model={selectedModelId}
-            icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
+            icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-body)]" /> : undefined}
             label={triggerLabel}
-            detail={reasoningLabel}
-            trailing={(
-              <span className="flex items-center gap-1">
-                {fastModeControl?.isEnabled && (
-                  <Zap aria-hidden="true" className="icon-paired fill-current text-muted-foreground" />
-                )}
-                <PendingConfigIndicator pendingState={currentModel?.pendingState ?? null} />
-                <PendingConfigIndicator pendingState={reasoningControl?.pendingState ?? null} />
-                <PendingConfigIndicator pendingState={fastModeControl?.pendingState ?? null} />
-                <ChevronDown aria-hidden="true" className="icon-paired text-muted-foreground" />
-              </span>
-            )}
-            aria-label={`${reasoningLabel
-              ? `Model and reasoning: ${triggerLabel}, ${reasoningLabel}`
-              : `Model: ${triggerLabel}`}${fastModeControl ? `, Fast mode: ${fastModeLabel}` : ""}`}
+            trailing={currentModel?.pendingState
+              ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
+              : null}
+            aria-label={`Model: ${triggerLabel}`}
             aria-invalid={unsupportedSelectionMessage ? true : undefined}
             aria-describedby={unsupportedSelectionMessage
               ? MODEL_UNSUPPORTED_MESSAGE_ID
               : undefined}
             className="max-w-[15rem]"
           />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          side="top"
-          align="start"
-          sideOffset={2}
-          className="w-56 min-w-56"
-          onEscapeKeyDown={handleKeyboardClose}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            const shouldRestoreComposerFocus = restoreComposerFocusOnCloseRef.current;
-            restoreComposerFocusOnCloseRef.current = false;
-            if (shouldRestoreComposerFocus && keyboardFocusRestoreEnabled) {
-              focusChatInput();
-            }
-          }}
-        >
-          <ComposerModelPickerMenu
+        )}
+        side="top"
+        align="start"
+        offset={2}
+        className="w-auto border-0 bg-transparent p-0 shadow-none"
+        externalOpen={pickerOpen}
+        onOpenChange={setPickerOpen}
+      >
+        {(close) => (
+          <ComposerModelPickerPopover
             groups={groups}
             currentModel={currentModel}
-            currentModelLabel={triggerLabel}
-            reasoningControl={reasoningControl}
-            fastModeControl={fastModeControl}
-            onEscapeKeyDown={handleKeyboardClose}
-            onKeyboardSelect={handleKeyboardClose}
+            onKeyboardClose={handleKeyboardClose}
             onSelect={(selection) => {
               onSelect(selection);
-              setPickerOpen(false);
+              close();
             }}
             onAddProvider={() => {
               handleAddProvider();
-              setPickerOpen(false);
+              close();
             }}
             onSettings={() => {
               handleSettings();
-              setPickerOpen(false);
+              close();
             }}
           />
-        </DropdownMenuContent>
-      </DropdownMenu>
+        )}
+      </PopoverButton>
 
       {/* Field-scoped, so it lives with the field: the model the composer is on
           is one this target refuses, and the control above is what fixes it. */}
@@ -227,92 +183,6 @@ export function ComposerModelSelectorControl({
 }
 
 const MODEL_UNSUPPORTED_MESSAGE_ID = "composer-model-unsupported";
-
-function ComposerModelPickerMenu({
-  groups,
-  currentModel,
-  currentModelLabel,
-  reasoningControl,
-  fastModeControl,
-  onEscapeKeyDown,
-  onKeyboardSelect,
-  onSelect,
-  onAddProvider,
-  onSettings,
-}: {
-  groups: ModelSelectorGroup[];
-  currentModel: ModelSelectorProps["currentModel"];
-  currentModelLabel: string;
-  reasoningControl: LiveSessionControlDescriptor | null;
-  fastModeControl: LiveSessionControlDescriptor | null;
-  onEscapeKeyDown: () => void;
-  onKeyboardSelect: () => void;
-  onSelect: (selection: ModelSelectorSelection) => void;
-  onAddProvider: () => void;
-  onSettings: () => void;
-}) {
-  return (
-    <>
-      <ComposerModelOptionsSubmenu
-        groups={groups}
-        currentModel={currentModel}
-        currentModelLabel={currentModelLabel}
-        onEscapeKeyDown={onEscapeKeyDown}
-        onKeyboardSelect={onKeyboardSelect}
-        onSelect={onSelect}
-      />
-      <ComposerModelTuningControls
-        reasoningControl={reasoningControl}
-        fastModeControl={fastModeControl}
-        onEscapeKeyDown={onEscapeKeyDown}
-      />
-      <DropdownMenuSeparator />
-      <AdvancedOptionsSubmenu
-        onAddProvider={onAddProvider}
-        onEscapeKeyDown={onEscapeKeyDown}
-        onSettings={onSettings}
-      />
-    </>
-  );
-}
-
-function AdvancedOptionsSubmenu({
-  onAddProvider,
-  onEscapeKeyDown,
-  onSettings,
-}: {
-  onAddProvider: () => void;
-  onEscapeKeyDown: () => void;
-  onSettings: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <DropdownMenuSub open={open} onOpenChange={setOpen}>
-      <DropdownMenuSubTrigger
-        className="text-muted-foreground"
-        onClick={() => setOpen(true)}
-      >
-        Advanced
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent
-        sideOffset={4}
-        alignOffset={-4}
-        className="w-56"
-        onEscapeKeyDown={onEscapeKeyDown}
-      >
-        <DropdownMenuItem onSelect={onAddProvider}>
-          <Plus className="icon-compact shrink-0" />
-          <span>Add provider</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onSettings}>
-          <Settings className="icon-compact shrink-0" />
-          <span>Settings</span>
-        </DropdownMenuItem>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  );
-}
 
 function resolveTriggerLabel(modelSelectorProps: ModelSelectorProps): string {
   const {
