@@ -11,3 +11,8 @@
 /.github/workflows/     @pablonyx
 /.github/dependabot.yml @pablonyx
 /.github/CODEOWNERS     @pablonyx
+
+# Constitution: rule records and exception ledgers require founder approval.
+# See lints/README.md — weakening a rule or adding a net-new exception is an
+# amendment; agents flag and stop, they never amend.
+/lints/                 @pablonyx
