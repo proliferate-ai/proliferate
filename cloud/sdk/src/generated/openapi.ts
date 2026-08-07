@@ -4570,6 +4570,11 @@ export interface components {
             sandboxStatus?: string | null;
             /** Anyharnessworkspaceid */
             anyharnessWorkspaceId?: string | null;
+            /**
+             * Workerdegraded
+             * @default false
+             */
+            workerDegraded: boolean;
         };
         /** CloudWorktreeRetentionPolicyRequest */
         CloudWorktreeRetentionPolicyRequest: {
@@ -9488,8 +9493,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 name: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -9524,8 +9529,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 name: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -9693,9 +9698,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                name: string;
                 git_owner: string;
                 git_repo_name: string;
-                name: string;
             };
             cookie?: never;
         };
@@ -9730,9 +9735,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                name: string;
                 git_owner: string;
                 git_repo_name: string;
-                name: string;
             };
             cookie?: never;
         };
