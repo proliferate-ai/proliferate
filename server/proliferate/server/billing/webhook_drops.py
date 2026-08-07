@@ -302,7 +302,7 @@ def report_invoice_grant_gate_closed(
 
 def report_invoice_not_period_boundary(
     event_id: object,
-    invoice: dict[str, Any],
+    invoice: dict[str, object],
     invoice_id: str,
     subject: BillingSubject,
     invoice_reason: object,
