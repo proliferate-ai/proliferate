@@ -109,3 +109,54 @@ Known collision to resolve during migration: the server currently has two prose 
 - Use the code's exact names everywhere (grep is how agents travel between doc and code)
 - No copied payload/schema dumps - point at the source path instead. Interface SEMANTICS are welcome: optionality, compatibility windows, typed errors, producer/consumer responsibilities
 - No "last updated" stamps or changelogs - git owns history; dates live only inside laws and rejections
+
+## Slice registry (execution plan, 2026-08-06)
+
+Every slice ends at pushed + CI green + agent-reviewed; the founder merges. Distill slices get an
+adversarial verify pass (refuters per moved/deleted doc — the method validated on PR #1667).
+`AGENTS.md` retargets FIRST inside each slice; moved paths keep one-line tombstones until
+`check_docs.py` reports zero inbound, deleted in D14.
+
+### Wave 0 — unblocked (theatre deletion #1667 merged @3ff09e50a was the precondition)
+
+- **D1 — land this program.** Rebase this branch onto main, append this registry, mark ready. No
+  canonical-path changes. State: this PR.
+- **D2 — `guides/`.** 1:1 move of `specs/developing/` into `guides/{local,debugging,deploying,operating,process}`
+  per the inventory above. `reference/environment-sources.md` folds into `dev-profiles`' config
+  section; `reference/workspace-command-environment.md` tombstones toward D7 (ANYHARNESS owner
+  content); `testing/*` stays put for D3. Script/Makefile citations retargeted.
+- **D3 — `specs/TESTING.md` + `specs/TESTING/`.** Distill `developing/testing/README.md` to the
+  ≤150-line per-PR doc; depth (core-release-validation, release-worlds-and-fixtures, tier-3/4
+  contracts, the scenario manifest) moves to `specs/TESTING/`. Constitution-class: the manifest
+  parity test hardcodes doc paths — flagged, founder-reviewed. Open rulings carried in the PR:
+  fate of legacy `flows.md`/`scenarios.md`; `manual-release-qa.md` placement (proposal:
+  `specs/TESTING/`). Gate: D2 (shared router rows).
+- **D4 — `specs/DESIGN.md`.** Promote `specs/codebase/platforms/product/design-system.md`;
+  retarget theme-checker scripts + inbound links. Gate: the in-flight branch editing that file
+  lands (pro-76-streaming-micro-bumps).
+- **D5 — `specs/OBSERVABILITY.md`.** ≤150-line distill (instrumenting-a-new-feature table,
+  scrubber asymmetries, motivating incident); system depth stays with the observability docs.
+
+### Wave 1 — owner dirs, gated on the in-flight structure programs (they ARE steps 1–3)
+
+- **D6 — constitution machinery.** Shared TOML rule schema, `lints/` scaffold, `CODEOWNERS` on
+  `lints/**`, record→diagnostic generator. Founder-reviewed personally. Gate: first owner's rule
+  data exists (D7 ready to consume it).
+- **D7 — `ANYHARNESS/` + `lints/anyharness/`.** Gate: anyharness-grid program merged. Per the
+  migration order above: baselines → split (guides + anyharness-structure → TOML + one README) →
+  checker seeded with named exceptions → delete old guides. `live-runtime` survives as a deep guide.
+- **D8 — `SERVER/` + `lints/server/`.** Gate: server-grid landed. Executes the ruled collision:
+  grid-ownership-model wins; old architecture.md's unique content folds in, then deletes.
+- **D9 — `FRONTEND/` + `lints/frontend/`.** Gate: frontend fold stack + slice 5 merged.
+- **D10 — thin owners.** Single-file standards: supervisor, worker, desktop-native, sdk. Gate: D7.
+
+### Wave 2 — router, feature docs, taste
+
+- **D11 — `AGENTS.md` target shape + `ARCHITECTURE.md`.** Final router consolidation (waves
+  already retargeted their own rows — no big-bang) + the starved ~150-line architecture doc.
+- **D12a–g — `FEATURE_DOCS/` carve, one PR per doc.** SANDBOX/ (quartet re-fenced), BILLING,
+  MANAGED_RUNTIME, AGENT_AUTH, MODELS, WORKFLOWS, DESKTOP_HOST — each reshaped to the file
+  anatomy above.
+- **D13 — `PRODUCT_SENSE.md`.** Drafted, then a live founder taste ruling.
+- **D14 — tombstone sweep.** Delete tombstones + `specs/codebase` residue at zero inbound; this
+  program dir deletes itself per the harvest rule.
