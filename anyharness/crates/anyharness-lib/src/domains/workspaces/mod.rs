@@ -18,6 +18,8 @@ mod resolver_tests;
 pub mod restore_runtime;
 pub mod retention;
 pub mod retention_policy;
+pub mod retire;
+pub mod retire_policy;
 pub mod retire_preflight;
 pub mod runtime;
 pub mod setup_runtime;

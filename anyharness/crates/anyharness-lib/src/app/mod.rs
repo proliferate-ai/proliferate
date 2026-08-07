@@ -2,6 +2,7 @@ mod mobility;
 mod product_mcp;
 mod sessions;
 mod workflows;
+mod workspaces;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -52,7 +53,6 @@ use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::domains::sessions::links::completions::LinkCompletionStore;
 use crate::domains::sessions::links::service::SessionLinkService;
@@ -78,6 +78,7 @@ use crate::domains::workspaces::files_runtime::{
 use crate::domains::workspaces::inventory::WorktreeInventoryService;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::purge::WorkspacePurgeService;
+use crate::domains::workspaces::retire::WorkspaceRetireService;
 use crate::domains::workspaces::restore_runtime::RestoreWorktreeRuntime;
 use crate::domains::workspaces::retention::WorkspaceRetentionService;
 use crate::domains::workspaces::retire_preflight::RetirePreflightChecker;
@@ -158,6 +159,7 @@ pub struct AppState {
     pub checkout_deletion_gate: Arc<CheckoutDeletionGate>,
     pub retire_preflight_checker: Arc<RetirePreflightChecker>,
     pub workspace_purge_service: Arc<WorkspacePurgeService>,
+    pub workspace_retire_service: Arc<WorkspaceRetireService>,
     pub workspace_retention_service: Arc<WorkspaceRetentionService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
     pub mobility_runtime: Arc<MobilityRuntime>,
@@ -458,27 +460,24 @@ impl AppState {
         );
         let workflow_run_runtime = workflow_phase_two.run_runtime;
         let workflow_workspace_runtime = workflow_phase_two.workspace_runtime;
-        let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
-            workspace_runtime.clone(),
-            workspace_access_gate.clone(),
-            workspace_operation_gate.clone(),
-            session_runtime.clone(),
-            session_service.clone(),
-            terminal_service.clone(),
-            runtime_home.clone(),
-        ));
-        let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
-            workspace_runtime.clone(),
-            session_runtime.clone(),
-            workspace_delete_workflow.clone(),
-            SessionStore::new(db.clone()),
-            PromptAttachmentStorage::new(runtime_home.clone()),
-            workspace_operation_gate.clone(),
-            session_admission.clone(),
-            checkout_deletion_gate.clone(),
-            retire_preflight_checker.clone(),
-            runtime_home.clone(),
-        ));
+        // Destructive workspace family: shared preflight checker + purge/retire.
+        let destruction =
+            workspaces::wire_workspace_destruction(workspaces::WorkspaceDestructionDeps {
+                db: db.clone(),
+                runtime_home: runtime_home.clone(),
+                workspace_runtime: workspace_runtime.clone(),
+                workspace_access_gate: workspace_access_gate.clone(),
+                workspace_operation_gate: workspace_operation_gate.clone(),
+                checkout_deletion_gate: checkout_deletion_gate.clone(),
+                workspace_delete_workflow: workspace_delete_workflow.clone(),
+                session_runtime: session_runtime.clone(),
+                session_service: session_service.clone(),
+                session_admission: session_admission.clone(),
+                terminal_service: terminal_service.clone(),
+            });
+        let retire_preflight_checker = destruction.preflight_checker;
+        let workspace_purge_service = destruction.purge;
+        let workspace_retire_service = destruction.retire;
         let workspace_retention_service = Arc::new(WorkspaceRetentionService::new(
             workspace_runtime.clone(),
             WorkspaceStore::new(db.clone()),
@@ -606,6 +605,7 @@ impl AppState {
             checkout_deletion_gate,
             retire_preflight_checker,
             workspace_purge_service,
+            workspace_retire_service,
             workspace_retention_service,
             worktree_inventory_service,
             mobility_runtime,

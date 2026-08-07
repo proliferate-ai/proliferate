@@ -115,6 +115,51 @@ pub(crate) fn set_proliferate_dev_env(value: Option<&str>) -> ProliferateDevEnvG
     ProliferateDevEnvGuard { previous }
 }
 
+/// Insert one minimal session row directly through the store.
+///
+/// The 25-field `SessionRecord` literal every admission/workflow proof needs in
+/// order to have a bindable session; only the id, workspace, and status ever
+/// differ between call sites, so those are the parameters and the rest is the
+/// same "no agent has touched it yet" shape.
+pub(crate) fn insert_session_row(
+    store: &SessionStore,
+    workspace_id: &str,
+    session_id: &str,
+    status: &str,
+) {
+    use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let record = SessionRecord {
+        id: session_id.to_string(),
+        workspace_id: workspace_id.to_string(),
+        agent_kind: "claude".to_string(),
+        native_session_id: None,
+        agent_auth_contexts: None,
+        requested_model_id: None,
+        current_model_id: None,
+        requested_mode_id: None,
+        current_mode_id: None,
+        title: None,
+        thinking_level_id: None,
+        thinking_budget_tokens: None,
+        status: status.to_string(),
+        created_at: now.clone(),
+        updated_at: now,
+        last_prompt_at: None,
+        closed_at: None,
+        dismissed_at: None,
+        mcp_bindings_ciphertext: None,
+        mcp_binding_summaries_json: None,
+        mcp_binding_policy: SessionMcpBindingPolicy::InternalOnly,
+        system_prompt_append: None,
+        subagents_enabled: false,
+        action_capabilities_json: None,
+        origin: Some(crate::origin::OriginContext::system_local_runtime()),
+    };
+    store.insert(&record).expect("insert session row");
+}
+
 pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &str, path: &str) {
     let repo_root_id = format!("repo-root-{workspace_id}");
     let now = "2026-03-25T00:00:00Z";

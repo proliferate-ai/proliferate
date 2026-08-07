@@ -49,6 +49,8 @@ mod workflow_workspaces_contract;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;
 pub mod workspaces_lifecycle;
+mod workspaces_lifecycle_contract;
+mod workspaces_lifecycle_errors;
 pub mod workspaces_purge;
 pub mod workspaces_restore;
 mod workspaces_restore_errors;
