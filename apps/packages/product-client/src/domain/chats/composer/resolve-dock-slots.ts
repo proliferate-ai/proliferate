@@ -13,10 +13,6 @@ export type ComposerDockActiveSlot =
   | { kind: "mcp_elicitation" }
   | { kind: "todo_tracker" };
 
-export type ComposerDockAmbientSlot =
-  | { kind: "workspace_status" }
-  | { kind: "cloud_runtime" };
-
 /**
  * Slim companion rendered directly below the active interaction card so plan
  * progress is not evicted entirely while a permission/question/MCP form
@@ -25,7 +21,6 @@ export type ComposerDockAmbientSlot =
 export type ComposerDockActiveSlotCompanion = { kind: "todo_strip" };
 
 export interface ComposerDockAttachedSlot {
-  ambientSlot: ComposerDockAmbientSlot | null;
   delegatedWork: boolean;
   workspaceActivity: boolean;
   /**
@@ -50,7 +45,6 @@ export interface ComposerDockSlotResolution {
 
 export interface ResolveComposerDockSlotsInput {
   suppressSessionSlots?: boolean;
-  suppressWorkspaceStatusPanels?: boolean;
   pendingPromptCount: number;
   recoveredPromptCount?: number;
   primaryPendingInteractionKind: ComposerDockInteractionKind | null;
@@ -59,13 +53,10 @@ export interface ResolveComposerDockSlotsInput {
   hasWorkspaceActivity: boolean;
   hasSessionGoal: boolean;
   hasSessionActivity?: boolean;
-  hasWorkspaceStatusPanel: boolean;
-  hasCloudRuntimePanel: boolean;
 }
 
 export function resolveComposerDockSlots({
   suppressSessionSlots = false,
-  suppressWorkspaceStatusPanels = false,
   pendingPromptCount,
   recoveredPromptCount = 0,
   primaryPendingInteractionKind,
@@ -74,8 +65,6 @@ export function resolveComposerDockSlots({
   hasWorkspaceActivity,
   hasSessionGoal,
   hasSessionActivity = false,
-  hasWorkspaceStatusPanel,
-  hasCloudRuntimePanel,
 }: ResolveComposerDockSlotsInput): ComposerDockSlotResolution {
   const outboundSlot = !suppressSessionSlots && recoveredPromptCount > 0
     ? { kind: "prompt_recoveries" as const }
@@ -89,21 +78,16 @@ export function resolveComposerDockSlots({
     activeSlot && activeSlot.kind !== "todo_tracker" && hasActiveTodoTracker
       ? { kind: "todo_strip" as const }
       : null;
-  const ambientSlot = !suppressWorkspaceStatusPanels
-    ? resolveAmbientSlot(hasWorkspaceStatusPanel, hasCloudRuntimePanel)
-    : null;
   const attachedDelegatedWork = !suppressSessionSlots && hasDelegatedWork;
   const attachedWorkspaceActivity = hasWorkspaceActivity;
   const attachedSessionGoal = !suppressSessionSlots && hasSessionGoal;
   const attachedSessionActivity = !suppressSessionSlots && hasSessionActivity;
   const attachedSlot =
-    ambientSlot
-    || attachedDelegatedWork
+    attachedDelegatedWork
     || attachedWorkspaceActivity
     || attachedSessionGoal
     || attachedSessionActivity
       ? {
-        ambientSlot,
         delegatedWork: attachedDelegatedWork,
         workspaceActivity: attachedWorkspaceActivity,
         sessionGoal: attachedSessionGoal,
@@ -127,14 +111,4 @@ function resolveActiveSlot(
     return { kind: primaryPendingInteractionKind };
   }
   return hasActiveTodoTracker ? { kind: "todo_tracker" } : null;
-}
-
-function resolveAmbientSlot(
-  hasWorkspaceStatusPanel: boolean,
-  hasCloudRuntimePanel: boolean,
-): ComposerDockAmbientSlot | null {
-  if (hasWorkspaceStatusPanel) {
-    return { kind: "workspace_status" };
-  }
-  return hasCloudRuntimePanel ? { kind: "cloud_runtime" } : null;
 }

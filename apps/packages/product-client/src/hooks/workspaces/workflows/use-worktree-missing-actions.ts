@@ -3,26 +3,18 @@ import { AnyHarnessError } from "@anyharness/sdk";
 import { useRestoreWorktreeWorkspaceMutation } from "@anyharness/sdk-react";
 import { worktreeRestoreFailureCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceRetireActions } from "#product/hooks/workspaces/workflows/use-workspace-retire-actions";
-import { workspaceRetireBlockedMessage } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
-// Actions for the missing-worktree composer panel. "Check again" refetches
+// Actions for the missing-worktree composer takeover. "Check again" refetches
 // the workspace collections; the runtime recomputes availability from disk on
-// read, so the panel clears on its own once the directory is back.
-export function useWorktreeMissingActions(args: {
-  workspaceId: string;
-  logicalWorkspaceId: string | null;
-}) {
+// read, so the takeover clears on its own once the directory is back.
+export function useWorktreeMissingActions(args: { workspaceId: string }) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const refresh = useWorkspaceCollectionsInvalidation(runtimeUrl);
-  const { markDone } = useWorkspaceRetireActions();
   const restoreMutation = useRestoreWorktreeWorkspaceMutation();
   const showToast = useToastStore((state) => state.show);
-  const showErrorToast = useToastStore((state) => state.showError);
   const [isCheckingAgain, setIsCheckingAgain] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
 
   const checkAgain = useCallback(async () => {
@@ -54,40 +46,11 @@ export function useWorktreeMissingActions(args: {
     }
   }, [args.workspaceId, refresh, restoreMutation, showToast]);
 
-  const deleteWorkspace = useCallback(async function deleteWorkspace(): Promise<boolean> {
-    setIsDeleting(true);
-    try {
-      const result = await markDone(args.workspaceId, {
-        logicalWorkspaceId: args.logicalWorkspaceId,
-      });
-      if (result.outcome === "blocked") {
-        showToast(workspaceRetireBlockedMessage(result));
-        return false;
-      }
-      if (result.outcome === "cleanup_failed") {
-        showToast("Workspace delete started, but cleanup needs attention.");
-      }
-      return true;
-    } catch (error) {
-      showErrorToast({
-        headline: "Workspace not deleted",
-        consequence: "It is still listed, still missing its worktree on disk.",
-        cause: error instanceof Error ? error.message : String(error),
-        retry: () => void deleteWorkspace(),
-      });
-      return false;
-    } finally {
-      setIsDeleting(false);
-    }
-  }, [args.logicalWorkspaceId, args.workspaceId, markDone, showErrorToast, showToast]);
-
   return {
     checkAgain,
     isCheckingAgain,
     restoreWorktree,
     isRestoring: restoreMutation.isPending,
     restoreError,
-    deleteWorkspace,
-    isDeleting,
   };
 }

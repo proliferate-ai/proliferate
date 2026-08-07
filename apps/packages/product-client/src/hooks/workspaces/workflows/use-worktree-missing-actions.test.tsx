@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   restore: vi.fn(),
   restorePending: false,
   refresh: vi.fn(async () => undefined),
-  markDone: vi.fn(),
   showToast: vi.fn(),
 }));
 
@@ -22,14 +21,6 @@ vi.mock("@anyharness/sdk-react", () => ({
 
 vi.mock("#product/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
   useWorkspaceCollectionsInvalidation: () => mocks.refresh,
-}));
-
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-retire-actions", () => ({
-  useWorkspaceRetireActions: () => ({ markDone: mocks.markDone }),
-}));
-
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
-  workspaceRetireBlockedMessage: () => "blocked",
 }));
 
 vi.mock("#product/stores/sessions/harness-connection-store", () => ({
@@ -46,7 +37,6 @@ vi.mock("#product/stores/toast/toast-store", () => ({
 beforeEach(() => {
   mocks.restorePending = false;
   mocks.restore.mockResolvedValue({ outcome: "restored" });
-  mocks.markDone.mockResolvedValue({ outcome: "retired" });
 });
 
 afterEach(() => {
@@ -100,8 +90,5 @@ describe("useWorktreeMissingActions", () => {
 });
 
 function renderActions() {
-  return renderHook(() => useWorktreeMissingActions({
-    workspaceId: "workspace-1",
-    logicalWorkspaceId: "logical-1",
-  }));
+  return renderHook(() => useWorktreeMissingActions({ workspaceId: "workspace-1" }));
 }

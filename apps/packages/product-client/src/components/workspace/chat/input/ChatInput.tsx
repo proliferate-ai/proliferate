@@ -15,6 +15,7 @@ import {
   useActiveSessionRunningState,
 } from "#product/hooks/chat/derived/use-active-session-identity";
 import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
+import { useComposerBlockedState } from "#product/hooks/chat/derived/use-composer-blocked-state";
 import { useChatComposerKeyboard } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 import { useChatDraftControls } from "#product/hooks/chat/ui/use-chat-draft-state";
 import { useChatModelSelectorState } from "#product/hooks/chat/facade/use-chat-model-selector-state";
@@ -47,7 +48,10 @@ import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { ChatInputControlRow } from "./ChatInputControlRow";
 import { ConnectedWorkspaceStatusComposerControl } from "./workspace-status/ConnectedWorkspaceStatusComposerControl";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
+import { ComposerBlockedStatusLine } from "./ComposerBlockedStatusLine";
+import { ComposerBlockedControlRow } from "./ComposerBlockedControlRow";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerTextareaFrame";
 import { Input } from "#product/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
@@ -61,12 +65,17 @@ export function ChatInput({
   attachments,
   suppressActiveSessionState = false,
   suppressAutoFocus = false,
+  suppressWorkspaceTakeover = false,
   replacementSessionId = null,
   hasSessionTurns = false,
 }: {
   attachments: PromptAttachmentController;
   suppressActiveSessionState?: boolean;
   suppressAutoFocus?: boolean;
+  /** Cowork threads suppress the composer takeover (see ChatView's
+   * `showWorkspaceStatusPanels`) the same way they used to suppress the
+   * ambient workspace-status panel. */
+  suppressWorkspaceTakeover?: boolean;
   replacementSessionId?: string | null;
   /** Flips the placeholder to the follow-up variant once the transcript has turns. */
   hasSessionTurns?: boolean;
@@ -90,6 +99,7 @@ export function ChatInput({
   const { isDisabled, sendBlockedReason, areRuntimeControlsDisabled } = useChatAvailabilityState({
     activeSessionId: activeSessionIdForUi,
   });
+  const blockedPresentation = useComposerBlockedState({ suppress: suppressWorkspaceTakeover });
   const modelSelectorProps = useChatModelSelectorState({
     suppressActiveSessionState,
     replacementSessionId,
@@ -339,55 +349,78 @@ export function ChatInput({
               onChange={handleFileInputChange}
               accept={CHAT_INPUT_ATTACHMENT_ACCEPT}
             />
-            <ChatInputDraftArea
-              hasSessionTurns={hasSessionTurns}
-              isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
-              editingQueueSeq={effectiveIsEditingQueuedPrompt ? editingSeq : null}
-              editDraft={editDraft}
-              onEditDraftChange={setEditDraftText}
-              textareaRef={textareaRef}
-              workspaceUiKey={workspaceUiKey}
-              onDraftChange={setDraft}
-              canSubmit={canSubmit}
-              isDisabled={isDisabled}
-              onSubmit={onSubmit}
-              onKeyDown={handleKeyDown}
-              hasDraftAttachments={hasDraftAttachments}
-              draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
-              onRemoveDraftAttachment={handleRemoveDraftAttachment}
-              onOpenDraftAttachment={handleOpenDraftAttachment}
-              overlayHostElement={composerOverlayHost}
-              onCancelEdit={cancelEdit}
-            />
-            <ChatInputControlRow
-              runtimeControlsDisabled={areRuntimeControlsDisabled}
-              modelSelectorProps={modelSelectorProps}
-              agentKind={effectiveAgentKind}
-              sessionConfigControls={effectiveSessionConfigControls}
-              isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
-              chatDisabled={isDisabled}
-              sendBlockedReason={sendBlockedReason}
-              isSubmitting={isSubmitting}
-              supportsAttachments={attachments.supportsAttachments}
-              canAttachFiles={attachments.canAttachFiles}
-              activeSessionId={activeSessionIdForUi}
-              onAttachFile={() => fileInputRef.current?.click()}
-              isRunning={isRunningForUi}
-              isEmpty={effectiveIsEmpty}
-              onSubmit={onSubmit}
-              onCancel={onCancel}
-              statusControl={suppressActiveSessionState
-                ? undefined
-                : (
-                  <ConnectedWorkspaceStatusComposerControl
-                    advancedControls={
-                      buildComposerSessionControlGroups(effectiveSessionConfigControls)
-                        .overflowControls
-                    }
-                    agentKind={effectiveAgentKind}
+            {blockedPresentation
+              ? (
+                <>
+                  <ComposerTextareaFrame topInset="standard">
+                    <ComposerBlockedStatusLine
+                      icon={blockedPresentation.icon}
+                      tone={blockedPresentation.tone}
+                      message={blockedPresentation.message}
+                    />
+                  </ComposerTextareaFrame>
+                  <ComposerBlockedControlRow
+                    actions={blockedPresentation.actions}
+                    isRunning={isRunningForUi}
+                    isEmpty={effectiveIsEmpty}
+                    onSubmit={onSubmit}
+                    onCancel={onCancel}
                   />
-                )}
-            />
+                </>
+              )
+              : (
+                <>
+                  <ChatInputDraftArea
+                    hasSessionTurns={hasSessionTurns}
+                    isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
+                    editingQueueSeq={effectiveIsEditingQueuedPrompt ? editingSeq : null}
+                    editDraft={editDraft}
+                    onEditDraftChange={setEditDraftText}
+                    textareaRef={textareaRef}
+                    workspaceUiKey={workspaceUiKey}
+                    onDraftChange={setDraft}
+                    canSubmit={canSubmit}
+                    isDisabled={isDisabled}
+                    onSubmit={onSubmit}
+                    onKeyDown={handleKeyDown}
+                    hasDraftAttachments={hasDraftAttachments}
+                    draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
+                    onRemoveDraftAttachment={handleRemoveDraftAttachment}
+                    onOpenDraftAttachment={handleOpenDraftAttachment}
+                    overlayHostElement={composerOverlayHost}
+                    onCancelEdit={cancelEdit}
+                  />
+                  <ChatInputControlRow
+                    runtimeControlsDisabled={areRuntimeControlsDisabled}
+                    modelSelectorProps={modelSelectorProps}
+                    agentKind={effectiveAgentKind}
+                    sessionConfigControls={effectiveSessionConfigControls}
+                    isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
+                    chatDisabled={isDisabled}
+                    sendBlockedReason={sendBlockedReason}
+                    isSubmitting={isSubmitting}
+                    supportsAttachments={attachments.supportsAttachments}
+                    canAttachFiles={attachments.canAttachFiles}
+                    activeSessionId={activeSessionIdForUi}
+                    onAttachFile={() => fileInputRef.current?.click()}
+                    isRunning={isRunningForUi}
+                    isEmpty={effectiveIsEmpty}
+                    onSubmit={onSubmit}
+                    onCancel={onCancel}
+                    statusControl={suppressActiveSessionState
+                      ? undefined
+                      : (
+                        <ConnectedWorkspaceStatusComposerControl
+                          advancedControls={
+                            buildComposerSessionControlGroups(effectiveSessionConfigControls)
+                              .overflowControls
+                          }
+                          agentKind={effectiveAgentKind}
+                        />
+                      )}
+                  />
+                </>
+              )}
           </form>
         </ChatComposerSurface>
       </div>

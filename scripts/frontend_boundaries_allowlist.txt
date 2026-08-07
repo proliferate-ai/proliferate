@@ -6,7 +6,7 @@
 # ProductClient's existing internal upward edges. These are import-statement
 # counts, including type-only edges; move the dependency/type down and shrink
 # the matching entry whenever a site is repaired.
-PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx 11 JSX-returning hook imports connected components
+PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx 9 JSX-returning hook imports connected components
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/ui/diff/use-gap-expansion.ts 1 hook imports component-owned expansion type
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/workspaces/ui/tabs/use-header-tabs-group-editor.ts 1 hook imports component-owned anchor type
 PRODUCT_CLIENT_LAYER_DIRECTION apps/packages/product-client/src/hooks/workspaces/ui/use-repo-group-native-context-menu.ts 1 hook imports component-owned environment type

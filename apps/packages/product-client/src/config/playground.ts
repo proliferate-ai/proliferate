@@ -30,6 +30,7 @@ export type ScenarioKey =
   | "file-mention-empty"
   | "workspace-receipt-setup-succeeded"
   | "workspace-receipt-setup-failed"
+  | "worktree-missing"
   | "cloud-first-runtime"
   | "cloud-provisioning"
   | "cloud-applying-files"
@@ -148,6 +149,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "file-mention-empty": { label: "File mentions empty" },
   "workspace-receipt-setup-succeeded": { label: "Creation receipt (setup succeeded)" },
   "workspace-receipt-setup-failed": { label: "Creation receipt (setup failed)" },
+  "worktree-missing": { label: "Composer takeover: worktree missing" },
   "cloud-first-runtime": { label: "Cloud first runtime" },
   "cloud-provisioning": { label: "Cloud provisioning" },
   "cloud-applying-files": { label: "Cloud applying files" },
