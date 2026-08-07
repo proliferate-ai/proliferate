@@ -1,52 +1,52 @@
 # Product Sense
 
-Sparse cross-product judgment primitives: the taste calls a competent model
-gets wrong — style, copy, naming, tone. Each carries one good/bad pair.
-Enforcement mode is review, legitimately.
+This doc is for things that require *taste* and judgment: copy, design,
+architectural positioning. Sparse by design: each entry is a call a competent
+model gets wrong, with one good/bad pair. Enforcement mode is review,
+legitimately. System-specific taste lives with that system (design tokens →
+the [design system doc](codebase/platforms/product/design-system.md), area
+judgment → the owner README).
 
-Admission bar: if it only applies to one system, it lives with that system
-(design tokens → the
-[design system doc](codebase/platforms/product/design-system.md), area
-judgment → the owner README). If a competent model gets it right anyway, it is not here.
-If this doc grows past ~15 entries, cut it back.
+## Broadly we like
+
+- Non-AI text. No em-dashes in ANY product text. No AI tells.
+- Concise beats complete.
+- Always do the work for the user. Is there a bug? Tell them how to fix it if
+  they can.
+- NO EMOJIS.
+- Readable and plain beats clever.
+- The user is smart. Present them with the tools they need to build.
+- Make the user's day better. If we can inject some whimsy into the product we
+  should, but organized.
 
 ## Copy
 
-**1. No em-dashes in user-visible copy.** Anywhere: app, landing, changelog,
-toasts. Rewrite the sentence instead.
+**1. No em-dashes, no AI tells.** Anywhere users read: app, landing,
+changelog, toasts. Rule-of-three lists, "not X but Y" constructions,
+symmetrical hedging, puffery. Rewrite the sentence. When editing copy a human
+wrote, keep their voice.
 
-- Bad: `Sessions run in the cloud — no setup required.`
-- Good: `Sessions run in the cloud. No setup required.`
-
-**2. Strip the AI tells.** Rule-of-three lists, "not X but Y" constructions,
-symmetrical hedging, puffery adjectives, bold-header bullet mush. If a sentence
-reads like a launch tweet, cut it. And when editing copy a human wrote, keep
-their voice — do not re-polish it into model-speak.
-
-- Bad: `Proliferate isn't just a tool — it's a seamless, powerful platform
-  that transforms how you build, ship, and iterate.`
+- Bad: `Proliferate isn't just a tool — it's a seamless, powerful platform.`
 - Good: `Proliferate runs coding agents against real codebases, end to end.`
 
-**3. Concise beats complete.** Changelogs are plain bulleted Improvements /
-Fixes, one line each — no expandable sections, no per-item ceremony. Error and
-status copy says the one thing the user needs.
-
-- Bad: a changelog entry with a dropdown revealing three paragraphs per fix.
-- Good: `- Fixed transcript scroll jumping on session re-entry.`
-
-**4. Refusals and errors name the specific thing.** Generic failure copy is a
-dead end; the message states which model, target, or setting is the problem so
-the user's next step is obvious.
+**2. Do the work for the user.** Errors and refusals name the specific thing
+and the next step. Generic failure copy hands the user a dead end.
 
 - Bad: `This model is unavailable.`
 - Good: `claude-opus-5 isn't enabled for this workspace. Enable it in
   Settings → Models.`
 
-**5. Our vocabulary, never another product's name.** Describe what a treatment
-or feature IS. No competitor names in user-visible copy, titles, marketing
-positioning, comments, class names, commit messages, branch names, or PR text.
-(Real product vocabulary stays: `codex` as a harness, `cursor` as an editor
-target.)
+**3. No qualifier for a distinction the user cannot act on.** If there is
+only one kind of the thing, don't name the kind.
+
+- Bad: the only item under a "New workspace" trigger reads `New cloud
+  workspace` when cloud is the only option.
+- Good: `New workspace`.
+
+**4. Our vocabulary, never another product's name.** Describe what a
+treatment or feature IS. No competitor names in copy, titles, comments, class
+names, commit messages, branch names, or PR text. (Real product vocabulary
+stays: `codex` as a harness, `cursor` as an editor target.)
 
 - Bad: `A Cursor-style composer with Linear-quality polish.`
 - Good: `The composer expands as you type and caps at a quarter of the
@@ -54,56 +54,54 @@ target.)
 
 ## Naming
 
-**6. Name things for the job, not the feature that needed them.** A reusable
+**5. Name things for the job, not the feature that needed them.** A reusable
 thing named after its first consumer is a lie within a month.
 
 - Bad: `WorkspaceListRow` reused for sessions and repos.
 - Good: `ListRow`, `PageHeader`, `ConfirmationDialog`.
 
-## Visual judgment
+## Design
 
-**7. Never the colored left-border treatment.** No colored left-edge notice
+**6. Never the colored left-border treatment.** No colored left-edge notice
 boxes, callouts, or ownership stripes, ever. Convey ownership and emphasis
 through structure: grouping, tinted glyphs, weight.
 
 - Bad: an info callout with a 3px blue left border and tinted background.
 - Good: a plain bordered card with an icon and heavier title.
 
-**8. Semantic color is earned.** Color states meaning the user must act on
+**7. Semantic color is earned.** Color states meaning the user must act on
 (destructive, failing, running). Decorative color to make a state "feel"
-important reads as noise — a human-input step is neutral, not amber.
+important reads as noise. A human-input step is neutral, not amber.
 
 - Bad: amber badge + amber border on every step that waits for a person.
 - Good: neutral surface; the running step alone carries the accent.
 
-**9. No emoji as icons, no emoji in product copy.** Glyphs come from the icon
-set; brand marks are the real assets, never redrawn from memory or
-approximated.
+**8. Don't ship an affordance the user can never use.** A permanently
+disabled control, or a control that becomes unreachable in a legal layout
+state, is a promise the product doesn't keep. Remove it or make it work.
 
-- Bad: `🚀 Deploy` button; a hand-written SVG path "close enough" to a brand
-  logo.
-- Good: the icon module's glyph; the brand's actual mark, imported.
+- Bad: a floating prev/next pair that renders permanently disabled; an update
+  affordance that vanishes when the sidebar is collapsed.
+- Good: the control exists only where it can act, in every layout state.
+
+**9. Readable and plain beats clever.** If the user has to decode a
+visualization before they can read the number, it's the wrong visualization.
+
+- Bad: two concentric rings encoding usage percentages.
+- Good: status rows: label, percentage used, remaining.
 
 **10. Micro-alignment is the bar.** Text inside chips, pills, and badges is
-optically centered, not just box-centered — cap-height and descenders shift
-the visual middle. This class of one-pixel wrongness is what separates the
-product from a demo.
+optically centered, not just box-centered. This class of one-pixel wrongness
+is what separates the product from a demo.
 
 - Bad: chip text sitting 1px low because the container centers the line box.
 - Good: a nudged padding pair that makes the text read centered.
 
-## Showing the product
+## Amending this doc
 
-**11. The real thing or nothing.** Demos, screenshots, and marketing visuals
-show the actual running product. Never a hand-built mock of a widget, never a
-fake terminal-UI graphic, never a recreation "for illustration."
-
-- Bad: an inline mock recreating the composer for a demo.
-- Good: a screenshot or recording of the served app, even if it takes longer.
-
-**12. Lead with product and receipts.** Positioning shows what it does and
-proves it — no competitor comparisons in titles, no category-claiming
-superlatives.
-
-- Bad: `The best alternative to <competitor>` as a page title.
-- Good: the launch post is the product doing the work, with numbers.
+This doc grows from real misses: when an agent (or a person) makes a taste
+call that gets rejected in review, and the miss is cross-product, it becomes
+an entry, in the same PR or the next one, with the actual rejected thing as
+the bad example. An entry that stops being violated gets cut; a competent
+model getting it right is the retirement bar. Founder review on every change
+here.
