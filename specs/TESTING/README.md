@@ -17,7 +17,8 @@ standard. Read that first; come here for release-validation detail.
   — the machine-owned target-guarantee inventory, parity-tested against the
   contracts by `scripts/ci-cd/core-release-scenario-manifest.test.mjs`.
 - [`manual-release-qa.md`](manual-release-qa.md) — the manual release QA
-  procedure; automated tiers live in the standard.
+  procedure; automated tiers live in the standard. A flow covered by an
+  automated tier does not also need a manual QA checklist entry.
 - [`desktop-update-testing.md`](desktop-update-testing.md) — building and
   exercising the Desktop updater path locally.
 - [`self-hosting.md`](self-hosting.md) — the self-host deployment fixture and

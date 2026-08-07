@@ -3,8 +3,9 @@ import { readFile, stat } from "node:fs/promises";
 
 /**
  * The declared inputs that determine whether an E2B template needs a rebuild
- * (specs/TESTING.md: "The E2B template build is cached by
- * content hash of its inputs (runtime binary, Dockerfile, agent pins)").
+ * (specs/TESTING/release-worlds-and-fixtures.md "Candidate Artifacts": the
+ * candidate manifest pins the E2B template ID and complete template-input
+ * hash; build once per candidate content hash, then reuse).
  */
 export interface TemplateInputs {
   /** Path to the Linux AnyHarness binary that gets uploaded into the sandbox. */

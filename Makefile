@@ -822,7 +822,8 @@ test-cloud-all: cloud-runtime-build server-db-ready
 	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud -xvs
 
 # Tier-3 live end-to-end / tier-4 upgrade-path runner
-# (specs/TESTING.md "Running tier 3/4 locally"). One runner
+# (specs/TESTING/release-worlds-and-fixtures.md "Local And GitHub Actions
+# Execution"). One runner
 # CLI with lane flags; this target is a thin wrapper so CI and laptops call it
 # identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
 # SCENARIOS=<list|all> BEHAVIOR=diagnostic|strict DRY_RUN=1 FILE_ISSUES=1.

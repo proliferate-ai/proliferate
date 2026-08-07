@@ -654,6 +654,10 @@ A red CI run must reproduce by using its candidate manifest and runner flags
 locally. Secrets are named in the environment-variable catalog and never
 embedded in scenarios, artifacts, logs, or evidence.
 
+Job-level non-cancelling concurrency groups serialize overlapping runs of the
+same world in GitHub Actions. GitHub does not guarantee FIFO ordering for
+pending runs, so these groups are collision protection, not an ordered queue.
+
 The current local manual job is a bounded precursor to the target topology: it
 builds one local-file candidate publication, runs the smoke world beneath
 `<run>/worlds/local-world-smoke-1`, and then copies and re-verifies the same
