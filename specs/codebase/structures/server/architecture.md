@@ -308,7 +308,7 @@ The `connect.py` call that issues the Supervisor-first launch is implemented,
 and the `proliferate-supervisor` update-mailbox consumer it depends on is
 implemented too (verify → bounded download → re-verify → stage → atomic
 activate → dependency-ordered restart → health-gate → rollback; see
-[`proliferate-supervisor/README.md`](../proliferate-supervisor/README.md#implementation-status-this-pr)).
+[`specs/supervisor.md`](../../../supervisor.md)).
 
 The optional Worker has one heartbeat loop, not a product-command channel:
 
@@ -342,7 +342,7 @@ mechanics moves to Proliferate Supervisor's mailbox consumer (verify, download,
 re-verify, stage, atomically activate, dependency-ordered restart, health-gate,
 rollback), which is implemented, unit-tested, and drained by `process/mod.rs`.
 See
-[`proliferate-supervisor/README.md`](../proliferate-supervisor/README.md#implementation-status-this-pr)
+[`specs/supervisor.md`](../../../supervisor.md)
 for detail.
 
 A legacy Worker on an already-provisioned target that receives
