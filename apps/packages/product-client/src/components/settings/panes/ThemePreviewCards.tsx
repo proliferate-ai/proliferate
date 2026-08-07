@@ -1,4 +1,4 @@
-import { useId, type FC } from "react";
+import { useId, useRef, type FC, type KeyboardEvent } from "react";
 import { themePreviewColors } from "@proliferate/design/tokens";
 import { Button } from "#product/primitives/Button";
 import { Check } from "#product/primitives/icons/core";
@@ -134,19 +134,66 @@ export interface ThemePreviewCardsProps {
 }
 
 export function ThemePreviewCards({ value, onChange }: ThemePreviewCardsProps) {
+  // Roving tabindex pattern: the selected radio gets tabIndex={0}, the others
+  // get tabIndex={-1}. Keyboard navigation moves both selection and focus.
+  const buttonRefs = useRef(new Map<ColorMode, HTMLButtonElement>());
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const currentIndex = CARD_ORDER.indexOf(value);
+    let nextIndex: number | undefined;
+
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        nextIndex = (currentIndex + 1) % CARD_ORDER.length;
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+        nextIndex = (currentIndex - 1 + CARD_ORDER.length) % CARD_ORDER.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = CARD_ORDER.length - 1;
+        break;
+    }
+
+    if (nextIndex !== undefined) {
+      event.preventDefault();
+      const nextMode = CARD_ORDER[nextIndex];
+      onChange(nextMode);
+      // Selection follows focus: move focus to the newly selected radio.
+      buttonRefs.current.get(nextMode)?.focus();
+    }
+  };
+
   return (
-    <div role="radiogroup" aria-label="Theme" className="grid w-full grid-cols-3 gap-3">
+    <div
+      role="radiogroup"
+      aria-label="Theme"
+      className="grid w-full grid-cols-3 gap-3"
+      onKeyDown={handleKeyDown}
+    >
       {CARD_ORDER.map((mode) => {
         const selected = value === mode;
         const Artwork = MODE_ARTWORK[mode];
         return (
           <Button
             key={mode}
+            ref={(el) => {
+              if (el) {
+                buttonRefs.current.set(mode, el);
+              } else {
+                buttonRefs.current.delete(mode);
+              }
+            }}
             type="button"
             variant="unstyled"
             size="unstyled"
             role="radio"
             aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
             data-selected={selected ? "" : undefined}
             className="group flex min-w-0 flex-col items-center gap-1.5 rounded-lg text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             onClick={() => onChange(mode)}

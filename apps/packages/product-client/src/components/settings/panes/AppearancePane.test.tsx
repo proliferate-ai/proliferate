@@ -23,13 +23,14 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
  * both at once, so a preview that resolves to the wrong ramp silently tells
  * them their setting did nothing.
  *
- * What changed is where the contract lives. The previews are now the product's
- * real renderers with canned content rather than lookalike markup, so the lock
- * is that the pane keeps *reaching* those renderers — a future edit that
- * "simplifies" a preview back into hand-written divs would take the ramp
- * wiring with it, and that is exactly the regression. jsdom cannot resolve
- * `var(...)` to a pixel value, so this asserts the semantic classes and
- * custom-property chains each half carries, not computed sizes.
+ * What changed is where the contract lives. The chat preview is now the
+ * product's real renderer with canned content rather than lookalike markup; the
+ * code preview is a bespoke drawn diff (AppearanceCodePreview). The lock is
+ * that the pane keeps *reaching* those real components — a future edit that
+ * "simplifies" a preview back into hand-written divs would take the ramp wiring
+ * with it, and that is exactly the regression. jsdom cannot resolve `var(...)`
+ * to a pixel value, so this asserts the semantic classes and custom-property
+ * chains each half carries, not computed sizes.
  */
 
 import { AppearancePane } from "#product/components/settings/panes/AppearancePane";
@@ -40,8 +41,8 @@ describe("AppearancePane previews", () => {
   it("drives the code preview through the readable-code ramp and the mono family", () => {
     const { container } = render(<AppearancePane />);
 
-    // DiffViewer's root carries the pairing; nothing in the pane may override
-    // it with a UI-ramp or fixed size.
+    // AppearanceCodePreview's root carries the pairing; nothing in the pane may
+    // override it with a UI-ramp or fixed size.
     const codeRoot = container.querySelector(".text-readable-code");
     expect(codeRoot).not.toBeNull();
     expect(codeRoot?.className).toContain("font-mono");
@@ -87,6 +88,54 @@ describe("AppearancePane previews", () => {
     fireEvent.click(getByRole("radio", { name: "System" }));
     expect(getByRole("radio", { name: "System" }).getAttribute("aria-checked")).toBe("true");
     expect(getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("implements the radio-group keyboard contract: roving tabindex + arrow navigation", () => {
+    const { getByRole } = render(<AppearancePane />);
+
+    // Set up: select Light mode to establish a known starting point.
+    fireEvent.click(getByRole("radio", { name: "Light" }));
+
+    const systemRadio = getByRole("radio", { name: "System" });
+    const lightRadio = getByRole("radio", { name: "Light" });
+    const darkRadio = getByRole("radio", { name: "Dark" });
+
+    // Initially, the selected radio has tabindex 0, the others have -1.
+    expect(lightRadio.getAttribute("tabindex")).toBe("0");
+    expect(systemRadio.getAttribute("tabindex")).toBe("-1");
+    expect(darkRadio.getAttribute("tabindex")).toBe("-1");
+
+    // ArrowRight moves selection forward (Light → Dark) and updates roving tabindex.
+    lightRadio.focus();
+    fireEvent.keyDown(lightRadio, { key: "ArrowRight" });
+    expect(darkRadio.getAttribute("aria-checked")).toBe("true");
+    expect(lightRadio.getAttribute("aria-checked")).toBe("false");
+    expect(darkRadio.getAttribute("tabindex")).toBe("0");
+    expect(lightRadio.getAttribute("tabindex")).toBe("-1");
+
+    // ArrowLeft moves backward (Dark → Light).
+    fireEvent.keyDown(darkRadio, { key: "ArrowLeft" });
+    expect(lightRadio.getAttribute("aria-checked")).toBe("true");
+    expect(darkRadio.getAttribute("aria-checked")).toBe("false");
+
+    // ArrowDown wraps: from Dark (the last) to System (the first).
+    fireEvent.click(darkRadio);
+    fireEvent.keyDown(darkRadio, { key: "ArrowDown" });
+    expect(systemRadio.getAttribute("aria-checked")).toBe("true");
+    expect(darkRadio.getAttribute("aria-checked")).toBe("false");
+
+    // ArrowUp wraps: from System (the first) to Dark (the last).
+    fireEvent.keyDown(systemRadio, { key: "ArrowUp" });
+    expect(darkRadio.getAttribute("aria-checked")).toBe("true");
+    expect(systemRadio.getAttribute("aria-checked")).toBe("false");
+
+    // Home jumps to the first radio.
+    fireEvent.keyDown(darkRadio, { key: "Home" });
+    expect(systemRadio.getAttribute("aria-checked")).toBe("true");
+
+    // End jumps to the last radio.
+    fireEvent.keyDown(systemRadio, { key: "End" });
+    expect(darkRadio.getAttribute("aria-checked")).toBe("true");
   });
 
   it("keeps every preview size off hardcoded pixels", () => {
