@@ -6,16 +6,16 @@ Current gap: the managed-Target UI described here is not implemented.
 
 Date: 2026-05-20.
 
-Depends on: [`sandbox-lifecycle.md`](../../../platforms/product/sandbox-lifecycle.md),
+Depends on: [`lifecycle.md`](../../../../FEATURE_DOCS/SANDBOX/lifecycle.md),
 `mcp-skills.md` (document retired; no owning platform document replaces it), and
-[`agent-auth.md`](../../../platforms/product/agent-auth.md).
+[`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md).
 
 Staleness note (2026-07-25): this document predates the Bifrost removal.
 Its Agents-scope content (the `agent-authentication` pane, its panes,
 primitives, deep links, copy files, and smoke steps) describes removed UI;
 each such block below carries a correction to the shipped per-harness
 sections. The authoritative auth contract is
-[`agent-auth.md`](../../../platforms/product/agent-auth.md).
+[`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md).
 
 This spec defines the settings shell, sidebar navigation, page ownership,
 shared UI primitives, and shared vocabulary used by every other spec
@@ -131,14 +131,14 @@ every other spec owns its page content:
 Hard:
 
 - the cloud sandbox provisioning platform (document retired; absorbed by
-  [`sandbox-lifecycle.md`](../../../platforms/product/sandbox-lifecycle.md) —
+  [`lifecycle.md`](../../../../FEATURE_DOCS/SANDBOX/lifecycle.md) —
   the `sandbox_profile` / `sandbox_profile_target_state` schema this pane
   consumes currently has no owning platform document): Compute pane
   consumes `sandbox_profile` and `sandbox_profile_target_state`.
 - `mcp-skills.md` (document retired): Plugins page
   rows show `enabled`, `public_to_org`, `auth_status`,
   `runtime_apply_status`.
-- [`agent-auth.md`](../../../platforms/product/agent-auth.md): this spec's
+- [`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md): this spec's
   Agent Authentication pane (`CloudAgentAuthLibrary` +
   `ComputeTargetAgentAuthCard`, `CredentialPicker`) described the removed
   Bifrost-era UI. The shipped UI is per-harness settings sections
@@ -278,7 +278,7 @@ subfolders:
 > as `panes/agents/harness/` (per-harness pane, auth method cards, CLI
 > login details) and `panes/agents/api-keys/` (the key pool), with
 > selection/vault contracts owned by
-> [`agent-auth.md`](../../../platforms/product/agent-auth.md).
+> [`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md).
 
 **Existing shared primitives**: page chrome lives in
 `apps/packages/product-client/src/components/patterns/`:

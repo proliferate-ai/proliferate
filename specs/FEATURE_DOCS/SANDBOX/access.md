@@ -29,7 +29,7 @@ Fences, one owner per concern:
   document owns the caller-facing representation, gateway owns the
   server-side mechanism.
 - Billing *math* — meters, credits, holds — belongs to
-  [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md). This document owns only the billing gate's
+  [specs/FEATURE_DOCS/BILLING.md](../BILLING.md). This document owns only the billing gate's
   wire representation.
 - What is inside the box belongs to
   [content.md](content.md).

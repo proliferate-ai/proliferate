@@ -150,7 +150,7 @@ restore.
 ## 1.1 Model Selector Semantics
 
 The composer model selector presents the model-catalog contract from
-`specs/codebase/platforms/product/model-catalog.md`. It must not infer identity from
+`specs/FEATURE_DOCS/MODELS.md`. It must not infer identity from
 display labels or from one provider's raw runtime id shape.
 
 Rules:
@@ -186,7 +186,7 @@ Rules:
   newly created workspaces use those persisted controls; catalog defaults
   remain the fallback until the user selects a value. Cowork working-mode and
   tuning changes do not update standard-workspace launch defaults.
-- [Model Catalog](../../../platforms/product/model-catalog.md) owns whether a
+- [Model Catalog](../../../../FEATURE_DOCS/MODELS.md) owns whether a
   selection is current, `update_current_chat`, or `open_new_chat`; Composer
   presents that action and does not derive it from live setter availability.
 - [Chat Lifecycle](lifecycle.md) owns the visible create, preserve, and replace

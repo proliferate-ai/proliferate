@@ -285,7 +285,7 @@ not a softer version of the rule.
       immediately, reports unexpected failures through `report_critical` and
       continues, then sleeps
       `max(BILLING_RECONCILE_INTERVAL_SECONDS, 30)` seconds. The
-      [Billing contract](../codebase/platforms/product/billing.md) describes the
+      [Billing contract](../FEATURE_DOCS/BILLING.md) describes the
       normal interval as fifteen minutes. Conversion is parked because ordinary
       self-host deployment does not run the Celery worker, Beat, or broker
       plane; moving this pass to Beat first would silently stop enforcement and

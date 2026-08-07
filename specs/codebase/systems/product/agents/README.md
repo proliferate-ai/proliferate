@@ -10,9 +10,9 @@ linked document is the authority.
 | Document | One-line ownership | Status |
 | --- | --- | --- |
 | [agent-distribution.md](../../../platforms/product/agent-distribution.md) | What a harness *is* and how it gets onto a machine: the registry/catalog document pair, pinned auto-installs, binary-carried catalog convergence, supervisor-owned runtime swaps, the probe pipeline, readiness projection. | target |
-| [agent-auth.md](../../../platforms/product/agent-auth.md) | How a harness gets *credentials* at launch: auth source selections, the key vault, `state.json` delivery, per-harness application recipes, fail-closed launch. | target |
-| [model-gateway.md](../../../platforms/product/model-gateway.md) | The managed inference proxy: LiteLLM artifact and deployment, enrollment/teams/virtual keys, access-group model gating, budgets, usage import. | target |
-| [model-catalog.md](../../../platforms/product/model-catalog.md) | Which *models* a ready, authenticated harness can run: probe-generated per-user snapshots, projection to pickers, availability. | target |
+| [AGENT_AUTH.md](../../../../FEATURE_DOCS/AGENT_AUTH.md) | How a harness gets *credentials* at launch: auth source selections, the key vault, `state.json` delivery, per-harness application recipes, fail-closed launch. | target |
+| [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) | The managed inference proxy: LiteLLM artifact and deployment, enrollment/teams/virtual keys, access-group model gating, budgets, usage import. | target |
+| [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) | Which *models* a ready, authenticated harness can run: probe-generated per-user snapshots, projection to pickers, availability. | target |
 
 Two lifecycle documents ride along:
 
@@ -73,11 +73,11 @@ Reusable Product MCP contracts live under
 ## Neighboring owners
 
 - Runtime binary *mechanics* (mailbox, swap state machine, rollback):
-  [proliferate-supervisor](../../../structures/proliferate-supervisor/README.md)
-  and [proliferate-worker](../../../structures/proliferate-worker/README.md)
+  [proliferate-supervisor](../../../../supervisor.md)
+  and [proliferate-worker](../../../../worker.md)
   structure docs, under agent-distribution's contract.
 - The `agents` domain source layout:
-  [anyharness/src/agents.md](../../../structures/anyharness/src/agents.md).
+  [specs/anyharness/agents.md](../../../../anyharness/agents.md).
 - Billing of gateway spend:
-  [billing.md](../../../platforms/product/billing.md), integrated through
+  [BILLING.md](../../../../FEATURE_DOCS/BILLING.md), integrated through
   model-gateway's account model.

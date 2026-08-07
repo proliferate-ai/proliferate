@@ -30,10 +30,17 @@ specs/
 ├── OBSERVABILITY.md  Per-PR observability standard (consider it in every PR)
 ├── TESTING.md        Per-PR testing standard (consider it in every PR)
 ├── TESTING/          Release-validation depth behind TESTING.md
+├── FEATURE_DOCS/     Cross-plane systems no single code location can host
 ├── anyharness/       AnyHarness runtime owner docs (README.md teaches the model)
+├── server/           Server owner docs (README.md teaches the model)
+├── frontend/         Frontend owner docs (README.md teaches the model)
+├── supervisor.md     Thin-owner standards: supervisor, worker,
+├── worker.md         desktop-native, sdk — one file each
+├── desktop-native.md
+├── sdk.md
 ├── codebase/
 │   ├── README.md
-│   ├── structures/   Source-area organization and dependency rules
+│   ├── structures/   Pointer index only; owners live in specs/<owner>/
 │   ├── platforms/    Reusable product, engineering, and internal capabilities
 │   └── systems/      Complete product and engineering domains
 ├── developing/       Current reference tables
@@ -60,7 +67,9 @@ Style and structure expectations for every document live in
 authority.
 
 - Describe ownership, behavior, failure handling, and proof directly.
-- Put source organization in `codebase/structures/**`.
+- Put source organization in the owning `specs/<owner>/` document
+  (`anyharness/`, `server/`, `frontend/`, or a thin owner's single file);
+  `codebase/structures/README.md` is only the pointer index to them.
 - Put reusable capability contracts in `codebase/platforms/**`.
 - Put complete product and engineering domains in `codebase/systems/**`.
 - Put task procedures in the repository-root `guides/**`; do not duplicate

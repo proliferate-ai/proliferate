@@ -144,11 +144,11 @@ Read this file first, then the focused owner:
 
 For behavior outside the crate, use the current owners:
 
-- [Server structure](codebase/structures/server/README.md)
-- [AnyHarness structure](codebase/structures/anyharness/README.md)
-- [Sandbox lifecycle](codebase/platforms/product/sandbox-lifecycle.md)
+- [Server structure](server/standards.md)
+- [AnyHarness structure](anyharness/README.md)
+- [Sandbox lifecycle](FEATURE_DOCS/SANDBOX/lifecycle.md)
 - [Repository environments and workspace provisioning](codebase/platforms/product/workspace-provisioning.md)
-- [Billing](codebase/platforms/product/billing.md)
+- [Billing](FEATURE_DOCS/BILLING.md)
 
 ## Dependency Direction
 

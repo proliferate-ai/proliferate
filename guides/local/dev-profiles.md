@@ -325,4 +325,4 @@ outside the application/runtime input catalog.
 AnyHarness owns the environment assembled for workspace process runs,
 terminals, setup commands, and live agent launches. Its file layers and
 protected metadata are documented in
-[`workspace-command-environment.md`](../../specs/developing/reference/workspace-command-environment.md).
+[`workspace-command-environment.md`](../../specs/anyharness/workspace-command-environment.md).

@@ -123,8 +123,8 @@ the fallback evidence source.
 
 Depth: [`observability/README.md`](codebase/systems/engineering/observability/README.md)
 and [`sentry.md`](codebase/systems/engineering/observability/sentry.md) (system
-contract), [`frontend/guides/telemetry.md`](codebase/structures/frontend/guides/telemetry.md),
-[`anyharness/guides/observability.md`](codebase/structures/anyharness/guides/observability.md)
+contract), [`specs/frontend/telemetry.md`](frontend/telemetry.md),
+[`specs/anyharness/observability.md`](anyharness/observability.md)
 (span doctrine), [`engineering/analytics/`](codebase/systems/engineering/analytics/README.md)
 (anonymous telemetry, PostHog, Metabase),
 [`guides/operating/production-alerts.md`](../guides/operating/production-alerts.md)

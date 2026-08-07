@@ -5,10 +5,10 @@
 **Owns:** Server ↔ supervisor ↔ worker convergence: mailbox state machine, binary-swap-is-catalog-update, enrollment/identity, process supervision topology.
 
 **Does not own:**
-- AnyHarness runtime internals → [AnyHarness structure](../codebase/structures/anyharness/README.md)
-- Sandbox lifecycle and provisioning → [Sandbox lifecycle](../codebase/platforms/product/sandbox-lifecycle.md)
+- AnyHarness runtime internals → [AnyHarness structure](../anyharness/README.md)
+- Sandbox lifecycle and provisioning → [Sandbox lifecycle](SANDBOX/lifecycle.md)
 - Cloud workspace product flows → [Cloud workspace provisioning](../codebase/platforms/product/workspace-provisioning.md)
-- Server structure → [Server structure](../codebase/structures/server/README.md)
+- Server structure → [Server structure](../server/standards.md)
 
 ## Mental Model
 
@@ -200,7 +200,7 @@ Source: [Agent distribution](../codebase/platforms/product/agent-distribution.md
 | Managed cloud (E2B) | Yes (always) | Mailbox (`supervisor_update_request_dir` set) | Mailbox | Server's `build_worker_config` only ever emits `supervisor_update_request_dir`; calling it with `supervisor_owned=False` raises `ValueError` |
 | SSH-installed | Yes (supervisor runs) | Disabled | Disabled | Supervisor owns process supervision; Worker binary convergence is off |
 
-Source: [Worker lifecycle guide](../codebase/structures/proliferate-worker/guides/lifecycle.md) "Launch Policy", `server/proliferate/server/cloud/runtime/bootstrap.py`
+Source: [Worker lifecycle guide](../worker.md) "Launch Policy", `server/proliferate/server/cloud/runtime/bootstrap.py`
 
 ## Laws
 

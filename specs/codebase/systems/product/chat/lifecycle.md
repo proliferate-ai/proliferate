@@ -30,13 +30,13 @@ session tab; it does not guarantee the new tab's immediate-right placement.
 
 ## Related Owners
 
-- [Model Catalog](../../../platforms/product/model-catalog.md) owns model
+- [Model Catalog](../../../../FEATURE_DOCS/MODELS.md) owns model
   identity, availability, and action classification.
 - [Composer](composer.md) owns input, controls, picker presentation, panels,
   and badges.
 - [Workspaces](../workspaces/README.md) owns tab ordering, restoration, and
   projected-shell mechanics.
-- [AnyHarness sessions](../../../structures/anyharness/src/sessions.md) owns
+- [AnyHarness sessions](../../../../anyharness/sessions.md) owns
   actor/config application, process retirement, and relaunch.
-- [Frontend structure](../../../structures/frontend/README.md) owns source
+- [Frontend structure](../../../../frontend/README.md) owns source
   placement.

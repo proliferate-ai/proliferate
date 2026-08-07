@@ -436,7 +436,7 @@ jobs:
 
       # Focused Tier-1 gate for the workflow definition surface: passive
       # refetch draft preservation, revision-conflict handling, failed-reload
-      # retry, and create-state reset (specs/codebase/systems/product/workflows/definitions.md
+      # retry, and create-state reset (specs/FEATURE_DOCS/WORKFLOWS.md
       # assigns UI conflict behavior to Tier 1). Keep this exact-file signal in
       # addition to the package suite so regressions remain immediately named.
       - name: Test workflow definition surface
