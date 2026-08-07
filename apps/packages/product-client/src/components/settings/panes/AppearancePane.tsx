@@ -92,7 +92,7 @@ export function AppearancePane() {
             description="Zoom everything in the window, like browser zoom. Font size settings are unaffected."
           >
             <div
-              className={`flex h-8 ${CONTROL_WIDTH_CLASS} items-center overflow-hidden rounded-lg bg-surface-control text-foreground`}
+              className={`flex h-7 ${CONTROL_WIDTH_CLASS} items-center overflow-hidden rounded-lg bg-surface-control text-foreground`}
             >
               <Button
                 type="button"
@@ -100,12 +100,12 @@ export function AppearancePane() {
                 size="icon"
                 aria-label="Zoom out"
                 disabled={!canDecreaseZoom}
-                className="h-8 w-8 shrink-0 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+                className="h-7 w-7 shrink-0 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
                 onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, -1))}
               >
                 <Minus className="icon-paired" />
               </Button>
-              <div className="flex h-8 flex-1 items-center justify-center border-x border-border-light text-ui font-medium text-foreground">
+              <div className="flex h-7 flex-1 items-center justify-center border-x border-border-light text-ui font-medium text-foreground">
                 {WINDOW_ZOOM_LABELS[windowZoomId]}
               </div>
               <Button
@@ -114,7 +114,7 @@ export function AppearancePane() {
                 size="icon"
                 aria-label="Zoom in"
                 disabled={!canIncreaseZoom}
-                className="h-8 w-8 shrink-0 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
+                className="h-7 w-7 shrink-0 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
                 onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, 1))}
               >
                 <Plus className="icon-paired" />
@@ -129,7 +129,6 @@ export function AppearancePane() {
             <SettingsMenu
               label={UI_FONT_SIZE_LABELS[uiFontSizeId]}
               className={CONTROL_WIDTH_CLASS}
-              menuClassName={CONTROL_WIDTH_CLASS}
               groups={[{
                 id: "ui-font-size",
                 options: UI_FONT_SIZE_OPTIONS.map((option) => ({
@@ -149,7 +148,6 @@ export function AppearancePane() {
             <SettingsMenu
               label={READABLE_CODE_FONT_SIZE_LABELS[readableCodeFontSizeId]}
               className={CONTROL_WIDTH_CLASS}
-              menuClassName={CONTROL_WIDTH_CLASS}
               groups={[{
                 id: "readable-code-font-size",
                 options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({

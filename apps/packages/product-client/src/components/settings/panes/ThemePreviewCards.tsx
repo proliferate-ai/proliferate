@@ -1,8 +1,9 @@
-import type { FC } from "react";
+import { useId, type FC } from "react";
 import { themePreviewColors } from "@proliferate/design/tokens";
+import { Button } from "#product/primitives/Button";
 import { Check } from "#product/primitives/icons/core";
 import { twMerge } from "#product/primitives/utils/tw-merge";
-import { COLOR_MODES, type ColorMode } from "#product/config/theme";
+import type { ColorMode } from "#product/config/theme";
 
 /**
  * Theme picker for the Appearance pane: one preview card per color mode.
@@ -85,16 +86,20 @@ const DARK_ARTWORK = (
  * because the seam has to fall inside shapes (a pill is half light and half
  * dark), which a clip of two complete drawings cannot produce.
  */
-const SYSTEM_ARTWORK = (
+const SystemArtwork: FC = () => {
+  // The clip id must be unique per mounted instance: a duplicated DOM id would
+  // make a second card's clipPath resolve to the first instance's node.
+  const clipId = useId();
+  return (
   <>
     <defs>
-      <clipPath id="theme-preview-system-sheet">
+      <clipPath id={clipId}>
         <path d="M7 42a8 8 0 0 1 8-8h140a8 8 0 0 1 8 8v78H7V42Z" />
       </clipPath>
     </defs>
     <rect x="0" y="0" width="85" height="120" fill={light.ground} />
     <rect x="85" y="0" width="85" height="120" fill={dark.groundSplit} />
-    <g clipPath="url(#theme-preview-system-sheet)">
+    <g clipPath={`url(#${clipId})`}>
       <path fill={light.sheetAlt} d="M7 34h78v86H7z" />
       <path fill={dark.ground} d="M85 34h78v86H85z" />
       <path fill={light.pillStrong} d="M73 59h12v6H73a3 3 0 0 1 0-6Z" />
@@ -111,10 +116,11 @@ const SYSTEM_ARTWORK = (
       <path fill={dark.pillStrong} d="M103 114a3 3 0 0 1 3-3h29a3 3 0 0 1 0 6h-29a3 3 0 0 1-3-3Z" />
     </g>
   </>
-);
+  );
+};
 
 const MODE_ARTWORK: Record<ColorMode, FC> = {
-  system: () => SYSTEM_ARTWORK,
+  system: SystemArtwork,
   light: () => LIGHT_ARTWORK,
   dark: () => DARK_ARTWORK,
 };
@@ -130,13 +136,15 @@ export interface ThemePreviewCardsProps {
 export function ThemePreviewCards({ value, onChange }: ThemePreviewCardsProps) {
   return (
     <div role="radiogroup" aria-label="Theme" className="grid w-full grid-cols-3 gap-3">
-      {CARD_ORDER.filter((mode) => COLOR_MODES.includes(mode)).map((mode) => {
+      {CARD_ORDER.map((mode) => {
         const selected = value === mode;
         const Artwork = MODE_ARTWORK[mode];
         return (
-          <button
+          <Button
             key={mode}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             role="radio"
             aria-checked={selected}
             data-selected={selected ? "" : undefined}
@@ -175,7 +183,7 @@ export function ThemePreviewCards({ value, onChange }: ThemePreviewCardsProps) {
             >
               {MODE_LABELS[mode]}
             </span>
-          </button>
+          </Button>
         );
       })}
     </div>

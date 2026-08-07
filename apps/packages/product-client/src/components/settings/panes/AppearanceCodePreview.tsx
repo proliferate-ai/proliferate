@@ -26,13 +26,34 @@ const ADDITION_ROW_STYLE = { background: "var(--color-success-subtle)" } as CSSP
 const DELETION_NUMBER_STYLE = { color: "var(--color-destructive)" } as CSSProperties;
 const ADDITION_NUMBER_STYLE = { color: "var(--color-success)" } as CSSProperties;
 
+/**
+ * The change gutters reuse the product's markers — solid 3px bar for
+ * additions, the striped bar for deletions. They are inline styles rather than
+ * product.css rules on purpose: this component is settings-only, and the
+ * global stylesheet ships in the /login first-load bundle, which sits at its
+ * byte cap.
+ */
 type LineKind = "context" | "deletion" | "addition";
+
+const GUTTER_BASE_STYLE = { flex: "none", width: "3px" } as CSSProperties;
+const GUTTER_STYLES: Record<LineKind, CSSProperties | undefined> = {
+  context: GUTTER_BASE_STYLE,
+  addition: { ...GUTTER_BASE_STYLE, background: "var(--color-success)" },
+  deletion: {
+    ...GUTTER_BASE_STYLE,
+    background:
+      "repeating-linear-gradient(180deg, var(--color-destructive) 0 3px, transparent 3px 5px)",
+  },
+};
+
+/** The mock's airy code leading; the readable-code ramp still sets the size. */
+const PREVIEW_LINE_HEIGHT_STYLE = { lineHeight: 1.95 } as CSSProperties;
 
 function Line({ number, kind, children }: { number: number; kind: LineKind; children: ReactNode }) {
   const changed = kind !== "context";
   return (
     <div className="flex" style={kind === "deletion" ? DELETION_ROW_STYLE : kind === "addition" ? ADDITION_ROW_STYLE : undefined}>
-      <span data-gutter={changed ? kind : undefined} />
+      <span style={GUTTER_STYLES[kind]} />
       <span
         className={`w-8 shrink-0 select-none pr-3 text-right ${changed ? "" : "text-faint"}`}
         style={kind === "deletion" ? DELETION_NUMBER_STYLE : kind === "addition" ? ADDITION_NUMBER_STYLE : undefined}
@@ -68,7 +89,7 @@ function FieldLine({ name, value, numeric }: { name: string; value: string; nume
 
 export function AppearanceCodePreview() {
   return (
-    <div className="appearance-code-preview grid grid-cols-2 py-2 font-mono text-readable-code">
+    <div className="grid grid-cols-2 py-2 font-mono text-readable-code" style={PREVIEW_LINE_HEIGHT_STYLE}>
       <div className="flex min-w-0 flex-col overflow-hidden">
         <Line number={1} kind="context"><OpeningLine /></Line>
         <Line number={2} kind="deletion"><FieldLine name="runtime" value={"\"local\""} /></Line>

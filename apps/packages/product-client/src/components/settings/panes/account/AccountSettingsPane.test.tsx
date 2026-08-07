@@ -33,6 +33,28 @@ describe("AccountSettingsPane", () => {
     expect(screen.getByText("Connected")).toBeTruthy();
   });
 
+  it("renders exactly one Sign out on the profile row and fires its action", () => {
+    const onSignOut = vi.fn();
+    render(
+      <AccountSettingsPane
+        displayName="Pablo"
+        email="pablo@example.com"
+        profileSummary="Ready for cloud workspaces."
+        githubLabel="@pablo"
+        providers={[]}
+        actions={{ signOut: { label: "Sign out", onClick: onSignOut } }}
+      />,
+    );
+
+    // Sign out lives on the profile identity row now — one affordance, wired
+    // through. Dropping the pass-through or re-adding the old footer would
+    // change this count.
+    const buttons = screen.getAllByRole("button", { name: "Sign out" });
+    expect(buttons.length).toBe(1);
+    fireEvent.click(buttons[0]);
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
   it("renders a missing GitHub action", () => {
     const connectGitHub = vi.fn();
 

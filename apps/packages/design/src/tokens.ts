@@ -1935,7 +1935,6 @@ export const themePreviewColors = {
     sheet: "#1C1C1C",
     pillStrong: "#3A3A3A",
     pill: "#2E2E2E",
-    pillSoft: "#232323",
     hairline: "#2A2A2A",
   },
   /**

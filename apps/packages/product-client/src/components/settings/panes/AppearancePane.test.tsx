@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The host provider is a self-referencing package export that resolves to the
@@ -72,6 +72,21 @@ describe("AppearancePane previews", () => {
 
     const group = getByRole("radiogroup", { name: "Theme" });
     expect(group.querySelectorAll("[role='radio']").length).toBe(3);
+  });
+
+  it("writes the clicked theme card to the preference store and reflects it back", () => {
+    const { getByRole } = render(<AppearancePane />);
+
+    // The card is not a local toggle: each click must round-trip through the
+    // real preference store and come back as the checked state. Two different
+    // targets so the lock holds regardless of the store's starting mode.
+    fireEvent.click(getByRole("radio", { name: "Light" }));
+    expect(getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe("true");
+    expect(getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("false");
+
+    fireEvent.click(getByRole("radio", { name: "System" }));
+    expect(getByRole("radio", { name: "System" }).getAttribute("aria-checked")).toBe("true");
+    expect(getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe("false");
   });
 
   it("keeps every preview size off hardcoded pixels", () => {
