@@ -186,8 +186,8 @@ importers:
         specifier: ^0.17.0
         version: 0.17.0
       posthog-js:
-        specifier: ^1.410.6
-        version: 1.410.6
+        specifier: 1.386.8
+        version: 1.386.8
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -574,8 +574,8 @@ importers:
         specifier: ^5.101.4
         version: 5.101.4(react@19.2.8)
       posthog-js:
-        specifier: ^1.410.6
-        version: 1.410.6
+        specifier: 1.386.8
+        version: 1.386.8
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -5756,9 +5756,8 @@ packages:
     resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
     engines: {node: '>=0.10.0'}
 
-  posthog-js@1.410.6:
-    resolution: {integrity: sha512-/LRekY3DN0SRDD98xS7DPXeTRGozMhkxO/mi+i9F783c3YnaGRP7UGKyS9In1adjmp0xXKc4PfKkwKHonB2liQ==}
-
+  posthog-js@1.386.8:
+    resolution: {integrity: sha512-L4cJD1sleUULE7K4mZQI5wpS24NHGtNmFw1rPHruc579unVzHuooHiVDEHp/qyNnhNxtNE6alBTiVORbYnRTSw==}
   posthog-react-native@4.61.4:
     resolution: {integrity: sha512-8l9wZ1boR27hRuEH41dF/BtUdwm7VTyzFykRKXphFXYKqygrO4Cxr2xyuwqFVSnbnu4S/NKWFuWxK4bk98clpw==}
     hasBin: true
@@ -12633,9 +12632,8 @@ snapshots:
     dependencies:
       xtend: 4.0.2
 
-  posthog-js@1.410.6:
+  posthog-js@1.386.8:
     dependencies:
-      '@posthog/browser-common': 0.3.1
       '@posthog/core': 1.46.9
       '@posthog/types': 1.402.2
       core-js: 3.50.0
