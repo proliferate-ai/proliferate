@@ -1,6 +1,7 @@
 # Docs structure (target)
 
 Description: the target model and live slice registry for restructuring this repo's documentation system into the AGENTS.md-routed tree.
+Date: 2026-08-05
 
 One authority rule replaces the current five-lifecycle model: **if it's not current, it's not in this repo.** Current means current behavior, current policy including its exact exceptions, current procedures, and current evidence. Approved-but-unbuilt designs are not current: delivery specs and multi-PR plans live outside the canonical read path - PRs, issues, and the Implementation sections of `adrs/` records (below). When a delivery spec or program retires, its surviving decisions graduate in that same retiring PR: mechanical rules → lint records, rejected approaches → tried-and-rejected rows, cross-plane invariants → feature-doc laws. Nothing valuable dies in a PR body. Anything in the tree is operating truth, updated in the same PR that changes behavior. The tree serves agents and humans alike - it is the reference for both, not an agent-only artifact.
 
