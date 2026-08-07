@@ -495,6 +495,12 @@ jobs:
       - name: Install server (venv, matches local layout)
         run: cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
 
+      - name: Regenerate cloud SDK artifacts
+        run: make cloud-client-generate
+
+      - name: Verify generated cloud SDK artifacts are committed
+        run: git diff --exit-code -- cloud/sdk/src/generated/openapi.ts
+
       - name: Install Playwright chromium
         run: pnpm -C tests/intent exec playwright install --with-deps chromium
 
