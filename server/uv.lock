@@ -279,16 +279,16 @@ wheels = [
 
 [[package]]
 name = "botocore"
-version = "1.43.66"
+version = "1.43.64"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jmespath" },
     { name = "python-dateutil" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5d/81/9ce1f5fe88b4b1429edf83189b8994ffb9883fc20bdd46b7ee9d1cc1da24/botocore-1.43.66.tar.gz", hash = "sha256:dde324cbe8be14b536b78f4fafe192f94fffcc70716bde804044e62495af8c3c", size = 15880416, upload-time = "2026-08-06T19:38:37.603Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/67/0e39203c5c67f750874478cf89124486044580ec5cb391eec8eb13cf25b8/botocore-1.43.64.tar.gz", hash = "sha256:a2bb131f48111094fae0a2c896b42593797e935d9c22abb2ebae4290c6dbb5ea", size = 15842274, upload-time = "2026-08-04T20:12:31.598Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/e6/53f0e28dea0f17a1b041bb3356d0c21fda7ba4198a515cfaf4d5f3088fe3/botocore-1.43.66-py3-none-any.whl", hash = "sha256:0fa62529579469a9224c186eba87e7e561db87dfad20c63ce5d52e427c7fa325", size = 15566310, upload-time = "2026-08-06T19:38:34.446Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/d1/f27d1a4fb571e102828a4672cb3d19e0409275eb92c701b67a85879c0b04/botocore-1.43.64-py3-none-any.whl", hash = "sha256:f0a01c47d631ab95589c244566bca971294724b21862de1c12c7c3b0de236272", size = 15525459, upload-time = "2026-08-04T20:12:28.58Z" },
 ]
 
 [package.optional-dependencies]
@@ -1151,7 +1151,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.18.5" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "boto3", specifier = ">=1.43.63" },
-    { name = "botocore", extras = ["crt"], specifier = ">=1.43.59" },
+    { name = "botocore", extras = ["crt"], specifier = ">=1.43.64" },
     { name = "celery", specifier = ">=5.5.0" },
     { name = "celery-redbeat", specifier = ">=2.4.2" },
     { name = "cryptography", specifier = ">=49.0.0" },
