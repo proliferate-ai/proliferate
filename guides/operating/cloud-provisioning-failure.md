@@ -6,7 +6,7 @@ workspace materialization failures.
 Use this runbook when a user's cloud sandbox cannot be connected, a repository
 environment cannot be materialized, or a Cloud workspace cannot reach its
 AnyHarness worktree. The current lifecycle is owned by
-[`sandbox-lifecycle.md`](../../specs/codebase/platforms/product/sandbox-lifecycle.md)
+[`sandbox-lifecycle.md`](../../specs/FEATURE_DOCS/SANDBOX/lifecycle.md)
 and
 [`workspace-provisioning.md`](../../specs/codebase/platforms/product/workspace-provisioning.md).
 Use [`worker-enrollment-failure.md`](worker-enrollment-failure.md) only after
