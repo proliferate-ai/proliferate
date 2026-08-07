@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import {
+  composeBlockedStatusMessage,
   presentComposerBlockedState,
   resolveComposerBlockedState,
   type ComposerBlockedPresentation,
@@ -92,10 +93,10 @@ export function useComposerBlockedState(options?: {
         mode: panelState.model.mode,
         // Attention modes keep the model's title as framing — the error
         // mode's description is the raw provisioning receipt (lastError)
-        // and reads as noise without it.
-        message: panelState.model.mode === "pending" || !panelState.model.title
-          ? panelState.model.description
-          : `${panelState.model.title}. ${panelState.model.description}`,
+        // and reads as noise without it. Descriptions that already restate
+        // the title (every blocked-family description opens with "Cloud
+        // usage is paused …") stand alone.
+        message: composeBlockedStatusMessage(panelState.model.mode, panelState.model.title, panelState.model.description),
         primaryActionLabel:
           buildCloudWorkspaceCompactStatusView(panelState.model).primaryAction?.label ?? null,
         primaryAction: cloudStatusActions.handlePrimaryAction

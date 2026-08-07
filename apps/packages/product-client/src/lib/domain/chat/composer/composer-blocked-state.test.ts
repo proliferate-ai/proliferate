@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  composeBlockedStatusMessage,
   presentComposerBlockedState,
   resolveComposerBlockedState,
   type ComposerBlockedActionState,
@@ -340,5 +341,28 @@ describe("presentComposerBlockedState", () => {
       claim: null,
     });
     expect(presentation.actions).toEqual([]);
+  });
+});
+
+describe("composeBlockedStatusMessage", () => {
+  it("frames attention descriptions with the title", () => {
+    expect(composeBlockedStatusMessage(
+      "error",
+      "Provisioning failed",
+      "exit code 1",
+    )).toBe("Provisioning failed. exit code 1");
+  });
+
+  it("drops the title while pending or absent", () => {
+    expect(composeBlockedStatusMessage("pending", "Ready soon", "Preparing.")).toBe("Preparing.");
+    expect(composeBlockedStatusMessage("error", null, "Preparing.")).toBe("Preparing.");
+  });
+
+  it("does not double up when the description already restates the title", () => {
+    expect(composeBlockedStatusMessage(
+      "blocked",
+      "Cloud usage is paused",
+      "Cloud usage is paused because your included sandbox hours are exhausted.",
+    )).toBe("Cloud usage is paused because your included sandbox hours are exhausted.");
   });
 });

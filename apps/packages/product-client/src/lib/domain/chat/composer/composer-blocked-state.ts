@@ -273,3 +273,21 @@ export function presentComposerBlockedState(
       };
   }
 }
+
+/**
+ * Frames a cloud-status takeover message. Attention modes keep the model's
+ * title as framing (the error mode's description is the raw provisioning
+ * receipt and reads as noise without it), but descriptions that already
+ * restate the title — every blocked-family description opens with "Cloud
+ * usage is paused …" — stand alone rather than doubling up.
+ */
+export function composeBlockedStatusMessage(
+  mode: string,
+  title: string | null,
+  description: string,
+): string {
+  if (mode === "pending" || !title || description.startsWith(title)) {
+    return description;
+  }
+  return `${title}. ${description}`;
+}

@@ -4,6 +4,7 @@ import { ComposerTextareaFrame } from "#product/primitives/patterns/ComposerText
 import { ComposerBlockedStatusLine } from "#product/components/workspace/chat/input/ComposerBlockedStatusLine";
 import { ComposerBlockedControlRow } from "#product/components/workspace/chat/input/ComposerBlockedControlRow";
 import {
+  composeBlockedStatusMessage,
   presentComposerBlockedState,
   resolveComposerBlockedState,
   type ComposerBlockedState,
@@ -67,9 +68,7 @@ function cloudStatusInput(model: CloudWorkspaceStatusScreenModel): ComposerBlock
   const view = buildCloudWorkspaceCompactStatusView(model);
   return {
     mode: model.mode,
-    message: model.mode === "pending" || !model.title
-      ? model.description
-      : `${model.title}. ${model.description}`,
+    message: composeBlockedStatusMessage(model.mode, model.title, model.description),
     primaryActionLabel: view.primaryAction?.label ?? null,
     primaryAction: view.primaryAction ? idleAction : null,
     primaryActionConfirmation:
