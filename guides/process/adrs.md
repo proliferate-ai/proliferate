@@ -7,8 +7,9 @@ members and then implemented.
 The ADR itself is used during implementation — it is the living working
 document while the ladder ships, amended as slices land — and is committed
 into `adrs/` in the **final PR** of the ladder. So `adrs/` only ever contains
-shipped decisions: one file per decision, opening with a one-line
-`Description:` header (`grep 'Description:' adrs/` is the index). ADRs are
+shipped decisions: one file per decision, named `adrs/YYYY-MM-DD-<slug>.md`
+(the decision date), opening with one-line `Description:` and `Date:` headers
+(`grep 'Description:' adrs/` is the index; the date sorts it). ADRs are
 EXPLICITLY NOT sources of truth (the code is), but rather sources of
 decisions: approved, built against, then kept forever as the permanent why,
 including the rejected options.
