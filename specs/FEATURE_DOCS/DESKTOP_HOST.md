@@ -95,6 +95,12 @@ deployment selection, links, storage, clipboard, telemetry, and Cloud behavior
 use their normal ProductHost groups rather than being duplicated in the
 Desktop bridge.
 
+The initial DesktopBridge may implement methods for the known inventoried
+consumers before those call sites migrate, as Desktop Host Adoption did. New
+methods beyond that inventory remain demand-driven: add one only when an
+actual consumer needs it, and preserve the concrete Desktop behavior and
+return shape at that boundary. The embedded browser is removed, not bridged.
+
 Root render-error reporting is one diagnostics operation with an acknowledged
 result: Desktop resolves success only after its native renderer diagnostic was
 persisted (or an identical event was already persisted inside the host-owned
@@ -150,6 +156,8 @@ apps/packages/product-client/src/app/AuthenticatedProductClient.tsx
 - `ProductClient.tsx` is the only public product entry.
 - `AuthenticatedProductClient.tsx` is internal and lazy-loaded from
   `#product/app/AuthenticatedProductClient`.
+- Neither file exists in the landed mechanics proof. The mechanical extraction
+  creates both from the existing Desktop product.
 
 #### Public export subpath
 
@@ -161,6 +169,19 @@ The only public product entry is exported as
   "./ProductClient": {
     "types": "./dist/ProductClient.d.ts",
     "import": "./dist/ProductClient.js"
+  }
+}
+```
+
+The mechanical extraction emits `dist/ProductClient.{js,d.ts}` and adds this
+export. Until then, the package carries a **temporary** public canary export
+that stands in for it and is deleted when the real entry lands:
+
+```json
+{
+  "./qualification/ProductClientBuildCanary": {
+    "types": "./dist/qualification/ProductClientBuildCanary.d.ts",
+    "import": "./dist/qualification/ProductClientBuildCanary.js"
   }
 }
 ```
@@ -190,6 +211,84 @@ export function ProductClient({
   product lifecycles beneath the envelope below.
 
 #### Provider envelope
+
+```text
+BrowserRouter
+  -> QueryClientProvider
+  -> CloudClientProvider
+  -> ProductHostProvider
+  -> ProductClient(RoutesComponent = host InstrumentedRoutes)
+```
+
+The browser qualification fixture passes `surface: "web"` and `desktop: null`;
+any local/native lifecycle fails closed by not mounting.
+
+#### Package-private `#product/*` import mechanism
+
+Moved modules resolve package-private imports through the compiled package:
+
+```json
+{
+  "imports": {
+    "#product/*": {
+      "types": "./src/*",
+      "default": "./dist/*.js"
+    }
+  }
+}
+```
+
+- Runtime/host-build resolution (`default`) resolves `#product/*` to compiled
+  `dist/*.js` and must **never** resolve back into `src`.
+- In-package TypeScript resolves `#product/*` types to `src` via the `types`
+  condition and a mirrored tsconfig `paths` entry
+  (`"#product/*": ["./src/*"]`).
+- Vitest resolves `#product/*` to `src` via a `resolve.alias` entry so tests run
+  against source.
+- Plain `tsc` does not rewrite the `#product/*` specifiers; it emits them
+  verbatim, and Node/Vite resolve them through the package `imports` map at
+  runtime/host-build time. This is what proves the compiled mechanism.
+
+#### Public-shell / lazy-authenticated split
+
+`ProductClient` is a lightweight public/auth shell. The authenticated product
+root is internal and lazy-loaded via `#product/app/AuthenticatedProductClient`,
+so Web login and callback entrypoints do not eagerly load editor, terminal, or
+other authenticated-only chunks. Connected repository/workspace action hosts
+also mount inside that authenticated root; they must not be imported by the
+public `App` shell. The mechanical move applies this exact shape to the real
+Desktop product.
+
+#### Reserved-file rule
+
+- `src/ProductClient.tsx` and `src/app/AuthenticatedProductClient.tsx` are
+  reserved names owned by the mechanical move.
+- The landed mechanics proof does not create them, export `./ProductClient`,
+  or import Desktop source into the package.
+
+#### Landed qualification canary
+
+The contract is qualified — without moving the product — by:
+
+```text
+apps/packages/product-client/src/qualification/
+  ProductClientBuildCanary.tsx              # public/auth shell; props mirror ProductClientProps
+  AuthenticatedProductClientBuildCanary.tsx # lazy-loaded via #product/qualification/...
+  canary-lazy-chunk.tsx                     # additional on-demand chunk
+  assets/**                                 # png, svg (url + ?raw), json (?raw + normal), mp3
+apps/packages/product-client/src/assets.d.ts  # ambient resource/CSS/font declarations
+apps/packages/product-client/scripts/copy-qualification-assets.mjs  # tsc-only asset copy into dist
+```
+
+The canary's prop shape is typed locally (`ProductClientBuildCanaryProps`); it is
+a stand-in for `ProductClientProps` and is deleted with the rest of the canary
+when the real entry lands. Because plain `tsc` cannot transform `?raw`,
+asset-URL, CSS, or font imports, the ambient declarations keep the canary's
+declaration-level build passing while the Vite host builds resolve and emit the
+real resource URLs; the post-build copy script mirrors the resource inputs into
+`dist/qualification/assets/**` for dist consumers.
+
+### Styling and assets
 
 ```text
 BrowserRouter
