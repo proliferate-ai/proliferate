@@ -20,7 +20,7 @@ index, and the change-control model for moving a value or adding a component.
 **Does not own:**
 
 - Class-authoring rules and which CSS file owns which rules —
-  [structures/frontend/guides/styling.md](codebase/structures/frontend/guides/styling.md).
+  [structures/frontend/guides/styling.md](frontend/styling.md).
 - The appearance-scaling gate's own contract (what it bans, its baselines, the
   Appearance preference it protects) —
   [systems/product/settings/appearance-scaling.md](codebase/systems/product/settings/appearance-scaling.md).
@@ -28,7 +28,7 @@ index, and the change-control model for moving a value or adding a component.
   the gate's specification.
 - Package dependency direction between `design` and ProductClient's nested
   domain, primitives, and connected tiers —
-  [structures/frontend/packages/README.md](codebase/structures/frontend/packages/README.md).
+  [structures/frontend/packages/README.md](frontend/packages.md).
 - Per-surface product behavior (what a screen does, its flows and copy) — the
   owning [systems/product/**](codebase/systems/README.md) document.
 
@@ -727,7 +727,7 @@ not a different role:
   as `product-client/src/primitives/patterns/` (built from primitives/patterns + tokens), but this tier
   is allowed to import concrete `#product/domain/<file>` view models and vocabulary, which
   `product-client/src/primitives/patterns/` must not (per the package boundary in
-  [packages/README.md](codebase/structures/frontend/packages/README.md)). The
+  [packages/README.md](frontend/packages.md)). The
   settings family (`SettingsRow`, `SettingsSection`, `SettingsPageHeader`, and
   siblings), `PrStatusBadge`, `ProductPageShell`, and the `secrets/` sub-tree
   live here for that reason, not because they belong to a "settings" or
