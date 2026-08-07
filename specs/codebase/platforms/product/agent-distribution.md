@@ -238,54 +238,7 @@ push.
 
 ### Runtime binary convergence (cloud)
 
-The cloud runtime binary converges to a server-advertised pin, and one
-process owns the swap: `proliferate-supervisor`, the OS parent of both
-the AnyHarness runtime and the worker in every sandbox. Supervision
-differs by surface, but the invariant is shared — the process that owns
-the children is the only process that swaps their binaries. On desktop
-that owner is the app itself (the runtime and worker are bundled
-sidecars, replaced only by an app update; neither ever self-swaps).
-
-The pin's provenance: release CI stamps `RUNTIME_VERSION` (and
-`WORKER_VERSION`) into the server image at build time
-([`server/version.py`](../../../../server/proliferate/server/version.py));
-every heartbeat ack advertises them as
-`desired_versions`. A server deploy is therefore the fleet trigger — each
-sandbox converges within one heartbeat interval (~30s). A per-sandbox
-override column exists for targeted pinning ahead of or behind the fleet.
-
-The worker never touches processes or binaries. On mismatch it writes an
-update request (exact version and artifact URL) into the supervisor's
-file mailbox
-([`proliferate-worker/src/supervisor_bridge/mailbox.rs`](../../../../anyharness/crates/proliferate-worker/src/supervisor_bridge/mailbox.rs))
-and moves on. The supervisor drains the mailbox — on child exit and on a
-periodic poll tick — and runs the swap state machine
-([`proliferate-supervisor/src/update/activate/`](../../../../anyharness/crates/proliferate-supervisor/src/update/activate/)):
-download, sha256
-re-verify, stage, journal-protected atomic swap (a crash mid-swap is
-repaired at next boot from the journal), restart in dependency order
-(runtime before worker), health-gate against `/health` (which must
-report the desired version), roll back to the `.prev` copy on any
-failure. A failed pin is recorded and not retried until a newer pin
-supersedes it. The supervisor's run loop
-([`proliferate-supervisor/src/process/mod.rs`](../../../../anyharness/crates/proliferate-supervisor/src/process/mod.rs))
-also restarts either child on crash with backoff, so a sandbox never
-depends on server-side reconnect to recover its runtime.
-
-Binary swaps do not wait for live sessions: the supervisor kills and
-restarts the runtime even mid-conversation. That is the intended
-behavior for now — desktop updates happen at app startup when no
-sessions exist, and in cloud the disruption window is one process
-restart on a fleet that updates at most daily. Deferring swaps around
-long-running work is a known UX gap to revisit, not an accident.
-
-Because the binary is the only catalog transport, this swap is also how
-cloud sandboxes receive new harness pins: a merged catalog PR rides the
-next runtime release, the server deploy advertises the new
-`RUNTIME_VERSION`, the supervisor swaps the binary, and the startup pass
-converges the harnesses. Catalog freshness in cloud is therefore bounded
-by the runtime release cadence (the nightly train), the same bound
-desktop already has.
+Runtime binary convergence for cloud targets — how the supervisor, worker, and server coordinate to swap binaries and how the binary-is-catalog principle makes catalog freshness a side effect of runtime updates — is owned by [Managed Runtime](../../../FEATURE_DOCS/MANAGED_RUNTIME.md).
 
 ## The update pipeline
 
