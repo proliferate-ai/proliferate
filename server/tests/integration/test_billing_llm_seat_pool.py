@@ -96,11 +96,19 @@ def _subscription_payload(
     }
 
 
-def _invoice_payload(*, subject_id: uuid.UUID, org_id: uuid.UUID) -> dict:
+def _invoice_payload(
+    *,
+    subject_id: uuid.UUID,
+    org_id: uuid.UUID,
+    billing_reason: str = "subscription_cycle",
+) -> dict:
     return {
         "id": "in_llm_pool",
         "customer": "cus_llm_pool",
         "subscription": None,
+        # Real Stripe invoices always carry this, and only a period boundary
+        # mints the period's allowance (W-F2), so the fixture must state it.
+        "billing_reason": billing_reason,
         "parent": {
             "subscription_details": {
                 "subscription": "sub_llm_pool",

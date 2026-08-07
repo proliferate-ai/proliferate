@@ -20,6 +20,43 @@ BILLING_PRICE_CLASS_PRO = "pro"
 BILLING_PRICE_CLASS_LEGACY_CLOUD = "legacy_cloud"
 BILLING_PRICE_CLASS_UNKNOWN = "unknown"
 
+# Stripe ``invoice.billing_reason`` values that mean "a new subscription period
+# began", and so are the only ones that may mint the period's seat allowance.
+# A mid-period seat change also produces a PAID invoice carrying a cloud
+# subscription line, but its allowance is prorated and issued separately by the
+# seat-adjustment pass (``PRO_SEAT_PRORATION_GRANT_TYPE``) — granting a second,
+# full-period allowance for it is a double allocation. See W-F2.
+BILLING_PERIOD_GRANT_INVOICE_REASONS = frozenset(
+    {"subscription_create", "subscription_cycle"},
+)
+# Reasons we affirmatively know do NOT open a period, so skipping the grant for
+# them is ordinary expected traffic. Kept as its own set rather than inferred as
+# "everything else": the failure direction of this gate is a paid invoice that
+# mints NOTHING, so an unrecognized reason — including a missing one — has to be
+# loud instead of silently sharing the expected path. Stripe adding a reason, or
+# an API version that stops sending the field, would otherwise zero out every
+# renewal for every paying org with only an info log to show for it.
+#
+# Checked against the full ``invoice.billing_reason`` enum in Stripe's OpenAPI
+# spec (2026-06-24.dahlia), which has nine values. The two above plus these six
+# account for eight. The ninth, ``subscription``, is deliberately in NEITHER
+# set: Stripe retired it for subscriptions created before May 2018, when no
+# distinction was drawn between cycles, updates and thresholds. Because it could
+# stand in for a *cycle*, classifying it benign would silently skip a real
+# period grant — the one failure direction this split exists to prevent — so it
+# stays unrecognized and pages. It cannot occur here in any case: every
+# subscription we have was created in 2026.
+BILLING_NON_PERIOD_INVOICE_REASONS = frozenset(
+    {
+        "subscription_update",
+        "subscription_threshold",
+        "manual",
+        "upcoming",
+        "quote_accept",
+        "automatic_pending_invoice_item_invoice",
+    },
+)
+
 PRO_SEAT_MONTHLY_AMOUNT_CENTS = 2000
 # Each active billed seat ($20/mo) allocates a $5 managed-LLM contribution and a
 # $15-equivalent compute contribution into two *separate* shared org pools. The

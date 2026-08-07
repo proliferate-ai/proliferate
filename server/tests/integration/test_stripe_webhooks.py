@@ -833,6 +833,10 @@ async def test_invoice_paid_uses_current_stripe_line_and_item_period_shapes(
             "id": "in_cloud",
             "customer": "cus_cloud",
             "subscription": None,
+            # A renewal: this test asserts the *pro-pricing* gate withholds the
+            # grant, so it must reach that gate rather than stopping at the
+            # period-boundary one, or it would stay green if pro pricing broke.
+            "billing_reason": "subscription_cycle",
             "parent": {
                 "subscription_details": {
                     "subscription": "sub_cloud",
@@ -1125,6 +1129,8 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
         "id": "in_org_sync",
         "customer": "cus_org_sync",
         "subscription": None,
+        # Renewals are what mint the period allowance (W-F2).
+        "billing_reason": "subscription_cycle",
         "parent": {
             "subscription_details": {
                 "subscription": "sub_org_sync",
@@ -1216,7 +1222,32 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
     assert updates == [2, 3]
     assert subscription.seat_quantity == 3
     assert len(grants) == 1
-    assert grants[0].hours_granted == 15.0  # 3 seats * 5 h/seat
+    # 3 seats * 5 h/seat, and this value is pinned as *current behaviour, not as
+    # correct behaviour*. Read the setup: this is a **re-delivery of the same
+    # boundary invoice** after the seat count grew, so it is genuinely NOT the
+    # W-F2 trigger — W-F2 was a *mid-period seat change* raising its own invoice
+    # with ``billing_reason=subscription_update`` and an unchanged period, which
+    # collided with this period-keyed grant. That invoice no longer reaches here
+    # (see ``test_billing_invoice_period_boundary.py``).
+    #
+    # But the arithmetic here is the same error reached by a different door, and
+    # this comment should not be read as blessing it. The third seat was added
+    # *mid-period*, so what this boundary owes for it is a prorated fraction, not
+    # a full seat-month; the seat-adjustment pass grants that fraction under its
+    # own ``source_ref``, which does not dedupe against this one. So the
+    # re-delivery yields ~17.5 h where ~12.5 h is owed — one extra seat-month
+    # per seat added mid-period. ``top_up_existing=True`` is *idempotency*
+    # motivated (it repairs a grant first written from a stale seat count), and
+    # converging on a **grown** seat count is a known residual over-grant,
+    # tracked separately rather than fixed here.
+    #
+    # Prod reachability is narrow but real: the receipt table refuses re-claim
+    # once ``status == "processed"``, so a routine Stripe re-delivery never gets
+    # here. It needs a receipt left ``failed`` (or a lease expired mid-process)
+    # and a seat added before the retry lands. The proper fix is to size the
+    # period grant from the seat count *as of the boundary*, which is a
+    # behaviour change needing its own verification — out of scope for the gate.
+    assert grants[0].hours_granted == 15.0
 
 
 @pytest.mark.asyncio
@@ -1303,6 +1334,11 @@ async def test_invoice_failed_hold_blocks_until_invoice_paid_clears_it(
             "id": "in_paid_after_hold",
             "customer": "cus_payment_hold",
             "subscription": "sub_payment_hold",
+            # A renewal, so this keeps covering hold-clearing on the *boundary*
+            # path. Without it the invoice takes the non-boundary early return
+            # and the assertions below pass through that branch instead, leaving
+            # the boundary path's clear_payment_failed_holds call untested.
+            "billing_reason": "subscription_cycle",
             "metadata": {"billing_subject_id": str(subject_id)},
             "lines": {
                 "data": [
