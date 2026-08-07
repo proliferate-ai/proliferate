@@ -4,18 +4,19 @@ Read [servers.md](../servers.md) first. That spec
 defines the source layout and implementation rules. Files in this folder define
 the initial product MCPs we are standardizing.
 
-Each definition answers:
+Each definition carries the durable laws of one product MCP:
 
 ```text
-id
-owner
-visibility
-default injection
-context
-tools
-calls
-UI exposure
+agent-facing identity and exposure rules
+tool inventory (names, not schemas)
+lifecycle laws (auth, ordering, races)
+compatibility semantics
 ```
+
+Static MCP metadata (id, route slug, server name, visibility, injection) lives
+in code — [servers.md](../servers.md) names the definition files as its
+source-of-truth pattern. Tool argument/return schemas live in the tool
+implementations, not here.
 
 Cross-cutting standards:
 
@@ -25,5 +26,4 @@ Current definitions:
 
 - [subagents.md](subagents.md)
 - [cowork.md](cowork.md)
-- [artifacts.md](artifacts.md)
 - [reviews.md](reviews.md)

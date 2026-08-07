@@ -100,20 +100,6 @@ mobility
 These are product workflows built on core primitives. They may depend on core
 domains. They should not be imported by core domains directly.
 
-### Runtime Infrastructure Domains
-
-```text
-plugins
-runtime_config
-```
-
-These own runtime infrastructure that sits between core domains and product
-surfaces. `plugins` expands cloud-configured MCP plugins and skills into
-session-ready MCP server definitions and skill rendering. `runtime_config`
-owns the applied MCP/skill/plugin config revision for a session: manifest
-storage, credential values, and the session context handed to session launch.
-These are not product surface domains and should not own product tool behavior.
-
 Expected shape:
 
 ```text
@@ -331,6 +317,10 @@ Promote a named concern into its own folder when it has any of:
 - repeated files with a stable concept name
 - tests that naturally group around that concern
 
+Do not promote a concern folder just to shrink a file.
+`domains/sessions/title/{store,service}.rs` is wrong; `service/titles.rs` +
+`store/sessions.rs` is right.
+
 Examples:
 
 ```text
@@ -442,7 +432,6 @@ Examples:
 ```text
 domains/cowork/mcp/
 domains/reviews/mcp/
-domains/plugins/mcp/
 domains/sessions/subagents/mcp/
 ```
 
@@ -515,8 +504,7 @@ contract types as a domain's working model or as persisted rows are
 violations.
 
 Migration exceptions (the rule is the law; this is the debt):
-`domains/runtime_config` persists contract types as rows and uses them as its
-model; `domains/agents/auth` uses contract auth structs end-to-end.
+`domains/agents/auth` uses contract auth structs end-to-end.
 Target: domain twins minted at the API seam. (The sessions runtime's former
 fetching response mapper is resolved: `runtime/view.rs` composes `SessionView`
 and the API maps it dep-lessly.)

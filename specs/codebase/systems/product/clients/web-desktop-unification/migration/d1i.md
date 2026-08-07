@@ -145,8 +145,50 @@ product). The replacement browser-host build **does** split: the `/login` entry
 is `index-*.js` (~482.55 KiB gzip) and the authenticated product loads lazily as
 `AuthenticatedProductClient-*.js` (~743.62 KiB gzip), so the unauthenticated
 entry no longer eagerly pulls the authenticated bundle. Those replacement
-numbers are informational only; the gated no-regression comparison under the
-approved formula is phase-6 (cutover) work, not this slice.
+numbers are informational only; the no-regression comparison under the
+originally approved formula was superseded at cutover by founder ruling
+WDU-1247-D1 (fixed gzip-9 caps), recorded next.
+
+## Phase 6 — hosted Web first-load budget (WDU-1247-D1)
+
+The phase-6 cutover gate measured the replacement browser host's `/login`
+first-load against the binding baseline above (471,212 B JS / 24,226 B CSS
+gzip-9, no route splitting). The smallest verified split still exceeded that
+baseline — inherent to unifying onto one shared design system and app shell,
+not an unshipped optimization. **Founder ruling WDU-1247-D1 (approved
+2026-07-15):** shared-shell simplicity and full shared-package Tailwind
+scanning win over a separate auth-shell CSS build boundary, with fail-closed
+gzip-9 `/login` ceilings of **JS 485,000 B / CSS 66,000 B / zero eager fonts,
+images, or audio** — encoded as `CAPS` in
+`scripts/measure-login-runtime-budget.mjs` and enforced by the required,
+non-continue-on-error `Login first-load budget (phase-6)` CI check.
+
+The empirical floor behind the ruling: re-scoping Tailwind's `@source` to only
+the login/auth shell sources and rebuilding floors the eager CSS at **35.4 KB
+gzip — still +46% over the 24.2 KB baseline**. The residual is the shared
+design-system token + base + login-utility layer; reaching no-regression would
+require a second parallel Tailwind pipeline for the login surface, duplicating
+tokens and risking cross-host visual drift.
+
+Two eager-shell regressions were root-caused and fixed against those caps on
+`codex/wdu-login-budget`:
+
+- **Turn-end audio** (`use-turn-end-sound.ts`): an eager `new Audio(ding)`
+  above the auth gate fetched 58.8 KB on the public login shell; fixed by
+  lazy-constructing the clip on first turn-end.
+- **xterm terminal CSS** (`product-client/src/index.css` →
+  `use-xterm-surface.ts`): the eager ProductClient entry pulled
+  `@xterm/xterm/css/xterm.css` (~1.9 KB gzip) into the login bundle; fixed by
+  co-locating the stylesheet with the lazily imported xterm runtime so it
+  rides the `AuthenticatedProductClient` chunk instead.
+
+Candidate result, measured at the durable login-ready marker
+(`[data-auth-screen="auth"]`) against a fixed anonymous API fixture and
+recorded in
+[`login-runtime-budget-candidate.json`](login-runtime-budget-candidate.json):
+JS 482,026 B (2,974 B headroom), CSS 65,351 B (649 B headroom),
+fonts/images/audio 0 B — all pass, with thin headroom against future
+eager-shell growth.
 
 ## Final battery (re-run end-to-end at the slice head `47ffe5869` + docs)
 

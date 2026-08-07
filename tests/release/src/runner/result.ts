@@ -8,9 +8,9 @@ import type { CellEvidenceV1, FinalCellResultV2 } from "../evidence/schema.js";
 
 /**
  * Cell state, finalization invariants, behavior policy, verdict, and intended
- * exit code, per specs/developing/testing/qualification-runner-core.md
- * ("Final test results" / "Diagnostic and strict verdicts") as extended by
- * specs/developing/testing/exact-test-matrix.md: the selected unit is an
+ * exit code, per specs/developing/testing/core-release-validation.md —
+ * historical section names: "Final test results" / "Diagnostic and strict
+ * verdicts", as extended by the exact-test-matrix law: the selected unit is an
  * exact test cell (`scenario/lane` for leaves, `scenario/lane/dim=value` for
  * matrix children), and every planned cell must receive exactly one result.
  */

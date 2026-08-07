@@ -13,12 +13,12 @@ restating folder rules or low-level reusable contracts.
 | Product auth | Account sign-in, linked providers, email/password, product-readiness gates, reviewer accounts, and auth surface UX. | [auth/README.md](auth/README.md) |
 | Organization invitations | Organization invite links, pending invitation grants, desktop join behavior, and admin member/invite UX. | [organizations/invitations.md](organizations/invitations.md) |
 | Pending workspace shell | Pending workspace entry, projected session shell, optimistic prompts, and workspace/session materialization handoff. | [workspaces/pending-shell.md](workspaces/pending-shell.md) |
-| Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access, dispatch UX, and cloud/local parity. | [clients/cloud-local-parity.md](clients/cloud-local-parity.md); the dispatch spec built on the reverted claim/exposure substrate was removed and a rewrite is planned. |
+| Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access and dispatch UX. | No current system spec; the previous dispatch spec was built on a reverted substrate and removed — a rewrite is planned. |
 | Chat | Chat lifecycle, composer, and transcript behavior. | [chat/README.md](chat/README.md) |
 | Workspace files, mobility boundary, and terminals | User-facing workspace file, shell, dispatch, and terminal behavior; current migration absence and retained runtime mobility boundary. | [workspaces/README.md](workspaces/README.md) |
-| Mobile cloud client | Mobile auth, cloud chat, sessions, automations, settings, device/mobile-web smoke, and mobile acceptance matrix. | [clients/mobile-cloud.md](clients/mobile-cloud.md) |
+| Mobile client | Mobile auth, cloud chat, sessions, and settings on the mobile surface. | No current system spec. Mobile ships from `apps/mobile`; architecture boundary owned by [structures/frontend](../../structures/frontend/README.md), local/QA lanes by [developing/local/mobile.md](../../../developing/local/mobile.md). |
 | Workflows | User-owned workflow definitions, ordered stages and prompt steps, catalog-backed harness validation, revisioning, optional default repository configuration, and definition-authoring UX. | [workflows/definitions.md](workflows/definitions.md) |
-| Automations | Scheduled/manual automations and the parked Slack bot contract. | [automations/README.md](automations/README.md) |
+| Automations | Automation authoring, scheduling UI, and the automation/automation_run data it writes. | No current system spec. Automation editor/scheduling UI ships in `apps/packages/product-client/src/lib/domain/automations/**`; server keeps only the `automation`/`automation_run` tables (no mounted router — pinned by `server/tests/unit/test_api_path_prefix.py`). Create a spec before reviving execution. |
 | Engagement | Customer.io transport, code-owned profile attributes and lifecycle events, and current enable/no-op gates. | [engagement/README.md](engagement/README.md) |
 | Agents | The agent-systems overview map (distribution, auth, gateway, model catalog), plus delegated-work UX and cowork artifact lifecycle. | [agents/README.md](agents/README.md) |
 | Settings and appearance | Settings/admin information architecture, Appearance scaling, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings/README.md](settings/README.md) |
@@ -36,7 +36,7 @@ Use this map before creating a new spec:
 | Browsers | No dedicated browser system spec yet. Product MCP ownership is in [Product Agent Features](../../platforms/product/agent-features/README.md); runtime/domain ownership remains under [AnyHarness](../../structures/anyharness/README.md). Create a browser system spec before adding user-visible browser workflows. |
 | Terminals | [workspaces/terminals.md](workspaces/terminals.md) owns terminal pane UX and the creation grid contract. Runtime ownership remains under [AnyHarness](../../structures/anyharness/README.md). |
 | Computer Use | No dedicated computer-use system spec yet. Product MCP ownership is in [Product Agent Features](../../platforms/product/agent-features/README.md); create a system spec before adding user-visible Computer Use workflow, permissions, or QA behavior. |
-| Plugins | Runtime/config ownership lives in [MCP, Skills, and Plugins](../../platforms/product/mcp-skills.md). Create a plugins system spec only for user-facing catalog/install/manage workflows that exceed the platform contract. |
+| Plugins | No current platform document. Create a plugins system spec only for user-facing catalog/install/manage workflows that exceed today's implicit plugin-expansion behavior. |
 | Product MCP Structure | Covered by [Product MCP Servers](../../platforms/product/agent-features/servers.md) and [Product MCP Definitions](../../platforms/product/agent-features/definitions/README.md). |
 
 ## Agent Feature Coverage
@@ -47,10 +47,10 @@ new system spec or Product MCP definition:
 | Agent feature | Current owner |
 | --- | --- |
 | Browser | No concrete system spec or Product MCP definition yet; create one before user-visible browser workflow or permission changes. |
-| Artifacts | [agents/cowork-artifacts.md](agents/cowork-artifacts.md) and [Artifacts MCP](../../platforms/product/agent-features/definitions/artifacts.md). |
+| Artifacts | [agents/cowork-artifacts.md](agents/cowork-artifacts.md). |
 | Sub Agents | [agents/delegated-work.md](agents/delegated-work.md) and [Subagents MCP](../../platforms/product/agent-features/definitions/subagents.md). |
 | Computer Use | No concrete system spec or Product MCP definition yet; create one before user-visible Computer Use workflow, permission, or QA changes. |
-| Plugins | [MCP, Skills, and Plugins](../../platforms/product/mcp-skills.md) owns runtime/config expansion; create a system spec only for catalog/install/manage UX. |
+| Plugins | No current platform document owns runtime/config expansion; create a system spec only for catalog/install/manage UX. |
 
 ## Adding A Product System Spec
 

@@ -49,6 +49,11 @@ How does an external protocol format its raw wire messages?
 Those belong in `domains/**`, `persistence/**`, `api/**`, or
 `integrations/**`.
 
+Only create a `live/<system>/` folder when there is a real long-lived runtime
+object: a manager, actor, handle, PTY, sidecar, watcher, stream registry, or
+pending interaction rendezvous. A domain workflow that merely starts a session
+does not earn one.
+
 ## Core Grammar
 
 Every live resource should be described with the same vocabulary:
@@ -478,6 +483,9 @@ misc.rs
 processing.rs
 logic.rs
 ```
+
+Do not use `service.rs`, `runtime.rs`, or `store.rs` inside `live/**` — those
+names belong to `domains/`.
 
 ### `driver/**`
 

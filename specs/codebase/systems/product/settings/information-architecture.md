@@ -7,7 +7,7 @@ Current gap: the managed-Target UI described here is not implemented.
 Date: 2026-05-20.
 
 Depends on: [`sandbox-lifecycle.md`](../../../platforms/product/sandbox-lifecycle.md),
-[`mcp-skills.md`](../../../platforms/product/mcp-skills.md), and
+`mcp-skills.md` (document retired; no owning platform document replaces it), and
 [`agent-auth.md`](../../../platforms/product/agent-auth.md).
 
 Staleness note (2026-07-25): this document predates the Bifrost removal.
@@ -52,7 +52,8 @@ In scope:
 Out of scope:
 
 - Feature implementation. Plugins UI lands in spec 01. Agent auth UI in
-  spec 02. Compute readiness in spec 00. Slack bot in spec 07. Billing
+  spec 02. Compute readiness in spec 00. Slack bot in spec 07 (document
+  retired; the Slack bot was never built). Billing
   content is owned by the Billing platform. Personal/shared cloud config is
   owned by 00/01/02.
 - New pages outside the Settings shell. The Plugins, Automations,
@@ -109,8 +110,11 @@ every other spec owns its page content:
   spec 02  ->  Agent Authentication pane
   spec 05  ->  Organization claim/manage hooks inside Organization pane
   spec 06  ->  Automations (top-level page, not Settings)
+               (document retired; no current Automations system spec —
+                see systems/product/README.md)
   future   ->  Integrations and Workflows (top-level pages, not Settings)
   spec 07  ->  Slack bot pane
+               (document retired; the Slack bot was never built)
   Billing platform -> Billing and Usage & Limits pane content
 ```
 
@@ -131,7 +135,7 @@ Hard:
   the `sandbox_profile` / `sandbox_profile_target_state` schema this pane
   consumes currently has no owning platform document): Compute pane
   consumes `sandbox_profile` and `sandbox_profile_target_state`.
-- [`mcp-skills.md`](../../../platforms/product/mcp-skills.md): Plugins page
+- `mcp-skills.md` (document retired): Plugins page
   rows show `enabled`, `public_to_org`, `auth_status`,
   `runtime_apply_status`.
 - [`agent-auth.md`](../../../platforms/product/agent-auth.md): this spec's
@@ -550,10 +554,12 @@ Agents
    the two rows above were removed — see the staleness note at the top)
 
 Slack bot                  SlackBotPane                   (parked/disabled;
-                                                           spec 07 logic is
-                                                           preserved but entry
-                                                           points are commented
-                                                           out)
+                                                           spec 07 (document
+                                                           retired; the Slack
+                                                           bot was never built)
+                                                           logic is preserved
+                                                           but entry points are
+                                                           commented out)
 
 Help (sidebar footer, every scope)
   support                  action (existing)
@@ -673,6 +679,8 @@ Agents
                                        agent_run_config rows; visible to
                                        chat, automations, Slack, web,
                                        mobile, Desktop
+                                       (spec 06 document retired; no current
+                                        Automations system spec)
   (shipped: `AgentDefaultsPane` was built (added by `ec1271420`, "Add
    agent launch defaults settings"), registered, and rendered with a
    "Defaults" sidebar row, then removed by PR #1100 (`7d5894807`,
@@ -693,6 +701,8 @@ Agents
 Slack bot (parked)          spec 07   install/reconnect, repo routing,
                                        default agent_run_config, shared
                                        readiness summary
+                                       (spec 07 document retired; the Slack
+                                        bot was never built)
 
 Help/support                spec 03   support dialog
 Help/check-for-updates      spec 03   updater
@@ -872,8 +882,10 @@ AgentRunConfigSelector
     inline "Create new" CTA. Loads catalog.json for live controls.
   Used by:
     AgentDefaultsPane (spec 03)
-    Automation create dialog (spec 06)
-    Slack bot config (spec 07)
+    Automation create dialog (spec 06 — document retired; no current
+      Automations system spec)
+    Slack bot config (spec 07 — document retired; the Slack bot was
+      never built)
   (shipped: `AgentRunConfigSelector` was never built — a zero-hit grep
    across apps/desktop and apps/packages on main. Its one listed
    consumer, `AgentDefaultsPane`, was built but was removed by PR #1100

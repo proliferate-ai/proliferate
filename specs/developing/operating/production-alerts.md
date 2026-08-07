@@ -6,9 +6,7 @@ identity, and the dedicated dark issue-tracker webhook contact point.
 Use this runbook to understand what each production alert detects, where to
 look first when it fires, and how to reproduce or roll back the rule-identity
 overlay and the tracker contact point. The end-to-end support boundary is owned
-by [`../../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../codebase/systems/engineering/issue-lifecycle/support-loop.md);
-the frozen slice contract is
-[`../../codebase/systems/engineering/issue-lifecycle/grafana-rules-delivery.md`](../../codebase/systems/engineering/issue-lifecycle/grafana-rules-delivery.md).
+by [`../../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../codebase/systems/engineering/issue-lifecycle/support-loop.md).
 
 ## Fixed production target
 
@@ -24,11 +22,14 @@ The operator script refuses to write if any of these differ.
 ## Required access
 
 - Read access to the `proliferate-ops` Grafana workspace.
-- For live export/apply/restore (Phase 2 only): the ephemeral Grafana Admin
-  service-account token minted immediately before the operation and stored at
-  `~/.proliferate-local/ops/grafana-admin.token` with mode `0600`. It is never
-  the runtime Viewer credential.
+- For live export/apply/restore (never for offline `check`): the ephemeral
+  Grafana Admin service-account token minted immediately before the operation
+  and stored at `~/.proliferate-local/ops/grafana-admin.token` with mode `0600`.
+  It is never the runtime Viewer credential.
 - AWS access to read `issue-tracker/app.grafanaWebhookSecret` at apply time.
+- AWS access to read `issue-tracker/sources.grafanaToken`: the dedicated Viewer
+  service-account token the tracker uses for runtime Grafana polling. It is a
+  read-only credential and is explicitly not the Admin token.
 
 Secrets policy: never paste the Admin token, the Viewer token, the webhook
 Bearer credential, workspace URLs, or request bodies into chat, issues, PRs, or
@@ -126,7 +127,7 @@ template (target match, exactly six known UIDs, approved labels/annotations,
 log annotations only on `bfrmh7e7x2k8wd`, and a secret reference with no secret
 value). With `--snapshot` it detects UID/title drift against a captured export.
 
-### export / apply / restore (live, Phase 2)
+### export / apply / restore (live)
 
 ```bash
 GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-alerting.mjs export  --receipt <private-path>
@@ -134,9 +135,11 @@ GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-alerting.mjs apply   --receipt 
 GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-alerting.mjs restore --receipt <private-path>
 ```
 
-These are live Grafana operations and are **gated on slice A acceptance**. They
-refuse to touch the network unless `GRAFANA_ALERTING_LIVE=1` is set, so no live
-call happens by accident. Order:
+These are live Grafana operations. `apply` requires the issue tracker to be
+serving `https://issues.proliferate.com/v1/ingest/grafana`, because that is the
+url the contact point it creates delivers to. All three refuse to touch the
+network unless `GRAFANA_ALERTING_LIVE=1` is set, so no live call happens by
+accident. Order:
 
 1. `export` reads the live rules, contact points, and notification policy,
    normalizes them, captures the query checksums into a mode-`0600` rollback
@@ -161,15 +164,32 @@ call happens by accident. Order:
    rollback authority for the created receiver; credential rotation is a
    later, separately reviewed change.
 
+The tracker contact point is created and removed through the Alertmanager
+config API rather than the provisioning API, because AMG Grafana 10.4 returns
+HTTP 500 (`no secrets configured for type 'webhook'`) for any webhook contact
+point created through provisioning.
+
 All live output is bounded to UIDs, metadata names, checksums, and contact-point
 setting names.
+
+## Delivery auth on Grafana 10.4
+
+Live delivery auth is a dedicated static Bearer credential. The contact point
+sets `authorization_scheme: Bearer` and the operator script resolves
+`issue-tracker/app.grafanaWebhookSecret` at execution time; no other route uses
+that credential. This is **not** the HMAC-SHA256 `X-Grafana-Alerting-Signature`
+scheme that
+[`support-loop.md`](../../codebase/systems/engineering/issue-lifecycle/support-loop.md)
+describes as the target contract. Grafana 10.4 does not support native HMAC
+signing, so moving to the signed scheme is coupled to a separately tested
+Grafana upgrade.
 
 ## Health check is manual for now
 
 There is no scheduled Grafana canary, Lambda, workflow, or seventh business
-rule. To confirm delivery health, an operator runs `check` and, in Phase 2,
-inspects the bounded read-back from `export`/`apply`. A daily automated canary
-is deliberately out of scope for this slice.
+rule. To confirm delivery health, an operator runs `check` and inspects the
+bounded read-back from a live `export`/`apply`. A daily automated canary is
+deliberately out of scope.
 
 ## How E2 activates the dark contact point
 
@@ -204,7 +224,8 @@ node --test scripts/ops/grafana-alerting.test.mjs
 node scripts/ops/grafana-alerting.mjs check
 ```
 
-Live acceptance (Phase 2, gated on slice A): record one bounded receipt proving
+Live acceptance (requires the tracker serving
+`https://issues.proliferate.com`): record one bounded receipt proving
 the six exact UIDs are present, every query checksum is unchanged before and
 after, the approved labels/annotations read back, only `bfrmh7e7x2k8wd` has log
 metadata, the tracker contact point exists and is unreferenced, the
@@ -218,7 +239,7 @@ issue or occurrence was created.
 | --- | --- |
 | `check` reports a target mismatch | Confirm you are pointed at account 157466816238 / us-east-1 / g-e532d030d8; do not force a write. |
 | `check --snapshot` reports drift | A rule's UID or title changed live; reconcile the overlay before any apply, never recreate the rule. |
-| Live command refuses to run | `GRAFANA_ALERTING_LIVE=1` is unset (expected until Phase 2) or slice A is not yet accepted. |
+| Live command refuses to run | `GRAFANA_ALERTING_LIVE=1` is unset. It is unset by default; set it only for an intended live run. |
 | Receipt path rejected | Use an absolute path outside the Git worktree in a non-world/group-writable directory. |
 
 ## Final report

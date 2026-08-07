@@ -411,15 +411,15 @@ background work. The domain owns no process entry, scheduler, or reconciliation
 loop: the task is substrate in `background/**`, and Beat owns scheduling.
 
 ```text
-server/automations/
+server/proliferate/server/workflows/
   api.py
-  service.py            # API-facing service: CRUD on automation definitions
+  service.py            # API-facing service: CRUD on workflow definitions
   models.py             # API schemas
   domain/
-    recurrence.py       # pure RRULE parsing
-    policy.py
+    validation.py       # pure cross-field definition validation
+    invocation.py       # pure eligibility / argument / identity rules
   worker/
-    service.py          # worker-facing service: pick due, dispatch, record
+    service.py          # worker-facing service: cancel, deliver, observe
 ```
 
 Two `service.py` files coexist only when surfaces are genuinely distinct; they

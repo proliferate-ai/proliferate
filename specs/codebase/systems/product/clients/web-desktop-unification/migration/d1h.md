@@ -34,8 +34,9 @@ four rather than rebasing them away:
   `GitReviewStageAction`, `GitReviewStatusBadge`,
   `use-composer-ultra-emphasis`, `git-file-status-presentation`) — recorded as
   `move -> delete` ledger amendments rather than silently dropped, bringing the
-  amendments total to **23** (18 `retain -> move` + 5 `move -> delete`; see
-  `../move-ledger.md#amendments-ratified-during-the-move`).
+  amendments total to **23** (18 `retain -> move` + 5 `move -> delete`; the
+  amendments section of `../move-ledger.md`, consumed and removed after the
+  move landed — see Git history).
 - Landed via a **fast-gate merge per founder directive**: the founder
   authorized merging ahead of a full independent re-review given the
   mechanical nature of the reconciliation (import-path and ledger-classification
@@ -47,7 +48,7 @@ four rather than rebasing them away:
 
 The slice is complete and closed at `c6e094b41`. No further work is owed
 against this contract; the next contract is the legacy Web replacement (see
-the [rollout procedure](../../../../../../developing/deploying/web-desktop-unification-rollout.md)).
+[`d1i.md`](d1i.md)).
 
 - Exact implementation base:
   `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`
@@ -55,9 +56,11 @@ the [rollout procedure](../../../../../../developing/deploying/web-desktop-unifi
   Mechanics), merge `9757e86de`, plus doc link-fix `1d0043756` (this base).
 - Parent architecture: [`../README.md`](../README.md)
 - Application-entry contract: [`../entry-contract.md`](../entry-contract.md)
-- Move ledger: [`../move-ledger.md`](../move-ledger.md)
-- Pipeline ledger:
-  [`../../../../../../developing/deploying/web-desktop-unification-rollout.md`](../../../../../../developing/deploying/web-desktop-unification-rollout.md)
+- Move ledger: `../move-ledger.md` (consumed and removed after the move
+  landed; see Git history). The one-shot ledger tooling named in the evidence
+  tables below (`scripts/check-product-client-move-ledger*.py`,
+  `scripts/migrate-desktop-product-client.mjs`) was removed with it — the
+  command results here are historical acceptance evidence, not runnable steps.
 - Approved contract:
   `04 - Move the Desktop Product into ProductClient.md` (founder-approved).
 
@@ -612,7 +615,8 @@ base-URL-explicit (no host-config default in the package).
   off-Desktop; `use-window-actions` moved with it (replacing the raw
   `apply_macos_window_chrome` Tauri op).
 - **G6 Ledger amendments.** An "Amendments (ratified during the move)" section was
-  appended to `move-ledger.md` — the binding rows are **not** rewritten. It carries
+  appended to `move-ledger.md` (since consumed and removed with that ledger;
+  see Git history) — the binding rows were **not** rewritten. It carries
   a fenced ` ```ledger-amendments ` block of **18 `retain → move` overrides** (the
   9 credentials/shell/workspace-scratch subtree files from F3 + the G1 updater
   cluster + `use-window-actions` + `use-update-restart-watcher`), each with

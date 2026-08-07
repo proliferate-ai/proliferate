@@ -3,11 +3,12 @@ import type { FailureReport } from "./types.js";
 
 /**
  * In-memory compatibility mapping from normalized `failed` results to the
- * issue-filing payload (specs/developing/testing/qualification-runner-core.md
- * "Failure behavior"). Only normalized failed results produce a payload; no
+ * issue-filing payload (specs/developing/testing/core-release-validation.md;
+ * historical section name: "Failure behavior"). Only normalized failed
+ * results produce a payload; no
  * status writes a per-failure JSON file — the combined report
  * (src/evidence/write.ts) is the only on-disk artifact. Payloads carry the
- * exact cell identity (specs/developing/testing/exact-test-matrix.md), so a
+ * exact cell identity (specs/developing/testing/core-release-validation.md), so a
  * failed matrix child (`T3-CHAT-1/local/harness=codex`) files and dedupes as
  * its own issue rather than collapsing into its scenario.
  */

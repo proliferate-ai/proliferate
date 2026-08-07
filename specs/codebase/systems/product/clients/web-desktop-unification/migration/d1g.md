@@ -4,10 +4,9 @@
   [`web-desktop-client-unification.md`](../README.md)
 - Application-entry contract:
   [`web-desktop-product-client-entry-contract.md`](../entry-contract.md)
-- Move ledger:
-  [`web-desktop-product-client-move-ledger.md`](../move-ledger.md)
-- Pipeline ledger:
-  [`../../developing/deploying/web-desktop-unification-rollout.md`](../../../../../../developing/deploying/web-desktop-unification-rollout.md)
+- Move ledger: `web-desktop-product-client-move-ledger.md` (consumed and
+  removed after the move landed; see Git history)
+- Next slice: [`d1h.md`](d1h.md) (the Desktop product move)
 
 This is the landed record proving that
 `@proliferate/product-client`'s toolchain can compile and ship every import and
@@ -150,8 +149,8 @@ cutover baseline.
 
 ## Move ledger summary counts
 
-Full ledger:
-[`web-desktop-product-client-move-ledger.md`](../move-ledger.md).
+Full ledger: `web-desktop-product-client-move-ledger.md` (consumed and removed
+after the move landed; see Git history).
 Source root `apps/desktop/src` = **2220 files at base**. Checked by
 `scripts/check-product-client-move-ledger.py` (every disk path has exactly one
 classification, no target collisions, no unclassified product file):

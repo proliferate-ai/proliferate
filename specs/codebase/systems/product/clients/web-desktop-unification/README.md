@@ -648,15 +648,14 @@ extraction and replacement are:
 
 - [landed extraction proof](migration/d1g.md);
 - [application-entry contract](entry-contract.md);
-- [source move ledger](move-ledger.md);
 - [Desktop product move record](migration/d1h.md);
-- [legacy Web replacement record](migration/d1i.md); and
-- [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json).
+- [legacy Web replacement record](migration/d1i.md);
+- [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json); and
+- [phase-6 login budget candidate ledger](migration/login-runtime-budget-candidate.json).
 
-The next step is to qualify Desktop and hosted Web against the shared
-implementation and cut over hosted Web. The remaining order and cutover gates
-live in the
-[rollout procedure](../../../../../developing/deploying/web-desktop-unification-rollout.md).
+Desktop and hosted Web were qualified against the shared implementation and
+cut over. The phase-6 first-load budget ruling and cutover gate are recorded
+in [the legacy Web replacement record](migration/d1i.md#phase-6--hosted-web-first-load-budget-wdu-1247-d1).
 
 Related authoritative docs:
 
@@ -669,7 +668,7 @@ Related authoritative docs:
 - Telemetry:
   [`../../../../structures/frontend/guides/telemetry.md`](../../../../structures/frontend/guides/telemetry.md)
 - CI/CD and release:
-  [`../../../../../developing/deploying/ci-cd.md`](../../../../../developing/deploying/ci-cd.md)
+  [`../../../../../developing/deploying/README.md`](../../../../../developing/deploying/README.md)
 - Testing:
   [`../../../../../developing/testing/README.md`](../../../../../developing/testing/README.md)
 

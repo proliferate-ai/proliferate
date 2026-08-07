@@ -67,10 +67,10 @@ the cells whose isolation contract permits it.
 ## Candidate Artifacts
 
 The implemented bounded handoff is the candidate-only, local-file-only
-`CandidateBuildMapV1` in
-[`candidate-build-handoff.md`](candidate-build-handoff.md). Each current world
-resolver requires its exact artifact set; the runner validates source identity,
-shape, local files, and every digest before setup. The complete remote/full
+`CandidateBuildMapV1` contract (`tests/release/src/artifacts/build-map.ts`).
+Each current world resolver requires its exact artifact set; the runner
+validates source identity, shape, local files, and every digest before setup.
+The complete remote/full
 manifest below — portable remote locators, retained N-1, and cross-run
 digest-verified downloads — is later work layered on that contract.
 
@@ -860,6 +860,11 @@ expected-failure status, a missing credential, or a silently skipped external
 dependency. There is no blocked budget in qualification: every required cell
 must produce exactly one final green result. Optional and change-untriggered
 cells are resolved as `not_required`, never disguised as blocked.
+
+Runtime-discovered values — such as the exact model a live probe selects —
+are execution evidence recorded on the result, never cell dimensions. Cell
+identity is fixed by the plan; live-probed choices must not create or rename
+cells.
 
 Diagnostic local and scheduled runs may report `blocked` or `expected_fail` so
 partially configured environments still produce useful signal. They always

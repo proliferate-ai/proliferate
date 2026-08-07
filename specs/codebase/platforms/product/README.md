@@ -2,7 +2,7 @@
 
 Product platform specs own capabilities that multiple systems or structures
 depend on:
-provisioning, auth materialization, billing gates, MCP/skills runtime
+provisioning, auth materialization, billing gates, MCP runtime
 configuration, claiming, and shared catalogs. A platform may include UI/API
 expectations, but it is not the owner of a full user workflow.
 
@@ -17,7 +17,6 @@ expectations, but it is not the owner of a full user workflow.
 | Design system | The whole visual system in one document: the closed type ramp and control weight, the color role model, elevation, spacing/containers, radii, motion, icon tiers and layering, plus the token-authority and gate model, change control for moving a value, and the component library (tier model, governance rules, sanctioned index, how a component enters it). | [design-system.md](design-system.md) |
 | Cloud workspace provisioning | Repository-environment materialization, synchronous Cloud workspace creation, direct AnyHarness worktree creation, and Cloud/runtime truth boundaries. | [workspace-provisioning.md](workspace-provisioning.md) (slimming to create-row choreography, materialization ledger, and workspace-kind rules as the new specs absorb the rest) |
 | MCP runtime | AnyHarness MCP concepts, user bindings, session extensions, product MCP serving, and elicitation boundaries. | [mcp-runtime.md](mcp-runtime.md) |
-| MCP + skills + plugins flow | Cloud configured items for MCPs, skills, plugins, runtime manifests, worker materialization, and plugin-to-runtime expansion rules. | [mcp-skills.md](mcp-skills.md) |
 | Product MCP structure | Product-owned MCP server pattern, static definitions, binding summaries, and concrete agent-feature MCP definitions. | [agent-features/servers.md](agent-features/servers.md), [agent-features/definitions/README.md](agent-features/definitions/README.md) |
 | Agent auth platform | Harness auth source selection (`gateway`/`api_key` selections, native = no selection), key vault and typed provider configs, `state.json` delivery, per-harness application recipes, and fail-closed launch behavior. | [agent-auth.md](agent-auth.md) (Status: target) |
 | Integrations + runtime worker auth | Integration definitions/accounts/policies, OAuth flows, the cloud integration MCP gateway and its virtual tools, and the runtime worker enrollment/heartbeat/token model. | [integrations.md](integrations.md) |
@@ -27,6 +26,7 @@ expectations, but it is not the owner of a full user workflow.
 | Billing | Credit authorization, Stripe subscription/refill behavior, budget reconciliation, billing state in product responses, and billing QA. | [billing.md](billing.md) |
 | Model catalog | Probe-first model truth: machine snapshots, cloud snapshots, shipped-catalog fallback, launch validation universe, visibility, and model identity. | [model-catalog.md](model-catalog.md) (Status: target) |
 | Agent distribution | Registry/catalog document contract, pinned auto-install and seed topology, binary-carried catalog convergence, supervisor-owned runtime binary convergence, the probe pipeline, and readiness projection. | [agent-distribution.md](agent-distribution.md) (Status: target) |
+| Agent run config | Centralized cloud agent configuration: catalog-validated named configs (`cloud_agent_run_config`), three-phase catalog intersection, per-owner defaults and system starter presets, and the run-time snapshot pattern. | [agent-run-config.md](agent-run-config.md) |
 | Agent systems overview | No contract — the narrative map of how agent distribution, agent auth, the model gateway, and the model catalog compose; read first when orienting. | [../../systems/product/agents/README.md](../../systems/product/agents/README.md) |
 
 ## Naming Notes
@@ -35,9 +35,6 @@ expectations, but it is not the owner of a full user workflow.
   Product MCP definitions describe capabilities consumed by multiple systems,
   while
   [mcp-runtime.md](mcp-runtime.md) owns the generic AnyHarness runtime.
-- "Plugins" are not a runtime platform inside AnyHarness. Plugins expand into
-  configured MCP and skill items before launch; [mcp-skills.md](mcp-skills.md)
-  is the owning platform.
 
 ## Adding A Product Platform Spec
 

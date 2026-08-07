@@ -28,7 +28,6 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/codebase/platforms/product/agent-features/README.md",
             "specs/codebase/systems/README.md",
             "specs/codebase/systems/product/agents/README.md",
-            "specs/codebase/systems/product/automations/README.md",
             "specs/codebase/systems/product/chat/README.md",
             "specs/codebase/systems/product/clients/README.md",
             "specs/codebase/systems/product/organizations/README.md",

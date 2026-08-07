@@ -14,7 +14,7 @@ Examples:
 - Server changes: [specs/codebase/structures/server/README.md](./specs/codebase/structures/server/README.md)
 - AnyHarness runtime changes: [specs/codebase/structures/anyharness/README.md](./specs/codebase/structures/anyharness/README.md)
 - SDK changes: [specs/codebase/structures/sdk/README.md](./specs/codebase/structures/sdk/README.md)
-- CI/CD or release changes: [specs/developing/deploying/ci-cd.md](./specs/developing/deploying/ci-cd.md)
+- CI/CD or release changes: [specs/developing/deploying/README.md](./specs/developing/deploying/README.md)
 
 ## Local Development
 

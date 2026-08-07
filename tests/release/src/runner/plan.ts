@@ -4,7 +4,8 @@ import type { PlannedCellV1 } from "./result.js";
 
 /**
  * Exact-cell expansion and validation
- * (specs/developing/testing/exact-test-matrix.md "Cell identity"). The
+ * (specs/developing/testing/core-release-validation.md; historical section
+ * name: "Cell identity"). The
  * selected-cell array produced here is the complete test plan for one
  * invocation: leaf scenarios keep their unchanged `<scenario>/<lane>` cell,
  * matrix scenarios declare child specs that the runner turns into
