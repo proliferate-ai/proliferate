@@ -61,6 +61,7 @@ applicable owner.
 | `anyharness/crates/proliferate-supervisor/**`, `install/**` | [`specs/codebase/structures/proliferate-supervisor/README.md`](specs/codebase/structures/proliferate-supervisor/README.md) |
 | `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**` | [`specs/TESTING.md`](specs/TESTING.md) |
 | `scripts/agent-gateway-smoke/**` | [`specs/TESTING.md`](specs/TESTING.md) |
+| Telemetry and scrubber sources in any area (`**/telemetry/**`, `**/telemetry.rs`, `server/proliferate/integrations/sentry.py`, `server/proliferate/middleware/logging.py`), `server/infra/observability/**` | [`specs/OBSERVABILITY.md`](specs/OBSERVABILITY.md) |
 | `catalogs/**`, `scripts/agent-catalog/**` | [`specs/codebase/platforms/product/README.md`](specs/codebase/platforms/product/README.md) |
 | `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`guides/deploying/README.md`](guides/deploying/README.md) |
 | `.auth-env/**`, local profiles, local app identity | [`guides/local/README.md`](guides/local/README.md) |
