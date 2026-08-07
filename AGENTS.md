@@ -1,23 +1,28 @@
 # Proliferate
 
-Proliferate contains the Desktop, Web, and Mobile clients; the hosted control
-plane; and the AnyHarness runtime used to run coding-agent sessions.
+Proliferate runs coding agents against real codebases, end to end. This
+repository contains the Desktop, Web, and Mobile clients; the hosted control
+plane (server); the AnyHarness runtime that executes coding-agent sessions
+across harnesses; the supervisor/worker pair that manages targets; and the
+model gateway. Clients talk to the server; the server orchestrates sandboxes
+and personal targets; the runtime executes sessions; agent LLM traffic flows
+through the gateway. [`ARCHITECTURE.md`](ARCHITECTURE.md) explains how the
+pieces fit together and why the seams sit where they sit.
 
-- Repository: <https://github.com/proliferate-ai/proliferate>
-- Documentation entrypoint: [`specs/README.md`](specs/README.md)
+This file routes; it never explains. Land here cold, find the ONE doc to read
+next, go. Every "touching X → read Y" fact lives here and nowhere else.
 
-## Before Editing
+## Orientation
 
-Canonical current documentation describes operating truth and enforced
-architecture. Other documentation lifecycles are defined in `specs/README.md`.
-A frozen delivery specification describes the intended delta for one PR. Read
-the applicable artifacts before editing, and report a concrete contradiction
-instead of silently changing the frozen scope.
+| You want to… | Read |
+| --- | --- |
+| Understand how Proliferate is structured | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| Understand why a decision was made | `adrs/` — `grep 'Description:' adrs/*.md` is the index |
+| Understand a cross-plane system deeply | [`specs/FEATURE_DOCS/`](specs/FEATURE_DOCS/) |
+| Do something that isn't writing code (release, debug prod, local setup) | [`guides/`](guides/README.md) |
+| Understand how the docs system itself works | [`guides/process/docs-system.md`](guides/process/docs-system.md) |
 
-Start with `specs/README.md`, then follow the source-area router below. The
-focused area document wins if this file overlaps with it.
-
-## Build And Develop
+## Build and develop
 
 Runtime baseline: Rust stable, Node 22+, pnpm, Python 3.12, and `uv`.
 
@@ -41,40 +46,62 @@ make dev-list
 
 Profile state lives under `~/.proliferate-local/dev/profiles/<name>/`; runtime
 state lives under `~/.proliferate-local/runtimes/<name>/`. Read
-[`guides/local/README.md`](guides/local/README.md) before
-running a feature worktree or changing local launch behavior.
+[`guides/local/README.md`](guides/local/README.md) before running a feature
+worktree or changing local launch behavior.
 
-## Source Router
+## Source router
 
 Use the most specific matching row. When a change crosses areas, read every
 applicable owner.
 
 | Source area | Start here |
 | --- | --- |
-| `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`guides/process/README.md`](guides/process/README.md) |
-| `adrs/**` — writing or reviewing a decision record | [`guides/process/adrs.md`](guides/process/adrs.md) |
-| `apps/desktop/**`, `apps/web/**`, `apps/mobile/**`, `apps/packages/**` | [`specs/codebase/structures/frontend/README.md`](specs/codebase/structures/frontend/README.md) |
-| `apps/desktop/src-tauri/**`, `apps/desktop/src-tauri-debug/**` | [`specs/codebase/structures/desktop-native/README.md`](specs/codebase/structures/desktop-native/README.md) |
-| `server/**` | [`specs/codebase/structures/server/README.md`](specs/codebase/structures/server/README.md) |
-| `cloud/sdk/**`, `cloud/sdk-react/**`, `anyharness/sdk/**`, `anyharness/sdk-react/**` | [`specs/codebase/structures/sdk/README.md`](specs/codebase/structures/sdk/README.md) |
-| `anyharness/crates/anyharness*/**` | [`specs/codebase/structures/anyharness/README.md`](specs/codebase/structures/anyharness/README.md) |
-| `anyharness/crates/proliferate-worker/**` | [`specs/codebase/structures/proliferate-worker/README.md`](specs/codebase/structures/proliferate-worker/README.md) |
-| `anyharness/crates/proliferate-supervisor/**`, `install/**` | [`specs/codebase/structures/proliferate-supervisor/README.md`](specs/codebase/structures/proliferate-supervisor/README.md) |
-| `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**` | [`specs/TESTING.md`](specs/TESTING.md) |
-| `scripts/agent-gateway-smoke/**` | [`specs/TESTING.md`](specs/TESTING.md) |
+| `apps/desktop/**`, `apps/web/**`, `apps/mobile/**`, `apps/packages/**` | [`specs/frontend/README.md`](specs/frontend/README.md) |
+| `apps/desktop/src-tauri/**`, `apps/desktop/src-tauri-debug/**` | [`specs/desktop-native.md`](specs/desktop-native.md) |
+| `server/**` | [`specs/server/README.md`](specs/server/README.md) |
+| `anyharness/crates/anyharness*/**` | [`specs/anyharness/README.md`](specs/anyharness/README.md) |
+| `anyharness/crates/proliferate-worker/**` | [`specs/worker.md`](specs/worker.md) |
+| `anyharness/crates/proliferate-supervisor/**`, `install/**` | [`specs/supervisor.md`](specs/supervisor.md) |
+| `cloud/sdk/**`, `cloud/sdk-react/**`, `anyharness/sdk/**`, `anyharness/sdk-react/**` | [`specs/sdk.md`](specs/sdk.md) |
+| UI: components, styling, tokens, theme | [`specs/DESIGN_SYSTEM.md`](specs/DESIGN_SYSTEM.md) |
+| User-facing copy, naming, product feel | [`specs/PRODUCT_SENSE.md`](specs/PRODUCT_SENSE.md) |
+| `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**`, `scripts/agent-gateway-smoke/**` | [`specs/TESTING.md`](specs/TESTING.md) |
 | Telemetry and scrubber sources in any area (`**/telemetry/**`, `**/telemetry.rs`, `server/proliferate/integrations/sentry.py`, `server/proliferate/middleware/logging.py`), `server/infra/observability/**` | [`specs/OBSERVABILITY.md`](specs/OBSERVABILITY.md) |
-| `catalogs/**`, `scripts/agent-catalog/**` | [`specs/codebase/platforms/product/README.md`](specs/codebase/platforms/product/README.md) |
+| `lints/**`, `scripts/check_*` | Constitution — see [Repository-wide rules](#repository-wide-rules); records in [`lints/`](lints/) |
+| `adrs/**` — writing or reviewing a decision record | [`guides/process/adrs.md`](guides/process/adrs.md) |
+| `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`guides/process/README.md`](guides/process/README.md) |
 | `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`guides/deploying/README.md`](guides/deploying/README.md) |
 | `.auth-env/**`, local profiles, local app identity | [`guides/local/README.md`](guides/local/README.md) |
+| `specs/GENERATED/**` | Never hand-edit; [`specs/GENERATED/README.md`](specs/GENERATED/README.md) names the regenerate command |
 
-After the structure document, use
-[`specs/codebase/README.md`](specs/codebase/README.md) to find the reusable
-platform contract or complete product/system contract involved in the change.
-Use [`guides/README.md`](guides/README.md) for procedures.
+## Cross-plane systems
 
-## Repository-Wide Rules
+Touching one of these systems means reading its feature doc first, whatever
+source area you are in.
 
-- Preserve current behavior unless the frozen specification changes it.
+| System | Touching | Read |
+| --- | --- | --- |
+| Sandbox | sandbox lifecycle/access/content, E2B, sandbox gateway, sandbox GitHub auth | [`specs/FEATURE_DOCS/SANDBOX/`](specs/FEATURE_DOCS/SANDBOX/) |
+| Billing | Stripe, meters, credits, plans, webhooks | [`specs/FEATURE_DOCS/BILLING.md`](specs/FEATURE_DOCS/BILLING.md) |
+| Managed runtime | supervisor/worker convergence, enrollment, runtime updates | [`specs/FEATURE_DOCS/MANAGED_RUNTIME.md`](specs/FEATURE_DOCS/MANAGED_RUNTIME.md) |
+| Agent auth | agent credentials, key vault, selections, `state.json` | [`specs/FEATURE_DOCS/AGENT_AUTH.md`](specs/FEATURE_DOCS/AGENT_AUTH.md) |
+| Models | `catalogs/**`, `scripts/agent-catalog/**`, model gateway, probes, LiteLLM | [`specs/FEATURE_DOCS/MODELS.md`](specs/FEATURE_DOCS/MODELS.md) |
+| Workflows | workflow definitions, invocations, runs, workspace placement | [`specs/FEATURE_DOCS/WORKFLOWS.md`](specs/FEATURE_DOCS/WORKFLOWS.md) |
+| Desktop host | web bundle ↔ native shell ↔ sidecar seam | [`specs/FEATURE_DOCS/DESKTOP_HOST.md`](specs/FEATURE_DOCS/DESKTOP_HOST.md) |
+
+## Repository-wide rules
+
+- If it's not current, it's not in this repo: future work lives in PRs, issues,
+  and `adrs/`; update docs in the same PR that changes behavior.
+- Consider [`specs/TESTING.md`](specs/TESTING.md) and
+  [`specs/OBSERVABILITY.md`](specs/OBSERVABILITY.md) in every PR; the PR
+  template asks for both sections.
+- Constitution: never weaken a lint, add a net-new exception, delete a pinning
+  test, or rewrite a normative rule without flagging it in the PR description
+  and stopping for founder review. Making CI green by changing the rules is
+  never a fix. Carrying an exception fingerprint forward on rename/move is
+  legal maintenance.
+- Preserve current behavior unless an approved ADR or PR scope changes it.
 - Prefer ownership-correct changes over cosmetic churn.
 - Do not leave duplicate old and new paths after a migration.
 - Use direct imports; do not add convenience barrel or re-export modules.
