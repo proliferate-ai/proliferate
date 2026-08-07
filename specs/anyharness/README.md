@@ -303,7 +303,7 @@ which guide to read and where the code belongs.
 | Provider credential file discovery or portable credential export/import | `anyharness-credential-discovery/src/**` | `anyharness-credential-discovery` | [crates.md](crates.md) |
 | HTTP handlers, routers, auth headers, SSE/WS transport, OpenAPI wiring | `anyharness-lib/src/api/**` | `api/**` | [api.md](api.md) |
 | AppState, dependency construction, wiring extension implementations, product MCP endpoint registration | `anyharness-lib/src/app/**` | `app/**` | [app.md](app.md) |
-| SQLite engine setup, migrations, DB pool wiring | `anyharness-lib/src/persistence/**` | `persistence/**` | [persistence-stores.md](persistence-stores.md) |
+| SQLite engine setup, migrations, DB pool wiring | `anyharness-lib/src/persistence/**` | `persistence/**` | [persistence-database.md](persistence-database.md) |
 | Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/domains/sessions/**` | `domains/sessions/**` | [domains.md](domains.md), [session-engine.md](session-engine.md), [sessions.md](sessions.md) |
 | Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/live/sessions/**`, with remaining ACP helpers in `anyharness-lib/src/integrations/acp/**` | `live/sessions/**` plus `integrations/acp/**` | [live-runtime.md](live-runtime.md), [session-engine.md](session-engine.md), [acp.md](acp.md) |
 | Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/domains/workspaces/**` | `domains/workspaces/**` | [domains.md](domains.md), [workspaces.md](workspaces.md) |
