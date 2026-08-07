@@ -297,20 +297,26 @@ export function AnnouncementToastBody({
     return () => observer.disconnect();
   }, [onCardResize]);
 
-  const [copiedDetails, setCopiedDetails] = useState(false);
+  // Which copy control just fired, so its label — and only its label — flips
+  // to "Copied". The flip is the whole feedback for a click whose effect lands
+  // in the clipboard, where nothing visible changes.
+  const [copied, setCopied] = useState<"payload" | "details" | null>(null);
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(copyResetRef.current), []);
+  const markCopied = (control: "payload" | "details") => {
+    setCopied(control);
+    clearTimeout(copyResetRef.current);
+    copyResetRef.current = setTimeout(() => setCopied(null), 1_500);
+  };
   const handleCopyDetails = () => {
     if (inlinePayload === undefined) {
       return;
     }
     void navigator.clipboard?.writeText(inlinePayload);
-    setCopiedDetails(true);
-    clearTimeout(copyResetRef.current);
-    copyResetRef.current = setTimeout(() => setCopiedDetails(false), 1_500);
+    markCopied("details");
   };
 
-  const quiet = [copyAction, jump, input.secondary, navigateAction].filter(
+  const quiet = [jump, input.secondary, navigateAction].filter(
     (action): action is ToastAction => action !== undefined,
   );
   const commit = input.commit;
@@ -401,7 +407,7 @@ export function AnnouncementToastBody({
           </div>
         </div>
       ) : null}
-      {quiet.length > 0 || commit || expandable ? (
+      {copyAction || quiet.length > 0 || commit || expandable ? (
         <div className="mt-2.5 flex items-center justify-end gap-2">
           {expanded ? (
             <Button
@@ -411,7 +417,21 @@ export function AnnouncementToastBody({
               className={twMerge(GHOST_ACTION_CLASS, "mr-auto")}
               onClick={handleCopyDetails}
             >
-              {copiedDetails ? "Copied" : "Copy details"}
+              {copied === "details" ? "Copied" : "Copy details"}
+            </Button>
+          ) : null}
+          {copyAction ? (
+            <Button
+              type="button"
+              variant="unstyled"
+              size="unstyled"
+              className={SECONDARY_ACTION_CLASS}
+              onClick={() => {
+                copyAction.onClick();
+                markCopied("payload");
+              }}
+            >
+              {copied === "payload" ? "Copied" : copyAction.label}
             </Button>
           ) : null}
           {quiet.map((action) => (

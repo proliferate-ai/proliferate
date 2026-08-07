@@ -197,10 +197,13 @@ describe("showToast — detail", () => {
     const payload = ["a.ts", "b.ts", "c.ts", "d.ts"].join("\n");
     await raise({ weight: "detail", title: "4 files", payload });
 
+    const copy = screen.getByRole("button", { name: "Copy" });
     act(() => {
-      screen.getByRole("button", { name: "Copy" }).click();
+      copy.click();
     });
     expect(writeText).toHaveBeenCalledWith(payload);
+    // The clipboard is invisible, so the label is the receipt.
+    expect(copy.textContent).toBe("Copied");
   });
 });
 

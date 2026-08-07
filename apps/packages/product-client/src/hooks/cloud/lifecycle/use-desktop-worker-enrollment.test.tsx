@@ -26,10 +26,12 @@ const workflowMocks = vi.hoisted(() => ({
 // store delegates to it, so capture calls here instead of reading store state.
 const toastMocks = vi.hoisted(() => ({
   showProductToast: vi.fn<(message: string, kind?: "error" | "info") => void>(),
+  showProductErrorToast: vi.fn<(input: unknown) => void>(),
 }));
 
 vi.mock("#product/components/feedback/product-toast", () => ({
   showProductToast: toastMocks.showProductToast,
+  showProductErrorToast: toastMocks.showProductErrorToast,
 }));
 
 vi.mock("#product/lib/workflows/cloud/ensure-desktop-worker", () => ({
@@ -58,6 +60,7 @@ async function loadEnrollmentHarness() {
     activeOrganizationValidated: false,
   });
   toastMocks.showProductToast.mockClear();
+  toastMocks.showProductErrorToast.mockClear();
   // The enrollment hook reads captureException through the product telemetry
   // facade (host boundary), so the harness mounts a ProductHostProvider.
   // Both provider and hook come from the same post-reset module registry so
@@ -87,7 +90,11 @@ async function loadEnrollmentHarness() {
       useOrganizationStore.getState().setActiveOrganizationId(organizationId, {
         validated: true,
       }),
-    getToastCalls: () => toastMocks.showProductToast.mock.calls,
+    getToastCalls: () => [
+      ...toastMocks.showProductToast.mock.calls,
+      ...toastMocks.showProductErrorToast.mock.calls,
+    ],
+    getErrorToastCalls: () => toastMocks.showProductErrorToast.mock.calls,
     nudgeRender: () => rendered.rerender({ ...props }),
   };
 }
@@ -282,14 +289,22 @@ describe("useDesktopWorkerEnrollment", () => {
     const harness = await loadEnrollmentHarness();
 
     harness.signIn("user-a");
+    // The exception reaches the toast as a separate `cause` (rendered only by
+    // Details) under a stable id, so the retry loop replaces its live report
+    // instead of stacking one interpolated headline per attempt.
     await waitFor(() => {
-      expect(harness.getToastCalls()).toEqual([
+      expect(harness.getErrorToastCalls()).toEqual([
         [
-          "Cloud integrations worker failed to start: worker exited: enrollment contract mismatch",
-          "error",
+          {
+            id: "desktop-worker-startup",
+            headline: "Cloud integrations worker failed to start",
+            consequence: "Cloud workspaces are unavailable until it starts.",
+            cause: "worker exited: enrollment contract mismatch",
+          },
         ],
       ]);
     });
+    expect(toastMocks.showProductToast).not.toHaveBeenCalled();
   });
 
   it("does not show a stale failure after sign-out cancels enrollment", async () => {

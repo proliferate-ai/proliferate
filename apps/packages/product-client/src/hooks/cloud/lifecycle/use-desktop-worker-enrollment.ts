@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
-import { desktopWorkerStartupFailureCopy } from "#product/copy/cloud/desktop-worker-copy";
+import {
+  DESKTOP_WORKER_STARTUP_FAILURE_CONSEQUENCE,
+  DESKTOP_WORKER_STARTUP_FAILURE_HEADLINE,
+  DESKTOP_WORKER_STARTUP_FAILURE_TOAST_ID,
+  desktopWorkerStartupFailureCause,
+} from "#product/copy/cloud/desktop-worker-copy";
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
@@ -54,7 +59,7 @@ export function useDesktopWorkerEnrollment(
   const activeOrganizationId = useOrganizationStore(
     (state) => state.activeOrganizationId,
   );
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const { captureException } = useProductTelemetry();
   const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
@@ -87,7 +92,12 @@ export function useDesktopWorkerEnrollment(
         if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
           return;
         }
-        showToast(desktopWorkerStartupFailureCopy(error), "error");
+        showErrorToast({
+          id: DESKTOP_WORKER_STARTUP_FAILURE_TOAST_ID,
+          headline: DESKTOP_WORKER_STARTUP_FAILURE_HEADLINE,
+          consequence: DESKTOP_WORKER_STARTUP_FAILURE_CONSEQUENCE,
+          cause: desktopWorkerStartupFailureCause(error),
+        });
       },
       captureException,
     }).then((enrolled) => {
@@ -111,5 +121,5 @@ export function useDesktopWorkerEnrollment(
         window.clearTimeout(retryTimer);
       }
     };
-  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showToast, worker, captureException]);
+  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showErrorToast, worker, captureException]);
 }
