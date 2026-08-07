@@ -4,6 +4,7 @@ import {
   DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES,
   READABLE_CODE_FONT_SCALES,
   resolveAppearanceSizeId,
+  resolveReadableCodeFontScale,
   resolveWindowZoomId,
   stepAppearanceFontSizes,
   stepAppearanceSizeId,
@@ -200,5 +201,47 @@ describe("appearance preferences", () => {
       expect(UI_FONT_SCALES[id].sidebarRow).toEqual(UI_FONT_SCALES[id].ui);
       expect(UI_FONT_SCALES[id].sidebarBrand).toEqual(UI_FONT_SCALES[id].heading);
     }
+  });
+
+  /**
+   * Ruling: a "default" readable-code selection no longer carries its own
+   * absolute rung. It follows whichever UI text size is active, one px under
+   * for mono optics — so it moves with "UI text size" instead of pinning
+   * chat-prose-equal px, which read ~10% oversized in mono. An explicitly
+   * chosen non-default code size is unaffected by the UI size: it keeps
+   * today's absolute-ladder meaning.
+   */
+  describe("resolveReadableCodeFontScale coupling", () => {
+    it("resolves the default/default pairing to 13px across all three surfaces", () => {
+      const scale = resolveReadableCodeFontScale("default", "default");
+      expect(scale.codeFontSize).toBe("13px");
+      expect(scale.diffsFontSize).toBe("13px");
+      expect(scale.monacoFontSize).toBe(13);
+      expect(scale.monacoLineHeight).toBe(21);
+      expect(scale.codeLineHeight).toBe("1.625");
+      expect(scale.diffsLineHeight).toBe("calc(var(--diffs-font-size) * 1.8)");
+    });
+
+    it("follows the UI size down when code is default and UI is xxsmall", () => {
+      const scale = resolveReadableCodeFontScale("default", "xxsmall");
+      expect(scale.codeFontSize).toBe("10px");
+      expect(scale.diffsFontSize).toBe("10px");
+      expect(scale.monacoFontSize).toBe(10);
+      expect(scale.monacoLineHeight).toBe(18);
+    });
+
+    it("keeps an explicit non-default rung (small) absolute regardless of the UI size", () => {
+      for (const uiId of ["xxsmall", "default", "xxxlarge"] as const) {
+        const scale = resolveReadableCodeFontScale("small", uiId);
+        expect(scale.codeFontSize).toBe("13px");
+        expect(scale.monacoFontSize).toBe(13);
+      }
+    });
+
+    it("keeps an explicit xxxlarge rung at 18px even against the smallest UI size", () => {
+      const scale = resolveReadableCodeFontScale("xxxlarge", "xxsmall");
+      expect(scale.codeFontSize).toBe("18px");
+      expect(scale.monacoFontSize).toBe(18);
+    });
   });
 });

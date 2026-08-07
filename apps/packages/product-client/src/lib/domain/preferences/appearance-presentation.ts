@@ -1,6 +1,7 @@
 import {
   APPEARANCE_SIZE_IDS,
   type ReadableCodeFontSizeId,
+  resolveReadableCodeFontScale,
   type UiFontSizeId,
   type WindowZoomId,
   WINDOW_ZOOM_IDS,
@@ -44,6 +45,23 @@ export const READABLE_CODE_FONT_SIZE_OPTIONS: AppearanceSizeOption<ReadableCodeF
     label: SIZE_LABELS[id],
     detail: id === "default" ? "Default editor and code text" : "Editor, diffs, and code blocks",
   }));
+
+/**
+ * Default now couples to the UI ladder (one px under, for mono optics), so its
+ * option copy needs the live UI size to say what it will actually render at —
+ * the static `READABLE_CODE_FONT_SIZE_OPTIONS.detail` above cannot express
+ * that, since it has no UI id to resolve against.
+ */
+export function readableCodeFontSizeDetail(
+  id: ReadableCodeFontSizeId,
+  uiFontSizeId: UiFontSizeId,
+): string {
+  if (id !== "default") {
+    return "Editor, diffs, and code blocks";
+  }
+  const { codeFontSize } = resolveReadableCodeFontScale(id, uiFontSizeId);
+  return `Matches UI text size — ${codeFontSize}`;
+}
 
 export const WINDOW_ZOOM_OPTIONS: AppearanceSizeOption<WindowZoomId>[] =
   WINDOW_ZOOM_IDS.map((id) => ({

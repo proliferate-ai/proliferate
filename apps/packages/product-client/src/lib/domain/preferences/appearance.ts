@@ -170,8 +170,15 @@ function buildUiFontScale(index: number): UiFontScale {
 
 export const UI_FONT_SCALES = /* @__PURE__ */ scaleRecord(buildUiFontScale);
 
-function buildReadableCodeFontScale(index: number): ReadableCodeFontScale {
-  const fontSize = READING_FONT_SIZES[index]!;
+/**
+ * `offsetPx` is how the "Reading & code" default couples to the UI ladder
+ * instead of restating its own absolute rung: mono at the same px as sans
+ * reads ~10% larger, so the coupled default resolves one px under whichever
+ * UI step is active rather than pinning its own number. Explicit rungs (the
+ * `READABLE_CODE_FONT_SCALES` record below) always call this with offset 0.
+ */
+function buildReadableCodeFontScale(index: number, offsetPx = 0): ReadableCodeFontScale {
+  const fontSize = READING_FONT_SIZES[index]! + offsetPx;
   const fontSizePx = `${fontSize}px`;
   return {
     monacoFontSize: fontSize,
@@ -183,7 +190,9 @@ function buildReadableCodeFontScale(index: number): ReadableCodeFontScale {
   };
 }
 
-export const READABLE_CODE_FONT_SCALES = /* @__PURE__ */ scaleRecord(buildReadableCodeFontScale);
+export const READABLE_CODE_FONT_SCALES = /* @__PURE__ */ scaleRecord((index) =>
+  buildReadableCodeFontScale(index, 0)
+);
 
 export const WINDOW_ZOOM_SCALES: Record<WindowZoomId, WindowZoomScale> = {
   zoom80: { factor: 0.8, cssValue: "0.8" },
@@ -241,8 +250,29 @@ export const DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES: UiGlyphScaleCssVariables = {
   "--icon-display": "2em",
 };
 
-export function resolveReadableCodeFontScale(value: unknown): ReadableCodeFontScale {
-  return buildReadableCodeFontScale(APPEARANCE_SIZE_IDS.indexOf(resolveAppearanceSizeId(value)));
+/** Mono at the same px as sans reads ~10% larger; the coupled default undercuts by this. */
+const READABLE_CODE_DEFAULT_OFFSET_PX = -1;
+
+/**
+ * Ruling: when "Reading & code" is left at "default" it no longer carries its
+ * own absolute rung — it follows the UI text size, minus
+ * `READABLE_CODE_DEFAULT_OFFSET_PX` for mono optics (13px code under 14px
+ * chat, 10px under 11px chat, ...). An explicitly chosen non-default code
+ * size keeps today's absolute-ladder meaning regardless of the UI size.
+ */
+export function resolveReadableCodeFontScale(
+  codeValue: unknown,
+  uiValue?: unknown,
+): ReadableCodeFontScale {
+  const resolvedCodeId = resolveAppearanceSizeId(codeValue);
+  if (resolvedCodeId !== DEFAULT_APPEARANCE_SIZE_ID) {
+    return buildReadableCodeFontScale(APPEARANCE_SIZE_IDS.indexOf(resolvedCodeId));
+  }
+  const resolvedUiId = resolveAppearanceSizeId(uiValue);
+  return buildReadableCodeFontScale(
+    APPEARANCE_SIZE_IDS.indexOf(resolvedUiId),
+    READABLE_CODE_DEFAULT_OFFSET_PX,
+  );
 }
 
 export function resolveWindowZoomScale(value: unknown): WindowZoomScale {

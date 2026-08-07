@@ -33,8 +33,9 @@ export const XTERM_CURSOR_OPTIONS = {
 export function resolveXtermSurfaceTypography(
   readableCodeFontSizeId: unknown,
   overrides: Pick<UseXtermSurfaceInput, "fontSize" | "lineHeight"> = {},
+  uiFontSizeId?: unknown,
 ): { fontSize: number; lineHeight: number } {
-  const scale = resolveReadableCodeFontScale(readableCodeFontSizeId);
+  const scale = resolveReadableCodeFontScale(readableCodeFontSizeId, uiFontSizeId);
   return {
     fontSize: overrides.fontSize ?? scale.monacoFontSize,
     lineHeight: overrides.lineHeight ?? TERMINAL_LINE_HEIGHT,
@@ -59,10 +60,11 @@ export function useXtermSurface({
   const [isReady, setIsReady] = useState(false);
   const [hasBeenVisible, setHasBeenVisible] = useState(visible);
   const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
+  const uiFontSizeId = useUserPreferencesStore((state) => state.uiFontSizeId);
   const terminalTypography = resolveXtermSurfaceTypography(readableCodeFontSizeId, {
     fontSize,
     lineHeight,
-  });
+  }, uiFontSizeId);
   const terminalFontSize = terminalTypography.fontSize;
   const terminalLineHeight = terminalTypography.lineHeight;
   const terminalFontSizeRef = useRef(terminalFontSize);

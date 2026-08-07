@@ -15,6 +15,7 @@ import {
   DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES,
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
   READABLE_CODE_FONT_SCALES,
+  resolveReadableCodeFontScale,
   UI_FONT_SCALES,
 } from "#product/lib/domain/preferences/appearance";
 
@@ -513,8 +514,8 @@ describe("tab and sidebar status tokens across modes", () => {
 });
 
 describe("appearance scaling CSS defaults", () => {
-  const defaultCodeScale = READABLE_CODE_FONT_SCALES[DEFAULT_APPEARANCE_SIZE_ID];
-
+  // Coupled default (one px under UI default), not the raw per-rung table.
+  const defaultCodeScale = resolveReadableCodeFontScale(DEFAULT_APPEARANCE_SIZE_ID, DEFAULT_APPEARANCE_SIZE_ID);
   it("keeps default code CSS aligned with the readable-code ladder", () => {
     expect(themeDeclarations["--diffs-font-size"]).toBe(defaultCodeScale.diffsFontSize);
     expect(themeDeclarations["--readable-code-font-size"]).toBe(defaultCodeScale.codeFontSize);
