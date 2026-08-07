@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
-import { desktopWorkerStartupFailureCopy } from "#product/copy/cloud/desktop-worker-copy";
+import { dismissToast } from "#product/primitives/utils/show-toast";
+import {
+  desktopWorkerStartupFailureNotice,
+  type DesktopWorkerStartupFailureKind,
+} from "#product/copy/cloud/desktop-worker-copy";
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
@@ -17,6 +21,20 @@ import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product
 // silently keeping the previous identity's credentials.
 let enrolledIdentityKey: string | null = null;
 
+const DESKTOP_WORKER_FAILURE_TOAST_ID = "desktop-worker-startup-failure";
+
+interface EnrollmentFailureNotification {
+  identityKey: string;
+  kind: DesktopWorkerStartupFailureKind;
+  cause: string;
+}
+
+// Enrollment retries are intentionally process-wide, so notification state is
+// process-wide too. Remounting the lifecycle root must not resurface a failure
+// the user dismissed or animate a replacement for the same failed condition.
+let activeFailureNotification: EnrollmentFailureNotification | null = null;
+let dismissedFailureNotification: EnrollmentFailureNotification | null = null;
+
 // Delay before retrying a failed enrollment. Long enough not to hammer an
 // unreachable control plane, short enough that integrations recover without
 // a restart.
@@ -24,6 +42,45 @@ const ENROLLMENT_RETRY_DELAY_MS = 15_000;
 
 function identityKey(userId: string, organizationId: string | null): string {
   return `${userId}::${organizationId ?? ""}`;
+}
+
+function sameFailure(
+  failure: EnrollmentFailureNotification | null,
+  identity: string,
+  kind: DesktopWorkerStartupFailureKind,
+  cause: string,
+): boolean {
+  return failure?.identityKey === identity
+    && failure.kind === kind
+    && failure.cause === cause;
+}
+
+function clearFailureNotification(identity?: string): void {
+  const activeMatches =
+    activeFailureNotification !== null
+    && (identity === undefined || activeFailureNotification.identityKey === identity);
+  const dismissedMatches =
+    dismissedFailureNotification !== null
+    && (identity === undefined || dismissedFailureNotification.identityKey === identity);
+
+  if (activeMatches) {
+    activeFailureNotification = null;
+    dismissToast(DESKTOP_WORKER_FAILURE_TOAST_ID);
+  }
+  if (dismissedMatches) {
+    dismissedFailureNotification = null;
+  }
+}
+
+function clearFailureNotificationForOtherIdentity(identity: string): void {
+  if (
+    (activeFailureNotification !== null
+      && activeFailureNotification.identityKey !== identity)
+    || (dismissedFailureNotification !== null
+      && dismissedFailureNotification.identityKey !== identity)
+  ) {
+    clearFailureNotification();
+  }
 }
 
 // Enrollment guard transitions:
@@ -54,7 +111,7 @@ export function useDesktopWorkerEnrollment(
   const activeOrganizationId = useOrganizationStore(
     (state) => state.activeOrganizationId,
   );
-  const showToast = useToastStore((state) => state.show);
+  const showErrorToast = useToastStore((state) => state.showError);
   const { captureException } = useProductTelemetry();
   const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
@@ -62,6 +119,7 @@ export function useDesktopWorkerEnrollment(
       return;
     }
     if (authStatus !== "authenticated" || !authUserId) {
+      clearFailureNotification();
       // Signed out: stop the worker and clear the guard so the next login
       // (any user) re-enrolls with a fresh identity.
       if (enrolledIdentityKey !== null) {
@@ -71,6 +129,7 @@ export function useDesktopWorkerEnrollment(
       return;
     }
     const nextIdentityKey = identityKey(authUserId, activeOrganizationId);
+    clearFailureNotificationForOtherIdentity(nextIdentityKey);
     if (enrolledIdentityKey === nextIdentityKey) {
       return;
     }
@@ -87,11 +146,62 @@ export function useDesktopWorkerEnrollment(
         if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
           return;
         }
-        showToast(desktopWorkerStartupFailureCopy(error), "error");
+        const notice = desktopWorkerStartupFailureNotice(error);
+        if (
+          sameFailure(
+            activeFailureNotification,
+            nextIdentityKey,
+            notice.kind,
+            notice.cause,
+          )
+          || sameFailure(
+            dismissedFailureNotification,
+            nextIdentityKey,
+            notice.kind,
+            notice.cause,
+          )
+        ) {
+          return;
+        }
+        const notification = {
+          identityKey: nextIdentityKey,
+          kind: notice.kind,
+          cause: notice.cause,
+        };
+        dismissedFailureNotification = null;
+        activeFailureNotification = notification;
+        showErrorToast({
+          id: DESKTOP_WORKER_FAILURE_TOAST_ID,
+          headline: notice.headline,
+          consequence: notice.consequence,
+          cause: notice.cause,
+          retry: () => {
+            dismissedFailureNotification = null;
+            enrolledIdentityKey = null;
+            setRetryNonce((nonce) => nonce + 1);
+          },
+          onDismiss: () => {
+            if (
+              sameFailure(
+                activeFailureNotification,
+                nextIdentityKey,
+                notice.kind,
+                notice.cause,
+              )
+            ) {
+              activeFailureNotification = null;
+              dismissedFailureNotification = notification;
+            }
+          },
+        });
       },
       captureException,
     }).then((enrolled) => {
-      if (enrolled || enrolledIdentityKey !== nextIdentityKey) {
+      if (enrolled) {
+        clearFailureNotification(nextIdentityKey);
+        return;
+      }
+      if (enrolledIdentityKey !== nextIdentityKey) {
         return;
       }
       // Enrollment failed (e.g. a network blip right after an org switch's
@@ -111,5 +221,5 @@ export function useDesktopWorkerEnrollment(
         window.clearTimeout(retryTimer);
       }
     };
-  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showToast, worker, captureException]);
+  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showErrorToast, worker, captureException]);
 }
