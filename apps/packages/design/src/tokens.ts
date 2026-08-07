@@ -718,6 +718,22 @@ export const themeTokens = {
     light: "#f6f6f6",
     provenance: "[RETUNE:light/two-plane-system]",
   },
+  /**
+   * Keyword ink for the Appearance pane's hand-drawn code preview.
+   *
+   * A live role rather than a literal in `themePreviewColors`, because unlike
+   * the theme-card artwork this ink paints on the *current* mode's surfaces and
+   * must flip with them. Dark `#FB5D8F` is the shipped pink; the light half is
+   * darkened to `#C7175C` because the shipped pink measures 2.97:1 on white,
+   * under the 4.5:1 floor. Measured light ratios: 5.67:1 on `--color-background`
+   * (#ffffff), 4.94:1 on the addition tint (#e4f3ea) and 4.84:1 on the deletion
+   * tint (#fbe9e8) — the two diff surfaces the preview actually paints it over.
+   */
+  "--color-syntax-keyword": {
+    dark: "#FB5D8F",
+    light: "#C7175C",
+    provenance: "[RETUNE:light/independent-scale]",
+  },
   "--color-terminal-black": {
     dark: "rgba(255, 255, 255, 0.5)",
     light: "#545a61",
@@ -1936,15 +1952,6 @@ export const themePreviewColors = {
     pillStrong: "#3A3A3A",
     pill: "#2E2E2E",
     hairline: "#2A2A2A",
-  },
-  /**
-   * Syntax fills for the pane's hand-drawn code preview. The preview is a
-   * five-line still life, not a real editor, so it carries the design's
-   * display palette rather than a Shiki theme; only the keyword pink lacks a
-   * live custom property, so it is the only literal.
-   */
-  syntax: {
-    keyword: "#FB5D8F",
   },
 } as const;
 
