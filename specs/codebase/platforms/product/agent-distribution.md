@@ -146,17 +146,20 @@ Two carve-outs:
 
 - An agent the user already provides on PATH is left alone: it is usable
   through readiness as-is, and a managed install would shadow their copy.
-- Cursor never installs in cloud. Its readiness still resolves through a
-  headless credential path — an enabled `api_key` selection (agent-auth.md's
+- Cursor never installs in cloud. Its readiness resolves through a headless
+  credential path — an enabled `api_key` selection (agent-auth.md's
   `CURSOR_API_KEY` slot) upgrades `CredentialsRequired` to `Ready` the same
-  way any other routed harness's selection does — but a cloud install would
-  still never reach `Ready` on its own: `cursor-agent`'s ACP process ignores
-  `CURSOR_API_KEY` at runtime and reads its native login from macOS Keychain
-  (`catalog_probe.rs`'s cursor-login/cursor-api arms), which no headless
-  Linux sandbox has. So cursor stays cloud-uninstallable for a real-binary
-  reason (no Keychain, no interactive login surface to seed one), not
-  because it lacks *any* credential path — the api_key path exists and is
-  legal, it just does not make the installed binary itself authenticate.
+  way any other routed harness's selection does, and that route is real:
+  `cursor-agent` **does** honor a supplied `CURSOR_API_KEY`, proven by a live
+  `initialize` → `session/new` → prompt → `end_turn` run on 2026-07-26 and
+  wired into the probe's cursor arm in commit `4ccbfc41a`
+  (`catalog_probe.rs`). (An earlier revision of this paragraph claimed the
+  opposite; that claim was stale and is struck.) Cursor stays
+  cloud-uninstallable for a different reason: its *native* login lives in the
+  macOS Keychain, which no headless Linux sandbox has and which no cloud
+  surface can interactively seed. For the same keychain reason it is
+  excluded from unattended model probing and refreshed only on request
+  (model-catalog.md's probe engine).
 
 Install topology per surface is then only about who pays the first
 download:
