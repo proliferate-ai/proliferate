@@ -11,7 +11,7 @@ and product behavior belong under [`../specs/codebase/`](../specs/codebase/).
 | --- | --- |
 | Prepare, open, or mark a pull request ready for review | [`process/README.md`](process/README.md) |
 | Set up or run a local worktree, profile, Stripe, Web, Desktop, or Mobile | [`local/README.md`](local/README.md) |
-| Write or run automated tests and release qualification | [`../specs/developing/testing/README.md`](../specs/developing/testing/README.md) |
+| Write or run automated tests and release qualification | [`../specs/TESTING.md`](../specs/TESTING.md) |
 | Investigate a local or production defect | [`debugging/README.md`](debugging/README.md) |
 | Change CI, package, release, deploy, or promote | [`deploying/README.md`](deploying/README.md) |
 | Follow a focused production or provider operation | [`operating/README.md`](operating/README.md) |

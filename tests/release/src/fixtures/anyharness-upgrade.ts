@@ -1,6 +1,6 @@
 /**
  * Helpers for the tier-4 AnyHarness binary self-update scenario (T4-CLOUD-1,
- * owned by specs/developing/testing/tier-4-scenario-contract.md; shipped
+ * owned by specs/TESTING/tier-4-scenario-contract.md; shipped
  * mechanics live in specs/codebase/structures/proliferate-worker/guides/lifecycle.md).
  * Two kinds of thing live here:
  *

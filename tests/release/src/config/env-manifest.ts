@@ -1,7 +1,8 @@
 /**
  * Declared manifest of every environment variable the tier-3 release-e2e
- * runner needs. Per specs/developing/testing/README.md ("Running tier 3/4
- * locally"): every key is inventoried here with where to obtain it. A missing
+ * runner needs. Per specs/TESTING/release-worlds-and-fixtures.md ("Local And
+ * GitHub Actions Execution"): every key is inventoried here with where to
+ * obtain it. A missing
  * credential does not fail the whole run — the runner reports just the
  * scenarios/lanes that require it as blocked (see `src/cli/run.ts`), so a
  * partially-credentialed environment still produces signal for everything it

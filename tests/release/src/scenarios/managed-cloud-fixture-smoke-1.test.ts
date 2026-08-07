@@ -280,7 +280,7 @@ function cellsFor(names: readonly string[]): PlannedCellV1[] {
   return names.map((name) => ({
     cell_id: `${MANAGED_CLOUD_FIXTURE_SMOKE_1_ID}/sandbox/cell=${name}`,
     scenario_id: MANAGED_CLOUD_FIXTURE_SMOKE_1_ID,
-    registry_flow_ref: "specs/developing/testing/flows.md#cloud-provision",
+    registry_flow_ref: "specs/TESTING/flows.md#cloud-provision",
     runtime_lane: "sandbox",
     dimensions: { cell: name },
     required_env: [],

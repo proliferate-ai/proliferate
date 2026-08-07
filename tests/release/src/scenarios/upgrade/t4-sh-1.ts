@@ -18,7 +18,7 @@ import {
 
 /**
  * T4-SH-1 — operator update motion.
- * specs/developing/testing/self-hosting.md#T4-SH-1
+ * specs/TESTING/self-hosting.md#T4-SH-1
  *
  * Boots a self-hosted box pinned to the previous server release (N-1), claims
  * an admin (so there is existing user data to preserve), then runs the exact
@@ -44,7 +44,7 @@ const VERSION_FILE = resolve(HERE, "..", "..", "..", "..", "..", "VERSION");
 export const t4Sh1: ScenarioDefinition = {
   id: "T4-SH-1",
   title: "operator update motion (update.sh N-1 -> N, data intact)",
-  registryFlowRef: "specs/developing/testing/self-hosting.md#T4-SH-1",
+  registryFlowRef: "specs/TESTING/self-hosting.md#T4-SH-1",
   lanes: ["local"],
   requiredEnv: ["RELEASE_E2E_SELFHOST_PROVISION"],
   plan: () => [

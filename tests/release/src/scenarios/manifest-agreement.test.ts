@@ -26,7 +26,7 @@ import { TIER2_CASE_DIMENSION } from "./tier2/harness.js";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const MANIFEST_PATH = path.join(
   REPO_ROOT,
-  "specs/developing/testing/core-release-scenario-manifest.json",
+  "specs/TESTING/core-release-scenario-manifest.json",
 );
 
 type ImplementationStatus = "planned" | "deferred" | "collected" | "enforced";

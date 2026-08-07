@@ -16,7 +16,7 @@ import {
 
 /**
  * The versioned combined-report contract, per
- * specs/developing/testing/core-release-validation.md — historical section
+ * specs/TESTING/core-release-validation.md — historical section
  * names: "Combined report", candidate-artifact evidence, and "Combined
  * report V3", which changes the semantic result unit to an exact test cell.
  * One artifact per invocation/shard/attempt; validated before writing. V1 and

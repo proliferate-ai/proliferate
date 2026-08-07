@@ -164,7 +164,7 @@ export const managedCloudFixtureSmoke1: ScenarioDefinition = {
   title:
     "prove the merged managed-cloud shared fixtures live: one bounded real smoke op per fixture " +
     "(callback relay, Stripe test clock, billing threshold, failure injection) + durable cleanup replay",
-  registryFlowRef: "specs/developing/testing/flows.md#cloud-provision",
+  registryFlowRef: "specs/TESTING/flows.md#cloud-provision",
   lanes: ["sandbox"],
   requiredEnv: [
     "AGENT_GATEWAY_LITELLM_BASE_URL",

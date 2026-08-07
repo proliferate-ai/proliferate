@@ -3,7 +3,7 @@
 This procedure covers release coordinators and artifact publication. Hosted
 staging and manual production promotion are covered by
 [Hosted Deployments](hosted.md). Release qualification belongs to
-[Testing](../../specs/developing/testing/README.md).
+[Testing](../../specs/TESTING.md).
 
 ## Before Running A Release
 

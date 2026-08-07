@@ -17,7 +17,7 @@ same change.
 | Install or update the canonical self-hosted Compose deployment | [Self-hosted deployment](self-hosted-deploy.md) |
 | Launch or update self-hosting through AWS CloudFormation | [Self-hosted AWS](self-hosted-aws.md) |
 | Prepare or mark a pull request ready | [Pull requests](../process/pull-requests.md) |
-| Run release qualification or determine a test gate | [Testing](../../specs/developing/testing/README.md) |
+| Run release qualification or determine a test gate | [Testing](../../specs/TESTING.md) |
 | Find the owner and precedence of a variable, secret, or provider setting | [Environment sources](../local/dev-profiles.md#environment-sources) |
 
 Do not put secret values, deploy tokens, signing credentials, private keys, or

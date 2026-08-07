@@ -1,0 +1,150 @@
+# Testing Standard
+
+How tests are organized across the repo: what each tier owns, what gates
+merges vs releases, and how a change decides which tests it must add — derive
+that from the diff, not from habit. Consider this document in every PR. Depth
+(release validation, release worlds, the tier-3/4 contracts, manual QA) lives
+in [`specs/TESTING/`](TESTING/README.md).
+
+## The model
+
+Code is state and logic. Every test is defined by which state is real and
+where the boundary to fakes sits. Four tiers:
+
+| Tier | What is real | What is faked or absent | Runs | Gates |
+| --- | --- | --- | --- | --- |
+| **1 — Unit / contract** | Logic; Postgres/SQLite where the guarantee lives in the DB | Everything across a network | Every PR, seconds | **Merge** |
+| **2 — Mocked intent** | Server + Desktop renderer in Chromium + real Postgres, booted on ports; real Stripe test mode for billing | AnyHarness, sandbox provider, LLM, IdP, email, Slack, and every other external provider | Every PR, minutes | **Merge** |
+| **3 — Live end-to-end** | The selected world's real candidate server/runtime/provider boundaries, real agents on cheap models, and exact deploy artifacts | Boundaries outside the selected world are absent rather than simulated | Release train + nightly | **Release** |
+| **4 — Packaged install / upgrade** | Exact signed candidate packages plus retained production N−1 state upgraded through shipped mechanisms to exact candidate N | No claimed product boundary; updater/control channels are isolated while their artifacts and verification remain real | Release train | **Release** |
+
+**The gate rule (hard):** the merge gate is tiers 1–2 only. No real LLM or
+real sandbox runs in the merge gate. Stripe test mode is the one explicit
+real-network exception; trusted CI fails if its test credential or required
+billing cells are missing. Tier 3/4 failures block the *release* and file
+issues into the issues service — they never block an ordinary merge.
+Current-main fail-open exceptions are recorded, without being normalized as
+success, in [`TESTING/core-release-validation.md`](TESTING/core-release-validation.md#current-enforcement-exception).
+
+**Real-LLM tests assert outcomes, not transcripts.** "Run reached `completed`,
+file exists, emit validated against schema" — never "the agent said X."
+
+## Tier 1 — unit / contract
+
+Three sub-kinds, in every language:
+
+- **Pure logic (no state).** State-machine guards, decision matrices, billing
+  math, policy checks. Enumerate the matrix, not just the cells you thought about.
+- **Logic against real state.** When the guarantee IS a property of the
+  database (unique index, `ON CONFLICT`, savepoint, transaction boundary,
+  crash-resume cursor), the DB must be real — Postgres for server tests,
+  SQLite for runtime tests. Fake everything across a network. A crash drill
+  is expressed as calling the construction twice (claim CAS returns `None`
+  the second time), not as killing processes.
+- **Contract fixtures.** Shared JSON shapes that cross a language boundary get
+  a golden fixture under `fixtures/contracts/`. The producing language asserts
+  it produces the fixture; each consuming language asserts it parses it. A
+  shape change is made by changing the fixture, which mechanically breaks the
+  other side's test until it is updated.
+
+| Language | Location | Invocation |
+| --- | --- | --- |
+| Rust | Colocated `*_tests.rs` / `tests.rs` submodule next to the module | `cargo test --workspace` |
+| Python | `server/tests/unit/` (logic, DB-backed unit), `server/tests/integration/` (HTTP-level via ASGI against real Postgres) | `cd server && uv run pytest -q` |
+| TypeScript | Colocated `*.test.ts(x)` next to source (desktop, packages, SDKs) | `pnpm --filter <pkg> test` |
+| Contract fixtures | `fixtures/contracts/<contract-name>/*.json` | Asserted from each language's tier-1 suite |
+
+Engine tests that need a step executor use a scripted fake implementing
+`WorkflowStepExecutor` (and equivalent seams elsewhere) — never a real agent.
+
+## Tier 2 — mocked intent
+
+Real server + the real Desktop renderer served on a port, seeded Postgres,
+and Playwright driving Chromium. **There is no fake sandbox provider and no
+mock LLM (deliberate ruling, 2026-07-07):** flows that need a sandbox or an
+LLM are tier 3 by definition; building and maintaining those two fakes costs
+more than the per-merge coverage they buy, and tier 1 already owns the logic
+in those paths. If nightly/promotion gaps in agent/workflow flows bite
+repeatedly, that evidence — not speculation — justifies building a fake then.
+
+| Dependency | Test control |
+| --- | --- |
+| SSO IdP | Mock OIDC container (asserts any identity on demand) |
+| Invite/notification email | Token capture (test-only endpoint), no send |
+| Stripe | **Real network exception:** Stripe test mode + test clocks; required and fail-closed in trusted CI |
+| Poll feeds | Stub feed (replaying, per the poll contract) |
+
+Lives in `tests/intent/`: one stack-boot fixture (`stack/`), fakes as
+pluggable slots (`fakes/`), one spec file per flow (`specs/`). Seed through
+the product's own API via the `stack/seed.ts` helpers; raw SQL is the
+exception, only for state the product exposes no API for.
+
+**Tier 2 tests up to the seam, never past it.** For sandbox/agent-adjacent
+flows, assert "request accepted, row created, delivery attempted, UI entered
+pending" — never sandbox readiness or run completion, which are tier 3.
+Real-provider round-trips (Google/GitHub OAuth, live IdP) are tier 3; tier 2
+asserts the *seam that decides* which flow fires. Run locally:
+`pnpm -C tests/intent test` (`TIER2_INTENT_SKIP_RUNTIME=1` skips building the
+Rust runtime; `TIER2_INTENT_PROFILE=<name>` isolates parallel worktrees).
+
+## Tier 3 — live end-to-end
+
+Tests the **deploy artifact, not just the code** in three deliberately
+distinct worlds: local runtime, managed cloud, and self-host. No world
+repeats the complete Cartesian product already proved by another; the exact
+dependency matrix lives in [`TESTING/release-worlds-and-fixtures.md`](TESTING/release-worlds-and-fixtures.md#world-dependency-matrix).
+
+- Lives in `tests/release/` as one runner CLI with explicit world,
+  product-host, selector, and diagnostic/strict inputs. GitHub Actions is one
+  caller of the same provisioners and scenarios used from a laptop; local runs
+  are a first-class path, not a CI afterthought.
+- **Extend the existing smoke; do not add a new boot-the-world test.** Tier 3
+  stays O(1) per lane, not O(features) — a per-feature tier-3 test is the
+  smell that a tier-1/2 seam test is missing.
+- Tier 3 is also the per-agent catalog bump gate: a candidate agent version
+  bump runs that agent's smoke on staging; failure means the agent stays
+  pinned to last-good and an issue is filed.
+- No credential ever lives in a scenario: every key the runner needs is
+  inventoried in `specs/developing/reference/env-vars.yaml`.
+- Guarantee ids are `T3-<AREA>-<n>`; register them in the target manifest and
+  declare collected cell metadata on the executable scenario.
+
+## Tier 4 — packaged install and upgrade
+
+One qualification stage with independently evidenced target cells, using
+exact shipped packages or immutable runtime artifacts: clean candidate
+Desktop install, Desktop N−1 → N signed update (`T4-DESKTOP-1`),
+managed-runtime upgrade through Worker mailbox + Supervisor activation
+(`T4-RUNTIME-1`), and self-host N−1 → N when its artifacts changed. It does
+not rerun the Tier 3 functional matrix. Exact artifact, controller, evidence,
+and current-gap details live in [`TESTING/tier-4-scenario-contract.md`](TESTING/tier-4-scenario-contract.md).
+
+## Deciding where a change's tests go
+
+1. Is the guarantee expressible as pure input→output? → Tier 1 pure logic.
+2. Does it only exist as a property of a state transition (dedup,
+   exactly-once, crash-resume, ordering)? → Tier 1 against real DB, fake
+   neighbors.
+3. Did it change a shared JSON shape? → Update the contract fixture (which
+   mechanically breaks the consuming side's test).
+4. Is it a user-visible flow with no real-agent dependency? → Tier 2 spec
+   (new spec file, or extend one).
+5. Does it need a real agent, sandbox, or the deploy artifact? → Tier 3.
+6. Did it touch packaged/native installation, the updater, template
+   versioning, or migrations? → Tier 4.
+
+**PR obligation:** a PR that adds or changes a flow adds/updates tests at the
+tier where its guarantees live, and names them in the PR description. New or
+changed guarantees update the target manifest/contract and collector metadata
+in the same PR; generated flow and execution views must remain clean.
+
+**Postmortem rule:** any bug caught at tier 3/4 or in production gets an
+answer to "which lower tier should have owned this," and that test lands with
+the fix.
+
+Named migration exceptions: desktop vitest is not yet wired into the merge
+gate; the broad tier-2 intent lanes (`intent-tests` + `intent-billing`) run
+provisional/non-blocking until they earn a flake-free record; and
+`scripts/validate-agent-catalog.mjs` remains a hand-kept mirror of the Rust
+catalog validator until the contract-fixture pattern absorbs it. Target gate
+tables and the exception's closure order live in the same contract linked above.

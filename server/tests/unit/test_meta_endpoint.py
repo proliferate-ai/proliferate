@@ -80,7 +80,7 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
     assert isinstance(body["capabilities"], dict)
 
 
-# T1-SH-3 (specs/developing/testing/self-hosting.md): the /meta wire contract.
+# T1-SH-3 (specs/TESTING/self-hosting.md): the /meta wire contract.
 #
 # `/meta` is the shape the desktop's connect-to-a-server dialog reads to render
 # its trust-confirmation screen ("Server version X"). A silent field rename or

@@ -5,7 +5,7 @@ import { ApiClient } from "../../fixtures/http.js";
 
 /**
  * T3-SH-5 — adaptive sign-in surface is truthful on real infra.
- * specs/developing/testing/self-hosting.md#T3-SH-5
+ * specs/TESTING/self-hosting.md#T3-SH-5
  *
  * self-hosting.spec.ts (T2-SH-4) proves the desktop's login screen renders
  * whatever `GET /auth/desktop/methods` + `GET /auth/desktop/github/
@@ -30,7 +30,7 @@ import { ApiClient } from "../../fixtures/http.js";
 export const t3Sh5: ScenarioDefinition = {
   id: "T3-SH-5",
   title: "adaptive sign-in surface is truthful on real infra",
-  registryFlowRef: "specs/developing/testing/self-hosting.md#T3-SH-5",
+  registryFlowRef: "specs/TESTING/self-hosting.md#T3-SH-5",
   lanes: ["local"],
   requiredEnv: ["RELEASE_E2E_SELFHOST_URL"],
   plan: () => [

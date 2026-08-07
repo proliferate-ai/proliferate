@@ -1,4 +1,4 @@
-// T2-AUTH-3 (specs/developing/testing/scenarios.md): SSO OIDC round trip via
+// T2-AUTH-3 (specs/TESTING/scenarios.md): SSO OIDC round trip via
 // a mock IdP, org-scoped connection admin CRUD, JIT provisioning, and the
 // three named negatives.
 //
