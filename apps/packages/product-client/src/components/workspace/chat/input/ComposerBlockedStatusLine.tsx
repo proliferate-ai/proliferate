@@ -21,7 +21,12 @@ export function ComposerBlockedStatusLine({
   message: string;
 }) {
   return (
-    <div className="flex items-center gap-2 pt-0.5 pb-3.5 text-composer">
+    <div
+      // Destructive states interrupt (the retired panels' restore-error had
+      // role=alert); waiting states just announce politely.
+      role={tone === "destructive" ? "alert" : "status"}
+      className="flex items-center gap-2 pt-0.5 pb-3.5 text-composer"
+    >
       {icon === "alert"
         ? (
           <CircleAlert

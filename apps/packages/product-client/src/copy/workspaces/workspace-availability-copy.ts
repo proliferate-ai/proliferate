@@ -62,6 +62,6 @@ export function missingCheckoutComposerMessage(
 ): string {
   const noun = kind === "worktree" ? "Worktree folder" : "Workspace folder";
   return restoreEligible
-    ? `${noun} is missing. Chat is paused until it's restored.`
-    : `${noun} is missing. Chat is paused until it's back on disk.`;
+    ? `${noun} is missing. Chat is paused until it’s restored.`
+    : `${noun} is missing. Chat is paused until it’s back on disk.`;
 }

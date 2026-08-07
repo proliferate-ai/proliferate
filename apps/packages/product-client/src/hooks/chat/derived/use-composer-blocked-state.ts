@@ -64,9 +64,11 @@ export function useComposerBlockedState(options?: {
       }
       : null;
 
-    const provisioning = panelState?.kind === "pending"
+    // In-flight provisioning never takes over: availability keeps the
+    // composer enabled so the first prompt can be typed and queued against
+    // the pending workspace. Only a failed entry blocks.
+    const provisioningFailed = panelState?.kind === "pending" && panelState.isFailed
       ? {
-        isFailed: panelState.isFailed,
         message: panelState.subtitle,
         back: {
           onSelect: () => {
@@ -88,7 +90,12 @@ export function useComposerBlockedState(options?: {
     const cloudStatus = panelState?.kind === "cloud-status"
       ? {
         mode: panelState.model.mode,
-        message: panelState.model.description,
+        // Attention modes keep the model's title as framing — the error
+        // mode's description is the raw provisioning receipt (lastError)
+        // and reads as noise without it.
+        message: panelState.model.mode === "pending" || !panelState.model.title
+          ? panelState.model.description
+          : `${panelState.model.title}. ${panelState.model.description}`,
         primaryActionLabel:
           buildCloudWorkspaceCompactStatusView(panelState.model).primaryAction?.label ?? null,
         primaryAction: cloudStatusActions.handlePrimaryAction
@@ -98,6 +105,17 @@ export function useComposerBlockedState(options?: {
             disabled: cloudStatusActions.isPrimaryActionPending,
           }
           : null,
+        // The lost-workspace delete is irreversible; the retired cloud
+        // panel confirmed it and the takeover must too.
+        primaryActionConfirmation:
+          panelState.model.footer.kind === "action" && panelState.model.footer.action === "delete"
+            ? {
+              title: "Delete lost workspace?",
+              description:
+                "Remove this workspace record. Anything pushed to GitHub, including commits, branches, and pull requests, remains available.",
+              confirmLabel: "Delete",
+            }
+            : null,
       }
       : null;
 
@@ -122,7 +140,7 @@ export function useComposerBlockedState(options?: {
 
     const state = resolveComposerBlockedState({
       directoryMissing,
-      provisioning,
+      provisioningFailed,
       cloudStatus,
       cloudRuntime,
     });

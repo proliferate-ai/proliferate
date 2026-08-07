@@ -146,6 +146,7 @@ export function ChatInput({
     !effectiveIsEmpty && !isDisabled && !sendBlockedReason && !isSubmitting;
   const canAcceptPastedAttachments =
     !effectiveIsEditingQueuedPrompt
+    && !blockedPresentation
     && !isDisabled
     && !areRuntimeControlsDisabled
     && !isSubmitting
@@ -302,6 +303,21 @@ export function ChatInput({
     return () => window.clearTimeout(timer);
   }, [activeSessionIdForUi, focusComposer, suppressAutoFocus, workspaceUiKey, workspaceSelectionNonce]);
 
+  // The takeover unmounts the textarea; when the blocking condition clears
+  // and it remounts, put the caret back rather than leaving focus on body.
+  const wasBlockedRef = useRef(false);
+  useEffect(() => {
+    const isBlocked = !!blockedPresentation;
+    if (wasBlockedRef.current && !isBlocked && !suppressAutoFocus) {
+      const timer = window.setTimeout(() => {
+        focusComposer();
+      }, 0);
+      wasBlockedRef.current = isBlocked;
+      return () => window.clearTimeout(timer);
+    }
+    wasBlockedRef.current = isBlocked;
+  }, [blockedPresentation, focusComposer, suppressAutoFocus]);
+
   useEffect(() => {
     if (focusRequestNonce === 0) {
       return;
@@ -361,8 +377,10 @@ export function ChatInput({
                   </ComposerTextareaFrame>
                   <ComposerBlockedControlRow
                     actions={blockedPresentation.actions}
+                    disabledReason={blockedPresentation.message}
                     isRunning={isRunningForUi}
                     isEmpty={effectiveIsEmpty}
+                    isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
                     onSubmit={onSubmit}
                     onCancel={onCancel}
                   />

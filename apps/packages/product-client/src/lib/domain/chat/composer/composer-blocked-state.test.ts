@@ -12,7 +12,7 @@ function action(overrides: Partial<ComposerBlockedActionState> = {}): ComposerBl
 
 const EMPTY_INPUT: ComposerBlockedStateInput = {
   directoryMissing: null,
-  provisioning: null,
+  provisioningFailed: null,
   cloudStatus: null,
   cloudRuntime: null,
 };
@@ -32,27 +32,27 @@ describe("resolveComposerBlockedState", () => {
         checkAgain: action(),
         restore: action(),
       },
-      provisioning: { isFailed: false, message: "provisioning", back: action(), retry: action() },
-      cloudStatus: { mode: "pending", message: "cloud", primaryActionLabel: null, primaryAction: null },
+      provisioningFailed: { message: "provisioning failed", back: action(), retry: action() },
+      cloudStatus: { mode: "pending", message: "cloud", primaryActionLabel: null, primaryAction: null, primaryActionConfirmation: null },
       cloudRuntime: { phase: "failed", message: "runtime", retry: action(), claim: null },
     });
     expect(state?.kind).toBe("worktree-missing");
   });
 
-  it("prioritizes provisioning over cloud status and cloud runtime", () => {
+  it("prioritizes failed provisioning over cloud status and cloud runtime", () => {
     const state = resolveComposerBlockedState({
       ...EMPTY_INPUT,
-      provisioning: { isFailed: false, message: "provisioning", back: action(), retry: action() },
-      cloudStatus: { mode: "pending", message: "cloud", primaryActionLabel: null, primaryAction: null },
+      provisioningFailed: { message: "provisioning failed", back: action(), retry: action() },
+      cloudStatus: { mode: "pending", message: "cloud", primaryActionLabel: null, primaryAction: null, primaryActionConfirmation: null },
       cloudRuntime: { phase: "failed", message: "runtime", retry: action(), claim: null },
     });
-    expect(state?.kind).toBe("provisioning");
+    expect(state?.kind).toBe("provisioning-failed");
   });
 
   it("prioritizes cloud status over cloud runtime", () => {
     const state = resolveComposerBlockedState({
       ...EMPTY_INPUT,
-      cloudStatus: { mode: "pending", message: "cloud", primaryActionLabel: null, primaryAction: null },
+      cloudStatus: { mode: "pending", message: "cloud", primaryActionLabel: null, primaryAction: null, primaryActionConfirmation: null },
       cloudRuntime: { phase: "failed", message: "runtime", retry: action(), claim: null },
     });
     expect(state?.kind).toBe("cloud-pending");
@@ -82,7 +82,7 @@ describe("resolveComposerBlockedState", () => {
       });
       expect(state).toEqual({
         kind: "worktree-missing",
-        message: "Worktree folder is missing. Chat is paused until it's restored.",
+        message: "Worktree folder is missing. Chat is paused until it’s restored.",
         checkAgain,
         restore,
       });
@@ -119,21 +119,16 @@ describe("resolveComposerBlockedState", () => {
     });
   });
 
-  describe("provisioning", () => {
-    it("maps in-flight provisioning without actions", () => {
-      const state = resolveComposerBlockedState({
-        ...EMPTY_INPUT,
-        provisioning: { isFailed: false, message: "Creating workspace…", back: action(), retry: action() },
-      });
-      expect(state).toEqual({ kind: "provisioning", message: "Creating workspace…" });
-    });
-
+  describe("provisioningFailed", () => {
+    // In-flight (non-failed) provisioning is deliberately absent from the
+    // input shape: the composer stays enabled so a first prompt can queue
+    // against the pending workspace, so there is nothing to resolve.
     it("maps failed provisioning with back/retry actions", () => {
       const back = action();
       const retry = action();
       const state = resolveComposerBlockedState({
         ...EMPTY_INPUT,
-        provisioning: { isFailed: true, message: "Setup failed", back, retry },
+        provisioningFailed: { message: "Setup failed", back, retry },
       });
       expect(state).toEqual({ kind: "provisioning-failed", message: "Setup failed", back, retry });
     });
@@ -143,7 +138,7 @@ describe("resolveComposerBlockedState", () => {
     it("maps pending mode without actions", () => {
       const state = resolveComposerBlockedState({
         ...EMPTY_INPUT,
-        cloudStatus: { mode: "pending", message: "Preparing runtime", primaryActionLabel: "Retry", primaryAction: action() },
+        cloudStatus: { mode: "pending", message: "Preparing runtime", primaryActionLabel: "Retry", primaryAction: action(), primaryActionConfirmation: null },
       });
       expect(state).toEqual({ kind: "cloud-pending", message: "Preparing runtime" });
     });
@@ -152,14 +147,29 @@ describe("resolveComposerBlockedState", () => {
       const primaryAction = action();
       const state = resolveComposerBlockedState({
         ...EMPTY_INPUT,
-        cloudStatus: { mode: "error", message: "Cloud setup failed", primaryActionLabel: "Retry", primaryAction },
+        cloudStatus: { mode: "error", message: "Cloud setup failed", primaryActionLabel: "Retry", primaryAction, primaryActionConfirmation: null },
       });
       expect(state).toEqual({
         kind: "cloud-attention",
         message: "Cloud setup failed",
         primaryActionLabel: "Retry",
         primaryAction,
+        primaryActionConfirmation: null,
       });
+    });
+
+    it("carries the delete confirmation through to cloud-attention", () => {
+      const confirmation = {
+        title: "Delete lost workspace?",
+        description: "Remove this workspace record.",
+        confirmLabel: "Delete",
+      };
+      const state = resolveComposerBlockedState({
+        ...EMPTY_INPUT,
+        cloudStatus: { mode: "lost", message: "Workspace lost", primaryActionLabel: "Delete", primaryAction: action(), primaryActionConfirmation: confirmation },
+      });
+      expect(state && "primaryActionConfirmation" in state ? state.primaryActionConfirmation : null)
+        .toEqual(confirmation);
     });
   });
 
@@ -227,16 +237,6 @@ describe("presentComposerBlockedState", () => {
     expect(presentation.actions.map((a) => a.key)).toEqual(["check-again"]);
   });
 
-  it("presents provisioning as a faint spinner with no actions", () => {
-    const presentation = presentComposerBlockedState({ kind: "provisioning", message: "Creating workspace…" });
-    expect(presentation).toEqual({
-      icon: "spinner",
-      tone: "faint",
-      message: "Creating workspace…",
-      actions: [],
-    });
-  });
-
   it("presents provisioning-failed with back then retry, alert/destructive", () => {
     const back = action();
     const retry = action();
@@ -270,11 +270,12 @@ describe("presentComposerBlockedState", () => {
       message: "Cloud usage is paused",
       primaryActionLabel: "Try again",
       primaryAction,
+      primaryActionConfirmation: null,
     });
     expect(presentation.icon).toBe("alert");
     expect(presentation.tone).toBe("destructive");
     expect(presentation.actions).toEqual([
-      { key: "primary", label: "Try again", variant: "primary", ...primaryAction },
+      { key: "primary", label: "Try again", variant: "primary", confirmation: null, ...primaryAction },
     ]);
   });
 
@@ -284,6 +285,7 @@ describe("presentComposerBlockedState", () => {
       message: "Workspace archived",
       primaryActionLabel: null,
       primaryAction: null,
+      primaryActionConfirmation: null,
     });
     expect(presentation.actions).toEqual([]);
   });
@@ -307,7 +309,7 @@ describe("presentComposerBlockedState", () => {
     });
     expect(presentation.icon).toBe("alert");
     expect(presentation.tone).toBe("destructive");
-    expect(presentation.actions).toEqual([{ key: "retry", label: "Retry", variant: "primary", ...retry }]);
+    expect(presentation.actions).toEqual([{ key: "retry", label: "Retry", variant: "primary", confirmation: null, ...retry }]);
   });
 
   it("presents runtime-error with no actions when retry is null", () => {
@@ -328,7 +330,7 @@ describe("presentComposerBlockedState", () => {
     });
     expect(presentation.icon).toBe("alert");
     expect(presentation.tone).toBe("destructive");
-    expect(presentation.actions).toEqual([{ key: "claim", label: "Claim", variant: "primary", ...claim }]);
+    expect(presentation.actions).toEqual([{ key: "claim", label: "Claim", variant: "primary", confirmation: null, ...claim }]);
   });
 
   it("presents runtime-claim-required with no actions when claim is null", () => {

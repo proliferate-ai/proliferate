@@ -48,6 +48,7 @@ export function renderComposerBlockedSurface(scenario: ScenarioKey): ReactNode |
         </ComposerTextareaFrame>
         <ComposerBlockedControlRow
           actions={presentation.actions}
+          disabledReason={presentation.message}
           isRunning={false}
           isEmpty
           onSubmit={noop}
@@ -66,9 +67,20 @@ function cloudStatusInput(model: CloudWorkspaceStatusScreenModel): ComposerBlock
   const view = buildCloudWorkspaceCompactStatusView(model);
   return {
     mode: model.mode,
-    message: model.description,
+    message: model.mode === "pending" || !model.title
+      ? model.description
+      : `${model.title}. ${model.description}`,
     primaryActionLabel: view.primaryAction?.label ?? null,
     primaryAction: view.primaryAction ? idleAction : null,
+    primaryActionConfirmation:
+      model.footer.kind === "action" && model.footer.action === "delete"
+        ? {
+          title: "Delete lost workspace?",
+          description:
+            "Remove this workspace record. Anything pushed to GitHub, including commits, branches, and pull requests, remains available.",
+          confirmLabel: "Delete",
+        }
+        : null,
   };
 }
 
@@ -83,49 +95,49 @@ function composerBlockedStateForScenario(scenario: ScenarioKey): ComposerBlocked
           checkAgain: idleAction,
           restore: idleAction,
         },
-        provisioning: null,
+        provisioningFailed: null,
         cloudStatus: null,
         cloudRuntime: null,
       });
     case "cloud-first-runtime":
       return resolveComposerBlockedState({
         directoryMissing: null,
-        provisioning: null,
+        provisioningFailed: null,
         cloudStatus: cloudStatusInput(CLOUD_STATUS_FIRST_RUNTIME),
         cloudRuntime: null,
       });
     case "cloud-provisioning":
       return resolveComposerBlockedState({
         directoryMissing: null,
-        provisioning: null,
+        provisioningFailed: null,
         cloudStatus: cloudStatusInput(CLOUD_STATUS_PROVISIONING),
         cloudRuntime: null,
       });
     case "cloud-applying-files":
       return resolveComposerBlockedState({
         directoryMissing: null,
-        provisioning: null,
+        provisioningFailed: null,
         cloudStatus: cloudStatusInput(CLOUD_STATUS_APPLYING_FILES),
         cloudRuntime: null,
       });
     case "cloud-blocked":
       return resolveComposerBlockedState({
         directoryMissing: null,
-        provisioning: null,
+        provisioningFailed: null,
         cloudStatus: cloudStatusInput(CLOUD_STATUS_BLOCKED),
         cloudRuntime: null,
       });
     case "cloud-error":
       return resolveComposerBlockedState({
         directoryMissing: null,
-        provisioning: null,
+        provisioningFailed: null,
         cloudStatus: cloudStatusInput(CLOUD_STATUS_ERROR),
         cloudRuntime: null,
       });
     case "cloud-reconnecting":
       return resolveComposerBlockedState({
         directoryMissing: null,
-        provisioning: null,
+        provisioningFailed: null,
         cloudStatus: null,
         cloudRuntime: {
           phase: CLOUD_RUNTIME_RECONNECTING.phase,
@@ -137,7 +149,7 @@ function composerBlockedStateForScenario(scenario: ScenarioKey): ComposerBlocked
     case "cloud-reconnect-error":
       return resolveComposerBlockedState({
         directoryMissing: null,
-        provisioning: null,
+        provisioningFailed: null,
         cloudStatus: null,
         cloudRuntime: {
           phase: CLOUD_RUNTIME_RECONNECT_ERROR.phase,

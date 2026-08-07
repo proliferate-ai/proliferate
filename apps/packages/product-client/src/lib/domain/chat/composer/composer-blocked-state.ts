@@ -24,10 +24,19 @@ export interface ComposerBlockedActionState {
   disabled: boolean;
 }
 
+/** Confirmation dialog copy for an irreversible action; the control row
+ * interposes a `ConfirmationDialog` before `onSelect` runs. */
+export interface ComposerBlockedActionConfirmation {
+  title: string;
+  description: string;
+  confirmLabel: string;
+}
+
 export interface ComposerBlockedActionPresentation extends ComposerBlockedActionState {
   key: string;
   label: string;
   variant: ComposerBlockedActionVariant;
+  confirmation: ComposerBlockedActionConfirmation | null;
 }
 
 export interface ComposerBlockedPresentation {
@@ -50,10 +59,6 @@ export type ComposerBlockedState =
     restore: ComposerBlockedActionState | null;
   }
   | {
-    kind: "provisioning";
-    message: string;
-  }
-  | {
     kind: "provisioning-failed";
     message: string;
     back: ComposerBlockedActionState;
@@ -68,6 +73,9 @@ export type ComposerBlockedState =
     message: string;
     primaryActionLabel: string | null;
     primaryAction: ComposerBlockedActionState | null;
+    /** Present when the primary action is irreversible (lost-workspace
+     * delete) and must be confirmed before it fires. */
+    primaryActionConfirmation: ComposerBlockedActionConfirmation | null;
   }
   | {
     kind: "runtime-connecting";
@@ -87,7 +95,7 @@ export type ComposerBlockedState =
 // ---------------------------------------------------------------------------
 // Raw per-source inputs. The hook populates whichever buckets its underlying
 // data supports; at most one of the workspace-status-panel-derived buckets
-// (directoryMissing/provisioning/cloudStatus) is non-null at a time (their
+// (directoryMissing/provisioningFailed/cloudStatus) is non-null at a time (their
 // source, use-workspace-status-panel-state, already resolves one kind), but
 // `cloudRuntime` is independent, so the resolver still enforces precedence
 // explicitly rather than assuming exclusivity.
@@ -102,8 +110,11 @@ export interface ComposerBlockedDirectoryMissingInput {
   restore: ComposerBlockedActionState;
 }
 
-export interface ComposerBlockedProvisioningInput {
-  isFailed: boolean;
+/** Populated only for a FAILED pending entry. In-flight provisioning is
+ * deliberately not a takeover: availability keeps the composer enabled so
+ * the first prompt can be typed and queued against the pending workspace
+ * (design rule: non-blocking ambient states never take over the composer). */
+export interface ComposerBlockedProvisioningFailedInput {
   message: string;
   back: ComposerBlockedActionState;
   retry: ComposerBlockedActionState;
@@ -114,6 +125,7 @@ export interface ComposerBlockedCloudStatusInput {
   message: string;
   primaryActionLabel: string | null;
   primaryAction: ComposerBlockedActionState | null;
+  primaryActionConfirmation: ComposerBlockedActionConfirmation | null;
 }
 
 export interface ComposerBlockedCloudRuntimeInput {
@@ -125,18 +137,20 @@ export interface ComposerBlockedCloudRuntimeInput {
 
 export interface ComposerBlockedStateInput {
   directoryMissing: ComposerBlockedDirectoryMissingInput | null;
-  provisioning: ComposerBlockedProvisioningInput | null;
+  provisioningFailed: ComposerBlockedProvisioningFailedInput | null;
   cloudStatus: ComposerBlockedCloudStatusInput | null;
   cloudRuntime: ComposerBlockedCloudRuntimeInput | null;
 }
 
 /**
- * Precedence: worktree/local directory missing outranks everything else
- * (nothing about the workspace is actionable while the checkout is gone);
- * then cloud/cowork provisioning; then the richer cloud-status screen; then
- * a live cloud runtime that has dropped out of "ready". This mirrors the
- * retired ambient-slot ordering (workspace-status panel before
- * cloud-runtime panel).
+ * Precedence: the workspace-status-panel-derived buckets first (their
+ * source, use-workspace-status-panel-state, already yields at most one of
+ * directoryMissing/provisioningFailed/cloudStatus — a pending entry
+ * resolves before a missing directory there, so the relative order of the
+ * first three arms is a tiebreak that cannot fire in practice), then a live
+ * cloud runtime that has dropped out of "ready". This mirrors the retired
+ * ambient-slot ordering (workspace-status panel before cloud-runtime
+ * panel).
  */
 export function resolveComposerBlockedState(
   input: ComposerBlockedStateInput,
@@ -152,20 +166,24 @@ export function resolveComposerBlockedState(
     };
   }
 
-  if (input.provisioning) {
-    const { isFailed, message, back, retry } = input.provisioning;
-    if (isFailed) {
-      return { kind: "provisioning-failed", message, back, retry };
-    }
-    return { kind: "provisioning", message };
+  if (input.provisioningFailed) {
+    const { message, back, retry } = input.provisioningFailed;
+    return { kind: "provisioning-failed", message, back, retry };
   }
 
   if (input.cloudStatus) {
-    const { mode, message, primaryActionLabel, primaryAction } = input.cloudStatus;
+    const { mode, message, primaryActionLabel, primaryAction, primaryActionConfirmation } =
+      input.cloudStatus;
     if (mode === "pending") {
       return { kind: "cloud-pending", message };
     }
-    return { kind: "cloud-attention", message, primaryActionLabel, primaryAction };
+    return {
+      kind: "cloud-attention",
+      message,
+      primaryActionLabel,
+      primaryAction,
+      primaryActionConfirmation,
+    };
   }
 
   if (input.cloudRuntime) {
@@ -191,8 +209,9 @@ function action(
   label: string,
   variant: ComposerBlockedActionVariant,
   state: ComposerBlockedActionState,
+  confirmation: ComposerBlockedActionConfirmation | null = null,
 ): ComposerBlockedActionPresentation {
-  return { key, label, variant, ...state };
+  return { key, label, variant, confirmation, ...state };
 }
 
 export function presentComposerBlockedState(
@@ -209,8 +228,6 @@ export function presentComposerBlockedState(
           ...(state.restore ? [action("restore", "Restore worktree", "primary", state.restore)] : []),
         ],
       };
-    case "provisioning":
-      return { icon: "spinner", tone: "faint", message: state.message, actions: [] };
     case "provisioning-failed":
       return {
         icon: "alert",
@@ -229,7 +246,13 @@ export function presentComposerBlockedState(
         tone: "destructive",
         message: state.message,
         actions: state.primaryAction && state.primaryActionLabel
-          ? [action("primary", state.primaryActionLabel, "primary", state.primaryAction)]
+          ? [action(
+            "primary",
+            state.primaryActionLabel,
+            "primary",
+            state.primaryAction,
+            state.primaryActionConfirmation,
+          )]
           : [],
       };
     case "runtime-connecting":

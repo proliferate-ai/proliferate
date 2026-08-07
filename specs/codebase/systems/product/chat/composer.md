@@ -269,15 +269,21 @@ chat input enabled.
 
 **Blocked-status composer takeover** (`useComposerBlockedState` +
 `lib/domain/chat/composer/composer-blocked-state.ts`): when a persistent
-condition blocks chat — worktree/local checkout missing, cloud/cowork
-provisioning (or its failure), the cloud workspace-status screen demanding
-attention, or a live cloud runtime out of `ready` — `ChatInput` replaces the
-draft textarea with a one-line status (`ComposerBlockedStatusLine`) and swaps
-the control row for the state's recovery actions
-(`ComposerBlockedControlRow`); send stays disabled. Precedence: directory
-missing, then provisioning, then cloud status, then runtime. Cowork threads
-suppress the takeover via `suppressWorkspaceTakeover` exactly as they used to
-suppress the ambient workspace-status panel.
+condition blocks chat — worktree/local checkout missing, a FAILED
+cloud/cowork provisioning attempt, the cloud workspace-status screen
+demanding attention, or a live cloud runtime out of `ready` — `ChatInput`
+replaces the draft textarea with a one-line status
+(`ComposerBlockedStatusLine`) and swaps the control row for the state's
+recovery actions (`ComposerBlockedControlRow`); send stays disabled with the
+blocked message as its reason, and irreversible actions (lost-workspace
+delete) confirm first. In-flight (non-failed) provisioning is deliberately
+NOT a takeover: availability keeps the composer enabled so the first prompt
+can be typed and queued against the pending workspace. The panel-derived
+buckets are mutually exclusive upstream (`use-workspace-status-panel-state`
+yields one kind, resolving a pending entry before a missing directory); the
+resolver then prefers any panel bucket over the runtime bucket. Cowork
+threads suppress the takeover via `suppressWorkspaceTakeover` exactly as
+they used to suppress the ambient workspace-status panel.
 
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: outbound work, active agent state, or attached context/parallel
