@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type ClipboardEvent,
   type MouseEvent,
 } from "react";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -51,7 +50,7 @@ import { ChatComposerSurface } from "#product/components/workspace/chat/composer
 import { Input } from "#product/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
-import { handlePromptAttachmentPaste } from "#product/lib/domain/chat/composer/prompt-attachment-paste";
+import { useChatInputPaste } from "#product/hooks/chat/ui/use-chat-input-paste";
 import type { PromptAttachmentPreviewHandler } from "#product/components/workspace/chat/content/PromptContentRenderer";
 
 const CHAT_INPUT_ATTACHMENT_ACCEPT =
@@ -140,6 +139,10 @@ export function ChatInput({
     && !areRuntimeControlsDisabled
     && !isSubmitting
     && attachments.canAttachFiles;
+  const { handleFilePasteCapture, handlePaste } = useChatInputPaste({
+    attachments,
+    canAcceptPastedAttachments,
+  });
   const onSubmit = useCallback(async () => {
     // End the typing burst NOW so the transcript renders urgently: the
     // composer clearing and the sent message appearing must be one frame.
@@ -250,23 +253,6 @@ export function ChatInput({
     [openAttachmentPreview],
   );
 
-  const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
-    // The editor owns formatted Markdown paste first. Once it has imported a
-    // list or link, do not reinterpret the same clipboard text as an
-    // attachment at the composer surface.
-    const shouldPreventDefault = handlePromptAttachmentPaste({
-      defaultPrevented: event.defaultPrevented,
-      canAcceptAttachments: canAcceptPastedAttachments,
-      fileCount: event.clipboardData.files.length,
-      plainText: event.clipboardData.getData("text/plain"),
-      addFiles: () => attachments.addFiles(event.clipboardData.files),
-      addTextPaste: attachments.addTextPaste,
-    });
-    if (shouldPreventDefault) {
-      event.preventDefault();
-    }
-  }, [attachments, canAcceptPastedAttachments]);
-
   const handleComposerSurfaceClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     // Portal-rendered popovers (model picker, etc.) bubble clicks through the
     // React tree even though their DOM lives outside the surface — those
@@ -327,6 +313,7 @@ export function ChatInput({
         <ChatComposerSurface
           overflowMode="clip"
           onClick={handleComposerSurfaceClick}
+          onPasteCapture={handleFilePasteCapture}
           onPaste={handlePaste}
         >
           <form className="relative flex flex-col">

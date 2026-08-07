@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createTextDraft,
@@ -12,6 +12,7 @@ import { ComposerCommandEditor } from "#product/components/workspace/chat/input/
 import {
   isComposerFormattedPaste,
   isComposerLinkPaste,
+  isComposerMarkdownCodeBlockPaste,
   isComposerMarkdownListPaste,
   isExactHttpsComposerPaste,
 } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
@@ -362,6 +363,97 @@ describe("ComposerCommandEditor", () => {
     expect(textarea.querySelector("ul li")?.textContent).toContain("item");
   });
 
+  it("keeps inline command discovery closed while editing a code block", async () => {
+    slashCommandMock.commands = [createSlashCommand("review", "Review the current changes")];
+    const onSubmit = vi.fn();
+    const { container, textarea } = renderEditor({
+      draft: createTextDraft("```\n/rev\n```"),
+      onSubmit,
+    });
+    const textNode = textarea.querySelector("code [data-lexical-text]")?.firstChild;
+    expect(textNode).toBeTruthy();
+    const range = document.createRange();
+    range.setStart(textNode!, 4);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    await act(async () => {
+      fireEvent(document, new Event("selectionchange"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).not.toContain("Review the current changes");
+    });
+    expect(fireEvent.keyDown(textarea, { key: "Enter" })).toBe(false);
+    expect(slashCommandMock.selectedCount).toBe(0);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces a file trigger after a code block without shifting its range", async () => {
+    fileMentionMock.results = [
+      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    ];
+    const onDraftChange = vi.fn();
+    const { textarea } = renderEditor({
+      draft: createTextDraft("```\nconst ready = true;\n```\n\n@set"),
+      onDraftChange,
+    });
+    const textNode = textarea.querySelector("p [data-lexical-text]")?.firstChild;
+    expect(textNode?.textContent).toBe("@set");
+    const range = document.createRange();
+    range.setStart(textNode!, 4);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    await act(async () => {
+      fireEvent(document, new Event("selectionchange"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(fileMentionMock.lastQuery).toBe("set"));
+    fireEvent.keyDown(textarea, { key: "Enter", repeat: false });
+    await waitFor(() => expect(onDraftChange.mock.calls.some(
+      ([draft]) => serializeChatDraftToPrompt(draft)
+        === "```\nconst ready = true;\n```\n\n[setup.md](docs/setup.md) ",
+    )).toBe(true));
+  });
+
+  it("replaces a file trigger before a code block without consuming the block", async () => {
+    fileMentionMock.results = [
+      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    ];
+    const onDraftChange = vi.fn();
+    const { textarea } = renderEditor({
+      draft: createTextDraft("@set\n\n```\nconst ready = true;\n```"),
+      onDraftChange,
+    });
+    const textNode = textarea.querySelector("p [data-lexical-text]")?.firstChild;
+    expect(textNode?.textContent).toBe("@set");
+    const range = document.createRange();
+    range.setStart(textNode!, 4);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    await act(async () => {
+      fireEvent(document, new Event("selectionchange"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(fileMentionMock.lastQuery).toBe("set"));
+    fireEvent.keyDown(textarea, { key: "Enter", repeat: false });
+    await waitFor(() => expect(onDraftChange.mock.calls.some(
+      ([draft]) => serializeChatDraftToPrompt(draft)
+        === "[setup.md](docs/setup.md) \n\n```\nconst ready = true;\n```",
+    )).toBe(true));
+  });
+
   it("recognizes exact HTTPS URLs and complete pasted Markdown HTTPS links", () => {
     expect(isExactHttpsComposerPaste("https://example.com/path?q=1")).toBe(true);
     expect(isExactHttpsComposerPaste("http://example.com")).toBe(false);
@@ -375,7 +467,16 @@ describe("ComposerCommandEditor", () => {
     expect(isComposerMarkdownListPaste("1. first\n2. second")).toBe(true);
     expect(isComposerMarkdownListPaste("a hyphen - inside prose")).toBe(false);
     expect(isComposerMarkdownListPaste("-")).toBe(false);
+    expect(isComposerMarkdownCodeBlockPaste("```\nconst ready = true;\n```")).toBe(true);
+    expect(isComposerMarkdownCodeBlockPaste("```ts\nconst ready = true;\n````")).toBe(true);
+    expect(isComposerMarkdownCodeBlockPaste("```c++\nconst ready = true;\n```")).toBe(true);
+    expect(isComposerMarkdownCodeBlockPaste("```python linenos\nprint('ok')\n```")).toBe(true);
+    expect(isComposerMarkdownCodeBlockPaste("````\nconst ready = true;\n```")).toBe(false);
+    expect(isComposerMarkdownCodeBlockPaste("```\nconst ready = true;")).toBe(false);
+    expect(isComposerMarkdownCodeBlockPaste("```const ready = true;```")).toBe(false);
     expect(isComposerFormattedPaste("- first")).toBe(true);
+    expect(isComposerFormattedPaste("```\nconst ready = true;\n```")).toBe(true);
+    expect(isComposerFormattedPaste("```\nconst ready = true;")).toBe(true);
 
     const { textarea: typed } = renderEditor({
       draft: createTextDraft("[Docs](https://example.com)"),
