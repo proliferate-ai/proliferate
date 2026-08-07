@@ -3,7 +3,7 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { CoworkArtifactTurnCard } from "#product/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import {
   ToolCallSummary,
@@ -16,9 +16,7 @@ import {
 import {
   blockBelongsToCompletedHistory,
 } from "#product/domain/chats/transcript/transcript-rendering";
-import { formatWorkedForDuration } from "#product/domain/chats/transcript/transcript-work-duration";
 import type {
-  CompletedHistorySummary,
   TurnDisplayBlock,
   TurnPresentation,
 } from "#product/domain/chats/transcript/transcript-presentation";
@@ -30,7 +28,13 @@ import { TranscriptTreeNode } from "#product/components/workspace/chat/transcrip
 import {
   formatCollapsedSummary,
 } from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
-import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import {
+  CompletedHistorySequence,
+  resolveCompletedHistoryDisclosureLabel,
+  TURN_ITEM_GAP_CLASS,
+  useCompletedHistoryTransition,
+} from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { useTurnWorkspaceReceiptSlot } from "#product/components/workspace/chat/transcript/TurnWorkspaceReceiptSlot";
 import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
@@ -71,15 +75,8 @@ export function TurnItemSequence({
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   /**
    * The workspace-creation receipt, when this row hosts it. Renders as the
-   * first child inside the completed-history disclosure (collapsing with the
-   * rest of the turn's work) when this row owns that disclosure. Otherwise it
-   * renders at the position immediately before this row's first
-   * non-user-message block (or after all blocks when every block so far is a
-   * user message): inline, bare, while the turn is still streaming; once the
-   * turn completes, the receipt IS a tool call, so that position instead
-   * hosts a synthetic "Worked for Ns" disclosure containing only the receipt
-   * — identical in appearance to a turn whose real history is one tool call
-   * (see `hostsSynthesizedReceiptDisclosure`).
+   * first child inside the completed-history disclosure when this row owns
+   * one; otherwise see TurnWorkspaceReceiptSlot for its standalone position.
    */
   workspaceReceipt?: ReactNode;
 }) {
@@ -130,41 +127,21 @@ export function TurnItemSequence({
   // footerless fallback card. This sequence only consumes that index.
   let hasRenderedCompletedHistory = false;
 
-  // Workspace-creation receipt hosting: when this row owns the
-  // completed-history disclosure, the receipt folds inside it (see
-  // CompletedHistorySequence below) instead of rendering inline here.
-  const hostsCompletedHistoryDisclosure = !!visiblePresentation.completedHistorySummary;
-  const showInlineWorkspaceReceipt = !!workspaceReceipt && !hostsCompletedHistoryDisclosure;
-  const inlineWorkspaceReceiptBlockKey = showInlineWorkspaceReceipt
-    ? resolveLeadingNonUserMessageBlockKey(visiblePresentation, transcript)
-    : null;
-  const renderInlineWorkspaceReceiptAtEnd = showInlineWorkspaceReceipt
-    && inlineWorkspaceReceiptBlockKey === null;
-  // The receipt IS a tool call: a completed turn with no other history of its
-  // own (no completedHistorySummary — e.g. prose-only) must still present as
-  // a "Worked for Ns" disclosure, not a bare inline line. Streaming turns
-  // (no completedAt yet) keep the plain inline rendering above; they get no
-  // synthetic disclosure since the "Worked for" duration isn't final yet.
-  const shouldSynthesizeReceiptDisclosure = hostsSynthesizedReceiptDisclosure({
-    hasWorkspaceReceipt: showInlineWorkspaceReceipt,
-    completedHistorySummary: visiblePresentation.completedHistorySummary,
-    turnCompletedAt: turn.completedAt,
+  // Workspace-creation receipt hosting: folds into the completed-history
+  // disclosure below when this row owns one; see TurnWorkspaceReceiptSlot
+  // for its standalone position/disclosure logic otherwise.
+  const {
+    inlineWorkspaceReceiptBlockKey,
+    renderInlineWorkspaceReceiptAtEnd,
+    workspaceReceiptSlot,
+  } = useTurnWorkspaceReceiptSlot({
+    workspaceReceipt,
+    presentation: visiblePresentation,
+    transcript,
+    turn,
+    completedHistoryLabel,
+    tailAssistantProseRootId,
   });
-  const animateReceiptDisclosure = useCompletedHistoryTransition(shouldSynthesizeReceiptDisclosure);
-  const workspaceReceiptSlot = shouldSynthesizeReceiptDisclosure
-    ? (
-      <ToolCallSummary
-        label={resolveCompletedHistoryDisclosureLabel(turn, completedHistoryLabel)}
-        summary={formatCollapsedSummary({ messages: 0, toolCalls: 1, subagents: 0 })}
-        showWorkDivider={tailAssistantProseRootId !== null}
-        animateCompletion={animateReceiptDisclosure}
-        borderless
-        renderChildren={() => (
-          <CompletedHistorySequence>{workspaceReceipt}</CompletedHistorySequence>
-        )}
-      />
-    )
-    : workspaceReceipt;
 
   return (
     <>
@@ -280,20 +257,6 @@ export function constrainTurnItemSequencePresentation(
   };
 }
 
-function useCompletedHistoryTransition(eligible: boolean): boolean {
-  const wasEligibleRef = useRef(eligible);
-  const [transitionClaimed, setTransitionClaimed] = useState(false);
-
-  useLayoutEffect(() => {
-    if (eligible && !wasEligibleRef.current) {
-      setTransitionClaimed(true);
-    }
-    wasEligibleRef.current = eligible;
-  }, [eligible]);
-
-  return transitionClaimed;
-}
-
 export function shouldRenderCompletedArtifactCards({
   completedArtifactCount,
   presentation,
@@ -337,68 +300,6 @@ export function resolveTurnItemFrontierBlockKey(
   }
 
   return frontierBlock ? getTurnDisplayBlockKey(frontierBlock) : null;
-}
-
-/**
- * Finds the block key of the first display block that is not a user-message
- * item — the position where an inline workspace-creation receipt should
- * render (immediately before it). Returns null when every block so far is a
- * user message (or there are no blocks yet), meaning the receipt should
- * render after all of them instead.
- */
-export function resolveLeadingNonUserMessageBlockKey(
-  presentation: TurnPresentation,
-  transcript: TranscriptState,
-): string | null {
-  for (const block of presentation.displayBlocks) {
-    if (block.kind === "item" && transcript.itemsById[block.itemId]?.kind === "user_message") {
-      continue;
-    }
-    return getTurnDisplayBlockKey(block);
-  }
-  return null;
-}
-
-export function CompletedHistorySequence({ children }: { children: ReactNode }) {
-  return (
-    <div
-      data-completed-history-sequence
-      className={`flex flex-col ${TURN_ITEM_GAP_CLASS}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function resolveCompletedHistoryDisclosureLabel(
-  turn: Pick<TurnRecord, "startedAt" | "completedAt">,
-  override: string | null | undefined,
-): string {
-  return override
-    ?? formatWorkedForDuration(turn.startedAt, turn.completedAt)
-    ?? "Worked";
-}
-
-/**
- * Whether a workspace-creation receipt must be hosted inside a synthetic
- * "Worked for Ns" disclosure rather than rendered as a bare inline line. This
- * happens exactly when: the row hosts a receipt, the turn has no history of
- * its own to host the real completed-history disclosure, and the turn is
- * completed (so its "Worked for" duration is final). Exported so callers
- * that separately decide whether a real completed-history disclosure exists
- * for this turn (e.g. to avoid double-rendering a "Worked for"/stopped-notice
- * line) can account for the synthetic one too.
- */
-export function hostsSynthesizedReceiptDisclosure({
-  hasWorkspaceReceipt,
-  completedHistorySummary,
-  turnCompletedAt,
-}: {
-  hasWorkspaceReceipt: boolean;
-  completedHistorySummary: CompletedHistorySummary | null;
-  turnCompletedAt: string | null | undefined;
-}): boolean {
-  return hasWorkspaceReceipt && completedHistorySummary === null && !!turnCompletedAt;
 }
 
 function TranscriptFragment({

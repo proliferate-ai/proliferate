@@ -14,13 +14,13 @@ import {
 } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import { buildTurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 import {
-  CompletedHistorySequence,
   constrainTurnItemSequencePresentation,
-  resolveLeadingNonUserMessageBlockKey,
   resolveTurnItemFrontierBlockKey,
   shouldRenderCompletedArtifactCards,
   TurnItemSequence,
 } from "#product/components/workspace/chat/transcript/TurnItemSequence";
+import { CompletedHistorySequence } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { resolveLeadingNonUserMessageBlockKey } from "#product/components/workspace/chat/transcript/TurnWorkspaceReceiptSlot";
 import type { TurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 
 vi.mock("./TranscriptTreeNode", () => ({

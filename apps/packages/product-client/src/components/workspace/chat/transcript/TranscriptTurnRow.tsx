@@ -15,10 +15,8 @@ import {
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { goalMetMarkerLabel } from "#product/domain/activity/goal";
 import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
-import {
-  hostsSynthesizedReceiptDisclosure,
-  TurnItemSequence,
-} from "#product/components/workspace/chat/transcript/TurnItemSequence";
+import { TurnItemSequence } from "#product/components/workspace/chat/transcript/TurnItemSequence";
+import { hostsSynthesizedReceiptDisclosure } from "#product/components/workspace/chat/transcript/TurnWorkspaceReceiptSlot";
 import {
   findTailAssistantProseRootId,
   getAssistantProseContent,

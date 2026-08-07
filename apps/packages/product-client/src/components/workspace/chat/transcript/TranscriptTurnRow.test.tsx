@@ -10,7 +10,7 @@ import {
   RECENT_ASSISTANT_REVEAL_WINDOW_MS,
   shouldHoldAssistantRevealFrontier,
 } from "#product/hooks/chat/ui/use-assistant-reveal-frontier";
-import { resolveCompletedHistoryDisclosureLabel } from "#product/components/workspace/chat/transcript/TurnItemSequence";
+import { resolveCompletedHistoryDisclosureLabel } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 
 describe("resolveTranscriptTurnDiffPanelKind", () => {
   it("uses current git diffs only for the latest completed turn row", () => {
