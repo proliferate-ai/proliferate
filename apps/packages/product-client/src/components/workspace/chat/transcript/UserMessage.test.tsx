@@ -85,6 +85,22 @@ describe("UserMessage", () => {
     expect(container.querySelector("[data-file-path-link]")?.textContent).toContain("file");
   });
 
+  it("renders an unlabeled single-line fence as a code block in the sent bubble", () => {
+    const { container } = render(
+      <UserMessage
+        sessionId="session-1"
+        content={"```\nconst ready = true;\n```"}
+        contentParts={[]}
+      />,
+    );
+
+    expect(container.querySelector('[data-markdown-code-block="true"]')).toBeTruthy();
+    expect(container.querySelector('[data-markdown-inline-code="true"]')).toBeNull();
+    expect(container.querySelector("[data-markdown-code-content]")?.textContent).toContain(
+      "const ready = true;",
+    );
+  });
+
   it("does not execute raw HTML or unsafe Markdown links", () => {
     const { container } = render(
       <UserMessage

@@ -20,10 +20,10 @@ import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ComposerCaretPlugin } from "#product/components/workspace/chat/input/ComposerCaretPlugin";
+import { ComposerFencedCodePlugin } from "#product/components/workspace/chat/input/ComposerFencedCodePlugin";
 import {
   COMPOSER_INPUT_TRANSFORMERS,
   COMPOSER_NODES,
@@ -32,6 +32,7 @@ import {
   type ComposerEditorContext,
 } from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import { ComposerLinkPastePlugin } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
+import { ComposerMarkdownShortcutPlugin } from "#product/components/workspace/chat/input/ComposerMarkdownShortcutPlugin";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
 import type { ComposerKeyboardEventLike } from "#product/lib/domain/chat/composer/composer-keyboard";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
@@ -89,6 +90,7 @@ export function ComposerRichTextEditor({
     theme: {
       paragraph: "m-0 min-h-[1lh]",
       text: { bold: "font-semibold", italic: "italic" },
+      code: "box-border my-2 block w-full min-w-0 max-w-full overflow-x-auto whitespace-pre rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))] p-3 font-mono text-chat font-normal text-foreground",
       list: {
         ul: "list-disc pl-5",
         ol: "list-decimal pl-5",
@@ -163,7 +165,8 @@ export function ComposerRichTextEditor({
       </div>
       <HistoryPlugin />
       <ListPlugin />
-      <MarkdownShortcutPlugin transformers={INPUT_TRANSFORMERS} />
+      <ComposerMarkdownShortcutPlugin transformers={INPUT_TRANSFORMERS} />
+      <ComposerFencedCodePlugin />
       <ComposerBehaviorPlugin
         canSubmit={canSubmit}
         onSubmit={onSubmit}
