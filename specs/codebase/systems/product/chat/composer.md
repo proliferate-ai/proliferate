@@ -41,13 +41,13 @@ ChatView
     │     ├── ConnectedMcpElicitationCard   (MCP form)
     │     └── TodoTrackerPanel              (Codex/Gemini structured plan)
     ├── attachedSlot
-    │     ├── WorkspaceArrivalAttachedPanel (directory-missing/cloud-pending/cloud-status)
-    │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
     │     ├── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
     │     └── WorkspaceActivityComposerCard (Git/PR summary and source-control actions)
     ├── ChatInput
     │   └── ChatComposerSurface
     │       └── form: ComposerCommandEditor + ModelSelector + SessionConfigControls + ChatComposerActions
+    │           (or the blocked-status takeover: ComposerBlockedStatusLine +
+    │            ComposerBlockedControlRow while a persistent condition blocks chat)
     └── footerSlot
         └── reserved for product-specific footer context when present
 ```
@@ -243,9 +243,9 @@ this order:
 2. **`activeSlot`** — the active agent state. Permission approvals, user-input
    questions, and MCP elicitation forms take precedence. If there is no blocking
    request, this slot may show `TodoTrackerPanel`.
-3. **`attachedSlot`** — ambient attached context and parallel work:
-   workspace/worktree/runtime panels plus review agents and linked
-   same-workspace subagents.
+3. **`attachedSlot`** — parallel delegated work: review agents and linked
+   same-workspace subagents. Persistent workspace/runtime blocking state is
+   not an attached panel; it takes over the composer itself (below).
 
 Review status lives in `attachedSlot`, not in active state. The shared
 `DelegatedWorkComposerControl` owns the compact `Agents` summary-control +
@@ -267,6 +267,18 @@ finished result notice. This review-start gate is separate from chat input
 availability; `parent_revising` keeps review controls visible but leaves parent
 chat input enabled.
 
+**Blocked-status composer takeover** (`useComposerBlockedState` +
+`lib/domain/chat/composer/composer-blocked-state.ts`): when a persistent
+condition blocks chat — worktree/local checkout missing, cloud/cowork
+provisioning (or its failure), the cloud workspace-status screen demanding
+attention, or a live cloud runtime out of `ready` — `ChatInput` replaces the
+draft textarea with a one-line status (`ComposerBlockedStatusLine`) and swaps
+the control row for the state's recovery actions
+(`ComposerBlockedControlRow`); send stays disabled. Precedence: directory
+missing, then provisioning, then cloud status, then runtime. Cowork threads
+suppress the takeover via `suppressWorkspaceTakeover` exactly as they used to
+suppress the ambient workspace-status panel.
+
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: outbound work, active agent state, or attached context/parallel
 work. Add the precedence decision to `resolve-dock-slots.ts` and the shared DOM
@@ -282,8 +294,8 @@ prompt panel. `outboundSlot` must render before `activeSlot`; both stack above
 attached context/parallel work when present.
 
 The workspace-activity cap is a separate Git/PR surface. It renders last in
-the attached stack, after ambient context, delegated work, and session
-goal/activity, so it joins directly to the composer. Its collapsed trigger is
+the attached stack, after delegated work and session goal/activity, so it
+joins directly to the composer. Its collapsed trigger is
 text-only, has no disclosure arrow, and shows at most three ordered Git/PR
 facts: conflicts or failing checks first, then sync and changed-file state,
 then a healthy branch/clean fallback. It never shows filenames, diff stats, or
