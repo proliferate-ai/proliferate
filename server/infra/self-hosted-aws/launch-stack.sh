@@ -29,7 +29,7 @@ STACK_NAME="proliferate-self-hosted"
 VERSION=""
 SITE_ADDRESS=""
 EVAL_MODE=0
-INSTANCE_TYPE="t4g.small"
+INSTANCE_TYPE="t3.small"
 REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
 GH_CLIENT_ID=""
 GH_CLIENT_SECRET=""
@@ -49,7 +49,7 @@ Options:
   --version X.Y.Z                Server release to launch (default: newest server-v*).
   --site-address HOST            Public hostname (required unless --eval).
   --eval                         No domain; sslip.io host from the Elastic IP.
-  --instance-type TYPE           t4g.small | t4g.medium | t4g.large (default: t4g.small).
+  --instance-type TYPE           t3.small | t3.medium | t3.large (default: t3.small).
   --region REGION                AWS region (default: from your AWS config).
   --github-oauth-client-id ID    GitHub OAuth client id (optional).
   --github-oauth-client-secret S GitHub OAuth client secret (optional).

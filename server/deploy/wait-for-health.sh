@@ -115,7 +115,7 @@ read_env_value() {
     return 0
   fi
 
-  line="$(grep -m1 "^${key}=" "$file" || true)"
+  line="$(grep "^${key}=" "$file" | tail -n1 || true)"
   if [[ -z "$line" ]]; then
     return 0
   fi
@@ -146,6 +146,8 @@ site_url_from_address() {
 wait_for_url() {
   local target="$1"
   local url="$2"
+  local insecure="${3:-false}"
+  local insecure_flag=()
   local attempt=1
   local now
   local remaining
@@ -153,6 +155,8 @@ wait_for_url() {
   local connect_timeout
   local sleep_seconds
   local target_deadline
+
+  [[ "$insecure" == "true" ]] && insecure_flag=(-k)
 
   health_progress_marker "$target" started
   target_deadline=$(( $(date +%s) + TARGET_TIMEOUT_SECONDS ))
@@ -173,7 +177,7 @@ wait_for_url() {
     (( request_timeout > remaining )) && request_timeout="$remaining"
     (( connect_timeout > request_timeout )) && connect_timeout="$request_timeout"
 
-    if curl -fsS --connect-timeout "$connect_timeout" --max-time "$request_timeout" "$url" >/dev/null; then
+    if curl -fsS "${insecure_flag[@]}" --connect-timeout "$connect_timeout" --max-time "$request_timeout" "$url" >/dev/null 2>&1; then
       health_progress_marker "$target" completed
       return 0
     fi
@@ -273,7 +277,19 @@ fi
 wait_for_url local "$HEALTHCHECK_URL"
 
 if [[ "$SKIP_PUBLIC" == "false" && -n "$PUBLIC_HEALTHCHECK_URL" ]]; then
-  wait_for_url public "$PUBLIC_HEALTHCHECK_URL"
+  # SITE_ADDRESS=localhost (the documented "local evaluation" mode) makes
+  # Caddy serve the public hostname off its internal CA, which curl won't
+  # trust by default; the public endpoint would otherwise fail every attempt
+  # with SSL errors even though the stack is healthy. Trust that internal CA
+  # for the public check only when the target host is localhost/127.0.0.1.
+  public_insecure="false"
+  public_host="${PUBLIC_HEALTHCHECK_URL#*://}"
+  public_host="${public_host%%/*}"
+  public_host="${public_host%%:*}"
+  case "$public_host" in
+    localhost | 127.0.0.1) public_insecure="true" ;;
+  esac
+  wait_for_url public "$PUBLIC_HEALTHCHECK_URL" "$public_insecure"
 fi
 
 print_setup_instructions

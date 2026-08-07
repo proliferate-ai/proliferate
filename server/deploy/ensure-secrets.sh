@@ -27,7 +27,7 @@ read_env_value() {
     return 0
   fi
 
-  line="$(grep -m1 "^${key}=" "$file" || true)"
+  line="$(grep "^${key}=" "$file" | tail -n1 || true)"
   if [[ -z "$line" ]]; then
     return 0
   fi

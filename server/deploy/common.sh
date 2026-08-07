@@ -13,9 +13,9 @@
 # --- env-file reading --------------------------------------------------------
 
 # proliferate_read_env <file> <key>: print the raw value of KEY= from an env
-# file (empty when the file or key is absent). Reads the first match only, so a
-# generated override that appends KEY= later would need a dedicated reader; the
-# deploy scripts never do that.
+# file (empty when the file or key is absent). Reads the LAST match, matching
+# typical env-file last-wins semantics (a duplicated KEY= appended lower in
+# the file overrides an earlier one).
 proliferate_read_env() {
   local file="$1"
   local key="$2"
@@ -25,7 +25,7 @@ proliferate_read_env() {
     return 0
   fi
 
-  line="$(grep -m1 "^${key}=" "$file" || true)"
+  line="$(grep "^${key}=" "$file" | tail -n1 || true)"
   if [[ -z "$line" ]]; then
     return 0
   fi
