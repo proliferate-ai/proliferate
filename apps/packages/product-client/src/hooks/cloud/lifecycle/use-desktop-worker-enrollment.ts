@@ -26,6 +26,7 @@ const DESKTOP_WORKER_FAILURE_TOAST_ID = "desktop-worker-startup-failure";
 interface EnrollmentFailureNotification {
   identityKey: string;
   kind: DesktopWorkerStartupFailureKind;
+  cause: string;
 }
 
 // Enrollment retries are intentionally process-wide, so notification state is
@@ -47,8 +48,11 @@ function sameFailure(
   failure: EnrollmentFailureNotification | null,
   identity: string,
   kind: DesktopWorkerStartupFailureKind,
+  cause: string,
 ): boolean {
-  return failure?.identityKey === identity && failure.kind === kind;
+  return failure?.identityKey === identity
+    && failure.kind === kind
+    && failure.cause === cause;
 }
 
 function clearFailureNotification(identity?: string): void {
@@ -144,14 +148,25 @@ export function useDesktopWorkerEnrollment(
         }
         const notice = desktopWorkerStartupFailureNotice(error);
         if (
-          sameFailure(activeFailureNotification, nextIdentityKey, notice.kind)
-          || sameFailure(dismissedFailureNotification, nextIdentityKey, notice.kind)
+          sameFailure(
+            activeFailureNotification,
+            nextIdentityKey,
+            notice.kind,
+            notice.cause,
+          )
+          || sameFailure(
+            dismissedFailureNotification,
+            nextIdentityKey,
+            notice.kind,
+            notice.cause,
+          )
         ) {
           return;
         }
         const notification = {
           identityKey: nextIdentityKey,
           kind: notice.kind,
+          cause: notice.cause,
         };
         activeFailureNotification = notification;
         showErrorToast({
@@ -165,7 +180,14 @@ export function useDesktopWorkerEnrollment(
             setRetryNonce((nonce) => nonce + 1);
           },
           onDismiss: () => {
-            if (sameFailure(activeFailureNotification, nextIdentityKey, notice.kind)) {
+            if (
+              sameFailure(
+                activeFailureNotification,
+                nextIdentityKey,
+                notice.kind,
+                notice.cause,
+              )
+            ) {
               activeFailureNotification = null;
               dismissedFailureNotification = notification;
             }

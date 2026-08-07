@@ -367,6 +367,38 @@ describe("useDesktopWorkerEnrollment", () => {
     }
   });
 
+  it("refreshes the notification when a retry fails for a different cause", async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.ensureDesktopWorker
+        .mockImplementationOnce(async (_organizationId, _worker, deps) => {
+          deps.onFailure("control plane unavailable");
+          return false;
+        })
+        .mockImplementationOnce(async (_organizationId, _worker, deps) => {
+          deps.onFailure("worker process exited");
+          return false;
+        });
+      const harness = await loadEnrollmentHarness();
+
+      await act(async () => {
+        harness.signIn("user-a");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(harness.getErrorToastCalls()).toHaveLength(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(harness.getErrorToastCalls()).toHaveLength(2);
+      expect(harness.getErrorToastCalls()[1]?.[0]).toEqual(
+        expect.objectContaining({ cause: "worker process exited" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not resurface a dismissed failure during background retries", async () => {
     vi.useFakeTimers();
     try {
@@ -394,6 +426,41 @@ describe("useDesktopWorkerEnrollment", () => {
       });
       expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
       expect(harness.getErrorToastCalls()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resurfaces a dismissed notification when the failure cause changes", async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.ensureDesktopWorker
+        .mockImplementationOnce(async (_organizationId, _worker, deps) => {
+          deps.onFailure("control plane unavailable");
+          return false;
+        })
+        .mockImplementationOnce(async (_organizationId, _worker, deps) => {
+          deps.onFailure("worker process exited");
+          return false;
+        });
+      const harness = await loadEnrollmentHarness();
+
+      await act(async () => {
+        harness.signIn("user-a");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const notice = harness.getErrorToastCalls()[0]?.[0] as {
+        onDismiss: () => void;
+      };
+      act(() => notice.onDismiss());
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(harness.getErrorToastCalls()).toHaveLength(2);
+      expect(harness.getErrorToastCalls()[1]?.[0]).toEqual(
+        expect.objectContaining({ cause: "worker process exited" }),
+      );
     } finally {
       vi.useRealTimers();
     }
