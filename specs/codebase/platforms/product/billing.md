@@ -15,7 +15,7 @@ presentation.
 Fences, one owner per concern:
 
 - **Lifecycle owns the sandbox primitives; billing owns the math.**
-  [sandbox-lifecycle.md](../../FEATURE_DOCS/SANDBOX/lifecycle.md) names the events (create,
+  [sandbox-lifecycle.md](../../../FEATURE_DOCS/SANDBOX/lifecycle.md) names the events (create,
   resume, pause, kill) that open and close a `usage_segment`; this document
   owns what a segment costs, who it is attributed to, and every
   enforcement decision made from it. Lifecycle never computes a balance;
@@ -59,7 +59,7 @@ attribution paths that predate the default-organization cutover — see
 [Current gaps](#current-gaps).
 
 **The org-only subject target (#1564) is a later target, not the launch
-contract.** [sandbox-lifecycle.md](../../FEATURE_DOCS/SANDBOX/lifecycle.md#account-model) and
+contract.** [sandbox-lifecycle.md](../../../FEATURE_DOCS/SANDBOX/lifecycle.md#account-model) and
 [model-gateway.md](model-gateway.md#account-model) settle the further ruling
 that *orgs are the only billing subject*: no personal subject at all, one
 sandbox per `(user, organization)` with `organization_id` NOT NULL, and the
@@ -113,7 +113,7 @@ provider ids. An already-destroyed row's later exact-provider terminal
 evidence closes retained usage without reviving deletion state. The
 provider-event boundary itself is documented by the usage-fencing primitives
 in
-[`sandbox-lifecycle.md`](../../FEATURE_DOCS/SANDBOX/lifecycle.md#usage-fencing-the-billing-primitives)
+[`sandbox-lifecycle.md`](../../../FEATURE_DOCS/SANDBOX/lifecycle.md#usage-fencing-the-billing-primitives)
 (absorbed there from the retired `sandbox-provisioning.md` by #1564).
 
 **A2 — no orphaned spend.** Every closed segment is grant-covered,
@@ -565,7 +565,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `(owner_user_id, organization_id)`, `organization_id` NOT NULL, no
       stored subject) is the ruled direction that removes this hardcode; it
       landed as spec in #1564 and is owned by
-      [sandbox-lifecycle.md](../../FEATURE_DOCS/SANDBOX/lifecycle.md#current-gaps) — its gap
+      [sandbox-lifecycle.md](../../../FEATURE_DOCS/SANDBOX/lifecycle.md#current-gaps) — its gap
       list carries the migration steps. It is OUT of launch scope (Pablo,
       ruling 3, 2026-07-28) and stays a documented deferral here, not a
       silent fix.

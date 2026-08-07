@@ -1,2 +1,2 @@
 # Moved
-This document moved to [specs/FEATURE_DOCS/SANDBOX/gateway.md](../../../../FEATURE_DOCS/SANDBOX/gateway.md).
+This document moved to [specs/FEATURE_DOCS/SANDBOX/gateway.md](../../../FEATURE_DOCS/SANDBOX/gateway.md).
