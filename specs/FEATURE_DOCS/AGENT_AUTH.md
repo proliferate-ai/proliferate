@@ -55,7 +55,7 @@ where surface is `local` (desktop) or `cloud` (sandboxes) — the same user
 can run the gateway in cloud sandboxes and their native login on desktop.
 
 Three tables in
-[db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py):
+[db/models/cloud/agent_gateway.py](../../server/proliferate/db/models/cloud/agent_gateway.py):
 
 | Table | One row is | Scope | Key fields |
 | --- | --- | --- | --- |
@@ -76,11 +76,11 @@ Selection laws:
 
 - **Native is the absence of rows.** `source_kind` has exactly two stored
   values, `gateway` and `api_key`
-  ([constants/agent_gateway.py](../../../../server/proliferate/constants/agent_gateway.py)).
+  ([constants/agent_gateway.py](../../server/proliferate/constants/agent_gateway.py)).
   Zero enabled rows for a scope means the harness runs on its own login.
   `native` exists as a string only in org-policy allow-lists.
 - **Cardinality is a per-harness rule**, codified in
-  [selection_rules.py](../../../../server/proliferate/server/cloud/agent_gateway/selection_rules.py):
+  [selection_rules.py](../../server/proliferate/server/cloud/agent_gateway/selection_rules.py):
   claude, codex, grok, and cursor are single-source (at most one enabled
   row per scope — a radio); cursor's single source can only be `api_key`,
   because no gateway route exists for it; opencode is multi-source (a
@@ -95,13 +95,13 @@ Selection laws:
 - **Org policy gates writes, not launches.**
   `PUT …/selections/{harness}` runs every org the user belongs to
   through `_enforce_org_selection_policy`
-  ([service.py](../../../../server/proliferate/server/cloud/agent_gateway/service.py))
+  ([service.py](../../server/proliferate/server/cloud/agent_gateway/service.py))
   and rejects a violating write with 403 `policy_violation`. A policy
   tightened after the fact shows up in the admin violations report
   (`GET /policy/violations`), not as a launch failure.
 - **Every selection write re-materializes.** The PUT handler ends by
   calling `schedule_materialize_agent_auth`
-  ([service.py:250](../../../../server/proliferate/server/cloud/agent_gateway/service.py)),
+  ([service.py:250](../../server/proliferate/server/cloud/agent_gateway/service.py)),
   so the stored truth and the delivered document never drift for longer
   than one materialization pass.
 
@@ -115,7 +115,7 @@ toggles a harness offers are declared in the agent catalog
 chosen values, and they ride `state.json`'s per-harness `settings` map as
 a **passenger** because it is the one per-user, per-surface document
 already delivered to every runtime. At launch,
-[`resolve_settings_deltas`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/settings.rs)
+[`resolve_settings_deltas`](../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/settings.rs)
 joins the catalog's declarations with the persisted values and emits the
 CLI-flag/env deltas — entirely outside the auth pipeline. Read
 "agent_auth" in this table's name as naming the *delivery vehicle*, not
@@ -146,18 +146,18 @@ once a third field:
 - **Bedrock is `region` + `bearerToken`**, not a static access-key pair and
   not a role to assume; that is the shape every arm of
   `_translate_provider_config_env` reads
-  ([agent_auth.py:395-411](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
+  ([agent_auth.py:395-411](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
 - **Azure has no `deployment` field.** The renderer deliberately does not
   translate one: for opencode a deployment selection folds into a
   `--model azure/<id>` launch argument, which is outside `state.json`'s
   env-plus-files wire contract
-  ([agent_auth.py:434-446](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
+  ([agent_auth.py:434-446](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
   A field the apply side cannot honor must not be collected, so the Azure
   entry affordance asks for endpoint and key only.
 
 All kinds share the same lifecycle: Fernet-encrypted at rest
 (`cloud-secret-v1` key id), created and revoked through
-[api_keys.py](../../../../server/proliferate/db/store/agent_gateway/api_keys.py),
+[api_keys.py](../../server/proliferate/db/store/agent_gateway/api_keys.py),
 displayed only as a redacted hint (`sk-…abc4`). A vault entry is not
 bound to a harness at storage time — binding happens when a selection row
 references it. Decryption happens in exactly two places, both
@@ -187,7 +187,7 @@ on other machines. One document carries resolved key material to the
 runtime: `<runtime_home>/agent-auth/state.json`, mode 0600, version 2.
 
 Wire contract
-([state.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)):
+([state.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)):
 
 ```json
 {
@@ -215,7 +215,7 @@ Document laws:
   than fanning one subject-wide key out to every entry.
 - **`api_key` sources carry plaintext.** The vault entry is decrypted at
   materialization
-  ([materialize/agent_auth.py](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py))
+  ([materialize/agent_auth.py](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py))
   and written into the 0600 file; revoking a key removes the value at the
   next pass. A typed vault entry travels as its resolved env-var map
   (`{"kind": "provider_config", "config_kind": "aws_bedrock", "env": {…}}`)
@@ -233,14 +233,14 @@ Document laws:
   job: the runtime rejects a *delayed, out-of-order* push whose revision is
   lower than the persisted one, and accepts equal revisions as
   content-authoritative (key rotation without a selection change)
-  ([state.rs `apply_state_file`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)).
+  ([state.rs `apply_state_file`](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)).
 - **`issuing_server_origin` is the server-switch guard.** The desktop
   stamps the document with the origin it fetched from; the runtime
   compares it against `PROLIFERATE_API_BASE_URL_ORIGIN` (set by the Tauri
   sidecar at spawn,
-  [sidecar.rs](../../../../apps/desktop/src-tauri/src/sidecar.rs)) and
+  [sidecar.rs](../../apps/desktop/src-tauri/src/sidecar.rs)) and
   treats a mismatched document as absent
-  ([route_auth/mod.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs)).
+  ([route_auth/mod.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs)).
   A desktop repointed at a different control plane can never inject the
   abandoned server's gateway key.
 
@@ -285,11 +285,11 @@ applied document, and the UI says so:
 
 The materialization worker writes the file directly into the user's
 sandbox
-([materialize/agent_auth.py](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
+([materialize/agent_auth.py](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
 
 - **When it runs.** Unconditionally during sandbox bootstrap, as one of
   the standard materialization steps
-  ([materialize/sandbox.py](../../../../server/proliferate/server/cloud/materialization/materialize/sandbox.py))
+  ([materialize/sandbox.py](../../server/proliferate/server/cloud/materialization/materialize/sandbox.py))
   — so a fresh sandbox has the document before its first session. After
   that, on every auth-relevant event: a selection write (which ensures the
   sandbox, per the acknowledgement contract above), an enrollment
@@ -297,7 +297,7 @@ sandbox
   call `schedule_materialize_agent_auth`.
 - **How it runs.** Through the same asynchronous after-commit application
   used for every cloud-sandbox materialization event
-  ([materialization/service.py](../../../../server/proliferate/server/cloud/materialization/service.py)):
+  ([materialization/service.py](../../server/proliferate/server/cloud/materialization/service.py)):
   the handler registers the task on the open transaction via
   `run_after_commit`, and a spawned task runs only once the transaction
   commits — the materializer always reads committed truth, never a state
@@ -325,7 +325,7 @@ sandbox
 
 The desktop app is the transport: it pulls from the control plane and
 pushes into its embedded runtime
-([use-local-auth-state-sync.ts](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts)).
+([use-local-auth-state-sync.ts](../../apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts)).
 
 - **When it runs.** On app start once signed in with a healthy runtime,
   and again whenever an auth mutation (selection PUT, vault
@@ -345,12 +345,12 @@ pushes into its embedded runtime
   renderer as the cloud materializer, scoped to the `local`-surface
   selections) → fingerprint-compare against the last pushed document →
   stamp `issuing_server_origin`
-  ([local-auth-state.ts](../../../../apps/packages/product-client/src/lib/domain/agents/local-auth-state.ts))
+  ([local-auth-state.ts](../../apps/packages/product-client/src/lib/domain/agents/local-auth-state.ts))
   → `PUT /v1/agent-auth/state` into the local runtime, or
   `DELETE /v1/agent-auth/state` when the document is empty (back to
   native).
 - **The runtime's guard.** The push lands through
-  [api/http/agent_auth.rs](../../../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs)
+  [api/http/agent_auth.rs](../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs)
   into `apply_state_file`, which enforces the monotonic-revision rule and
   heals a previously malformed file.
 
@@ -369,14 +369,14 @@ computation is deterministic from two local inputs (`state.json` and the
 agent catalog), which is what makes a retry idempotent and the recipes
 unit-testable as pure functions.
 
-The pipeline ([route_auth/mod.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs))
+The pipeline ([route_auth/mod.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs))
 answers four questions in order:
 
 1. **What did the user choose?** Load `state.json` (checking the
    server-origin guard) and fold the harness's `sources[]` into a typed
    profile: `Native` (no entry → touch nothing) or the list of resolved
    sources
-   ([profile.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/profile.rs)).
+   ([profile.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/profile.rs)).
    A source missing a required field is `SelectionIncomplete`; an unknown
    kind is `UnsupportedRoute`. Pure mapping, no filesystem.
 2. **What models does the world mention?** Recipes embed model names
@@ -384,7 +384,7 @@ answers four questions in order:
    as the gateway one; opencode's provider block lists models). Those names
    come from the catalog's `session.defaults` and gateway policy through the
    `GatewayModelResolve` seam
-   ([plan.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/plan.rs))
+   ([plan.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/plan.rs))
    — model names are catalog data, never Rust constants. The plan carries a
    separate native default (resolved from the non-gateway auth contexts in
    precedence order) so a native launch pins the model the user's own
@@ -392,22 +392,22 @@ answers four questions in order:
 3. **What must the world contain?** Render every source, in order, into
    one composed delta: env vars to set, env vars to remove, files to
    write
-   ([render.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs)).
+   ([render.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs)).
    Sources compose additively (opencode's gateway + N api_keys merge into
    one delta). Still pure — the per-harness recipes below live here.
 4. **Make it so.** Write the rendered files atomically at mode 0600 under
    `<runtime_home>/agent-auth/`
-   ([materialize.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/materialize.rs)),
+   ([materialize.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/materialize.rs)),
    then spawn with the composed env. Config dirs that embed credentials
    or models are revision-keyed (`codex-home-<revision>/`) so an
    in-flight session launched under revision N−1 keeps its files; GC
    retains the current and immediately previous revision only.
 
 Any failure at any stage maps to `StartSessionError::RouteAuth`
-([startup.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs))
+([startup.rs](../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs))
 and the launch is refused — 409 for selection-shaped preconditions, 500
 for a malformed or unwritable state
-([sessions_errors.rs](../../../../anyharness/crates/anyharness-lib/src/api/http/sessions_errors.rs)).
+([sessions_errors.rs](../../anyharness/crates/anyharness-lib/src/api/http/sessions_errors.rs)).
 There is no fallback to native on a failure: a user who selected the
 gateway never silently runs on their personal login.
 
@@ -415,7 +415,7 @@ Environment layering law: the spawned process env is composed
 workspace → session → route_auth (later wins), and route_auth's remove
 list strips its keys from both the composed map and the truly inherited
 ambient process env (`command.env_remove` at spawn,
-[process.rs](../../../../anyharness/crates/anyharness-lib/src/live/sessions/driver/process.rs)).
+[process.rs](../../anyharness/crates/anyharness-lib/src/live/sessions/driver/process.rs)).
 An ambient `ANTHROPIC_API_KEY` on the host can never shadow or leak into
 a routed launch.
 
@@ -477,7 +477,7 @@ Ambient sanitization (claude): every routed launch strips
 `AWS_BEARER_TOKEN_BEDROCK`, and any ambient
 `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` not set
 by the route itself
-([render.rs `sanitize_claude_ambient`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs)).
+([render.rs `sanitize_claude_ambient`](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs)).
 A host configured for Bedrock cannot silently reroute a gateway or BYOK
 launch. Sanitization applies to every non-native route, not only the
 gateway.
@@ -497,14 +497,14 @@ a synthetic home so a routed session cannot accidentally pick up (or
 bill) the user's personal login. Opencode is the designed exception:
 its data dir stays ambient because coexistence is its model. Native
 credential *detection* for readiness is a separate read-only path
-([auth/credentials.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs)),
+([auth/credentials.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs)),
 owned by agent-distribution's projection.
 
 Native login works on both surfaces, through the same mechanism:
 "Authenticate" starts the harness's own login command in a real PTY
-([login_terminal.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs))
+([login_terminal.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs))
 streamed over WebSocket
-([agent_login_terminals.rs](../../../../anyharness/crates/anyharness-lib/src/api/ws/agent_login_terminals.rs)).
+([agent_login_terminals.rs](../../anyharness/crates/anyharness-lib/src/api/ws/agent_login_terminals.rs)).
 The terminal is a PTY inside whichever process runs AnyHarness, so on
 desktop the login runs against the local runtime and in the cloud it runs
 inside the sandbox — the resulting credentials land in the sandbox's own
@@ -517,7 +517,7 @@ artifacts plus locally-detected credentials, which alone would read
 `CredentialsRequired` for a routed harness even though launch will inject
 valid keys. Every projection therefore absorbs the enrolled route through
 **one** seam, `apply_launch_route_upgrade` in
-[readiness/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs):
+[readiness/service.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs):
 it asks route-auth one yes/no question —
 `launch_route_provides_credentials`, the same state load and origin
 guard as launch — and upgrades `CredentialsRequired`/`LoginRequired` to
@@ -597,14 +597,14 @@ that vendor's own docs.
 `native`, rendered Conductor-style but **not inside a card**. Radio
 semantics: picking one deselects the others, because for the four
 single-source harnesses the selection model is literally a radio
-([selection_rules.py](../../../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)'s
+([selection_rules.py](../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)'s
 `SINGLE_SOURCE_HARNESSES`). Rationale: the stored model is one enabled
 source, so the control that writes it must be one-of-N and not a set of
 independent switches.
 
 For **opencode this section is not a gate.** Opencode is
 `MULTI_SOURCE_HARNESSES`
-([selection_rules.py](../../../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)):
+([selection_rules.py](../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)):
 gateway, any number of API keys, and its own native login all compose
 additively, so there is no "method" to pick before anything else becomes
 usable. Nothing below §2 is disabled or hidden pending a choice there.
@@ -620,8 +620,8 @@ user learn three.
 The native status row is additionally **clickable**, and opens the choice
 between refreshing the status and running a login terminal session. The
 login-terminal flow already exists and is surface-agnostic
-([HarnessAuthCliDetails.tsx:110-136](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthCliDetails.tsx),
-over [login_terminal.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs));
+([HarnessAuthCliDetails.tsx:110-136](../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthCliDetails.tsx),
+over [login_terminal.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs));
 this ruling only moves its entry point onto the status row it explains.
 Rationale: the row that reports "not logged in" is the row a user clicks to
 fix it.
@@ -657,7 +657,7 @@ translate one, so collecting it would store a value nothing applies.
 Keys are **disabled, not deleted, while in use.** Revocation of a key wired
 into an enabled selection is refused server-side with the referencing
 harnesses named
-([service.py:232-240](../../../../server/proliferate/server/cloud/agent_gateway/service.py)'s
+([service.py:232-240](../../server/proliferate/server/cloud/agent_gateway/service.py)'s
 `agent_api_key_referenced`), so the UI renders that state up front as an
 "in use by N harnesses" chip and offers disable rather than a delete button
 that 409s. Rationale: surface the refusal as a state, not as an error the
@@ -668,9 +668,9 @@ affordance: a modal that is a **near-literal copy of Conductor's** provider
 picker.
 
 - **The full list is searchable.** All ~149 vendored providers
-  ([provider-registry.generated.json](../../../../apps/packages/product-client/src/config/provider-registry.generated.json),
+  ([provider-registry.generated.json](../../apps/packages/product-client/src/config/provider-registry.generated.json),
   vendored from `https://models.dev/api.json` by
-  [scripts/vendor-provider-registry.mjs](../../../../scripts/vendor-provider-registry.mjs)).
+  [scripts/vendor-provider-registry.mjs](../../scripts/vendor-provider-registry.mjs)).
   Rationale: opencode can talk to any of them, so the picker must not
   curate the user's provider choice down to a shortlist.
 - **Rows without valid env vars are filtered out**, as the vendoring script
@@ -754,7 +754,7 @@ selectable, launchable, or visible.
 
 An apply can land while gateway enrollment sync is still incomplete: the
 renderer drops the unsatisfiable gateway source
-([agent_auth.py:261-271](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)),
+([agent_auth.py:261-271](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)),
 possibly leaving `sources: []` for that harness, which the launch path
 treats fail-closed. The ruling for the probe in that window:
 
@@ -779,7 +779,7 @@ never offered as a working option.
 
 - **claude × `azure_openai` (Foundry) is offerable in the registry but its
   render arm is self-admittedly unverified**
-  ([agent_auth.py:418-433](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)
+  ([agent_auth.py:418-433](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)
   carries the unverified-judgment-call comment: the resource-name
   derivation and the API-key-vs-auth-token choice are both analogies to
   opencode's proven arm, not tested facts). **Ruling: verify before
@@ -798,7 +798,7 @@ never offered as a working option.
 
 `/v1/cloud/agent-auth/` owns the user-facing auth relationship
 (handlers today in
-[agent_gateway/api.py](../../../../server/proliferate/server/cloud/agent_gateway/api.py)):
+[agent_gateway/api.py](../../server/proliferate/server/cloud/agent_gateway/api.py)):
 
 - `GET/POST /keys`, `DELETE /keys/{id}` — the vault.
 - `GET /selections`, `PUT /selections/{harness}?surface=` — the selection
@@ -814,8 +814,8 @@ model catalog. Renames are hard cutovers, no alias windows (all consumers
 are first-party).
 
 The runtime's own surface is two routes
-([api/http/agent_auth.rs](../../../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs),
-[sdk client](../../../../anyharness/sdk/src/client/agent-auth.ts)):
+([api/http/agent_auth.rs](../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs),
+[sdk client](../../anyharness/sdk/src/client/agent-auth.ts)):
 `PUT /v1/agent-auth/state` (desktop push, revision-guarded) and
 `DELETE /v1/agent-auth/state` (return to native).
 
@@ -866,7 +866,7 @@ anyharness/
 
 The wire shape crossing the Python↔Rust boundary is pinned by the
 `agent-auth-state` contract fixture
-([fixtures/contracts/agent-auth-state/](../../../../fixtures/contracts/agent-auth-state/)):
+([fixtures/contracts/agent-auth-state/](../../fixtures/contracts/agent-auth-state/)):
 the renderer asserts it produces it, `route_auth/` asserts it consumes it, and a
 shape change is made by changing the fixture — which breaks whichever side lags.
 
@@ -1002,7 +1002,7 @@ Deltas between this document and the integration stack
       `AGENT_CLI_CREDENTIAL_STORE=file`. The false comment and its dead
       `cursor-api` bail arm were deleted and the arm now injects a supplied
       key in commit `4ccbfc41a`
-      ([catalog_probe.rs](../../../../anyharness/crates/anyharness/src/commands/catalog_probe.rs)).
+      ([catalog_probe.rs](../../anyharness/crates/anyharness/src/commands/catalog_probe.rs)).
       Cursor's `api_key` route is real, its `Ready` is honest, and no
       founder ruling about dropping the card is owed. What remains correct
       and unchanged: cursor is **manual-refresh-only** for probing, because
@@ -1021,7 +1021,7 @@ Deltas between this document and the integration stack
       follow-up, not part of this docs pass.
 - [ ] **Opencode's native detector throws away the provider key.**
       `detect_opencode_local_auth`
-      ([auth/credentials.rs:288-341](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs))
+      ([auth/credentials.rs:288-341](../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs))
       iterates `~/.local/share/opencode/auth.json` as
       `for (_provider, value)` — it discards the provider name and returns
       one whole-file `Present`/`Expired`/`Absent` verdict, so the pane
@@ -1032,23 +1032,23 @@ Deltas between this document and the integration stack
       a per-slot verdict. **This introduces no new wire concept**: per-slot
       results already flow to clients through the existing `auth_slots`
       field on the readiness projection
-      ([readiness/service.rs:118-147](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs)),
+      ([readiness/service.rs:118-147](../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs)),
       so this is a detector change plus the pane reading a field that is
       already there. It is the precondition for §3's per-provider status
       rows and for the Zen-vs-provider distinction.
 - [ ] **The typed-vault path is unreachable behind two gates, not one.**
       The server gate is documented in the typed-selections gap above
       (`_assert_keys_usable`'s `kind == 'api_key'` filter,
-      [selections.py:63-92](../../../../server/proliferate/db/store/agent_gateway/selections.py),
+      [selections.py:63-92](../../server/proliferate/db/store/agent_gateway/selections.py),
       plus the `ck_agent_auth_selection_api_key_shape` CHECK constraint
       that a migration must loosen). The **client** gate is separate and
       equally blocking: `getSupportedProviderConfigKinds()` is hardcoded to
       return `[]` for every harness
-      ([provider-config-fields.ts:121-125](../../../../apps/packages/product-client/src/lib/domain/settings/provider-config-fields.ts)),
+      ([provider-config-fields.ts:121-125](../../apps/packages/product-client/src/lib/domain/settings/provider-config-fields.ts)),
       so §4's "Configure Bedrock"/"Configure Azure" affordances render for
       nobody. The stub's own comment is now stale — it defers to a registry
       `providerConfig` declaration that has since landed
-      ([registry.json](../../../../catalogs/agents/registry.json) declares
+      ([registry.json](../../catalogs/agents/registry.json) declares
       `aws_bedrock` and `azure_openai` for claude, codex, and opencode,
       with codex×azure marked `pending`), so the replacement is a read of
       the harness's registry entry minus pending kinds. Both gates must
