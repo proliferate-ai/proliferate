@@ -24,6 +24,7 @@ export function ChatTranscriptView({
   renderPendingPromptTrailingStatus,
   renderTurnTrailingStatus,
   renderGoalEventRow,
+  renderWorkspaceReceiptRow,
   contentSearch,
   scrollHandleRef,
 }: ChatTranscriptViewProps) {
@@ -57,6 +58,7 @@ export function ChatTranscriptView({
     renderPendingPromptRow,
     renderTurnRow,
     renderGoalEventRow,
+    renderWorkspaceReceiptRow,
     selectedWorkspaceId: model.selectedWorkspaceId,
     sessionViewState: model.sessionViewState,
     transcript: model.transcript,

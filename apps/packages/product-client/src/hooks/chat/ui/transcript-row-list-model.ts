@@ -42,6 +42,8 @@ const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
 // Goal lifecycle rows are quiet single-line system rows, not turn content —
 // a much smaller virtualization estimate than the generic turn fallback.
 const ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX = 28;
+// Collapsed single receipt line; the expanded log grows on measure.
+const ESTIMATED_WORKSPACE_RECEIPT_ROW_HEIGHT_PX = 32;
 
 export interface TranscriptRowListBaseProps {
   rows: readonly TranscriptVirtualRow[];
@@ -192,6 +194,9 @@ export function estimateRenderableRowHeight(
   }
   if (row?.kind === "transcript" && row.row.kind === "goal_event") {
     return ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX;
+  }
+  if (row?.kind === "transcript" && row.row.kind === "workspace_receipt") {
+    return ESTIMATED_WORKSPACE_RECEIPT_ROW_HEIGHT_PX;
   }
   return ESTIMATED_TURN_HEIGHT_PX;
 }

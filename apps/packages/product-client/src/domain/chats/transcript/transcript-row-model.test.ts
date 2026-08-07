@@ -961,6 +961,68 @@ describe("buildTranscriptRowModel", () => {
       }
     }
   });
+
+  describe("workspace receipt row", () => {
+    it("leads with the receipt row, before any goal rows", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(1, "set")],
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      expect(rows[0]).toEqual({
+        kind: "workspace_receipt",
+        key: "workspace-receipt:worktree:workspace-1",
+      });
+      expect(rows[1]).toEqual({
+        kind: "goal_event",
+        key: "goal-event:1",
+        event: goalEvent(1, "set"),
+      });
+      expect(rows[2]).toEqual(expect.objectContaining({ kind: "turn", turnId: "turn-1" }));
+    });
+
+    it("omits the receipt row when the key is null", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        workspaceReceiptKey: null,
+      });
+
+      expect(rows.some((row) => row.kind === "workspace_receipt")).toBe(false);
+    });
+
+    it("omits the receipt row when the key is omitted entirely", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+      });
+
+      expect(rows.some((row) => row.kind === "workspace_receipt")).toBe(false);
+    });
+  });
 });
 
 describe("resolveVirtualBottomDistance", () => {

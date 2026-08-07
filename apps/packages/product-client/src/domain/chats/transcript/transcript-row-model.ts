@@ -46,6 +46,10 @@ export type TranscriptRow =
     kind: "goal_event";
     key: `goal-event:${string}`;
     event: GoalTranscriptEvent;
+  }
+  | {
+    kind: "workspace_receipt";
+    key: `workspace-receipt:${string}`;
   };
 
 export interface BuildTranscriptRowModelInput {
@@ -81,6 +85,15 @@ export interface BuildTranscriptRowModelInput {
    * row can never be pushed before a row anchored to turn N or earlier.
    */
   goalEvents?: readonly GoalTranscriptEvent[];
+  /**
+   * Workspace-creation receipt identity, or null/undefined for none. Like
+   * goal rows, this is client-side composition only — the receipt derives
+   * from the workspace record + setup-status query, never from stored
+   * transcript content. It pins to the very top of the transcript (before
+   * any goal rows), so callers must only pass it when the full history is
+   * loaded (no older pages above).
+   */
+  workspaceReceiptKey?: string | null;
 }
 
 export interface TranscriptRowModelCache {
@@ -105,10 +118,18 @@ export function buildTranscriptRowModel({
   latestTurnId,
   latestTurnHasAssistantRenderableContent,
   goalEvents = EMPTY_GOAL_EVENTS,
+  workspaceReceiptKey = null,
 }: BuildTranscriptRowModelInput, cache?: TranscriptRowModelCache): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
   const seenTurnIds = new Set<string>();
   const goalRows = bucketGoalEventRows(goalEvents, transcript);
+
+  if (workspaceReceiptKey) {
+    rows.push({
+      kind: "workspace_receipt",
+      key: `workspace-receipt:${workspaceReceiptKey}`,
+    });
+  }
 
   rows.push(...goalRows.beforeFirstTurn);
 

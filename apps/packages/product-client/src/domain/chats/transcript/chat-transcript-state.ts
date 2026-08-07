@@ -27,6 +27,13 @@ export interface ChatTranscriptState {
    * that don't render goal state (e.g. the cloud preview transcript).
    */
   goalEvents?: readonly GoalTranscriptEvent[];
+  /**
+   * Workspace-creation receipt identity. Client-side composition like
+   * goalEvents — set only by surfaces that pin the creation receipt to the
+   * top of the transcript (the workspace chat). The view model drops it
+   * while older history pages remain unloaded.
+   */
+  workspaceReceiptKey?: string | null;
 }
 
 export interface ChatTranscriptHistoryState {

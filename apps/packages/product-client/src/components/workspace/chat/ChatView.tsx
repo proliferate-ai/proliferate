@@ -18,6 +18,7 @@ import { ChatPreMessageCanvas } from "#product/components/workspace/chat/surface
 import { ChatReadyHero } from "#product/components/workspace/chat/surface/ChatReadyHero";
 import { NoWorkspaceState } from "#product/components/workspace/chat/surface/NoWorkspaceState";
 import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
+import { WorkspaceCreationReceipt } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
 import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import { type ChatSurfaceState, useChatSurfaceState } from "#product/hooks/chat/derived/use-chat-surface-state";
@@ -75,7 +76,10 @@ function ChatContent({
     case "workspace-status":
     case "session-loading":
       return (
-        <ChatPreMessageCanvas bottomInsetPx={dockSafeAreaPx}>
+        <ChatPreMessageCanvas
+          bottomInsetPx={dockSafeAreaPx}
+          topSlot={<WorkspaceCreationReceipt />}
+        >
           <ChatLoadingHero />
         </ChatPreMessageCanvas>
       );
@@ -90,7 +94,10 @@ function ChatContent({
       return <TranscriptSwitchingPlaceholder />;
     case "session-empty":
       return (
-        <ChatPreMessageCanvas bottomInsetPx={dockSafeAreaPx}>
+        <ChatPreMessageCanvas
+          bottomInsetPx={dockSafeAreaPx}
+          topSlot={<WorkspaceCreationReceipt />}
+        >
           <ChatReadyHero />
         </ChatPreMessageCanvas>
       );

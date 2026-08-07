@@ -41,7 +41,7 @@ ChatView
     │     ├── ConnectedMcpElicitationCard   (MCP form)
     │     └── TodoTrackerPanel              (Codex/Gemini structured plan)
     ├── attachedSlot
-    │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
+    │     ├── WorkspaceArrivalAttachedPanel (directory-missing/cloud-pending/cloud-status)
     │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
     │     ├── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
     │     └── WorkspaceActivityComposerCard (Git/PR summary and source-control actions)
@@ -605,7 +605,7 @@ Scenarios (selectable via `?s=<key>`):
 - `clean` — baseline, no panel
 - `todos-short`, `todos-mid`, `todos-long` — TodoTrackerPanel at three sizes
 - `execute-approval`, `edit-approval` — ApprovalCard execute/edit variants
-- `workspace-arrival-created` — WorkspaceArrivalAttachedPanel above the composer
+- `workspace-receipt-setup-succeeded`, `workspace-receipt-setup-failed` — WorkspaceCreationReceiptView (transcript creation receipt) collapsed/expanded
 - `cloud-first-runtime`, `cloud-provisioning`, `cloud-applying-files`, `cloud-blocked`, `cloud-error`, `cloud-reconnecting`, `cloud-reconnect-error` — cloud workspace/runtime composer states
 - `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
 - `review-feedback-message`, `review-complete-message` — collapsed transcript receipts for review feedback and completed reviews

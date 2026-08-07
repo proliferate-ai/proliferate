@@ -1,4 +1,3 @@
-import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
 import {
   buildCloudWorkspaceStatusScreenModel,
   descriptionForStartBlockReason,
@@ -10,30 +9,6 @@ import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
-
-export const WORKSPACE_ARRIVAL_CREATED: WorkspaceArrivalViewModel = {
-  workspaceId: "workspace-arrival-created",
-  source: "worktree-created",
-  kind: "worktree",
-  workspacePath: "/Users/pablo/.proliferate/worktrees/proliferate/prism",
-  workspaceKind: "worktree",
-  workspaceName: "Prism",
-  repoName: "proliferate",
-  badgeLabel: "New worktree",
-  eyebrow: "Ready to open",
-  title: "Prism",
-  subtitle: "Created in proliferate from main",
-  setupTitle: "Repository setup",
-  setupSummary: "No setup script configured yet",
-  setupCommand: null,
-  setupActionLabel: "Add setup script",
-  setupStatusLabel: "Optional",
-  setupTone: "default",
-  setupDetail: null,
-  setupTerminalId: null,
-  branchName: "prism",
-  baseBranchName: "main",
-};
 
 function cloudWorkspaceFixture(
   overrides: Partial<CloudWorkspaceSummary> = {},

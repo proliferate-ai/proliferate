@@ -19,6 +19,7 @@ export function useSharedTranscriptRowModel(input: {
   latestTurnId: string | null;
   latestTurnHasAssistantRenderableContent: boolean;
   goalEvents?: readonly GoalTranscriptEvent[];
+  workspaceReceiptKey?: string | null;
 }): readonly TranscriptVirtualRow[] {
   const cacheRef = useRef(createTranscriptRowModelCache());
 
@@ -32,6 +33,7 @@ export function useSharedTranscriptRowModel(input: {
       input.visibleOptimisticPrompt,
       input.visibleOutboxEntries,
       input.goalEvents,
+      input.workspaceReceiptKey,
     ],
   );
 }
