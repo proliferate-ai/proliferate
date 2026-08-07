@@ -1,0 +1,268 @@
+# Frontend layer boundaries — enforced by
+# scripts/check_frontend_boundaries.py over apps/desktop, apps/web, apps/mobile,
+# and the shared apps/packages/* frontend packages.
+#
+# Grandfathered violation sites live in exceptions.toml, one entry per site.
+# See lints/README.md for the record and ledger contract.
+
+[[rule]]
+id = "FE-ACCESS-1"
+title = "Tauri APIs stay in the desktop access layer"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/**"
+
+rule = """Tauri APIs may only be imported inside the desktop access layer (apps/desktop/src/lib/access/tauri/**)."""
+alternative = """Wrap the Tauri call in an access module under lib/access/tauri/** and call that module from a hook or component."""
+why = """Confines the platform-specific surface to one layer so web and mobile can share everything above it."""
+
+[rule.example]
+bad = """`import { invoke } from "@tauri-apps/api/core";` in a component"""
+good = """`import { readWorkspaceFile } from "@/lib/access/tauri/files";`"""
+
+[[rule]]
+id = "FE-ACCESS-2"
+title = "getAnyHarnessClient stays behind AnyHarness access"
+owner = "frontend"
+status = "leaks"
+gap = "#1715"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/**, apps/packages/product-client/src/**"
+
+rule = """getAnyHarnessClient must stay behind the AnyHarness access boundaries (lib/access/anyharness/** or hooks/access/anyharness/**)."""
+alternative = """Add an access function that owns the client call and expose it through a hook."""
+why = """One place owns transport construction, auth headers, and error mapping for the runtime client."""
+
+[rule.example]
+bad = """a workflow hook calling `getAnyHarnessClient()` directly"""
+good = """`import { listWorkspaceSessions } from "#product/lib/access/anyharness/sessions";`"""
+
+[[rule]]
+id = "FE-ACCESS-3"
+title = "raw OpenAPI client verbs stay in cloud access"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/**, apps/packages/product-client/src/**"
+
+rule = """Raw generated OpenAPI client verbs (`client.GET`/`POST`/`PUT`/`PATCH`/`DELETE`) must stay under a cloud access directory: apps/desktop/src/lib/access/cloud/** or apps/packages/product-client/src/lib/access/cloud/**."""
+alternative = """Add a named access function under lib/access/cloud/** and call it."""
+why = """Generated verbs are unstable and untyped at the call site; the access layer is the versioning seam."""
+
+[rule.example]
+bad = """a component calling `client.GET("/v1/workspaces")` directly"""
+good = """`import { listWorkspaces } from "#product/lib/access/cloud/workspaces";`"""
+
+[[rule]]
+id = "FE-ACCESS-4"
+title = "retired legacy access paths are not imported"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/**"
+
+rule = """The retired legacy access modules `@/platform/tauri`, `@/lib/integrations/cloud`, and `@/lib/integrations/anyharness` must not be imported."""
+alternative = """Import the current access module at its post-migration path under lib/access/**."""
+why = """Keeps a completed access-layer migration from growing back."""
+
+[rule.example]
+bad = """`import { invoke } from "@/platform/tauri";`"""
+good = """`import { invoke } from "@/lib/access/tauri/invoke";`"""
+
+[[rule]]
+id = "FE-CACHE-1"
+title = "QueryClient belongs to the cache owners"
+owner = "frontend"
+status = "leaks"
+gap = "#1715"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/**, apps/packages/product-client/src/**"
+
+rule = """`useQueryClient` and the QueryClient cache methods may only be used by the declared cache owners: hooks/access/**, a hooks/**/cache/** owner, or lib/infra/query/**."""
+alternative = """Add an invalidation or mutation helper in the cache layer and call that helper instead."""
+why = """Ad-hoc invalidation from arbitrary components makes cache behaviour unreasonable; one layer owns cache keys."""
+
+[rule.example]
+bad = """`useQueryClient().invalidateQueries({ queryKey: ["sessions"] })` inside a component"""
+good = """`useInvalidateSessions()` from the sessions cache hook"""
+
+[[rule]]
+id = "FE-CACHE-2"
+title = "Query hooks live in access or cache layers"
+owner = "frontend"
+status = "leaks"
+gap = "#1715"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**"
+
+rule = """TanStack Query hooks (useQuery, useQueries, useMutation, useInfiniteQuery and friends) may only appear under hooks/access/** or a hooks/**/cache/** owner."""
+alternative = """Define the query in the cache layer and consume its typed hook from the feature layer."""
+why = """Keeps query keys, retry policy, and staleness in one reviewable place instead of per component."""
+
+[rule.example]
+bad = """`useQuery({ queryKey: ["x"], queryFn: fetchX })` inline in a workflow hook"""
+good = """`const { data } = useWorkspacesQuery();` from hooks/workspaces/cache/**"""
+
+[[rule]]
+id = "FE-DOMAIN-1"
+title = "lib/domain stays pure"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/lib/domain/**, apps/packages/product-client/src/lib/domain/**"
+
+rule = """lib/domain must stay pure: no React, hooks, stores, access modules, integrations, Tauri, or TanStack Query."""
+alternative = """Keep domain logic as plain functions over plain data and call it from a hook."""
+why = """Pure domain code is testable without a renderer and shareable across desktop, web, and mobile."""
+
+[rule.example]
+bad = """`import { useState } from "react";` inside lib/domain/**"""
+good = """`export function nextSessionState(current: SessionState): SessionState`"""
+
+[[rule]]
+id = "FE-DOMAIN-2"
+title = "lib/workflows stays non-React"
+owner = "frontend"
+status = "leaks"
+gap = "#1715"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/lib/workflows/**, apps/packages/product-client/src/lib/workflows/**"
+
+rule = """lib/workflows must not import React, components, hooks, Tauri, or TanStack Query."""
+alternative = """Express workflow logic as pure functions and render or drive it from a component or hook."""
+why = """The same purity argument as FE-DOMAIN-1, applied to the workflow plane."""
+
+[rule.example]
+bad = """a workflows module importing a component just to read a label"""
+good = """a workflows module exporting a plain state machine the hook drives"""
+
+[[rule]]
+id = "FE-COMPONENT-1"
+title = "components call hooks, not access modules"
+owner = "frontend"
+status = "leaks"
+gap = "#1715"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/components/**, apps/packages/product-client/src/components/**"
+
+rule = """Components must not own raw access: no lib/access imports, no Tauri API imports, no getAnyHarnessClient."""
+alternative = """Call the hook that wraps the access function; add the hook if it does not exist yet."""
+why = """A component that fetches cannot be rendered in isolation and duplicates loading and error handling."""
+
+[rule.example]
+bad = """`import { fetchSessions } from "#product/lib/access/anyharness/sessions";` in a component"""
+good = """`const { data } = useSessions();`"""
+
+[[rule]]
+id = "FE-STORE-1"
+title = "stores do not import the access layer"
+owner = "frontend"
+status = "leaks"
+gap = "#1715"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/stores/**, apps/packages/product-client/src/stores/**"
+
+rule = """Stores must not import the access layer (nor Tauri APIs, TanStack Query, or AnyHarness clients)."""
+alternative = """Fetch in a hook and write the result into the store through an owned action."""
+why = """A store that fetches owns both state and I/O, which makes its transitions untestable."""
+
+[rule.example]
+bad = """a Zustand store importing an access function to hydrate itself"""
+good = """`useWorkspaceStore.getState().applyWorkspaces(await listWorkspaces())` from a hook"""
+
+[[rule]]
+id = "FE-STORE-2"
+title = "stores do not reach the runtime client"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/stores/**, apps/packages/product-client/src/stores/**"
+
+rule = """Stores must not reach a runtime client: no query/React SDK client imports, no raw client constructors, and no direct `fetch(` call."""
+alternative = """Move the runtime call into an access module and dispatch a store action with the result."""
+why = """The same separation as FE-STORE-1, closing the qualified-import and call-site holes."""
+
+[rule.example]
+bad = """a store action calling `fetch("/v1/sessions")` inline"""
+good = """a store action that takes the already-fetched value as an argument"""
+
+[[rule]]
+id = "FE-STORE-3"
+title = "imported store state is not mutated from outside"
+owner = "frontend"
+status = "leaks"
+gap = "#1715"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**"
+
+rule = """An imported store's state must not be mutated from outside the store that owns it: no `<store>.setState(..)` on an imported store binding, including through an alias or a namespace member."""
+alternative = """Call an action owned by the store instead of mutating imported store state directly."""
+why = """External setState makes the store's invariants unenforceable and its transitions untraceable."""
+
+[rule.example]
+bad = """`useSessionStore.setState({ selectedId })` from a component"""
+good = """`useSessionStore.getState().selectSession(selectedId)`"""
+
+[[rule]]
+id = "FE-UI-1"
+title = "Radix primitives belong to the component library"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/**, apps/web/src/**, apps/mobile/src/**, apps/packages/*/src/**"
+
+rule = """`@radix-ui/*` may only be imported by the UI component library: root files under apps/packages/product-client/src/primitives/ and its patterns/** tier."""
+alternative = """Use (or add) the wrapped primitive in the component library and import that."""
+why = """Direct Radix use bypasses the repo's styling, a11y, and behaviour wrappers, producing inconsistent primitives."""
+
+[rule.example]
+bad = """`import * as Dialog from "@radix-ui/react-dialog";` in a feature component"""
+good = """`import { Dialog } from "#product/primitives/dialog";`"""
+
+[[rule]]
+id = "FE-UI-2"
+title = "tailwind-merge is reached through its wrapper"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/desktop/src/**, apps/web/src/**, apps/mobile/src/**, apps/packages/*/src/**"
+
+rule = """`tailwind-merge` may only be imported by apps/packages/product-client/src/primitives/utils/tw-merge.ts."""
+alternative = """Import the repo wrapper: `#product/primitives/utils/tw-merge`."""
+why = """The wrapper carries the repo's class-group configuration; a bare tailwind-merge discards the semantic text utilities it does not know about."""
+
+[rule.example]
+bad = """`import { twMerge } from "tailwind-merge";` in a component"""
+good = """`import { cn } from "#product/primitives/utils/tw-merge";`"""
+
+[[rule]]
+id = "FE-UI-3"
+title = "the warning token is a fill, never ink"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/**, apps/web/src/**"
+
+rule = """`--color-warning` is a fill token: `text-warning` as ink and alpha-modified `bg-warning/N` / `border-warning/N` fills are not allowed."""
+alternative = """Use the purpose-built tokens: `text-warning-foreground` for ink, `bg-warning-subtle` for a panel fill, `border-warning-border` for a border."""
+why = """`--color-warning` is rgba(255,180,50,0.15) in dark mode, so as ink it renders effectively invisible; alpha-modifying an already-alpha fill yields ~1.5% alpha and does not read either."""
+
+[rule.example]
+bad = """`className="text-warning"` on a body string"""
+good = """`className="text-warning-foreground"`"""
