@@ -44,10 +44,11 @@ const TOAST_CARD_CLASS = `${POPOVER_FRAME_CLASS} group-focus-visible/toast:ring-
 
 /**
  * One easing for both halves of the transform — the width and the unfold move
- * as one surface or the seam shows. `motion-reduce` jump-cuts.
+ * as one surface or the seam shows. The emphasized role: this is the kit's
+ * one spring-led product moment. `motion-reduce` jump-cuts.
  */
 const DETAILS_TRANSFORM_EASING =
-  "duration-[350ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none";
+  "duration-emphasized ease-spring motion-reduce:transition-none";
 
 /** Kit action recipe: 28px control, `text-ui` label, `radius-md`. */
 const ACTION_SIZE_CLASS = "h-7 rounded-md px-2.5 text-ui";
@@ -139,7 +140,7 @@ function CloseButton({
       )}
       onClick={onClose}
     >
-      <X aria-hidden className="size-3.5" strokeWidth={1.5} />
+      <X aria-hidden className="icon-control" strokeWidth={1.5} />
     </Button>
   );
 }
@@ -236,7 +237,7 @@ export function AnnouncementToastBody({
   toastId,
   inlinePayload,
   navigateAction,
-  copyAction,
+  copyPayload,
   onClose,
   onCardResize,
 }: {
@@ -245,7 +246,8 @@ export function AnnouncementToastBody({
   /** Raw payload behind Details; its presence makes the toast expandable. */
   inlinePayload?: string;
   navigateAction?: ToastAction;
-  copyAction?: ToastAction;
+  /** Full text behind the collapsed cluster's Copy; the body owns the write. */
+  copyPayload?: string;
   onClose: () => void;
   /**
    * Fired when the card's rendered size changes. Sonner measures a toast only
@@ -299,21 +301,22 @@ export function AnnouncementToastBody({
 
   // Which copy control just fired, so its label — and only its label — flips
   // to "Copied". The flip is the whole feedback for a click whose effect lands
-  // in the clipboard, where nothing visible changes.
+  // in the clipboard, where nothing visible changes — which is also why the
+  // receipt waits for the write to resolve: a missing or refusing clipboard
+  // must not report a success that never happened.
   const [copied, setCopied] = useState<"payload" | "details" | null>(null);
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(copyResetRef.current), []);
-  const markCopied = (control: "payload" | "details") => {
-    setCopied(control);
-    clearTimeout(copyResetRef.current);
-    copyResetRef.current = setTimeout(() => setCopied(null), 1_500);
-  };
-  const handleCopyDetails = () => {
-    if (inlinePayload === undefined) {
+  const handleCopy = (control: "payload" | "details", text: string) => {
+    const write = navigator.clipboard?.writeText(text);
+    if (!write) {
       return;
     }
-    void navigator.clipboard?.writeText(inlinePayload);
-    markCopied("details");
+    void write.then(() => {
+      setCopied(control);
+      clearTimeout(copyResetRef.current);
+      copyResetRef.current = setTimeout(() => setCopied(null), 1_500);
+    }, () => {});
   };
 
   const quiet = [jump, input.secondary, navigateAction].filter(
@@ -327,7 +330,10 @@ export function AnnouncementToastBody({
       data-toast-expanded={expandable ? expanded : undefined}
       className={twMerge(
         TOAST_CARD_CLASS,
-        "w-[356px] p-3",
+        // The viewport clamp keeps a leftward-growing card on screen at narrow
+        // widths; the details strip wears the same clamp so its wrapping is
+        // decided at the final width either way (see the anti-jitter note).
+        "w-[356px] max-w-[calc(100vw-48px)] p-3",
         expandable && `transition-[width] ${DETAILS_TRANSFORM_EASING}`,
         expanded && "w-[480px]",
       )}
@@ -386,6 +392,11 @@ export function AnnouncementToastBody({
            from the accessibility tree, not just from pixels. */
         <div
           aria-hidden={expanded ? undefined : true}
+          // The host is an aria-live region, so unhiding the strip would read
+          // the whole payload aloud. The user pressed Details — they are about
+          // to read it themselves; `off` scopes the announcement away without
+          // removing the strip from the accessibility tree.
+          aria-live="off"
           className={twMerge(
             `-mx-3 grid grid-rows-[0fr] transition-[grid-template-rows] ${DETAILS_TRANSFORM_EASING}`,
             expanded && "grid-rows-[1fr]",
@@ -400,38 +411,35 @@ export function AnnouncementToastBody({
               role="region"
               aria-labelledby={titleId}
               tabIndex={expanded ? 0 : -1}
-              className="m-0 mt-2.5 max-h-72 w-[480px] overflow-y-auto whitespace-pre-wrap break-words border-y border-border-light bg-surface-elevated-secondary px-3 py-2 font-mono text-ui-sm leading-[18px] text-muted-foreground"
+              className="m-0 mt-2.5 max-h-72 w-[480px] max-w-[calc(100vw-48px)] overflow-y-auto whitespace-pre-wrap break-words border-y border-border-light bg-surface-elevated-secondary px-3 py-2 font-mono text-readable-code text-muted-foreground"
             >
               {inlinePayload}
             </pre>
           </div>
         </div>
       ) : null}
-      {copyAction || quiet.length > 0 || commit || expandable ? (
+      {copyPayload !== undefined || quiet.length > 0 || commit || expandable ? (
         <div className="mt-2.5 flex items-center justify-end gap-2">
-          {expanded ? (
+          {expanded && inlinePayload !== undefined ? (
             <Button
               type="button"
               variant="unstyled"
               size="unstyled"
               className={twMerge(GHOST_ACTION_CLASS, "mr-auto")}
-              onClick={handleCopyDetails}
+              onClick={() => handleCopy("details", inlinePayload)}
             >
               {copied === "details" ? "Copied" : "Copy details"}
             </Button>
           ) : null}
-          {copyAction ? (
+          {copyPayload !== undefined ? (
             <Button
               type="button"
               variant="unstyled"
               size="unstyled"
               className={SECONDARY_ACTION_CLASS}
-              onClick={() => {
-                copyAction.onClick();
-                markCopied("payload");
-              }}
+              onClick={() => handleCopy("payload", copyPayload)}
             >
-              {copied === "payload" ? "Copied" : copyAction.label}
+              {copied === "payload" ? "Copied" : "Copy"}
             </Button>
           ) : null}
           {quiet.map((action) => (

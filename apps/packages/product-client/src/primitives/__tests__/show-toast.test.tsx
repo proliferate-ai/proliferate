@@ -98,6 +98,11 @@ describe("showToast — the X", () => {
     await waitFor(() => {
       expect(screen.queryByText("Close me")).toBeNull();
     });
+    // Still once, *after* sonner has finished removing the toast: sonner
+    // forwards `toast.dismiss(id)` into its own dismiss callback, so a close
+    // that reported directly and then let the forward report again would pass
+    // the first wait and double-count here.
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it("sits on every weight", async () => {
@@ -202,8 +207,27 @@ describe("showToast — detail", () => {
       copy.click();
     });
     expect(writeText).toHaveBeenCalledWith(payload);
-    // The clipboard is invisible, so the label is the receipt.
-    expect(copy.textContent).toBe("Copied");
+    // The clipboard is invisible, so the label is the receipt — issued only
+    // once the write has actually resolved.
+    await waitFor(() => {
+      expect(copy.textContent).toBe("Copied");
+    });
+  });
+
+  it("issues no receipt when the clipboard is unavailable", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    });
+    await raise({ weight: "detail", title: "2 files", payload: "a.ts\nb.ts" });
+
+    const copy = screen.getByRole("button", { name: "Copy" });
+    act(() => {
+      copy.click();
+    });
+    // A "Copied" here would be a lie; the label not flipping is the signal
+    // that nothing reached the clipboard.
+    expect(copy.textContent).toBe("Copy");
   });
 });
 
@@ -278,7 +302,9 @@ describe("showToast — details destinations", () => {
       copy.click();
     });
     expect(writeText).toHaveBeenCalledWith("signature verification failed");
-    expect(copy.textContent).toBe("Copied");
+    await waitFor(() => {
+      expect(copy.textContent).toBe("Copied");
+    });
   });
 
   it("expanding one toast collapses any other", async () => {
@@ -376,7 +402,12 @@ describe("showToast — hard limits", () => {
     expect(document.querySelectorAll("[data-sonner-toast]")).toHaveLength(1);
   });
 
-  it("reports the dismissal so a same-id caller can stop re-raising it", async () => {
+  it("keeps programmatic dismissal out of onDismiss — only the user reports", async () => {
+    // `onDismiss` is the user-walked-away signal. Code closing a toast it no
+    // longer stands behind (a presenter leaving its error phase) must not
+    // read as that: on an update-failed toast, onDismiss is `cancelUpdate`,
+    // and firing it from the phase change after Retry would cancel the very
+    // retry the user just pressed.
     const onDismiss = vi.fn();
     await raise({ id: "dismissable", message: "Close me", onDismiss });
 
@@ -384,8 +415,118 @@ describe("showToast — hard limits", () => {
       dismissToast("dismissable");
     });
     await waitFor(() => {
-      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText("Close me")).toBeNull();
     });
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("survives a same-id raise after a quiet dismissal — Collapse still works", async () => {
+    // Sonner delivers `toast.dismiss(id)` on an animation frame and its
+    // Observer merges same-id raises over the old entry, so a predecessor's
+    // dismissal can replay against a brand-new toast as a stale delete-effect.
+    // Without the replay guard, that effect settles the new instance: its
+    // Collapse click and the replayed collapse cancel out and the strip
+    // never folds.
+    await raise({ id: "replayed", message: "first" });
+    act(() => {
+      dismissToast("replayed");
+    });
+    cleanup();
+
+    render(<ToastHost />);
+    act(() => {
+      showToast({
+        id: "replayed",
+        weight: "announcement",
+        title: "Second failed",
+        details: { kind: "inline", payload: "boom cause" },
+      });
+    });
+    await waitFor(() => screen.getByText("Second failed"));
+
+    act(() => {
+      screen.getByRole("button", { name: "Details" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Collapse" }).click();
+    });
+    const toggle = screen.getByRole("button", { name: "Details" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.getByText("boom cause").closest("[aria-hidden='true']"),
+    ).not.toBeNull();
+  });
+
+  it("hands custody to the replacement — only the live toast's onDismiss speaks", async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    await raise({ id: "same", message: "first", onDismiss: first });
+    act(() => {
+      showToast({ id: "same", message: "second", onDismiss: second });
+    });
+    await waitFor(() => screen.getByText("second"));
+
+    act(() => {
+      screen.getByRole("button", { name: "Close" }).click();
+    });
+    await waitFor(() => {
+      expect(second).toHaveBeenCalledTimes(1);
+    });
+    // The superseded closure was retired at replacement: its onDismiss belongs
+    // to a message the user never closed.
+    expect(first).not.toHaveBeenCalled();
+  });
+
+  it("survives a same-id raise after a quiet dismissal", async () => {
+    // Sonner's Observer keeps dismissed toasts in its module-level state with
+    // `delete: true`, and same-id replacement merges `{...oldToast, ...data}`.
+    // A stale `delete: true` triggers the delete-effect on the next re-render
+    // (e.g., a Collapse click), firing the NEW toast's onDismiss → settle and
+    // breaking the toggle. This verifies that explicitly passing `delete: false`
+    // in `common` overrides the stale flag.
+    render(<ToastHost />);
+    act(() => {
+      showToast({ id: "same", message: "first" });
+    });
+    await waitFor(() => screen.getByText("first"));
+    act(() => {
+      dismissToast("same");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("first")).toBeNull();
+    });
+    cleanup();
+
+    // Fresh render, same id, with inline details.
+    render(<ToastHost />);
+    act(() => {
+      showToast({
+        id: "same",
+        weight: "announcement",
+        title: "Provisioning failed",
+        details: { kind: "inline", payload: "boom cause" },
+      });
+    });
+    await waitFor(() => screen.getByText("Provisioning failed"));
+
+    const details = screen.getByRole("button", { name: "Details" });
+    act(() => {
+      details.click();
+    });
+    expect(details.getAttribute("aria-expanded")).toBe("true");
+    expect(details.textContent).toBe("Collapse");
+
+    act(() => {
+      details.click();
+    });
+    // Without the fix, the stale delete-effect would fire onDismiss → settle
+    // → collapseToastExpansion, then the onClick toggle would re-expand, leaving
+    // aria-expanded="true" and the payload visible.
+    expect(details.getAttribute("aria-expanded")).toBe("false");
+    expect(details.textContent).toBe("Details");
+    expect(
+      screen.getByText(/boom cause/).closest("[aria-hidden='true']"),
+    ).not.toBeNull();
   });
 });
 

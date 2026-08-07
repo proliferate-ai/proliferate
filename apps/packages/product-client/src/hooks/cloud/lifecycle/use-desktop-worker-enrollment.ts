@@ -11,6 +11,7 @@ import {
   ensureDesktopWorker,
   teardownDesktopWorker,
 } from "#product/lib/workflows/cloud/ensure-desktop-worker";
+import { dismissToast } from "#product/primitives/utils/show-toast";
 import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
@@ -26,6 +27,13 @@ let enrolledIdentityKey: string | null = null;
 // unreachable control plane, short enough that integrations recover without
 // a restart.
 const ENROLLMENT_RETRY_DELAY_MS = 15_000;
+
+// Identity whose startup-failure toast the user closed. The retry loop keeps
+// running — cloud workspaces should recover without a restart — but a loop
+// that resurrects a dismissed error toast every 15 seconds overrides the
+// user's choice. Keyed by identity so a new sign-in or org switch, which is a
+// genuinely new attempt, gets its own report.
+let startupFailureDismissedFor: string | null = null;
 
 function identityKey(userId: string, organizationId: string | null): string {
   return `${userId}::${organizationId ?? ""}`;
@@ -89,7 +97,11 @@ export function useDesktopWorkerEnrollment(
     let retryTimer: number | null = null;
     void ensureDesktopWorker(activeOrganizationId, worker, {
       onFailure: (error) => {
-        if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
+        if (
+          cancelled
+          || enrolledIdentityKey !== nextIdentityKey
+          || startupFailureDismissedFor === nextIdentityKey
+        ) {
           return;
         }
         showErrorToast({
@@ -97,11 +109,22 @@ export function useDesktopWorkerEnrollment(
           headline: DESKTOP_WORKER_STARTUP_FAILURE_HEADLINE,
           consequence: DESKTOP_WORKER_STARTUP_FAILURE_CONSEQUENCE,
           cause: desktopWorkerStartupFailureCause(error),
+          onDismiss: () => {
+            startupFailureDismissedFor = nextIdentityKey;
+          },
         });
       },
       captureException,
     }).then((enrolled) => {
-      if (enrolled || enrolledIdentityKey !== nextIdentityKey) {
+      if (enrolled) {
+        // A retry made it: the persistent failure toast is now describing a
+        // state that no longer exists, so it leaves with the failure — and a
+        // dismissal recorded against the failed attempt no longer applies.
+        dismissToast(DESKTOP_WORKER_STARTUP_FAILURE_TOAST_ID);
+        startupFailureDismissedFor = null;
+        return;
+      }
+      if (enrolledIdentityKey !== nextIdentityKey) {
         return;
       }
       // Enrollment failed (e.g. a network blip right after an org switch's

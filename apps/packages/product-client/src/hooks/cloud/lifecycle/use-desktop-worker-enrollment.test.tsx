@@ -300,11 +300,48 @@ describe("useDesktopWorkerEnrollment", () => {
             headline: "Cloud integrations worker failed to start",
             consequence: "Cloud workspaces are unavailable until it starts.",
             cause: "worker exited: enrollment contract mismatch",
+            onDismiss: expect.any(Function),
           },
         ],
       ]);
     });
     expect(toastMocks.showProductToast).not.toHaveBeenCalled();
+  });
+
+  it("stops re-raising the failure toast once the user closes it", async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.ensureDesktopWorker.mockImplementation(async (
+        _organizationId,
+        _worker,
+        deps,
+      ) => {
+        deps.onFailure("worker exited: enrollment contract mismatch");
+        return false;
+      });
+      const harness = await loadEnrollmentHarness();
+
+      await act(async () => {
+        harness.signIn("user-a");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(harness.getErrorToastCalls()).toHaveLength(1);
+
+      // The user closes the toast. The retry loop keeps working toward a
+      // worker, but resurrecting the dismissed report every 15 seconds would
+      // override that choice.
+      const [[input]] = harness.getErrorToastCalls() as [
+        [{ onDismiss: () => void }],
+      ];
+      input.onDismiss();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(workflowMocks.ensureDesktopWorker.mock.calls.length).toBeGreaterThan(1);
+      expect(harness.getErrorToastCalls()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not show a stale failure after sign-out cancels enrollment", async () => {
