@@ -8,7 +8,7 @@ so a failure teaches the rule instead of just saying "banned."
 
 Checkers (the enforcement engines) live in `scripts/` per existing convention
 and load their records from here via `scripts/lint_records.py`. Native tools
-(Clippy, ESLint, rustfmt, mypy) enforce additional rules in their own config
+(Clippy, tsc, Ruff, rustfmt, mypy) enforce additional rules in their own config
 formats; they are outside these records today — see `native-tools.md` for the
 ledger and the follow-up.
 

@@ -12,14 +12,19 @@ native config) or stays ledger-only.
 
 | Tool | Owner | Config | CI wiring | What it enforces |
 | --- | --- | --- | --- | --- |
-| Clippy | anyharness | workspace defaults (no `clippy.toml`) | `make clippy` → `cargo clippy --workspace -- -D warnings` | Rust idiom + correctness lints, warnings are errors |
-| rustfmt | anyharness | workspace defaults | `make fmt` | Rust formatting |
+| Clippy | anyharness | workspace defaults (no `clippy.toml`) | none — local only: `make clippy` → `cargo clippy --workspace -- -D warnings` | Rust idiom + correctness lints, warnings are errors |
+| rustfmt | anyharness | workspace defaults | none — local only: `make fmt` | Rust formatting |
 | tsc (`--noEmit` via `typecheck` scripts) | frontend | per-package `tsconfig.json` | ci.yml typecheck jobs (desktop, web, mobile, shared, tests/release) | TypeScript type soundness per package |
 | Ruff (check + format) | server | `server/pyproject.toml` `[tool.ruff]` | server-ci.yml "Ruff check" / "Ruff format check" | Python lint + formatting for `server/` |
 | mypy | server | `server/pyproject.toml` `[tool.mypy]` + `server/scripts/check_mypy_baseline.py` | server-ci.yml "Mypy diagnostic ratchet" | Python typing; shrink-only diagnostic-count ratchet against `mypy_baseline.json` |
 | Terraform fmt/validate/test | server (infra) | `server/infra/**` | ci.yml Terraform jobs | Infra formatting, validity, policy tests |
 
 Notes:
+
+- Clippy and rustfmt are wired only through the Makefile — no CI job runs
+  them today (ci.yml's cargo job runs `cargo check` / `cargo test` only).
+  Closing that gap is part of the follow-up scope.
+- There is no ESLint in this repository; TypeScript linting is tsc-only.
 
 - The mypy ratchet is the pattern `ratchets.toml` generalizes; migrating it
   into `lints/server/ratchets.toml` is deliberately out of v1 scope because
