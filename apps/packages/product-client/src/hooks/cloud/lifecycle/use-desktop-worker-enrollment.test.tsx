@@ -26,10 +26,17 @@ const workflowMocks = vi.hoisted(() => ({
 // store delegates to it, so capture calls here instead of reading store state.
 const toastMocks = vi.hoisted(() => ({
   showProductToast: vi.fn<(message: string, kind?: "error" | "info") => void>(),
+  showProductErrorToast: vi.fn<(input: Record<string, unknown>) => void>(),
+  dismissToast: vi.fn<(id?: string) => void>(),
 }));
 
 vi.mock("#product/components/feedback/product-toast", () => ({
   showProductToast: toastMocks.showProductToast,
+  showProductErrorToast: toastMocks.showProductErrorToast,
+}));
+
+vi.mock("#product/primitives/utils/show-toast", () => ({
+  dismissToast: toastMocks.dismissToast,
 }));
 
 vi.mock("#product/lib/workflows/cloud/ensure-desktop-worker", () => ({
@@ -58,6 +65,8 @@ async function loadEnrollmentHarness() {
     activeOrganizationValidated: false,
   });
   toastMocks.showProductToast.mockClear();
+  toastMocks.showProductErrorToast.mockClear();
+  toastMocks.dismissToast.mockClear();
   // The enrollment hook reads captureException through the product telemetry
   // facade (host boundary), so the harness mounts a ProductHostProvider.
   // Both provider and hook come from the same post-reset module registry so
@@ -88,6 +97,7 @@ async function loadEnrollmentHarness() {
         validated: true,
       }),
     getToastCalls: () => toastMocks.showProductToast.mock.calls,
+    getErrorToastCalls: () => toastMocks.showProductErrorToast.mock.calls,
     nudgeRender: () => rendered.rerender({ ...props }),
   };
 }
@@ -270,7 +280,7 @@ describe("useDesktopWorkerEnrollment", () => {
     }
   });
 
-  it("shows the native startup failure to the user", async () => {
+  it("shows one persistent actionable startup notification", async () => {
     workflowMocks.ensureDesktopWorker.mockImplementationOnce(async (
       _organizationId,
       _worker,
@@ -283,12 +293,135 @@ describe("useDesktopWorkerEnrollment", () => {
 
     harness.signIn("user-a");
     await waitFor(() => {
-      expect(harness.getToastCalls()).toEqual([
+      expect(harness.getErrorToastCalls()).toEqual([
         [
-          "Cloud integrations worker failed to start: worker exited: enrollment contract mismatch",
-          "error",
+          expect.objectContaining({
+            id: "desktop-worker-startup-failure",
+            headline: "Cloud integrations unavailable",
+            consequence:
+              "Proliferate will keep trying in the background. Retry now, or dismiss this notice.",
+            cause: "worker exited: enrollment contract mismatch",
+            retry: expect.any(Function),
+            onDismiss: expect.any(Function),
+          }),
         ],
       ]);
+    });
+    expect(harness.getToastCalls()).toEqual([]);
+  });
+
+  it("explains how to recover when an earlier worker owns the credentials", async () => {
+    workflowMocks.ensureDesktopWorker.mockImplementationOnce(async (
+      _organizationId,
+      _worker,
+      deps,
+    ) => {
+      deps.onFailure(
+        "Cannot replace worker credentials while a Proliferate Worker is still running.",
+      );
+      return false;
+    });
+    const harness = await loadEnrollmentHarness();
+
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(harness.getErrorToastCalls()).toEqual([
+        [
+          expect.objectContaining({
+            headline: "Cloud integrations unavailable",
+            consequence:
+              "An earlier Proliferate Worker is still running. Quit other Proliferate apps; if none are open, restart your computer, then retry.",
+          }),
+        ],
+      ]);
+    });
+  });
+
+  it("keeps retrying without raising the same notification again", async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.ensureDesktopWorker.mockImplementation(async (
+        _organizationId,
+        _worker,
+        deps,
+      ) => {
+        deps.onFailure("worker is still unavailable");
+        return false;
+      });
+      const harness = await loadEnrollmentHarness();
+
+      await act(async () => {
+        harness.signIn("user-a");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+      expect(harness.getErrorToastCalls()).toHaveLength(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+      expect(harness.getErrorToastCalls()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not resurface a dismissed failure during background retries", async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.ensureDesktopWorker.mockImplementation(async (
+        _organizationId,
+        _worker,
+        deps,
+      ) => {
+        deps.onFailure("worker is still unavailable");
+        return false;
+      });
+      const harness = await loadEnrollmentHarness();
+
+      await act(async () => {
+        harness.signIn("user-a");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const notice = harness.getErrorToastCalls()[0]?.[0] as {
+        onDismiss: () => void;
+      };
+      act(() => notice.onDismiss());
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+      expect(harness.getErrorToastCalls()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries immediately from the notification and clears it on recovery", async () => {
+    workflowMocks.ensureDesktopWorker
+      .mockImplementationOnce(async (_organizationId, _worker, deps) => {
+        deps.onFailure("worker is still unavailable");
+        return false;
+      })
+      .mockResolvedValueOnce(true);
+    const harness = await loadEnrollmentHarness();
+
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(harness.getErrorToastCalls()).toHaveLength(1);
+    });
+    const notice = harness.getErrorToastCalls()[0]?.[0] as {
+      retry: () => void;
+    };
+    act(() => notice.retry());
+
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+      expect(toastMocks.dismissToast).toHaveBeenCalledWith(
+        "desktop-worker-startup-failure",
+      );
     });
   });
 
@@ -318,6 +451,6 @@ describe("useDesktopWorkerEnrollment", () => {
       failOldEnrollment?.();
       await flushEffects();
     });
-    expect(harness.getToastCalls()).toEqual([]);
+    expect(harness.getErrorToastCalls()).toEqual([]);
   });
 });
