@@ -49,7 +49,7 @@ def test_api_rejects_store_import(tmp_path: Path) -> None:
     path.write_text("from proliferate.db.store.users import load_user_by_id\n")
 
     violations = module.check_paths([path])
-    assert any("must not import db/store modules" in item.message for item in violations)
+    assert any(item.rule_id == "SRV-API-1" for item in violations)
 
 
 def test_api_rejects_async_session_dep(tmp_path: Path) -> None:
@@ -63,7 +63,7 @@ def test_api_rejects_async_session_dep(tmp_path: Path) -> None:
     )
 
     violations = module.check_paths([path])
-    assert any(item.rule_id == "API_DB_ENGINE_IMPORT" for item in violations)
+    assert any(item.rule_id == "SRV-API-3" for item in violations)
 
 
 def test_api_allows_documented_async_session_dependency(tmp_path: Path) -> None:
@@ -120,7 +120,7 @@ def test_ordinary_service_rejects_session_factory_type(tmp_path: Path) -> None:
 
     violations = module.check_paths([path])
 
-    assert any(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in violations)
+    assert any(item.rule_id == "SRV-SVC-1" for item in violations)
 
 
 def test_worker_service_still_rejects_queries_engines_models_and_session_methods(
@@ -144,10 +144,10 @@ def test_worker_service_still_rejects_queries_engines_models_and_session_methods
 
     violations = module.check_paths([path])
 
-    assert sum(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in violations) == 2
-    assert any(item.rule_id == "SERVICE_DB_ENGINE_IMPORT" for item in violations)
-    assert any(item.rule_id == "SERVICE_ORM_IMPORT" for item in violations)
-    assert sum(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations) == 3
+    assert sum(item.rule_id == "SRV-SVC-1" for item in violations) == 2
+    assert any(item.rule_id == "SRV-SVC-2" for item in violations)
+    assert any(item.rule_id == "SRV-SVC-3" for item in violations)
+    assert sum(item.rule_id == "SRV-SVC-4" for item in violations) == 3
 
 
 @pytest.mark.parametrize(
@@ -177,7 +177,7 @@ def test_worker_service_rejects_direct_session_escape_methods(
 
     violations = module.check_paths([path])
 
-    assert any(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations)
+    assert any(item.rule_id == "SRV-SVC-4" for item in violations)
 
 
 def test_canonical_single_file_worker_service_folder_is_allowed(tmp_path: Path) -> None:
@@ -213,9 +213,9 @@ def test_worker_service_exemption_requires_exact_domain_depth(
     path_violations = module.check_paths([path])
     structure_violations = module.check_structure(tmp_path)
 
-    assert any(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in path_violations)
+    assert any(item.rule_id == "SRV-SVC-1" for item in path_violations)
     assert any(
-        item.rule_id == "SINGLE_FILE_FOLDER" and item.path == path.parent
+        item.rule_id == "SRV-STRUCT-4" and item.path == path.parent
         for item in structure_violations
     )
 
@@ -234,7 +234,7 @@ def test_noncanonical_worker_and_arbitrary_single_file_folders_remain_rejected(
 
     violations = module.check_structure(tmp_path)
 
-    rejected = {item.path for item in violations if item.rule_id == "SINGLE_FILE_FOLDER"}
+    rejected = {item.path for item in violations if item.rule_id == "SRV-STRUCT-4"}
     assert worker in rejected
     assert arbitrary in rejected
 
@@ -246,7 +246,7 @@ def test_service_rejects_query_builder_import(tmp_path: Path) -> None:
     path.write_text("from sqlalchemy import select\n")
 
     violations = module.check_paths([path])
-    assert any(item.rule_id == "SERVICE_SQLALCHEMY_IMPORT" for item in violations)
+    assert any(item.rule_id == "SRV-SVC-1" for item in violations)
 
 
 def test_service_rejects_db_commit_call(tmp_path: Path) -> None:
@@ -256,7 +256,7 @@ def test_service_rejects_db_commit_call(tmp_path: Path) -> None:
     path.write_text("async def run(db) -> None:\n    await db.commit()\n")
 
     violations = module.check_paths([path])
-    assert any(".commit()" in item.message for item in violations)
+    assert any(item.rule_id == "SRV-SVC-4" and ".commit()" in item.detail for item in violations)
 
 
 def test_owned_service_concern_rejects_db_commit_after_relocation(tmp_path: Path) -> None:
@@ -277,7 +277,7 @@ def test_owned_service_concern_rejects_db_commit_after_relocation(tmp_path: Path
 
     violations = module.check_paths([path])
 
-    assert any(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations)
+    assert any(item.rule_id == "SRV-SVC-4" for item in violations)
 
 
 def test_service_rejects_session_ops_import_and_call(tmp_path: Path) -> None:
@@ -295,8 +295,8 @@ def test_service_rejects_session_ops_import_and_call(tmp_path: Path) -> None:
 
     violations = module.check_paths([path])
 
-    assert any(item.rule_id == "SERVICE_DB_ENGINE_IMPORT" for item in violations)
-    assert sum(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations) == 3
+    assert any(item.rule_id == "SRV-SVC-2" for item in violations)
+    assert sum(item.rule_id == "SRV-SVC-4" for item in violations) == 3
 
 
 def test_store_rejects_self_opening_session_and_commit(tmp_path: Path) -> None:
@@ -311,9 +311,9 @@ def test_store_rejects_self_opening_session_and_commit(tmp_path: Path) -> None:
     )
 
     violations = module.check_paths([path])
-    assert any(item.rule_id == "STORE_SESSION_FACTORY_IMPORT" for item in violations)
-    assert any(item.rule_id == "STORE_SESSION_FACTORY_CALL" for item in violations)
-    assert any(item.rule_id == "STORE_COMMIT_ROLLBACK" for item in violations)
+    assert any(item.rule_id == "SRV-STORE-1" for item in violations)
+    assert any(item.rule_id == "SRV-STORE-4" for item in violations)
+    assert any(item.rule_id == "SRV-STORE-3" for item in violations)
 
 
 def test_domain_rejects_async_export_and_framework_import(tmp_path: Path) -> None:
@@ -327,9 +327,9 @@ def test_domain_rejects_async_export_and_framework_import(tmp_path: Path) -> Non
     )
 
     violations = module.check_paths([path])
-    assert any(item.rule_id == "DOMAIN_FORBIDDEN_IMPORT" for item in violations)
-    assert any(item.rule_id == "DOMAIN_ASYNC_EXPORT" for item in violations)
-    assert any(item.rule_id == "HTTP_EXCEPTION_FORBIDDEN" for item in violations)
+    assert any(item.rule_id == "SRV-DOMAIN-1" for item in violations)
+    assert any(item.rule_id == "SRV-DOMAIN-3" for item in violations)
+    assert any(item.rule_id == "SRV-ERR-1" for item in violations)
 
 
 def test_background_tasks_folder_allows_single_task_module(tmp_path: Path) -> None:
@@ -354,7 +354,7 @@ def test_integration_rejects_database_import(tmp_path: Path) -> None:
 
     violations = module.check_paths([path])
 
-    assert any(item.rule_id == "INTEGRATION_DB_IMPORT" for item in violations)
+    assert any(item.rule_id == "SRV-INTEG-1" for item in violations)
 
 
 def test_migration_rejects_application_import(tmp_path: Path) -> None:
@@ -366,10 +366,22 @@ def test_migration_rejects_application_import(tmp_path: Path) -> None:
 
     violations = module.check_paths([path])
 
-    assert any(item.rule_id == "MIGRATION_APP_IMPORT" for item in violations)
+    assert any(item.rule_id == "SRV-MIGRATE-1" for item in violations)
 
 
-def test_allowlist_counts_do_not_hide_new_debt(tmp_path: Path) -> None:
+def _ledger(module, sites):  # type: ignore[no-untyped-def]
+    """A RuleSet carrying the real rule records plus the given exception sites."""
+    ruleset = module.lint_records.load()
+    ruleset.exceptions = [
+        module.lint_records.Exception_(rule=rule_id, path=path, site=site, reason="test")
+        for rule_id, path, site in sites
+    ]
+    return ruleset
+
+
+def test_exception_ledger_excepts_one_site_without_hiding_its_sibling(
+    tmp_path: Path,
+) -> None:
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
     path.parent.mkdir(parents=True)
@@ -380,37 +392,41 @@ def test_allowlist_counts_do_not_hide_new_debt(tmp_path: Path) -> None:
         "    await db.rollback()\n"
     )
     violations = module.check_paths([path])
+    assert len(violations) == 2
     relative = path.as_posix()
-    allowlist = {
-        ("SERVICE_DB_METHOD_CALL", relative): module.AllowlistEntry(
-            rule_id="SERVICE_DB_METHOD_CALL",
-            path=relative,
-            count=1,
-            reason="test",
-        )
-    }
+    ledger = _ledger(module, [("SRV-SVC-4", relative, "one::db.commit")])
 
-    failing, stale = module.apply_allowlist(violations, allowlist)
+    failing, stale = module.apply_exceptions(violations, ledger)
 
     assert len(failing) == 1
+    assert failing[0].site == "two::db.rollback"
     assert stale == []
 
 
-def test_allowlist_reports_stale_entries(tmp_path: Path) -> None:
+def test_exception_ledger_reports_stale_entries(tmp_path: Path) -> None:
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
     path.parent.mkdir(parents=True)
     path.write_text("async def run() -> None:\n    return None\n")
-    allowlist = {
-        ("SERVICE_DB_METHOD_CALL", path.as_posix()): module.AllowlistEntry(
-            rule_id="SERVICE_DB_METHOD_CALL",
-            path=path.as_posix(),
-            count=1,
-            reason="test",
-        )
-    }
+    ledger = _ledger(module, [("SRV-SVC-4", path.as_posix(), "run::db.commit")])
 
-    failing, stale = module.apply_allowlist([], allowlist)
+    failing, stale = module.apply_exceptions([], ledger)
 
     assert failing == []
     assert stale
+
+
+def test_diagnostic_carries_rule_alternative_and_record_path(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("async def run(db) -> None:\n    await db.commit()\n")
+
+    (violation,) = module.check_paths([path])
+    rendered = violation.format(tmp_path)
+
+    rule = module.ruleset().rule("SRV-SVC-4")
+    assert "SRV-SVC-4" in rendered
+    assert rule.rule.splitlines()[0] in rendered
+    assert rule.alternative.splitlines()[0] in rendered
+    assert "lints/server/boundaries.toml" in rendered

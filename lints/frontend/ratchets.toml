@@ -1,0 +1,64 @@
+# Frontend measured size debt (PROD-SIZE-1). A ratchet, not an exception
+# ledger: max_lines is the observed count allowed for this file and may only
+# shrink. Growth fails; so does a stale entry whose file is now under its
+# allowance or gone. scripts/check_max_lines.py is the only reader.
+
+[[max_lines]]
+path = "apps/desktop/src-tauri/src/commands/ssh_tunnel.rs"
+max_lines = 729
+reason = "existing desktop native oversized file"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx"
+max_lines = 1208
+reason = "C-train composition: C-2 ack-status UI coverage joins the B-4 cut; P3 runtime catalog extends All-Models coverage + add-key modal flow + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases + C3 model-snapshot status mock stub + review-fix refresh mutation stub + C1 cursor api_key/CLI method + CURSOR_API_KEY persistence cases; F-040 dropped the client-refresh-with-payload cases (no callable cloud refresh remains); agent-auth.md §5 provider-picker two-write assertion (vault api_key + one selection row) replaces the prefill-only case; the §1–§7 pane rebuild adds the collapsed-model-list expansion helper; review-fix non-orphaning provider-picker cases (PUT-failure revoke + rollback, close-only-after-PUT, bound-env-var pass-through, key-shaped env var for multi-field providers); PR-review fixes add the P0 anonymous-local Authenticate-gate regression, the P1-a supportsLogin&&canRunLogin regression, and the P1-b gateway-capabilities-pending loading-state regression; design-handoff v2 rewrite (cards + merged header badge + providers section + saved-keys segment)"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/cloud/transcript-view.test.ts"
+max_lines = 1160
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-presentation.test.ts"
+max_lines = 868
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.test.ts"
+max_lines = 1144
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.ts"
+max_lines = 905
+reason = "relocated existing oversized domain source; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/sessions/activity.test.ts"
+max_lines = 660
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/sessions/intents/session-intent.test.ts"
+max_lines = 606
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/workspaces/cloud-work-inventory.test.ts"
+max_lines = 859
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts"
+max_lines = 840
+reason = "managed sandbox cloud workspace indicators + PR 5 explicit-materialization attachment cases extend existing oversized test file"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts"
+max_lines = 691
+reason = "workspace git-status threading extends existing oversized test file"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts"
+max_lines = 734
+reason = "product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred"

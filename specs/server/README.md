@@ -311,13 +311,13 @@ not a softer version of the rule.
   [billing_subjects.py](../../server/proliferate/db/store/billing_subjects.py)
   return ORM types. Accounts SSO also mutates a `User` and calls `db.flush()` in
   [user_resolution.py](../../server/proliferate/server/accounts/sso/user_resolution.py).
-- [ ] **Request transaction ownership is incomplete.** The migration allowlist
+- [ ] **Request transaction ownership is incomplete.** The exception ledger
   records 30 route-owned session calls across the Accounts
   [Desktop](../../server/proliferate/server/accounts/desktop/api.py),
   [Identity](../../server/proliferate/server/accounts/identity/api.py),
   and [SSO](../../server/proliferate/server/accounts/sso/api.py) APIs.
-  Their exact count locks live in
-  [server_boundaries_allowlist.txt](../../scripts/server_boundaries_allowlist.txt).
+  Each site is a `SRV-API-5` entry in
+  [exceptions.toml](../../lints/server/exceptions.toml).
 - [ ] **Authorization dependency adoption is partial.** The current
   [Auth guide](auth.md) treats inline service checks as migration debt. Current
   examples include Organization role gates in
@@ -343,10 +343,8 @@ not a softer version of the rule.
 - [ ] **Raw-transport placement retains one exact exception.**
   [cloud/gateway/proxy.py](../../server/proliferate/server/cloud/gateway/proxy.py)
   owns raw HTTP and WebSocket proxy transport inside a product domain. Its
-  `httpx` import is count-locked as
-  `PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/gateway/proxy.py 1`
-  in
-  [server_boundaries_allowlist.txt](../../scripts/server_boundaries_allowlist.txt).
+  `httpx` import is the one `SRV-INTEG-4` site in
+  [exceptions.toml](../../lints/server/exceptions.toml).
   Sentry release identity is injected and no longer crosses into a product
   domain.
 - [ ] **Service topology and package audiences are not gated.** Cloud Sandbox

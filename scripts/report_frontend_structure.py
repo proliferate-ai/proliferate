@@ -12,11 +12,12 @@ from pathlib import Path
 
 try:
     from scripts.frontend_imports import ImportStatement, collect_module_specifiers
+    from scripts import lint_records
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
     from frontend_imports import ImportStatement, collect_module_specifiers
+    import lint_records
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MAX_LINES_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "max_lines_allowlist.txt"
 FRONTEND_STRUCTURE_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_structure_allowlist.txt"
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
 PRODUCT_CLIENT_DOMAIN_SRC = PRODUCT_CLIENT_SRC / "domain"
@@ -269,16 +270,16 @@ def count_lines(path: Path) -> int:
 
 
 def load_max_lines_allowlist_paths() -> set[str]:
+    """Paths whose size debt is already ratcheted under lints/*/ratchets.toml.
+
+    scripts/check_max_lines.py owns those files; this reporter defers to it so a
+    file is not reported twice.
+    """
     paths: set[str] = set()
-    if not MAX_LINES_ALLOWLIST_PATH.exists():
-        return paths
-    for raw_line in MAX_LINES_ALLOWLIST_PATH.read_text().splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split(maxsplit=2)
-        if len(parts) == 3:
-            paths.add(parts[0])
+    for owner in lint_records.OWNERS:
+        for entry in lint_records.load_ratchets(owner).get("max_lines", []):
+            if "path" in entry:
+                paths.add(entry["path"])
     return paths
 
 

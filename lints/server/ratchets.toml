@@ -1,0 +1,139 @@
+# Server measured size debt (SRV-SIZE-1 / PROD-SIZE-1). A ratchet, not an
+# exception ledger: max_lines is the observed count allowed for this file and
+# may only shrink. Growth fails; so does a stale entry whose file is now under
+# its allowance or gone. scripts/check_max_lines.py is the only reader.
+
+[[max_lines]]
+path = "server/proliferate/auth/identity/store.py"
+max_lines = 695
+reason = "managed sandbox GitHub grant read path extends existing identity store + SG10 review: explicit crypto-secret calls retain the original readable grant flow instead of line-neutral compression"
+
+[[max_lines]]
+path = "server/proliferate/config.py"
+max_lines = 614
+reason = "managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending"
+
+[[max_lines]]
+path = "server/proliferate/db/models/cloud/agent_gateway.py"
+max_lines = 643
+reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D cut; agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); AgentApiKey gains a kind column (D1); a module split is deferred to the model-taxonomy pass rather than done mid-stack; typed-config write gate loosens ck_agent_auth_selection_api_key_shape with a why-not-tighter comment; SG12 keeps the base docstring intact while the direct wall-clock owner import adds one line"
+
+[[max_lines]]
+path = "server/proliferate/db/store/organizations.py"
+max_lines = 777
+reason = "D1 adds get_default_organization_for_user (earliest active membership = signup placement org, the v1 payer law); SG09 review restores the collision-ladder and race-backstop rationale; SSO JIT membership persistence is relocated from auth_sso into its Organization store owner; split pending with the org-store taxonomy pass"
+
+[[max_lines]]
+path = "server/proliferate/server/accounts/identity/api.py"
+max_lines = 488
+reason = "complete behavior-preserving account-entry route move; split pending"
+
+[[max_lines]]
+path = "server/proliferate/server/billing/stripe_webhooks.py"
+max_lines = 665
+reason = "W-F2 period-boundary gate adds one guard clause (a billing_reason check plus its drop report and the hold-clear that must still run) to _handle_invoice_paid; the reporter and its context assembly live in webhook_drops.py. W-F5 drop visibility: the intake path was already 595/600 before this change, so threading the Stripe event id through the five handlers and adding one report call per silent early return cannot fit under the cap. The drop vocabulary, levels, paid-detection, and all per-reason context assembly were split out to webhook_drops.py to keep the growth to call sites only; splitting the handlers themselves is deferred to the billing service taxonomy pass rather than done inside an observability-only fix. Adversarial-review fix pass (MAJOR 1) adds a two-line reporter call at the dispatch fall-through's 13th silent drop (unhandled_event_type); billing error normalization changes only the direct error import"
+
+[[max_lines]]
+path = "server/proliferate/server/cloud/agent_gateway/enrollment.py"
+max_lines = 636
+reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes; D train: org-only ensure_signup_enrollment + per-(org,member) LiteLLM identity + fingerprint-driven per-key re-mint; shrank again when ensure_user_enrollment died (D-3), split pending"
+
+[[max_lines]]
+path = "server/proliferate/server/cloud/agent_gateway/service.py"
+max_lines = 813
+reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set"
+
+[[max_lines]]
+path = "server/proliferate/server/cloud/materialization/materialize/agent_auth.py"
+max_lines = 725
+reason = "C-train composition: C-1 ensure-on-switch + C-2 delivery-ack stamping join the cut; D3 python arm adds the provider_config render branch + per-(harness,config_kind) translation table (_translate_provider_config_env) + typed-vault loading in _load_state_inputs; review fix cycle 1 hardens _hostname_first_label's userinfo/port stripping; review fix cycle 2 repairs the dangling Foundry-mapping docstring; integration adds A4 fail-closed + B3 per-harness key map on the same module D1 fail-closed comments: the renderer withholding predicate now names unfunded subjects explicitly (D train)"
+
+[[max_lines]]
+path = "server/proliferate/server/cloud/materialization/sandbox_io/connect.py"
+max_lines = 613
+reason = "sandbox connect/ready choreography (attempt CAS, usage convergence) + gateway-cache invalidation at the re-stamp (C8); split pending + SG10 review: explicit crypto-secret calls retain the original lifecycle spacing instead of line-neutral compression"
+
+[[max_lines]]
+path = "server/proliferate/server/cloud/workspaces/service.py"
+max_lines = 1173
+reason = "workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path + cold-access repairing runtime-access resolution (S2); AnyHarness provisioning handoff split out per guides/domains.md; + git_identity_required translation (C3) + after-commit worktree retire and lost-status derivation (C7) + worker-staleness degraded surfacing (_worker_degraded, S3)"
+
+[[max_lines]]
+path = "server/tests/integration/test_agent_gateway_api.py"
+max_lines = 1242
+reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model; state coverage now seeds a per-harness child key (B3 renderer); C1 adds cursor gateway-rejected/api_key-accepted (local + cloud) selection cases, plus the disabled gateway-marker-row asserts restored on review fix; +provider-config kind coverage (D1); +per-kind required-field validation coverage (D1 fix cycle, review finding 6); +structural route-shape pin for the S1 /agent-auth vs /agent-gateway split (cycle-2 fix) D train rewrites the enrollment-shape cases org-only (D2) and drops the personal-subject fixtures; typed-config write gate adds typed-selection PUT coverage (open combos, pending/undeclared refusals, A6 shape pins, R5 azure field-set pin, A5 write-to-render state case); split pending with the suite taxonomy pass"
+
+[[max_lines]]
+path = "server/tests/integration/test_agent_gateway_enrollment.py"
+max_lines = 887
+reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage"
+
+[[max_lines]]
+path = "server/tests/integration/test_agent_gateway_migration.py"
+max_lines = 619
+reason = "NEW in D-3: the legacy-enrollment migration proofs (D6) + the org-only grep-gates (D8)"
+
+[[max_lines]]
+path = "server/tests/integration/test_agent_gateway_store.py"
+max_lines = 714
+reason = "store-level agent_gateway suite; +create_agent_provider_config/get_agent_provider_config_decrypted kind-scoped fetch symmetry coverage (D1) D-3 deletes the personal-enrollment discovery test, adds the migration feed coverage; typed-config write gate reworks the bad-shape case for the kind-aware gate"
+
+[[max_lines]]
+path = "server/tests/integration/test_agent_gateway_usage_credits.py"
+max_lines = 782
+reason = "D train: D2 free-credit dedupe proofs + converted-claim guard + importer tests re-cut to the signup shape"
+
+[[max_lines]]
+path = "server/tests/integration/test_auth_flow.py"
+max_lines = 2216
+reason = "existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage + SG10 review: explicit crypto-secret fixture setup retains the nested grant construction"
+
+[[max_lines]]
+path = "server/tests/integration/test_billing_accounting.py"
+max_lines = 872
+reason = "existing server oversized integration test"
+
+[[max_lines]]
+path = "server/tests/integration/test_billing_api.py"
+max_lines = 1944
+reason = "existing oversized billing integration suite; billing error normalization adds exact parent-router, nested-router, and permission-denial envelope characterization"
+
+[[max_lines]]
+path = "server/tests/integration/test_billing_fail_closed_read_errors.py"
+max_lines = 693
+reason = "billing error normalization characterizes both snapshot-read and verdict-persistence inheritance corridors in the existing fail-closed integration fixture"
+
+[[max_lines]]
+path = "server/tests/integration/test_cloud_workspace_materialization_service.py"
+max_lines = 1190
+reason = "durable materialization ledger service suite (intent/report/unlink transitions, redaction, primary selection, recorded-sandbox reconciliation, repo-less workspace, install-id redaction, generation replay/crash-retry/terminal-reintent) + PR 5 exact-ref create coverage; new fail-closed source cases split to test_cloud_workspace_exact_ref_source.py; + lost-workspace rematerialization rejection (C7)"
+
+[[max_lines]]
+path = "server/tests/integration/test_organizations_api.py"
+max_lines = 624
+reason = "added admin-only coverage for GET .../invitations"
+
+[[max_lines]]
+path = "server/tests/integration/test_stripe_webhook_drop_visibility.py"
+max_lines = 685
+reason = "W-F5 level-policy suite; W-F2 adds the INVOICE_NOT_PERIOD_BOUNDARY level case here rather than in its own file because the assertion under test is precisely that this drop is NOT confused with INVOICE_GRANT_GATE_CLOSED, whose level case sits directly above it, and both need this module's caplog/propagate and report_critical fixtures. The file was already 597/600 before the addition. A split by drop family is deferred to the billing suite taxonomy pass"
+
+[[max_lines]]
+path = "server/tests/integration/test_stripe_webhooks.py"
+max_lines = 1502
+reason = "existing server oversized integration test; W-F2 adds billing_reason to two invoice fixtures that would otherwise take the new non-boundary early return (silently un-testing the pro-pricing gate and the boundary hold-clear they exist to cover), plus an annotation on the seat-reconciliation grant assertion. That annotation is the larger part of the growth and is deliberate: the assertion pins 15.0 h, which review established is a real over-grant (~17.5 vs ~12.5 owed) reached by re-delivery of a boundary invoice after a seat was added mid-period — the same arithmetic as W-F2 through a different door. It is pinned as current behaviour with the residual named and its narrow reachability stated, rather than left reading as correct, because an in-repo comment blessing this shape is how the W-F2 bug survived review the first time; billing error normalization pins the direct product-error envelope after route-wrapper removal"
+
+[[max_lines]]
+path = "server/tests/unit/test_agent_auth_materialization.py"
+max_lines = 990
+reason = "C-train composition: C-1/C-2 renderer additions; renderer unit suite (+fail-closed rewrites, +the renderer-merge tripwire; the contract-fixture producer class split out to test_agent_auth_state_contract_fixture.py); D3 python arm adds TestTranslateProviderConfigEnv (6-row table) + TestRenderProviderConfigSource coverage for the new provider_config wire source; review fix cycle 1 adds a userinfo/port hostname-derivation edge case"
+
+[[max_lines]]
+path = "server/tests/unit/test_cloud_connect_race.py"
+max_lines = 605
+reason = "connect/detach commit-ambiguity race suite (usage-close fencing fakes) + mark-lost stub wiring (C7)"
+
+[[max_lines]]
+path = "server/tests/unit/test_cloud_webhook_service.py"
+max_lines = 610
+reason = "E2B webhook receipt suite (killed/paused/resumed/timeout receipt + usage-segment fencing) + marked-lost stamping assertions (C7)"
