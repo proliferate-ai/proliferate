@@ -28,6 +28,9 @@ export const motion = {
     panelMs: 240,
     /** Emphasized, spring-led product moments. */
     emphasizedMs: 300,
+    /** Slow ambient dissolve of transient overlays (e.g. the todo progress
+     * pill's linger fade) — long enough to read as evaporation, not exit. */
+    dissolveMs: 600,
   },
   ease: {
     outQuint: "cubic-bezier(0.19, 1, 0.22, 1)",

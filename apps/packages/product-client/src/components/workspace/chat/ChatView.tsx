@@ -11,6 +11,7 @@ import {
 } from "react";
 import { ChatInput } from "#product/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "#product/components/workspace/chat/input/ChatComposerDock";
+import { TodoProgressPill } from "#product/components/workspace/chat/input/TodoProgressPill";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { ChatLaunchIntentPane } from "#product/components/workspace/chat/surface/ChatLaunchIntentPane";
 import { ChatLoadingHero } from "#product/components/workspace/chat/surface/ChatLoadingHero";
@@ -286,6 +287,7 @@ export const ChatView = memo(function ChatView({
           backdrop={isSessionMode}
           outboundSlot={composerDockSlots.outboundSlot}
           activeSlot={composerDockSlots.activeSlot}
+          floatingSlot={<TodoProgressPill />}
           attachedSlot={activeWorkspaceSessionRecovery
             ? (
                 <Suspense fallback={null}>

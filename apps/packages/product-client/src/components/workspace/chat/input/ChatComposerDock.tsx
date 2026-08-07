@@ -13,6 +13,13 @@ interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   outboundSlot?: ReactNode;
   activeSlot?: ReactNode;
   attachedSlot?: ReactNode;
+  /**
+   * Absolutely positioned, centered overlay directly above the composer
+   * surface (`children`) — reserves no layout space of its own. For
+   * transient affordances like `TodoProgressPill` that must not shift the
+   * dock when they show/hide.
+   */
+  floatingSlot?: ReactNode;
   footerSlot?: ReactNode;
   lowerBackdropTopPx?: number | null;
   shellClassName?: string;
@@ -37,6 +44,7 @@ export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDock
     outboundSlot,
     activeSlot,
     attachedSlot,
+    floatingSlot,
     footerSlot,
     lowerBackdropTopPx,
     shellClassName,
@@ -120,7 +128,14 @@ export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDock
               </DebugProfiler>
             )}
             <DebugProfiler id="chat-composer-dock-input">
-              <>{children}</>
+              <div className="relative">
+                {floatingSlot && (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 flex justify-center pb-2.5">
+                    {floatingSlot}
+                  </div>
+                )}
+                {children}
+              </div>
             </DebugProfiler>
             {footerSlot ? (
               <DebugProfiler id="chat-composer-dock-footer">

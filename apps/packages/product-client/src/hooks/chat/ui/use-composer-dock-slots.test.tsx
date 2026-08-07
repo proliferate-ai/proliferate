@@ -13,10 +13,6 @@ const primaryPendingInteractionState = vi.hoisted(() => ({
   value: null as { kind: string; requestId: string } | null,
 }));
 
-const activeTodoTrackerState = vi.hoisted(() => ({
-  value: null as { entries: unknown[] } | null,
-}));
-
 const pendingPromptsState = vi.hoisted(() => ({
   value: [] as unknown[],
 }));
@@ -38,10 +34,6 @@ vi.mock("#product/hooks/chat/derived/use-active-pending-session-interactions", (
     primaryPendingInteraction: primaryPendingInteractionState.value,
   }),
   useActivePendingPrompts: () => pendingPromptsState.value,
-}));
-
-vi.mock("#product/hooks/chat/derived/use-active-todo-tracker", () => ({
-  useActiveTodoTracker: () => activeTodoTrackerState.value,
 }));
 
 vi.mock("#product/hooks/chat/derived/use-chat-prompt-recoveries", () => ({
@@ -77,11 +69,6 @@ vi.mock("#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel", 
   CloudRuntimeAttachedPanel: () => <div data-testid="cloud-runtime-panel" />,
 }));
 
-vi.mock("#product/components/workspace/chat/input/TodoTrackerPanel", () => ({
-  TodoTrackerPanel: () => <div data-testid="todo-tracker-panel" />,
-  TodoTrackerStrip: () => <div data-testid="todo-tracker-strip" />,
-}));
-
 vi.mock("#product/components/workspace/chat/input/ApprovalCard", () => ({
   ConnectedApprovalCard: () => <div data-testid="approval-card" />,
 }));
@@ -113,7 +100,6 @@ afterEach(() => {
   cleanup();
   workspaceStatusPanelState.value = { kind: "pending" };
   primaryPendingInteractionState.value = null;
-  activeTodoTrackerState.value = null;
   pendingPromptsState.value = [];
   promptRecoveryState.value = [];
   delegatedWorkState.value = null;
@@ -148,26 +134,19 @@ describe("useComposerDockSlots", () => {
     expect(screen.queryByTestId("workspace-status-panel")).toBeNull();
   });
 
-  it("renders the todo strip below an interaction card instead of evicting plan progress", () => {
+  it("renders the interaction card as the active slot", () => {
     primaryPendingInteractionState.value = { kind: "permission", requestId: "req-1" };
-    activeTodoTrackerState.value = { entries: [] };
     const { result } = renderHook(() => useComposerDockSlots());
 
     render(<>{result.current.activeSlot}</>);
 
     expect(screen.getByTestId("approval-card")).not.toBeNull();
-    expect(screen.getByTestId("todo-tracker-strip")).not.toBeNull();
-    expect(screen.queryByTestId("todo-tracker-panel")).toBeNull();
   });
 
-  it("renders the full tracker panel when no interaction holds the slot", () => {
-    activeTodoTrackerState.value = { entries: [] };
+  it("leaves the active slot empty when there is no blocking interaction", () => {
     const { result } = renderHook(() => useComposerDockSlots());
 
-    render(<>{result.current.activeSlot}</>);
-
-    expect(screen.getByTestId("todo-tracker-panel")).not.toBeNull();
-    expect(screen.queryByTestId("todo-tracker-strip")).toBeNull();
+    expect(result.current.activeSlot).toBeNull();
   });
 
   it("renders workspace-scoped prompt recoveries in the outbound slot", () => {
