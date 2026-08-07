@@ -40,7 +40,7 @@ ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
 GENERATED_PREFIXES: set[str] = set()
 
-# Component-library taxonomy (specs/codebase/platforms/product/design-system.md):
+# Component-library taxonomy (specs/DESIGN_SYSTEM.md):
 # ProductClient owns root primitive files plus these support directories.
 PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES = {
     "icons",
@@ -2725,7 +2725,7 @@ def find_radix_import_violations(
 ) -> list[Violation]:
     """Rule: `@radix-ui/*` imports are legal only in root primitive files and
     the nested `patterns/` tier per the component-library taxonomy in
-    specs/codebase/platforms/product/design-system.md.
+    specs/DESIGN_SYSTEM.md.
     """
     violations: list[Violation] = []
     candidates = (
@@ -2887,7 +2887,7 @@ def find_primitives_top_level_violations() -> list[Violation]:
                     f"apps/packages/product-client/src/primitives/{entry.name} is not "
                     "an allowed root source file or support directory per the "
                     "component-library taxonomy in "
-                    "specs/codebase/platforms/product/design-system.md "
+                    "specs/DESIGN_SYSTEM.md "
                     "(support directories: "
                     f"{', '.join(sorted(PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES))})"
                 ),
