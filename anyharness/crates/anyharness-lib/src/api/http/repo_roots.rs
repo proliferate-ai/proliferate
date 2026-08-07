@@ -318,7 +318,7 @@ pub async fn materialize_repo_root(
             })?;
 
     let result = state
-        .materialization_service
+        .materialization_runtime
         .acquire_repo_root(
             &req.operation_id,
             "github",
@@ -368,7 +368,7 @@ pub async fn materialize_workspace_at_ref(
     load_repo_root(&state, repo_root_id.clone()).await?;
 
     let result = state
-        .materialization_service
+        .materialization_runtime
         .materialize_workspace_at_ref(
             &repo_root_id,
             &req.operation_id,

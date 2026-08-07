@@ -45,10 +45,15 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
-/// Tracks the per-operation-id locks live in this process. Cloneable and shared
-/// (held in `AppState`); a single instance backs all callers.
+/// Tracks the per-operation-id locks live in this process. Cloneable and
+/// shared between `MaterializationService` and `MaterializationRuntime` (both
+/// hold the one instance `app/materialization.rs` constructs), so repo-root
+/// and workspace operation ids converge/conflict against the same lock map
+/// whichever layer they enter through. `pub` only to satisfy the two
+/// constructors' signatures — the enclosing module stays `pub(crate)`, so this
+/// never reaches outside the crate.
 #[derive(Clone, Default)]
-pub(crate) struct MaterializationOperationLocks {
+pub struct MaterializationOperationLocks {
     keys: Arc<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>>,
 }
 

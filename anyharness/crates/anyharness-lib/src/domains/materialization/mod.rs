@@ -2,6 +2,7 @@ pub(crate) mod acquire;
 pub mod identity;
 pub mod model;
 pub(crate) mod operation_lock;
+pub mod runtime;
 pub mod service;
 pub mod store;
 pub(crate) mod workspace_plan;

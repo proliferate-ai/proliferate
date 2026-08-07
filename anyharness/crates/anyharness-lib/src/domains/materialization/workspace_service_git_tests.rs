@@ -9,6 +9,7 @@ use super::store::MaterializationOperationStore;
 use super::workspace_plan::generated_workspace_destination_id;
 use crate::app::AppState;
 use crate::domains::agents::installer::seed::AgentSeedStore;
+use crate::domains::terminals::model::{CreateTerminalOptions, TerminalPurpose};
 use crate::persistence::Db;
 
 struct Guard {
@@ -138,7 +139,7 @@ async fn omitted_destination_crash_retry_adopts_the_recorded_checkout() {
         .expect("record chosen destination");
 
     let recovered = state
-        .materialization_service
+        .materialization_runtime
         .materialize_workspace_at_ref(
             &repo_root_id,
             operation_id,
@@ -159,7 +160,7 @@ async fn explicit_busy_destination_returns_workspace_busy() {
     let (_source, repo_root_id, head_sha) = registered_source(&state, "busy-source");
     let branch = "feature/busy";
     let first = state
-        .materialization_service
+        .materialization_runtime
         .materialize_workspace_at_ref(
             &repo_root_id,
             "workspace-busy-first",
@@ -185,7 +186,7 @@ async fn explicit_busy_destination_returns_workspace_busy() {
         .expect("seed active session");
 
     let error = state
-        .materialization_service
+        .materialization_runtime
         .materialize_workspace_at_ref(
             &repo_root_id,
             "workspace-busy-second",
@@ -200,13 +201,77 @@ async fn explicit_busy_destination_returns_workspace_busy() {
 }
 
 #[tokio::test]
+async fn explicit_busy_destination_with_active_terminal_returns_workspace_busy() {
+    let (_env, _home, state) = make_app_state("busy-terminal-home");
+    let (_source, repo_root_id, head_sha) = registered_source(&state, "busy-terminal-source");
+    let branch = "feature/busy-terminal";
+    let first = state
+        .materialization_runtime
+        .materialize_workspace_at_ref(
+            &repo_root_id,
+            "workspace-busy-terminal-first",
+            branch,
+            &head_sha,
+            Some("busy-terminal-destination"),
+            None,
+        )
+        .await
+        .expect("first materialization");
+
+    // A real PTY-backed terminal on the reused workspace, not a mock: it lands
+    // in `TerminalStatus::Running` (see `live/terminals/driver/pty.rs`), which
+    // is what the reuse admission check queries via `list_terminals`.
+    let terminal = state
+        .terminal_service
+        .create_terminal(
+            &first.workspace.id,
+            &first.workspace.path,
+            CreateTerminalOptions {
+                cwd: None,
+                shell: Some("/bin/sh".to_string()),
+                title: None,
+                purpose: TerminalPurpose::General,
+                env: Vec::new(),
+                startup_command: None,
+                startup_command_env: Vec::new(),
+                startup_command_timeout_ms: None,
+                cols: 80,
+                rows: 24,
+            },
+        )
+        .await
+        .expect("create terminal");
+
+    let error = state
+        .materialization_runtime
+        .materialize_workspace_at_ref(
+            &repo_root_id,
+            "workspace-busy-terminal-second",
+            branch,
+            &head_sha,
+            Some("busy-terminal-destination"),
+            None,
+        )
+        .await
+        .expect_err("destination with an active terminal must fail");
+    assert_eq!(error.code(), "WORKSPACE_BUSY");
+    assert_eq!(error.to_string(), "workspace is busy: workspace has active terminals");
+
+    state
+        .terminal_service
+        .close_terminal(&terminal.id)
+        .await
+        .expect("close terminal");
+}
+
+#[tokio::test]
 async fn completed_replay_rejects_malformed_observed_head_sha() {
     let (_env, _home, state) = make_app_state("replay-home");
     let (_source, repo_root_id, head_sha) = registered_source(&state, "replay-source");
     let operation_id = "workspace-replay-sha";
     let branch = "feature/replay-sha";
     state
-        .materialization_service
+        .materialization_runtime
         .materialize_workspace_at_ref(
             &repo_root_id,
             operation_id,
@@ -232,7 +297,7 @@ async fn completed_replay_rejects_malformed_observed_head_sha() {
         .expect("corrupt replay sha");
 
     let error = state
-        .materialization_service
+        .materialization_runtime
         .materialize_workspace_at_ref(
             &repo_root_id,
             operation_id,
