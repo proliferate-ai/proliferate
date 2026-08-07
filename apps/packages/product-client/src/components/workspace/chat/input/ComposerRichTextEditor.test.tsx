@@ -87,29 +87,45 @@ describe("ComposerRichTextEditor", () => {
     expect(harness.root.querySelector("ul li")).toBeTruthy();
   });
 
-  it("keeps list Enter and indentation Lexical-owned", async () => {
+  it("submits numbered-list drafts on Enter and inserts a newline on Shift-Enter", async () => {
     const onSubmit = vi.fn();
     const harness = renderEditor({ onSubmit });
     await harness.ready();
     act(() => resetText(harness.editor, ""));
-    await typeCharacters(harness.editor, "- one");
+    await typeCharacters(harness.editor, "1. one");
+
+    expect(harness.root.querySelectorAll("ol li")).toHaveLength(1);
+    act(() => {
+      harness.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter", { shiftKey: true }));
+    });
+    await waitFor(() => expect(harness.root.querySelector("ol li br")).toBeTruthy());
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    const enter = keyEvent("Enter", { cancelable: true });
+    act(() => {
+      harness.editor.dispatchCommand(KEY_ENTER_COMMAND, enter);
+    });
+    expect(enter.defaultPrevented).toBe(true);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(harness.root.querySelectorAll("ol li")).toHaveLength(1);
+  });
+
+  it("keeps list indentation Lexical-owned", async () => {
+    const harness = renderEditor();
+    await harness.ready();
+    act(() => resetText(harness.editor, ""));
+    act(() => { fireEvent(harness.root, pasteEvent("- one\n- two")); });
+    await waitFor(() => expect(harness.root.querySelectorAll("li")).toHaveLength(2));
 
     act(() => {
-      harness.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter"));
-      insertText(harness.editor, "two");
       harness.editor.dispatchCommand(KEY_TAB_COMMAND, keyEvent("Tab"));
     });
-    await waitFor(() => expect(harness.root.querySelectorAll("li")).toHaveLength(2));
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(harness.root.querySelector("ul ul")).toBeTruthy();
+    await waitFor(() => expect(harness.root.querySelector("ul ul")).toBeTruthy());
 
     act(() => {
       harness.editor.dispatchCommand(KEY_TAB_COMMAND, keyEvent("Tab", { shiftKey: true }));
-      harness.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter"));
-      harness.editor.dispatchCommand(KEY_ENTER_COMMAND, keyEvent("Enter"));
     });
-    await waitFor(() => expect(harness.root.querySelector("ul + p")).toBeTruthy());
-    expect(onSubmit).not.toHaveBeenCalled();
+    await waitFor(() => expect(harness.root.querySelector("ul ul")).toBeNull());
   });
 
   it("creates bare and selected HTTPS links", async () => {

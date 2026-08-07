@@ -86,16 +86,16 @@ external draft replacements discard the snapshot.
 
 The live editor recognizes `*`/`_` emphasis, `**`/`__` strong emphasis, and
 line-leading unordered and ordered list shortcuts. Cmd/Ctrl-B and Cmd/Ctrl-I
-toggle marks through the rich-text command layer. Enter continues or exits a
-list and Tab/Shift-Tab indent or outdent only when the selection is inside a
-list item. Outside lists, every composer surface — workspace, Home, and queued
-edits — submits on plain Enter or Cmd/Ctrl-Enter, and Shift-Enter inserts a
-newline. Queued edits use the workspace editor's minimum height, row cap, and
-overflow scrolling.
+toggle marks through the rich-text command layer. Tab/Shift-Tab indent or
+outdent only when the selection is inside a list item. Every composer surface —
+workspace, Home, and queued edits — submits on plain Enter or Cmd/Ctrl-Enter,
+including from a list item, and Shift-Enter inserts a newline without
+submitting. Queued edits use the workspace editor's minimum height, row cap,
+and overflow scrolling.
 
 Lexical's high-priority Enter and Tab commands own this decision before native
-editor mutation. A list selection stays Lexical-owned; otherwise the surface
-applies the shared submit contract exactly once. The
+editor mutation. The surface applies the shared submit contract exactly once;
+Shift-Enter and list indentation stay Lexical-owned. The
 same native `beforeinput`, `keydown`, or `paste` event timestamp is forwarded to
 typing measurement when that event changes the document.
 
