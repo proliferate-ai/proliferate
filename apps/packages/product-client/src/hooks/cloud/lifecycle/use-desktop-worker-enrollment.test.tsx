@@ -466,6 +466,52 @@ describe("useDesktopWorkerEnrollment", () => {
     }
   });
 
+  it("refreshes an active notification when a previously dismissed cause returns", async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.ensureDesktopWorker
+        .mockImplementationOnce(async (_organizationId, _worker, deps) => {
+          deps.onFailure("control plane unavailable");
+          return false;
+        })
+        .mockImplementationOnce(async (_organizationId, _worker, deps) => {
+          deps.onFailure("worker process exited");
+          return false;
+        })
+        .mockImplementationOnce(async (_organizationId, _worker, deps) => {
+          deps.onFailure("control plane unavailable");
+          return false;
+        });
+      const harness = await loadEnrollmentHarness();
+
+      await act(async () => {
+        harness.signIn("user-a");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const firstNotice = harness.getErrorToastCalls()[0]?.[0] as {
+        onDismiss: () => void;
+      };
+      act(() => firstNotice.onDismiss());
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(harness.getErrorToastCalls()[1]?.[0]).toEqual(
+        expect.objectContaining({ cause: "worker process exited" }),
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(harness.getErrorToastCalls()).toHaveLength(3);
+      expect(harness.getErrorToastCalls()[2]?.[0]).toEqual(
+        expect.objectContaining({ cause: "control plane unavailable" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("retries immediately from the notification and clears it on recovery", async () => {
     workflowMocks.ensureDesktopWorker
       .mockImplementationOnce(async (_organizationId, _worker, deps) => {

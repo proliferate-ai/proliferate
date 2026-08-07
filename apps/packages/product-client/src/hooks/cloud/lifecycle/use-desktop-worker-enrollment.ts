@@ -168,6 +168,7 @@ export function useDesktopWorkerEnrollment(
           kind: notice.kind,
           cause: notice.cause,
         };
+        dismissedFailureNotification = null;
         activeFailureNotification = notification;
         showErrorToast({
           id: DESKTOP_WORKER_FAILURE_TOAST_ID,
