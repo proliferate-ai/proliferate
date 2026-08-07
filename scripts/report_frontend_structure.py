@@ -282,7 +282,7 @@ def count_lines(path: Path) -> int:
     return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
-def load_max_lines_allowlist_paths() -> set[str]:
+def load_max_lines_ratchet_paths() -> set[str]:
     """Paths whose size debt is already ratcheted under lints/*/ratchets.toml.
 
     scripts/check_max_lines.py owns those files; this reporter defers to it so a
@@ -687,7 +687,7 @@ def find_forbidden_shared_package_imports(files: Iterable[Path]) -> list[Violati
 
 def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
-    documented_large_files = load_max_lines_allowlist_paths()
+    documented_large_files = load_max_lines_ratchet_paths()
     ratchet = load_size_ratchet()
     observed: dict[str, int] = {}
     for path in files:
