@@ -6,7 +6,7 @@ server/proliferate/server/cloud/github_app/service.py:274) calling
 `ensure_personal_cloud_sandbox_exists` + `schedule_materialize_sandbox`. That
 callback needs a real GitHub OAuth `code`, and this repo's dev GitHub App's
 callback URL is pinned to the `main` profile's port
-(specs/developing/local/feature-worktree-auth.md, Layer C) — a dedicated
+(guides/local/feature-worktree-auth.md, Layer C) — a dedicated
 `t3local` profile cannot receive it. Real attempt made and documented in the
 final report; this script is the contract's sanctioned fallback: "invoke the
 exact post-authorization service call the callback makes — never a faked

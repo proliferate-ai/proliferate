@@ -41,7 +41,7 @@ make dev-list
 
 Profile state lives under `~/.proliferate-local/dev/profiles/<name>/`; runtime
 state lives under `~/.proliferate-local/runtimes/<name>/`. Read
-[`specs/developing/local/README.md`](specs/developing/local/README.md) before
+[`guides/local/README.md`](guides/local/README.md) before
 running a feature worktree or changing local launch behavior.
 
 ## Source Router
@@ -51,7 +51,7 @@ applicable owner.
 
 | Source area | Start here |
 | --- | --- |
-| `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`specs/developing/process/README.md`](specs/developing/process/README.md) |
+| `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`guides/process/README.md`](guides/process/README.md) |
 | `apps/desktop/**`, `apps/web/**`, `apps/mobile/**`, `apps/packages/**` | [`specs/codebase/structures/frontend/README.md`](specs/codebase/structures/frontend/README.md) |
 | `apps/desktop/src-tauri/**`, `apps/desktop/src-tauri-debug/**` | [`specs/codebase/structures/desktop-native/README.md`](specs/codebase/structures/desktop-native/README.md) |
 | `server/**` | [`specs/codebase/structures/server/README.md`](specs/codebase/structures/server/README.md) |
@@ -62,13 +62,13 @@ applicable owner.
 | `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**` | [`specs/developing/testing/README.md`](specs/developing/testing/README.md) |
 | `scripts/agent-gateway-smoke/**` | [`specs/developing/testing/README.md`](specs/developing/testing/README.md) |
 | `catalogs/**`, `scripts/agent-catalog/**` | [`specs/codebase/platforms/product/README.md`](specs/codebase/platforms/product/README.md) |
-| `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`specs/developing/deploying/README.md`](specs/developing/deploying/README.md) |
-| `.auth-env/**`, local profiles, local app identity | [`specs/developing/local/README.md`](specs/developing/local/README.md) |
+| `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`guides/deploying/README.md`](guides/deploying/README.md) |
+| `.auth-env/**`, local profiles, local app identity | [`guides/local/README.md`](guides/local/README.md) |
 
 After the structure document, use
 [`specs/codebase/README.md`](specs/codebase/README.md) to find the reusable
 platform contract or complete product/system contract involved in the change.
-Use [`specs/developing/README.md`](specs/developing/README.md) for procedures.
+Use [`guides/README.md`](guides/README.md) for procedures.
 
 ## Repository-Wide Rules
 
@@ -95,4 +95,4 @@ Use [`specs/developing/README.md`](specs/developing/README.md) for procedures.
 Run `python3 scripts/check_docs.py` after changing repository documentation.
 
 Prepare and mark pull requests ready according to
-[`specs/developing/process/pull-requests.md`](specs/developing/process/pull-requests.md).
+[`guides/process/pull-requests.md`](guides/process/pull-requests.md).

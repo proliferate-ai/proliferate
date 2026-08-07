@@ -381,4 +381,4 @@ Changes to this feature require focused coverage for the guarantee they alter:
   visibly confirm the Slack message.
 
 Operator investigation is documented in
-[`../../../../developing/debugging/support-reports.md`](../../../../developing/debugging/support-reports.md).
+[`../../../../../guides/debugging/support-reports.md`](../../../../../guides/debugging/support-reports.md).

@@ -1,7 +1,7 @@
 # Desktop Updates And Release Notices
 
 Read this spec with
-[`releases.md`](../../../../developing/deploying/releases.md) and
+[`releases.md`](../../../../../guides/deploying/releases.md) and
 [`desktop-update-testing.md`](../../../../developing/testing/desktop-update-testing.md).
 The Releases procedure owns packaging, signing, publishing, and operator procedure; the
 testing spec owns the real N−1 to N updater mechanism; this feature spec owns
@@ -117,7 +117,7 @@ title. The packaged WebView must be able to fetch the immutable record from the
 public downloads CDN. Direct tag-push releases without an authored input remain
 valid and publish without `notes`. Atomic publication order, collision handling,
 same-version reruns, CORS configuration, and partial-publish recovery are owned
-by [`releases.md`](../../../../developing/deploying/releases.md).
+by [`releases.md`](../../../../../guides/deploying/releases.md).
 
 ## Acceptance Matrix
 

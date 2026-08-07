@@ -113,7 +113,7 @@ dashboard/CLI, or the adapter's listing if the check needs scripting).
 The row deliberately does not duplicate the template reference — a stored
 copy is one more write path whose honesty we would have to maintain, for
 an enumeration the provider already owns. Operating procedure:
-[e2b-template-operations.md](../../../developing/operating/e2b-template-operations.md).
+[e2b-template-operations.md](../../../../guides/operating/e2b-template-operations.md).
 
 ### Instantiate
 
@@ -549,7 +549,7 @@ server/proliferate/
 
 - Materialization attempt fails: row `error` with a sanitized receipt; the
   next materialization retries. First response:
-  [cloud-provisioning-failure.md](../../../developing/operating/cloud-provisioning-failure.md).
+  [cloud-provisioning-failure.md](../../../../guides/operating/cloud-provisioning-failure.md).
 - Provider target authoritatively gone: binding detached, next attempt
   creates a new VM under the same row; user state inside the old VM is
   lost, the logical sandbox is not.

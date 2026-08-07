@@ -435,11 +435,11 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "(tests/release/scripts/prov1_fallback.py), which calls the real GitHub-App-callback service " +
       "functions in-process against this DB, bypassing the real GitHub OAuth redirect (infeasible " +
       "on a dedicated feature profile — its callback URL is pinned to the main profile's port, per " +
-      "specs/developing/local/feature-worktree-auth.md Layer C) and the (separately tracked) " +
+      "guides/local/feature-worktree-auth.md Layer C) and the (separately tracked) " +
       "current_product_user gate. Staging has no equivalent — that fallback is local-lane-only.",
     whereItLives:
       "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate_dev_<profile>, per " +
-      "specs/developing/local/feature-worktree-auth.md. Required by the billing, integration-audit, " +
+      "guides/local/feature-worktree-auth.md. Required by the billing, integration-audit, " +
       "and provisioning DB seams (all local-lane only).",
     secret: false,
     lanes: ["local"],

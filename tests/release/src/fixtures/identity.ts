@@ -212,7 +212,7 @@ export const DEFAULT_LOCAL_DURABLE_USER_PASSWORD = "release-e2e-DurableUser!Aa1"
  * claim transport (`server/proliferate/server/setup/api.py`) — the same
  * unauthenticated, single-use, form-encoded flow a human running
  * `pdevui <profile>` would use per
- * `specs/developing/local/feature-worktree-auth.md` Layer B.
+ * `guides/local/feature-worktree-auth.md` Layer B.
  *
  * Idempotent across runs against the same profile: `/setup` permanently 404s
  * ("not found — nothing to set up here") once any user exists, which this
@@ -228,7 +228,7 @@ export async function ensureLocalDurableUser(creds: DurableUserCredentials): Pro
       throw new Error(
         "ensureLocalDurableUser: /setup is open (fresh profile) but SETUP_TOKEN_FILE is not set. " +
           "Boot the profile with SETUP_TOKEN_FILE=/tmp/proliferate-<profile>-setup-token per " +
-          "specs/developing/local/feature-worktree-auth.md Layer B, then re-run.",
+          "guides/local/feature-worktree-auth.md Layer B, then re-run.",
       );
     }
     const { readFile } = await import("node:fs/promises");

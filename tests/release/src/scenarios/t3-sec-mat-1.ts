@@ -274,7 +274,7 @@ async function runWorkspaceFileSecretHalf(
   } catch (error) {
     // The seed script re-imports the local server's Settings, which requires
     // the running profile's full ambient env (JWT_SECRET, DEBUG, etc. -- see
-    // specs/developing/local/feature-worktree-auth.md), not just
+    // guides/local/feature-worktree-auth.md), not just
     // RELEASE_E2E_LOCAL_DATABASE_URL. `githubAppSeedAvailable` only checks
     // for a seed credential, not a fully-sourced profile shell, so a
     // same-class environmental failure surfaces here rather than in that

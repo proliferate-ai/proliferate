@@ -419,7 +419,7 @@ apps/packages/product-client/src/
 
 - Clone dirty or ahead at refresh: typed checkout error (exit 43/44 → 409);
   never a silent reset. First response:
-  [cloud-provisioning-failure.md](../../../developing/operating/cloud-provisioning-failure.md).
+  [cloud-provisioning-failure.md](../../../../guides/operating/cloud-provisioning-failure.md).
 - Base-branch fetch fails at worktree create: creation proceeds on local
   state with the failure classified and surfaced; offline Desktop use is a
   legitimate instance of this path, not an error to block on.

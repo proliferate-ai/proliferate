@@ -304,4 +304,4 @@ Use these focused tests as the code-level proof:
 - `apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-link-candidates.test.ts`
 
 For incident diagnosis, use
-[`cloud-provisioning-failure.md`](../../../developing/operating/cloud-provisioning-failure.md).
+[`cloud-provisioning-failure.md`](../../../../guides/operating/cloud-provisioning-failure.md).

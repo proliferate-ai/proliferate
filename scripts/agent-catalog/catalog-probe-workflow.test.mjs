@@ -7,7 +7,7 @@ const workflow = readFileSync(
   "utf8",
 );
 const runbook = readFileSync(
-  new URL("../../specs/developing/operating/catalog-probe.md", import.meta.url),
+  new URL("../../guides/operating/catalog-probe.md", import.meta.url),
   "utf8",
 );
 

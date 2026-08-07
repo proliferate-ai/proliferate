@@ -31,7 +31,7 @@ Observability does not own:
 - release construction and promotion, which belongs to Delivery;
 - mutable Sentry projects, alert rules, integrations, or Slack destinations.
   Operators discover that state at execution time using the
-  [Sentry operating procedure](../../../../developing/operating/analytics/sentry.md).
+  [Sentry operating procedure](../../../../../guides/operating/analytics/sentry.md).
 
 ## Deployment and data contract
 

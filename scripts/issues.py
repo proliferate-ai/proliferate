@@ -11,7 +11,7 @@ the accepted F1 REST surface:
 It never creates issues by hand, never fetches private report objects, and
 never dumps raw provider payloads. The agent credential and the secret-provider
 response are redacted from every error path; they are never printed, logged, or
-persisted. See specs/developing/debugging/issue-triage.md for the human runbook.
+persisted. See guides/debugging/issue-triage.md for the human runbook.
 """
 from __future__ import annotations
 

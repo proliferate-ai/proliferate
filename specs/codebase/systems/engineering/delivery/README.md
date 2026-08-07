@@ -3,7 +3,7 @@
 Delivery owns the repository's artifact identities and the topology that
 builds, deploys, promotes, and publishes them. It describes what the checked-in
 automation does. Operator steps live in
-[Developing: Deploying](../../../../developing/deploying/README.md).
+[Developing: Deploying](../../../../../guides/deploying/README.md).
 
 ## Identities
 
@@ -58,7 +58,7 @@ staging, the nightly train, or production promotion. The Worker reusable lane
 is a configured no-op while `WORKERS_DEPLOY_ENABLED` is false and deliberately
 fails if enabled before a canonical worker service and command exist.
 
-See the [Hosted procedure](../../../../developing/deploying/hosted.md).
+See the [Hosted procedure](../../../../../guides/deploying/hosted.md).
 
 ### Background plane topology
 
@@ -195,7 +195,7 @@ Runtime release even though it has no production deploy job. Neither
 coordinator includes a LiteLLM job. Exact LiteLLM deployment uses the manual
 production-promotion path.
 
-See the [Release procedure](../../../../developing/deploying/releases.md).
+See the [Release procedure](../../../../../guides/deploying/releases.md).
 
 ### Artifact lanes
 
@@ -209,7 +209,7 @@ Server releases publish server and LiteLLM GHCR images with version and rolling
 `stable` tags, never commit-SHA image tags. A `server-v<version>` GitHub Release
 also holds the two Linux runtime bundles, CloudFormation template, installer,
 AWS launch helper, deploy bundle, and checksum manifest enumerated in the
-[Release procedure](../../../../developing/deploying/releases.md).
+[Release procedure](../../../../../guides/deploying/releases.md).
 
 Those published LiteLLM images are Proliferate-owned wrappers. Their rolling or
 versioned outer tags do not loosen the wrapper's upstream input: every build
@@ -276,11 +276,11 @@ parent because that source commit already passed the `main` push gate.
 
 ## Ownership Boundaries
 
-- [Developing: Deploying](../../../../developing/deploying/README.md) owns
+- [Developing: Deploying](../../../../../guides/deploying/README.md) owns
   operator procedures; this system document owns durable topology.
-- [Pull Requests](../../../../developing/process/pull-requests.md) owns human PR
+- [Pull Requests](../../../../../guides/process/pull-requests.md) owns human PR
   preparation and readiness policy.
-- [Environment Sources](../../../../developing/reference/environment-sources.md)
+- [Environment Sources](../../../../../guides/local/dev-profiles.md#environment-sources)
   and its variable catalog own configuration locations and precedence.
 - [Testing](../../../../developing/testing/README.md) owns release qualification,
   test tiers, scenarios, and evidence requirements.

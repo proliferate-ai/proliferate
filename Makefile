@@ -1563,7 +1563,7 @@ install: git-hooks
 	pnpm install
 
 # Point git at the checked-in hooks. Idempotent, safe to re-run, and local to
-# this clone/worktree (never committed state). See specs/developing/local/README.md.
+# this clone/worktree (never committed state). See guides/local/README.md.
 git-hooks:
 	@git config core.hooksPath scripts/git-hooks
 	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks); bypass a single commit with --no-verify."

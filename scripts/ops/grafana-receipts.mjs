@@ -1,7 +1,7 @@
 // Private rollback-receipt handling for the E1 Grafana operator tooling
 // (grafana-alerting.mjs). Receipts hold real before-state, are written mode
 // 0600 outside the Git worktree, and are never committed.
-// Contract: specs/developing/operating/production-alerts.md
+// Contract: guides/operating/production-alerts.md
 
 import fs from "node:fs";
 import path from "node:path";

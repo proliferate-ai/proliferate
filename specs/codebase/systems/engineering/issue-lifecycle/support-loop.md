@@ -477,7 +477,7 @@ reporter email or private source bodies to the general agent API.
 ## PR metadata and attribution
 
 Contributors select PR titles and labels through the canonical
-[pull-request procedure](../../../../developing/process/pull-requests.md).
+[pull-request procedure](../../../../../guides/process/pull-requests.md).
 There is no version number on an ordinary PR; the successful release boundary
 assigns it.
 
@@ -825,7 +825,7 @@ The following are known implementation differences, not alternate contracts:
   the contact-point template
   (`server/infra/observability/grafana/issue-tracker-contact.json`), and the
   target-locked operator script (`scripts/ops/grafana-alerting.mjs`) with its
-  runbook ([`../../../../developing/operating/production-alerts.md`](../../../../developing/operating/production-alerts.md)).
+  runbook ([`../../../../../guides/operating/production-alerts.md`](../../../../../guides/operating/production-alerts.md)).
   Contact-point creation is one-time (apply refuses a pre-existing receiver;
   restore removes only the tooling-created receiver). Delivery activation is
   E2; no webhook health canary exists yet and the health check is manual;

@@ -126,7 +126,7 @@ Onboarding analytics must follow the
 Support reports and debugging should include stable ids when available: user
 id, organization id, linked provider state, billing subject id, workspace id,
 session id, command id, and support report id. Use
-[../../../../developing/debugging/README.md](../../../../developing/debugging/README.md)
+[../../../../../guides/debugging/README.md](../../../../../guides/debugging/README.md)
 for the operator path.
 
 ## Verification
@@ -149,6 +149,6 @@ Minimum local smoke for end-to-end onboarding changes:
 9. Send a prompt or command and confirm transcript/commandability updates.
 ```
 
-Use `STRIPE=1` and [../../../../developing/local/stripe-local-testing.md](../../../../developing/local/stripe-local-testing.md)
+Use `STRIPE=1` and [../../../../../guides/local/stripe-local-testing.md](../../../../../guides/local/stripe-local-testing.md)
 when billing checkout, portal, subscription, refill, webhook, or credit behavior
 is part of the onboarding change.

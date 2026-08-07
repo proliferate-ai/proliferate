@@ -41,8 +41,8 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/codebase/systems/engineering/delivery/README.md",
             "specs/codebase/systems/engineering/issue-lifecycle/README.md",
             "specs/codebase/systems/engineering/observability/README.md",
-            "specs/developing/operating/README.md",
-            "specs/developing/operating/analytics/README.md",
+            "guides/operating/README.md",
+            "guides/operating/analytics/README.md",
             "specs/developing/testing/manual-release-qa.md",
         }
 
@@ -68,7 +68,11 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "reference",
         }
         expected_indexes = {
-            f"specs/developing/{root}/README.md" for root in expected_roots
+            f"guides/{root}/README.md"
+            for root in expected_roots - {"testing", "reference"}
+        } | {
+            "specs/developing/testing/README.md",
+            "specs/developing/reference/README.md",
         }
 
         self.assertEqual(check_docs.DEVELOPING_ROOTS, expected_roots)

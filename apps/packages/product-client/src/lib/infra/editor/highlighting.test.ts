@@ -17,7 +17,7 @@ describe("highlightMarkdownDiffLines", () => {
         "make test             # Rust workspace tests",
         "```",
         "- Run `make dev` now",
-        "See [`specs/developing/local/dev-profiles.md`](specs/developing/local/dev-profiles.md)",
+        "See [`guides/local/dev-profiles.md`](guides/local/dev-profiles.md)",
       ],
       "dark",
     );
@@ -42,10 +42,10 @@ describe("highlightMarkdownDiffLines", () => {
       { content: "See ", color: colors.foreground },
       { content: "[", color: colors.muted },
       { content: "`", color: colors.muted },
-      { content: "specs/developing/local/dev-profiles.md", color: colors.string },
+      { content: "guides/local/dev-profiles.md", color: colors.string },
       { content: "`", color: colors.muted },
       { content: "]", color: colors.muted },
-      { content: "(specs/developing/local/dev-profiles.md)", color: colors.heading },
+      { content: "(guides/local/dev-profiles.md)", color: colors.heading },
     ]);
   });
 });

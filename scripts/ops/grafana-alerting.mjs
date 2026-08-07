@@ -2,7 +2,7 @@
 
 // Operator tooling for the six production Grafana alert rules and the dark
 // issue-tracker webhook contact point (support-system slice E1).
-// Contract: specs/developing/operating/production-alerts.md
+// Contract: guides/operating/production-alerts.md
 // check is offline; export/apply/restore are live and refuse the network
 // unless GRAFANA_ALERTING_LIVE=1 (Phase 2, gated on slice A acceptance).
 // HTTP transport lives in grafana-client.mjs (network-layer target lock).
