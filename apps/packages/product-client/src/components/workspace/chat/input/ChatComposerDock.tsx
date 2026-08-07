@@ -130,7 +130,7 @@ export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDock
             <DebugProfiler id="chat-composer-dock-input">
               <div className="relative">
                 {floatingSlot && (
-                  <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 flex justify-center pb-2.5">
+                  <div className="pointer-events-none absolute inset-x-0 bottom-full z-sticky flex justify-center pb-2.5">
                     {floatingSlot}
                   </div>
                 )}
