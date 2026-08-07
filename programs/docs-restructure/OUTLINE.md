@@ -159,4 +159,6 @@ adversarial verify pass (refuters per moved/deleted doc — the method validated
   anatomy above.
 - **D13 — `PRODUCT_SENSE.md`.** Drafted, then a live founder taste ruling.
 - **D14 — tombstone sweep.** Delete tombstones + `specs/codebase` residue at zero inbound; this
-  program dir deletes itself per the harvest rule.
+  program dir deletes itself per the harvest rule. Preconditions surfaced by the D2 review round:
+  a live Grafana re-apply must land first (alert runbook URLs currently traverse tombstones), and
+  `check_docs.py` gains a `guides/` root guard when the `specs/developing` guard retires.
