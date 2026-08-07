@@ -5,7 +5,7 @@ Cloud once, sends heartbeats, and — when a heartbeat ack reports version
 divergence — writes a durable update request into a Proliferate Supervisor
 mailbox. The agent catalog is not converged here: it ships only inside the
 runtime binary
-(agent-distribution.md in specs/codebase/platforms/product/),
+([agent-distribution.md](codebase/platforms/product/agent-distribution.md)),
 so binary convergence is catalog convergence.
 
 It is not a Cloud command runner. It does not lease commands, materialize
@@ -19,7 +19,7 @@ for already-running legacy workers), the Worker never downloads, replaces,
 kills, or rolls back AnyHarness or itself.
 It only observes heartbeat divergence and writes one durable request into
 `.proliferate/supervisor/updates` for Proliferate Supervisor to act on; see
-the Lifecycle section below and [specs/supervisor.md](supervisor.md) for
+the [Lifecycle](#worker-lifecycle-and-convergence) section below and [specs/supervisor.md](supervisor.md) for
 the consumer side. On a **legacy (non-supervisor-owned) target** the Worker
 still performs the in-place AnyHarness/Worker binary swap described below;
 that path is deprecated and scheduled for deletion after the one-time
@@ -118,28 +118,37 @@ inventory, or materialization subsystems.
 
 ## Ownership Map
 
-| Area | Owns | Does not own |
-| --- | --- | --- |
-| `main.rs`, `runtime.rs` | CLI entry, dependency construction, one heartbeat-and-convergence loop | Product workflows or background task supervision |
-| `identity/**` | Enrollment request, durable Worker credential, fingerprint | Sandbox identity, command identity, re-enrollment policy |
-| `lifecycle/heartbeat.rs` | Heartbeat cadence, request, and acknowledgement | Update execution or server-side liveness policy |
-| `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target |
-| `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target |
-| `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) |
-| `integration_gateway.rs` | Write the private gateway credential file returned by enrollment and repair it after an authenticated heartbeat when a predecessor overwrote it | Credential issuance or re-enrollment |
-| `cloud_client/**` | Raw Cloud HTTP and wire shapes | Convergence decisions or local persistence |
-| `store/**` | Durable Worker identity and AnyHarness update state in local SQLite | Cloud or AnyHarness product truth |
-| Root support files | Configuration, errors, telemetry, process locking, version reporting | Hidden service layers |
+| Area | Owns | Does not own | Guide |
+| --- | --- | --- | --- |
+| `main.rs`, `runtime.rs` | CLI entry, dependency construction, one heartbeat-and-convergence loop | Product workflows or background task supervision | [Runtime](#worker-runtime) |
+| `identity/**` | Enrollment request, durable Worker credential, fingerprint | Sandbox identity, command identity, re-enrollment policy | [Identity](#worker-identity) |
+| `lifecycle/heartbeat.rs` | Heartbeat cadence, request, and acknowledgement | Update execution or server-side liveness policy | [Lifecycle](#worker-lifecycle-and-convergence) |
+| `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target | [Lifecycle](#worker-lifecycle-and-convergence) |
+| `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target | [Lifecycle](#worker-lifecycle-and-convergence) |
+| `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](#worker-lifecycle-and-convergence) |
+| `integration_gateway.rs` | Write the private gateway credential file returned by enrollment and repair it after an authenticated heartbeat when a predecessor overwrote it | Credential issuance or re-enrollment | [Identity](#worker-identity) |
+| `cloud_client/**` | Raw Cloud HTTP and wire shapes | Convergence decisions or local persistence | [Clients](#worker-http-clients) |
+| `store/**` | Durable Worker identity and AnyHarness update state in local SQLite | Cloud or AnyHarness product truth | [Store](#worker-store) |
+| Root support files | Configuration, errors, telemetry, process locking, version reporting | Hidden service layers | [Root support](#worker-root-support-files) |
 
-The sections below explain each area in detail.
+## Read Order
+
+Read this file first, then the focused owner:
+
+- [Runtime](#worker-runtime)
+- [Identity](#worker-identity)
+- [Lifecycle and convergence](#worker-lifecycle-and-convergence)
+- [HTTP clients](#worker-http-clients)
+- [Local store](#worker-store)
+- [Root support](#worker-root-support-files)
 
 For behavior outside the crate, use the current owners:
 
-- Server structure (specs/codebase/structures/server/README.md)
-- AnyHarness structure (specs/codebase/structures/anyharness/README.md)
-- Sandbox lifecycle (specs/codebase/platforms/product/sandbox-lifecycle.md)
-- Repository environments and workspace provisioning (specs/codebase/platforms/product/workspace-provisioning.md)
-- Billing (specs/codebase/platforms/product/billing.md)
+- [Server structure](codebase/structures/server/README.md)
+- [AnyHarness structure](codebase/structures/anyharness/README.md)
+- [Sandbox lifecycle](codebase/platforms/product/sandbox-lifecycle.md)
+- [Repository environments and workspace provisioning](codebase/platforms/product/workspace-provisioning.md)
+- [Billing](codebase/platforms/product/billing.md)
 
 ## Dependency Direction
 
@@ -372,7 +381,7 @@ on its next successful heartbeat.
 There is no catalog convergence in this crate: the agent catalog ships only
 inside the runtime binary, so the AnyHarness binary swap below IS the catalog
 update
-(agent-distribution.md "Convergence" in specs/codebase/platforms/product/). The Worker has no served catalog version to compare, no
+([agent-distribution.md "Convergence"](codebase/platforms/product/agent-distribution.md#convergence)). The Worker has no served catalog version to compare, no
 document to fetch, and no push route to call. Do not reintroduce one — a
 faster catalog lane would break the invariant that the active catalog is
 immutable for the lifetime of the runtime process.
