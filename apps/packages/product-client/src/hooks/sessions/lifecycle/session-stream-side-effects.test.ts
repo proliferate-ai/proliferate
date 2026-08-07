@@ -8,6 +8,7 @@ import {
 import {
   createTranscriptState,
   type SessionEventEnvelope,
+  type SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
 import {
   applyBatchedStreamSideEffects,
@@ -147,6 +148,32 @@ describe("applyBatchedStreamSideEffects", () => {
     ]);
   });
 
+  it("forwards stream-reconciled controls to launch-default persistence", () => {
+    const input = baseInput();
+    const liveConfig = effortLiveConfigSnapshot();
+    const reconciledChange = {
+      rawConfigId: "reasoning_effort",
+      value: "xhigh",
+      status: "queued" as const,
+      mutationId: 1,
+    };
+
+    applyBatchedStreamSideEffects({
+      ...input,
+      reconciledIntents: [{
+        liveConfig,
+        reconciledChanges: [reconciledChange],
+      }],
+    });
+
+    expect(input.persistReconciledControlPreferences).toHaveBeenCalledWith(
+      "workspace-1",
+      "codex",
+      liveConfig,
+      [reconciledChange],
+    );
+  });
+
   it("notifies once for every terminal event in a batch", () => {
     applyBatchedStreamSideEffects({
       ...baseInput(),
@@ -228,6 +255,30 @@ function queuedPendingConfigChanges(): PendingSessionConfigChanges {
       status: "queued",
       mutationId: 1,
     },
+  };
+}
+
+function effortLiveConfigSnapshot(): SessionLiveConfigSnapshot {
+  return {
+    rawConfigOptions: [],
+    normalizedControls: {
+      model: null,
+      collaborationMode: null,
+      mode: null,
+      reasoning: null,
+      effort: {
+        key: "effort",
+        rawConfigId: "reasoning_effort",
+        label: "Effort",
+        currentValue: "xhigh",
+        settable: true,
+        values: [{ value: "xhigh", label: "Extra High" }],
+      },
+      fastMode: null,
+      extras: [],
+    },
+    sourceSeq: 2,
+    updatedAt: "2026-04-04T00:00:02Z",
   };
 }
 
