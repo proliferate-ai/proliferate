@@ -32,6 +32,15 @@ export type TranscriptRow =
     renderPresentation: TurnPresentation;
     isFirstTurnRow: boolean;
     isLastTurnRow: boolean;
+    /**
+     * True for exactly one row of the FIRST turn when a workspace-creation
+     * receipt should render. That row hosts the receipt as one of its
+     * tool-call-style entries — see `applyWorkspaceReceiptHost` for the
+     * selection rule and `TurnItemSequence` for how it renders (folded into
+     * the completed-history disclosure, or inline before the turn's first
+     * non-user-message content while streaming).
+     */
+    hostsWorkspaceReceipt?: boolean;
   }
   | {
     kind: "pending_prompt";
@@ -124,10 +133,13 @@ export function buildTranscriptRowModel({
   const seenTurnIds = new Set<string>();
   const goalRows = bucketGoalEventRows(goalEvents, transcript);
 
-  // The receipt reads as the opening of the agent's first response: it
-  // renders after the first user message (the first turn's leading
-  // user-message row, or the local prompt rows when no turn is renderable
-  // yet), never pinned above the conversation.
+  // The receipt reads as one of the first turn's tool calls: it hosts on
+  // whichever row of that turn will render the completed-history "Worked for
+  // Ns" disclosure (folding into it like any other tool call), or otherwise
+  // the turn's first row with non-user-message content, or otherwise the
+  // turn's first row — see `applyWorkspaceReceiptHost`. Only when no turn is
+  // renderable yet does it fall back to a standalone row after the local
+  // prompt rows (below).
   const workspaceReceiptRow: TranscriptRow | null = workspaceReceiptKey
     ? {
       kind: "workspace_receipt",
@@ -159,9 +171,7 @@ export function buildTranscriptRowModel({
     const hostsWorkspaceReceipt = workspaceReceiptRow !== null && seenTurnIds.size === 0;
     seenTurnIds.add(turnId);
     const turnGoalRows = goalRows.byTurnId.get(turnId) ?? EMPTY_GOAL_ROWS;
-    // The receipt host turn also forces the leading user-message split so
-    // the receipt can slot directly after the prompt.
-    const needsLeadingSplit = turnGoalRows.length > 0 || hostsWorkspaceReceipt;
+    const needsLeadingSplit = turnGoalRows.length > 0;
     const goalSeqBoundaries = turnGoalRows.map((row) => row.event.seq);
     const { rows: turnRows } = buildTurnRows(
       turn,
@@ -169,6 +179,7 @@ export function buildTranscriptRowModel({
       cache,
       needsLeadingSplit,
       goalSeqBoundaries,
+      hostsWorkspaceReceipt,
     );
     // Interleave goal rows by seq among the turn's own rows.
     const interleavedRows = interleaveGoalRowsBySeq(
@@ -177,11 +188,9 @@ export function buildTranscriptRowModel({
       turn,
       transcript,
     );
+    rows.push(...interleavedRows);
     if (hostsWorkspaceReceipt) {
-      rows.push(...insertWorkspaceReceiptRow(interleavedRows, workspaceReceiptRow, transcript));
       workspaceReceiptEmitted = true;
-    } else {
-      rows.push(...interleavedRows);
     }
   }
 
@@ -466,39 +475,43 @@ function interleaveGoalRowsBySeq(
 }
 
 /**
- * Places the workspace receipt row directly after the host turn's leading
- * user-message row (carved out by the forced leading split), so the receipt
- * opens the agent's response. Falls back to before the turn's rows when the
- * turn does not start with a user message.
+ * Selects the row that hosts the workspace-creation receipt among a turn's
+ * (already built) rows and marks it `hostsWorkspaceReceipt: true`. Preferred
+ * host, in order:
+ *   1. The row that renders the completed-history "Worked for Ns" disclosure
+ *      (`renderPresentation.completedHistorySummary` set) — the receipt
+ *      folds in as the disclosure's first child, collapsing with it.
+ *   2. Otherwise, the first row containing any non-user-message block — the
+ *      receipt renders inline before that block while the turn streams.
+ *   3. Otherwise, the turn's first row (e.g. a turn that is so far nothing
+ *      but the user's prompt) — the receipt renders after it.
+ * All other rows are returned unchanged (same references, so unrelated rows
+ * don't lose memoization).
  */
-function insertWorkspaceReceiptRow(
-  turnRows: readonly TranscriptRow[],
-  receiptRow: TranscriptRow,
+function applyWorkspaceReceiptHost(
+  rows: readonly Extract<TranscriptRow, { kind: "turn" }>[],
   transcript: TranscriptState,
-): TranscriptRow[] {
-  const firstTurnRowIndex = turnRows.findIndex((row) => row.kind === "turn");
-  if (firstTurnRowIndex === -1) {
-    return [...turnRows, receiptRow];
+): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
+  if (rows.length === 0) {
+    return rows;
   }
-  const firstTurnRow = turnRows[firstTurnRowIndex] as Extract<TranscriptRow, { kind: "turn" }>;
-  const insertIndex = isUserMessageOnlyTurnRow(firstTurnRow, transcript)
-    ? firstTurnRowIndex + 1
-    : firstTurnRowIndex;
-  return [
-    ...turnRows.slice(0, insertIndex),
-    receiptRow,
-    ...turnRows.slice(insertIndex),
-  ];
-}
-
-function isUserMessageOnlyTurnRow(
-  row: Extract<TranscriptRow, { kind: "turn" }>,
-  transcript: TranscriptState,
-): boolean {
-  const blocks = row.renderPresentation.displayBlocks;
-  return blocks.length > 0 && blocks.every((block) =>
-    block.kind === "item"
-    && transcript.itemsById[block.itemId]?.kind === "user_message");
+  let hostIndex = rows.findIndex((row) =>
+    row.renderPresentation.completedHistorySummary !== null
+  );
+  if (hostIndex === -1) {
+    hostIndex = rows.findIndex((row) =>
+      row.renderPresentation.displayBlocks.some((block) =>
+        block.kind !== "item"
+        || transcript.itemsById[block.itemId]?.kind !== "user_message"
+      )
+    );
+  }
+  if (hostIndex === -1) {
+    hostIndex = 0;
+  }
+  return rows.map((row, index) =>
+    index === hostIndex ? { ...row, hostsWorkspaceReceipt: true } : row
+  );
 }
 
 export function buildTurnContentRowKey(
@@ -536,12 +549,14 @@ function buildTurnRows(
   cache: TranscriptRowModelCache | undefined,
   needsLeadingSplit: boolean,
   goalSeqBoundaries: readonly number[] = [],
+  hostsWorkspaceReceipt = false,
 ): TurnRowsResult {
   const cacheKey = createTranscriptTurnRowCacheKey(
     turn,
     transcript,
     needsLeadingSplit,
     goalSeqBoundaries,
+    hostsWorkspaceReceipt,
   );
   const cached = cache?.turnRowsById.get(turn.turnId) ?? null;
   if (cached && isTranscriptTurnRowCacheHit(cached, cacheKey)) {
@@ -555,6 +570,7 @@ function buildTurnRows(
     presentation,
     needsLeadingSplit,
     goalSeqBoundaries,
+    hostsWorkspaceReceipt,
   );
   cache?.turnRowsById.set(turn.turnId, {
     ...cacheKey,
@@ -569,7 +585,13 @@ function buildRowsForTurnPresentation(
   presentation: TurnPresentation,
   needsLeadingSplit: boolean,
   goalSeqBoundaries: readonly number[],
+  hostsWorkspaceReceipt: boolean,
 ): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
+  const finalize = (
+    rows: readonly Extract<TranscriptRow, { kind: "turn" }>[],
+  ): readonly Extract<TranscriptRow, { kind: "turn" }>[] =>
+    hostsWorkspaceReceipt ? applyWorkspaceReceiptHost(rows, transcript) : rows;
+
   // When goal seq boundaries exist, skip the large-turn chunk early-return and
   // use the goal-partition path instead (the final slice's scoped collapse
   // absorbs the bulk). Goal-less turns keep the existing chunk behavior.
@@ -578,7 +600,7 @@ function buildRowsForTurnPresentation(
       ? chunkTurnDisplayBlocks(presentation)
       : [];
     if (chunks.length > 1) {
-      return chunks.map((chunk, index) => {
+      return finalize(chunks.map((chunk, index) => {
         const renderPresentation: TurnPresentation = {
           ...presentation,
           displayBlocks: chunk.blocks,
@@ -591,7 +613,7 @@ function buildRowsForTurnPresentation(
           isFirstTurnRow: index === 0,
           isLastTurnRow: index === chunks.length - 1,
         });
-      });
+      }));
     }
   }
 
@@ -607,7 +629,7 @@ function buildRowsForTurnPresentation(
       sortedBoundaries,
     );
     if (subRows.length > 1) {
-      return subRows;
+      return finalize(subRows);
     }
   }
 
@@ -634,18 +656,18 @@ function buildRowsForTurnPresentation(
         isFirstTurnRow: false,
         isLastTurnRow: true,
       });
-      return [leadingRow, restRow];
+      return finalize([leadingRow, restRow]);
     }
   }
 
-  return [buildTurnRow({
+  return finalize([buildTurnRow({
     turnId: turn.turnId,
     blockKey: TURN_CONTENT_BLOCK_KEY,
     presentation,
     renderPresentation: presentation,
     isFirstTurnRow: true,
     isLastTurnRow: true,
-  })];
+  })]);
 }
 
 /** Counts the turn's leading run of display blocks that are `user_message`

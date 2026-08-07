@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ReactNode } from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createTranscriptState } from "@anyharness/sdk";
@@ -9,11 +10,13 @@ import {
   terminalItem,
   toolItem,
   turnRecord,
+  userItem,
 } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import { buildTurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 import {
   CompletedHistorySequence,
   constrainTurnItemSequencePresentation,
+  resolveLeadingNonUserMessageBlockKey,
   resolveTurnItemFrontierBlockKey,
   shouldRenderCompletedArtifactCards,
   TurnItemSequence,
@@ -196,22 +199,89 @@ describe("assistant visual frontier", () => {
   });
 });
 
+describe("workspace receipt hosting", () => {
+  it("folds the receipt inside the completed-history disclosure, hidden until expanded", async () => {
+    const user = userEvent.setup();
+    const transcript = createTranscriptState("session-1");
+    const turn = turnRecord(["prompt", "command", "answer"], "2026-04-04T00:00:10Z");
+    transcript.itemsById = {
+      prompt: userItem("prompt", turn.turnId, 0),
+      command: terminalItem("command", turn.turnId, 1, "printf proof"),
+      answer: assistantItem("answer", turn.turnId, 2),
+    };
+    const receiptMarker = <div data-testid="receipt-marker">Worktree created</div>;
+    const { container } = renderTurnItemSequence({ turn, transcript, workspaceReceipt: receiptMarker });
+
+    // Collapsed: the disclosure exists, but the receipt (like the rest of
+    // the history) is not in the DOM yet.
+    const disclosure = screen.getByRole("button", { name: /Worked for 10s/ });
+    expect(screen.queryByTestId("receipt-marker")).toBeNull();
+
+    await user.click(disclosure);
+
+    const sequence = container.querySelector<HTMLElement>("[data-completed-history-sequence]");
+    expect(sequence).not.toBeNull();
+    const marker = within(sequence!).getByTestId("receipt-marker");
+    // First child inside the disclosure's children.
+    expect(sequence!.firstElementChild).toBe(marker);
+  });
+
+  it("renders the receipt inline before the first non-user-message block while streaming", () => {
+    const transcript = createTranscriptState("session-1");
+    const turn = turnRecord(["prompt", "command"]);
+    transcript.itemsById = {
+      prompt: userItem("prompt", turn.turnId, 0),
+      command: toolItem("command", turn.turnId, 1, "terminal", "in_progress"),
+    };
+    const receiptMarker = <div data-testid="receipt-marker">Worktree created</div>;
+    const { container } = renderTurnItemSequence({ turn, transcript, workspaceReceipt: receiptMarker });
+
+    const marker = screen.getByTestId("receipt-marker");
+    expect(marker).not.toBeNull();
+    // Renders before the tool block, after the leading user-message block —
+    // never inside the (nonexistent, since the turn isn't complete) disclosure.
+    expect(container.querySelector("[data-completed-history-sequence]")).toBeNull();
+    const promptNode = screen.getByText("prompt");
+    expect(
+      promptNode.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("renders the receipt after all blocks when every block so far is a user message", () => {
+    const transcript = createTranscriptState("session-1");
+    const turn = turnRecord(["prompt"]);
+    transcript.itemsById = {
+      prompt: userItem("prompt", turn.turnId, 0),
+    };
+    expect(resolveLeadingNonUserMessageBlockKey(buildTurnPresentation(turn, transcript), transcript))
+      .toBeNull();
+
+    const receiptMarker = <div data-testid="receipt-marker">Worktree created</div>;
+    renderTurnItemSequence({ turn, transcript, workspaceReceipt: receiptMarker });
+    expect(screen.getByTestId("receipt-marker")).not.toBeNull();
+  });
+});
+
 function renderTurnItemSequence({
   turn,
   transcript,
+  workspaceReceipt,
 }: {
   turn: ReturnType<typeof turnRecord>;
   transcript: ReturnType<typeof createTranscriptState>;
+  workspaceReceipt?: ReactNode;
 }) {
-  return render(turnItemSequence({ turn, transcript }));
+  return render(turnItemSequence({ turn, transcript, workspaceReceipt }));
 }
 
 function turnItemSequence({
   turn,
   transcript,
+  workspaceReceipt,
 }: {
   turn: ReturnType<typeof turnRecord>;
   transcript: ReturnType<typeof createTranscriptState>;
+  workspaceReceipt?: ReactNode;
 }) {
   const presentation = buildTurnPresentation(turn, transcript);
   return (
@@ -228,6 +298,7 @@ function turnItemSequence({
       showCompletedArtifactFallback={false}
       workspaceId={null}
       onOpenArtifact={vi.fn()}
+      workspaceReceipt={workspaceReceipt}
     />
   );
 }

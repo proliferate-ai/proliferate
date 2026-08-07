@@ -282,6 +282,7 @@ export function MessageList({
       onOpenTurnChanges={() => openGitReviewPane({ mode: "last_turn" })}
       onOpenArtifact={openArtifact}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+      workspaceReceipt={input.row.hostsWorkspaceReceipt ? <WorkspaceCreationReceipt /> : null}
     />
   ), [
     onHandOffPlanToNewSession,

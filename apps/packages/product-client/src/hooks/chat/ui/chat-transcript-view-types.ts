@@ -88,7 +88,10 @@ export interface ChatTranscriptViewProps {
   /** Omitted surfaces (e.g. the cloud preview transcript) render no goal rows. */
   renderGoalEventRow?: (input: ChatTranscriptGoalEventRenderInput) => ReactNode;
   /**
-   * Workspace-creation receipt pinned to the top of the transcript. Only the
+   * Workspace-creation receipt fallback row, used only before any turn is
+   * renderable yet (a pending/outbox prompt with nothing else to host the
+   * receipt). Once a turn exists the receipt instead hosts inline on that
+   * turn's row via `hostsWorkspaceReceipt` — see `renderTurnRow`. Only the
    * workspace chat surface supplies this (and sets workspaceReceiptKey on
    * state); other surfaces render no receipt row.
    */

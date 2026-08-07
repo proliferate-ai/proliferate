@@ -47,7 +47,7 @@ function baseState(overrides: Partial<ChatTranscriptState> = {}): ChatTranscript
 }
 
 describe("useChatTranscriptViewModel workspace receipt gating", () => {
-  it("emits the receipt row after the first user message when the full history is loaded", () => {
+  it("hosts the receipt on the first turn's row when the full history is loaded", () => {
     const { result } = renderHook(() =>
       useChatTranscriptViewModel({
         state: baseState({
@@ -57,17 +57,20 @@ describe("useChatTranscriptViewModel workspace receipt gating", () => {
       }),
     );
 
+    // The receipt folds into the first turn's row as a flag — it no longer
+    // gets its own standalone row once a turn exists.
+    expect(result.current.virtualRows).toHaveLength(1);
     expect(result.current.virtualRows[0]).toEqual(expect.objectContaining({
       kind: "turn",
       isFirstTurnRow: true,
+      hostsWorkspaceReceipt: true,
     }));
-    expect(result.current.virtualRows[1]).toEqual(expect.objectContaining({
-      kind: "workspace_receipt",
-      key: "workspace-receipt:workspace-1",
-    }));
+    expect(
+      result.current.virtualRows.some((row) => row.kind === "workspace_receipt"),
+    ).toBe(false);
   });
 
-  it("drops the receipt row while older history pages remain unloaded", () => {
+  it("drops the receipt hosting while older history pages remain unloaded", () => {
     const { result } = renderHook(() =>
       useChatTranscriptViewModel({
         state: baseState({
@@ -80,6 +83,11 @@ describe("useChatTranscriptViewModel workspace receipt gating", () => {
 
     expect(
       result.current.virtualRows.some((row) => row.kind === "workspace_receipt"),
+    ).toBe(false);
+    expect(
+      result.current.virtualRows.some((row) =>
+        row.kind === "turn" && row.hostsWorkspaceReceipt
+      ),
     ).toBe(false);
   });
 });

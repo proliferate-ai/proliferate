@@ -49,6 +49,7 @@ export function TurnItemSequence({
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
+  workspaceReceipt = null,
 }: {
   turn: TurnRecord;
   transcript: TranscriptState;
@@ -67,6 +68,15 @@ export function TurnItemSequence({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
+  /**
+   * The workspace-creation receipt, when this row hosts it. Renders as the
+   * first child inside the completed-history disclosure (collapsing with the
+   * rest of the turn's work) when this row owns that disclosure; otherwise
+   * renders inline as a leading tool-call-style entry, immediately before
+   * this row's first non-user-message block (or after all blocks when every
+   * block so far is a user message).
+   */
+  workspaceReceipt?: ReactNode;
 }) {
   const visiblePresentation = constrainTurnItemSequencePresentation(
     presentation,
@@ -115,6 +125,17 @@ export function TurnItemSequence({
   // footerless fallback card. This sequence only consumes that index.
   let hasRenderedCompletedHistory = false;
 
+  // Workspace-creation receipt hosting: when this row owns the
+  // completed-history disclosure, the receipt folds inside it (see
+  // CompletedHistorySequence below) instead of rendering inline here.
+  const hostsCompletedHistoryDisclosure = !!visiblePresentation.completedHistorySummary;
+  const showInlineWorkspaceReceipt = !!workspaceReceipt && !hostsCompletedHistoryDisclosure;
+  const inlineWorkspaceReceiptBlockKey = showInlineWorkspaceReceipt
+    ? resolveLeadingNonUserMessageBlockKey(visiblePresentation, transcript)
+    : null;
+  const renderInlineWorkspaceReceiptAtEnd = showInlineWorkspaceReceipt
+    && inlineWorkspaceReceiptBlockKey === null;
+
   return (
     <>
       {visiblePresentation.displayBlocks.map((block) => {
@@ -138,6 +159,7 @@ export function TurnItemSequence({
               borderless
               renderChildren={() => (
                 <CompletedHistorySequence>
+                  {workspaceReceipt}
                   {visiblePresentation.displayBlocks
                     .filter((historyBlock) =>
                       blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIdSet)
@@ -194,12 +216,14 @@ export function TurnItemSequence({
 
         return (
           <Fragment key={blockKey}>
+            {blockKey === inlineWorkspaceReceiptBlockKey ? workspaceReceipt : null}
             {blockKey === frontierBlockKey ? standaloneFrontierPrelude : null}
             {renderedBlock}
           </Fragment>
         );
       })}
       {frontierBlockKey === null ? standaloneFrontierPrelude : null}
+      {renderInlineWorkspaceReceiptAtEnd ? workspaceReceipt : null}
     </>
   );
 }
@@ -283,6 +307,26 @@ export function resolveTurnItemFrontierBlockKey(
   }
 
   return frontierBlock ? getTurnDisplayBlockKey(frontierBlock) : null;
+}
+
+/**
+ * Finds the block key of the first display block that is not a user-message
+ * item — the position where an inline workspace-creation receipt should
+ * render (immediately before it). Returns null when every block so far is a
+ * user message (or there are no blocks yet), meaning the receipt should
+ * render after all of them instead.
+ */
+export function resolveLeadingNonUserMessageBlockKey(
+  presentation: TurnPresentation,
+  transcript: TranscriptState,
+): string | null {
+  for (const block of presentation.displayBlocks) {
+    if (block.kind === "item" && transcript.itemsById[block.itemId]?.kind === "user_message") {
+      continue;
+    }
+    return getTurnDisplayBlockKey(block);
+  }
+  return null;
 }
 
 export function CompletedHistorySequence({ children }: { children: ReactNode }) {

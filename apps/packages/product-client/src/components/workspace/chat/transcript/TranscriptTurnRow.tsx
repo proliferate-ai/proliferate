@@ -61,6 +61,7 @@ export function TranscriptTurnRow({
   onOpenTurnChanges,
   onOpenArtifact,
   onHandOffPlanToNewSession,
+  workspaceReceipt = null,
 }: {
   row: Extract<TranscriptVirtualRow, { kind: "turn" }>;
   rowIndex: number;
@@ -77,6 +78,8 @@ export function TranscriptTurnRow({
   onOpenTurnChanges?: () => void;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
+  /** The workspace-creation receipt, when this row hosts it (see `hostsWorkspaceReceipt`). */
+  workspaceReceipt?: ReactNode;
 }) {
   const isLatestTurn = row.turnId === latestTurnId;
   const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
@@ -248,6 +251,7 @@ export function TranscriptTurnRow({
           workspaceId={selectedWorkspaceId}
           onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+          workspaceReceipt={workspaceReceipt}
         />
         {shouldRenderAssistantEndResource({
           rowIsLastTurnRow: row.isLastTurnRow,

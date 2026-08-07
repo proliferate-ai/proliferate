@@ -40,6 +40,14 @@ export interface WorkspaceCreationReceiptViewProps {
  * Workspace-creation transcript receipt — a quiet collapsible tool-call-style
  * line ("Worktree created") with an expandable log block. Pure view; the
  * connected wrapper below (and playground fixtures) supply the presentation.
+ *
+ * Placement: it renders as one of the first turn's tool calls — folded
+ * inside that turn's completed-history "Worked for Ns" disclosure (hidden
+ * until expanded) once the turn completes, or inline before the turn's first
+ * non-user-message content while it streams. Only before any turn exists
+ * (a pending/outbox prompt with nothing rendered yet) does it fall back to a
+ * standalone transcript row. See `transcript-row-model.ts`'s
+ * `applyWorkspaceReceiptHost` for the placement rule.
  */
 export function WorkspaceCreationReceiptView({
   presentation,
@@ -248,7 +256,8 @@ export function WorkspaceCreationReceipt({
    * Pre-message canvas mounts set this: before a transcript exists the
    * receipt may only surface in-flight creation progress and failures.
    * The settled "created" receipt belongs to the transcript flow — it
-   * renders after the first user message, never pinned above the canvas.
+   * renders inside the first turn's work group, never pinned above the
+   * canvas.
    */
   pendingOnly?: boolean;
 } = {}) {

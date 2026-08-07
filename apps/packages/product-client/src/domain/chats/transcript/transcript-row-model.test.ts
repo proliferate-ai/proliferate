@@ -3,6 +3,7 @@ import { createTranscriptState, type PendingPromptEntry, type TranscriptState } 
 import {
   buildTranscriptRowModel,
   createTranscriptRowModelCache,
+  type TranscriptRow,
 } from "./transcript-row-model";
 import { createPromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import {
@@ -962,12 +963,14 @@ describe("buildTranscriptRowModel", () => {
     }
   });
 
-  describe("workspace receipt row", () => {
-    it("renders after the first turn's user message, opening the agent response", () => {
+  describe("workspace receipt hosting", () => {
+    it("hosts the receipt inside the completed-history disclosure row for a completed first turn", () => {
       const transcript = createTranscriptState("session-1");
       addTurn(transcript, "turn-1", true);
       addUserItem(transcript, "turn-1", "user-1", "make me a worktree", 1);
-      addAssistantItems(transcript, "turn-1", 2, 10);
+      // 3 assistant items: the last is final prose, the other 2 fold into
+      // the turn's completed-history disclosure.
+      addAssistantItems(transcript, "turn-1", 3, 10);
 
       const rows = buildTranscriptRowModel({
         activeSessionId: "session-1",
@@ -978,26 +981,45 @@ describe("buildTranscriptRowModel", () => {
         workspaceReceiptKey: "worktree:workspace-1",
       });
 
-      // Leading user-message row first, then the receipt, then the rest of
-      // the turn's content.
-      expect(rows[0]).toEqual(expect.objectContaining({
-        kind: "turn",
-        turnId: "turn-1",
-        isFirstTurnRow: true,
-        isLastTurnRow: false,
-      }));
-      expect(rows[1]).toEqual({
-        kind: "workspace_receipt",
-        key: "workspace-receipt:worktree:workspace-1",
-      });
-      expect(rows[2]).toEqual(expect.objectContaining({
-        kind: "turn",
-        turnId: "turn-1",
-        isLastTurnRow: true,
-      }));
+      expect(rows).toHaveLength(1);
+      const row = rows[0];
+      if (row.kind !== "turn") {
+        throw new Error("expected a turn row");
+      }
+      expect(row.turnId).toBe("turn-1");
+      expect(row.hostsWorkspaceReceipt).toBe(true);
+      expect(row.renderPresentation.completedHistorySummary).not.toBeNull();
+      expect(rows.some((candidate) => candidate.kind === "workspace_receipt")).toBe(false);
     });
 
-    it("hosts the receipt in the first turn only, not later turns", () => {
+    it("hosts on the turn's row with non-user content while the first turn is still streaming", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", false);
+      addUserItem(transcript, "turn-1", "user-1", "make me a worktree", 1);
+      addCommandItem(transcript, "turn-1", "command-1", 2);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      expect(rows).toHaveLength(1);
+      const row = rows[0];
+      if (row.kind !== "turn") {
+        throw new Error("expected a turn row");
+      }
+      expect(row.turnId).toBe("turn-1");
+      expect(row.hostsWorkspaceReceipt).toBe(true);
+      // Streaming turn: no completed-history disclosure exists yet, so the
+      // receipt hosts via the "first row with non-user content" fallback.
+      expect(row.renderPresentation.completedHistorySummary).toBeNull();
+    });
+
+    it("hosts in the first turn only, never a later turn", () => {
       const transcript = createTranscriptState("session-1");
       addTurn(transcript, "turn-1", true);
       addUserItem(transcript, "turn-1", "user-1", "first prompt", 1);
@@ -1015,40 +1037,40 @@ describe("buildTranscriptRowModel", () => {
         workspaceReceiptKey: "worktree:workspace-1",
       });
 
-      const receiptIndex = rows.findIndex((row) => row.kind === "workspace_receipt");
-      const firstTurn2Index = rows.findIndex(
-        (row) => row.kind === "turn" && row.turnId === "turn-2",
-      );
-      expect(receiptIndex).toBeGreaterThan(0);
-      expect(receiptIndex).toBeLessThan(firstTurn2Index);
-      expect(rows.filter((row) => row.kind === "workspace_receipt")).toHaveLength(1);
+      const isHostingTurnRow = (
+        row: TranscriptRow,
+      ): row is Extract<TranscriptRow, { kind: "turn" }> =>
+        row.kind === "turn" && !!row.hostsWorkspaceReceipt;
+      const hostedRows = rows.filter(isHostingTurnRow);
+      expect(hostedRows).toHaveLength(1);
+      expect(hostedRows[0].turnId).toBe("turn-1");
+      expect(rows.some((row) => row.kind === "workspace_receipt")).toBe(false);
     });
 
-    it("falls back to before the turn content when the turn has no leading user message", () => {
+    it("does not serve a stale hostsWorkspaceReceipt flag from the turn-row cache once the key appears or disappears", () => {
       const transcript = createTranscriptState("session-1");
       addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "user-1", "make me a worktree", 1);
       addAssistantItems(transcript, "turn-1", 1, 10);
+      const cache = createTranscriptRowModelCache();
+      const buildRows = (workspaceReceiptKey: string | null) =>
+        buildTranscriptRowModel({
+          activeSessionId: "session-1",
+          transcript,
+          visibleOptimisticPrompt: null,
+          latestTurnId: "turn-1",
+          latestTurnHasAssistantRenderableContent: true,
+          workspaceReceiptKey,
+        }, cache);
+      const hostFlag = (rows: readonly TranscriptRow[]) => {
+        const row = rows[0];
+        return row.kind === "turn" ? !!row.hostsWorkspaceReceipt : false;
+      };
 
-      const rows = buildTranscriptRowModel({
-        activeSessionId: "session-1",
-        transcript,
-        visibleOptimisticPrompt: null,
-        latestTurnId: "turn-1",
-        latestTurnHasAssistantRenderableContent: true,
-        goalEvents: [goalEvent(1, "set")],
-        workspaceReceiptKey: "worktree:workspace-1",
-      });
-
-      expect(rows[0]).toEqual({
-        kind: "goal_event",
-        key: "goal-event:1",
-        event: goalEvent(1, "set"),
-      });
-      expect(rows[1]).toEqual({
-        kind: "workspace_receipt",
-        key: "workspace-receipt:worktree:workspace-1",
-      });
-      expect(rows[2]).toEqual(expect.objectContaining({ kind: "turn", turnId: "turn-1" }));
+      expect(hostFlag(buildRows(null))).toBe(false);
+      expect(hostFlag(buildRows("worktree:workspace-1"))).toBe(true);
+      expect(hostFlag(buildRows(null))).toBe(false);
+      expect(hostFlag(buildRows("worktree:workspace-1"))).toBe(true);
     });
 
     it("follows the local prompt rows when no turn is renderable yet", () => {
