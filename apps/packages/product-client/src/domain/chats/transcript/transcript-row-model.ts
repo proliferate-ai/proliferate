@@ -45,20 +45,25 @@ export type TranscriptRow =
   | {
     kind: "pending_prompt";
     key: `pending-prompt:${string}`;
+    /**
+     * True when no turn exists yet to host the workspace-creation receipt
+     * (worktree still being created, prompt queued). The pending-prompt row
+     * hosts it in its frontier slot instead of a standalone row — see
+     * `TranscriptPendingPromptRow`'s `workspaceReceipt` prop.
+     */
+    hostsWorkspaceReceipt?: boolean;
   }
   | {
     kind: "outbox_prompt";
     key: `prompt:${string}`;
     clientPromptId: string;
+    /** Same meaning as the `pending_prompt` variant's flag, above. */
+    hostsWorkspaceReceipt?: boolean;
   }
   | {
     kind: "goal_event";
     key: `goal-event:${string}`;
     event: GoalTranscriptEvent;
-  }
-  | {
-    kind: "workspace_receipt";
-    key: `workspace-receipt:${string}`;
   };
 
 export interface BuildTranscriptRowModelInput {
@@ -98,9 +103,14 @@ export interface BuildTranscriptRowModelInput {
    * Workspace-creation receipt identity, or null/undefined for none. Like
    * goal rows, this is client-side composition only — the receipt derives
    * from the workspace record + setup-status query, never from stored
-   * transcript content. It pins to the very top of the transcript (before
-   * any goal rows), so callers must only pass it when the full history is
-   * loaded (no older pages above).
+   * transcript content.
+   *
+   * It hosts as one of the first turn's tool calls once a turn exists (see
+   * `applyWorkspaceReceiptHost`). Before any turn exists — worktree still
+   * being created, the user's prompt queued — it hosts in the last prompt
+   * row's frontier slot instead (see `hostsWorkspaceReceipt` on the
+   * `pending_prompt`/`outbox_prompt` row variants). Callers must only pass
+   * it when the full history is loaded (no older pages above).
    */
   workspaceReceiptKey?: string | null;
 }
@@ -138,15 +148,10 @@ export function buildTranscriptRowModel({
   // Ns" disclosure (folding into it like any other tool call), or otherwise
   // the turn's first row with non-user-message content, or otherwise the
   // turn's first row — see `applyWorkspaceReceiptHost`. Only when no turn is
-  // renderable yet does it fall back to a standalone row after the local
-  // prompt rows (below).
-  const workspaceReceiptRow: TranscriptRow | null = workspaceReceiptKey
-    ? {
-      kind: "workspace_receipt",
-      key: `workspace-receipt:${workspaceReceiptKey}`,
-    }
-    : null;
-  let workspaceReceiptEmitted = false;
+  // renderable yet does it instead host in the last prompt row's frontier
+  // slot (below), so it still lands after the user's message rather than
+  // detached below a false "Thinking" status.
+  let turnHostedWorkspaceReceipt = false;
 
   rows.push(...goalRows.beforeFirstTurn);
 
@@ -168,7 +173,7 @@ export function buildTranscriptRowModel({
       continue;
     }
 
-    const hostsWorkspaceReceipt = workspaceReceiptRow !== null && seenTurnIds.size === 0;
+    const hostsWorkspaceReceipt = workspaceReceiptKey != null && seenTurnIds.size === 0;
     seenTurnIds.add(turnId);
     const turnGoalRows = goalRows.byTurnId.get(turnId) ?? EMPTY_GOAL_ROWS;
     const needsLeadingSplit = turnGoalRows.length > 0;
@@ -190,15 +195,17 @@ export function buildTranscriptRowModel({
     );
     rows.push(...interleavedRows);
     if (hostsWorkspaceReceipt) {
-      workspaceReceiptEmitted = true;
+      turnHostedWorkspaceReceipt = true;
     }
   }
 
+  let lastPromptRowIndex = -1;
   if (visibleOptimisticPrompt) {
     rows.push({
       kind: "pending_prompt",
       key: buildPendingPromptRowKey(activeSessionId),
     });
+    lastPromptRowIndex = rows.length - 1;
   }
 
   for (const entry of visibleOutboxEntries) {
@@ -207,18 +214,19 @@ export function buildTranscriptRowModel({
       key: buildOutboxPromptRowKey(entry.clientPromptId),
       clientPromptId: entry.clientPromptId,
     });
+    lastPromptRowIndex = rows.length - 1;
   }
 
   // No renderable turn hosts the receipt yet (brand-new workspace, or the
-  // only turn is hidden behind its local prompt echo): the receipt follows
-  // the local prompt rows so it still lands after the user's message. An
-  // empty transcript renders no receipt at all.
-  if (
-    workspaceReceiptRow
-    && !workspaceReceiptEmitted
-    && (visibleOptimisticPrompt !== null || visibleOutboxEntries.length > 0)
-  ) {
-    rows.push(workspaceReceiptRow);
+  // only turn is hidden behind its local prompt echo): the receipt hosts in
+  // the last prompt row's frontier slot instead, so it still lands after the
+  // user's message. An empty transcript (no prompt rows either) renders no
+  // receipt at all.
+  if (workspaceReceiptKey != null && !turnHostedWorkspaceReceipt && lastPromptRowIndex !== -1) {
+    const promptRow = rows[lastPromptRowIndex];
+    if (promptRow.kind === "pending_prompt" || promptRow.kind === "outbox_prompt") {
+      rows[lastPromptRowIndex] = { ...promptRow, hostsWorkspaceReceipt: true };
+    }
   }
 
   if (cache) {

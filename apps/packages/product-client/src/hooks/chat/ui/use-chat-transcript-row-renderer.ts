@@ -12,7 +12,6 @@ import type {
   ChatTranscriptOutboxActions,
   ChatTranscriptPendingPromptRenderInput,
   ChatTranscriptTurnRowRenderInput,
-  ChatTranscriptWorkspaceReceiptRenderInput,
 } from "./chat-transcript-view-types";
 import { resolvePendingPromptRenderTarget } from "#product/lib/domain/chat/transcript/chat-transcript-view-rules";
 
@@ -33,7 +32,6 @@ export function useChatTranscriptRowRenderer({
   renderPendingPromptRow,
   renderTurnRow,
   renderGoalEventRow,
-  renderWorkspaceReceiptRow,
   selectedWorkspaceId,
   sessionViewState,
   transcript,
@@ -51,7 +49,6 @@ export function useChatTranscriptRowRenderer({
   renderPendingPromptRow: (input: ChatTranscriptPendingPromptRenderInput) => ReactNode;
   renderTurnRow: (input: ChatTranscriptTurnRowRenderInput) => ReactNode;
   renderGoalEventRow?: (input: ChatTranscriptGoalEventRenderInput) => ReactNode;
-  renderWorkspaceReceiptRow?: (input: ChatTranscriptWorkspaceReceiptRenderInput) => ReactNode;
   selectedWorkspaceId: string | null;
   sessionViewState: SessionViewState;
   transcript: TranscriptState;
@@ -81,10 +78,6 @@ export function useChatTranscriptRowRenderer({
 
     if (row.kind === "goal_event") {
       return renderGoalEventRow?.({ row, rowIndex, event: row.event }) ?? null;
-    }
-
-    if (row.kind === "workspace_receipt") {
-      return renderWorkspaceReceiptRow?.({ row, rowIndex }) ?? null;
     }
 
     const turn = transcript.turnsById[row.turnId];
@@ -117,7 +110,6 @@ export function useChatTranscriptRowRenderer({
     renderPendingPromptRow,
     renderTurnRow,
     renderGoalEventRow,
-    renderWorkspaceReceiptRow,
     selectedWorkspaceId,
     sessionViewState,
     transcript,
@@ -156,7 +148,6 @@ export function useChatTranscriptRowRenderer({
     visibleOutboxEntries,
   ]);
   const goalEventRenderRevision = useMemo(() => ({}), [renderGoalEventRow]);
-  const workspaceReceiptRenderRevision = useMemo(() => ({}), [renderWorkspaceReceiptRow]);
 
   const getRowRenderRevision = useCallback((row: TranscriptVirtualRow): object => {
     if (row.kind === "pending_prompt" || row.kind === "outbox_prompt") {
@@ -164,9 +155,6 @@ export function useChatTranscriptRowRenderer({
     }
     if (row.kind === "goal_event") {
       return goalEventRenderRevision;
-    }
-    if (row.kind === "workspace_receipt") {
-      return workspaceReceiptRenderRevision;
     }
     if (row.turnId === latestTurnId) {
       return latestTurnRenderRevision;
@@ -183,7 +171,6 @@ export function useChatTranscriptRowRenderer({
     latestTurnRenderRevision,
     pendingPromptRenderRevision,
     turnRenderRevision,
-    workspaceReceiptRenderRevision,
   ]);
 
   return { renderRow, getRowRenderRevision };

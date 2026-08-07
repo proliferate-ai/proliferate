@@ -58,11 +58,6 @@ export interface ChatTranscriptGoalEventRenderInput {
   event: GoalTranscriptEvent;
 }
 
-export interface ChatTranscriptWorkspaceReceiptRenderInput {
-  row: Extract<TranscriptVirtualRow, { kind: "workspace_receipt" }>;
-  rowIndex: number;
-}
-
 /** Active chat content-search state driving the prose paint layer. */
 export interface ChatTranscriptContentSearch {
   query: string;
@@ -87,15 +82,6 @@ export interface ChatTranscriptViewProps {
   renderTurnTrailingStatus?: (input: ChatTranscriptTurnStatusInput) => ReactNode;
   /** Omitted surfaces (e.g. the cloud preview transcript) render no goal rows. */
   renderGoalEventRow?: (input: ChatTranscriptGoalEventRenderInput) => ReactNode;
-  /**
-   * Workspace-creation receipt fallback row, used only before any turn is
-   * renderable yet (a pending/outbox prompt with nothing else to host the
-   * receipt). Once a turn exists the receipt instead hosts inline on that
-   * turn's row via `hostsWorkspaceReceipt` — see `renderTurnRow`. Only the
-   * workspace chat surface supplies this (and sets workspaceReceiptKey on
-   * state); other surfaces render no receipt row.
-   */
-  renderWorkspaceReceiptRow?: (input: ChatTranscriptWorkspaceReceiptRenderInput) => ReactNode;
   /**
    * Chat content search. When set (search open on the chat surface), the
    * transcript prose is highlighted for `query`. Null/undefined disables the

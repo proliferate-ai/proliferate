@@ -177,6 +177,50 @@ describe("TranscriptPendingPromptRow", () => {
     expect(frontier?.nextElementSibling).toBe(footer);
     expect(footer?.querySelector("[data-turn-assistant-footer-slot]")?.className).toContain("h-6");
   });
+
+  it("hosts the workspace-creation receipt in the frontier slot instead of the trailing status", () => {
+    const { container } = render(
+      <TranscriptPendingPromptRow
+        activeSessionId="session-1"
+        rowIndex={0}
+        prompt={createOptimisticPendingPrompt("Make me a worktree", "prompt-1", NOW)}
+        outboxEntry={null}
+        optimisticTrailingStatus={<div data-testid="thinking">Thinking</div>}
+        outboxActions={{
+          retryPrompt: vi.fn(),
+          dismissPrompt: vi.fn(),
+        }}
+        workspaceReceipt={<div data-testid="receipt">Creating worktree</div>}
+      />,
+    );
+
+    expect(screen.queryByTestId("thinking")).toBeNull();
+    const receipt = screen.getByTestId("receipt");
+    const frontier = container.querySelector("[data-pending-frontier]");
+    expect(frontier?.contains(receipt)).toBe(true);
+  });
+
+  it("keeps the failed_before_dispatch line unaffected by the workspaceReceipt prop", () => {
+    const actions = {
+      retryPrompt: vi.fn(),
+      dismissPrompt: vi.fn(),
+    };
+    render(
+      <TranscriptPendingPromptRow
+        activeSessionId="session-1"
+        rowIndex={0}
+        prompt={createOptimisticPendingPrompt("Not sent", "prompt-1", NOW)}
+        outboxEntry={failedOutboxEntry("network dropped")}
+        optimisticTrailingStatus={null}
+        outboxActions={actions}
+        workspaceReceipt={<div data-testid="receipt">Creating worktree</div>}
+      />,
+    );
+
+    expect(screen.queryByTestId("receipt")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(actions.retryPrompt).toHaveBeenCalledWith("prompt-1");
+  });
 });
 
 function failedOutboxEntry(errorMessage: string): PromptOutboxEntry {

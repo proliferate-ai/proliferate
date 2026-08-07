@@ -989,7 +989,6 @@ describe("buildTranscriptRowModel", () => {
       expect(row.turnId).toBe("turn-1");
       expect(row.hostsWorkspaceReceipt).toBe(true);
       expect(row.renderPresentation.completedHistorySummary).not.toBeNull();
-      expect(rows.some((candidate) => candidate.kind === "workspace_receipt")).toBe(false);
     });
 
     it("hosts on the turn's row with non-user content while the first turn is still streaming", () => {
@@ -1044,7 +1043,6 @@ describe("buildTranscriptRowModel", () => {
       const hostedRows = rows.filter(isHostingTurnRow);
       expect(hostedRows).toHaveLength(1);
       expect(hostedRows[0].turnId).toBe("turn-1");
-      expect(rows.some((row) => row.kind === "workspace_receipt")).toBe(false);
     });
 
     it("does not serve a stale hostsWorkspaceReceipt flag from the turn-row cache once the key appears or disappears", () => {
@@ -1073,7 +1071,7 @@ describe("buildTranscriptRowModel", () => {
       expect(hostFlag(buildRows("worktree:workspace-1"))).toBe(true);
     });
 
-    it("follows the local prompt rows when no turn is renderable yet", () => {
+    it("hosts on the last prompt row's frontier when no turn is renderable yet", () => {
       const transcript = createTranscriptState("session-1");
 
       const rows = buildTranscriptRowModel({
@@ -1085,7 +1083,49 @@ describe("buildTranscriptRowModel", () => {
         workspaceReceiptKey: "worktree:workspace-1",
       });
 
-      expect(rows.map((row) => row.kind)).toEqual(["pending_prompt", "workspace_receipt"]);
+      expect(rows.map((row) => row.kind)).toEqual(["pending_prompt"]);
+      const row = rows[0];
+      if (row.kind !== "pending_prompt") {
+        throw new Error("expected a pending_prompt row");
+      }
+      expect(row.hostsWorkspaceReceipt).toBe(true);
+    });
+
+    it("hosts on the last outbox prompt row's frontier when no turn is renderable yet", () => {
+      const transcript = createTranscriptState("session-1");
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        visibleOutboxEntries: [
+          createPromptOutboxEntry({
+            clientPromptId: "prompt-1",
+            clientSessionId: "session-1",
+            text: "first",
+            blocks: [{ type: "text", text: "first" }],
+            now: "2026-01-01T00:00:00.000Z",
+          }),
+          createPromptOutboxEntry({
+            clientPromptId: "prompt-2",
+            clientSessionId: "session-1",
+            text: "second",
+            blocks: [{ type: "text", text: "second" }],
+            now: "2026-01-01T00:00:01.000Z",
+          }),
+        ],
+        latestTurnId: null,
+        latestTurnHasAssistantRenderableContent: false,
+        workspaceReceiptKey: "worktree:workspace-1",
+      });
+
+      expect(rows.map((row) => row.kind)).toEqual(["outbox_prompt", "outbox_prompt"]);
+      const [firstRow, secondRow] = rows;
+      if (firstRow.kind !== "outbox_prompt" || secondRow.kind !== "outbox_prompt") {
+        throw new Error("expected outbox_prompt rows");
+      }
+      expect(firstRow.hostsWorkspaceReceipt).toBeFalsy();
+      expect(secondRow.hostsWorkspaceReceipt).toBe(true);
     });
 
     it("renders no receipt in an empty transcript", () => {
@@ -1117,7 +1157,9 @@ describe("buildTranscriptRowModel", () => {
         workspaceReceiptKey: null,
       });
 
-      expect(rows.some((row) => row.kind === "workspace_receipt")).toBe(false);
+      expect(
+        rows.some((row) => row.kind === "turn" && row.hostsWorkspaceReceipt),
+      ).toBe(false);
     });
 
     it("omits the receipt row when the key is omitted entirely", () => {
@@ -1133,7 +1175,9 @@ describe("buildTranscriptRowModel", () => {
         latestTurnHasAssistantRenderableContent: true,
       });
 
-      expect(rows.some((row) => row.kind === "workspace_receipt")).toBe(false);
+      expect(
+        rows.some((row) => row.kind === "turn" && row.hostsWorkspaceReceipt),
+      ).toBe(false);
     });
   });
 });

@@ -262,6 +262,7 @@ export function MessageList({
       outboxEntry={input.outboxEntry}
       optimisticTrailingStatus={input.optimisticTrailingStatus}
       outboxActions={input.outboxActions}
+      workspaceReceipt={input.row.hostsWorkspaceReceipt ? <WorkspaceCreationReceipt /> : null}
     />
   ), []);
 
@@ -293,9 +294,6 @@ export function MessageList({
   const renderGoalEventRow = useCallback((input: ChatTranscriptGoalEventRenderInput) => (
     <GoalTranscriptEventRow event={input.event} />
   ), []);
-  // Connected component: it derives its own state from the selection, so the
-  // renderer needs no inputs beyond the row's existence.
-  const renderWorkspaceReceiptRow = useCallback(() => <WorkspaceCreationReceipt />, []);
   // Stable renderer identities — required for DeferredChatTranscriptView's
   // memo to bail out on urgent (typing) passes.
   const renderPendingPromptTrailingStatusRow = useCallback(
@@ -342,7 +340,6 @@ export function MessageList({
                     renderPendingPromptRow={renderPendingPromptRow}
                     renderTurnRow={renderTurnRow}
                     renderGoalEventRow={renderGoalEventRow}
-                    renderWorkspaceReceiptRow={renderWorkspaceReceiptRow}
                     renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
                     renderTurnTrailingStatus={renderTurnTrailingStatusRow}
                     contentSearch={contentSearchPaint}

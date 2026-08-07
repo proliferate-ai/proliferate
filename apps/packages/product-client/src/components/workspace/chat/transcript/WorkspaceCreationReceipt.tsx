@@ -44,10 +44,12 @@ export interface WorkspaceCreationReceiptViewProps {
  * Placement: it renders as one of the first turn's tool calls — folded
  * inside that turn's completed-history "Worked for Ns" disclosure (hidden
  * until expanded) once the turn completes, or inline before the turn's first
- * non-user-message content while it streams. Only before any turn exists
- * (a pending/outbox prompt with nothing rendered yet) does it fall back to a
- * standalone transcript row. See `transcript-row-model.ts`'s
- * `applyWorkspaceReceiptHost` for the placement rule.
+ * non-user-message content while it streams. Before any turn exists (the
+ * worktree is still being created, the user's prompt queued), it instead
+ * renders in the pending prompt row's frontier slot, replacing the
+ * "Thinking"/outbox status there — see `TranscriptPendingPromptRow`'s
+ * `workspaceReceipt` prop. See `transcript-row-model.ts`'s
+ * `applyWorkspaceReceiptHost` for the turn-hosting placement rule.
  */
 export function WorkspaceCreationReceiptView({
   presentation,

@@ -57,17 +57,14 @@ describe("useChatTranscriptViewModel workspace receipt gating", () => {
       }),
     );
 
-    // The receipt folds into the first turn's row as a flag — it no longer
-    // gets its own standalone row once a turn exists.
+    // The receipt folds into the first turn's row as a flag — it never gets
+    // its own standalone row (the `workspace_receipt` row kind is gone).
     expect(result.current.virtualRows).toHaveLength(1);
     expect(result.current.virtualRows[0]).toEqual(expect.objectContaining({
       kind: "turn",
       isFirstTurnRow: true,
       hostsWorkspaceReceipt: true,
     }));
-    expect(
-      result.current.virtualRows.some((row) => row.kind === "workspace_receipt"),
-    ).toBe(false);
   });
 
   it("drops the receipt hosting while older history pages remain unloaded", () => {
@@ -81,9 +78,6 @@ describe("useChatTranscriptViewModel workspace receipt gating", () => {
       }),
     );
 
-    expect(
-      result.current.virtualRows.some((row) => row.kind === "workspace_receipt"),
-    ).toBe(false);
     expect(
       result.current.virtualRows.some((row) =>
         row.kind === "turn" && row.hostsWorkspaceReceipt
