@@ -11,6 +11,7 @@ Product and engineering behavior remains with the owning documents under
 | Task | Start here |
 | --- | --- |
 | Prepare, open, or mark a pull request ready for review | [`pull-requests.md`](pull-requests.md) |
+| Spec a big change or feature as an ADR, or review one | [`adrs.md`](adrs.md) |
 
 Use [`../../specs/TESTING.md`](../../specs/TESTING.md) to select and run proof for a
 change. Use [`../deploying/README.md`](../deploying/README.md) for CI, release,

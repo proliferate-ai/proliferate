@@ -52,6 +52,7 @@ applicable owner.
 | Source area | Start here |
 | --- | --- |
 | `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`guides/process/README.md`](guides/process/README.md) |
+| `adrs/**` — writing or reviewing a decision record | [`guides/process/adrs.md`](guides/process/adrs.md) |
 | `apps/desktop/**`, `apps/web/**`, `apps/mobile/**`, `apps/packages/**` | [`specs/codebase/structures/frontend/README.md`](specs/codebase/structures/frontend/README.md) |
 | `apps/desktop/src-tauri/**`, `apps/desktop/src-tauri-debug/**` | [`specs/codebase/structures/desktop-native/README.md`](specs/codebase/structures/desktop-native/README.md) |
 | `server/**` | [`specs/codebase/structures/server/README.md`](specs/codebase/structures/server/README.md) |
