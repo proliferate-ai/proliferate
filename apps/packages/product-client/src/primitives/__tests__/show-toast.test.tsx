@@ -40,10 +40,9 @@ describe("showToast — status", () => {
   });
 
   it("speaks the severity the dot carries, since a colour reads as nothing", async () => {
-    // On a status line the dot is the *only* severity signal — the message text
-    // carries no "Failed"/"Done" marker of its own — and the dot is aria-hidden,
-    // so without this "Couldn't save" and "Saved" reach a screen reader as the
-    // same sentence.
+    // The dot is the only severity signal on a status line and it is
+    // aria-hidden, so without this "Couldn't save" and "Saved" reach a
+    // screen reader as the same sentence.
     await raise({ message: "Couldn't save the workspace", tone: "destructive" });
 
     const label = screen.getByText("Error:", { exact: false });
@@ -54,8 +53,7 @@ describe("showToast — status", () => {
   });
 
   it("stays silent for neutral, which is the absence of severity", async () => {
-    // Prefixing every ordinary status line with "Neutral" is noise, not
-    // information.
+    // Prefixing every ordinary status line with "Neutral" is noise.
     await raise({ message: "Workspace saved" });
 
     const [node] = document.querySelectorAll<HTMLElement>("[data-sonner-toast]");
