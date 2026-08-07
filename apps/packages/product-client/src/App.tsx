@@ -4,7 +4,6 @@ import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/Aut
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { ToastHost } from "#product/primitives/patterns/ToastHost"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
-import { useSupportModalStore } from "#product/stores/support/support-modal-store"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
@@ -126,10 +125,6 @@ interface AppProps {
 // owns only the route tree, public feedback hosts, and toasts. Repository and
 // workspace hosts live behind the lazy authenticated product boundary.
 export function App({ RoutesComponent }: AppProps) {
-  // "Report a bug" in the toast details modal reuses the existing feedback
-  // modal rather than inventing a second reporting path.
-  const openSupportFeedback = useSupportModalStore((s) => s.openFeedback)
-
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
@@ -260,11 +255,10 @@ export function App({ RoutesComponent }: AppProps) {
           <Route path="*" element={<Navigate to="/" replace />} />
         </RoutesComponent>
         <SupportModalHost />
-        {/* The single toast mount: the kit Toaster plus the one details modal
-            a `details: { kind: "modal" }` toast opens. Every toast in the app
-            goes through it, so the three weights, the visible cap and the
-            details destination are configured in exactly one place. */}
-        <ToastHost onReportBug={openSupportFeedback} />
+        {/* The single toast mount. Every toast in the app goes through it, so
+            the three weights, the visible cap and the details expansion are
+            configured in exactly one place. */}
+        <ToastHost />
         <AppUpdateSurface />
       </ShortcutRevealProvider>
   )

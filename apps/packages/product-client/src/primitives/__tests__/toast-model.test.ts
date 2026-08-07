@@ -66,8 +66,8 @@ describe("resolveToastDuration", () => {
   it.each([
     ["commit", { commit: { label: "Restart", onClick: noop } }],
     ["secondary", { secondary: { label: "Later", onClick: noop } }],
-    ["modal details", {
-      details: { kind: "modal" as const, title: "Details", payload: "a.ts" },
+    ["inline details", {
+      details: { kind: "inline" as const, payload: "a.ts" },
     }],
     ["navigate details", {
       details: { kind: "navigate" as const, onNavigate: noop },
@@ -78,13 +78,21 @@ describe("resolveToastDuration", () => {
     ).toBe(Number.POSITIVE_INFINITY);
   });
 
-  it("keeps a detail toast with a jump action until dismissed", () => {
+  it("keeps every detail toast until dismissed, actions or not", () => {
     expect(
       resolveToastDuration({
         weight: "detail",
         title: "3 fields need attention",
         payload: "a\nb",
         jump: { label: "Open workflow", onClick: noop },
+      }),
+    ).toBe(Number.POSITIVE_INFINITY);
+    // A payload exists to be read, and reading takes longer than any dwell.
+    expect(
+      resolveToastDuration({
+        weight: "detail",
+        title: "3 fields need attention",
+        payload: "a\nb",
       }),
     ).toBe(Number.POSITIVE_INFINITY);
   });
@@ -142,10 +150,9 @@ describe("toErrorAnnouncement", () => {
     expect(announcement.title).toBe("Run did not start");
     expect(announcement.description).toBe("No files were changed.");
     // The only field the cause reaches is the details payload, which renders in
-    // a scrolling `pre` behind a button — never in the toast body.
+    // the expanded strip behind the Details toggle — never in the toast body.
     expect(announcement.details).toEqual({
-      kind: "modal",
-      title: "Run did not start",
+      kind: "inline",
       payload: cause,
     });
   });
@@ -153,7 +160,7 @@ describe("toErrorAnnouncement", () => {
   it("offers no Details when there is nothing behind it", () => {
     expect(toErrorAnnouncement({ headline: "Link did not open" }).details)
       .toEqual({ kind: "none" });
-    // Whitespace is not a cause: it would open an empty modal.
+    // Whitespace is not a cause: it would unfold an empty strip.
     expect(toErrorAnnouncement({ headline: "Link did not open", cause: "  \n" }).details)
       .toEqual({ kind: "none" });
   });
@@ -166,7 +173,7 @@ describe("toErrorAnnouncement", () => {
     expect(toErrorAnnouncement({ headline: "Message not sent" }).commit).toBeUndefined();
   });
 
-  it("lets an error with a home point at it instead of at a modal", () => {
+  it("lets an error with a home point at it instead of expanding", () => {
     const onNavigate = () => {};
     const announcement = toErrorAnnouncement({
       headline: "A run failed",
