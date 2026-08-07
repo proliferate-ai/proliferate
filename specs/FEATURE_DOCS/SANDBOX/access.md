@@ -29,7 +29,7 @@ Fences, one owner per concern:
   document owns the caller-facing representation, gateway owns the
   server-side mechanism.
 - Billing *math* — meters, credits, holds — belongs to
-  [billing.md](billing.md). This document owns only the billing gate's
+  [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md). This document owns only the billing gate's
   wire representation.
 - What is inside the box belongs to
   [content.md](content.md).
@@ -330,7 +330,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       its inputs: the 900 s stale threshold and the
       runtime-id-presence rule that turn a row into
       `materializing`-vs-`error` live only in
-      [workspace-provisioning.md](workspace-provisioning.md), whose
+      [../../codebase/platforms/product/workspace-provisioning.md](../../codebase/platforms/product/workspace-provisioning.md), whose
       vocabulary (`ready`/`materializing`/`error`) predates this enum.
       Fold the derivation rules (threshold included) into this document
       and align the enums when that doc slims.

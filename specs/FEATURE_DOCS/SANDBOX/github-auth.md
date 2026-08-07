@@ -90,7 +90,7 @@ Authority status for a repository
 is one of: `authorized`, `needs_reauth`, `missing_authorization`,
 `missing_installation`, `not_covered`, `missing_user_repo_access`,
 `operator_configuration_required`, `error`. The no-unrepairable-action law
-from [sandbox-access.md](sandbox-access.md) applies verbatim: operator
+from [access.md](access.md) applies verbatim: operator
 misconfiguration repairs operator-side (`action: null`), missing human
 repository access repairs on GitHub, and only genuinely-expired user
 authorization offers "Reconnect GitHub App".

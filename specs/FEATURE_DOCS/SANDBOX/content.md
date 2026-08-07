@@ -23,17 +23,17 @@ Fences, one owner per concern:
   resource-pressure measurement; content owns what spends the disk.
 - Cloud workspace creation choreography — request validation, GitHub
   authority checks, row transactions — belongs to
-  [workspace-provisioning.md](workspace-provisioning.md). This document owns
+  [../../codebase/platforms/product/workspace-provisioning.md](../../codebase/platforms/product/workspace-provisioning.md). This document owns
   what that choreography puts on disk, the two records that describe it,
   and when it all leaves.
 - GitHub *authority* — tokens, credential leases, the credential helper —
   belongs to [github-auth.md](github-auth.md). This document
   owns *identity*: who the commit says it is by.
 - Workflow-run placement has its own contract
-  ([workspace-placement.md](../../systems/product/workflows/workspace-placement.md));
+  ([workspace-placement.md](../../codebase/systems/product/workflows/workspace-placement.md));
   workflow worktrees are deliberately invisible to retention here.
 - Disk is bounded and observable, never billed; billing math stays in
-  [billing.md](billing.md).
+  [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md).
 
 ## The disk, one picture
 
@@ -322,7 +322,7 @@ when disk crosses the pressure threshold the client surfaces "your cloud
 machine is running low — here are your worktrees" backed by the inventory
 and its delete actions. No server-side notification job exists or is
 planned; the screens and copy belong to
-[cloud-workspace.md](../../systems/product/workspaces/cloud-workspace.md).
+[cloud-workspace.md](../../codebase/systems/product/workspaces/cloud-workspace.md).
 
 ## When the VM dies
 
@@ -470,7 +470,7 @@ tests reference them by name:
 - **H2** The inventory row carries last activity. (Rust test)
 - **H3** Crossing the disk threshold surfaces the worktrees copy
   pointing into the delete dialog (surface owned by
-  [cloud-workspace.md](../../systems/product/workspaces/cloud-workspace.md)).
+  [cloud-workspace.md](../../codebase/systems/product/workspaces/cloud-workspace.md)).
   (frontend test)
 - **H4** The cloud clone flow rides `acquire_repo_root`; grep-gate: the
   standalone clone-script path stays deleted. (Rust + pytest)

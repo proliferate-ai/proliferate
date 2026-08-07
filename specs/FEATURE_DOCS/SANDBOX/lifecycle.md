@@ -30,12 +30,12 @@ Fences, one owner per concern:
   the fencing that keeps every open/close exact under races (see
   [Usage fencing](#usage-fencing-the-billing-primitives)). Billing *math* —
   what those segments cost, credits, holds, invoices — belongs to
-  [billing.md](billing.md), which consumes the primitives and never
+  [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md), which consumes the primitives and never
   reimplements them.
 - Worker and Supervisor internals (binary swap mechanics, mailbox
   protocol, rollback) belong to
-  [proliferate-worker](../../structures/proliferate-worker/README.md) and
-  [proliferate-supervisor](../../structures/proliferate-supervisor/README.md);
+  [proliferate-worker](../../codebase/structures/proliferate-worker/README.md) and
+  [proliferate-supervisor](../../codebase/structures/proliferate-supervisor/README.md);
   this document owns when those processes exist and what convergence the
   sandbox is guaranteed.
 - GitHub credentials inside the sandbox belong to
@@ -156,7 +156,7 @@ initialized. In order:
    ids), then the Worker; restarts either on crash after a 5 second
    delay; and applies binary updates from the mailbox with health gates
    and rollback to the previous binary
-   ([proliferate-supervisor](../../structures/proliferate-supervisor/README.md)).
+   ([proliferate-supervisor](../../codebase/structures/proliferate-supervisor/README.md)).
    The server never launches or updates AnyHarness or the Worker
    directly.
 4. The Worker spends its enrollment token against Cloud, receiving its
@@ -179,7 +179,7 @@ initialized. In order:
 ## Account model
 
 One sandbox per (user, organization), and **orgs are the only billing
-subject** — the same law [model-gateway.md](model-gateway.md) settled for
+subject** — the same law [../../codebase/platforms/product/model-gateway.md](../../codebase/platforms/product/model-gateway.md) settled for
 inference spend. There is no personal context and no personal subject: a
 solo user's work runs in their (user, default-org) sandbox, and the
 default org — the org created at signup that nobody else has joined —
@@ -203,7 +203,7 @@ cloud_sandbox
 There is deliberately no stored billing subject on the row: the org *is*
 the payer, so a second stored copy could only drift from it. Billing
 derives the subject from `organization_id`; compute usage segments (see
-[billing.md](billing.md)) open and close against that org on the
+[../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md)) open and close against that org on the
 lifecycle events in the causes table below. Which sandbox serves a
 request is decided by the workspace's context: a workspace under an org
 repo environment materializes into the (user, that org) sandbox,
@@ -381,7 +381,7 @@ converging.
 ## Usage fencing: the billing primitives
 
 This platform owns the operations billing consumes — the fenced open and
-close of compute usage segments — and [billing.md](billing.md) owns what
+close of compute usage segments — and [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md) owns what
 they cost. The fences exist so that every segment is attributed to one
 exact provider VM and no race can double-open, double-close, or reassign
 one. Absorbed from the retired sandbox-provisioning document at its
@@ -662,7 +662,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       uniqueness to (owner_user_id, organization_id), drop the
       billing-subject column, and derive the payer from the org.
       Ruling: orgs are the only billing subject
-      ([model-gateway.md](model-gateway.md)); a stored payer copy can
+      ([../../codebase/platforms/product/model-gateway.md](../../codebase/platforms/product/model-gateway.md)); a stored payer copy can
       only drift.
 - [ ] Provisioning does not fire on authority-chain completion: the
       user-auth callback alone schedules the bootstrap even when no
