@@ -1,0 +1,196 @@
+# Theme contrast (PROD-THEME). Enforced by scripts/check_theme_contrast.py,
+# which runs with --table in the shared-frontend-packages CI job.
+#
+# The check reads the BUILT stylesheet, apps/packages/design/dist/theme.css, not
+# tokens.ts. The authority is a TypeScript record of {dark, light} halves, and
+# what a browser paints is that record projected through generate-theme.mjs —
+# including var() indirection between roles and any surviving color-mix().
+# Reading the record would only prove the literals were typed correctly; reading
+# the built stylesheet proves the RESOLVED role reads legibly, which is the
+# property a person perceives. Translucent planes are composited over
+# --color-background in order before measurement, because a person sees the
+# composite.
+#
+# These floors exist because light mode was originally derived from dark by
+# flipping the ink while keeping dark's alpha percentages. color-mix(foreground
+# X%, transparent) is only meaningful when you know the backdrop, and with five
+# elevation roles you do not: every neutral collapsed toward the page, faint text
+# landed at 3.28:1 at 11px, and the persistent `selected` state read weaker than
+# the transient `hover`. All of that is mechanically detectable, so it is
+# detected here instead of being re-discovered by eye.
+#
+# Floors, both modes, no per-mode exemptions: body >= 7.0:1, secondary >= 4.5:1,
+# faint >= 4.5:1, borders >= 1.25:1, state steps >= 1.02:1.
+#
+# In-code scope definitions kept in the checker (structural, not grandfathering):
+# TEXT_ROLES and their floors, TEXT_PLANES (the plane list is part of the
+# contract — a new elevation role belongs in it), BORDER_PAIRS, SIDEBAR_PAIRS,
+# STACKED_TEXT_PAIRS, STATE_ROLES and STATE_PLANE.
+#
+# THE DEVIATION LEDGER
+# --------------------
+# Five measured dark-mode pairs do not meet these floors and are not silently
+# exempted. Each is a grandfathered site in lints/product/exceptions.toml, keyed
+# by the mode block it lives in and the measured pair. The exception is a
+# ratchet, not a waiver: the exact ratio measured when the deviation was accepted
+# stays in the checker's DECLARED_DEVIATION_RATIOS table, keyed by the same
+# (path, site) pair the ledger uses, because an [[exception]] entry carries prose
+# and not numbers. The pair may improve freely; any regression below the pinned
+# ratio fails (PROD-THEME-3/4), a pin for a pair that is no longer measured fails
+# (PROD-THEME-5), and a pin that starts clearing its floor fails so it is deleted
+# rather than quietly outliving its reason (PROD-THEME-6).
+
+[[rule]]
+id = "PROD-THEME-1"
+title = "text clears its contrast floor on every plane it is painted on"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_theme_contrast.py"
+mode = "lint"
+scope = "apps/packages/design/dist/theme.css — TEXT_ROLES x TEXT_PLANES, in both the dark and light blocks"
+
+rule = """Every text role must clear its floor against every measured elevation
+plane, in both modes: body ink (--color-foreground) at 7.0:1, and the
+secondary-weight and faint roles (--color-foreground-secondary,
+--color-muted-foreground, --color-foreground-tertiary, --color-faint,
+--color-link-foreground) at 4.5:1."""
+alternative = """Raise the role's authored contrast in
+apps/packages/design/src/tokens.ts for the failing mode."""
+why = """Text is measured against every plane the product actually paints it on,
+not just the page. In light mode the editor, the rail, and the translucent
+control fills all differ from white, so measuring only surface and background
+left the three darkest light planes unmeasured — which is exactly where the faint
+tier was failing while this check reported green. The dimmer roles carry every
+timestamp, byte count, and muted sidebar row, so they are held to a real floor
+rather than written off as decoration; a link sits at prose weight, not
+decoration, and is held to the secondary floor for the same reason."""
+
+[rule.example]
+bad = "--color-faint reading 3.28:1 on --color-surface-editor in light mode"
+good = "the role is retuned in tokens.ts until it clears 4.5:1 on every plane"
+
+[[rule]]
+id = "PROD-THEME-2"
+title = "sidebar ink is measured on the sidebar, including through a nested control"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_theme_contrast.py"
+mode = "lint"
+scope = "apps/packages/design/dist/theme.css — SIDEBAR_PAIRS and STACKED_TEXT_PAIRS, both modes"
+
+rule = """Sidebar ink must clear its floor against the sidebar's own fill —
+--color-sidebar-foreground at 7.0:1 and --color-sidebar-muted-foreground at
+4.5:1 — and the muted role must also clear 4.5:1 when it sits inside
+--color-surface-control composited on the rail."""
+alternative = """Retune the sidebar role, or the control fill it sits in, in
+tokens.ts."""
+why = """The sidebar is its own plane, so measuring its ink against the chat
+surface answers the wrong question. Some rail ink additionally sits inside a
+translucent control, and that stack has to be composed in order — measuring
+either role against the rail alone misses the file-tree search field and the
+badge treatment entirely."""
+
+[rule.example]
+bad = "muted rail ink measured against the chat surface instead of the rail"
+good = "the rail pair and the control-over-rail stack both measured and clearing 4.5:1"
+
+[[rule]]
+id = "PROD-THEME-3"
+title = "a border is visible against the plane it divides"
+owner = "product"
+status = "leaks"
+gap = "four dark-mode --color-border-light pairs are grandfathered in lints/product/exceptions.toml, pinned at their measured ratios and unable to regress; they clear only when the dark hairline system is retuned"
+enforced_by = "scripts/check_theme_contrast.py"
+mode = "lint"
+scope = "apps/packages/design/dist/theme.css — BORDER_PAIRS, both modes"
+
+rule = """Every border role must reach 1.25:1 against the plane it divides, in
+both modes. The lightest edge (--color-border-light) is proven on the chat
+surface, the rail, the recessed plane, and the translucent control fill. A pair
+grandfathered in lints/product/exceptions.toml must still hold at or above the
+ratio pinned for it in the checker."""
+alternative = """Raise the border token's contrast for the failing mode in
+tokens.ts."""
+why = """A hairline that does not reach 1.25:1 is not a division, it is a
+rendering artifact — and the light system promises one border rung that composes
+on every parent rather than a per-surface gray fork, which is only true if the
+rung is measured on every parent."""
+
+[rule.example]
+bad = "--color-border-light reading 1.09:1 against --color-surface in light mode"
+good = "the rung reaches 1.25:1 on the surface, the rail, the recessed plane, and the control fill"
+
+[[rule]]
+id = "PROD-THEME-4"
+title = "state fills are distinguishable and selected carries at least as much ink as hover"
+owner = "product"
+status = "leaks"
+gap = "the dark selected-vs-hover inversion is grandfathered in lints/product/exceptions.toml, pinned at the measured 1.08:1 so it cannot deepen; it clears when dark's state ramp is retuned"
+enforced_by = "scripts/check_theme_contrast.py"
+mode = "lint"
+scope = "apps/packages/design/dist/theme.css — STATE_ROLES against STATE_PLANE and against each other, both modes"
+
+rule = """--color-hover, --color-selected, and --color-active must each reach
+1.02:1 against the surface and against each other, and --color-selected must
+carry at least as much ink off the surface as --color-hover does. A
+grandfathered pair must still hold at or above its pinned ratio."""
+alternative = """Retune the state ramp for the failing mode in tokens.ts so the
+persistent state reads at least as strongly as the transient one."""
+why = """1.02:1 is deliberately a hair above 1.0: a state fill is meant to be a
+step, not a jump, so the floor asks for a perceptible difference rather than a
+legible one. The direction check is the important half — a persistent selection
+carrying LESS ink than a transient hover reads as the weaker state, which is
+exactly how additive alphas invert when a dark scale is flipped, and difference
+alone would have accepted it."""
+
+[rule.example]
+bad = "selected #1f1f1f at 1.08:1 where hover #2a2a2a reads 1.24:1"
+good = "selected reads at least as strongly as hover in both modes"
+
+[[rule]]
+id = "PROD-THEME-5"
+title = "a grandfathered deviation names a pair that is still measured"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_theme_contrast.py"
+mode = "lint"
+scope = "lints/product/exceptions.toml, for every PROD-THEME rule"
+
+rule = """Every PROD-THEME entry in the exception ledger must name a mode block
+and a pair the checker still measures, and must carry a pinned ratio in the
+checker's DECLARED_DEVIATION_RATIOS table under the same (path, site) key. A
+ledger entry for a pair that is no longer measured, or one with no pinned ratio,
+is an error."""
+alternative = """Delete the ledger entry and its pinned ratio together with the
+pair they described."""
+why = """A pin for a pair nobody measures is dead weight in a design contract: it
+reads as an accepted deviation that is in fact enforcing nothing, so the ledger
+stops being a truthful list of what we owe. Requiring the ratio alongside the
+entry stops a ledger row from degrading into an unbounded waiver."""
+
+[rule.example]
+bad = "a ledger entry for a border pair after that pair was dropped from BORDER_PAIRS"
+good = "the pair, its ledger entry, and its pinned ratio are removed in one commit"
+
+[[rule]]
+id = "PROD-THEME-6"
+title = "a deviation that now clears its floor is deleted, not left pinned"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_theme_contrast.py"
+mode = "lint"
+scope = "lints/product/exceptions.toml, for every PROD-THEME rule"
+
+rule = """A grandfathered pair that measures at or above its floor must have its
+ledger entry and pinned ratio removed; the checker fails while a cleared pair is
+still pinned."""
+alternative = """Delete the [[exception]] entry and its pinned ratio in the same
+commit that fixed the pair."""
+why = """This is what keeps the ledger shrinking. A pin that has quietly started
+passing still documents a deviation we no longer have, and every stale row makes
+the honest rows easier to ignore — so the check that a pair improved is also the
+check that forces the paperwork to follow."""
+
+[rule.example]
+bad = "a pin left in place after the token was retuned above its floor"
+good = "the retune commit also deletes the exception entry and the pinned ratio"

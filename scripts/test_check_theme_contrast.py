@@ -12,10 +12,12 @@ from __future__ import annotations
 import unittest
 import unittest.mock
 
+from scripts import check_theme_contrast
 from scripts.check_theme_contrast import (
     BORDER_PAIRS,
     STACKED_TEXT_PAIRS,
     TEXT_PLANES,
+    THEME_CSS_RECORD_PATH,
     Measurement,
     Resolver,
     Rgb,
@@ -157,12 +159,83 @@ class BlockExtraction(unittest.TestCase):
             read_block(self.CSS, ":root[data-mode='nope']")
 
 
+class RecordCoverage(unittest.TestCase):
+    """Every rule this checker claims must have a record, and vice versa."""
+
+    def test_checker_owns_exactly_the_prod_theme_records(self) -> None:
+        self.assertEqual(
+            check_theme_contrast.OWNED_RULE_IDS,
+            frozenset(f"PROD-THEME-{index}" for index in range(1, 7)),
+        )
+
+    def test_every_measurement_rule_is_owned(self) -> None:
+        for rule_id in (
+            check_theme_contrast.TEXT_RULE,
+            check_theme_contrast.SIDEBAR_RULE,
+            check_theme_contrast.BORDER_RULE,
+            check_theme_contrast.STATE_RULE,
+            check_theme_contrast.ORPHAN_PIN_RULE,
+            check_theme_contrast.STALE_PIN_RULE,
+        ):
+            self.assertIn(rule_id, check_theme_contrast.OWNED_RULE_IDS)
+
+    def test_diagnostic_cites_the_rule_and_the_record(self) -> None:
+        diagnostic = Measurement(
+            "light", "--color-faint on --color-surface", 3.28, 4.5, "detail", "PROD-THEME-1"
+        ).diagnostic()
+        self.assertIn("PROD-THEME-1", diagnostic)
+        self.assertIn("3.28:1", diagnostic)
+        self.assertIn("lints/product/theme.toml", diagnostic)
+        self.assertIn("  instead:", diagnostic)
+
+
+class ExceptionLedgerIsLoadBearing(unittest.TestCase):
+    """The five dark deviations live in `lints/product/exceptions.toml`, and the
+    ratio each was accepted at lives here. Neither half stands alone: an entry
+    with no ratio would be an unbounded waiver, and a ratio with no entry would
+    be an undocumented one. The join is asserted rather than assumed because a
+    silent mismatch is exactly how a ratchet turns back into an exemption."""
+
+    def test_the_ledger_and_the_pinned_ratios_agree(self) -> None:
+        self.assertEqual(check_theme_contrast.UNPINNED_DEVIATIONS, [])
+        self.assertEqual(check_theme_contrast.UNLEDGERED_RATIOS, [])
+
+    def test_every_deviation_carries_a_reason_from_the_ledger(self) -> None:
+        self.assertEqual(len(check_theme_contrast.DECLARED_DEVIATIONS), 5)
+        for (path, site), (ratio, reason) in check_theme_contrast.DECLARED_DEVIATIONS.items():
+            with self.subTest(site=site):
+                self.assertEqual(path, THEME_CSS_RECORD_PATH)
+                self.assertTrue(site.startswith("[dark] "))
+                self.assertGreater(ratio, 1.0)
+                self.assertTrue(reason.strip())
+
+    def test_a_ledgered_site_with_no_ratio_is_reported_not_waived(self) -> None:
+        with unittest.mock.patch.dict(
+            "scripts.check_theme_contrast.DECLARED_DEVIATION_RATIOS", {}, clear=True
+        ):
+            deviations, unpinned, unledgered = check_theme_contrast.load_declared_deviations()
+        self.assertEqual(deviations, {})
+        self.assertEqual(len(unpinned), 5)
+        self.assertEqual(unledgered, [])
+
+    def test_a_pinned_ratio_with_no_ledger_entry_is_reported(self) -> None:
+        key = (THEME_CSS_RECORD_PATH, "[dark] --color-invented against --color-surface")
+        with unittest.mock.patch.dict(
+            "scripts.check_theme_contrast.DECLARED_DEVIATION_RATIOS", {key: 1.1}
+        ):
+            _deviations, unpinned, unledgered = check_theme_contrast.load_declared_deviations()
+        self.assertEqual(unpinned, [])
+        self.assertEqual(unledgered, [key])
+
+
 class Ratchet(unittest.TestCase):
     """`DECLARED_DEVIATIONS` is patched per-test so the suite states its own
     inputs instead of depending on whatever the live token set happens to be."""
 
+    SITE = (THEME_CSS_RECORD_PATH, "[light] pair")
+
     def measurement(self, ratio: float, floor: float = 1.25, label: str = "pair") -> Measurement:
-        return Measurement("light", label, ratio, floor, "detail")
+        return Measurement("light", label, ratio, floor, "detail", "PROD-THEME-3")
 
     def test_clearing_the_floor_needs_no_pin(self) -> None:
         self.assertTrue(self.measurement(1.42).ok)
@@ -173,7 +246,7 @@ class Ratchet(unittest.TestCase):
     def test_pin_admits_the_measured_value(self) -> None:
         with unittest.mock.patch.dict(
             "scripts.check_theme_contrast.DECLARED_DEVIATIONS",
-            {("light", "pair"): (1.24, "approved")},
+            {self.SITE: (1.24, "approved")},
             clear=True,
         ):
             self.assertTrue(self.measurement(1.24).ok)
@@ -181,7 +254,7 @@ class Ratchet(unittest.TestCase):
     def test_pin_refuses_a_regression(self) -> None:
         with unittest.mock.patch.dict(
             "scripts.check_theme_contrast.DECLARED_DEVIATIONS",
-            {("light", "pair"): (1.24, "approved")},
+            {self.SITE: (1.24, "approved")},
             clear=True,
         ):
             self.assertFalse(self.measurement(1.20).ok)
@@ -189,7 +262,7 @@ class Ratchet(unittest.TestCase):
     def test_pin_allows_improvement_below_the_floor(self) -> None:
         with unittest.mock.patch.dict(
             "scripts.check_theme_contrast.DECLARED_DEVIATIONS",
-            {("light", "pair"): (1.20, "approved")},
+            {self.SITE: (1.20, "approved")},
             clear=True,
         ):
             measurement = self.measurement(1.23)
@@ -199,10 +272,20 @@ class Ratchet(unittest.TestCase):
     def test_pin_becomes_stale_once_the_floor_is_met(self) -> None:
         with unittest.mock.patch.dict(
             "scripts.check_theme_contrast.DECLARED_DEVIATIONS",
-            {("light", "pair"): (1.24, "approved")},
+            {self.SITE: (1.24, "approved")},
             clear=True,
         ):
             self.assertTrue(self.measurement(1.30).stale_pin)
+
+    def test_a_deviation_for_another_mode_does_not_transfer(self) -> None:
+        """The ledger site carries the mode, so a dark deviation cannot silently
+        excuse the same pair in light."""
+        with unittest.mock.patch.dict(
+            "scripts.check_theme_contrast.DECLARED_DEVIATIONS",
+            {(THEME_CSS_RECORD_PATH, "[dark] pair"): (1.10, "approved")},
+            clear=True,
+        ):
+            self.assertFalse(self.measurement(1.10).ok)
 
 
 class PlaneCoverage(unittest.TestCase):

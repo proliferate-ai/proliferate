@@ -1,0 +1,68 @@
+# Toast copy (PROD-COPY). Enforced by scripts/check_toast_copy.py.
+#
+# The failure these bans delete was written the same way dozens of times:
+#
+#     showToast(`Failed to send queued message next: ${errorMessage(error)}`)
+#
+# a human headline concatenated with a raw exception. It has no good width:
+# narrow clips it mid-word with no ellipsis, wide clips it later, and wrapping
+# prints the exception to the user — while the message it was about sits unsent.
+# No layout fixes concatenation, so the concatenation is what is banned. The
+# replacement is structured: toastError({ headline, consequence, cause, retry }),
+# where `cause` carries the exception and is reachable only through Details.
+#
+# Both censuses were empty when the sweep landed — every existing site was
+# fixed — so both rules are absolute bans with no ledger and no ratchet.
+#
+# In-code scope definitions kept in the checker (structural, not grandfathering):
+# SCANNED_ROOTS (product-client, desktop, and web, because all three raise toasts
+# through the same kit), EXTENSIONS, SKIPPED_DIR_NAMES, TOAST_CALL (every name a
+# toast entry point is reached by), and ERROR_BINDING (the deliberately narrow
+# error vocabulary that separates the banned shape from an ordinary interpolated
+# status line).
+
+[[rule]]
+id = "PROD-COPY-1"
+title = "a toast headline is written, not built"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_toast_copy.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/**, apps/web/src/** (.ts/.tsx)"
+
+rule = """A `headline:` value must be a written string literal. It may not be a
+template literal with an interpolation, and it may not be assembled by
+concatenation — including the Prettier-wrapped form where the value is split
+across lines."""
+alternative = """A headline is a written line, not a built string — put the
+dynamic text in `consequence` or the exception in `cause`."""
+why = """The headline is the one line a person actually reads, so it is product
+voice and has to be reviewable as written copy. An interpolated headline is a
+sentence nobody can read until runtime, which means nobody reviewed it."""
+
+[rule.example]
+bad = "toastError({ headline: `Failed to ${verb} session` })"
+good = "toastError({ headline: \"Session not started\", consequence: `${verb} did not run.` })"
+
+[[rule]]
+id = "PROD-COPY-2"
+title = "an exception never lands in a toast message"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_toast_copy.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/**, apps/web/src/** (.ts/.tsx)"
+
+rule = """A toast must not be raised with a string that interpolates or
+concatenates an error-shaped binding — error, err, errorMessage, message, msg,
+reason, detail, stderr, stack — through any of the toast entry points."""
+alternative = """Raise it with toastError({ headline, consequence, cause }) so
+the exception reaches Details, not the headline."""
+why = """Raw exception text in the message is the classic leak of internal
+language onto a product surface; `cause` is where it belongs. Interpolation into
+a toast is not banned in general — `show(`Joined ${org.name}.`)` is a fine status
+line — only interpolation of the thing that is an exception."""
+
+[rule.example]
+bad = "showToast(`Couldn't save: ${errorMessage(error)}`)"
+good = "toastError({ headline: \"Workspace not saved\", cause: errorMessage(error) })"
