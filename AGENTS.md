@@ -63,11 +63,11 @@ applicable owner.
 | `anyharness/crates/proliferate-worker/**` | [`specs/worker.md`](specs/worker.md) |
 | `anyharness/crates/proliferate-supervisor/**`, `install/**` | [`specs/supervisor.md`](specs/supervisor.md) |
 | `cloud/sdk/**`, `cloud/sdk-react/**`, `anyharness/sdk/**`, `anyharness/sdk-react/**` | [`specs/sdk.md`](specs/sdk.md) |
-| UI: components, styling, tokens, theme | [`specs/DESIGN_SYSTEM.md`](specs/DESIGN_SYSTEM.md) |
+| UI: components, styling, tokens, theme | [`specs/codebase/platforms/product/design-system.md`](specs/codebase/platforms/product/design-system.md) |
 | User-facing copy, naming, product feel | [`specs/PRODUCT_SENSE.md`](specs/PRODUCT_SENSE.md) |
 | `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**`, `scripts/agent-gateway-smoke/**` | [`specs/TESTING.md`](specs/TESTING.md) |
 | Telemetry and scrubber sources in any area (`**/telemetry/**`, `**/telemetry.rs`, `server/proliferate/integrations/sentry.py`, `server/proliferate/middleware/logging.py`), `server/infra/observability/**` | [`specs/OBSERVABILITY.md`](specs/OBSERVABILITY.md) |
-| `lints/**`, `scripts/check_*` | Constitution — see [Repository-wide rules](#repository-wide-rules); records in [`lints/`](lints/) |
+| `scripts/check_*`, checker allowlists | Constitution — see [Repository-wide rules](#repository-wide-rules) |
 | `adrs/**` — writing or reviewing a decision record | [`guides/process/adrs.md`](guides/process/adrs.md) |
 | `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`guides/process/README.md`](guides/process/README.md) |
 | `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`guides/deploying/README.md`](guides/deploying/README.md) |
