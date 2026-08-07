@@ -12,7 +12,13 @@ fn session_model_options(ids: &[&str]) -> Vec<SessionModelOption> {
 }
 
 #[test]
-fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite() {
+fn load_startup_restore_snapshot_captures_controls_for_resume_replay_agents() {
+    for agent_kind in [AgentKind::Claude, AgentKind::Codex] {
+        assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind);
+    }
+}
+
+fn assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind: AgentKind) {
     let db = Db::open_in_memory().expect("open db");
     test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
 
@@ -21,7 +27,7 @@ fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite(
         .insert(&SessionRecord {
             id: "session-1".to_string(),
             workspace_id: "workspace-1".to_string(),
-            agent_kind: AgentKind::Claude.as_str().to_string(),
+            agent_kind: agent_kind.as_str().to_string(),
             native_session_id: Some("native-1".to_string()),
             agent_auth_contexts: None,
             requested_model_id: None,
@@ -52,29 +58,29 @@ fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite(
         raw_config_options: vec![],
         normalized_controls: NormalizedSessionControls {
             model: None,
-            collaboration_mode: Some(NormalizedSessionControl {
-                key: "collaboration_mode".into(),
-                raw_config_id: "collaboration_mode".into(),
-                label: "Collaboration Mode".into(),
-                current_value: Some("plan".into()),
-                settable: true,
-                values: vec![
-                    NormalizedSessionControlValue {
-                        value: "chat".into(),
-                        label: "Chat".into(),
-                        description: None,
-                    },
-                    NormalizedSessionControlValue {
-                        value: "plan".into(),
-                        label: "Plan".into(),
-                        description: None,
-                    },
-                ],
-            }),
+            collaboration_mode: Some(normalized_select_control(
+                "collaboration_mode",
+                "collaboration_mode",
+                "Collaboration Mode",
+                "plan",
+                &[("chat", "Chat"), ("plan", "Plan")],
+            )),
             mode: None,
             reasoning: None,
-            effort: None,
-            fast_mode: None,
+            effort: Some(normalized_select_control(
+                "effort",
+                "reasoning_effort",
+                "Reasoning Effort",
+                "xhigh",
+                &[("medium", "Medium"), ("xhigh", "Extra High")],
+            )),
+            fast_mode: Some(normalized_select_control(
+                "fast_mode",
+                "fast_mode",
+                "Fast Mode",
+                "on",
+                &[("off", "Off"), ("on", "On")],
+            )),
             extras: vec![],
         },
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
@@ -87,38 +93,37 @@ fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite(
         )
         .expect("persist old snapshot");
 
-    let captured =
-        load_startup_restore_snapshot(&store, "session-1", AgentKind::Claude.as_str(), true)
-            .expect("load startup snapshot")
-            .expect("snapshot exists");
+    let captured = load_startup_restore_snapshot(&store, "session-1", agent_kind.as_str(), true)
+        .expect("load startup snapshot")
+        .expect("snapshot exists");
 
     let replacement_snapshot = SessionLiveConfigSnapshot {
         raw_config_options: vec![],
         normalized_controls: NormalizedSessionControls {
             model: None,
-            collaboration_mode: Some(NormalizedSessionControl {
-                key: "collaboration_mode".into(),
-                raw_config_id: "collaboration_mode".into(),
-                label: "Collaboration Mode".into(),
-                current_value: Some("chat".into()),
-                settable: true,
-                values: vec![
-                    NormalizedSessionControlValue {
-                        value: "chat".into(),
-                        label: "Chat".into(),
-                        description: None,
-                    },
-                    NormalizedSessionControlValue {
-                        value: "plan".into(),
-                        label: "Plan".into(),
-                        description: None,
-                    },
-                ],
-            }),
+            collaboration_mode: Some(normalized_select_control(
+                "collaboration_mode",
+                "collaboration_mode",
+                "Collaboration Mode",
+                "chat",
+                &[("chat", "Chat"), ("plan", "Plan")],
+            )),
             mode: None,
             reasoning: None,
-            effort: None,
-            fast_mode: None,
+            effort: Some(normalized_select_control(
+                "effort",
+                "reasoning_effort",
+                "Reasoning Effort",
+                "medium",
+                &[("medium", "Medium"), ("xhigh", "Extra High")],
+            )),
+            fast_mode: Some(normalized_select_control(
+                "fast_mode",
+                "fast_mode",
+                "Fast Mode",
+                "off",
+                &[("off", "Off"), ("on", "On")],
+            )),
             extras: vec![],
         },
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
@@ -132,14 +137,47 @@ fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite(
         )
         .expect("persist replacement snapshot");
 
+    let controls = &captured.normalized_controls;
     assert_eq!(
-        captured
-            .normalized_controls
-            .collaboration_mode
-            .as_ref()
-            .and_then(|control| control.current_value.as_deref()),
-        Some("plan")
+        (
+            normalized_control_value(&controls.collaboration_mode),
+            normalized_control_value(&controls.effort),
+            normalized_control_value(&controls.fast_mode),
+        ),
+        (Some("plan"), Some("xhigh"), Some("on")),
+        "{} resume must retain the pre-overwrite snapshot",
+        agent_kind.as_str()
     );
+}
+
+fn normalized_select_control(
+    key: &str,
+    raw_config_id: &str,
+    label: &str,
+    current_value: &str,
+    values: &[(&str, &str)],
+) -> NormalizedSessionControl {
+    NormalizedSessionControl {
+        key: key.into(),
+        raw_config_id: raw_config_id.into(),
+        label: label.into(),
+        current_value: Some(current_value.into()),
+        settable: true,
+        values: values
+            .iter()
+            .map(|(value, label)| NormalizedSessionControlValue {
+                value: (*value).into(),
+                label: (*label).into(),
+                description: None,
+            })
+            .collect(),
+    }
+}
+
+fn normalized_control_value(control: &Option<NormalizedSessionControl>) -> Option<&str> {
+    control
+        .as_ref()
+        .and_then(|control| control.current_value.as_deref())
 }
 
 #[test]
@@ -183,9 +221,9 @@ fn persisted_control_values_orders_standard_controls_before_extras() {
         }),
         effort: Some(NormalizedSessionControl {
             key: "effort".into(),
-            raw_config_id: "effort".into(),
-            label: "Effort".into(),
-            current_value: Some("max".into()),
+            raw_config_id: "reasoning_effort".into(),
+            label: "Reasoning Effort".into(),
+            current_value: Some("xhigh".into()),
             settable: true,
             values: vec![],
         }),
@@ -219,7 +257,7 @@ fn persisted_control_values_orders_standard_controls_before_extras() {
             "model=default",
             "collaboration_mode=plan",
             "thinking=off",
-            "effort=max",
+            "reasoning_effort=xhigh",
             "fast_mode=on",
             "mode=default",
             "foo=bar",

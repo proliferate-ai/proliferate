@@ -16,8 +16,13 @@ resolved `dist.integrity` as provenance. The wrapper executable resolves from
   must be updated and probed alongside the embedded core
 
 The Codex ACP session config surface also exposes `fast_mode` as a live control.
-That maps to Codex `service_tier = fast` for the current session, but it is not
-persisted across reload/resume by the current Codex rollout replay path.
+That maps to Codex `service_tier = fast` for the current session. The Codex
+rollout replay path does not persist all live controls, including
+`reasoning_effort` and `fast_mode`, so AnyHarness captures the durable live
+config before the ACP startup config is persisted over it in
+[persist.rs](../../../../../anyharness/crates/anyharness-lib/src/live/sessions/actor/config/persist.rs)
+and replays those controls after applying the requested model in
+[startup.rs](../../../../../anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs).
 
 Native collaboration events are normalized by the ACP adapter before they
 reach AnyHarness. Spawn events own a stable parent `Agent` tool item; child
