@@ -27,9 +27,9 @@ Every rule names its enforcement mode: `compiler | lint | test | review`. Mechan
         - Frontend packages own presentation and interaction: clients of the server's contracts. Desktop Native owns OS integration and local process lifecycle (supervisor/worker converge the managed runtime)
     - Trying to on-ramp to the codebase / comprehend how Proliferate is structured? `ARCHITECTURE.md` lists out how every component fits together.
     - Are you building something? Best practices per SOURCE OWNER (owners, not languages - "Rust" is a compiler, not an owner):
-        - `specs/ANYHARNESS/` - the runtime lib, mental model in `README.md`, specifics in distinct top level files
-        - `specs/SERVER/` - same shape
-        - `specs/FRONTEND/` - same shape
+        - `specs/anyharness/` - the runtime lib, mental model in `README.md`, specifics in distinct top level files
+        - `specs/server/` - same shape
+        - `specs/frontend/` - same shape
         - Thin single-file standards for the small owners: supervisor, worker, desktop-native, sdk. Supervisor and worker do distinct work with distinct standards even though they run in tandem - the tandem story itself lives in `FEATURE_DOCS/MANAGED_RUNTIME.md`.
     - Touching a cross-plane system (sandbox, billing, model routing, ...)? The "touching `<globs>` → read `<doc>`" rows live right here, pointing into `specs/FEATURE_DOCS/`. No CI ceremony attached.
     - Want to deeply understand a specific architectural decision? → `adrs/` (grep for `Description:` to get the one-line summary of each record)
@@ -60,7 +60,7 @@ Every rule names its enforcement mode: `compiler | lint | test | review`. Mechan
         - `MODELS.md` - catalog + gateway: probes ↔ server ↔ LiteLLM ↔ providers
         - `WORKFLOWS.md` - server ↔ runtime ↔ workspace placement: race laws + ownership, no wire shapes
         - `DESKTOP_HOST.md` - web bundle ↔ native shell ↔ sidecar seam
-    - Each owner dir (`ANYHARNESS/`, `SERVER/`, `FRONTEND/`; the thin owners follow the same pattern in one file) is exactly TWO artifacts - one teaches you to think, one stops you:
+    - Each owner dir (`anyharness/`, `server/`, `frontend/`; the thin owners follow the same pattern in one file) is exactly TWO artifacts - one teaches you to think, one stops you:
         - `README.md` - the one prose doc per area. The compression (server: "the grid - legality is a pure function of coordinates"), why each rule exists as problem → solution → what-you-get, target shape for orientation, placement judgment (what owns what, proportionality, "ceremony is earned"), failure-mode table, change discipline. Exemplars: `grid-ownership-model.md` + the judgment half of frontend README / `anyharness-structure.md`
         - `lints/<owner>/` (top-level, see below) - everything mechanical as data: edges, path licenses, grades, named exceptions (never counts), ratchet config
         - The litmus per sentence: could a checker hold this? Yes → data in `lints/`. No → prose in the doc. Nothing qualifies for both, so nothing is written twice.
@@ -77,7 +77,7 @@ Every rule names its enforcement mode: `compiler | lint | test | review`. Mechan
     - `process/` - `pull-requests` (labels, review flow, agent review)
     - NOT guides: `developing/testing/*` depth → `specs/TESTING/`; the two `reference/` tables are reference, not task-shaped - `environment-sources` folds into `dev-profiles`' config section, `workspace-command-environment` belongs to the ANYHARNESS owner docs
 
-- `adrs/` - architectural decision records. The specing doc IS the record (ruled 2026-08-07): new work of decision weight is specced as an ADR up front (Orientation / Current context / Design options / Implementation slices / Validation derived from the grid), immutable once approved, and it STAYS after ship as the permanent why. Every record opens with a one-line `Description:` header so `grep 'Description:' adrs/` is the index - no separate index file to rot. Current behavior still graduates into owner docs / feature docs at ship; the ADR keeps the rationale and the rejected options.
+- `adrs/` - architectural decision records. The specing doc IS the record (ruled 2026-08-07): every non-trivial feature is specced as an ADR up front (the spec format and the ADR format are one thing) (Orientation / Current context / Design options / Implementation slices / Validation derived from the grid), immutable once approved, and it STAYS after ship as the permanent why. Every record opens with a one-line `Description:` header so `grep 'Description:' adrs/` is the index - no separate index file to rot. Current behavior still graduates into owner docs / feature docs at ship; the ADR keeps the rationale and the rejected options.
 
 - `programs/` - multi-PR orchestration in flight, OUTSIDE the canonical read path: nothing routes here, agents doing normal work never read it. Scope narrowed 2026-08-07: the design content lives in the ADR; programs/ carries only the execution machinery - the slice registry / dependency graph and per-slice state (base SHA, approval) - so slice N+1 reconciles against what slice N actually shipped, not against a stale plan
     - Deleted when the program ships; the harvest rule at the top moves surviving behavior into owner docs (rationale is already permanent in the ADR)
@@ -118,10 +118,10 @@ Known collision to resolve during migration: the server currently has two prose 
 Founder-ruled against the live AGENTS.md-TOC sketch: `adrs/` added with ADR-as-the-spec semantics
 and `programs/` narrowed to orchestration (both applied in the tree above); per-PR
 testing/observability enforcement = review-mode + PR template (applied above; slice D16);
-`DESIGN_SYSTEM.md` naming (slice D4); `FEATURE_DOCS/` home confirmed as already ruled. One
-ambiguity left open deliberately: the ruling answer said "top-level" for the owner dirs while this
-tree keeps them at `specs/ANYHARNESS|SERVER|FRONTEND` (CAPS) — confirm placement before D7
-executes; nothing before Wave 1 depends on it.
+`DESIGN_SYSTEM.md` naming (slice D4); `FEATURE_DOCS/` home confirmed as already ruled. Owner-dir
+placement re-ruled explicitly 2026-08-07 (second pass): `specs/anyharness|server|frontend`,
+lowercase, under specs/ — supersedes the CAPS/top-level readings. ADR bar ruled: every
+non-trivial feature is specced as an ADR, not only decision-weight work.
 
 ## Slice registry (execution plan, 2026-08-06)
 
@@ -162,12 +162,12 @@ adversarial verify pass (refuters per moved/deleted doc — the method validated
 - **D6 — constitution machinery.** Shared TOML rule schema, `lints/` scaffold, `CODEOWNERS` on
   `lints/**`, record→diagnostic generator. Founder-reviewed personally. Gate: first owner's rule
   data exists (D7 ready to consume it).
-- **D7 — `ANYHARNESS/` + `lints/anyharness/`.** Gate: anyharness-grid program merged. Per the
+- **D7 — `specs/anyharness/` + `lints/anyharness/`.** Gate: anyharness-grid program merged. Per the
   migration order above: baselines → split (guides + anyharness-structure → TOML + one README) →
   checker seeded with named exceptions → delete old guides. `live-runtime` survives as a deep guide.
-- **D8 — `SERVER/` + `lints/server/`.** Gate: server-grid landed. Executes the ruled collision:
+- **D8 — `specs/server/` + `lints/server/`.** Gate: server-grid landed. Executes the ruled collision:
   grid-ownership-model wins; old architecture.md's unique content folds in, then deletes.
-- **D9 — `FRONTEND/` + `lints/frontend/`.** Gate: frontend fold stack + slice 5 merged.
+- **D9 — `specs/frontend/` + `lints/frontend/`.** Gate: frontend fold stack + slice 5 merged.
 - **D10 — thin owners.** Single-file standards: supervisor, worker, desktop-native, sdk. Gate: D7.
 
 ### Wave 2 — router, feature docs, taste
