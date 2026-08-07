@@ -3,7 +3,6 @@ import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import {
-  getAuthoritativeConfigValue,
   shouldAcceptAuthoritativeLiveConfig,
 } from "#product/domain/sessions/pending-config";
 import {
@@ -16,8 +15,8 @@ import {
   getSessionClientAndWorkspace,
 } from "#product/lib/access/anyharness/session-runtime";
 import {
-  persistDefaultSessionModePreference,
-} from "#product/hooks/sessions/workflows/session-mode-preferences";
+  persistDefaultSessionControlPreference,
+} from "#product/hooks/sessions/workflows/session-control-preferences";
 import {
   getSessionRecord,
   patchSessionRecord,
@@ -34,7 +33,7 @@ export interface ConfigIntentDispatchDeps {
   cloudClient: CloudSandboxGatewayUrlSource | null;
   getWorkspaceSurface: (
     workspaceId: string | null | undefined,
-  ) => Parameters<typeof persistDefaultSessionModePreference>[0]["workspaceSurface"];
+  ) => Parameters<typeof persistDefaultSessionControlPreference>[0]["workspaceSurface"];
   setSessionConfigOptionMutation: SetSessionConfigOptionMutation;
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
@@ -146,11 +145,11 @@ export async function dispatchConfigIntent(
         patchSessionRecord(intent.clientSessionId, nextPatch);
       }
       if (response.applyState === "applied" && intent.persistDefaultPreference) {
-        persistDefaultSessionModePreference({
+        persistDefaultSessionControlPreference({
           agentKind: response.session.agentKind ?? latestSlot.agentKind,
-          liveConfigRawConfigId: effectiveLiveConfig?.normalizedControls.mode?.rawConfigId ?? null,
+          liveConfig: effectiveLiveConfig,
           rawConfigId: intent.configId,
-          modeId: getAuthoritativeConfigValue(effectiveLiveConfig, intent.configId) ?? intent.value,
+          requestedValue: intent.value,
           workspaceSurface: deps.getWorkspaceSurface(workspaceId),
         });
       }

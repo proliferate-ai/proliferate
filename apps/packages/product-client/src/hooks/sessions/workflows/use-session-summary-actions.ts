@@ -8,7 +8,6 @@ import {
   resolveSessionStatus,
 } from "#product/domain/sessions/activity";
 import {
-  getAuthoritativeConfigValue,
   hasQueuedPendingConfigChanges,
   reconcilePendingConfigChanges,
   shouldAcceptAuthoritativeLiveConfig,
@@ -23,7 +22,7 @@ import {
 import { buildSessionSlotPatchFromSummary } from "#product/lib/domain/sessions/summary";
 import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
 import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
-import { persistDefaultSessionModePreference } from "#product/hooks/sessions/workflows/session-mode-preferences";
+import { persistDefaultSessionControlPreference } from "#product/hooks/sessions/workflows/session-control-preferences";
 import { clearPendingConfigRollbackCheck } from "#product/hooks/sessions/lifecycle/session-runtime-pending-config";
 import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
@@ -39,20 +38,19 @@ import { trackWorkspaceInteraction } from "#product/stores/preferences/workspace
 export function useSessionSummaryActions() {
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
 
-  const persistReconciledModePreferences = useCallback((
+  const persistReconciledControlPreferences = useCallback((
     workspaceId: string | null | undefined,
     agentKind: string | null | undefined,
-    liveConfigRawConfigId: string | null | undefined,
+    liveConfig: NonNullable<Session["liveConfig"]>,
     reconciledChanges: PendingSessionConfigChange[],
-    liveConfigValueResolver: (rawConfigId: string) => string | null,
   ) => {
     const workspaceSurface = getWorkspaceSurface(workspaceId);
     for (const change of reconciledChanges) {
-      persistDefaultSessionModePreference({
+      persistDefaultSessionControlPreference({
         agentKind,
-        liveConfigRawConfigId,
+        liveConfig,
         rawConfigId: change.rawConfigId,
-        modeId: liveConfigValueResolver(change.rawConfigId),
+        requestedValue: change.value,
         workspaceSurface,
       });
     }
@@ -141,21 +139,22 @@ export function useSessionSummaryActions() {
       trackWorkspaceInteraction(resolvedWorkspaceId, interactionTimestamp);
     }
 
-    persistReconciledModePreferences(
-      resolvedWorkspaceId,
-      patch.agentKind,
-      effectiveLiveConfig?.normalizedControls.mode?.rawConfigId ?? null,
-      reconcileResult.reconciledChanges,
-      (rawConfigId) => getAuthoritativeConfigValue(effectiveLiveConfig, rawConfigId),
-    );
+    if (effectiveLiveConfig) {
+      persistReconciledControlPreferences(
+        resolvedWorkspaceId,
+        patch.agentKind,
+        effectiveLiveConfig,
+        reconcileResult.reconciledChanges,
+      );
+    }
 
     if (!hasQueuedPendingConfigChanges(reconcileResult.pendingConfigChanges)) {
       clearPendingConfigRollbackCheck(sessionId);
     }
-  }, [persistReconciledModePreferences]);
+  }, [persistReconciledControlPreferences]);
 
   return {
     applySessionSummary,
-    persistReconciledModePreferences,
+    persistReconciledControlPreferences,
   };
 }

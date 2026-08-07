@@ -165,21 +165,6 @@ function presentSettingsModel<T extends SettingsAgentModel>(
   };
 }
 
-export function withUpdatedDefaultLiveSessionControlValueByAgentKind(
-  current: DefaultLiveSessionControlValuesByAgentKind,
-  agentKind: string,
-  key: DefaultLiveSessionControlKey,
-  value: string,
-): DefaultLiveSessionControlValuesByAgentKind {
-  return {
-    ...current,
-    [agentKind]: {
-      ...(current[agentKind] ?? {}),
-      [key]: value,
-    },
-  };
-}
-
 function buildLiveDefaultControlsForModel(
   model: SettingsAgentModel,
   storedValues: Partial<Record<DefaultLiveSessionControlKey, string>>,
