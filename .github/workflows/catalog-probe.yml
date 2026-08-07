@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: Catalog Probe
-      url: https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/catalog-probe.md
+      url: https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/catalog-probe.md
     timeout-minutes: 90
     concurrency:
       group: catalog-probe
@@ -196,7 +196,7 @@ jobs:
             --jq ".[] | select(.title == \"$title\") | .number" | head -1)
           message="Catalog Probe failed on the default-branch schedule: $RUN_URL
 
-          Follow the [Catalog Probe runbook](https://github.com/$GITHUB_REPOSITORY/blob/main/specs/developing/operating/catalog-probe.md). Inspect only sanitized run state and credential names; never copy credential values into this issue or workflow logs."
+          Follow the [Catalog Probe runbook](https://github.com/$GITHUB_REPOSITORY/blob/main/guides/operating/catalog-probe.md). Inspect only sanitized run state and credential names; never copy credential values into this issue or workflow logs."
           if [[ -n "$issue_number" ]]; then
             gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "$message"
           else

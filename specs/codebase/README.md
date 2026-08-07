@@ -2,7 +2,7 @@
 
 This area explains where code belongs, which reusable contracts it implements,
 and how complete product and engineering domains behave. Contributor
-procedures live under [`../developing/`](../developing/).
+procedures live under [`../../guides/`](../../guides/).
 
 ## Read Order
 

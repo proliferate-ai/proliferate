@@ -58,3 +58,5 @@ Commands can use the owned paths through normal shell expansion:
 ```sh
 cd "${PROLIFERATE_WORKTREE_DIR:-$PROLIFERATE_WORKSPACE_DIR}" && make dev
 ```
+
+This reference moves with the ANYHARNESS owner wave (slice D7 of `programs/docs-restructure/OUTLINE.md`).

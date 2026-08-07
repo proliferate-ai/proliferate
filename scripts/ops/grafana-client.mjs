@@ -1,5 +1,5 @@
 // Real Grafana HTTP client for the E1 operator script (grafana-alerting.mjs).
-// Contract: specs/developing/operating/production-alerts.md
+// Contract: guides/operating/production-alerts.md
 //
 // Network-layer target lock: the base URL is derived ONLY from the frozen
 // TARGET constants below (workspace id + region), never from env or config, so

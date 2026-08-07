@@ -7,7 +7,7 @@ control plane. Every `server-v*` release publishes it as
 operators do not need to clone the monorepo.
 
 The authoritative operating doc is
-[`specs/developing/deploying/self-hosted-deploy.md`](../../specs/developing/deploying/self-hosted-deploy.md).
+[`guides/deploying/self-hosted-deploy.md`](../../guides/deploying/self-hosted-deploy.md).
 For AWS, see
 [`server/infra/self-hosted-aws/`](../infra/self-hosted-aws/README.md).
 

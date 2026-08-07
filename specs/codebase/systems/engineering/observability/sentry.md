@@ -186,7 +186,7 @@ following up with reporters. Observability does not own tracker state.
   amendment). The `tracing_error_reaches_the_sentry_client` tests in
   AnyHarness, Worker, and Supervisor fail on any new divergence.
 
-Use the [Sentry operating procedure](../../../../developing/operating/analytics/sentry.md)
+Use the [Sentry operating procedure](../../../../../guides/operating/analytics/sentry.md)
 to discover current provider state and verify delivery without exposing
 credentials.
 

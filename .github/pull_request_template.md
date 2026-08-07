@@ -4,7 +4,7 @@
 
 ## Readiness
 
-- [ ] I followed the [pull-request procedure](https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/process/pull-requests.md)
+- [ ] I followed the [pull-request procedure](https://github.com/proliferate-ai/proliferate/blob/main/guides/process/pull-requests.md)
   for scope, title, labels, body, and readiness.
 
 ## Support and attribution (optional)

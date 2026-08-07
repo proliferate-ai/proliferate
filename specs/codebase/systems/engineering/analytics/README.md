@@ -58,6 +58,6 @@ deduplication boundary.
 ## Operating Routes
 
 - Operate PostHog through
-  [`developing/operating/analytics/posthog.md`](../../../../developing/operating/analytics/posthog.md).
+  [`guides/operating/analytics/posthog.md`](../../../../../guides/operating/analytics/posthog.md).
 - Operate Metabase and provider ingestion through
-  [`developing/operating/analytics/metabase.md`](../../../../developing/operating/analytics/metabase.md).
+  [`guides/operating/analytics/metabase.md`](../../../../../guides/operating/analytics/metabase.md).

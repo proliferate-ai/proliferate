@@ -135,7 +135,7 @@ Source-area organization: the tree, what each module owns, and dependency
 direction. Structure docs describe *where code lives and why*, never product
 behavior — behavior claims belong in the owning platform/system doc, linked.
 
-### Procedures (`developing/**`)
+### Procedures (`guides/**`)
 
 Operator- or developer-facing steps for a current task. Must name required
 tools and permissions, the happy path from trigger to verified completion,

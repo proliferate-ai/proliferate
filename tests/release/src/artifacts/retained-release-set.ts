@@ -20,7 +20,7 @@ import path from "node:path";
  * The canonical release-manifest schema
  * (specs/codebase/systems/engineering/delivery/release-manifest.schema.json)
  * has no publisher today — nothing computes its `artifactSetDigest` or writes
- * `release-manifest.json` (specs/developing/deploying/releases.md). Ownership
+ * `release-manifest.json` (guides/deploying/releases.md). Ownership
  * therefore does not fit extending it; this receipt is the narrowly scoped
  * qualification-owned contract, keyed by release tag + source SHA.
  */

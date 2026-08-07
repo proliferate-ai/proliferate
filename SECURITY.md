@@ -39,7 +39,7 @@ disclosure.
 
 Proliferate ships frequently. Security fixes target the **latest released
 version** on the default branch. Self-hosters should track the latest release;
-see [self-hosted-deploy.md](./specs/developing/deploying/self-hosted-deploy.md)
+see [self-hosted-deploy.md](./guides/deploying/self-hosted-deploy.md)
 for the update flow.
 
 ## Scope Notes

@@ -11,4 +11,4 @@ Engineering systems are complete delivery and operational domains.
   correlation, structured logs, Sentry, and infrastructure signals.
 
 Contributor procedures for operating these systems live under
-[Developing](../../../developing/README.md).
+[Developing](../../../../guides/README.md).

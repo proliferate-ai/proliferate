@@ -10,8 +10,8 @@
     "grafanaVersion": "10.4"
   },
   "component": "proliferate-server",
-  "runbook": "specs/developing/operating/production-alerts.md",
-  "runbookUrlBase": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md",
+  "runbook": "guides/operating/production-alerts.md",
+  "runbookUrlBase": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md",
   "rules": [
     {
       "uid": "dfrmh7bc4yqrkf",
@@ -23,7 +23,7 @@
         "severity": "critical"
       },
       "annotations": {
-        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#alb-5xx-errors-dfrmh7bc4yqrkf"
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md#alb-5xx-errors-dfrmh7bc4yqrkf"
       },
       "queryModel": {
         "title": "ALB 5xx > 10 in 5m",
@@ -126,7 +126,7 @@
         "severity": "critical"
       },
       "annotations": {
-        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#api-p95-latency-bfrmh7c7ecbnkb"
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md#api-p95-latency-bfrmh7c7ecbnkb"
       },
       "queryModel": {
         "title": "API p95 Latency > 5s for 10m",
@@ -229,7 +229,7 @@
         "severity": "critical"
       },
       "annotations": {
-        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#ecs-cpu-saturation-cfrmh7d7od8g0c"
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md#ecs-cpu-saturation-cfrmh7d7od8g0c"
       },
       "queryModel": {
         "title": "ECS CPU > 90% for 15m",
@@ -333,7 +333,7 @@
         "severity": "critical"
       },
       "annotations": {
-        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#critical_failure-in-prod-logs-bfrmh7e7x2k8wd",
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md#critical_failure-in-prod-logs-bfrmh7e7x2k8wd",
         "proliferate_log_group": "/ecs/proliferate-prod",
         "proliferate_log_filter_pattern": "CRITICAL_FAILURE",
         "proliferate_log_region": "us-east-1"
@@ -437,7 +437,7 @@
         "severity": "critical"
       },
       "annotations": {
-        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#analytics-ingest-errors-cfrmh7f2sbe2od"
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md#analytics-ingest-errors-cfrmh7f2sbe2od"
       },
       "queryModel": {
         "title": "Analytics ingest errors",
@@ -538,7 +538,7 @@
         "severity": "warning"
       },
       "annotations": {
-        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#server-error-rate-cfrmh7fttw4jke"
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md#server-error-rate-cfrmh7fttw4jke"
       },
       "queryModel": {
         "title": "Server error rate > 10 in 10m",

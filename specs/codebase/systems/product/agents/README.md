@@ -16,9 +16,9 @@ linked document is the authority.
 
 Two lifecycle documents ride along:
 
-- [agent-catalog-update.md](../../../../developing/operating/agent-catalog-update.md)
+- [agent-catalog-update.md](../../../../../guides/operating/agent-catalog-update.md)
   — the operator runbook for shipping a new agent catalog.
-- [catalog-probe.md](../../../../developing/operating/catalog-probe.md) — the
+- [catalog-probe.md](../../../../../guides/operating/catalog-probe.md) — the
   scheduled probe's credential lifecycle.
 
 ## The journey of a session

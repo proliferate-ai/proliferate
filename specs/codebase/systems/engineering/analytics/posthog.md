@@ -102,4 +102,4 @@ For a named Desktop development profile, runtime config is:
 ```
 
 `telemetryDisabled` there is read once at startup. Relaunch after changing it.
-See the [PostHog operating procedure](../../../../developing/operating/analytics/posthog.md).
+See the [PostHog operating procedure](../../../../../guides/operating/analytics/posthog.md).

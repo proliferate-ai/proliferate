@@ -84,5 +84,5 @@ Do not grant the BI role access to raw application schemas merely to make a
 card convenient. Add or revise an analytics view when a durable question needs
 new data, and preserve the privacy rules above.
 
-See the [Metabase operating procedure](../../../../developing/operating/analytics/metabase.md)
+See the [Metabase operating procedure](../../../../../guides/operating/analytics/metabase.md)
 for read-only discovery and freshness verification.
