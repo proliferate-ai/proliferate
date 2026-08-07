@@ -1,19 +1,9 @@
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { X } from "lucide-react";
 import { Badge, type BadgeTone } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { POPOVER_FRAME_CLASS } from "#product/primitives/popover-surface";
 import { twMerge } from "#product/primitives/utils/tw-merge";
-import {
-  readToastPayload,
-  toastOverflowLabel,
-} from "#product/primitives/utils/toast-payload";
-import {
-  collapseToastExpansion,
-  readExpandedToastId,
-  subscribeToastExpansion,
-  toggleToastExpansion,
-} from "#product/primitives/utils/toast-expansion-store";
+import { readToastPayload } from "#product/primitives/utils/toast-payload";
 import {
   ANNOUNCEMENT_DESCRIPTION_MAX_CHARS,
   STATUS_MESSAGE_MAX_CHARS,
@@ -23,6 +13,16 @@ import {
   type ToastAction,
   type ToastTone,
 } from "#product/primitives/utils/toast-model";
+import {
+  collapseToastExpansion,
+  DETAILS_TRANSFORM_EASING,
+  ToastCopyDetailsButton,
+  ToastDetailsStrip,
+  ToastDetailsToggle,
+  ToastExcerpt,
+  useToastCopy,
+  useToastExpansion,
+} from "./ToastExpansion";
 
 /**
  * The three toast weights, rendered — and the card itself.
@@ -42,20 +42,10 @@ import {
 
 const TOAST_CARD_CLASS = `${POPOVER_FRAME_CLASS} group-focus-visible/toast:ring-2 group-focus-visible/toast:ring-ring`;
 
-/**
- * One easing for both halves of the transform — the width and the unfold move
- * as one surface or the seam shows. The emphasized role: this is the kit's
- * one spring-led product moment. `motion-reduce` jump-cuts.
- */
-const DETAILS_TRANSFORM_EASING =
-  "duration-emphasized ease-spring motion-reduce:transition-none";
-
 /** Kit action recipe: 28px control, `text-ui` label, `radius-md`. */
 const ACTION_SIZE_CLASS = "h-7 rounded-md px-2.5 text-ui";
 /** Quiet secondary: faint fill plus a full-contrast label. */
 const SECONDARY_ACTION_CLASS = `${ACTION_SIZE_CLASS} border border-input bg-surface-elevated-secondary font-medium text-foreground hover:bg-hover active:bg-active`;
-/** Ghost-quiet: no chrome until hover. Copy details while expanded. */
-const GHOST_ACTION_CLASS = `${ACTION_SIZE_CLASS} text-muted-foreground hover:bg-hover hover:text-foreground`;
 
 const DOT_TONE_CLASS: Record<ToastTone, string> = {
   neutral: "bg-muted-foreground",
@@ -194,33 +184,6 @@ export function StatusToastBody({
   );
 }
 
-/** Mono excerpt: at most three countable lines, then "+N more". */
-function ToastExcerpt({ payload }: { payload: string }) {
-  const reading = readToastPayload(payload);
-  if (reading.blob || reading.lines.length === 0) {
-    return null;
-  }
-  const overflow = toastOverflowLabel(reading.overflow);
-
-  return (
-    <div
-      data-testid="toast-excerpt"
-      className="mt-2 rounded-md border border-border-light bg-surface-elevated-secondary px-2 py-1.5 font-mono text-ui-sm leading-5 text-muted-foreground"
-    >
-      {/* Keyed by index, not by content: an output log repeating an identical
-          line is ordinary, and a duplicate key would warn and reconcile wrong. */}
-      {reading.lines.map((line, index) => (
-        <span key={index} className="block truncate" title={line}>
-          {line}
-        </span>
-      ))}
-      {overflow ? (
-        <span className="block text-foreground/70">{overflow}</span>
-      ) : null}
-    </div>
-  );
-}
-
 /**
  * announcement / detail — badge above a wrapping title, a description that
  * states the consequence, then the action cluster bottom-right. `detail` adds
@@ -269,55 +232,12 @@ export function AnnouncementToastBody({
   const jump = input.weight === "detail" ? input.jump : undefined;
 
   const expandable = inlinePayload !== undefined;
-  const expandedInStore = useSyncExternalStore(
-    subscribeToastExpansion,
-    () => readExpandedToastId() === toastId,
-    () => false,
-  );
-  const expanded = expandable && expandedInStore;
-
-  const reactId = useId();
-  const titleId = `toast-title-${reactId}`;
-  const detailsId = `toast-details-${reactId}`;
-
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const node = cardRef.current;
-    if (!onCardResize || !node || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    let initial = true;
-    const observer = new ResizeObserver(() => {
-      // The mount-time fire reports a size sonner has already measured.
-      if (initial) {
-        initial = false;
-        return;
-      }
-      onCardResize();
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [onCardResize]);
-
-  // Which copy control just fired, so its label — and only its label — flips
-  // to "Copied". The flip is the whole feedback for a click whose effect lands
-  // in the clipboard, where nothing visible changes — which is also why the
-  // receipt waits for the write to resolve: a missing or refusing clipboard
-  // must not report a success that never happened.
-  const [copied, setCopied] = useState<"payload" | "details" | null>(null);
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(copyResetRef.current), []);
-  const handleCopy = (control: "payload" | "details", text: string) => {
-    const write = navigator.clipboard?.writeText(text);
-    if (!write) {
-      return;
-    }
-    void write.then(() => {
-      setCopied(control);
-      clearTimeout(copyResetRef.current);
-      copyResetRef.current = setTimeout(() => setCopied(null), 1_500);
-    }, () => {});
-  };
+  const { expanded, cardRef, titleId, detailsId } = useToastExpansion({
+    toastId,
+    expandable,
+    onCardResize,
+  });
+  const { copied, handleCopy } = useToastCopy();
 
   const quiet = [jump, input.secondary, navigateAction].filter(
     (action): action is ToastAction => action !== undefined,
@@ -385,51 +305,22 @@ export function AnnouncementToastBody({
         <CloseButton onClose={onClose} className="-mr-0.5 -mt-0.5" />
       </div>
       {payload ? <ToastExcerpt payload={payload} /> : null}
-      {expandable ? (
-        /* The unfold: `0fr → 1fr` is the one animatable path to auto height,
-           and the payload stays mounted through both directions of it. While
-           collapsed the strip is clipping away real content, so it is hidden
-           from the accessibility tree, not just from pixels. */
-        <div
-          aria-hidden={expanded ? undefined : true}
-          // The host is an aria-live region, so unhiding the strip would read
-          // the whole payload aloud. The user pressed Details — they are about
-          // to read it themselves; `off` scopes the announcement away without
-          // removing the strip from the accessibility tree.
-          aria-live="off"
-          className={twMerge(
-            `-mx-3 grid grid-rows-[0fr] transition-[grid-template-rows] ${DETAILS_TRANSFORM_EASING}`,
-            expanded && "grid-rows-[1fr]",
-          )}
-        >
-          <div className="min-h-0 overflow-hidden">
-            {/* Anti-jitter: the strip is laid out at the expanded card width
-                from the first frame, so line wrapping never changes while the
-                card widens — the clipping wrapper reveals it instead. */}
-            <pre
-              id={detailsId}
-              role="region"
-              aria-labelledby={titleId}
-              tabIndex={expanded ? 0 : -1}
-              className="m-0 mt-2.5 max-h-72 w-[480px] max-w-[calc(100vw-48px)] overflow-y-auto whitespace-pre-wrap break-words border-y border-border-light bg-surface-elevated-secondary px-3 py-2 font-mono text-readable-code text-muted-foreground"
-            >
-              {inlinePayload}
-            </pre>
-          </div>
-        </div>
+      {expandable && inlinePayload ? (
+        <ToastDetailsStrip
+          inlinePayload={inlinePayload}
+          expanded={expanded}
+          titleId={titleId}
+          detailsId={detailsId}
+        />
       ) : null}
       {copyPayload !== undefined || quiet.length > 0 || commit || expandable ? (
         <div className="mt-2.5 flex items-center justify-end gap-2">
           {expanded && inlinePayload !== undefined ? (
-            <Button
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              className={twMerge(GHOST_ACTION_CLASS, "mr-auto")}
-              onClick={() => handleCopy("details", inlinePayload)}
-            >
-              {copied === "details" ? "Copied" : "Copy details"}
-            </Button>
+            <ToastCopyDetailsButton
+              inlinePayload={inlinePayload}
+              copied={copied}
+              onCopy={handleCopy}
+            />
           ) : null}
           {copyPayload !== undefined ? (
             <Button
@@ -455,17 +346,11 @@ export function AnnouncementToastBody({
             </Button>
           ))}
           {expandable ? (
-            <Button
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              className={SECONDARY_ACTION_CLASS}
-              aria-expanded={expanded}
-              aria-controls={detailsId}
-              onClick={() => toggleToastExpansion(toastId)}
-            >
-              {expanded ? "Collapse" : "Details"}
-            </Button>
+            <ToastDetailsToggle
+              toastId={toastId}
+              expanded={expanded}
+              detailsId={detailsId}
+            />
           ) : null}
           {commit ? (
             <Button
