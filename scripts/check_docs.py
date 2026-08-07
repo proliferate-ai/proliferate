@@ -94,7 +94,8 @@ REQUIRED_READMES = (
     "guides/operating/analytics/README.md",
     "specs/TESTING/manual-release-qa.md",
     "specs/developing/reference/README.md",
-    "specs/generated/README.md",
+    "specs/anyharness/README.md",
+    "specs/GENERATED/README.md",
 )
 
 
