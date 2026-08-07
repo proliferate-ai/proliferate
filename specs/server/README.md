@@ -33,12 +33,12 @@ Plus the meta-rule: **lowest layer that can own it cleanly**, and dependencies
 point one way.
 
 The ownership model is current operating truth, enforced by
-[check_server_boundaries.py](../../scripts/check_server_boundaries.py) with its
-exact named exceptions in
-[server_boundaries_allowlist.txt](../../scripts/server_boundaries_allowlist.txt).
+[check_server_boundaries.py](../../scripts/check_server_boundaries.py) from the
+rule records in [lints/server/](../../lints/server/), with its exact named
+exception sites in [exceptions.toml](../../lints/server/exceptions.toml).
 The rules listed under [Current gaps](#current-gaps) are the ones that remain
-unenforced; reviewed allowlists remain the operating exceptions until those gaps
-close.
+unenforced; the reviewed exception ledger remains the operating tolerance until
+those gaps close.
 
 ## The Core Idea
 
