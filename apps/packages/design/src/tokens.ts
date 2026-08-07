@@ -1905,6 +1905,42 @@ export const timing = {
 } as const;
 
 /**
+ * Fills for the Appearance pane's theme preview illustrations.
+ *
+ * These are artwork, not palette. A theme card has to depict the mode it
+ * selects — the Light card stays light while the app is in dark mode, and the
+ * System card shows both halves at once — so its fills are deliberately
+ * mode-independent and cannot resolve through the theme custom properties like
+ * every other surface does. They live here for the same reason `codeColors`
+ * does: the literals belong to the authority, never to a component.
+ *
+ * The two halves are the abstracted app, not sampled screenshots: a page
+ * ground, a sheet floating on it, pill-shaped controls in two weights, and
+ * hairline separators.
+ */
+export const themePreviewColors = {
+  light: {
+    ground: "#F0F0F0",
+    sheet: "#FFFFFF",
+    sheetAlt: "#F7F7F7",
+    pillStrong: "#D4D4D4",
+    pill: "#E4E4E4",
+    hairline: "#F1F1F1",
+  },
+  dark: {
+    ground: "#111111",
+    // The System card's dark half sits one rung below the Dark card's ground so
+    // the split reads as two surfaces rather than one interrupted one.
+    groundSplit: "#0D0D0D",
+    sheet: "#1C1C1C",
+    pillStrong: "#3A3A3A",
+    pill: "#2E2E2E",
+    pillSoft: "#232323",
+    hairline: "#2A2A2A",
+  },
+} as const;
+
+/**
  * Resolved code-palette inputs for the Shiki and Monaco adapters (§6). Editor
  * palettes carry their own literals because they are not DOM custom properties;
  * terminal roles project from the authority above.

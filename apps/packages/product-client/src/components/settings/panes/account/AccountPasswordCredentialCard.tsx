@@ -93,17 +93,17 @@ export function AccountPasswordCredentialRow({
       : "Add a password to sign in with email";
 
   return (
-    <div className="border-b border-border-light px-3.5 py-3.5 text-body last:border-b-0">
-      <div className="flex min-h-[2.75rem] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+    <div className="border-t border-border-light py-3 first:border-t-0">
+      <div className="flex min-h-[2.75rem] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <ProviderBrandIcon provider="password" className="icon-control shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <div className="font-medium text-foreground">Email &amp; password</div>
-            <div className="truncate text-muted-foreground">{detailText}</div>
+          <div className="min-w-0 space-y-0.5">
+            <div className="text-ui font-medium text-foreground">Email &amp; password</div>
+            <div className="truncate text-ui-sm text-muted-foreground">{detailText}</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Badge tone="neutral">
+          <Badge tone="neutral" className="shrink-0 whitespace-nowrap">
             {statusLabel}
           </Badge>
           {credential.onSubmit ? (

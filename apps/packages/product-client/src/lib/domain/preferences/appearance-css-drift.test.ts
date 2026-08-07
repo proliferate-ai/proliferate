@@ -521,9 +521,9 @@ describe("appearance scaling CSS defaults", () => {
   });
 
   /**
-   * The Appearance pane's sample block (AppearanceSampleBlock) is the one
-   * surface where a reader compares the UI ramp and the readable-code ramp
-   * side by side, so the two ladders must be able to move independently: e.g.
+   * The Appearance pane's Chat preview and Code preview are the one place a
+   * reader compares the UI ramp and the readable-code ramp side by side, so
+   * the two ladders must be able to move independently: e.g.
    * UI font size = Largest with Code font size = Smallest should not drag one
    * ladder along with the other. Regression for a report that the sample
    * "isn't actually formatting the code text" at its own size — this proves
