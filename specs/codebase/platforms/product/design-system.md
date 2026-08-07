@@ -807,7 +807,7 @@ index is the closed set, not a sample of it.
 | `Select` | [Select.tsx](../../../../apps/packages/product-client/src/primitives/Select.tsx) | Native select styled to tokens. |
 | `ShortcutBadge` | [ShortcutBadge.tsx](../../../../apps/packages/product-client/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
 | `Skeleton` | [Skeleton.tsx](../../../../apps/packages/product-client/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
-| `Sonner` | [Sonner.tsx](../../../../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment: `sonner` wrapped in the canonical popover frame (shared by reference from `popover-surface.ts`), 12px padding with an inside-right close-control reserve, closed type ramp, 24px action pair with only the primary filled. |
+| `Sonner` | [Sonner.tsx](../../../../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment, split in two: `Sonner` is the transparent positioner (stacking, swipe, 3-visible cap), and the toast body pattern ([ToastBody.tsx](../../../../apps/packages/product-client/src/primitives/patterns/ToastBody.tsx)) paints the whole card — popover frame, always-visible corner close, 28px action cluster with only the primary filled, and the in-place Details expansion (356→480px). |
 | `Spinner` | [Spinner.tsx](../../../../apps/packages/product-client/src/primitives/Spinner.tsx) | Inline loading spinner. |
 | `Switch` | [Switch.tsx](../../../../apps/packages/product-client/src/primitives/Switch.tsx) | Toggle switch. |
 | `Textarea` | [Textarea.tsx](../../../../apps/packages/product-client/src/primitives/Textarea.tsx) | Multi-line text input (default/ghost/flush/code variants). |

@@ -141,20 +141,55 @@ describe("the update flow, rendered", () => {
     renderFlow();
 
     expect(await screen.findByText("Update failed")).toBeTruthy();
-    // The rule the fields split exists to enforce, checked against the DOM
-    // rather than the input object: no node anywhere in the toast carries it.
-    expect(screen.queryByText(cause)).toBeNull();
+    // The rule the fields split exists to enforce, checked against the DOM:
+    // the cause is mounted (the unfold animates real content) but sits behind
+    // the collapsed strip's aria-hidden clip, outside the accessibility tree.
+    expect(
+      screen.getByText(cause).closest("[aria-hidden='true']"),
+    ).not.toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Details" }));
-    // The details modal is lazy, so it arrives a tick later.
-    expect(await screen.findByText(cause)).toBeTruthy();
+    // Details is an in-place transform now, not a lazy modal: the same card
+    // widens and the strip becomes a region labelled by the toast's own title,
+    // synchronously.
+    expect(
+      screen.getByRole("region", { name: "Update failed" }).textContent,
+    ).toContain(cause);
+    expect(screen.getByText("Copy details")).toBeTruthy();
 
-    // Close it here rather than in `afterEach`: the details store is module-level
-    // and not an exported entrypoint of the kit, so the only honest way to reset
-    // it is the way a person does — Escape.
-    await userEvent.keyboard("{Escape}");
+    // Collapse is the inverse control; the strip drops back out of the
+    // accessibility tree and Copy details leaves with it.
+    await userEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    {
+      const el = screen.getByText(cause);
+      let cur: Element | null = el;
+      const chain: string[] = [];
+      while (cur && cur !== document.body) {
+        chain.push(`${cur.tagName}[ah=${cur.getAttribute("aria-hidden")}][exp=${cur.getAttribute("data-toast-expanded")}][rm=${cur.getAttribute("data-removed")}]`);
+        cur = cur.parentElement;
+      }
+      console.log("CHAIN", chain.join(" < "));
+    }
+    expect(
+      screen.getByText(cause).closest("[aria-hidden='true']"),
+    ).not.toBeNull();
+    expect(screen.queryByText("Copy details")).toBeNull();
+  });
+
+  it("reports the X on the failed update as the cancel", async () => {
+    updaterMocks.phase = "error";
+    updaterMocks.errorSource = "download";
+    updaterMocks.errorMessage = "network unreachable";
+
+    renderFlow();
+
+    await screen.findByText("Update failed");
+    // The X owns dismissal, and on this toast dismissal *is* the decision —
+    // walking away from the update — so the close must report it. The report
+    // rides sonner's own dismissal flow (a frame later), not the click.
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => {
-      expect(screen.queryByText("Copy details")).toBeNull();
+      expect(updaterMocks.cancelUpdate).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -180,6 +215,33 @@ describe("the update flow, rendered", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
     expect(updaterMocks.retryDownload).toHaveBeenCalledTimes(1);
     expect(updaterMocks.checkNow).not.toHaveBeenCalled();
+  });
+
+  it("does not cancel the retry it just started", async () => {
+    // The sequence a real Retry produces: the click flips the phase back to
+    // downloading, and the presenter's phase-leave cleanup dismisses the
+    // failure toast *programmatically*. That dismissal must not read as the
+    // user walking away — the toast's onDismiss is cancelUpdate, and firing it
+    // here would silently kill the download the user just asked for.
+    updaterMocks.phase = "error";
+    updaterMocks.errorSource = "download";
+    updaterMocks.errorMessage = "network unreachable";
+
+    const view = renderFlow();
+    await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+
+    updaterMocks.phase = "downloading";
+    view.rerender(
+      <>
+        <ToastHost />
+        <UpdateToastPresenter />
+      </>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Update failed")).toBeNull();
+    });
+    expect(updaterMocks.cancelUpdate).not.toHaveBeenCalled();
   });
 
   it("renders the counted countdown and lets the user stand it down", async () => {

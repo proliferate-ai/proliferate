@@ -187,14 +187,16 @@ export function UpdateToastPresenter() {
           ? "Check your connection and try again. You're still on the version you had."
           : `The update wasn't installed, so you're still on ${currentVersion ?? "the version you had"}.`,
         details: {
-          kind: "modal",
-          title: checkFailed ? "Couldn't check for updates" : "Update failed",
+          kind: "inline",
           payload: errorMessage,
         },
         // A failure the user can act on never auto-closes: `isError` plus the
         // Retry action both force persistence.
         isError: true,
-        secondary: { label: "Dismiss", onClick: cancelUpdate },
+        // The X owns dismissal — there is no Dismiss in the action cluster —
+        // and walking away from the failure is still a decision the store has
+        // to hear, so the close reports it as the cancel.
+        onDismiss: cancelUpdate,
         // Retry has to redo the thing that failed. A failed CHECK never
         // populated the store's update handle, and both download paths bail on
         // `if (!update) return` — so routing a check failure at a download made

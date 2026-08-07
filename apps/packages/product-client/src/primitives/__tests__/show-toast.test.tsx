@@ -40,10 +40,9 @@ describe("showToast — status", () => {
   });
 
   it("speaks the severity the dot carries, since a colour reads as nothing", async () => {
-    // On a status line the dot is the *only* severity signal — the message text
-    // carries no "Failed"/"Done" marker of its own — and the dot is aria-hidden,
-    // so without this "Couldn't save" and "Saved" reach a screen reader as the
-    // same sentence.
+    // The dot is the only severity signal on a status line and it is
+    // aria-hidden, so without this "Couldn't save" and "Saved" reach a
+    // screen reader as the same sentence.
     await raise({ message: "Couldn't save the workspace", tone: "destructive" });
 
     const label = screen.getByText("Error:", { exact: false });
@@ -54,8 +53,7 @@ describe("showToast — status", () => {
   });
 
   it("stays silent for neutral, which is the absence of severity", async () => {
-    // Prefixing every ordinary status line with "Neutral" is noise, not
-    // information.
+    // Prefixing every ordinary status line with "Neutral" is noise.
     await raise({ message: "Workspace saved" });
 
     const [node] = document.querySelectorAll<HTMLElement>("[data-sonner-toast]");
@@ -76,6 +74,39 @@ describe("showToast — status", () => {
     await raise({ message: "Sync finished", code: "12 files" });
 
     expect(screen.getByText("12 files").className).toContain("font-mono");
+  });
+});
+
+describe("showToast — the X", () => {
+  it("is always visible, owns dismissal, and reports it", async () => {
+    const onDismiss = vi.fn();
+    await raise({ message: "Close me", onDismiss });
+
+    const close = screen.getByRole("button", { name: "Close" });
+    // Always visible: the reveal-on-hover treatment is gone, so the control
+    // must not depend on a hover class to become interactive.
+    expect(close.className).not.toContain("opacity-0");
+
+    act(() => {
+      close.click();
+    });
+    await waitFor(() => {
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Close me")).toBeNull();
+    });
+    // Still once, *after* sonner has finished removing the toast: sonner
+    // forwards `toast.dismiss(id)` into its own dismiss callback, so a close
+    // that reported directly and then let the forward report again would pass
+    // the first wait and double-count here.
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("sits on every weight", async () => {
+    await raise({ weight: "announcement", title: "Heads up" });
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
   });
 });
 
@@ -134,7 +165,7 @@ describe("showToast — detail", () => {
     expect(screen.getByText("+2 more")).toBeTruthy();
   });
 
-  it("never renders a stack trace inline, and offers no Copy for it", async () => {
+  it("never renders a stack trace inline — it waits behind Details", async () => {
     await raise({
       weight: "detail",
       title: "The run crashed",
@@ -145,9 +176,18 @@ describe("showToast — detail", () => {
     });
 
     expect(screen.queryByTestId("toast-excerpt")).toBeNull();
-    expect(screen.queryByText(/at step/)).toBeNull();
-    // Copy complements an excerpt; with no excerpt the payload belongs to the
-    // details modal instead.
+    // The payload is mounted — the unfold animation needs it — but a payload
+    // that failed the excerpt test stays out of the accessibility tree and
+    // behind the clip until Details is pressed.
+    expect(
+      screen.getByText(/at step/).closest("[aria-hidden='true']"),
+    ).not.toBeNull();
+    // A blob payload earns the Details toggle even when the caller never
+    // spelled out a details destination: the strip is the only surface that
+    // can hold it.
+    expect(screen.getByRole("button", { name: "Details" })).toBeTruthy();
+    // Copy complements an excerpt; with no excerpt, the payload belongs to the
+    // expanded strip and its own Copy details.
     expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
   });
 
@@ -160,10 +200,32 @@ describe("showToast — detail", () => {
     const payload = ["a.ts", "b.ts", "c.ts", "d.ts"].join("\n");
     await raise({ weight: "detail", title: "4 files", payload });
 
+    const copy = screen.getByRole("button", { name: "Copy" });
     act(() => {
-      screen.getByRole("button", { name: "Copy" }).click();
+      copy.click();
     });
     expect(writeText).toHaveBeenCalledWith(payload);
+    // The clipboard is invisible, so the label is the receipt — issued only
+    // once the write has actually resolved.
+    await waitFor(() => {
+      expect(copy.textContent).toBe("Copied");
+    });
+  });
+
+  it("issues no receipt when the clipboard is unavailable", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    });
+    await raise({ weight: "detail", title: "2 files", payload: "a.ts\nb.ts" });
+
+    const copy = screen.getByRole("button", { name: "Copy" });
+    act(() => {
+      copy.click();
+    });
+    // A "Copied" here would be a lie; the label not flipping is the signal
+    // that nothing reached the clipboard.
+    expect(copy.textContent).toBe("Copy");
   });
 });
 
@@ -186,26 +248,112 @@ describe("showToast — details destinations", () => {
     });
   });
 
-  it("modal opens the compact details terminus, which carries no Retry", async () => {
+  it("inline expands the toast in place, reversibly", async () => {
     await raise({
       weight: "announcement",
       title: "Provisioning failed",
-      details: {
-        kind: "modal",
-        title: "Provisioning failed",
-        subtitle: "worker-3",
-        payload: "boom\n  at thing",
+      details: { kind: "inline", payload: "boom\n  at thing" },
+    });
+
+    const details = screen.getByRole("button", { name: "Details" });
+    expect(details.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.getByText(/at thing/).closest("[aria-hidden='true']"),
+    ).not.toBeNull();
+
+    act(() => {
+      details.click();
+    });
+    expect(details.getAttribute("aria-expanded")).toBe("true");
+    expect(details.textContent).toBe("Collapse");
+    // Expanded, the strip is a region labelled by the toast's own title
+    // rather than a hidden clip.
+    expect(
+      screen.getByRole("region", { name: "Provisioning failed" }).textContent,
+    ).toContain("at thing");
+
+    act(() => {
+      details.click();
+    });
+    expect(details.getAttribute("aria-expanded")).toBe("false");
+    expect(details.textContent).toBe("Details");
+  });
+
+  it("Copy details rides along only while expanded, and copies the payload", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    await raise({
+      weight: "announcement",
+      title: "Update failed",
+      details: { kind: "inline", payload: "signature verification failed" },
+    });
+
+    expect(screen.queryByRole("button", { name: "Copy details" })).toBeNull();
+    act(() => {
+      screen.getByRole("button", { name: "Details" }).click();
+    });
+    const copy = screen.getByRole("button", { name: "Copy details" });
+    act(() => {
+      copy.click();
+    });
+    expect(writeText).toHaveBeenCalledWith("signature verification failed");
+    await waitFor(() => {
+      expect(copy.textContent).toBe("Copied");
+    });
+  });
+
+  it("expanding one toast collapses any other", async () => {
+    await raise(
+      {
+        id: "first",
+        weight: "announcement",
+        title: "First failed",
+        details: { kind: "inline", payload: "cause one" },
       },
+      {
+        id: "second",
+        weight: "announcement",
+        title: "Second failed",
+        details: { kind: "inline", payload: "cause two" },
+      },
+    );
+
+    const toggles = screen.getAllByRole("button", { name: "Details" });
+    expect(toggles).toHaveLength(2);
+    act(() => {
+      toggles[0].click();
+    });
+    expect(toggles[0].getAttribute("aria-expanded")).toBe("true");
+    act(() => {
+      toggles[1].click();
+    });
+    expect(toggles[1].getAttribute("aria-expanded")).toBe("true");
+    // One id is the whole expansion state, so exclusivity is structural.
+    expect(toggles[0].getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("Retry collapses the expansion on its way to the action", async () => {
+    const retry = vi.fn();
+    await raise({
+      weight: "announcement",
+      title: "Update failed",
+      details: { kind: "inline", payload: "cause" },
+      commit: { label: "Retry", onClick: retry },
     });
 
     act(() => {
       screen.getByRole("button", { name: "Details" }).click();
     });
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Copy details" })).toBeTruthy();
+    act(() => {
+      screen.getByRole("button", { name: "Retry" }).click();
     });
-    expect(screen.getByText("worker-3")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Details" }).getAttribute("aria-expanded"),
+    ).toBe("false");
   });
 
   it("none renders no Details button at all", async () => {
@@ -216,33 +364,6 @@ describe("showToast — details destinations", () => {
     });
 
     expect(screen.queryByRole("button", { name: "Details" })).toBeNull();
-  });
-
-  it("does not load the modal until Details is pressed", async () => {
-    // /login mounts this host and can never open the modal, and the /login
-    // first-load JS budget is a fail-closed gate. So the modal — and the
-    // ModalShell and Button it pulls in — must stay out of the initial chunk.
-    const importSpy = vi.fn();
-    vi.doMock("#product/primitives/patterns/ToastDetailsModal", async () => {
-      importSpy();
-      return await vi.importActual("#product/primitives/patterns/ToastDetailsModal");
-    });
-    vi.resetModules();
-    const { ToastHost: FreshToastHost } = await import("#product/primitives/patterns/ToastHost");
-
-    render(<FreshToastHost />);
-    expect(importSpy).not.toHaveBeenCalled();
-
-    const { openToastDetails } = await import("#product/primitives/utils/toast-details-store");
-    act(() => {
-      openToastDetails({ title: "Provisioning failed", payload: "boom" });
-    });
-    await waitFor(() => {
-      expect(importSpy).toHaveBeenCalled();
-    });
-
-    vi.doUnmock("#product/primitives/patterns/ToastDetailsModal");
-    vi.resetModules();
   });
 });
 
@@ -279,7 +400,12 @@ describe("showToast — hard limits", () => {
     expect(document.querySelectorAll("[data-sonner-toast]")).toHaveLength(1);
   });
 
-  it("reports the dismissal so a same-id caller can stop re-raising it", async () => {
+  it("keeps programmatic dismissal out of onDismiss — only the user reports", async () => {
+    // `onDismiss` is the user-walked-away signal. Code closing a toast it no
+    // longer stands behind (a presenter leaving its error phase) must not
+    // read as that: on an update-failed toast, onDismiss is `cancelUpdate`,
+    // and firing it from the phase change after Retry would cancel the very
+    // retry the user just pressed.
     const onDismiss = vi.fn();
     await raise({ id: "dismissable", message: "Close me", onDismiss });
 
@@ -287,8 +413,118 @@ describe("showToast — hard limits", () => {
       dismissToast("dismissable");
     });
     await waitFor(() => {
-      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText("Close me")).toBeNull();
     });
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("survives a same-id raise after a quiet dismissal — Collapse still works", async () => {
+    // Sonner delivers `toast.dismiss(id)` on an animation frame and its
+    // Observer merges same-id raises over the old entry, so a predecessor's
+    // dismissal can replay against a brand-new toast as a stale delete-effect.
+    // Without the replay guard, that effect settles the new instance: its
+    // Collapse click and the replayed collapse cancel out and the strip
+    // never folds.
+    await raise({ id: "replayed", message: "first" });
+    act(() => {
+      dismissToast("replayed");
+    });
+    cleanup();
+
+    render(<ToastHost />);
+    act(() => {
+      showToast({
+        id: "replayed",
+        weight: "announcement",
+        title: "Second failed",
+        details: { kind: "inline", payload: "boom cause" },
+      });
+    });
+    await waitFor(() => screen.getByText("Second failed"));
+
+    act(() => {
+      screen.getByRole("button", { name: "Details" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Collapse" }).click();
+    });
+    const toggle = screen.getByRole("button", { name: "Details" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.getByText("boom cause").closest("[aria-hidden='true']"),
+    ).not.toBeNull();
+  });
+
+  it("hands custody to the replacement — only the live toast's onDismiss speaks", async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    await raise({ id: "same", message: "first", onDismiss: first });
+    act(() => {
+      showToast({ id: "same", message: "second", onDismiss: second });
+    });
+    await waitFor(() => screen.getByText("second"));
+
+    act(() => {
+      screen.getByRole("button", { name: "Close" }).click();
+    });
+    await waitFor(() => {
+      expect(second).toHaveBeenCalledTimes(1);
+    });
+    // The superseded closure was retired at replacement: its onDismiss belongs
+    // to a message the user never closed.
+    expect(first).not.toHaveBeenCalled();
+  });
+
+  it("survives a same-id raise after a quiet dismissal", async () => {
+    // Sonner's Observer keeps dismissed toasts in its module-level state with
+    // `delete: true`, and same-id replacement merges `{...oldToast, ...data}`.
+    // A stale `delete: true` triggers the delete-effect on the next re-render
+    // (e.g., a Collapse click), firing the NEW toast's onDismiss → settle and
+    // breaking the toggle. This verifies that explicitly passing `delete: false`
+    // in `common` overrides the stale flag.
+    render(<ToastHost />);
+    act(() => {
+      showToast({ id: "same", message: "first" });
+    });
+    await waitFor(() => screen.getByText("first"));
+    act(() => {
+      dismissToast("same");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("first")).toBeNull();
+    });
+    cleanup();
+
+    // Fresh render, same id, with inline details.
+    render(<ToastHost />);
+    act(() => {
+      showToast({
+        id: "same",
+        weight: "announcement",
+        title: "Provisioning failed",
+        details: { kind: "inline", payload: "boom cause" },
+      });
+    });
+    await waitFor(() => screen.getByText("Provisioning failed"));
+
+    const details = screen.getByRole("button", { name: "Details" });
+    act(() => {
+      details.click();
+    });
+    expect(details.getAttribute("aria-expanded")).toBe("true");
+    expect(details.textContent).toBe("Collapse");
+
+    act(() => {
+      details.click();
+    });
+    // Without the fix, the stale delete-effect would fire onDismiss → settle
+    // → collapseToastExpansion, then the onClick toggle would re-expand, leaving
+    // aria-expanded="true" and the payload visible.
+    expect(details.getAttribute("aria-expanded")).toBe("false");
+    expect(details.textContent).toBe("Details");
+    expect(
+      screen.getByText(/boom cause/).closest("[aria-hidden='true']"),
+    ).not.toBeNull();
   });
 });
 
@@ -307,7 +543,7 @@ describe("toastError", () => {
     });
   }
 
-  it("renders the outcome and consequence, and the cause nowhere", async () => {
+  it("renders the outcome and consequence, and the cause only behind the clip", async () => {
     await raiseError({
       headline: "Message not sent",
       consequence: "Your message is still in the composer, unsent.",
@@ -317,11 +553,14 @@ describe("toastError", () => {
     expect(screen.getByText("Message not sent")).toBeTruthy();
     expect(screen.getByText("Your message is still in the composer, unsent.")).toBeTruthy();
     // The whole point of the shape: the exception is present in the toast's
-    // data and absent from its pixels until someone asks for it.
-    expect(screen.queryByText(/Pending prompt not found/)).toBeNull();
+    // data — mounted for the unfold — and absent from its presentation until
+    // someone asks for it.
+    expect(
+      screen.getByText(/Pending prompt not found/).closest("[aria-hidden='true']"),
+    ).not.toBeNull();
   });
 
-  it("puts the cause behind Details, in the modal that can hold it", async () => {
+  it("puts the cause behind Details, in the strip that can hold it", async () => {
     await raiseError({
       headline: "Run did not start",
       cause: "TypeError: undefined is not a function\n  at step (run.ts:10:1)",
@@ -331,7 +570,9 @@ describe("toastError", () => {
       screen.getByRole("button", { name: "Details" }).click();
     });
     await waitFor(() => {
-      expect(screen.getByText(/at step \(run\.ts:10:1\)/)).toBeTruthy();
+      expect(
+        screen.getByRole("region", { name: "Run did not start" }).textContent,
+      ).toContain("at step (run.ts:10:1)");
     });
   });
 

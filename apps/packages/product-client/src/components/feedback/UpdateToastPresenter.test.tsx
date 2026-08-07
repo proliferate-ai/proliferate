@@ -318,14 +318,13 @@ describe("UpdateToastPresenter — error", () => {
 
       const toastInput = raisedWithId(UPDATE_TOAST_ID) as {
         description: string;
-        details: { kind: string; title: string; payload: string };
+        details: { kind: string; payload: string };
       };
       // The whole point of the fields split: no width of body copy can print
       // the updater's string, whatever shape it arrived in.
       expect(toastInput.description).not.toContain(errorMessage);
       expect(toastInput.details).toEqual({
-        kind: "modal",
-        title: "Update failed",
+        kind: "inline",
         payload: errorMessage,
       });
     },

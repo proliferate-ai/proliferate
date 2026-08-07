@@ -33,7 +33,6 @@ const patternModules = import.meta.glob([
   "../../../primitives/patterns/*.tsx",
   "!../../../primitives/patterns/*.test.tsx",
   "!../../../primitives/patterns/ToastBody.tsx",
-  "!../../../primitives/patterns/ToastDetailsModal.tsx",
 ]);
 const iconModules = import.meta.glob("../../../primitives/icons/*.tsx");
 const productPatternModules = import.meta.glob([

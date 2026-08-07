@@ -29,15 +29,15 @@ export interface ToastAction {
  *
  * - `navigate` — the error has a home (a run, a session, a form field). The
  *   toast is a pointer to it, not a copy: following the link dismisses it.
- * - `modal` — no home. A compact details modal is the terminus: read it, copy
- *   it, close it. It carries no Retry, because retrying belongs to the toast
- *   where the action was.
- * - `none` — nothing worth reading. No Details button at all; an empty modal
- *   is worse than no modal.
+ * - `inline` — no home. Details expands the toast itself: the card widens and
+ *   the payload unfolds as a strip between text and actions, fully reversible.
+ *   No modal and no context switch — the toast is the terminus.
+ * - `none` — nothing worth reading. No Details button at all; an empty
+ *   expansion is worse than no expansion.
  */
 export type ToastDetails =
   | { kind: "navigate"; label?: string; onNavigate: () => void }
-  | { kind: "modal"; title: string; subtitle?: string; payload: string }
+  | { kind: "inline"; payload: string }
   | { kind: "none" };
 
 interface ToastCommon {
@@ -145,8 +145,8 @@ export interface ToastErrorInput {
   consequence?: string;
   /**
    * The raw exception, response body, or payload. NEVER rendered in the toast
-   * body — it reaches the user only through Details, where a scrolling `pre`
-   * and a Copy button can actually hold it.
+   * body — it reaches the user only through Details, where the expanded strip
+   * and its Copy button can actually hold it.
    */
   cause?: string;
   /**
@@ -156,9 +156,9 @@ export interface ToastErrorInput {
    */
   retry?: () => void;
   /**
-   * Override where Details goes. Defaults to the compact details modal when
-   * there is a `cause` and to no button at all when there is not; pass
-   * `navigate` when the error has a home worth opening instead.
+   * Override where Details goes. Defaults to the inline expansion when there
+   * is a `cause` and to no button at all when there is not; pass `navigate`
+   * when the error has a home worth opening instead.
    */
   details?: ToastDetails;
   /**
@@ -197,7 +197,7 @@ export function toErrorAnnouncement(input: ToastErrorInput): AnnouncementToastIn
 
 /**
  * `cause` is the only thing that earns a Details button. Without one there is
- * nothing behind the button, and an empty modal is worse than no modal.
+ * nothing behind the button, and an empty expansion is worse than no button.
  */
 function resolveErrorDetails(input: ToastErrorInput): ToastDetails {
   if (input.details) {
@@ -205,7 +205,7 @@ function resolveErrorDetails(input: ToastErrorInput): ToastDetails {
   }
   const cause = input.cause?.trim();
   if (cause) {
-    return { kind: "modal", title: input.headline, payload: cause };
+    return { kind: "inline", payload: cause };
   }
   return { kind: "none" };
 }
@@ -230,8 +230,9 @@ export function isStatusToast(input: ToastInput): input is StatusToastInput {
 }
 
 /**
- * Anything carrying an error or an action stays until dismissed — an
- * auto-dismissing toast that asked for a decision loses the decision.
+ * Anything carrying an error, an action, or a payload stays until dismissed —
+ * an auto-dismissing toast that asked for a decision loses the decision, and
+ * a `detail` toast exists to be read, which takes longer than any dwell.
  */
 export function resolveToastDuration(input: ToastInput): number {
   if (isStatusToast(input)) {
@@ -240,10 +241,12 @@ export function resolveToastDuration(input: ToastInput): number {
     }
     return input.duration ?? STATUS_TOAST_DURATION_MS;
   }
+  if (input.weight === "detail") {
+    return Number.POSITIVE_INFINITY;
+  }
   const hasAction =
     input.commit !== undefined
     || input.secondary !== undefined
-    || (input.weight === "detail" && input.jump !== undefined)
     || (input.details !== undefined && input.details.kind !== "none");
   if (input.isError || hasAction) {
     return Number.POSITIVE_INFINITY;

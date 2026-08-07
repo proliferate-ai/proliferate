@@ -222,17 +222,16 @@ function ToastHostDemo() {
         title: "Could not reach the runtime",
         description: "The session is still open. Nothing was lost.",
         details: {
-          kind: "modal",
-          title: "Runtime unreachable",
-          subtitle: "workspace · proliferate",
+          kind: "inline",
           payload: [
             "connect ECONNREFUSED 127.0.0.1:8457",
             "  at TCPConnectWrap.afterConnect",
             "  at Socket.emit",
           ].join("\n"),
         },
+        commit: { label: "Retry", onClick: noop },
       })}>
-        Details modal
+        Error with details
       </Button>
     </div>
   );
