@@ -18,6 +18,7 @@ import {
 } from "#product/domain/chats/transcript/transcript-rendering";
 import { formatWorkedForDuration } from "#product/domain/chats/transcript/transcript-work-duration";
 import type {
+  CompletedHistorySummary,
   TurnDisplayBlock,
   TurnPresentation,
 } from "#product/domain/chats/transcript/transcript-presentation";
@@ -71,10 +72,14 @@ export function TurnItemSequence({
   /**
    * The workspace-creation receipt, when this row hosts it. Renders as the
    * first child inside the completed-history disclosure (collapsing with the
-   * rest of the turn's work) when this row owns that disclosure; otherwise
-   * renders inline as a leading tool-call-style entry, immediately before
-   * this row's first non-user-message block (or after all blocks when every
-   * block so far is a user message).
+   * rest of the turn's work) when this row owns that disclosure. Otherwise it
+   * renders at the position immediately before this row's first
+   * non-user-message block (or after all blocks when every block so far is a
+   * user message): inline, bare, while the turn is still streaming; once the
+   * turn completes, the receipt IS a tool call, so that position instead
+   * hosts a synthetic "Worked for Ns" disclosure containing only the receipt
+   * — identical in appearance to a turn whose real history is one tool call
+   * (see `hostsSynthesizedReceiptDisclosure`).
    */
   workspaceReceipt?: ReactNode;
 }) {
@@ -135,6 +140,31 @@ export function TurnItemSequence({
     : null;
   const renderInlineWorkspaceReceiptAtEnd = showInlineWorkspaceReceipt
     && inlineWorkspaceReceiptBlockKey === null;
+  // The receipt IS a tool call: a completed turn with no other history of its
+  // own (no completedHistorySummary — e.g. prose-only) must still present as
+  // a "Worked for Ns" disclosure, not a bare inline line. Streaming turns
+  // (no completedAt yet) keep the plain inline rendering above; they get no
+  // synthetic disclosure since the "Worked for" duration isn't final yet.
+  const shouldSynthesizeReceiptDisclosure = hostsSynthesizedReceiptDisclosure({
+    hasWorkspaceReceipt: showInlineWorkspaceReceipt,
+    completedHistorySummary: visiblePresentation.completedHistorySummary,
+    turnCompletedAt: turn.completedAt,
+  });
+  const animateReceiptDisclosure = useCompletedHistoryTransition(shouldSynthesizeReceiptDisclosure);
+  const workspaceReceiptSlot = shouldSynthesizeReceiptDisclosure
+    ? (
+      <ToolCallSummary
+        label={resolveCompletedHistoryDisclosureLabel(turn, completedHistoryLabel)}
+        summary={formatCollapsedSummary({ messages: 0, toolCalls: 1, subagents: 0 })}
+        showWorkDivider={tailAssistantProseRootId !== null}
+        animateCompletion={animateReceiptDisclosure}
+        borderless
+        renderChildren={() => (
+          <CompletedHistorySequence>{workspaceReceipt}</CompletedHistorySequence>
+        )}
+      />
+    )
+    : workspaceReceipt;
 
   return (
     <>
@@ -216,14 +246,14 @@ export function TurnItemSequence({
 
         return (
           <Fragment key={blockKey}>
-            {blockKey === inlineWorkspaceReceiptBlockKey ? workspaceReceipt : null}
+            {blockKey === inlineWorkspaceReceiptBlockKey ? workspaceReceiptSlot : null}
             {blockKey === frontierBlockKey ? standaloneFrontierPrelude : null}
             {renderedBlock}
           </Fragment>
         );
       })}
       {frontierBlockKey === null ? standaloneFrontierPrelude : null}
-      {renderInlineWorkspaceReceiptAtEnd ? workspaceReceipt : null}
+      {renderInlineWorkspaceReceiptAtEnd ? workspaceReceiptSlot : null}
     </>
   );
 }
@@ -347,6 +377,28 @@ export function resolveCompletedHistoryDisclosureLabel(
   return override
     ?? formatWorkedForDuration(turn.startedAt, turn.completedAt)
     ?? "Worked";
+}
+
+/**
+ * Whether a workspace-creation receipt must be hosted inside a synthetic
+ * "Worked for Ns" disclosure rather than rendered as a bare inline line. This
+ * happens exactly when: the row hosts a receipt, the turn has no history of
+ * its own to host the real completed-history disclosure, and the turn is
+ * completed (so its "Worked for" duration is final). Exported so callers
+ * that separately decide whether a real completed-history disclosure exists
+ * for this turn (e.g. to avoid double-rendering a "Worked for"/stopped-notice
+ * line) can account for the synthetic one too.
+ */
+export function hostsSynthesizedReceiptDisclosure({
+  hasWorkspaceReceipt,
+  completedHistorySummary,
+  turnCompletedAt,
+}: {
+  hasWorkspaceReceipt: boolean;
+  completedHistorySummary: CompletedHistorySummary | null;
+  turnCompletedAt: string | null | undefined;
+}): boolean {
+  return hasWorkspaceReceipt && completedHistorySummary === null && !!turnCompletedAt;
 }
 
 function TranscriptFragment({

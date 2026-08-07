@@ -260,6 +260,55 @@ describe("workspace receipt hosting", () => {
     renderTurnItemSequence({ turn, transcript, workspaceReceipt: receiptMarker });
     expect(screen.getByTestId("receipt-marker")).not.toBeNull();
   });
+
+  it("hosts the receipt in a synthetic Worked-for disclosure when the completed turn has no history of its own", async () => {
+    const user = userEvent.setup();
+    const transcript = createTranscriptState("session-1");
+    // Prose-only completed turn: no tool calls/thinking, so
+    // completedHistorySummary is null and there is no real disclosure.
+    const turn = turnRecord(["prompt", "answer"], "2026-04-04T00:00:10Z");
+    transcript.itemsById = {
+      prompt: userItem("prompt", turn.turnId, 0),
+      answer: assistantItem("answer", turn.turnId, 1),
+    };
+    const receiptMarker = <div data-testid="receipt-marker">Worktree created</div>;
+    const { container } = renderTurnItemSequence({ turn, transcript, workspaceReceipt: receiptMarker });
+
+    // A "Worked for Ns" disclosure trigger exists even though this turn has
+    // no other tool-call/thinking history — the receipt itself is the work.
+    const disclosure = screen.getByRole("button", { name: /Worked for 10s/ });
+    expect(disclosure).not.toBeNull();
+    // Collapsed: the receipt is hidden until expanded, like folded history.
+    expect(screen.queryByTestId("receipt-marker")).toBeNull();
+    // The assistant prose renders outside the disclosure regardless.
+    expect(screen.getByText("answer")).not.toBeNull();
+
+    await user.click(disclosure);
+
+    const sequence = container.querySelector<HTMLElement>("[data-completed-history-sequence]");
+    expect(sequence).not.toBeNull();
+    const marker = within(sequence!).getByTestId("receipt-marker");
+    expect(marker).not.toBeNull();
+  });
+
+  it("still folds into the one real disclosure when the completed turn has its own history, never a second one", async () => {
+    const user = userEvent.setup();
+    const transcript = createTranscriptState("session-1");
+    const turn = turnRecord(["prompt", "command", "answer"], "2026-04-04T00:00:10Z");
+    transcript.itemsById = {
+      prompt: userItem("prompt", turn.turnId, 0),
+      command: terminalItem("command", turn.turnId, 1, "printf proof"),
+      answer: assistantItem("answer", turn.turnId, 2),
+    };
+    const receiptMarker = <div data-testid="receipt-marker">Worktree created</div>;
+    renderTurnItemSequence({ turn, transcript, workspaceReceipt: receiptMarker });
+
+    const disclosures = screen.getAllByRole("button", { name: /Worked for 10s/ });
+    expect(disclosures).toHaveLength(1);
+
+    await user.click(disclosures[0]!);
+    expect(screen.getByTestId("receipt-marker")).not.toBeNull();
+  });
 });
 
 function renderTurnItemSequence({

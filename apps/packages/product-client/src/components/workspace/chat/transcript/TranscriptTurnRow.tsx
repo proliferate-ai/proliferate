@@ -15,7 +15,10 @@ import {
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { goalMetMarkerLabel } from "#product/domain/activity/goal";
 import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
-import { TurnItemSequence } from "#product/components/workspace/chat/transcript/TurnItemSequence";
+import {
+  hostsSynthesizedReceiptDisclosure,
+  TurnItemSequence,
+} from "#product/components/workspace/chat/transcript/TurnItemSequence";
 import {
   findTailAssistantProseRootId,
   getAssistantProseContent,
@@ -228,8 +231,17 @@ export function TranscriptTurnRow({
   ]);
 
   const stoppedNotice = row.isLastTurnRow ? resolveTurnStoppedNotice(turn) : null;
+  // A hosted workspace-creation receipt on a turn with no history of its own
+  // still surfaces as a "Worked for Ns" disclosure (TurnItemSequence's
+  // synthetic case) — that counts as owning the disclosure too, so the
+  // standalone stopped-notice line below doesn't duplicate its label.
   const hasCompletedHistoryDisclosure = row.isLastTurnRow
-    && renderPresentation.completedHistorySummary !== null;
+    && (renderPresentation.completedHistorySummary !== null
+      || hostsSynthesizedReceiptDisclosure({
+        hasWorkspaceReceipt: !!workspaceReceipt,
+        completedHistorySummary: renderPresentation.completedHistorySummary,
+        turnCompletedAt: turn.completedAt,
+      }));
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
