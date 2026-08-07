@@ -1,0 +1,481 @@
+# AnyHarness layer boundaries — enforced by
+# scripts/check_anyharness_boundaries.py over the anyharness-lib crate.
+#
+# Grandfathered violation sites live in exceptions.toml, one entry per site.
+# See lints/README.md for the record and ledger contract.
+
+[[rule]]
+id = "AH-API-1"
+title = "api/** does not import live runtime internals"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/api/**"
+
+rule = """api/** must not import live runtime internals directly."""
+alternative = """Go through the domain facade or the app-wired port instead of reaching into crate::live from a handler."""
+why = """The API layer is a transport boundary; live runtime internals are actor-private and change shape without wire consequences."""
+
+[rule.example]
+bad = """`use crate::live::sessions::actor::SessionActor;` inside anyharness/src/api/routes/sessions.rs"""
+good = """handler calls a domain facade or an app-wired port"""
+
+[[rule]]
+id = "AH-API-2"
+title = "handlers call domain facades, never stores"
+owner = "anyharness"
+status = "holds"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/api/**"
+
+rule = """API handlers must call domain facades, never a domain store directly."""
+alternative = """Add a facade method on the owning domain and call that: handlers call domain facades, never stores; see the api guide."""
+why = """A handler that reaches a store owns persistence shape it cannot maintain; the facade is the only contract the API is allowed to depend on."""
+
+[rule.example]
+bad = """a handler body calling `store.load_session(..)` on a store it constructed itself"""
+good = """state.workspace_service.list().await"""
+
+[[rule]]
+id = "AH-DOMAIN-1"
+title = "domains/** does not import api/**"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/**"
+
+rule = """Domain code must not import the API layer."""
+alternative = """Invert the dependency: the API maps into domain types, never the reverse."""
+why = """Domains are the stable core; depending upward on transport makes the core unusable outside HTTP."""
+
+[rule.example]
+bad = """`use crate::api::state::AppState;` inside a domain service"""
+good = """api/** maps its request into domain types and calls the domain"""
+
+[[rule]]
+id = "AH-DOMAIN-2"
+title = "core domains do not import product surface domains"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/{agents,repo_roots,sessions,workspaces}/**"
+
+rule = """Core domains must not directly import product surface domains."""
+alternative = """Move the shared concept down into the core domain, or have the product domain call the core one."""
+why = """Import audiences are inverse to knowledge: the core may not know product surface policy."""
+
+[rule.example]
+bad = """a core session domain importing a product-only workflows type"""
+good = """the product domain calls the core domain, or the shared concept moves down"""
+
+[[rule]]
+id = "AH-ADAPTER-1"
+title = "adapters/** does not import product surface domains"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/adapters/**"
+
+rule = """Adapters must not import product surface domains."""
+alternative = """Express the need as a port the domain implements and wire it in app/."""
+why = """Adapters are leaves that translate an outside protocol; product knowledge inside one makes it unswappable."""
+
+[rule.example]
+bad = """an ACP adapter importing a workflows domain type"""
+good = """adapter takes a port trait the domain implements, wired in app/"""
+
+[[rule]]
+id = "AH-ADAPTER-2"
+title = "adapters/** does not import live runtime internals"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/adapters/**"
+
+rule = """Adapters must not import live runtime internals."""
+alternative = """Take a capability trait parameter that app/ supplies."""
+why = """Adapters must stay testable without booting the live runtime."""
+
+[rule.example]
+bad = """an adapter constructing a live session actor handle"""
+good = """adapter takes a capability trait parameter that app/ supplies"""
+
+[[rule]]
+id = "AH-ADAPTER-3"
+title = "adapters/** does not import api/** or HTTP transport"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/adapters/**"
+
+rule = """Adapters must not import the API layer."""
+alternative = """Return adapter-owned types and let the API map them."""
+why = """Adapters sit below transport; depending on it inverts the layer order."""
+
+[rule.example]
+bad = """an adapter importing an API contract struct for convenience"""
+good = """adapter returns adapter-owned types; api/** maps them"""
+
+[[rule]]
+id = "AH-INTEG-1"
+title = "integrations/** does not import product surface domains"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/integrations/**"
+
+rule = """Integrations must not import product surface domains."""
+alternative = """Keep vendor mechanics in the integration and let a domain service translate meaning."""
+why = """Integrations isolate vendors; product policy inside one leaks the vendor into the product."""
+
+[rule.example]
+bad = """a GitHub integration importing a sessions domain policy type"""
+good = """integration returns vendor mechanics; a domain service translates meaning"""
+
+[[rule]]
+id = "AH-INTEG-2"
+title = "integrations/** does not import api/** or HTTP transport"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/integrations/**"
+
+rule = """Integrations must not import the API layer."""
+alternative = """Expose integration-owned types; map at the API boundary."""
+why = """Same layer-direction law as adapters: vendors are leaves."""
+
+[rule.example]
+bad = """an integration importing an API response DTO"""
+good = """integration exposes its own types; api/** maps them"""
+
+[[rule]]
+id = "AH-STORE-1"
+title = "domain stores do not import api/**"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/**/store.rs, anyharness/crates/anyharness-lib/src/domains/**/store/**"
+
+rule = """Domain stores are persistence leaves and must not import the API layer."""
+alternative = """Return store-owned rows/records; let the service and then the API map them."""
+why = """Stores are leaves; a store that knows transport cannot be reused by a worker or CLI."""
+
+[rule.example]
+bad = """`use crate::api::contract::SessionResponse;` in domains/sessions/store.rs"""
+good = """store returns rows/records; the service and then api/** map them"""
+
+[[rule]]
+id = "AH-STORE-2"
+title = "domain stores do not import the live runtime"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/**/store.rs, anyharness/crates/anyharness-lib/src/domains/**/store/**"
+
+rule = """Domain stores must not import the live runtime."""
+alternative = """Persist facts only; let the runtime read them through the domain facade."""
+why = """Persistence must not depend on a running actor system."""
+
+[rule.example]
+bad = """a store importing LiveSessionHandle to notify after a write"""
+good = """store persists facts; the runtime reads them through the domain facade"""
+
+[[rule]]
+id = "AH-STORE-3"
+title = "SQL lives in the domain's store"
+owner = "anyharness"
+status = "holds"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/** except store.rs and store/**"
+
+rule = """SQL may only appear in a domain's store; no other domain file may contain a query."""
+alternative = """SQL belongs in the domain's store — move this query into store.rs or store/**; see the persistence guide."""
+why = """One SQL surface per domain keeps schema-change blast radius knowable."""
+
+[rule.example]
+bad = """a `sqlx::query!("select ..")` inside domains/workspaces/service.rs"""
+good = """store.rs owns the query; the service calls a named store method"""
+
+[[rule]]
+id = "AH-STORE-4"
+title = "live/** never fetches"
+owner = "anyharness"
+status = "holds"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/live/**"
+
+rule = """live/** must never fetch: it may not import or use a domain store."""
+alternative = """live/ never fetches — pass facts in the launch bundle or add a capability trait wired in app/."""
+why = """An actor that queries mid-flight has unbounded, untestable dependencies and reintroduces the failure modes the launch bundle removed."""
+
+[rule.example]
+bad = """a live session actor calling `sessions_store.load(..)` to refresh config"""
+good = """the launch bundle carries the fact the actor needs"""
+
+[[rule]]
+id = "AH-SINK-1"
+title = "session event sinks do not import api/**"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/live/sessions/event_sink/**"
+
+rule = """Event sinks must not import the API layer."""
+alternative = """Emit sink-owned event types; map to wire shapes at the API."""
+why = """A sink is an output leaf; transport knowledge there couples emission to HTTP."""
+
+[rule.example]
+bad = """an event sink importing an API SSE contract struct"""
+good = """sink emits sink-owned event types; api/** maps them to wire shapes"""
+
+[[rule]]
+id = "AH-SINK-2"
+title = "session event sinks do not import HTTP transport crates"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/live/sessions/event_sink/**"
+
+rule = """Event sinks must not import raw HTTP transport crates."""
+alternative = """Depend on a transport port injected by app/, so the sink stays protocol-agnostic."""
+why = """Sinks that own their own HTTP client bypass the app's retry, auth, and observability wiring."""
+
+[rule.example]
+bad = """`use reqwest::Client;` in an event sink"""
+good = """sink depends on a transport port injected by app/"""
+
+[[rule]]
+id = "AH-PERSIST-1"
+title = "persistence/** does not import product surface domains"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/persistence/**"
+
+rule = """The shared persistence layer must not import product surface domains."""
+alternative = """Keep product types in the owning domain's store; persistence holds generic machinery only."""
+why = """Shared persistence is importable by every domain, so it must know no domain's policy."""
+
+[rule.example]
+bad = """a migration/pool helper importing a workflows domain enum"""
+good = """the owning domain's store holds the product type; persistence stays generic"""
+
+[[rule]]
+id = "AH-PERSIST-2"
+title = "persistence/** does not import the live runtime"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/persistence/**"
+
+rule = """The shared persistence layer must not import the live runtime."""
+alternative = """Keep the pool/migration layer runtime-free; wire runtime concerns in app/."""
+why = """Persistence must be constructible in tests and tools without the actor system."""
+
+[rule.example]
+bad = """persistence importing a live session registry to invalidate caches"""
+good = """app/ wires runtime concerns; the pool/migration layer stays runtime-free"""
+
+[[rule]]
+id = "AH-PERSIST-3"
+title = "persistence/** does not import api/** or HTTP transport"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/persistence/**"
+
+rule = """The shared persistence layer must not import the API layer."""
+alternative = """Return persistence-owned rows; map upward."""
+why = """Bottom layers never depend on transport."""
+
+[rule.example]
+bad = """persistence importing an API error type to build a response"""
+good = """persistence returns its own rows and errors; upper layers map them"""
+
+[[rule]]
+id = "AH-LIVE-1"
+title = "live session actor internals stay inside live/sessions/**"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/** outside anyharness/crates/anyharness-lib/src/live/sessions/**"
+
+rule = """Live session actor and driver internals must stay inside live/sessions/**."""
+alternative = """Use the public LiveSessionHandle surface instead of the actor/driver types."""
+why = """The actor's internal types are its private implementation; external users must go through the handle contract."""
+
+[rule.example]
+bad = """`use crate::live::sessions::driver::DriverLoop;` from app/"""
+good = """use the public LiveSessionHandle surface"""
+
+[[rule]]
+id = "AH-LIVE-2"
+title = "SessionCommand is not imported outside live/sessions/**"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/** outside anyharness/crates/anyharness-lib/src/live/sessions/**"
+
+rule = """SessionCommand is a private actor command and must not be imported outside live/sessions/**."""
+alternative = """Call the corresponding LiveSessionHandle method, which owns command construction."""
+why = """The command enum is the actor's inbox vocabulary; importing it lets callers invent protocol steps the actor never promised."""
+
+[rule.example]
+bad = """`use crate::live::sessions::SessionCommand;` in a domain service"""
+good = """call the LiveSessionHandle method that owns command construction"""
+
+[[rule]]
+id = "AH-LIVE-3"
+title = "SessionCommand is not constructed outside live/sessions/**"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/** outside anyharness/crates/anyharness-lib/src/live/sessions/**"
+
+rule = """SessionCommand construction or use must stay behind the live session handle, even when reached by a fully-qualified path rather than an import."""
+alternative = """Add or call a LiveSessionHandle method."""
+why = """Closes the qualified-path hole in AH-LIVE-2; a rule that only checks imports is not a rule."""
+
+[rule.example]
+bad = """`crate::live::sessions::SessionCommand::Interrupt { .. }` built in a handler"""
+good = """add or call a LiveSessionHandle method"""
+
+[[rule]]
+id = "AH-LIVE-4"
+title = "command_tx is not touched outside the live session boundary"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/** outside anyharness/crates/anyharness-lib/src/live/sessions/handle.rs and anyharness/crates/anyharness-lib/src/live/sessions/actor/**"
+
+rule = """LiveSessionHandle.command_tx must not be accessed outside the live session boundary."""
+alternative = """Send through a handle method that owns the send and its error handling."""
+why = """Direct channel access bypasses the handle's ordering and backpressure guarantees."""
+
+[rule.example]
+bad = """`handle.command_tx.send(cmd).await` in a domain runtime valve"""
+good = """handle.interrupt(..) — the handle owns the send and its errors"""
+
+[[rule]]
+id = "AH-LIVE-5"
+title = "domains reach live/ only through the runtime valve"
+owner = "anyharness"
+status = "holds"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/** except runtime.rs, runtime/** and live_ports.rs"
+
+rule = """Domain code may reach live/ only through the domain's runtime valve — runtime.rs, runtime/**, or live_ports.rs."""
+alternative = """Promote this use case to the domain's runtime valve (runtime.rs, runtime/**, live_ports.rs) and call the valve; see the domains guide."""
+why = """One file per domain owns runtime powers, so the set of domain code that can touch the actor system stays auditable."""
+
+[rule.example]
+bad = """`use crate::live::sessions::LiveSessionHandle;` in domains/sessions/service.rs (not runtime.rs)"""
+good = """domains/<d>/runtime.rs holds the live handle; the service calls the valve"""
+
+[[rule]]
+id = "AH-LIVE-6"
+title = "the runtime valve never re-exports a live power"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/**/runtime.rs, anyharness/crates/anyharness-lib/src/domains/**/runtime/**, anyharness/crates/anyharness-lib/src/domains/**/live_ports.rs"
+
+rule = """The runtime valve may hold live/ powers but must not re-export them: no `pub use crate::live::..` from a valve file."""
+alternative = """A `pub use crate::live::..` republishes the power domain-wide; expose a domain port instead of re-exporting the live type."""
+why = """Without this, AH-LIVE-5 is defeated in one line — the valve becomes a pass-through and every domain file regains runtime powers."""
+
+[rule.example]
+bad = """`pub use crate::live::sessions::LiveSessionHandle;` in domains/sessions/runtime.rs"""
+good = """the valve exposes `pub fn interrupt(..)`, keeping the live type private"""
+
+[[rule]]
+id = "AH-STATE-1"
+title = "AppState stays at the API/app boundary"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/** outside anyharness/crates/anyharness-lib/src/api/** and anyharness/crates/anyharness-lib/src/app/**"
+
+rule = """AppState must stay at the API/app/test-support boundary and may not be imported or named below it."""
+alternative = """Take the specific dependency (facade, port, pool) as a parameter instead of the whole application state."""
+why = """AppState is the god object; anything that takes it depends on everything and cannot be tested in isolation."""
+
+[rule.example]
+bad = """`fn run(state: &AppState)` in a domain service"""
+good = """fn run(sessions: &SessionService) — take the dependency, not the world"""
+
+[[rule]]
+id = "AH-CONTRACT-1"
+title = "domains do not name wire contract types"
+owner = "anyharness"
+status = "holds"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/**"
+
+rule = """Domain code must not import wire contract types below the API mapper boundary."""
+alternative = """Use a domain twin: define the domain's own type and map at the API boundary; see the domains guide."""
+why = """If the domain speaks wire types, every wire change is a domain change and the contract can never be versioned independently."""
+
+[rule.example]
+bad = """`use anyharness_contract::SessionSummary;` inside a domain service"""
+good = """domains/<d>/model.rs owns the type; api/** maps it to the wire shape"""
+
+[[rule]]
+id = "AH-CONTRACT-2"
+title = "domains do not name contract request/response types"
+owner = "anyharness"
+status = "holds"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/**"
+
+rule = """Domain code must not use contract request/response types below the API mapper boundary."""
+alternative = """Accept domain arguments and return domain results; the API mapper owns request/response shapes."""
+why = """Request/response types encode transport concerns (optionality, defaults, pagination) that must not become domain semantics."""
+
+[rule.example]
+bad = """`fn apply(req: CreateSessionRequest)` in a domain service"""
+good = """fn apply(name: String, agent: AgentId) — domain arguments, domain result"""
+
+[[rule]]
+id = "AH-POLICY-1"
+title = "policy files are pure"
+owner = "anyharness"
+status = "holds"
+enforced_by = "scripts/check_anyharness_boundaries.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/**/policy.rs, anyharness/crates/anyharness-lib/src/domains/**/*_policy.rs"
+
+rule = """Policy files are pure — facts in, decisions out: no clock, no id minting, no store."""
+alternative = """Mint in execute: pass the timestamp and ids in as facts and keep the decision function total."""
+why = """A pure policy is testable as a table of inputs to decisions; a policy that reads the clock or the database is only testable by simulation."""
+
+[rule.example]
+bad = """`let now = Utc::now();` inside domains/<d>/policy.rs"""
+good = """pub fn decide(facts: &Facts) -> Decision — no clock, no ids, no store"""
