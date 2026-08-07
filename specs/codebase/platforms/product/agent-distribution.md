@@ -32,7 +32,7 @@ Boundaries — the auth split is declare vs apply:
   contract.
 - **Model snapshot freshness and picker-facing model data** belong to the
   model catalog.
-- **Gateway model lists** belong to the [model gateway](model-gateway.md);
+- **Gateway model lists** belong to the [model gateway](../../../FEATURE_DOCS/MODELS.md);
   this platform knows only whether a harness supports the gateway route,
   never which models it serves.
 
@@ -140,7 +140,7 @@ are one named predicate
 deliberately not a side effect of the pass's scope: PATH protection must
 outrank every other rule, so it cannot be something a scope change can
 silently remove. Completed installs
-poke the model-snapshot reconciler ([model-catalog.md](model-catalog.md))
+poke the model-snapshot reconciler ([MODELS.md](../../../FEATURE_DOCS/MODELS.md))
 so a newly converged harness re-probes its models without extra wiring.
 Two carve-outs:
 

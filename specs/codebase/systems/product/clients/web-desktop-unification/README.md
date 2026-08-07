@@ -506,7 +506,7 @@ PR #1229, merge `d8ceabb4e`. The durable inputs and proofs across the
 extraction and replacement are:
 
 - [landed extraction proof](migration/d1g.md);
-- [application-entry contract](entry-contract.md);
+- [application-entry contract](../../../../../FEATURE_DOCS/DESKTOP_HOST.md);
 - [Desktop product move record](migration/d1h.md);
 - [legacy Web replacement record](migration/d1i.md);
 - [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json); and
@@ -519,17 +519,17 @@ in [the legacy Web replacement record](migration/d1i.md#phase-6--hosted-web-firs
 Related authoritative docs:
 
 - Frontend structure:
-  [`../../../../structures/frontend/README.md`](../../../../structures/frontend/README.md)
+  [`specs/frontend/README.md`](../../../../../frontend/README.md)
 - Frontend packages:
-  [`../../../../structures/frontend/packages/README.md`](../../../../structures/frontend/packages/README.md)
+  [`specs/frontend/packages.md`](../../../../../frontend/packages.md)
 - Styling:
-  [`../../../../structures/frontend/guides/styling.md`](../../../../structures/frontend/guides/styling.md)
+  [`specs/frontend/styling.md`](../../../../../frontend/styling.md)
 - Telemetry:
-  [`../../../../structures/frontend/guides/telemetry.md`](../../../../structures/frontend/guides/telemetry.md)
+  [`specs/frontend/telemetry.md`](../../../../../frontend/telemetry.md)
 - CI/CD and release:
   [`../../../../../../guides/deploying/README.md`](../../../../../../guides/deploying/README.md)
 - Testing:
-  [`../../../../../developing/testing/README.md`](../../../../../developing/testing/README.md)
+  [`specs/TESTING.md`](../../../../../TESTING.md)
 
 Older planning notes are history. This spec wins when they disagree with the
 simplified migration above.

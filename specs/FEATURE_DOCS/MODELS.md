@@ -30,7 +30,7 @@ before the first observation, never to override one.
 
 Boundaries: which auth sources a harness uses, how they are delivered, and
 what happens to running sessions when they change belong to
-[../codebase/platforms/product/agent-auth.md](../codebase/platforms/product/agent-auth.md). Harness install and the shipped catalog
+[specs/FEATURE_DOCS/AGENT_AUTH.md](AGENT_AUTH.md). Harness install and the shipped catalog
 document belong to [../codebase/platforms/product/agent-distribution.md](../codebase/platforms/product/agent-distribution.md). Which
 models the gateway serves belongs to the [Gateway](#gateway) section below;
 this platform observes that list through the harness, it does not define it.
@@ -383,7 +383,7 @@ observation for the multi-source one:
 
 | Harness kind | Attribution source | Rendered as |
 | --- | --- | --- |
-| single-source (claude, codex, grok, cursor) | the enabled selection ([../codebase/platforms/product/agent-auth.md](../codebase/platforms/product/agent-auth.md)'s `SINGLE_SOURCE_HARNESSES`) | bedrock-typed entry → AWS logo on every row; azure-typed → Microsoft logo; `gateway` → Proliferate logo; native (no rows) → no icon |
+| single-source (claude, codex, grok, cursor) | the enabled selection ([specs/FEATURE_DOCS/AGENT_AUTH.md](AGENT_AUTH.md)'s `SINGLE_SOURCE_HARNESSES`) | bedrock-typed entry → AWS logo on every row; azure-typed → Microsoft logo; `gateway` → Proliferate logo; native (no rows) → no icon |
 | opencode | the observation's `provider` field, verbatim | that provider's logo, per row |
 
 Rationale: a single-source harness's whole list is served by one source, so
@@ -401,7 +401,7 @@ launchable, or visible.
 ### Status and refresh in settings
 
 The per-harness settings pane's model section is specified in
-[../codebase/platforms/product/agent-auth.md](../codebase/platforms/product/agent-auth.md)'s pane anatomy (§7); two properties belong to
+[specs/FEATURE_DOCS/AGENT_AUTH.md](AGENT_AUTH.md)'s pane anatomy (§7); two properties belong to
 this platform:
 
 - **The probe status indicator is the same component as the auth status
@@ -415,7 +415,7 @@ this platform:
 
 An apply can land while gateway enrollment sync is incomplete, in which case
 the renderer has dropped the gateway source (possibly leaving no sources at
-all for that harness — [../codebase/platforms/product/agent-auth.md](../codebase/platforms/product/agent-auth.md)'s degraded-apply
+all for that harness — [specs/FEATURE_DOCS/AGENT_AUTH.md](AGENT_AUTH.md)'s degraded-apply
 section). The ruling: **the probe still runs**, its results are served
 normally, and the surface shows a co-located *gateway setup in progress*
 pending badge; the enrollment-sync completion trigger then re-applies and
@@ -813,7 +813,7 @@ up" state, not a trap.
 ### Billing integration
 
 The gateway does not meter spend; the billing platform's LLM credit ledger
-does ([../codebase/platforms/product/billing.md](../codebase/platforms/product/billing.md) owns grants and Stripe). The invariant
+does ([specs/FEATURE_DOCS/BILLING.md](BILLING.md) owns grants and Stripe). The invariant
 behind the division of labor: the ledger is the meter, the LiteLLM budget
 is a mirror, and disabling the virtual key is the enforcement act.
 

@@ -7,7 +7,7 @@ owns the product row; AnyHarness owns runtime workspace and session truth.
 Workflow runs do not use this Cloud provisioning flow. Deterministic,
 idempotent placement of an isolated AnyHarness workspace for a Workflow run UUID
 is a separate purpose-built API — see
-[`../../systems/product/workflows/workspace-placement.md`](../../systems/product/workflows/workspace-placement.md).
+[`specs/FEATURE_DOCS/WORKFLOWS.md`](../../../FEATURE_DOCS/WORKFLOWS.md).
 
 ## Mental Model
 
@@ -145,7 +145,7 @@ DELETE /v1/cloud/workspaces/{id}/materializations/{materialization_id}
 
 There is no mounted workspace `connection` endpoint. Clients reach AnyHarness
 through the authenticated cloud-sandbox gateway documented in
-[sandbox-gateway.md](sandbox-gateway.md).
+[gateway.md](../../../FEATURE_DOCS/SANDBOX/gateway.md).
 
 ## Save A Cloud Repository Environment
 
@@ -261,11 +261,11 @@ was removed and a rewrite is planned as part of the sandbox spec program.
 | Durable target association ledger | [`server/.../cloud/workspaces/materializations/`](../../../../server/proliferate/server/cloud/workspaces/materializations/) and [`db/store/cloud_workspace_materializations.py`](../../../../server/proliferate/db/store/cloud_workspace_materializations.py) |
 | Desktop clone/link/open orchestration | [`apps/packages/product-client/src/hooks/workspaces/workflows/`](../../../../apps/packages/product-client/src/hooks/workspaces/workflows/) and [`components/workspace/repo-setup/`](../../../../apps/packages/product-client/src/components/workspace/repo-setup/) |
 | Direct AnyHarness adapter | [`server/proliferate/integrations/anyharness/`](../../../../server/proliferate/integrations/anyharness/) |
-| Sandbox lifecycle and runtime access | [sandbox-lifecycle.md](sandbox-lifecycle.md), [sandbox-access.md](sandbox-access.md) |
-| GitHub sandbox credentials | [Sandbox GitHub auth](sandbox-github-auth.md) |
-| Billing authorization | [Billing](billing.md) |
-| Runtime workspace and session truth | [AnyHarness structure](../../structures/anyharness/README.md) |
-| Server placement rules | [Server structure](../../structures/server/README.md) |
+| Sandbox lifecycle and runtime access | [lifecycle.md](../../../FEATURE_DOCS/SANDBOX/lifecycle.md), [access.md](../../../FEATURE_DOCS/SANDBOX/access.md) |
+| GitHub sandbox credentials | [Sandbox GitHub auth](../../../FEATURE_DOCS/SANDBOX/github-auth.md) |
+| Billing authorization | [Billing](../../../FEATURE_DOCS/BILLING.md) |
+| Runtime workspace and session truth | [AnyHarness structure](../../../anyharness/README.md) |
+| Server placement rules | [Server structure](../../../server/standards.md) |
 
 ## Failure Boundaries
 

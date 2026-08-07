@@ -733,7 +733,7 @@ E2B-webhook findings. Test: `tests/release/src/scenarios/t3-bill-4.ts`.
 
 ### T4-CLOUD-1: AnyHarness runtime binary self-update in a cloud sandbox
 Shipped mechanism owner:
-`specs/codebase/structures/proliferate-worker/guides/lifecycle.md`. Target
+`specs/worker.md`. Target
 qualification owner: `specs/TESTING/tier-4-scenario-contract.md`.
 Sandbox lane, `--lane staging`. The one place the AnyHarness binary itself
 converges in a running sandbox (not via a new E2B template).

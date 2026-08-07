@@ -13,11 +13,10 @@ not own server-side managed-cloud bootstrap, SSH installer behavior, Worker
 command delivery, or AnyHarness runtime internals. Read the owning docs for
 those areas when changing those boundaries:
 
-- `specs/codebase/structures/server/README.md` for managed-cloud bootstrap code under
-  `server/**`
+- `specs/server/standards.md` for managed-cloud bootstrap code under `server/**`
 - `install/README.md` for SSH target installer behavior
-- `specs/codebase/structures/proliferate-worker/README.md` for target Worker behavior
-- `specs/codebase/structures/anyharness/README.md` for AnyHarness runtime behavior
+- `specs/worker.md` for target Worker behavior
+- `specs/anyharness/README.md` for AnyHarness runtime behavior
 
 ## Goal
 

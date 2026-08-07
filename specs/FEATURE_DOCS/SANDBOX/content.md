@@ -30,10 +30,10 @@ Fences, one owner per concern:
   belongs to [github-auth.md](github-auth.md). This document
   owns *identity*: who the commit says it is by.
 - Workflow-run placement has its own contract
-  ([workspace-placement.md](../../codebase/systems/product/workflows/workspace-placement.md));
+  ([WORKFLOWS.md](../WORKFLOWS.md));
   workflow worktrees are deliberately invisible to retention here.
 - Disk is bounded and observable, never billed; billing math stays in
-  [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md).
+  [specs/FEATURE_DOCS/BILLING.md](../BILLING.md).
 
 ## The disk, one picture
 

@@ -15,7 +15,7 @@ import {
 
 /**
  * T4-CLOUD-1 — AnyHarness runtime binary self-update in a cloud sandbox.
- * Shipped mechanics: specs/codebase/structures/proliferate-worker/guides/lifecycle.md.
+ * Shipped mechanics: specs/worker.md.
  * Target guarantee: specs/TESTING/tier-4-scenario-contract.md.
  *
  * The tier-4 assertion: with a sandbox already running version N, bump the

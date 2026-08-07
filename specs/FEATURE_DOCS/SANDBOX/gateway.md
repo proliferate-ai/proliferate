@@ -30,10 +30,10 @@ Fences, one owner per concern:
   policy, E2B wakes on traffic, materialization repairs.
 - What answers on the far end — the AnyHarness HTTP API, sessions,
   terminals, worktrees — belongs to the AnyHarness structure docs
-  ([specs/codebase/structures/anyharness/](../../codebase/structures/anyharness/README.md)).
+  ([specs/anyharness/README.md](../../anyharness/README.md)).
   The gateway is path-blind: it forwards `{path}` verbatim.
 - Model inference traffic never touches this wire or this server;
-  [../../codebase/platforms/product/model-gateway.md](../../codebase/platforms/product/model-gateway.md) owns that plane.
+  [specs/FEATURE_DOCS/MODELS.md](../MODELS.md) owns that plane.
 - The integration gateway — AnyHarness calling *into* Cloud as an MCP
   client — is the reverse direction and belongs to
   [../../codebase/platforms/product/integrations.md](../../codebase/platforms/product/integrations.md); it appears here only in the
@@ -222,7 +222,7 @@ side it is on:
 | Channel | Direction | Wire | Why |
 | --- | --- | --- | --- |
 | AnyHarness API, chat SSE, terminal WS, files, worktrees | client → sandbox | **Proxied** (this route) | Clients must never hold the sandbox address or runtime bearer |
-| Model inference | agent in sandbox → LiteLLM | **Direct** (public LiteLLM URL + per-user virtual key via `state.json`) | Inference bytes never touch the API server; keys are budgeted per user ([../../codebase/platforms/product/model-gateway.md](../../codebase/platforms/product/model-gateway.md)) |
+| Model inference | agent in sandbox → LiteLLM | **Direct** (public LiteLLM URL + per-user virtual key via `state.json`) | Inference bytes never touch the API server; keys are budgeted per user ([specs/FEATURE_DOCS/MODELS.md](../MODELS.md)) |
 | Git fetch/push | sandbox → GitHub | **Direct** (HTTPS + credential-helper lease) | The helper reads a local token file, no network hop through Cloud ([github-auth.md](github-auth.md)) |
 | Integrations (Slack, Linear, …) | agent in sandbox → Cloud MCP endpoint → provider | **Proxied inbound** (`/integration-gateway/mcp`, gateway grant token) | Third-party OAuth tokens never enter the sandbox; Cloud executes the provider call ([../../codebase/platforms/product/integrations.md](../../codebase/platforms/product/integrations.md)) |
 | Materialization scripts | server → sandbox | **E2B exec channel** (provider SDK, API key) | Control plane; server-only credentials ([lifecycle.md](lifecycle.md)) |

@@ -3,7 +3,7 @@
 - Parent architecture:
   [`web-desktop-client-unification.md`](../README.md)
 - Application-entry contract:
-  [`web-desktop-product-client-entry-contract.md`](../entry-contract.md)
+  [`DESKTOP_HOST.md`](../../../../../../FEATURE_DOCS/DESKTOP_HOST.md)
 - Move ledger: `web-desktop-product-client-move-ledger.md` (consumed and
   removed after the move landed; see Git history)
 - Next slice: [`d1h.md`](d1h.md) (the Desktop product move)
@@ -40,7 +40,7 @@ The landed implementation proves that:
 ## Entry contract (recorded, not implemented)
 
 The full contract is in
-[`web-desktop-product-client-entry-contract.md`](../entry-contract.md).
+[`DESKTOP_HOST.md`](../../../../../../FEATURE_DOCS/DESKTOP_HOST.md).
 Summary of what this slice locks:
 
 - **Public entry:** `ProductClient({ RoutesComponent }): ReactElement`, exported

@@ -34,13 +34,13 @@ triggers, or additional step kinds.
 
 Read with:
 
-- [`../codebase/platforms/product/model-catalog.md`](../codebase/platforms/product/model-catalog.md) for the
+- [`specs/FEATURE_DOCS/MODELS.md`](MODELS.md) for the
   probe-generated agent and model catalog;
 - [`../codebase/platforms/product/agent-distribution.md`](../codebase/platforms/product/agent-distribution.md)
   for catalog distribution and target readiness;
-- [`../codebase/structures/server/README.md`](../codebase/structures/server/README.md) for server
+- [`specs/server/standards.md`](../server/standards.md) for server
   ownership boundaries;
-- [`../codebase/structures/frontend/README.md`](../codebase/structures/frontend/README.md) for
+- [`specs/frontend/README.md`](../frontend/README.md) for
   frontend ownership boundaries; and
 - [`../TESTING/README.md`](../TESTING/README.md)
   for the automated testing tiers.
@@ -830,15 +830,15 @@ admission contract also supersedes the workflow-mutation-locking non-goal in
 
 Read with:
 
-- [`../codebase/structures/anyharness/README.md`](../codebase/structures/anyharness/README.md) for
+- [`specs/anyharness/README.md`](../anyharness/README.md) for
   AnyHarness ownership;
-- [`../codebase/structures/anyharness/guides/api.md`](../codebase/structures/anyharness/guides/api.md)
+- [`specs/anyharness/api.md`](../anyharness/api.md)
   for HTTP boundary rules;
-- [`../codebase/structures/anyharness/guides/domains.md`](../codebase/structures/anyharness/guides/domains.md)
+- [`specs/anyharness/domains.md`](../anyharness/domains.md)
   for store/service/runtime ownership;
-- [`../codebase/structures/anyharness/guides/persistence.md`](../codebase/structures/anyharness/guides/persistence.md)
+- [`specs/anyharness/persistence-stores.md`](../anyharness/persistence-stores.md)
   for SQLite transaction rules;
-- [`../codebase/structures/anyharness/guides/live-runtime.md`](../codebase/structures/anyharness/guides/live-runtime.md)
+- [`specs/anyharness/live-runtime.md`](../anyharness/live-runtime.md)
   for nonblocking session extensions; and
 - [`../TESTING/README.md`](../TESTING/README.md)
   for test tiers.
@@ -1566,8 +1566,8 @@ Read with:
   acceptance/replay, execution sequence, and completion extension;
 - [Portable Invocation and Target Resolution](#portable-invocation-and-target-resolution) for the v1/v2 version
   boundary, target resolution, and `resolved_plan_json`;
-- [`../codebase/structures/anyharness/guides/domains.md`](../codebase/structures/anyharness/guides/domains.md)
-  and [`guides/persistence.md`](../codebase/structures/anyharness/guides/persistence.md)
+- [`specs/anyharness/domains.md`](../anyharness/domains.md)
+  and [`specs/anyharness/persistence-stores.md`](../anyharness/persistence-stores.md)
   for placement and SQLite transaction rules; and
 - [`../TESTING/README.md`](../TESTING/README.md)
   for test tiers.

@@ -321,7 +321,7 @@ which guide to read and where the code belongs.
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [domains.md](domains.md), [../codebase/systems/product/agents/cowork-artifacts.md](../codebase/systems/product/agents/cowork-artifacts.md) |
 | Session link graph: subagent, cowork, review-agent, fork relationships | `anyharness-lib/src/domains/sessions/links/**` | `domains/sessions/links/**` | [domains.md](domains.md), [session-engine.md](session-engine.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [domains.md](domains.md), [mobility.md](mobility.md) |
-| Durable one-prompt workflow execution in an existing workspace (run/step records, canonical-JSON replay, restart fencing) | `anyharness-lib/src/domains/workflows/**` | `domains/workflows/**` | [domains.md](domains.md), [../codebase/systems/product/workflows/runs.md](../codebase/systems/product/workflows/runs.md) |
+| Durable one-prompt workflow execution in an existing workspace (run/step records, canonical-JSON replay, restart fencing) | `anyharness-lib/src/domains/workflows/**` | `domains/workflows/**` | [domains.md](domains.md), [specs/FEATURE_DOCS/WORKFLOWS.md](../FEATURE_DOCS/WORKFLOWS.md) |
 | Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [observability.md](observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [repo-shape.md](repo-shape.md) |
 

@@ -37,12 +37,12 @@ storage, delivery, and application.
 Fences with the neighboring platforms:
 
 - Gateway enrollment, virtual keys, access groups, budgets, and usage
-  import belong to the [model gateway](../codebase/platforms/product/model-gateway.md). Agent auth
+  import belong to the [model gateway](MODELS.md). Agent auth
   consumes the minted per-(subject, harness) key as an opaque value.
 - Which models a gateway key can see is enforced proxy-side by the key's
   access-group grant (model-gateway.md); agent auth never filters models.
 - Probed model snapshots and picker data belong to the
-  [model catalog](../codebase/platforms/product/model-catalog.md).
+  [model catalog](MODELS.md).
 - Readiness *projection* (the five-state ladder) belongs to
   [agent-distribution.md](../codebase/platforms/product/agent-distribution.md); agent auth supplies the
   route signal that upgrades it at launch.
@@ -253,7 +253,7 @@ applied document, and the UI says so:
   until the runtime acknowledges the applied `state.json`. A failed delivery
   is a visible pending state — never a silently stale runtime. The
   acknowledgement is also the trigger for the model-catalog probe
-  ([model-catalog.md](../codebase/platforms/product/model-catalog.md)'s auth-applied event), so the picker
+  ([MODELS.md](MODELS.md)'s auth-applied event), so the picker
   refreshes itself the moment the new world is real.
 - **A cloud switch ensures the sandbox.** A `cloud`-surface selection write
   ensures the user's sandbox (provision-or-wake — always possible, since
@@ -707,7 +707,7 @@ a working harness, so they belong below the thing that makes it work, and
 labeling them as a separate section keeps "not auth" visible in the layout.
 
 **§7 — Model list.** The probed model list
-([model-catalog.md](../codebase/platforms/product/model-catalog.md)), auto-collapsed by default, with a
+([MODELS.md](MODELS.md)), auto-collapsed by default, with a
 probe status indicator on the left built from the **same status-row
 component as §3's auth status** and a refresh affordance on the right.
 Rationale: "when was this last checked, and can I check again" is the same
@@ -741,7 +741,7 @@ Rationale: for a single-source harness every model in the list is served by
 the one selected source, so the selection *is* the attribution and no
 per-row inference is needed or correct. Opencode's list is genuinely mixed,
 and its observation already carries `provider` verbatim
-([model-catalog.md](../codebase/platforms/product/model-catalog.md)'s field contract) — so the honest
+([MODELS.md](MODELS.md)'s field contract) — so the honest
 attribution is the one the harness itself reported.
 
 The icon table is explicit, with a neutral fallback for any provider
@@ -1008,7 +1008,7 @@ Deltas between this document and the integration stack
       and unchanged: cursor is **manual-refresh-only** for probing, because
       its native credential lives in the macOS keychain and an unattended
       spawn can raise an OS keychain prompt with no user-visible cause
-      ([model-catalog.md](../codebase/platforms/product/model-catalog.md)'s probe engine; enforced in
+      ([MODELS.md](MODELS.md)'s probe engine; enforced in
       `targets.rs`'s `AUTO_PROBE_EXCLUDED_HARNESSES`).
 - [ ] **The same stale claim is restated in two other places.** The docs
       copy in [agent-distribution.md](../codebase/platforms/product/agent-distribution.md)'s cursor

@@ -6,7 +6,7 @@ access to that gateway. Provider credentials remain encrypted in Cloud;
 AnyHarness receives only a Proliferate gateway bearer.
 
 Harness model credentials and the LLM gateway are separate owners:
-[agent-auth.md](agent-auth.md) and [model-gateway.md](model-gateway.md).
+[AGENT_AUTH.md](../../../FEATURE_DOCS/AGENT_AUTH.md) and [MODELS.md](../../../FEATURE_DOCS/MODELS.md).
 
 ## Mental Model
 
@@ -143,7 +143,7 @@ desired Worker and AnyHarness versions (and, deletion-pending under the
 binary-only catalog ruling in
 [agent-distribution.md](agent-distribution.md), an agent-catalog version).
 The Worker uses that response for heartbeat-driven convergence; see the
-[Proliferate Worker structure](../../structures/proliferate-worker/README.md).
+[Proliferate Worker structure](../../../worker.md).
 
 The gateway token's `last_used_at` column is deliberately not updated on the
 request hot path. It remains nullable bookkeeping, not reliable usage
@@ -426,9 +426,9 @@ and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runti
   Worker sidecar is optional.
 - Generic MCP session assembly belongs to [MCP runtime](mcp-runtime.md).
 - Sandbox lifecycle belongs to
-  [sandbox-lifecycle.md](sandbox-lifecycle.md).
+  [lifecycle.md](../../../FEATURE_DOCS/SANDBOX/lifecycle.md).
 - Server vendor adapters follow the
-  [Server integrations structure](../../structures/server/guides/integrations.md).
+  [Server integrations structure](../../../server/integrations.md).
 
 ## Failure Boundaries
 

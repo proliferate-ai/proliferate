@@ -21,7 +21,7 @@ Fences, one owner per concern:
   enforcement decision made from it. Lifecycle never computes a balance;
   billing never opens or closes a provider binding.
 - Managed-LLM key issuance, budgets on the LiteLLM proxy, and the account
-  model belong to [model-gateway.md](../codebase/platforms/product/model-gateway.md); this document owns
+  model belong to [MODELS.md](MODELS.md); this document owns
   the credit ledger those budgets are rendered from and the org-limit
   enforcement that acts on it.
 - Organization membership, roles, and invitations belong to the
@@ -60,7 +60,7 @@ attribution paths that predate the default-organization cutover — see
 
 **The org-only subject target (#1564) is a later target, not the launch
 contract.** [sandbox-lifecycle.md](SANDBOX/lifecycle.md#account-model) and
-[model-gateway.md](../codebase/platforms/product/model-gateway.md#account-model) settle the further ruling
+[MODELS.md](MODELS.md#account-model) settle the further ruling
 that *orgs are the only billing subject*: no personal subject at all, one
 sandbox per `(user, organization)` with `organization_id` NOT NULL, and the
 payer derived from the org rather than stored. That is the accepted

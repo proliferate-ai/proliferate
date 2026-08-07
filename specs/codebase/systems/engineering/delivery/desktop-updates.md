@@ -2,7 +2,7 @@
 
 Read this spec with
 [`releases.md`](../../../../../guides/deploying/releases.md) and
-[`desktop-update-testing.md`](../../../../developing/testing/desktop-update-testing.md).
+[`desktop-update-testing.md`](../../../../TESTING/desktop-update-testing.md).
 The Releases procedure owns packaging, signing, publishing, and operator procedure; the
 testing spec owns the real N−1 to N updater mechanism; this feature spec owns
 user-visible update and release-notice behavior.

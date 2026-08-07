@@ -6,8 +6,8 @@ dispatch worker process management.
 
 The desktop native shell owns the boundary between the React renderer, the OS,
 bundled binaries, local secrets, and local long-running processes. It does not
-own product UI structure; use `specs/codebase/structures/frontend/README.md` for renderer code.
-It does not own AnyHarness runtime internals; use `specs/codebase/structures/anyharness/README.md`
+own product UI structure; use `specs/frontend/README.md` for renderer code.
+It does not own AnyHarness runtime internals; use `specs/anyharness/README.md`
 for runtime behavior behind the local HTTP API.
 
 ## File Tree
@@ -38,8 +38,8 @@ apps/desktop/src-tauri/
 
 | Spec | Use it for |
 | --- | --- |
-| `specs/codebase/structures/desktop-native/specs/anyharness-sidecar.md` | How packaged Desktop bundles, finds, launches, monitors, and restarts the local AnyHarness runtime. |
-| `specs/codebase/structures/desktop-native/specs/agent-seeds.md` | How bundled agent seeds are built, packaged, hydrated, tracked, repaired, and distinguished from downloaded artifacts. |
+| [AnyHarness Sidecar](#anyharness-sidecar) (this document) | How packaged Desktop bundles, finds, launches, monitors, and restarts the local AnyHarness runtime. |
+| [Agent Seeds](#agent-seeds) (this document) | How bundled agent seeds are built, packaged, hydrated, tracked, repaired, and distinguished from downloaded artifacts. |
 | `specs/codebase/systems/engineering/delivery/desktop-updates.md` and `guides/deploying/releases.md` | Product behavior and release mechanics to read together when changing `tauri.conf.json` updater configuration, updater manifests, or packaged update behavior. |
 
 ## Rules

@@ -12,12 +12,12 @@ into one user journey. It owns the screens, copy, and flow decisions; every
 mechanism it mentions is some platform's contract, consumed by link:
 
 - The box (states, wake, provisioning engine, webhooks, orphan reaping):
-  [sandbox-lifecycle.md](../../../platforms/product/sandbox-lifecycle.md).
+  [lifecycle.md](../../../../FEATURE_DOCS/SANDBOX/lifecycle.md).
 - What is in the box (clones, worktrees, identity, disk, the two workspace
-  records): [sandbox-content.md](../../../platforms/product/sandbox-content.md).
-- The wire: [sandbox-gateway.md](../../../platforms/product/sandbox-gateway.md).
+  records): [content.md](../../../../FEATURE_DOCS/SANDBOX/content.md).
+- The wire: [gateway.md](../../../../FEATURE_DOCS/SANDBOX/gateway.md).
 - The caller contract (gating layers, ensure→resolve choreography):
-  [sandbox-access.md](../../../platforms/product/sandbox-access.md).
+  [access.md](../../../../FEATURE_DOCS/SANDBOX/access.md).
 - Create-request choreography (validation, row transactions, branch retry):
   [workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md).
 - The composer panel stack is [composer.md](../chat/composer.md)'s anatomy;

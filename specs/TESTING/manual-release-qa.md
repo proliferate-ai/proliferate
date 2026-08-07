@@ -29,7 +29,7 @@ records, and reports a QA pass.
 
 Read feature specs when the release touches their workflows:
 
-- [../codebase/platforms/product/billing.md](../codebase/platforms/product/billing.md)
+- [specs/FEATURE_DOCS/BILLING.md](../FEATURE_DOCS/BILLING.md)
   for billing, credits, Stripe checkout, refill, and portal smoke coverage
 - [../codebase/systems/product/chat/composer.md](../codebase/systems/product/chat/composer.md)
   for composer playground verification
@@ -163,14 +163,14 @@ the change crosses a shared contract.
 
 | Surface | Minimum manual smoke | Supporting docs |
 | --- | --- | --- |
-| Desktop | Sign in, open a workspace, send a prompt, reload transcript, verify settings affected by the release, and inspect updater behavior only when packaging/updater changed. | [../../guides/local/README.md](../../guides/local/README.md), [../codebase/structures/desktop-native/README.md](../codebase/structures/desktop-native/README.md) |
+| Desktop | Sign in, open a workspace, send a prompt, reload transcript, verify settings affected by the release, and inspect updater behavior only when packaging/updater changed. | [../../guides/local/README.md](../../guides/local/README.md), [specs/desktop-native.md](../desktop-native.md) |
 | Web | Sign in through the profile or staging URL, open/create the affected workspace, send a prompt when commandability is in scope, reload, and verify settings/modal/deep-link behavior. | [../codebase/systems/product/clients/web-desktop-unification/README.md](../codebase/systems/product/clients/web-desktop-unification/README.md) |
 | Mobile web | Source the profile launch env, run mobile web against the same profile, verify auth state, navigation, chat, sessions, automations, and settings touched by the release. | [../../guides/local/mobile.md](../../guides/local/mobile.md) |
 | Native mobile | Verify the same user workflow in simulator/device when native OAuth, SecureStore, deep links, keyboard, safe-area, or TestFlight behavior changed. | [../../guides/local/mobile.md](../../guides/local/mobile.md) |
-| Server/API | Exercise changed API paths locally or in staging, verify auth/permission behavior, and confirm migrations/tests passed. | [../codebase/structures/server/README.md](../codebase/structures/server/README.md) |
-| AnyHarness runtime | Start a real session, stream transcript events, execute the changed tool/session/workspace behavior, and verify contract compatibility with Desktop/Web/Mobile callers. | [../codebase/structures/anyharness/README.md](../codebase/structures/anyharness/README.md) |
-| Cloud sandbox and Worker | Through mounted APIs, ensure the personal sandbox row, save/materialize a cloud repo environment, create a Cloud workspace, verify authenticated AnyHarness gateway access, and then verify optional Worker enrollment, heartbeat-derived liveness, and reported versions independently. | [../../guides/operating/cloud-provisioning-failure.md](../../guides/operating/cloud-provisioning-failure.md), [../../guides/operating/worker-enrollment-failure.md](../../guides/operating/worker-enrollment-failure.md), [../codebase/structures/proliferate-worker/README.md](../codebase/structures/proliferate-worker/README.md) |
-| Billing | Use Stripe test mode, verify checkout/portal/refill/webhook behavior, budget/credit reconciliation, and UI state after webhook delivery. | [../../guides/local/stripe-local-testing.md](../../guides/local/stripe-local-testing.md), [../codebase/platforms/product/billing.md](../codebase/platforms/product/billing.md) |
+| Server/API | Exercise changed API paths locally or in staging, verify auth/permission behavior, and confirm migrations/tests passed. | [specs/server/standards.md](../server/standards.md) |
+| AnyHarness runtime | Start a real session, stream transcript events, execute the changed tool/session/workspace behavior, and verify contract compatibility with Desktop/Web/Mobile callers. | [specs/anyharness/README.md](../anyharness/README.md) |
+| Cloud sandbox and Worker | Through mounted APIs, ensure the personal sandbox row, save/materialize a cloud repo environment, create a Cloud workspace, verify authenticated AnyHarness gateway access, and then verify optional Worker enrollment, heartbeat-derived liveness, and reported versions independently. | [../../guides/operating/cloud-provisioning-failure.md](../../guides/operating/cloud-provisioning-failure.md), [../../guides/operating/worker-enrollment-failure.md](../../guides/operating/worker-enrollment-failure.md), [specs/worker.md](../worker.md) |
+| Billing | Use Stripe test mode, verify checkout/portal/refill/webhook behavior, budget/credit reconciliation, and UI state after webhook delivery. | [../../guides/local/stripe-local-testing.md](../../guides/local/stripe-local-testing.md), [specs/FEATURE_DOCS/BILLING.md](../FEATURE_DOCS/BILLING.md) |
 | Analytics/observability | Verify events, dashboards, replay gates, alerts, release health, and support-correlation ids without leaking sensitive content. | [../../guides/operating/analytics/README.md](../../guides/operating/analytics/README.md) |
 | Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs ownership. | [../../guides/deploying/hosted.md](../../guides/deploying/hosted.md), [../../guides/deploying/releases.md](../../guides/deploying/releases.md) |
 
