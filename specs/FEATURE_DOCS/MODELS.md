@@ -148,7 +148,7 @@ to the `probedAt` age.
 
 The entry is a persistence of what the probe already returns
 (`ProbeSnapshot` in
-[live/sessions/probe.rs](../../../../anyharness/crates/anyharness-lib/src/live/sessions/probe.rs)),
+[live/sessions/probe.rs](../../anyharness/crates/anyharness-lib/src/live/sessions/probe.rs)),
 not a new observation format. The document holds only the current
 observation; it stores no history and no diffs. History lives server-side
 (below), and any "what changed" view is computed at read time by comparing
@@ -194,7 +194,7 @@ The one prerequisite fetch that is not observation survives as
 materialization: harnesses whose gateway config enumerates models explicitly
 (opencode's provider models map) need the proxy's list to *write that config*
 before any spawn. That fetch belongs to the route-materialization seam
-([catalog/gateway_plan.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_plan.rs)),
+([catalog/gateway_plan.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_plan.rs)),
 runs against `GET /v1/models` with the harness's own key, and never writes
 the observation — the probe then observes the configured harness like any
 other spawn. `gatewayPolicy.seedModels` survives only as a floor under that
@@ -272,8 +272,8 @@ protect live sessions and the machine, not staleness bookkeeping:
   admission of *automatic* event pokes after failures only. It is never a
   freshness gate, a manual/forced refresh always bypasses it, and it is
   not persisted across restarts
-  ([model_snapshot/config.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/config.rs),
-  [backoff.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/backoff.rs)).
+  ([model_snapshot/config.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/config.rs),
+  [backoff.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/backoff.rs)).
 - **Orphan sweep.** At engine construction the owner sweeps abandoned scratch
   roots (a SIGKILLed probe runs no guard), age-thresholded.
 - **One engine per runtime home.** The engine holds an advisory exclusive
@@ -335,7 +335,7 @@ one row per (user, harness) or (org, harness), a `patch_json` of optional
 ### Write path
 
 One writer: **Worker upload**. On the heartbeat-and-converge tick,
-[model_snapshot_sync.rs](../../../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs)
+[model_snapshot_sync.rs](../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs)
 GETs the runtime's snapshot documents over the narrow local surface, diffs
 `probedAt` against an in-memory last-pushed cache (worth at most one
 redundant upload after a Worker restart, which the soft-versioned write
@@ -364,7 +364,7 @@ The picker joins them per model:
 1. Build the candidate id set for the observed model: its `id`, its catalog
    aliases once matched, each normalized through the default-chat-model
    normalizer (the existing `buildCloudModelLookup` machinery in
-   [cloud-launch-catalog.ts](../../../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts)).
+   [cloud-launch-catalog.ts](../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts)).
 2. The first shipped-catalog model matching any candidate supplies display
    name, description, control wiring, and availability metadata.
 3. No match means the model still renders — id-shaped label, sparse metadata
@@ -539,19 +539,19 @@ test tree, per-context slots, and
 (`universe.rs` is not deleted but re-cut in place to the composed
 `ObservedUniverse`) — the probe materializes the full composed profile through
 the same
-[probe_materialization.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/probe_materialization.rs)
+[probe_materialization.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/probe_materialization.rs)
 seam (phase A shrinks to a state read; phase B and the scratch are
 unchanged).
 
 | Layer | Path | Owns |
 | --- | --- | --- |
 | Machine observation | `anyharness-lib/src/domains/agents/model_snapshot/` | Document, probe engine, events, status |
-| Probe materialization | [route_auth/probe_materialization.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/probe_materialization.rs) | The composed launch world under a scratch root; the orphan sweep |
-| Launch validation | [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs), [sessions/service/launch_options.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/service/launch_options.rs) | Observation-first resolution, the single typed refusal, picker projection |
-| Gateway model plan | [catalog/gateway_plan.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_plan.rs) | The surviving `GET /v1/models` materialization fetch: memoized, seed floor warned, never observation truth |
+| Probe materialization | [route_auth/probe_materialization.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/probe_materialization.rs) | The composed launch world under a scratch root; the orphan sweep |
+| Launch validation | [catalog/service.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs), [sessions/service/launch_options.rs](../../anyharness/crates/anyharness-lib/src/domains/sessions/service/launch_options.rs) | Observation-first resolution, the single typed refusal, picker projection |
+| Gateway model plan | [catalog/gateway_plan.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_plan.rs) | The surviving `GET /v1/models` materialization fetch: memoized, seed floor warned, never observation truth |
 | Cloud copy | `server/proliferate/server/cloud/agent_models/` | Layered reads, Worker ingest, overrides, soft-versioned history |
-| Cloud sync | [proliferate-worker/src/model_snapshot_sync.rs](../../../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs) | Heartbeat-tick upload of changed documents |
-| Picker composition | [cloud-launch-catalog.ts](../../../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts) and the chat/model domain | Merge precedence, identity normalization, visibility, badges |
+| Cloud sync | [proliferate-worker/src/model_snapshot_sync.rs](../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs) | Heartbeat-tick upload of changed documents |
+| Picker composition | [cloud-launch-catalog.ts](../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts) and the chat/model domain | Merge precedence, identity normalization, visibility, badges |
 
 ## Failure modes
 
@@ -740,7 +740,7 @@ asserts the Dockerfile and `server/docker-compose.yml` carry the identical
 pin and fails any bump that skips review. Bumping the pin is the
 highest-risk gateway change, since it swaps the code serving all inference
 and the pricing manifest; the procedure is in
-[gateway-models.md](../../../../guides/operating/gateway-models.md).
+[gateway-models.md](../../guides/operating/gateway-models.md).
 
 ### Secrets
 
@@ -997,7 +997,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       routes already live in their own `agent_models` module
       (see Catalog section's §Cloud routes above).
 - [ ] No product-server route emits `agent_gateway_credits_exhausted`
-      ([budget.py](../../../../server/proliferate/server/cloud/agent_gateway/budget.py)).
+      ([budget.py](../../server/proliferate/server/cloud/agent_gateway/budget.py)).
       Exhaustion is enforced — the usage importer disables the LiteLLM virtual
       keys, and the agent-auth state render withholds key material so the
       runtime fails closed at launch — but neither wall answers a request with
