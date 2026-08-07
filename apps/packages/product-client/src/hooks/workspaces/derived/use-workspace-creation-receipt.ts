@@ -102,6 +102,18 @@ export function useWorkspaceCreationReceiptKey(): string | null {
     if (!workspace) {
       return null;
     }
+    // Live-arrival bridge: the arrival event is published in the same flow
+    // that clears the pending entry, so its presence means this very
+    // selection just performed the creation — definitionally the workspace's
+    // first session. Skipping the query-backed proof below keeps the receipt
+    // mounted across the creating→created handoff; without it the key goes
+    // null for a round trip and the pending row flashes back to "Thinking".
+    if (
+      workspaceArrivalEvent?.workspaceId === workspace.id
+      && (workspace.kind === "worktree" || workspaceArrivalEvent.source === "local-created")
+    ) {
+      return workspaceUiKey;
+    }
     // First-session scope: hold the receipt until the sessions list can
     // prove the active session is the workspace's first. Hidden (not
     // flashed) while the list or the active session's materialized id is
