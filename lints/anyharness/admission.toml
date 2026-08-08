@@ -1,4 +1,8 @@
-# Session mutation admission — enforced by
+# Session mutation admission (AH-ADMIT) — the write-gate on session state.
+# Every entry point that can mutate a session — HTTP handler or background
+# pass — must declare its admission class, and a `fenced` entry point must
+# provably call the admission gate before performing any effect. Ordering is
+# the guarantee: an admit after the write admits nothing. Enforced by
 # scripts/check_session_mutation_admission.py.
 #
 # The classification ledgers (scripts/session_mutation_admission.txt and

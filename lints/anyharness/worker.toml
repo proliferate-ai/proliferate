@@ -1,4 +1,9 @@
-# proliferate-worker crate structure — enforced by
+# proliferate-worker crate structure (AH-WORKER) — the layout of the separate
+# worker binary crate (anyharness/crates/proliferate-worker, the agent-side
+# process), distinct from the anyharness-lib crate the boundary rules cover.
+# These records keep its completed restructure permanent: retired paths stay
+# dead, the required modules stay present, and neither imports nor `mod`
+# declarations may resurrect the old layout. Enforced by
 # scripts/check_proliferate_worker_structure.py.
 
 [[rule]]

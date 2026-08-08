@@ -1,5 +1,10 @@
-# AnyHarness layer boundaries — enforced by
-# scripts/check_anyharness_boundaries.py over the anyharness-lib crate.
+# AnyHarness layer boundaries — who may import whom inside the anyharness-lib
+# crate (AH-API / AH-DOMAIN / AH-ADAPTER / AH-INTEG / AH-STORE / AH-SINK /
+# AH-PERSIST / AH-LIVE / AH-STATE / AH-CONTRACT / AH-POLICY). The layer order:
+# api/ and app/ on top; domains/ as the core; live/ (the actor system) reached
+# only through each domain's runtime valve; adapters/, integrations/, and
+# persistence/ as leaves that know no transport, no actors, no product policy.
+# Enforced by scripts/check_anyharness_boundaries.py.
 #
 # Grandfathered violation sites live in exceptions.toml, one entry per site.
 # See lints/README.md for the record and ledger contract.

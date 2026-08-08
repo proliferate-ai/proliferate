@@ -1,5 +1,6 @@
-# AnyHarness repository shape — enforced by
-# scripts/check_anyharness_old_paths.py.
+# AnyHarness repository shape (AH-PATHS) — completed-migration path blocks for
+# the anyharness-lib crate: the pre-restructure tree may not grow back, one
+# file at a time or otherwise. Enforced by scripts/check_anyharness_old_paths.py.
 
 [[rule]]
 id = "AH-PATHS-1"
