@@ -147,11 +147,8 @@ export function HomeComposerForm({
   return (
     <>
       <DebugProfiler id="home-target-picker">
-        {/* px-1: bar inset + trigger border/padding + the notebook glyph's
-            empty viewBox margin must sum to the composer's 17px text inset,
-            so the repo icon's ink left-aligns with the prompt text below. */}
         <div
-          className="relative z-0 -mx-px -mb-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-t-composer bg-surface-elevated-secondary px-1 pb-[27px] pt-2"
+          className="relative z-0 -mx-px -mb-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-t-composer bg-surface-elevated-secondary px-2 pb-[27px] pt-2"
           data-home-launch-utility-bar
         >
           {targetPickerSlot}
