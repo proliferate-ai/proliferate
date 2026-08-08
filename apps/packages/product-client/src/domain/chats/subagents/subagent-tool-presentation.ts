@@ -47,6 +47,8 @@ export function formatSubagentMcpActionLabel(toolName: string | null | undefined
       return "Listed agents";
     case "mcp__subagents__read_agent_transcript":
       return "Read agent transcript";
+    case "mcp__subagents__schedule_agent_wake":
+      return "Scheduled agent wake";
     default:
       return null;
   }
@@ -93,6 +95,9 @@ export function formatSubagentHeaderVerb({
   }
   if (toolName === "mcp__subagents__read_agent_transcript") {
     return isRunning ? "Reading agent transcript" : "Agent transcript read";
+  }
+  if (toolName === "mcp__subagents__schedule_agent_wake") {
+    return isRunning ? "Scheduling agent wake" : "Agent wake scheduled";
   }
   if (executionState === "failed") {
     return "Subagent launch failed";

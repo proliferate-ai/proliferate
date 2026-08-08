@@ -16,6 +16,7 @@ use self::context::AgentOpsMcpContext;
 use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::integrations::mcp::product_server::{
@@ -37,6 +38,7 @@ pub struct AgentOpsPeerGates {
 #[derive(Clone)]
 pub struct AgentOpsProductMcpServer {
     service: Arc<SubagentService>,
+    wake_service: Arc<AgentWakeService>,
     session_runtime: Arc<SessionRuntime>,
     workspace_runtime: Arc<WorkspaceRuntime>,
     peer_gates: AgentOpsPeerGates,
@@ -46,6 +48,7 @@ pub struct AgentOpsProductMcpServer {
 impl AgentOpsProductMcpServer {
     pub fn new(
         service: Arc<SubagentService>,
+        wake_service: Arc<AgentWakeService>,
         session_runtime: Arc<SessionRuntime>,
         workspace_runtime: Arc<WorkspaceRuntime>,
         peer_gates: AgentOpsPeerGates,
@@ -53,6 +56,7 @@ impl AgentOpsProductMcpServer {
     ) -> Self {
         Self {
             service,
+            wake_service,
             session_runtime,
             workspace_runtime,
             peer_gates,
@@ -96,6 +100,7 @@ impl ProductMcpServer for AgentOpsProductMcpServer {
     ) -> anyhow::Result<Value> {
         calls::call_tool(
             &self.service,
+            &self.wake_service,
             &self.session_runtime,
             &self.peer_gates,
             ctx,

@@ -3718,6 +3718,86 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/wakes/{target_session_id}": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "schedule_agent_wake",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Watcher session ID — the session that gets woken",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target_session_id",
+            "in": "path",
+            "description": "Target session ID — the agent being waited on",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleAgentWakeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Armed a one-shot wake on the target's next finished turn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleAgentWakeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid wake request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Workspace or session state blocks wake scheduling",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/terminal-command-runs/{command_run_id}": {
       "get": {
         "tags": [
@@ -14246,6 +14326,30 @@
           {
             "type": "object",
             "required": [
+              "targetSessionId",
+              "type"
+            ],
+            "properties": {
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "targetSessionId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agentWake"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
               "sessionLinkId",
               "completionId",
               "type"
@@ -16322,6 +16426,33 @@
               "null"
             ],
             "format": "double"
+          }
+        }
+      },
+      "ScheduleAgentWakeRequest": {
+        "type": "object",
+        "description": "Arm a session-scoped wake as the human. Same table, same pointer, same\none-shot consumption the agent tools use — the pane composer's \"Wake me on\nreply\" is not a second mechanism."
+      },
+      "ScheduleAgentWakeResponse": {
+        "type": "object",
+        "required": [
+          "watcherSessionId",
+          "targetSessionId",
+          "wakeScheduled",
+          "alreadyScheduled"
+        ],
+        "properties": {
+          "alreadyScheduled": {
+            "type": "boolean"
+          },
+          "targetSessionId": {
+            "type": "string"
+          },
+          "wakeScheduled": {
+            "type": "boolean"
+          },
+          "watcherSessionId": {
+            "type": "string"
           }
         }
       },

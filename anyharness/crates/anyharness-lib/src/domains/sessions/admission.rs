@@ -130,6 +130,9 @@ pub enum SessionMutationKind {
     Plan,
     Review,
     SubagentWake,
+    /// Arming a session-scoped wake: the mutation lands on the WATCHER's
+    /// future prompt queue, which is the session the permit is taken for.
+    AgentWake,
     ReplayAdvance,
     WorkspacePurge,
     WorkspaceRetire,
@@ -158,6 +161,7 @@ impl SessionMutationKind {
             Self::Plan => "plan",
             Self::Review => "review",
             Self::SubagentWake => "subagent_wake",
+            Self::AgentWake => "agent_wake",
             Self::ReplayAdvance => "replay_advance",
             Self::WorkspacePurge => "workspace_purge",
             Self::WorkspaceRetire => "workspace_retire",
@@ -305,6 +309,33 @@ impl SessionMutationAdmission {
         })
         .await
         .map_err(|error| anyhow::anyhow!("controlled-session re-check task failed: {error}"))?
+    }
+
+    /// The set form of [`Self::find_workflow_controlled_session`]: which of
+    /// `session_ids` a nonterminal workflow controls right now.
+    ///
+    /// Same properties, for the same reason — a PURE read-only controller-policy
+    /// lookup that acquires neither a keyed permit nor a workspace lease, so it
+    /// adds no edge to the canonical `run gate -> permit -> operation lease`
+    /// order and cannot deadlock. Its caller is the session-scoped wake
+    /// consumption, which needs the whole controlled subset (it fires a pointer
+    /// at every OTHER watcher) rather than the first offender.
+    pub async fn workflow_controlled_sessions(
+        &self,
+        session_ids: Vec<String>,
+    ) -> anyhow::Result<std::collections::HashSet<String>> {
+        let policy = self.policy.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut controlled = std::collections::HashSet::new();
+            for session_id in session_ids {
+                if policy.controlling_run_id(&session_id)?.is_some() {
+                    controlled.insert(session_id);
+                }
+            }
+            Ok(controlled)
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!("controlled-session lookup task failed: {error}"))?
     }
 
     /// Reserve a NEW session id's gate before its row becomes visible

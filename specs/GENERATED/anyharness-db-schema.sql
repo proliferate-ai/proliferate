@@ -545,6 +545,18 @@ CREATE TABLE session_raw_notifications (
     payload_json TEXT NOT NULL
 );
 
+-- table: session_wake_schedules
+CREATE TABLE session_wake_schedules (
+    watcher_session_id TEXT NOT NULL REFERENCES sessions(id),
+    target_session_id TEXT NOT NULL REFERENCES sessions(id),
+    created_at TEXT NOT NULL,
+    armed_for_reply INTEGER NOT NULL DEFAULT 0,
+    dispatch_confirmed_at TEXT,
+    PRIMARY KEY (watcher_session_id, target_session_id),
+    CHECK (watcher_session_id != target_session_id),
+    CHECK (armed_for_reply IN (0, 1))
+);
+
 -- table: sessions
 CREATE TABLE sessions (
     id TEXT PRIMARY KEY,
@@ -871,6 +883,10 @@ CREATE INDEX idx_session_prompt_attachments_state_updated
 -- index: idx_session_raw_notifications_session_seq
 CREATE UNIQUE INDEX idx_session_raw_notifications_session_seq
     ON session_raw_notifications(session_id, seq);
+
+-- index: idx_session_wake_schedules_target
+CREATE INDEX idx_session_wake_schedules_target
+    ON session_wake_schedules(target_session_id);
 
 -- index: idx_sessions_activity
 CREATE INDEX idx_sessions_activity

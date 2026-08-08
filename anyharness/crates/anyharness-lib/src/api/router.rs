@@ -16,7 +16,8 @@ use super::http::{
     files, git, goals, health,
     hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
     sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workflow_workspaces,
+    sessions_prompt, sessions_resume, sessions_wakes, subagents, terminals, workflow_runs,
+    workflow_workspaces,
     workspaces, workspaces_lifecycle, workspaces_purge, workspaces_restore, workspaces_setup,
     workspaces_worktrees, worktrees,
 };
@@ -416,6 +417,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/sessions/{session_id}/subagents/{child_session_id}/wake",
             post(subagents::schedule_subagent_wake),
+        )
+        .route(
+            "/sessions/{session_id}/wakes/{target_session_id}",
+            post(sessions_wakes::schedule_agent_wake),
         )
         .route(
             "/sessions/{session_id}/reviews",

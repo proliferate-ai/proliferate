@@ -612,6 +612,8 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
         ("sessions_fork.rs", "fork_session", ADMIT, FORK_LEASE),
         // subagent wake: admit before the SubagentWrite shared lease.
         ("subagents.rs", "schedule_subagent_wake", ADMIT, SHARED),
+        // session-scoped agent wake: admit before the SubagentWrite shared lease.
+        ("sessions_wakes.rs", "schedule_agent_wake", ADMIT, SHARED),
         // retire HALF 1: the handler admits before it calls the facade.
         ("workspaces_lifecycle.rs", "retire_workspace", ADMIT_ALL, ".retire("),
         // mobility export: admit-all before the MobilityWrite shared lease.

@@ -152,6 +152,13 @@ impl ApiError {
 }
 
 impl ApiError {
+    /// Whether this is a 5xx. Used where a handler collapses a family of
+    /// client-side refusals into one indistinguishable status but must let a
+    /// genuine server failure through as itself.
+    pub(super) fn is_server_error(&self) -> bool {
+        self.0.is_server_error()
+    }
+
     /// HTTP status for this error. Test/introspection accessor.
     #[cfg(test)]
     pub(crate) fn status(&self) -> StatusCode {

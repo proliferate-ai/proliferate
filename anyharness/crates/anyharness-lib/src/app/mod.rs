@@ -67,6 +67,8 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
+use crate::domains::sessions::wakes::hooks::AgentWakeSessionHooks;
+use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
@@ -147,6 +149,8 @@ pub struct AppState {
     pub cowork_runtime: Arc<CoworkRuntime>,
     pub subagent_service: Arc<SubagentService>,
     pub subagent_session_hooks: Arc<SubagentSessionHooks>,
+    pub agent_wake_service: Arc<AgentWakeService>,
+    pub agent_wake_session_hooks: Arc<AgentWakeSessionHooks>,
     pub review_service: Arc<ReviewService>,
     pub review_session_hooks: Arc<ReviewSessionHooks>,
     pub integration_gateway_session_launch_extension: Arc<IntegrationGatewaySessionLaunchExtension>,
@@ -419,12 +423,25 @@ impl AppState {
         // startup fencing, main-handle capture, completion extension.
         let workflow_wiring = workflows::wire_workflows_before_sessions(&db)?;
         let session_admission = workflow_wiring.admission.clone();
+        // Wakes are wired after the admission gate on purpose: consuming a
+        // schedule has to know which watchers a workflow controls, so the
+        // service takes the same admission the fenced routes take (read-only
+        // lookup — it never acquires a permit).
+        let agent_wake_service = Arc::new(AgentWakeService::new(
+            SessionStore::new(db.clone()),
+            session_admission.clone(),
+        ));
+        let agent_wake_session_hooks = Arc::new(AgentWakeSessionHooks::new(
+            agent_wake_service.clone(),
+            acp_manager.clone(),
+        ));
         let workflow_run_session_extension = workflow_wiring.session_extension.clone();
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
+            agent_wake_session_hooks.clone(),
             review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
             goal_session_hooks,
@@ -547,6 +564,7 @@ impl AppState {
                 review_runtime: review_runtime.clone(),
                 review_mcp_auth,
                 subagent_service: subagent_service.clone(),
+                agent_wake_service: agent_wake_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
                 session_admission: session_admission.clone(),
@@ -595,6 +613,8 @@ impl AppState {
             cowork_runtime,
             subagent_service,
             subagent_session_hooks,
+            agent_wake_service,
+            agent_wake_session_hooks,
             review_service,
             review_session_hooks,
             integration_gateway_session_launch_extension,

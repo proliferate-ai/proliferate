@@ -287,3 +287,8 @@ subagent graph, the archive must preserve `session_links` and
 linked sessions are included. Export must block with a clear preflight error
 when only one side of a subagent link would be moved, because importing a
 partial graph would break child ownership and parent wake behavior.
+
+Session-scoped wake schedules (`session_wake_schedules`) are not archived. They
+are one-shot, latency-scoped state between two arbitrary sessions rather than
+part of the subagent graph, and a watcher that loses one is only owed a pointer
+it can re-arm.

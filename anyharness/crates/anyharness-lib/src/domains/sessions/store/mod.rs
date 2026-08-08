@@ -1,5 +1,6 @@
 use crate::persistence::Db;
 
+pub(crate) mod agent_wakes;
 mod attachments;
 mod background_work;
 mod events;

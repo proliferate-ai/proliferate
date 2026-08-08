@@ -31,6 +31,7 @@ pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "create_subagent",
     "send_subagent_message",
     "schedule_subagent_wake",
+    "schedule_agent_wake",
     "close_agent",
     "close_subagent",
 ];
@@ -116,6 +117,16 @@ pub struct ListAgentsArgs {
 pub struct SendAgentMessageArgs {
     pub session_id: String,
     pub message: String,
+    /// Arms a one-shot wake on the target in the same flow as the send, so a
+    /// target that finishes its turn without answering still pokes the sender.
+    #[serde(default)]
+    pub wake_on_reply: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleAgentWakeArgs {
+    pub session_id: String,
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq, Eq, Clone, Copy)]
@@ -192,9 +203,21 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "sessionId": { "type": "string", "description": "Target agent's session id. Use list_agents to find it." },
-                    "message": { "type": "string", "description": "Message body, delivered verbatim." }
+                    "message": { "type": "string", "description": "Message body, delivered verbatim." },
+                    "wakeOnReply": { "type": "boolean", "description": "Wake you when the target finishes its next turn. A real reply already wakes you with the full message and cancels this; the wake is the safety net for a target that answers nobody." }
                 },
                 "required": ["sessionId", "message"]
+            }),
+        ),
+        tool_definition(
+            "schedule_agent_wake",
+            "Wake yourself with a pointer when another agent finishes its next turn. A turn already running is covered; an IDLE target finishes nothing until someone prompts it, so the result reports targetStatus and targetRunning — if it is idle and you need an answer, send_agent_message instead. The pointer carries the target's label, session id and outcome — never its output; read the result with read_agent_transcript. Prefer wakeOnReply on send_agent_message when you are waiting on an answer.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string", "description": "Agent to wait on. Any open session, in any workspace." }
+                },
+                "required": ["sessionId"]
             }),
         ),
         tool_definition(
@@ -454,8 +477,41 @@ mod tests {
         // The link-scoped sibling still leases at the route: its target is
         // always in the caller's workspace.
         assert!(MUTATING_TOOL_NAMES.contains(&"send_subagent_message"));
+        // Arming a wake mutates the WATCHER (the caller), so the route-level
+        // lease on the caller's workspace is the right one.
+        assert!(MUTATING_TOOL_NAMES.contains(&"schedule_agent_wake"));
         assert!(!MUTATING_TOOL_NAMES.contains(&"list_agents"));
         assert!(!MUTATING_TOOL_NAMES.contains(&"read_agent_transcript"));
+    }
+
+    #[test]
+    fn session_scoped_wakes_are_offered_to_every_caller() {
+        // Same reasoning as peer messaging: an unpromoted subagent loses spawn
+        // tools, not the ability to wait on a peer.
+        for ctx in [context(true, 2), context(false, 0)] {
+            let tools = build_tool_list(&ctx);
+            let names = tool_names(&tools);
+
+            assert!(names.contains(&"schedule_agent_wake"));
+        }
+    }
+
+    #[test]
+    fn send_agent_message_advertises_wake_on_reply() {
+        let send = build_tool_list(&context(true, 0))
+            .into_iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("send_agent_message"))
+            .expect("send_agent_message is advertised");
+
+        assert!(send
+            .pointer("/inputSchema/properties/wakeOnReply")
+            .is_some());
+        // It is optional: a send with no flag is still a plain send.
+        let required = send
+            .pointer("/inputSchema/required")
+            .and_then(Value::as_array)
+            .expect("required list");
+        assert!(!required.iter().any(|value| value == "wakeOnReply"));
     }
 
     #[test]

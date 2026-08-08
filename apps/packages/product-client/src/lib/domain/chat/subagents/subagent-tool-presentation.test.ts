@@ -68,6 +68,8 @@ describe("subagent tool presentation", () => {
       .toBe("Listed agents");
     expect(formatSubagentMcpActionLabel("mcp__subagents__read_agent_transcript"))
       .toBe("Read agent transcript");
+    expect(formatSubagentMcpActionLabel("mcp__subagents__schedule_agent_wake"))
+      .toBe("Scheduled agent wake");
 
     expect(formatSubagentHeaderVerb({
       item: { nativeToolName: "mcp__subagents__send_agent_message" },
@@ -79,6 +81,11 @@ describe("subagent tool presentation", () => {
       executionState: "running",
       isRunning: true,
     })).toBe("Reading agent transcript");
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__schedule_agent_wake" },
+      executionState: "completed",
+      isRunning: false,
+    })).toBe("Agent wake scheduled");
   });
 
   it("derives concise status receipt presentation with the child target", () => {

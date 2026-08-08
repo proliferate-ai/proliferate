@@ -39,6 +39,7 @@ pub mod sessions_lifecycle;
 pub mod sessions_pending;
 pub mod sessions_prompt;
 pub mod sessions_resume;
+pub mod sessions_wakes;
 pub mod subagents;
 pub mod terminals;
 pub mod workflow_runs;

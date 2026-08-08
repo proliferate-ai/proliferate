@@ -118,7 +118,9 @@ pub fn authorize(
     Ok(AgentAccess { caller, target })
 }
 
-fn is_closed(session: &SessionRecord) -> bool {
+/// The one definition of "closed" this funnel enforces, shared with the wake
+/// consumption so a closed session is the same session to both.
+pub(crate) fn is_closed(session: &SessionRecord) -> bool {
     session.closed_at.is_some() || session.status == "closed"
 }
 

@@ -16,6 +16,8 @@ import type {
   ReorderPendingPromptsRequest,
   ResolveInteractionRequest,
   ResumeSessionRequest,
+  ScheduleAgentWakeRequest,
+  ScheduleAgentWakeResponse,
   ScheduleSubagentWakeRequest,
   ScheduleSubagentWakeResponse,
   SetSessionConfigOptionRequest,
@@ -94,6 +96,26 @@ export class SessionsClient {
       `/v1/sessions/${encodeURIComponent(sessionId)}/subagents/${
         encodeURIComponent(childSessionId)
       }/wake`,
+      request,
+      options,
+    );
+  }
+
+  /**
+   * Arm a one-shot wake: `sessionId` gets a pointer prompt when
+   * `targetSessionId` next finishes a turn. Same row, same pointer and same
+   * one-shot consumption the agents' own `schedule_agent_wake` uses.
+   */
+  async scheduleAgentWake(
+    sessionId: string,
+    targetSessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ScheduleAgentWakeResponse> {
+    const request: ScheduleAgentWakeRequest = {};
+    return this.transport.post<ScheduleAgentWakeResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/wakes/${
+        encodeURIComponent(targetSessionId)
+      }`,
       request,
       options,
     );

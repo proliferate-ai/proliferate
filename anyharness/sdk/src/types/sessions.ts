@@ -140,6 +140,10 @@ export type FeedRef = components["schemas"]["FeedRef"];
 export type FeedKind = components["schemas"]["FeedKind"];
 export type SessionSubagentsResponse =
   components["schemas"]["SessionSubagentsResponse"];
+export type ScheduleAgentWakeRequest =
+  components["schemas"]["ScheduleAgentWakeRequest"];
+export type ScheduleAgentWakeResponse =
+  components["schemas"]["ScheduleAgentWakeResponse"];
 export type ScheduleSubagentWakeRequest =
   components["schemas"]["ScheduleSubagentWakeRequest"];
 export type ScheduleSubagentWakeResponse =

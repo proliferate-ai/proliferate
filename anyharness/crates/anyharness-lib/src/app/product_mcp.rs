@@ -23,6 +23,7 @@ use crate::domains::sessions::mcp_bindings::product_registry::{
 };
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -39,6 +40,7 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) review_runtime: Arc<ReviewRuntime>,
     pub(super) review_mcp_auth: Arc<ReviewMcpAuth>,
     pub(super) subagent_service: Arc<SubagentService>,
+    pub(super) agent_wake_service: Arc<AgentWakeService>,
     pub(super) session_runtime: Arc<SessionRuntime>,
     pub(super) workspace_runtime: Arc<WorkspaceRuntime>,
     pub(super) session_admission: Arc<SessionMutationAdmission>,
@@ -110,6 +112,7 @@ pub(super) fn build_product_mcp_endpoint_registry(
         review_runtime,
         review_mcp_auth,
         subagent_service,
+        agent_wake_service,
         session_runtime,
         workspace_runtime,
         session_admission,
@@ -129,6 +132,7 @@ pub(super) fn build_product_mcp_endpoint_registry(
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
             Arc::new(AgentOpsProductMcpServer::new(
                 subagent_service.clone(),
+                agent_wake_service,
                 session_runtime,
                 workspace_runtime.clone(),
                 AgentOpsPeerGates {

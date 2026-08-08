@@ -155,8 +155,24 @@ Owner: `anyharness/crates/anyharness-lib/src/domains/sessions/prompt/envelope.rs
 
 ### Wake And Notification Prompts
 
-Wake prompts are operational. They should tell the parent what happened and
+Wake prompts are operational. They should tell the watcher what happened and
 which tool/handle to use next.
+
+There are two wake scopes, and they follow the same law. A LINK-scoped wake is
+armed on a `session_links` row, so it only ever wakes a parent about its own
+child. A SESSION-scoped wake is armed on a session pair
+(`session_wake_schedules`) and can be armed on any session in the runtime — by
+an agent (`schedule_agent_wake`, or `wakeOnReply` on `send_agent_message`) or by
+the human (`POST /v1/sessions/{id}/wakes/{target_id}`, which writes the same
+row). How the schedule was armed never changes what fires.
+
+Session-scoped agent wake prompt:
+
+```text
+Agent "Deploy Checker" (session ses_xyz) completed a turn. Outcome: completed.
+
+Use read_agent_transcript with sessionId "ses_xyz" for the result, or send_agent_message to follow up.
+```
 
 Subagent wake prompt:
 
@@ -188,7 +204,9 @@ Rules:
 - point to the next tool or transcript artifact
 - keep long results in transcript artifacts or explicit read tools
 - avoid raw session/link ids in normal prompts, except in a peer agent message's
-  envelope, where the sender's session id IS the reply handle
+  envelope, where the sender's session id IS the reply handle, and in a
+  session-scoped wake pointer, where the target's session id is what the
+  watcher must pass to `read_agent_transcript` / `send_agent_message`
 
 A wake is only ever a pointer: label, id, outcome, next tool. It never carries
 the target's turn output — output can be arbitrarily large, the read tools have
@@ -196,9 +214,25 @@ budgets for exactly that, and a wake must stay the same size no matter what the
 target did. Content reaches an agent only as an explicit message or an explicit
 read.
 
+A real reply is not a wake prompt — it is a message, and it carries the full
+content by itself. When an agent answers a peer that was waiting on it, the
+pending session-scoped schedule is consumed rather than fired: a pointer after a
+reply would only point at what the watcher already read. Only a schedule armed
+BY a `wakeOnReply` send is consumed this way. A standalone
+`schedule_agent_wake` is not waiting for that particular answer, so an
+incidental message from the target leaves it armed and it still fires at the
+target's turn end.
+
+A wake pointer is a prompt, so it obeys the prompt rules. A watcher whose
+execution a workflow controls is not sent one; its schedule stays armed until
+the run releases control. A closed watcher is never sent one at all.
+
 Wake copy has the same owner as message copy
 (`domains/sessions/prompt/envelope.rs`), for the same reason: text and the
-provenance the UI renders from are produced as one value and cannot drift.
+provenance the UI renders from are produced as one value and cannot drift. Each
+wake scope carries its own provenance — `subagent_wake` / `link_wake` name the
+link and completion row they came from, `agent_wake` names the target session,
+because a session-scoped schedule has neither.
 
 ### Transcript Artifacts
 

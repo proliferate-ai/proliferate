@@ -40,10 +40,10 @@ Subagents cannot create grandchildren. There are no top-level `modelId` or
 carried through `initialConfig`.
 
 `subagentId` is the handle for the subagent tool class only. The peer tools in
-the same MCP — `list_agents`, `send_agent_message`, `read_agent_transcript` —
-address any session in the runtime and take `sessionId`, because there is no
-link to derive a scoped handle from. A subagent addressed as a peer is
-addressed by its session id like any other agent.
+the same MCP — `list_agents`, `send_agent_message`, `read_agent_transcript`,
+`schedule_agent_wake` — address any session in the runtime and take `sessionId`,
+because there is no link to derive a scoped handle from. A subagent addressed as
+a peer is addressed by its session id like any other agent.
 
 "Any session in the runtime" means any session that is an *agent*. The
 peer-reachable set excludes dismissed sessions (deleted from the sidebar, and
@@ -62,6 +62,18 @@ Wake scheduling is explicit and not retroactive. `wakeOnCompletion` on
 should be tied to the prompt being sent, because it avoids the race where the
 child finishes before the parent schedules a separate wake via
 `schedule_subagent_wake`.
+
+The peer-scoped `schedule_agent_wake` closes the same race from the other side,
+and that is the reason it exists as a standalone tool as well as a
+`wakeOnReply` flag. Its schedule is consumed when the target's turn FINISHES,
+not recorded against a turn that has to start afterwards, so a wake armed on a
+session whose turn is already running still fires at the end of that turn.
+
+What it does not do is make an idle agent produce a turn. The contract is "the
+end of the target's NEXT FINISHED turn": if a turn is running, that turn; if the
+target is idle, nothing fires until someone prompts it. The tool result reports
+the target's status for exactly that decision — waiting on an idle agent means
+sending it a message, not scheduling a wake and hoping.
 
 ## Close Ordering
 

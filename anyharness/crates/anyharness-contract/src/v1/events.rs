@@ -227,6 +227,12 @@ pub enum PromptProvenance {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    AgentWake {
+        #[serde(rename = "targetSessionId")]
+        target_session_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
     SubagentWake {
         #[serde(rename = "sessionLinkId")]
         session_link_id: String,
