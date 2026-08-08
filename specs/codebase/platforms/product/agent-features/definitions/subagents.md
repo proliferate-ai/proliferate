@@ -76,6 +76,13 @@ An agent is in exactly one of three states, and the row says which:
 | Promoted | `relation = 'subagent'`, `promoted_at IS NOT NULL` | yes | no | no |
 | Owned peer | `relation = 'owned_agent'` | yes | no | no |
 
+Which row an agent gets is decided once, at spawn, by which tool created it.
+`spawn_subagent` writes `subagent`; `spawn_agent` writes `owned_agent`. Nothing
+ever converts one into the other — promotion stamps `promoted_at` and leaves the
+relation alone. So the two right-hand states are reached by different routes and
+stay distinguishable forever: `owned_agent` was born a peer, a stamped
+`subagent` became one. Their capabilities from that point are identical.
+
 `promote_subagent` moves a subagent to promoted. It is one write, idempotent,
 and one-way. The relation does not change, because the owner does not change:
 the parent still owns a promoted agent and may still close it deliberately. What
@@ -86,11 +93,22 @@ The spawn block is the visible consequence for the child. A spawned child is
 created with its session-level subagents policy OFF as well, which is the same
 subordination expressed on the session row; promotion lifts both, so a promoted
 agent can genuinely spawn rather than merely being offered the tools. An
-unpromoted subagent is offered no spawn-style tool at all — not `spawn_subagent`, not
-`get_subagent_launch_options`, not the `create_subagent` alias. That is stricter
-than the fanout cap, which merely refuses a spawn: a capped parent still sees
-its launch options, because the cap is a temporary condition of an agent that is
-allowed to think in terms of spawning. Subordination is not.
+unpromoted subagent is offered no spawn-style tool at all — not
+`spawn_subagent`, not `spawn_agent`, not `get_subagent_launch_options`, not the
+`create_subagent` alias. That is stricter than the fanout cap, which merely
+refuses a spawn: a capped parent still sees its launch options, because the cap
+is a temporary condition of an agent that is allowed to think in terms of
+spawning. Subordination is not.
+
+The cap is also narrower than it looks. It counts unpromoted subagents, which
+are the children that cascade and that a parent is responsible for; owned agents
+are peers from birth and are not capped. An owner holding eight subagents is
+refused `spawn_subagent` and still offered `spawn_agent`.
+
+`spawn_agent` creates a peer in the caller's own workspace and returns the new
+`sessionId` and an `agentId`. It reports no `subagentId`, because there is no
+subagent: the handle for a peer is its session id, the same one the peer tools
+take.
 
 Because tool lists are frozen at launch, the block is enforced at call time, on
 the wire name, against the caller's state at the moment it acts. `tools/list` is
@@ -142,6 +160,11 @@ should be tied to the prompt being sent, because it avoids the race where the
 child finishes before the parent schedules a separate wake via
 `schedule_subagent_wake`.
 
+`spawn_agent` takes the same `wakeOnCompletion` flag for the same reason, but
+arms a different mechanism. A subagent's wake hangs off the link completion row;
+a peer has no link completion to wait on, so its wake is session-scoped and
+fires at the end of the new agent's next finished turn.
+
 The peer-scoped `schedule_agent_wake` closes the same race from the other side,
 and that is the reason it exists as a standalone tool as well as a
 `wakeOnReply` flag. Its schedule is consumed when the target's turn FINISHES,
@@ -173,9 +196,10 @@ hooks, then marks the parent-child link closed. If closing the live session
 fails, the active link remains discoverable so a later close call can retry
 rather than orphaning hidden work.
 
-The cascade skips promoted children. Closing an owner takes down the subagents
-still subordinate to it and leaves the agents it promoted running; their
-ownership rows survive, so they can still be closed individually.
+The cascade skips promoted children and owned agents alike — it follows
+subordination, not ownership. Closing an owner takes down the subagents still
+subordinate to it and leaves the agents it promoted or spawned as peers running;
+their ownership rows survive, so they can still be closed individually.
 
 Closing an agent that is WORKING does not interrupt it. The call authorizes the
 close, records who closed it and why on the still-open ownership row, and

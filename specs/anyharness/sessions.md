@@ -128,6 +128,13 @@ read off one row:
 Promotion stamps `promoted_at`; it does not change the relation, because the
 parent stays the owner. It is one idempotent write, and it is one-way.
 
+The two ownership relations are written by different tools and never converge.
+`spawn_subagent` writes `subagent` and `spawn_agent` writes `owned_agent`; a
+promoted subagent keeps `subagent` forever. So `owned_agent` means "born a
+peer", `subagent` with `promoted_at` set means "became a peer", and the
+difference stays legible for the life of the row. A `Promoted` row and an
+`Owned peer` row confer the same capabilities from here on.
+
 `closed_by_session_id` and `close_reason` record which agent closed this one and
 why. Both stay `NULL` for a session a person closed through the UI or the HTTP
 close route — the columns record an *agent's* close, not every close.
@@ -215,11 +222,12 @@ The model is intentionally small:
 - PR2 does not cascade-delete child sessions when a parent is deleted; deleting
   either session removes only the link and attached completion/schedule rows
 - nested subagents are blocked; an UNPROMOTED subagent child receives no
-  spawn-style tools (`get_subagent_launch_options`, `spawn_subagent`, and the
-  deprecated `create_subagent` alias) and `validate_parent_can_spawn` refuses it
-  with a depth limit
+  spawn-style tools (`get_subagent_launch_options`, `spawn_subagent`, the
+  deprecated `create_subagent` alias, and `spawn_agent`) and
+  `validate_parent_can_spawn` refuses it with a depth limit
 - parents are limited to eight *unpromoted* subagents at a time; promoted
-  children no longer occupy a slot
+  children no longer occupy a slot. The cap counts subagents only: an owner
+  sitting at the cap may still spawn owned agents, which are uncapped
 - `subagents_enabled` is a durable create-time session policy. Missing legacy
   rows default enabled in the session store/read model. Resume reads the stored
   policy and does not silently re-enable disabled sessions. `spawn_subagent`
@@ -265,6 +273,7 @@ Current tools:
 
 - `get_subagent_launch_options`
 - `spawn_subagent` (deprecated alias: `create_subagent`)
+- `spawn_agent`
 - `list_subagents`
 - `send_subagent_message`
 - `get_subagent_status`
@@ -279,6 +288,25 @@ one launched before its promotion holds a list that did. The spawn gate
 therefore runs again at dispatch in `agent_ops/calls.rs`, against the caller's
 state at the moment it acts, and matches the wire name so the deprecated
 `create_subagent` spelling cannot walk around it.
+
+`spawn_subagent` and `spawn_agent` are two modes of one routine,
+`create_agent_session` in `agent_ops/spawn_ops.rs`. Both create a durable
+session in the caller's workspace, inheriting the caller's agent kind, model and
+mode unless overridden, write the ownership link, arm the optional wake, start
+the runtime, and send the first prompt — unwinding the session, link and wake if
+any step fails. They differ in three places, all keyed off the ownership mode:
+
+- the link relation, `subagent` or `owned_agent`
+- the wake: a subagent's is link-scoped, hung off the completion row, while a
+  peer has no link completion to wait on and so takes a session-scoped wake
+- the first prompt: a subagent's carries parent-to-child provenance with the
+  `session_link_id`, a peer's is an envelope-wrapped peer message with none
+
+A peer is created with the full tool surface, including the spawn tools, so it
+is never in the "unpromoted" state and needs no promotion. It also does not
+cascade: closing the owner does not close it. `spawn_agent` creates in the
+caller's own workspace, so it takes the route's workspace write lease and no
+target permit — there is no target yet.
 
 `promote_subagent` promotes one of the caller's subagents to a peer. The agent
 keeps its transcript, its label and its owner, and gains the full tool surface
