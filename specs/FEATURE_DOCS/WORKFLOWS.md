@@ -432,7 +432,7 @@ This contract covers manual/test transfer. It does not own automated delivery,
 background work, target custody, workspace creation/materialization,
 cancellation, takeover, UI, Desktop, goals, multiple steps/stages, grants, MCP,
 subagents, schedules, retry, recovery, a generalized compiler/resolver, a new
-actor/manager/scheduler, or a Cowork refactor.
+actor/manager/scheduler.
 
 ## Cloud API
 
@@ -632,7 +632,7 @@ For a new v2 run before acceptance:
 
 Workflow owns the decision to require an unattended mode. The active agent
 catalog owns which opaque mode value is vetted for the selected target; do not
-reintroduce family-specific mappings in Workflow. Do not import/edit Cowork.
+reintroduce family-specific mappings in Workflow.
 One narrow generic session/catalog read seam may expose `liveConfigId`; do not
 move Workflow execution policy into sessions/agents or broaden raw launch
 options.

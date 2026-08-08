@@ -1,9 +1,8 @@
 # Product MCP Servers
 
 Product MCP servers are AnyHarness-owned tools exposed to agents through MCP.
-They let an agent call Proliferate product capabilities such as subagents,
-reviews, cowork artifacts, computer use, browser use, or
-artifacts.
+They let an agent call Proliferate product capabilities such as agent ops,
+computer use, browser use, or artifacts.
 
 This document does not cover arbitrary external/user-supplied MCP servers
 except where those servers are merged into a session launch.
@@ -45,8 +44,6 @@ Current internal product MCPs:
 
 ```text
 domains/sessions/agent_ops
-domains/reviews/mcp
-domains/cowork/mcp
 ```
 
 Likely future user-selectable product MCPs:
@@ -111,7 +108,6 @@ anyharness-lib/src/domains/<domain>/mcp/
 Examples:
 
 ```text
-domains/reviews/mcp/
 domains/sessions/agent_ops/
 domains/artifacts/mcp/
 domains/computer_use/mcp/
@@ -143,7 +139,7 @@ Allowed:
 
 Banned:
 
-- product MCP IDs such as `reviews`, `subagents`, or `computer_use`
+- product MCP IDs such as `subagents` or `computer_use`
 - product authorization rules
 - session selection policy
 - domain service calls
@@ -162,7 +158,7 @@ Required fields:
 
 ```text
 id
-  stable product MCP id, such as "reviews" or "computer_use"
+  stable product MCP id, such as "subagents" or "computer_use"
 
 display_name
   user-facing name for summaries/catalogs
@@ -215,7 +211,7 @@ never
   only attach when explicitly selected by policy
 
 when_session_role_matches
-  attach for a specific product session role, such as reviewer or subagent
+  attach for a specific product session role, such as subagent
 
 when_product_feature_created_session
   attach for sessions created by a product workflow
@@ -269,7 +265,6 @@ Add fields when the product needs them:
 ```text
 role
 parent_session_id
-review_run_id
 subagent_id
 computer_use_allowed
 browser_use_allowed
@@ -301,14 +296,8 @@ typed context for tools/list and tools/call
 Examples:
 
 ```text
-reviews
-  parent session, reviewer session, review run role
-
 subagents
   parent session allowed to manage child sessions
-
-cowork
-  cowork thread/session/artifact context
 
 artifacts
   artifact namespace, read/write permissions, target capability availability
@@ -325,8 +314,8 @@ state.
 
 Expected but currently unavailable product state should normally resolve to a
 typed context that advertises fewer tools rather than failing protocol setup.
-Examples: a reviews MCP attached to a session with no current review role, or a
-subagents MCP attached to a parent that is now depth/fanout/config blocked.
+Example: a subagents MCP attached to a parent that is now depth/fanout/config
+blocked.
 Use a hard context error for missing rows, cross-workspace tokens, corrupt
 state, or a product MCP attached to a fundamentally unsupported surface.
 
@@ -346,7 +335,7 @@ availability by context/role
 Tool definitions should be easy to unit test. Do not hide business logic in
 tool-list construction.
 
-Tool names stay generic (`create_artifact`, not `create_cowork_artifact`)
+Tool names stay generic (`create_artifact`, not `create_workspace_artifact`)
 because the product MCP id namespaces them at the agent surface
 (`mcp__artifacts__create_artifact`).
 
@@ -512,17 +501,11 @@ final SessionMcpServer list
 Internal examples:
 
 ```text
-review session
-  receives reviews MCP with reviewer/parent scope
-
 every session
   receives the agent ops MCP unconditionally at launch; the write-side tools
   it advertises and the targets it can reach are computed per call from
   subagent policy (enabled, depth, fanout, workspace surface) and
   link-scoped target resolution, not from launch-time selection
-
-cowork session
-  receives artifacts MCP with cowork thread/artifact scope
 ```
 
 User-selectable examples:
@@ -575,7 +558,6 @@ Preferred generic endpoint:
 Compatibility aliases:
 
 ```text
-/v1/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp
 /v1/workspaces/{workspace_id}/sessions/{session_id}/subagents/mcp
 ```
 
@@ -623,7 +605,6 @@ Internal product MCPs:
 
 ```text
 subagents
-reviews
 ```
 
 Properties:
@@ -799,7 +780,6 @@ actor receives final concrete MCP config only
 Do not add:
 
 ```text
-integrations/mcp/reviews.rs
 integrations/mcp/computer_use.rs
 integrations/mcp/product_logic.rs
 domains/<domain>/mcp/utils.rs

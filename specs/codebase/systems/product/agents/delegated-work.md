@@ -1,23 +1,19 @@
 # Delegated Work UX
 
-Status: authoritative target UX spec for subagents, cowork agents, plan review
-agents, and code review agents in the desktop app.
+Status: authoritative target UX spec for delegated agents (subagents and
+peer-spawned agents) in the desktop app.
 
 Scope:
 
 - `apps/desktop/src/components/workspace/chat/input/delegated-work/**`
 - `apps/desktop/src/components/workspace/shell/tabs/**`
-- `apps/desktop/src/components/workspace/reviews/**`
 - `apps/desktop/src/components/workspace/chat/plans/**`
 - `apps/desktop/src/hooks/chat/facade/use-delegated-work-composer.ts`
 - `apps/desktop/src/hooks/chat/facade/subagents/**`
 - `apps/desktop/src/hooks/chat/workflows/subagents/**`
-- `apps/desktop/src/hooks/cowork/**`
-- `apps/desktop/src/hooks/reviews/**`
 - `apps/desktop/src/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy.ts`
 - `apps/desktop/src/lib/domain/delegated-work/**`
 - `apps/desktop/src/lib/domain/chat/subagents/**`
-- `apps/desktop/src/lib/domain/reviews/**`
 - `apps/desktop/src/lib/domain/plans/**`
 
 ## Product Model
@@ -27,7 +23,7 @@ The UI primitive is delegated work, not subagents.
 ```text
 DelegatedWorkItem
   id
-  kind: subagent | cowork | plan_review | code_review
+  kind: subagent
   title
   generatedName
   shortId
@@ -45,16 +41,12 @@ Kinds:
 ```text
 subagent
   same-workspace child session
-
-cowork
-  child session in a managed workspace
-
-plan_review
-  structured review run targeting a proposed/stored plan
-
-code_review
-  structured review run targeting code changes
 ```
+
+Cowork threads and structured review runs were also delegated-work kinds. Both
+features are deleted (ADR §6 step 8), so `subagent` is the only kind. The model
+keeps the `kind` field because the surfaces below are written against the
+primitive, not against one feature.
 
 Names:
 
@@ -65,7 +57,7 @@ Names:
 | `shortId` | `abc123` | compact stable disambiguator |
 | `displayName` | `Mary (API Surface Check abc123)` | composer, transcript receipts, tool-call rows, hover/details |
 | `colorToken` | `delegated-agent-3` | deterministic semantic identity color |
-| product handle | `subagent_abc123`, `review_abc123` | action routing, debug/details |
+| product handle | `subagent_abc123` | action routing, debug/details |
 
 Delegated-agent identity is generated and stable for a delegated-work id. Normal
 UI should use the canonical display handle when the surface represents the agent
@@ -153,7 +145,7 @@ Sidebar/session hierarchy
   durable relationship map and navigation
 
 Transcript
-  durable receipts, plans, and review feedback artifacts
+  durable receipts and plan artifacts
 
 Details surface
   focused inspect/manage view for one item
@@ -275,10 +267,6 @@ API Surface Check agent created
 Running - Claude - Wake scheduled
 Open agent session
 
-Security Review agent created
-Reviewing - Claude
-Open reviewer session
-
 Message sent to API Surface Check
 Queued while the agent is running
 Open agent session
@@ -287,7 +275,7 @@ Open agent session
 Rules:
 
 - Always show the delegated agent title.
-- Link to the child/reviewer session when one exists.
+- Link to the child session when one exists.
 - Keep raw JSON available only through an explicit details/debug affordance.
 - The rendered title should match the `label`/title that the parent agent sees
   in MCP results.
@@ -345,10 +333,6 @@ Parent: Main session
 Running
 ```
 
-Review runs are logical delegated-work items. Reviewer sessions remain real
-chat tabs, and each reviewer tab uses its own generated identity. Review
-`kind: code` maps to `code_review`; review `kind: plan` maps to `plan_review`.
-
 ### Attached Agent Tabs
 
 When the user opens a delegated agent, its chat tab appears immediately to the
@@ -366,10 +350,9 @@ Rules:
 - All open delegated-agent tabs for the same parent remain contiguous.
 - The parent remains the left anchor and is not visually grouped inside the
   delegated-agent run.
-- Cowork child tabs must carry their managed `workspaceId`, relationship
-  source, and link handle through the tab view model. Selecting a cowork child
-  tab opens that session in the managed cowork workspace, not in the parent's
-  current workspace.
+- A cross-workspace child tab must carry its `workspaceId`, relationship
+  source, and link handle through the tab view model. Selecting it opens that
+  session in ITS workspace, not in the parent's current workspace.
 - Existing tab grouping stays supported, but the child-agent group is a sibling
   attached to the parent, not a group that contains the parent.
 - Reordering normal tabs must not separate open delegated-agent tabs from their
@@ -396,18 +379,13 @@ Kinds may be grouped inside sections when needed:
 Agents
 
 Needs attention
-  Plan Review                    Feedback ready      View feedback
-    Architecture Review          Approved            Open
-    Security Review              Changes requested   View critique
+  Docs Pass                      Failed              Open
 
 Running
   API Surface Check              Running             Open
 ```
 
-The composer Agents popover surfaces review and same-workspace subagent work
-only. Cowork managed workspaces and their coding sessions live in the cowork
-sidebar (`CoworkThreadsSection` → `CoworkManagedWorkspaceList`) and are not
-duplicated above the composer.
+The composer Agents popover surfaces this session's own delegated work only.
 
 Row rules:
 
@@ -430,23 +408,6 @@ subagent
   Open
   Notify me
   Delete
-
-cowork
-  Open workspace
-  Open session
-  Delete
-
-plan_review | code_review
-  View feedback
-  Send feedback
-  Review revision
-  Finish review
-  Delete review
-
-reviewer row
-  Open reviewer
-  View critique
-  Retry reviewer
 ```
 
 The tab-cluster popover and composer Agents popover should use the same
@@ -463,25 +424,14 @@ Main session
   Subagents
     API Surface Check
     Docs Pass
-
-  Reviews
-    Plan Review round 1
-      Architecture Review
-      Security Review
-
-  Cowork workspaces
-    auth-workspace
-      Implementation Agent
-      Test Agent
 ```
 
 Rules:
 
 - Parent-child relationships should be stable even when a child tab is closed.
 - Opening a child should preserve a parent breadcrumb or parent entry.
-- Reviewers appear under their review run, not as unrelated child sessions.
-- Cowork sessions appear under the managed workspace first, then under the
-  parent relationship when space allows.
+- A child in another workspace appears under that workspace first, then under
+  the parent relationship when space allows.
 - Closed/deleted delegated work is hidden from the default tree unless the user
   opens history/debug.
 - An agent spawned as a PEER, and a workspace spawned by an agent, appear
@@ -501,16 +451,11 @@ Examples:
 Created subagent Mary (API Surface Check abc123) with prompt "Check SDK usage."
 
 Mary (API Surface Check abc123) finished a turn · Open
-
-Plan Review completed round 1.
-2 reviewers approved. 1 reviewer requested changes.
 ```
 
 Rules:
 
 - Plans render as plan artifacts/cards.
-- Review feedback renders as a first-class artifact, with reviewer details one
-  click away.
 - Subagent creation/completion receipts should be concise.
 - Adjacent subagent creation receipts from the same assistant/tool-call cluster
   group together. Creation receipts do not group with send, wake, status, read,
@@ -540,35 +485,6 @@ Actions:
   Delete
 ```
 
-Review details:
-
-```text
-Plan Review round 1
-Result: Changes requested
-
-Architecture Review: Approved
-Security Review: Changes requested
-
-Actions:
-  View critiques
-  Send feedback
-  Review revision
-  Delete review
-```
-
-Cowork details:
-
-```text
-auth-workspace
-Status: Running
-Sessions: 2
-
-Actions:
-  Open workspace
-  Open session
-  Delete
-```
-
 Use a popover for quick entry and a dialog/drawer for richer inspection. Do not
 put a large details browser directly in the composer dock.
 
@@ -587,7 +503,7 @@ Rules:
 - Closing a child tab does not delete the parent session.
 - Closing a parent tab that would close/delete the parent session must confirm
   if active delegated work exists.
-- Deleting from the Agents popover or subagent/review popover means deleting
+- Deleting from the Agents popover or a subagent popover means deleting
   that delegated item, not merely hiding the row.
 - If deletion affects running/queued work, the confirmation says active work
   will end.
@@ -635,8 +551,6 @@ apps/desktop/src/components/workspace/shell/topbar/
 apps/packages/product-client/src/components/workspace/chat/input/delegated-work/
   DelegatedWorkComposerControl.tsx
   AgentsPopoverSubagentSection.tsx
-  AgentsPopoverCoworkSection.tsx
-  AgentsPopoverReviewSection.tsx
   PopoverSection.tsx
 
 apps/packages/product-client/src/components/workspace/delegated-work/
@@ -652,7 +566,6 @@ apps/packages/product-client/src/components/workspace/agents-pane/
   AgentsPaneConfirm.tsx
   ConnectedAgentsPane.tsx
 
-apps/desktop/src/components/workspace/reviews/**
 apps/desktop/src/components/workspace/chat/plans/**
 apps/desktop/src/components/workspace/chat/transcript/**
 ```
@@ -663,8 +576,6 @@ Hooks:
 apps/desktop/src/hooks/chat/facade/use-delegated-work-composer.ts
 apps/desktop/src/hooks/chat/facade/subagents/**
 apps/desktop/src/hooks/chat/workflows/subagents/**
-apps/desktop/src/hooks/cowork/**
-apps/desktop/src/hooks/reviews/**
 apps/desktop/src/hooks/plans/**
 apps/desktop/src/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy.ts
 apps/desktop/src/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model.ts
@@ -683,7 +594,6 @@ apps/packages/product-client/src/lib/domain/delegated-work/
 
 apps/desktop/src/lib/domain/chat/subagents/**
 apps/desktop/src/lib/domain/chat/tools/**
-apps/desktop/src/lib/domain/reviews/**
 apps/desktop/src/lib/domain/plans/**
 apps/desktop/src/lib/domain/workspaces/tabs/**
 ```
@@ -692,15 +602,12 @@ Access:
 
 ```text
 apps/desktop/src/lib/access/anyharness/sessions.ts
-apps/desktop/src/lib/access/anyharness/cowork.ts
-apps/desktop/src/lib/access/anyharness/reviews.ts
 apps/desktop/src/lib/access/anyharness/plans.ts
 ```
 
 State:
 
 ```text
-apps/packages/product-client/src/stores/reviews/**
 apps/packages/product-client/src/stores/sessions/session-directory-store.ts
 apps/packages/product-client/src/stores/agents/agents-pane-store.ts
 ```
@@ -714,8 +621,7 @@ Done when:
 - bubble hover shows friendly name, title, and status
 - title/label remains the serious name everywhere else
 - composer and tab popovers share one delegated-work model
-- subagents, cowork, and reviews use the same status ordering language
-- review runs are the primary review UI object
+- every delegated-work kind uses the same status ordering language
 - delete semantics are consistent and confirmed when active work will end
 - sidebar hierarchy is navigation, not the active-work inbox
 - transcript artifacts carry durable workflow results

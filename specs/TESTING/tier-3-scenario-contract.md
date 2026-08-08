@@ -564,8 +564,7 @@ belongs to `LOCAL-7`.
 
 #### `CLOUD-PRODUCT-MCP-1` — built-in Product MCP smoke
 
-Where the candidate claims built-in Product MCP features such as reviews or
-subagents, complete one representative real read and permitted mutation using
+Where the candidate claims built-in Product MCP features such as agent ops, complete one representative real read and permitted mutation using
 the candidate runtime. This is separate from third-party integration proof.
 
 #### `CLOUD-COMPUTE-METER-1` — real E2B usage accounting

@@ -103,9 +103,8 @@ It stores an advisory relationship between two existing sessions:
 - child session id
 - workspace relation: `same_workspace`, `cross_workspace`, or
   `cowork_managed_workspace` (the last retired with cowork, parsed but never
-  written). It is decided when the link is written, by
-  comparing the two sessions' workspace ids, and is a durable fact rather than a
-  derived one — both sessions' workspaces can later move or be retired, so the
+  written). It is decided when the link is written, by comparing the two
+  sessions' workspace ids, and is a durable fact rather than a derived one — both sessions' workspaces can later move or be retired, so the
   row records where the child actually landed at creation. `spawn_agent` writes
   `cross_workspace` whenever its `workspaceId` is not the caller's own.
 - optional label for display and wake copy
@@ -546,9 +545,9 @@ Extensions may:
 - receive `on_turn_finished` notifications with session id, workspace, turn id,
   outcome, stop reason, and last event seq
 
-Subagent support and session-scoped wakes both use this
-extension surface — the wake extension runs for every finished turn, because any
-session can be the target of a wake.
+Subagent support and session-scoped wakes both use this extension surface — the
+wake extension runs for every finished turn, because any session can be the
+target of a wake.
 Extension failures are isolated from the actor path: they are logged and do not
 make the completed turn fail.
 

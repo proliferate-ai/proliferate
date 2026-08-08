@@ -74,9 +74,8 @@ session replay, and telemetry-related provider and hook ownership.
   `meta.telemetryHandled = true` so the global React Query handlers do not
   report it again.
 - The global query handler leaves cancellation, unambiguous auth/permission
-  gates, explicitly coded GitHub App or AnyHarness hosting-availability states,
-  and the Cowork `COWORK_THREAD_NOT_FOUND` lifecycle state in React Query
-  without sending them as exceptions. Generic 4xx responses remain reportable,
+  gates, and explicitly coded GitHub App or AnyHarness hosting-availability
+  states in React Query without sending them as exceptions. Generic 4xx responses remain reportable,
   as do request, network, and unknown failures. The global mutation handler does
   not apply this query disposition rule; it separately leaves only explicitly
   coded repository-selection validation states to their owning mutation

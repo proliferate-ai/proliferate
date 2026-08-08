@@ -20,7 +20,7 @@ restating folder rules or low-level reusable contracts.
 | Workflows | User-owned workflow definitions, ordered stages and prompt steps, catalog-backed harness validation, revisioning, optional default repository configuration, and definition-authoring UX. | [specs/FEATURE_DOCS/WORKFLOWS.md](../../../FEATURE_DOCS/WORKFLOWS.md) |
 | Automations | Automation authoring, scheduling UI, and the automation/automation_run data it writes. | No current system spec. Automation editor/scheduling UI ships in `apps/packages/product-client/src/lib/domain/automations/**`; server keeps only the `automation`/`automation_run` tables (no mounted router — pinned by `server/tests/unit/test_api_path_prefix.py`). Create a spec before reviving execution. |
 | Engagement | Customer.io transport, code-owned profile attributes and lifecycle events, and current enable/no-op gates. | [engagement/README.md](engagement/README.md) |
-| Agents | The agent-systems overview map (distribution, auth, gateway, model catalog), plus delegated-work UX and cowork artifact lifecycle. | [agents/README.md](agents/README.md) |
+| Agents | The agent-systems overview map (distribution, auth, gateway, model catalog), plus delegated-work UX. | [agents/README.md](agents/README.md) |
 | Settings and appearance | Settings/admin information architecture, Appearance scaling, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings/README.md](settings/README.md) |
 | Support reporting | Currently shipped private support capture. | [support/README.md](support/README.md) |
 | Web/Desktop client unification | Shared client ownership, thin Desktop/Web hosts, capability policy, and migration governance. | [clients/web-desktop-unification/README.md](clients/web-desktop-unification/README.md) |
@@ -47,7 +47,7 @@ new system spec or Product MCP definition:
 | Agent feature | Current owner |
 | --- | --- |
 | Browser | No concrete system spec or Product MCP definition yet; create one before user-visible browser workflow or permission changes. |
-| Artifacts | [agents/cowork-artifacts.md](agents/cowork-artifacts.md). |
+| Artifacts | No concrete system spec or Product MCP definition yet; the cowork artifact surface that used to own this was deleted. |
 | Sub Agents | [agents/delegated-work.md](agents/delegated-work.md) and [Subagents MCP](../../platforms/product/agent-features/definitions/subagents.md). |
 | Computer Use | No concrete system spec or Product MCP definition yet; create one before user-visible Computer Use workflow, permission, or QA changes. |
 | Plugins | No current platform document owns runtime/config expansion; create a system spec only for catalog/install/manage UX. |

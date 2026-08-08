@@ -49,7 +49,7 @@ session id like any other agent.
 "Any session in the runtime" means any session that is an *agent*. The
 peer-reachable set excludes dismissed sessions (deleted from the sidebar, and
 refused by the boot path), closed sessions unless explicitly asked for, the
-caller itself, and `internal_only` sessions — workflow and review plumbing the
+caller itself, and `internal_only` sessions — workflow plumbing the
 runtime drives, which are not agents the human is running. That is a discovery
 rule: `list_agents` hides them. What REFUSES them depends on the intent
 (`domains/sessions/authorize.rs`): `internal_only` is refused for both reads and
@@ -389,6 +389,3 @@ the reason when one was given, and that reading outranks the row's own session
 status because "still working" is true but no longer the point. Once the close
 lands the row leaves the read model entirely, so attribution after the fact is
 the `close_agent` receipt's job in the transcript, not the pane's.
-
-Cowork reuses this same close-ordering law for `close_cowork_agent`; see
-[cowork.md](cowork.md).

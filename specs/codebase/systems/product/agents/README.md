@@ -62,10 +62,7 @@ The fences that keep one fact in one document:
 
 ## Agent-experience systems in this folder
 
-- [Cowork Artifacts](cowork-artifacts.md) — current artifact lifecycle and
-  product behavior.
-- [Delegated Work](delegated-work.md) — target UX for delegated work and
-  review agents.
+- [Delegated Work](delegated-work.md) — target UX for delegated work.
 
 Reusable Product MCP contracts live under
 [Product Agent Features](../../../platforms/product/agent-features/README.md).

@@ -79,7 +79,7 @@ The normal onboarding path is:
    agent auth readiness.
 6. Managed-credit or BYOK setup establishes cloud run readiness.
 7. User starts first work through New Chat, Continue remotely, claim, Slack,
-   automation, cowork, or API entrypoint.
+   automation, or API entrypoint.
 8. Workspace creation uses the managed workspace provisioning path.
 9. Pending shell remaps to durable workspace/session ids after creation.
 10. First command or prompt proves onboarding by producing commandable work.

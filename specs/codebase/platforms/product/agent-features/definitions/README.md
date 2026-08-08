@@ -25,5 +25,3 @@ Cross-cutting standards:
 Current definitions:
 
 - [subagents.md](subagents.md)
-- [cowork.md](cowork.md)
-- [reviews.md](reviews.md)

@@ -275,10 +275,8 @@ config file and nothing else.
 Commit signing is deliberately not configured: sandbox commits are
 attributed, not attested; the push authority chain
 ([github-auth.md](github-auth.md)) is the integrity
-boundary. Two bot identities stay repo-local by design and cannot leak onto
-user commits: the cowork root repo (`AnyHarness <anyharness@local.invalid>`,
-[cowork/runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs))
-and workflow scratch repos (`AnyHarness Workflow
+boundary. The one bot identity that stays repo-local by design and cannot leak
+onto user commits is the workflow scratch repo (`AnyHarness Workflow
 <workflow@anyharness.local>`, signing disabled,
 [operations/scratch.rs](../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/scratch.rs)).
 

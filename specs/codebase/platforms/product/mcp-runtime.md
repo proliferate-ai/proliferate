@@ -34,8 +34,6 @@ Current trait: `domains/sessions/extensions.rs::SessionExtension`.
 Current implementations:
 
 ```text
-domains/cowork/runtime.rs
-domains/reviews/hooks.rs
 domains/sessions/subagents/hooks.rs
 ```
 
@@ -52,15 +50,11 @@ Internal Proliferate tool surfaces exposed to agents through HTTP MCP servers.
 
 Examples:
 
-- cowork artifact/delegation tools
-- subagent tools
-- review tools
+- agent-ops tools (subagents, owned agents, workspaces, wakes)
 
 Current implementation shape:
 
 ```text
-domains/cowork/mcp/
-domains/reviews/mcp/
 domains/sessions/agent_ops/
 ```
 
@@ -142,8 +136,7 @@ It does not own:
 
 - JSON-RPC parsing or response formatting
 - capability-token signing
-- product tool behavior such as `create_subagent`, `submit_review_result`, or
-  `create_artifact`
+- product tool behavior such as `create_subagent` or `create_artifact`
 - live MCP elicitation resolution
 
 The caller should read like:
@@ -243,9 +236,7 @@ Move common scaffolding:
 Do not move product behavior:
 
 - `create_subagent`
-- `submit_review_result`
 - `create_artifact`
-- cowork delegation/coding tools
 
 Those stay in the owning domain.
 

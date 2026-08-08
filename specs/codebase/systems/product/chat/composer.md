@@ -16,15 +16,11 @@ Scope:
 - `apps/packages/product-client/src/hooks/chat/derived/use-active-todo-tracker.ts`
 - `apps/packages/product-client/src/domain/chats/tools/active-todo-tracker.ts`
 - `apps/packages/product-client/src/domain/chats/tools/claude-plan-tool-call.ts`
-- `apps/packages/product-client/src/lib/access/anyharness/reviews.ts`
-- `apps/packages/product-client/src/lib/domain/reviews/**`
-- `apps/packages/product-client/src/lib/workflows/reviews/**`
 
 Read this doc before changing the composer, the panels that sit above it (todo tracker, approval card, workspace status, cloud runtime), or where the Claude plan body renders. The structure below is load-bearing for several visual decisions that are not obvious from the code alone.
 
-For delegated work semantics across subagents, cowork sessions, plan review
-agents, code review agents, tab indicators, and delegated-work delete behavior,
-also read [delegated-work.md](../agents/delegated-work.md).
+For delegated work semantics across subagents, tab indicators, and
+delegated-work delete behavior, also read [delegated-work.md](../agents/delegated-work.md).
 
 ## 1. Layout
 
@@ -43,7 +39,7 @@ ChatView
     ├── attachedSlot
     │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
     │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
-    │     ├── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
+    │     ├── DelegatedWorkComposerControl  (one Agents trigger + popover for subagents)
     │     └── WorkspaceActivityComposerCard (Git/PR summary and source-control actions)
     ├── ChatInput
     │   └── ChatComposerSurface
@@ -184,8 +180,7 @@ Rules:
   effort, or speed value in a standard workspace, ProductClient persists that
   value as the per-agent launch default. New chats in the current workspace and
   newly created workspaces use those persisted controls; catalog defaults
-  remain the fallback until the user selects a value. Cowork working-mode and
-  tuning changes do not update standard-workspace launch defaults.
+  remain the fallback until the user selects a value.
 - [Model Catalog](../../../../FEATURE_DOCS/MODELS.md) owns whether a
   selection is current, `update_current_chat`, or `open_new_chat`; Composer
   presents that action and does not derive it from live setter availability.
@@ -223,10 +218,6 @@ Permission/access mode and every other unclaimed configuration control render
 only under the rightmost three-dot configuration menu. A reasoning-level
 control with two or more ordered values remains visible in the combined picker
 when the runtime reports it as non-settable, but its choices are disabled.
-Cowork hides the permission/access `mode` because its access policy is
-product-defined, but retains independent working-mode controls such as
-`collaboration_mode` together with model tuning in the combined picker.
-
 ## 2. Dock Regions
 
 `resolveComposerDockSlots`
@@ -238,8 +229,8 @@ adapts that data resolution to the shared Desktop/Web React nodes. Classify each
 inhabitant by state role first, not by component family. They always render in
 this order:
 
-1. **`outboundSlot`** — queued outbound work: user prompts, queued wake prompts,
-   review feedback prompts, and review-complete prompts.
+1. **`outboundSlot`** — queued outbound work: user prompts and queued wake
+   prompts.
    The human's own queued prompts keep their full row with edit/delete/reorder.
    Queued AGENT updates do not: they collapse into one quiet row
    (`PendingAgentUpdatesRow`) carrying overlapping identity glyphs, a count and
@@ -255,12 +246,11 @@ this order:
    questions, and MCP elicitation forms take precedence. If there is no blocking
    request, this slot may show `TodoTrackerPanel`.
 3. **`attachedSlot`** — ambient attached context and parallel work:
-   workspace/worktree/runtime panels plus review agents and linked
-   same-workspace subagents.
+   workspace/worktree/runtime panels plus linked same-workspace subagents.
 
-Review status lives in `attachedSlot`, not in active state. The shared
+Delegated-work status lives in `attachedSlot`, not in active state. The shared
 `DelegatedWorkComposerControl` owns the compact `Agents` summary-control +
-popover pattern for reviews and subagents. That control is this session's
+popover pattern. That control is this session's
 "N working" cap, and it is one of the two entry points into the agents pane:
 `Open agents pane` in its popover opens THIS session's cluster in the right
 panel. The other entry point is the panel's own `Agents` tab, which opens the
@@ -270,24 +260,10 @@ never auto-follows tab focus.
 
 The cap itself is the popover's trigger button, so today the popover's
 `Open agents pane` action is the only cap surface that navigates; there is no
-separate goal-bar or status-cap component wired to open a cluster. The review
-section owns reviewer
-rows, critique links, stop, send-feedback, and review-revision actions. Review
-automation and linked subagents are parallel delegated work and must not make
-normal parent chat input unavailable by themselves. They should not displace
-blocking requests or todo state with a full card. Cowork managed workspaces
-are surfaced exclusively in the cowork sidebar — they are not duplicated in
-the composer Agents popover.
-
-Review runs have two composer-facing classes: blocking workflow runs
-(`reviewing`, `feedback_ready`, `parent_revising`, `waiting_for_revision`) and
-terminal result notices (`passed`, `stopped`, `system_failed`). The composer may
-show one blocking workflow or the latest terminal notice, but dismissing a
-terminal notice must not reveal older terminal runs underneath it. Starting a
-new review is blocked by workflow runs and optimistic starting state, not by a
-finished result notice. This review-start gate is separate from chat input
-availability; `parent_revising` keeps review controls visible but leaves parent
-chat input enabled.
+separate goal-bar or status-cap component wired to open a cluster. Linked
+subagents are parallel delegated work and must not make normal parent chat
+input unavailable by themselves. They should not displace blocking requests or
+todo state with a full card.
 
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: outbound work, active agent state, or attached context/parallel
@@ -296,8 +272,7 @@ adapter to `use-composer-dock-slots.tsx` — do not compute it inline in `ChatVi
 and do not introduce a parallel arbiter elsewhere.
 
 `attachedSlot` preserves the shared `DelegatedWorkComposerPanel` containing one
-compact `Agents` control for review agents and linked same-workspace child
-sessions. The control opens a popover with sections in review, subagent order.
+compact `Agents` control for linked same-workspace child sessions.
 Individual child chips should not be rendered directly above the composer.
 Attached delegated work is an indicator layer for adjacent work, not a blocking
 prompt panel. `outboundSlot` must render before `activeSlot`; both stack above
@@ -448,10 +423,9 @@ echoes it back as a `plan_reference` content part.
 
 - The composer plan picker uses `PopoverButton` + `ComposerPopoverSurface`, the
   same popover primitives as the workspace location control.
-- When the add popover launches review-agent configuration from the settings
-  icon, keep the add popover visible. The review setup panel is a continuation
-  of the add-action path, not a replacement for the `Add file` / `Add plan` /
-  review-agent menu.
+- When the add popover launches a configuration panel from the settings icon,
+  keep the add popover visible. That panel is a continuation of the add-action
+  path, not a replacement for the `Add file` / `Add plan` menu.
 - The picker list is summary-backed, so its search filters title, agent, source
   kind, and decision status. It does not claim body search unless the runtime
   exposes body snippets or a dedicated search endpoint.
@@ -630,14 +604,12 @@ Scenarios (selectable via `?s=<key>`):
 - `workspace-arrival-created` — WorkspaceArrivalAttachedPanel above the composer
 - `cloud-first-runtime`, `cloud-provisioning`, `cloud-applying-files`, `cloud-blocked`, `cloud-error`, `cloud-reconnecting`, `cloud-reconnect-error` — cloud workspace/runtime composer states
 - `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
-- `review-feedback-message`, `review-complete-message` — collapsed transcript receipts for review feedback and completed reviews
 - `tool-subagent-creation-single`, `tool-subagent-creations`, `subagent-parent-send-card`, `subagent-wake-card` — delegated-work transcript receipt coverage for single creation, grouped creation, parent-send provenance, and wake/completion receipts
-- `subagents-composer-few`, `subagents-composer-many`, `subagents-queued-wake`, `subagents-queued-wake-with-approval`, `subagents-coding-review-with-approval` — delegated-work strip, queued wake prompt, coding/review agent, and approval stack coverage
-- `subagents-review-starting-plan`, `subagents-review-starting-code`, `subagents-reviewing-plan`, `subagents-reviewing-code`, `subagents-review-feedback-ready`, `subagents-review-complete` — review-agent composer lifecycle coverage
+- `subagents-composer-few`, `subagents-composer-many`, `subagents-queued-wake`, `subagents-queued-wake-with-approval` — delegated-work strip, queued wake prompt, and approval stack coverage
 - delegated-work identity coverage must include: single active subagent trigger,
   multiple-agent generic trigger, failed/attention agent visible in the popover,
   completed-success agent hidden by default, and parent composer enabled while
-  review/subagent background work is running.
+  subagent background work is running.
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
 
 `/playground/subagents` is a separate fixture-only UX lab for Subagents receipts,

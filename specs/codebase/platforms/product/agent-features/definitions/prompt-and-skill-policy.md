@@ -51,7 +51,6 @@ Use for:
 Do not use for:
 
 - subagent workflow tutorials
-- review workflow tutorials for normal parent sessions
 - long MCP tool guides
 - optional feature instructions
 
@@ -62,14 +61,12 @@ Use when the product creates a session for a strict role.
 Examples:
 
 ```text
-review-only reviewer sessions
-managed cowork role sessions
 future evaluator-only sessions
 ```
 
 Role prompts may include hard constraints because the product workflow depends
-on them. For example, a reviewer session must be told not to modify files and
-must be told to submit through `submit_review_result`.
+on them. A role prompt is the right place to tell a session what it may not
+touch and which tool it must finish through.
 
 ### Product Skill
 
@@ -83,20 +80,8 @@ proliferate.subagents.workflow
   subagents
 ```
 
-Potential future product skills:
-
-```text
-proliferate.reviews.workflow
-  how a parent agent should reason about active review status if parent-agent
-  review management becomes a first-class capability
-
-proliferate.cowork.workflow
-  how to delegate into managed workspaces once cowork tool calls are exposed
-  with the same lifecycle handles
-```
-
-Reviewer agents should not need a skill to know how to finish. Their completion
-contract is part of their product role prompt and MCP tool list.
+A role-scoped agent should not need a skill to know how to finish. Its
+completion contract is part of its product role prompt and MCP tool list.
 
 ### User And Agent Prompts
 
@@ -185,16 +170,6 @@ Outcome: completed
 Use read_subagent_latest_turns or search_subagent_transcript with this subagentId before relying on the result.
 ```
 
-Review feedback prompt:
-
-```text
-Plan Review finished round 1. Result: changes requested.
-
-2 reviewers approved. 1 reviewer requested changes.
-
-Use the review feedback artifact in the transcript before continuing.
-```
-
 Rules:
 
 - include product title
@@ -241,8 +216,6 @@ Use transcript artifacts for durable product context:
 ```text
 proposed plans
 plan references
-review feedback summaries
-review critique artifacts
 subagent completion receipts
 delegated-work started/completed receipts
 ```
@@ -292,11 +265,7 @@ Product prompts:
 ```text
 anyharness/crates/anyharness-lib/src/domains/sessions/prompt/envelope.rs
 anyharness/crates/anyharness-lib/src/domains/sessions/agent_ops/definition.rs
-anyharness/crates/anyharness-lib/src/domains/reviews/runtime/launch.rs
-anyharness/crates/anyharness-lib/src/domains/reviews/service/detail.rs
 anyharness/crates/anyharness-lib/src/domains/sessions/response_formatting.rs
-anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs
-anyharness/crates/anyharness-lib/src/domains/cowork/mcp/definition.rs
 ```
 
 Prompt provenance and delegated child-session metadata:
@@ -308,11 +277,9 @@ anyharness/crates/anyharness-lib/src/persistence/sql/0029_session_links_prompt_p
 anyharness/crates/anyharness-lib/src/persistence/sql/0030_subagent_links_and_completions.sql
 ```
 
-Review and plan artifacts:
+Plan artifacts:
 
 ```text
-anyharness/crates/anyharness-lib/src/domains/reviews/runtime/artifacts.rs
-anyharness/crates/anyharness-lib/src/domains/reviews/store/feedback.rs
 anyharness/crates/anyharness-lib/src/domains/plans/document.rs
 anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs
 ```
@@ -321,9 +288,7 @@ Frontend presentation:
 
 ```text
 apps/desktop/src/components/workspace/chat/transcript/**
-apps/desktop/src/components/workspace/reviews/**
 apps/desktop/src/lib/domain/chat/subagents/provenance.ts
-apps/desktop/src/lib/domain/reviews/**
 apps/desktop/src/lib/domain/plans/**
 ```
 
@@ -332,7 +297,6 @@ apps/desktop/src/lib/domain/plans/**
 Done when:
 
 - subagent workflow guidance is a product skill, not parent system text
-- reviewer completion requirements remain product role prompt text
 - wake prompts use stable product handles and recommended next tools
 - parent-to-child prompts preserve authored text after validation
 - raw session/link ids are absent from normal prompt copy

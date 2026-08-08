@@ -841,39 +841,7 @@
       }
     },
     {
-      "id": "T3-COWORK-1",
-      "tier": 3,
-      "implementation": {
-        "status": "deferred",
-        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
-      }
-    },
-    {
-      "id": "T3-REVIEW-1",
-      "tier": 3,
-      "implementation": {
-        "status": "deferred",
-        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
-      }
-    },
-    {
-      "id": "T3-ARTIFACT-1",
-      "tier": 3,
-      "implementation": {
-        "status": "deferred",
-        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
-      }
-    },
-    {
       "id": "T3-DELEGATE-UI-1",
-      "tier": 3,
-      "implementation": {
-        "status": "deferred",
-        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
-      }
-    },
-    {
-      "id": "T3-ARTIFACT-2",
       "tier": 3,
       "implementation": {
         "status": "deferred",
@@ -1311,13 +1279,6 @@
     },
     {
       "id": "T4-DELEGATE-1",
-      "tier": 4,
-      "implementation": {
-        "status": "planned"
-      }
-    },
-    {
-      "id": "T4-COWORKART-1",
       "tier": 4,
       "implementation": {
         "status": "planned"
