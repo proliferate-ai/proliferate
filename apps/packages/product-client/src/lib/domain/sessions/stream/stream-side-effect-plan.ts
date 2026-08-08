@@ -228,6 +228,16 @@ export function planBatchedStreamSideEffects(input: {
         }
         invalidateSessionSubagents = true;
       }
+      // A peer spawn and a workspace spawn both put something new in the
+      // workspace collections that no stream event announces, so without this
+      // the new agent or workspace only appears on a manual refresh.
+      if (
+        item?.kind === "tool_call"
+        && item.status === "completed"
+        && isAgentOpsWorkspaceVisibilityMutation(item)
+      ) {
+        invalidateWorkspaceCollections = true;
+      }
       if (
         item?.kind === "tool_call"
         && item.status === "completed"
@@ -275,6 +285,16 @@ function appendOrderedEffect(
   effects.push(effect);
 }
 
+/**
+ * Product-MCP calls that change what the session-subagents read model returns —
+ * its children, its owned peers, or the ownership rows behind either.
+ *
+ * The peer and promotion calls belong here and NOT in the create branch below.
+ * They change the read model, so the pane has to refetch; but a peer is nobody's
+ * subagent, and a promoted child has stopped being one, so neither may record a
+ * subagent relationship hint or mount as a child — that would place an agent
+ * inside a parent's fanout that the server deliberately keeps out of it.
+ */
 function isSubagentMcpMutation(item: ToolCallItem): boolean {
   const nativeToolName = item.nativeToolName?.trim().toLowerCase();
   return nativeToolName === "mcp__subagents__spawn_subagent"
@@ -282,7 +302,17 @@ function isSubagentMcpMutation(item: ToolCallItem): boolean {
     || nativeToolName === "mcp__subagents__send_subagent_message"
     || nativeToolName === "mcp__subagents__schedule_subagent_wake"
     || nativeToolName === "mcp__subagents__close_agent"
-    || nativeToolName === "mcp__subagents__close_subagent";
+    || nativeToolName === "mcp__subagents__close_subagent"
+    || nativeToolName === "mcp__subagents__spawn_agent"
+    || nativeToolName === "mcp__subagents__promote_subagent"
+    || nativeToolName === "mcp__subagents__send_agent_message"
+    || nativeToolName === "mcp__subagents__configure_agent";
+}
+
+function isAgentOpsWorkspaceVisibilityMutation(item: ToolCallItem): boolean {
+  const nativeToolName = item.nativeToolName?.trim().toLowerCase();
+  return nativeToolName === "mcp__subagents__spawn_agent"
+    || nativeToolName === "mcp__subagents__spawn_workspace";
 }
 
 function isSubagentMcpCreateMutation(item: ToolCallItem): boolean {

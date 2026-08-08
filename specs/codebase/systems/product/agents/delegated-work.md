@@ -370,6 +370,12 @@ Rules:
   parent relationship when space allows.
 - Closed/deleted delegated work is hidden from the default tree unless the user
   opens history/debug.
+- An agent spawned as a PEER, and a workspace spawned by an agent, appear
+  without a manual refresh. Neither is announced by a stream event, so the
+  completed `spawn_agent` / `spawn_workspace` receipt is what refreshes the
+  workspace collections and the agents read model. A peer never records a
+  parent-child relationship from that receipt: it is nobody's subagent, and
+  claiming otherwise would file it under a parent's fanout in this tree.
 
 ## Transcript
 

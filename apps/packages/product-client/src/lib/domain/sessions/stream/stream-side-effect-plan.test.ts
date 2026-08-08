@@ -227,6 +227,75 @@ describe("planBatchedStreamSideEffects", () => {
     expect(plan.eventEffects).toEqual([]);
   });
 
+  it("makes a spawned peer visible without putting it in the parent's fanout", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById["tool-1"] = toolCallItem({
+      itemId: "tool-1",
+      nativeToolName: "mcp__subagents__spawn_agent",
+      status: "completed",
+      title: "spawn_agent",
+      rawInput: { label: "billing-webhooks" },
+      rawOutput: {
+        sessionId: "peer-session",
+        sessionLinkId: "link-1",
+      },
+    });
+
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput({ transcript }),
+      envelopes: [
+        itemCompleted(2, "tool-1"),
+      ],
+    });
+
+    expect(plan.invalidateSessionSubagents).toBe(true);
+    expect(plan.invalidateWorkspaceCollections).toBe(true);
+    // No relationship hint and no mount: an owned peer is nobody's subagent.
+    expect(plan.eventEffects).toEqual([]);
+  });
+
+  it("refreshes workspace collections when an agent spawns a workspace", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById["tool-1"] = toolCallItem({
+      itemId: "tool-1",
+      nativeToolName: "mcp__subagents__spawn_workspace",
+      status: "completed",
+      title: "spawn_workspace",
+      rawOutput: { workspaceId: "workspace-2" },
+    });
+
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput({ transcript }),
+      envelopes: [
+        itemCompleted(2, "tool-1"),
+      ],
+    });
+
+    expect(plan.invalidateWorkspaceCollections).toBe(true);
+    expect(plan.eventEffects).toEqual([]);
+  });
+
+  it("refetches the agents read model after a promotion", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById["tool-1"] = toolCallItem({
+      itemId: "tool-1",
+      nativeToolName: "mcp__subagents__promote_subagent",
+      status: "completed",
+      title: "promote_subagent",
+      rawOutput: { childSessionId: "child-session", sessionLinkId: "link-1" },
+    });
+
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput({ transcript }),
+      envelopes: [
+        itemCompleted(2, "tool-1"),
+      ],
+    });
+
+    expect(plan.invalidateSessionSubagents).toBe(true);
+    expect(plan.eventEffects).toEqual([]);
+  });
+
   it("plans cowork invalidation from completed MCP tool calls", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById["tool-1"] = toolCallItem({
