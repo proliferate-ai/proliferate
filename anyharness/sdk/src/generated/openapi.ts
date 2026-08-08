@@ -989,6 +989,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Promote a subagent as the human.
+         * @description ADR §4 puts Promote in the agent detail header, and ruling 7 says the parent
+         *     OR the human may do it. This is the human half of the one write
+         *     `agent_ops::calls::promote_subagent` performs — same ownership resolution,
+         *     same idempotent stamp, so the two callers cannot diverge on what promotion
+         *     means.
+         *
+         *     The fence differs from this file's other mutating route on purpose.
+         *     `schedule_subagent_wake` queues a prompt on a session, so it takes that
+         *     session's mutation permit before the workspace lease. Promotion touches no
+         *     session at all — it is one indexed UPDATE against a link row — so it takes
+         *     only the shared `SubagentWrite` lease, exactly as the agent tool does
+         *     (`promote_subagent` is in `MUTATING_TOOL_NAMES` and takes no admission
+         *     permit). Inventing a permit here would refuse a promotion while a workflow
+         *     held the parent, for a write the workflow cannot conflict with.
+         */
         post: operations["promote_subagent"];
         delete?: never;
         options?: never;
