@@ -140,6 +140,7 @@ Supported internal provenance kinds are:
 - `automation`
 - `system`
 - `subagent_wake`
+- `agent_wake`
 
 `None` means human, legacy, or unspecified. Provenance is persisted on
 `session_pending_prompts.provenance_json` so queued prompts retain their sender
@@ -151,6 +152,7 @@ projection for product UI:
 
 - `agentSession`
 - `subagentWake`
+- `agentWake`
 - `system`
 
 Internal automation provenance is not exposed directly; it must be converted to
@@ -199,7 +201,9 @@ It owns:
 - subagent creation/list/read/send validation
 - child ownership checks
 - passive child completion rows in `session_link_completions`
-- one-shot wake schedule rows in `session_link_wake_schedules`
+- one-shot link-scoped wake schedule rows in `session_link_wake_schedules`
+  (session-scoped wake rows in `session_wake_schedules` are owned by the
+  sessions domain itself, not by the subagent service)
 - subagent MCP capability-token validation
 - bounded and sanitized child event reads
 
@@ -315,6 +319,39 @@ internal `subagent_wake` provenance with the `session_link_id` and
 pending-wake detection, but public read models must not fabricate missing link
 or completion ids.
 
+### Session-Scoped Wakes
+
+Link-scoped wakes above only ever wake a parent about its own child. A
+session-scoped wake is armed on a session PAIR in `session_wake_schedules`
+(`watcher_session_id`, `target_session_id`), so it can be armed on any session
+in the runtime with no relationship between the two. Arming twice is a no-op —
+the pair is the primary key — and a session cannot wait on itself.
+
+Three callers arm the same row: `schedule_agent_wake`, the `wakeOnReply` flag on
+`send_agent_message`, and `POST /v1/sessions/{session_id}/wakes/{target_session_id}`
+for the human. All three require an OPEN target: a closed session never finishes
+another turn, so arming on one is rejected rather than silently never firing.
+
+Consumption mirrors the link-scoped latch. When ANY session finishes a turn, one
+transaction deletes every schedule for that target and queues one pointer prompt
+per deleted watcher. No schedule is ever consumed without its prompt, and no
+schedule fires twice. An offline watcher needs no special case: the pointer is a
+durable `session_pending_prompts` row.
+
+Because consumption happens at turn finish rather than at arm time, a schedule
+armed while the target's turn is ALREADY running fires at the end of that turn.
+There is no wait-for-next-turn race to guard against.
+
+A real reply consumes the schedule instead of firing it: when the target sends
+the watcher an agent message, that message already carried the content, so the
+`(watcher, target)` schedule is dropped. Consumption happens after the send
+lands, not inside it — the send is a runtime call that may boot an actor, not a
+single write — so a crash in that gap costs one redundant pointer rather than a
+lost wake.
+
+Session-scoped wake prompts use internal `agent_wake` provenance carrying the
+target session id and its label. There is no link id or completion id to carry.
+
 ## Session Extensions
 
 `SessionRuntime` supports small runtime extensions for launch additions and
@@ -330,7 +367,9 @@ Extensions may:
 - receive `on_turn_finished` notifications with session id, workspace, turn id,
   outcome, stop reason, and last event seq
 
-Cowork artifact support and subagent support both use this extension surface.
+Cowork artifact support, subagent support and session-scoped wakes all use this
+extension surface — the wake extension runs for every finished turn, because any
+session can be the target of a wake.
 Extension failures are isolated from the actor path: they are logged and do not
 make the completed turn fail.
 
