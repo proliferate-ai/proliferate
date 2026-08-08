@@ -90,42 +90,82 @@ impl SubagentService {
         }
     }
 
-    pub fn validate_parent_can_spawn(
+    /// The prechecks every agent creation shares, whatever the caller ends up
+    /// owning: the caller exists and is still open, its workspace is a standard
+    /// one, and creating agents is enabled for that session.
+    ///
+    /// What is deliberately NOT here is everything about SUBORDINATION — the
+    /// depth rule and the fanout cap — because those describe a linked
+    /// subagent, not a peer the caller merely owns (ADR §3.4, ruling 9).
+    fn validate_caller_can_create(
         &self,
-        parent_session_id: &str,
+        caller_session_id: &str,
     ) -> Result<SessionRecord, SubagentError> {
-        let parent = self
+        let caller = self
             .session_store
-            .find_by_id(parent_session_id)?
-            .ok_or_else(|| SubagentError::ParentNotFound(parent_session_id.to_string()))?;
-        if parent.closed_at.is_some() || parent.status == "closed" {
+            .find_by_id(caller_session_id)?
+            .ok_or_else(|| SubagentError::ParentNotFound(caller_session_id.to_string()))?;
+        if caller.closed_at.is_some() || caller.status == "closed" {
             return Err(SubagentError::Closed);
         }
         let workspace = self
             .workspace_runtime
-            .get_workspace(&parent.workspace_id)?
-            .ok_or_else(|| SubagentError::WorkspaceNotFound(parent.workspace_id.clone()))?;
+            .get_workspace(&caller.workspace_id)?
+            .ok_or_else(|| SubagentError::WorkspaceNotFound(caller.workspace_id.clone()))?;
         if workspace.surface != WorkspaceSurface::Standard {
             return Err(SubagentError::IneligibleWorkspace);
         }
-        // Depth is capped at one level of subordination, and promotion is
-        // exactly what lifts it (ADR §3.3): a promoted agent is a peer, so it
-        // may spawn its own children even though its ownership row survives.
-        let ownership = self.link_service.find_subagent_parent(parent_session_id)?;
-        let is_promoted_child = ownership
-            .as_ref()
-            .is_some_and(|link| link.promoted_at.is_some());
         // `spawn_subagent` creates every child with `subagents_enabled = false`;
         // that flag is how a spawned child carries its subordination, and it is
         // the only server-side consumer of the flag (agent ops mounts on every
         // session, and this validation is recomputed per call). So promotion has
-        // to lift it too, or the depth lift below is dead code for every real
-        // child and ruling 7 never takes effect. Derived from `promoted_at`
-        // rather than rewriting the session row, so promotion stays ONE durable
-        // fact on the link instead of two rows in two tables that can diverge.
-        if !parent.subagents_enabled && !is_promoted_child {
+        // to lift it too, or ruling 7 never takes effect for any real child.
+        // Derived from `promoted_at` rather than rewriting the session row, so
+        // promotion stays ONE durable fact on the link instead of two rows in
+        // two tables that can diverge.
+        let ownership = self.link_service.find_subagent_parent(caller_session_id)?;
+        let is_promoted_child = ownership
+            .as_ref()
+            .is_some_and(|link| link.promoted_at.is_some());
+        if !caller.subagents_enabled && !is_promoted_child {
             return Err(SubagentError::Disabled);
         }
+        Ok(caller)
+    }
+
+    /// The `spawn_agent` form of [`Self::validate_parent_can_spawn`].
+    ///
+    /// An owned agent is a PEER: ruling 9 puts no numeric limit on it and there
+    /// is no subordination to depth-limit, so neither the fanout cap nor the
+    /// depth rule applies. Everything about the CALLER still does, plus the
+    /// workspace the new session lands in being mutable — which for this tool
+    /// is the caller's own, the one whose write lease the route already took.
+    ///
+    /// The one gate NOT restated here is ruling 3's spawn block: an unpromoted
+    /// subagent is refused before dispatch reaches any tool body
+    /// (`agent_ops::calls::call_tool`), where the refusal can say why.
+    pub fn validate_caller_can_spawn_agent(
+        &self,
+        caller_session_id: &str,
+    ) -> Result<SessionRecord, SubagentError> {
+        let caller = self.validate_caller_can_create(caller_session_id)?;
+        self.access_gate
+            .assert_can_mutate_for_workspace(&caller.workspace_id)
+            .map_err(map_access_error)?;
+        Ok(caller)
+    }
+
+    pub fn validate_parent_can_spawn(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<SessionRecord, SubagentError> {
+        let parent = self.validate_caller_can_create(parent_session_id)?;
+        // Depth is capped at one level of subordination, and promotion is
+        // exactly what lifts it (ADR §3.3): a promoted agent is a peer, so it
+        // may spawn its own children even though its ownership row survives.
+        // (`validate_caller_can_create` already lifted `subagents_enabled` for
+        // a promoted child from the same link.)
+        let ownership = self.link_service.find_subagent_parent(parent_session_id)?;
         if ownership.is_some_and(|link| link.is_unpromoted_subagent()) {
             return Err(SubagentError::DepthLimit);
         }

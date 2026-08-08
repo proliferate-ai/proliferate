@@ -4,8 +4,8 @@ use anyharness_contract::v1::ConfigApplyState;
 use serde_json::{json, Value};
 
 use super::calls_helpers::{
-    default_model_for_agent, initial_config_string, launch_agents_to_json, mode_options_to_json,
-    prompt_outcome_label, summaries_to_json,
+    cleanup_wake_schedule_after_failed_dispatch, default_model_for_agent, launch_agents_to_json,
+    mode_options_to_json, prompt_outcome_label, summaries_to_json,
 };
 use super::config_ops::{
     compose_agent_config_options, controls_to_json, current_selection_to_json,
@@ -17,12 +17,13 @@ use super::peer_ops::{
     authorize_transcript_read, consume_reply_wake, lease_target_workspace_for_peer_write,
     prepare_agent_message,
 };
+use super::spawn_ops::{create_agent_session, CreateAgentSessionRequest};
 use super::tools::{
     canonical_tool_name, is_spawn_style_tool, ChildSessionArgs, CloseAgentArgs, ConfigureAgentArgs,
     CreateSubagentArgs, GetAgentConfigOptionsArgs, ListAgentsArgs, PromoteSubagentArgs,
     ReadAgentTranscriptArgs, ReadAgentTranscriptMode, ReadSubagentEventsArgs,
     ReadSubagentLatestTurnsArgs, ScheduleAgentWakeArgs, SearchSubagentTranscriptArgs,
-    SendAgentMessageArgs, SendSubagentMessageArgs,
+    SendAgentMessageArgs, SendSubagentMessageArgs, SpawnAgentArgs,
 };
 use super::AgentOpsPeerGates;
 use crate::domains::sessions::admission::SessionMutationKind;
@@ -42,7 +43,6 @@ use crate::domains::sessions::transcript_read::{
 };
 use crate::domains::sessions::wakes::service::AgentWakeService;
 use crate::integrations::mcp::json_rpc::deserialize_args;
-use crate::origin::OriginContext;
 
 pub async fn call_tool(
     service: &SubagentService,
@@ -73,7 +73,11 @@ pub async fn call_tool(
         "get_subagent_launch_options" => get_subagent_launch_options(service, session_runtime, ctx),
         "spawn_subagent" => {
             let args: CreateSubagentArgs = deserialize_args(arguments)?;
-            spawn_subagent(service, session_runtime, ctx, args).await
+            spawn_subagent(service, ownership, wake_service, session_runtime, ctx, args).await
+        }
+        "spawn_agent" => {
+            let args: SpawnAgentArgs = deserialize_args(arguments)?;
+            spawn_agent(service, ownership, wake_service, session_runtime, ctx, args).await
         }
         "list_subagents" => service
             .list_subagents(&ctx.parent_session_id)
@@ -291,11 +295,12 @@ fn get_subagent_launch_options(
 
 async fn spawn_subagent(
     service: &SubagentService,
+    ownership: &AgentOwnershipService,
+    wake_service: &AgentWakeService,
     session_runtime: &SessionRuntime,
     ctx: &AgentOpsMcpContext,
     args: CreateSubagentArgs,
 ) -> anyhow::Result<Value> {
-    let parent_session_id = &ctx.parent_session_id;
     if !ctx.can_create {
         anyhow::bail!(
             "{}",
@@ -304,139 +309,109 @@ async fn spawn_subagent(
                 .unwrap_or("subagent creation is not available for this session")
         );
     }
-    let parent = service.validate_parent_can_spawn(parent_session_id)?;
-    let prompt = args.prompt;
-    if prompt.trim().is_empty() {
-        anyhow::bail!("prompt is required");
-    }
-    let agent_kind = args.harness_id.unwrap_or_else(|| parent.agent_kind.clone());
-    let model_id = initial_config_string(args.initial_config.as_ref(), &["modelId", "model"])
-        .or(parent.current_model_id.clone())
-        .or(parent.requested_model_id.clone());
-    let mode_id = initial_config_string(args.initial_config.as_ref(), &["modeId", "mode"])
-        .or(parent.current_mode_id.clone())
-        .or(parent.requested_mode_id.clone());
-    let label = args
-        .label
-        .map(|value| value.trim().to_string())
-        .filter(|v| !v.is_empty());
+    let parent = service.validate_parent_can_spawn(&ctx.parent_session_id)?;
+    let request = CreateAgentSessionRequest::subagent(&parent, args)?;
+    let wake_requested = request.wake_on_completion;
+    let applied = applied_initial_config(&request);
+    let created = create_agent_session(
+        service,
+        ownership,
+        wake_service,
+        session_runtime,
+        &parent,
+        request,
+    )
+    .await?;
 
-    let child = session_runtime
-        .create_durable_session(
-            &parent.workspace_id,
-            &agent_kind,
-            None,
-            model_id.as_deref(),
-            mode_id.as_deref(),
-            None,
-            Vec::new(),
-            None,
-            crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
-            false,
-            OriginContext::system_local_runtime(),
-        )
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-    let link = match service.link_child(parent_session_id, &child.id, label.clone(), None, None) {
-        Ok(link) => link,
-        Err(error) => {
-            let _ = service.delete_session(&child.id);
-            return Err(error.into());
-        }
-    };
-    let wake_scheduled = if args.wake_on_completion {
-        match service.schedule_wake_for_target(parent_session_id, None, Some(&child.id)) {
-            Ok((_, inserted)) => inserted,
-            Err(error) => {
-                cleanup_child_session_after_failed_launch(service, &child.id, "schedule wake");
-                return Err(error.into());
-            }
-        }
-    } else {
-        false
-    };
-
-    let started = match session_runtime.start_persisted_session(&child).await {
-        Ok(started) => started,
-        Err(error) => {
-            if args.wake_on_completion {
-                cleanup_wake_schedule_after_failed_dispatch(service, &link.id, "start subagent");
-            }
-            cleanup_child_session_after_failed_launch(service, &child.id, "start subagent");
-            return Err(anyhow::anyhow!("{error:?}"));
-        }
-    };
-    let outcome = match session_runtime
-        .send_text_prompt_with_provenance(
-            &started.id,
-            prompt,
-            parent_to_child_provenance(parent_session_id, &link.id, label.clone()),
-        )
-        .await
-    {
-        Ok(outcome) => outcome,
-        Err(error) => {
-            if args.wake_on_completion {
-                cleanup_wake_schedule_after_failed_dispatch(
-                    service,
-                    &link.id,
-                    "send initial prompt",
-                );
-            }
-            cleanup_child_session_after_failed_launch(service, &child.id, "send initial prompt");
-            return Err(anyhow::anyhow!("{error:?}"));
-        }
-    };
     Ok(json!({
-        "sessionLinkId": link.id,
-        "subagentId": link.public_id,
-        "childSessionId": started.id,
-        "label": label,
-        "appliedInitialConfig": {
-            "harnessId": agent_kind,
-            "modelId": model_id,
-            "modeId": mode_id,
-        },
+        "sessionLinkId": created.link.id,
+        "subagentId": created.link.public_id,
+        "childSessionId": created.session.id,
+        "label": created.link.label,
+        "appliedInitialConfig": applied,
         "wake": {
-            "scheduled": args.wake_on_completion,
-            "created": wake_scheduled,
-            "scope": if args.wake_on_completion { Some("next_completion") } else { None::<&str> },
+            "scheduled": wake_requested,
+            "created": created.wake_created,
+            "scope": if wake_requested { Some("next_completion") } else { None::<&str> },
         },
-        "wakeScheduled": args.wake_on_completion,
-        "wakeScheduleCreated": wake_scheduled,
-        "wakeScope": if args.wake_on_completion { Some("next_completion") } else { None::<&str> },
-        "promptStatus": prompt_outcome_label(&outcome),
+        "wakeScheduled": wake_requested,
+        "wakeScheduleCreated": created.wake_created,
+        "wakeScope": if wake_requested { Some("next_completion") } else { None::<&str> },
+        "promptStatus": prompt_outcome_label(&created.prompt_outcome),
         "readCursor": { "sinceSeq": 0 },
     }))
 }
 
-fn cleanup_wake_schedule_after_failed_dispatch(
+/// Create a PEER agent the caller owns (ADR §3.4).
+///
+/// The same routine `spawn_subagent` uses, in `Owned` mode — which is the whole
+/// of the difference. What is NOT here is as important as what is: no fanout
+/// cap and no depth rule, because ruling 9 puts no numeric limit on owned
+/// agents and a peer is not subordinate to anything. What IS here is ruling 3's
+/// spawn block, enforced before dispatch reaches this function, and the
+/// caller's own workspace being writable.
+///
+/// It stays in `MUTATING_TOOL_NAMES` because it mutates exactly one workspace —
+/// the caller's, the one it creates the session in — which is the workspace the
+/// route already leased. There is no target session yet, so unlike
+/// `close_agent` there is no target permit to take first and no reason to lease
+/// anything itself.
+async fn spawn_agent(
     service: &SubagentService,
-    session_link_id: &str,
-    context: &str,
-) {
-    if let Err(error) = service.delete_wake_schedule_for_link(session_link_id) {
-        tracing::warn!(
-            session_link_id,
-            context,
-            error = ?error,
-            "failed to clean up subagent wake schedule after dispatch failure"
+    ownership: &AgentOwnershipService,
+    wake_service: &AgentWakeService,
+    session_runtime: &SessionRuntime,
+    ctx: &AgentOpsMcpContext,
+    args: SpawnAgentArgs,
+) -> anyhow::Result<Value> {
+    if !ctx.can_spawn_agent {
+        anyhow::bail!(
+            "{}",
+            ctx.spawn_agent_block_reason
+                .as_deref()
+                .unwrap_or("spawning agents is not available for this session")
         );
     }
+    let caller = service.validate_caller_can_spawn_agent(&ctx.parent_session_id)?;
+    let request = CreateAgentSessionRequest::owned_agent(&caller, args)?;
+    let wake_requested = request.wake_on_completion;
+    let applied = applied_initial_config(&request);
+    let created = create_agent_session(
+        service,
+        ownership,
+        wake_service,
+        session_runtime,
+        &caller,
+        request,
+    )
+    .await?;
+
+    Ok(json!({
+        // `sessionId` is the handle for everything afterwards: this agent is a
+        // peer, so it is addressed the way `list_agents` addresses one.
+        "sessionId": created.session.id,
+        "workspaceId": created.session.workspace_id,
+        "label": created.link.label,
+        // The ownership handle, for the subagent-vocabulary form of
+        // `close_agent`. `sessionId` works there too.
+        "agentId": created.link.public_id,
+        "ownership": "owned_agent",
+        "appliedInitialConfig": applied,
+        "wake": {
+            "scheduled": wake_requested,
+            "created": created.wake_created,
+            "scope": if wake_requested { Some("next_turn_finish") } else { None::<&str> },
+        },
+        "promptStatus": prompt_outcome_label(&created.prompt_outcome),
+    }))
 }
 
-fn cleanup_child_session_after_failed_launch(
-    service: &SubagentService,
-    child_session_id: &str,
-    context: &str,
-) {
-    if let Err(error) = service.delete_session(child_session_id) {
-        tracing::warn!(
-            child_session_id,
-            context,
-            error = ?error,
-            "failed to clean up subagent child session after launch failure"
-        );
-    }
+fn applied_initial_config(request: &CreateAgentSessionRequest) -> Value {
+    json!({
+        "harnessId": request.agent_kind,
+        "modelId": request.model_id,
+        "modeId": request.mode_id,
+    })
 }
 
 async fn send_subagent_message(

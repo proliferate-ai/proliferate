@@ -32,9 +32,16 @@ pub const DEPRECATED_TOOL_ALIASES: &[(&str, &str)] = &[
 // reasons — and it must, because a close acts on the target session and so
 // takes that session's mutation permit, which has to be OUTSIDE any workspace
 // lease.
+//
+// `spawn_agent` IS here, and for the opposite reason to `close_agent`: a spawn
+// has no target yet, so there is no target session permit to take and no other
+// workspace involved. What it mutates is the CALLER's workspace — it creates a
+// session in it — which is precisely the workspace the route's lease covers,
+// exactly as for `spawn_subagent`.
 pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "spawn_subagent",
     "create_subagent",
+    "spawn_agent",
     "send_subagent_message",
     "schedule_subagent_wake",
     "schedule_agent_wake",
@@ -51,6 +58,7 @@ pub const SPAWN_STYLE_TOOL_NAMES: &[&str] = &[
     "get_subagent_launch_options",
     "spawn_subagent",
     "create_subagent",
+    "spawn_agent",
 ];
 
 pub fn is_spawn_style_tool(name: &str) -> bool {
@@ -77,6 +85,27 @@ pub struct CreateSubagentArgs {
     pub initial_config: Option<Value>,
     #[serde(default)]
     pub wake_on_completion: bool,
+}
+
+/// `spawn_agent`'s arguments. Deliberately the same shape as
+/// `CreateSubagentArgs` — the launch vocabulary an agent already knows — plus
+/// `workspaceId`, which ADR §3.4 names. Until `spawn_workspace` lands there is
+/// only one workspace this tool can use, so naming a different one is refused
+/// rather than ignored (`spawn_ops::CreateAgentSessionRequest::owned_agent`).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnAgentArgs {
+    pub prompt: String,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub harness_id: Option<String>,
+    #[serde(default)]
+    pub initial_config: Option<Value>,
+    #[serde(default)]
+    pub wake_on_completion: bool,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -342,6 +371,39 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
         ),
     ]);
 
+    // Advertised on `can_spawn_agent`, NOT `can_create`: the fanout cap bounds
+    // subordinates, and an owned agent is not one (ruling 9). A parent sitting
+    // at eight subagents can still spawn a peer.
+    if ctx.can_spawn_agent && !ctx.is_unpromoted_subagent {
+        tools.push(tool_definition(
+            "spawn_agent",
+            "Create a new top-level agent you own, in your workspace, and send it a first message. \
+             It is a PEER, not a subagent: it is not capped, it does not close when you close, and \
+             it can spawn agents of its own from the start. Talk to it afterwards with \
+             send_agent_message and its sessionId, exactly like any other agent. Use \
+             spawn_subagent instead when you want a subordinate helper that closes with you.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "prompt": { "type": "string", "description": "First message, delivered inside an envelope naming you and your session id so the agent can reply." },
+                    "label": { "type": "string", "description": "Short name for the agent, shown wherever it appears." },
+                    "harnessId": { "type": "string", "description": "Defaults to your own harness. See get_subagent_launch_options for what this workspace can launch." },
+                    "initialConfig": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                            "modelId": { "type": "string" },
+                            "modeId": { "type": "string" }
+                        }
+                    },
+                    "wakeOnCompletion": { "type": "boolean", "description": "Wake you when the new agent finishes its first turn. Its reply already wakes you with the full message; this is the safety net for one that answers nobody." },
+                    "workspaceId": { "type": "string", "description": "Must be your own workspace. Spawning into another workspace is not available yet." }
+                },
+                "required": ["prompt"]
+            }),
+        ));
+    }
+
     if ctx.can_create && !ctx.is_unpromoted_subagent {
         tools.push(
             tool_definition(
@@ -491,6 +553,11 @@ mod tests {
             } else {
                 Some("blocked".to_string())
             },
+            // Independent of `can_create` on purpose: the cases these tests
+            // build `can_create = false` for are the fanout cap, which does not
+            // bound owned agents (ruling 9).
+            can_spawn_agent: true,
+            spawn_agent_block_reason: None,
             existing_subagent_count,
             max_subagents_per_parent: 8,
             is_unpromoted_subagent: false,
@@ -811,6 +878,10 @@ mod tests {
         assert!(is_spawn_style_tool("create_subagent"));
         assert!(is_spawn_style_tool("spawn_subagent"));
         assert!(is_spawn_style_tool("get_subagent_launch_options"));
+        // Ruling 3 says ANY spawn-style tool, and spawning a peer is the most
+        // spawn-style thing there is: an unpromoted subagent that could reach
+        // this would be spawning its way around the block it is under.
+        assert!(is_spawn_style_tool("spawn_agent"));
         assert!(!is_spawn_style_tool("send_agent_message"));
         assert!(!is_spawn_style_tool("close_agent"));
         for (alias, canonical) in DEPRECATED_TOOL_ALIASES {
@@ -821,6 +892,98 @@ mod tests {
                 );
             }
         }
+    }
+
+    // --- spawn_agent (ADR §3.4, ruling 9) --------------------------------
+
+    #[test]
+    fn an_unpromoted_subagent_is_offered_no_way_to_spawn_a_peer_either() {
+        let names = tool_names(&build_tool_list(&unpromoted_subagent_context()))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        assert!(
+            !names.iter().any(|name| name == "spawn_agent"),
+            "spawn_agent is advertised to an unpromoted subagent"
+        );
+        // And the gate that actually binds, since the list above is frozen at
+        // launch: dispatch refuses the wire name.
+        assert!(is_spawn_style_tool("spawn_agent"));
+    }
+
+    #[test]
+    fn a_capped_parent_can_still_spawn_a_peer() {
+        // Ruling 9: the cap of eight bounds LINKED children. An owned agent is
+        // not one, so the fanout cap must not reach it — which is the whole
+        // reason `can_spawn_agent` is not derived from `can_create`.
+        let capped = build_tool_list(&context(false, 8));
+        let names = tool_names(&capped);
+
+        assert!(
+            !names.contains(&"spawn_subagent"),
+            "the cap still bites subagents"
+        );
+        assert!(names.contains(&"spawn_agent"));
+    }
+
+    #[test]
+    fn spawn_agent_is_withheld_when_the_caller_itself_cannot_create_agents() {
+        // Not a cap — the caller's own state (closed, disabled, an ineligible
+        // or unwritable workspace) is what `can_spawn_agent` reports.
+        let blocked = AgentOpsMcpContext {
+            can_spawn_agent: false,
+            spawn_agent_block_reason: Some("subagents are disabled for this session".to_string()),
+            ..context(true, 0)
+        };
+
+        assert!(!tool_names(&build_tool_list(&blocked)).contains(&"spawn_agent"));
+    }
+
+    #[test]
+    fn spawn_agent_takes_the_subagent_launch_vocabulary_plus_a_workspace() {
+        let spawn = build_tool_list(&context(true, 1))
+            .into_iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("spawn_agent"))
+            .expect("spawn_agent is advertised");
+
+        for field in [
+            "prompt",
+            "label",
+            "harnessId",
+            "initialConfig",
+            "wakeOnCompletion",
+        ] {
+            assert!(
+                spawn
+                    .pointer(&format!("/inputSchema/properties/{field}"))
+                    .is_some(),
+                "spawn_agent does not accept {field}, which spawn_subagent does"
+            );
+        }
+        // ADR §3.4 names `workspaceId`. It is accepted so that passing it is an
+        // explicit refusal rather than a silent spawn somewhere else.
+        assert!(spawn
+            .pointer("/inputSchema/properties/workspaceId")
+            .is_some());
+        assert_eq!(
+            spawn
+                .pointer("/inputSchema/required")
+                .and_then(Value::as_array)
+                .map(|required| required.len()),
+            Some(1),
+            "only the first message is required"
+        );
+    }
+
+    #[test]
+    fn spawn_agent_leases_at_the_route_because_it_creates_in_the_callers_workspace() {
+        // The mirror of `close_agent`: a close acts on an existing target
+        // session somewhere else, so it fences itself. A spawn has no target
+        // yet — what it mutates is the caller's own workspace, which is exactly
+        // what the route leased.
+        assert!(MUTATING_TOOL_NAMES.contains(&"spawn_agent"));
+        assert!(MUTATING_TOOL_NAMES.contains(&"spawn_subagent"));
     }
 
     #[test]

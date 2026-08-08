@@ -10,6 +10,9 @@ pub mod definition;
 // exactly the same pair, so it reuses these rather than restating a lock-order
 // contract in a second place.
 pub(crate) mod peer_ops;
+// The one routine that creates an agent, shared by both spawn shapes so they
+// cannot drift apart on anything that is not about ownership (ADR §3.3).
+mod spawn_ops;
 pub mod tools;
 
 use std::sync::Arc;

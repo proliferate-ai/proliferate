@@ -4,8 +4,12 @@
 //! stopping an agent is the runtime's job (`close_session_tree`); this module
 //! decides WHETHER the caller may, and leaves the row that says who did it.
 
-use crate::domains::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
-use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::links::model::{
+    SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
+};
+use crate::domains::sessions::links::service::{
+    CreateSessionLinkError, CreateSessionLinkInput, SessionLinkService,
+};
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::store::SessionStore;
 
@@ -30,6 +34,8 @@ pub enum OwnershipError {
     NotASubagent,
     #[error("that agent is closed")]
     Closed,
+    #[error(transparent)]
+    Link(#[from] CreateSessionLinkError),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -126,6 +132,37 @@ impl AgentOwnershipService {
             .find_by_id(&link.child_session_id)?
             .ok_or_else(|| OwnershipError::TargetNotFound(link.child_session_id.clone()))?;
         Ok(OwnedAgent { link, target })
+    }
+
+    /// Record that `owner` owns a newly spawned PEER agent.
+    ///
+    /// `relation = 'owned_agent'` is the whole of the difference from a
+    /// subagent link (ADR §3.2): no fanout cap, no depth rule, and
+    /// `runtime::lifecycle::cascades_to_child` never follows the row, so
+    /// closing the owner leaves this agent running. The row exists at all
+    /// because ownership has to be readable — it is what lets the creator
+    /// close this agent later.
+    ///
+    /// `spawn_agent` is this relation's only producer. Promotion never writes
+    /// it: a promoted subagent keeps `relation = 'subagent'` and gains
+    /// `promoted_at`, because the row also records how the agent came to be.
+    pub fn link_owned_agent(
+        &self,
+        owner_session_id: &str,
+        agent_session_id: &str,
+        label: Option<String>,
+    ) -> Result<SessionLinkRecord, OwnershipError> {
+        Ok(self.link_service.create_link(CreateSessionLinkInput {
+            relation: SessionLinkRelation::OwnedAgent,
+            parent_session_id: owner_session_id.to_string(),
+            child_session_id: agent_session_id.to_string(),
+            // The agent is a peer, but it is still born in one workspace, and
+            // in this tool that is the caller's own.
+            workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+            label,
+            created_by_turn_id: None,
+            created_by_tool_call_id: None,
+        })?)
     }
 
     /// Promote one of the caller's linked subagents to a peer.
@@ -433,6 +470,73 @@ mod tests {
             .err()
             .expect("an owned agent cannot be promoted");
         assert!(matches!(error, OwnershipError::NotASubagent));
+    }
+
+    #[test]
+    fn spawning_a_peer_writes_an_owned_agent_row_the_owner_resolves() {
+        // ADR §3.2's settled ruling, at the only place that writes it:
+        // `spawn_agent` creates `relation = 'owned_agent'`. If this wrote
+        // 'subagent' the new agent would silently acquire everything
+        // subordination implies — a fanout slot, the close cascade, and the
+        // spawn block — none of which a peer is under.
+        let fixture = fixture(&["ses_owner", "ses_peer"]);
+
+        let link = fixture
+            .ownership
+            .link_owned_agent("ses_owner", "ses_peer", Some("Schema audit".to_string()))
+            .expect("link the owned agent");
+
+        assert_eq!(link.relation, SessionLinkRelation::OwnedAgent);
+        assert_eq!(link.parent_session_id, "ses_owner");
+        assert_eq!(link.child_session_id, "ses_peer");
+        assert_eq!(link.label.as_deref(), Some("Schema audit"));
+        // Born a peer, not promoted into one: `promoted_at` describes a
+        // subagent's history and this agent never had that history.
+        assert!(link.promoted_at.is_none());
+        assert!(!link.is_unpromoted_subagent());
+        assert!(link
+            .public_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("agent_")));
+
+        // The row is ownership, so close and promote resolve it — and the peer
+        // is not promotable, because it is already top level.
+        let owned = fixture
+            .ownership
+            .resolve_owned("ses_owner", None, Some("ses_peer"))
+            .expect("the owner owns it");
+        assert_eq!(owned.link.id, link.id);
+        assert!(matches!(
+            fixture.ownership.promote(&owned).err(),
+            Some(OwnershipError::NotASubagent)
+        ));
+    }
+
+    #[test]
+    fn an_owned_agent_link_does_not_claim_a_subagent_parent_slot() {
+        // Negative control on the relation: the child of an owned link must not
+        // read as somebody's subagent anywhere, or the depth rule and the
+        // fanout count would both pick it up.
+        let fixture = fixture(&["ses_owner", "ses_peer"]);
+        fixture
+            .ownership
+            .link_owned_agent("ses_owner", "ses_peer", None)
+            .expect("link the owned agent");
+
+        assert!(fixture
+            .links
+            .find_subagent_parent("ses_peer")
+            .expect("subagent parent lookup")
+            .is_none());
+        assert!(fixture
+            .links
+            .list_subagent_children("ses_owner")
+            .expect("subagent children")
+            .is_empty());
+        assert!(!fixture
+            .ownership
+            .is_unpromoted_subagent("ses_peer")
+            .expect("spawn block lookup"));
     }
 
     #[test]
