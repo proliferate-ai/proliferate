@@ -25,6 +25,8 @@ export interface HeaderHierarchyChildRow {
   meta: string | null;
   statusLabel: string;
   wakeScheduled: boolean;
+  /** A requested-but-not-landed close; see `subagents/ownership`. */
+  closeRequestedLabel?: string | null;
   isActive: boolean;
 }
 

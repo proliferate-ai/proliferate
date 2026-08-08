@@ -10,6 +10,10 @@ import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows
 import { isPendingSessionId } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { formatSubagentLabel } from "#product/domain/chats/subagents/provenance";
+import {
+  closeRequestedLabel,
+  isCloseRequested,
+} from "#product/domain/chats/subagents/ownership";
 import type {
   DelegatedAgentIdentity,
   DelegatedWorkStatusCategory,
@@ -30,6 +34,12 @@ export interface SubagentComposerStripRow {
   statusCategory: DelegatedWorkStatusCategory;
   latestCompletionLabel: string | null;
   wakeScheduled: boolean;
+  /**
+   * The owner asked this agent to close and the close has not landed. Rows are
+   * open links, so this window is the only time attribution is readable here.
+   */
+  closeRequested: boolean;
+  closeRequestedLabel: string | null;
 }
 
 export interface SubagentComposerStripViewModel {
@@ -202,6 +212,8 @@ function buildSubagentRow(
       ? formatCompletionLabel(child.latestCompletion.outcome)
       : null,
     wakeScheduled: child.wakeScheduled,
+    closeRequested: isCloseRequested(child),
+    closeRequestedLabel: closeRequestedLabel(child),
   };
 }
 

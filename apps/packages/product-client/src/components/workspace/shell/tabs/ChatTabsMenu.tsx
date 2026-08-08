@@ -253,6 +253,14 @@ function computeFlyoutPosition(rect: DOMRect, childCount: number): FlyoutState["
 }
 
 function renderSubagentTrailing(child: HeaderSubagentChildRow): ReactNode {
+  // TODO(agent-ops-ux): closing reads as plain muted status text for now.
+  if (child.closeRequestedLabel) {
+    return (
+      <span className="text-ui-sm leading-4 text-muted-foreground">
+        {child.closeRequestedLabel}
+      </span>
+    );
+  }
   if (child.wakeScheduled) {
     return <span className="text-ui text-foreground">Wake scheduled</span>;
   }

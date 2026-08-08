@@ -16,6 +16,8 @@ type PlaygroundSubagentStripRow = {
   statusCategory: DelegatedWorkStatusCategory;
   latestCompletionLabel: string | null;
   wakeScheduled: boolean;
+  closeRequested: boolean;
+  closeRequestedLabel: string | null;
 };
 
 const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
@@ -99,7 +101,10 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     latestCompletionLabel: null,
     wakeScheduled: true,
   },
-] satisfies Omit<PlaygroundSubagentStripRow, "identity" | "statusCategory">[];
+] satisfies Omit<
+  PlaygroundSubagentStripRow,
+  "identity" | "statusCategory" | "closeRequested" | "closeRequestedLabel"
+>[];
 
 export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] =
   RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS.map((row) => ({
@@ -114,4 +119,8 @@ export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] =
       statusLabel: row.statusLabel,
       wakeScheduled: row.wakeScheduled,
     }),
+    // The playground has no ownership link behind it, so nobody has asked any
+    // of these agents to close.
+    closeRequested: false,
+    closeRequestedLabel: null,
   }));

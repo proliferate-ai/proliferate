@@ -69,9 +69,13 @@ function SubagentPopoverRow({
   onOpen: () => void;
   onScheduleWake: () => void;
 }) {
-  const secondaryLabel = row.wakeScheduled
-    ? "Wake scheduled"
-    : row.latestCompletionLabel ?? row.statusLabel;
+  // A requested close outranks the other secondary lines: the agent is still
+  // working, but it is working its last step.
+  // TODO(agent-ops-ux): visual treatment for the closing state is the design pass.
+  const secondaryLabel = row.closeRequestedLabel
+    ?? (row.wakeScheduled
+      ? "Wake scheduled"
+      : row.latestCompletionLabel ?? row.statusLabel);
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted/40">

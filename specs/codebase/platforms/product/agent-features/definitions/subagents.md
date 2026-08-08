@@ -365,5 +365,13 @@ of an already-closed agent, or of one already finishing — is a no-op that
 preserves the first close's record, and a close performed by a person through the
 UI leaves both unset.
 
+The human client shows that window and only that window. Wherever a delegated
+agent's status is rendered — the agents popover, the chat tab menu, the tab
+hover card — a row whose ownership link names a closer reads as closing, with
+the reason when one was given, and that reading outranks the row's own session
+status because "still working" is true but no longer the point. Once the close
+lands the row leaves the read model entirely, so attribution after the fact is
+the `close_agent` receipt's job in the transcript, not the pane's.
+
 Cowork reuses this same close-ordering law for `close_cowork_agent`; see
 [cowork.md](cowork.md).

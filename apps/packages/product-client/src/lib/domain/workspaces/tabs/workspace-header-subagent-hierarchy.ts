@@ -7,6 +7,7 @@ import type {
   SessionSubagentsResponse,
 } from "@anyharness/sdk";
 import { formatSubagentLabel } from "#product/domain/chats/subagents/provenance";
+import { closeRequestedLabel } from "#product/domain/chats/subagents/ownership";
 import type { SubagentSessionRelationshipHint } from "#product/domain/chats/subagents/session-relationship-hints";
 import {
   reviewAssignmentHeaderStatusLabel,
@@ -277,6 +278,7 @@ function buildChildRow({
     meta: null,
     statusLabel: formatSessionStatus(child.status),
     wakeScheduled: child.wakeScheduled,
+    closeRequestedLabel: closeRequestedLabel(child),
     isActive: false,
   };
 }

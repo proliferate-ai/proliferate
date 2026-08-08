@@ -99,7 +99,9 @@ export function buildHeaderChatTabs(args: {
             title: hierarchyChild.title,
             source: hierarchyChild.source,
             reviewKind: hierarchyChild.reviewKind,
-            statusLabel: hierarchyChild.statusLabel,
+            // A requested close is the truest thing to say about the agent
+            // while it finishes its last step.
+            statusLabel: hierarchyChild.closeRequestedLabel ?? hierarchyChild.statusLabel,
             wakeScheduled: hierarchyChild.wakeScheduled,
             workspaceId: hierarchyChild.workspaceId ?? null,
             sessionId: hierarchyChild.sessionId,
