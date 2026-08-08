@@ -1237,6 +1237,49 @@ describe("transcript reducer", () => {
     });
   });
 
+  it.each([
+    ["mcp__subagents__spawn_subagent"],
+    ["mcp__subagents__close_agent"],
+  ])("classifies the renamed agent ops tool %s as subagent activity", (nativeToolName) => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          itemId: "tool-agent-ops",
+          event: {
+            type: "item_completed",
+            item: {
+              kind: "tool_invocation",
+              status: "completed",
+              sourceAgentKind: "claude",
+              title: nativeToolName,
+              toolCallId: "tool-agent-ops",
+              nativeToolName,
+              contentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-agent-ops",
+                  title: nativeToolName,
+                  toolKind: "other",
+                  nativeToolName,
+                },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-agent-ops"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.semanticKind).toBe("subagent");
+  });
+
   it("classifies AnyHarness schedule_subagent_wake MCP calls as subagent activity", () => {
     const state = reduceEvents(
       [

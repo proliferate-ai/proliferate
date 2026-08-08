@@ -206,7 +206,7 @@ Product prompts:
 
 ```text
 anyharness/crates/anyharness-lib/src/domains/sessions/subagents/hooks.rs
-anyharness/crates/anyharness-lib/src/domains/sessions/subagents/mcp/definition.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/agent_ops/definition.rs
 anyharness/crates/anyharness-lib/src/domains/reviews/runtime/launch.rs
 anyharness/crates/anyharness-lib/src/domains/reviews/service/detail.rs
 anyharness/crates/anyharness-lib/src/domains/sessions/response_formatting.rs

@@ -284,7 +284,8 @@ function isSubagent(item: ToolCallItem): boolean {
 }
 
 function isAnyHarnessSubagentTool(item: ToolCallItem): boolean {
-  return item.nativeToolName === "mcp__subagents__create_subagent";
+  return item.nativeToolName === "mcp__subagents__spawn_subagent"
+    || item.nativeToolName === "mcp__subagents__create_subagent";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

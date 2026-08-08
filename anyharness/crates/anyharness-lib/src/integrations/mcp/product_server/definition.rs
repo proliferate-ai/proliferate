@@ -19,6 +19,10 @@ pub struct ProductMcpDefinition {
     // when user-selectable product MCPs land; see specs/codebase/platforms/product/agent-features/servers.md.
     pub id: &'static str,
     pub route_slug: &'static str,
+    // Slugs a product used to be served under. Sessions bake the MCP URL in at
+    // launch and never refresh it, so a renamed product must keep answering on
+    // the old slug for every session launched before the rename.
+    pub legacy_route_slugs: &'static [&'static str],
     pub acp_server_name: &'static str,
     pub server_info_name: &'static str,
     pub display_name: &'static str,

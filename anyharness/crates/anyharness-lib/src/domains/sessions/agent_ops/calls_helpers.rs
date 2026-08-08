@@ -61,7 +61,7 @@ pub(super) fn mode_options_to_json(
 }
 
 pub(super) fn summaries_to_json(
-    summaries: Vec<super::super::model::SubagentSummary>,
+    summaries: Vec<crate::domains::sessions::subagents::model::SubagentSummary>,
 ) -> Vec<Value> {
     summaries
         .into_iter()

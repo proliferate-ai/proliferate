@@ -1,34 +1,35 @@
 use serde_json::{json, Value};
 
-use super::super::service::SubagentService;
 use super::calls_helpers::{
     default_model_for_agent, initial_config_string, launch_agents_to_json, mode_options_to_json,
     prompt_outcome_label, summaries_to_json,
 };
-use super::context::SubagentMcpContext;
+use super::context::AgentOpsMcpContext;
 use super::tools::{
-    ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs, ReadSubagentLatestTurnsArgs,
-    SearchSubagentTranscriptArgs, SendSubagentMessageArgs,
+    canonical_tool_name, ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs,
+    ReadSubagentLatestTurnsArgs, SearchSubagentTranscriptArgs, SendSubagentMessageArgs,
 };
+use crate::domains::sessions::authorize::{authorize, AgentAccessIntent};
 use crate::domains::sessions::delegation::{
     parent_to_child_provenance, READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT,
 };
 use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::subagents::service::SubagentService;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
 
 pub async fn call_tool(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
-    ctx: &SubagentMcpContext,
+    ctx: &AgentOpsMcpContext,
     name: &str,
     arguments: Option<Value>,
 ) -> anyhow::Result<Value> {
-    match name {
+    match canonical_tool_name(name) {
         "get_subagent_launch_options" => get_subagent_launch_options(service, session_runtime, ctx),
-        "create_subagent" => {
+        "spawn_subagent" => {
             let args: CreateSubagentArgs = deserialize_args(arguments)?;
-            create_subagent(service, session_runtime, ctx, args).await
+            spawn_subagent(service, session_runtime, ctx, args).await
         }
         "list_subagents" => service
             .list_subagents(&ctx.parent_session_id)
@@ -132,9 +133,9 @@ pub async fn call_tool(
                 })
                 .map_err(anyhow::Error::from)
         }
-        "close_subagent" => {
+        "close_agent" => {
             let args: ChildSessionArgs = deserialize_args(arguments)?;
-            close_subagent(service, session_runtime, &ctx.parent_session_id, args).await
+            close_agent(service, session_runtime, &ctx.parent_session_id, args).await
         }
         _ => Err(anyhow::anyhow!("unknown tool: {name}")),
     }
@@ -143,7 +144,7 @@ pub async fn call_tool(
 fn get_subagent_launch_options(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
-    ctx: &SubagentMcpContext,
+    ctx: &AgentOpsMcpContext,
 ) -> anyhow::Result<Value> {
     let parent = service
         .session_store()
@@ -207,19 +208,19 @@ fn get_subagent_launch_options(
             "options": mode_options_to_json(live_mode_control),
         },
         "notes": [
-            "If harnessId or initialConfig.modelId/modeId are omitted, create_subagent inherits the current parent session values when available.",
+            "If harnessId or initialConfig.modelId/modeId are omitted, spawn_subagent inherits the current parent session values when available.",
             "harnessId and initialConfig.modelId are validated against the launch catalog before the child session is created.",
             "initialConfig.modeId is currently a launch hint stored on the child session; available mode options can only be inferred from the parent session's live config snapshot.",
-            "Subagents are same-workspace normal sessions. They cannot create grandchildren and do not inherit the parent's MCP bindings in this PR.",
+            "Subagents are same-workspace normal sessions. They cannot create grandchildren and do not inherit the parent's external/user MCP bindings; product MCPs like agent ops are mounted independently on every session, not inherited.",
             "Completions are passive by default. Pass wakeOnCompletion or call schedule_subagent_wake when you want to be prompted after the child's next completed turn."
         ]
     }))
 }
 
-async fn create_subagent(
+async fn spawn_subagent(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
-    ctx: &SubagentMcpContext,
+    ctx: &AgentOpsMcpContext,
     args: CreateSubagentArgs,
 ) -> anyhow::Result<Value> {
     let parent_session_id = &ctx.parent_session_id;
@@ -377,6 +378,12 @@ async fn send_subagent_message(
         anyhow::bail!("prompt is required");
     }
     let link = service.authorize_target(parent_session_id, args.subagent_id.as_deref(), None)?;
+    authorize(
+        service.session_store(),
+        parent_session_id,
+        &link.child_session_id,
+        AgentAccessIntent::Send,
+    )?;
     let wake_scheduled = if args.wake_on_completion {
         service
             .schedule_wake_for_target(parent_session_id, args.subagent_id.as_deref(), None)?
@@ -449,10 +456,13 @@ async fn get_subagent_status(
         args.subagent_id.as_deref(),
         None,
     )?;
-    let session = service
-        .session_store()
-        .find_by_id(&link.child_session_id)?
-        .ok_or_else(|| anyhow::anyhow!("child session not found"))?;
+    let session = authorize(
+        service.session_store(),
+        parent_session_id,
+        &link.child_session_id,
+        AgentAccessIntent::Read,
+    )?
+    .target;
     let execution = session_runtime.session_execution_summary(&session).await;
     Ok(json!({
         "subagentId": link.public_id,
@@ -467,7 +477,7 @@ async fn get_subagent_status(
     }))
 }
 
-async fn close_subagent(
+async fn close_agent(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
     parent_session_id: &str,

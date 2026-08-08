@@ -1,7 +1,9 @@
-# Subagents Product MCP
+# Subagents
 
-Status: authoritative definition of the Subagents product MCP identity,
-exposure, and lifecycle laws. Prompt and wake-prompt rules live in
+Status: authoritative definition of subagent identity, exposure, and lifecycle
+laws. Subagents are a tool class inside the agent ops product MCP
+(`domains/sessions/agent_ops`), which mounts on every session and gates every
+tool at call time. Prompt and wake-prompt rules live in
 [prompt-and-skill-policy.md](prompt-and-skill-policy.md); UI presentation and
 close/delete semantics live in
 [../../../../systems/product/agents/delegated-work.md](../../../../systems/product/agents/delegated-work.md).
@@ -28,6 +30,11 @@ fields so older transcript parsers, SDKs, and in-flight agent sessions keep
 working. New callers should treat those fields as compatibility aliases only.
 All examples and new code should prefer `subagentId` plus `label`.
 
+Tool names follow the same law. A session's tool list is frozen at launch, so
+`spawn_subagent` and `close_agent` stay callable under their pre-agent-ops
+names, `create_subagent` and `close_subagent`. Aliases dispatch to the same
+implementation and are never advertised in `tools/list`.
+
 Subagents cannot create grandchildren. There are no top-level `modelId` or
 `modeId` fields in subagent tools; harness-specific launch configuration is
 carried through `initialConfig`.
@@ -35,7 +42,7 @@ carried through `initialConfig`.
 ## Wake Race
 
 Wake scheduling is explicit and not retroactive. `wakeOnCompletion` on
-`create_subagent` and `send_subagent_message` is preferred when the wake
+`spawn_subagent` and `send_subagent_message` is preferred when the wake
 should be tied to the prompt being sent, because it avoids the race where the
 child finishes before the parent schedules a separate wake via
 `schedule_subagent_wake`.

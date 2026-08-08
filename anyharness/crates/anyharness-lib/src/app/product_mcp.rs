@@ -9,6 +9,10 @@ use crate::domains::reviews::mcp::{
     self as review_mcp, auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
 };
 use crate::domains::reviews::runtime::ReviewRuntime;
+use crate::domains::sessions::agent_ops::{
+    self as agent_ops_mcp, auth::AgentOpsMcpAuth, tools as agent_ops_mcp_tools,
+    AgentOpsProductMcpServer,
+};
 use crate::domains::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use crate::domains::sessions::mcp_bindings::product_launch::{
     ProductMcpLaunchRegistration, ProductMcpSelectionContext,
@@ -17,9 +21,6 @@ use crate::domains::sessions::mcp_bindings::product_registry::{
     ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistration, ProductMcpEndpointRegistry,
 };
 use crate::domains::sessions::runtime::SessionRuntime;
-use crate::domains::sessions::subagents::mcp::{
-    auth::SubagentMcpAuth, tools as subagent_mcp_tools, SubagentProductMcpServer,
-};
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
@@ -29,9 +30,8 @@ pub(super) struct LaunchCatalogDeps {
     pub(super) runtime_base_url: String,
     pub(super) bearer_token: Option<String>,
     pub(super) review_mcp_auth: Arc<ReviewMcpAuth>,
-    pub(super) subagent_mcp_auth: Arc<SubagentMcpAuth>,
+    pub(super) agent_ops_mcp_auth: Arc<AgentOpsMcpAuth>,
     pub(super) cowork_mcp_auth: Arc<CoworkMcpAuth>,
-    pub(super) subagent_service: Arc<SubagentService>,
 }
 
 pub(super) struct EndpointRegistryDeps {
@@ -40,7 +40,7 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) subagent_service: Arc<SubagentService>,
     pub(super) session_runtime: Arc<SessionRuntime>,
     pub(super) workspace_runtime: Arc<WorkspaceRuntime>,
-    pub(super) subagent_mcp_auth: Arc<SubagentMcpAuth>,
+    pub(super) agent_ops_mcp_auth: Arc<AgentOpsMcpAuth>,
     pub(super) cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
     pub(super) cowork_runtime: Arc<CoworkRuntime>,
     pub(super) cowork_mcp_auth: Arc<CoworkMcpAuth>,
@@ -51,15 +51,13 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
         runtime_base_url,
         bearer_token,
         review_mcp_auth,
-        subagent_mcp_auth,
+        agent_ops_mcp_auth,
         cowork_mcp_auth,
-        subagent_service,
     } = deps;
 
     let review_auth = review_mcp_auth.clone();
-    let subagent_auth = subagent_mcp_auth.clone();
+    let agent_ops_auth = agent_ops_mcp_auth.clone();
     let cowork_auth = cowork_mcp_auth.clone();
-    let subagent_selector_service = subagent_service.clone();
 
     ProductMcpLaunchCatalog::new(
         runtime_base_url,
@@ -79,24 +77,13 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
             )
             .with_binding_summary(review_mcp::definition::binding_summary()),
             ProductMcpLaunchRegistration::new(
-                &crate::domains::sessions::subagents::mcp::definition::DEFINITION,
-                Arc::new(move |ctx: ProductMcpSelectionContext<'_>| {
-                    if ctx.workspace.surface != WorkspaceSurface::Standard
-                        || !ctx.session.subagents_enabled
-                    {
-                        return Ok(false);
-                    }
-                    Ok(subagent_selector_service
-                        .find_subagent_parent(&ctx.session.id)?
-                        .is_none())
-                }),
+                &agent_ops_mcp::definition::DEFINITION,
+                Arc::new(agent_ops_mcp::definition::should_attach),
                 Arc::new(move |workspace_id: &str, session_id: &str| {
-                    subagent_auth.mint_capability_token(workspace_id, session_id)
+                    agent_ops_auth.mint_capability_token(workspace_id, session_id)
                 }),
             )
-            .with_binding_summary(
-                crate::domains::sessions::subagents::mcp::definition::binding_summary(),
-            ),
+            .with_binding_summary(agent_ops_mcp::definition::binding_summary()),
             ProductMcpLaunchRegistration::new(
                 &cowork_mcp::definition::DEFINITION,
                 Arc::new(|ctx: ProductMcpSelectionContext<'_>| {
@@ -122,7 +109,7 @@ pub(super) fn build_product_mcp_endpoint_registry(
         subagent_service,
         session_runtime,
         workspace_runtime,
-        subagent_mcp_auth,
+        agent_ops_mcp_auth,
         cowork_artifact_runtime,
         cowork_runtime,
         cowork_mcp_auth,
@@ -135,14 +122,14 @@ pub(super) fn build_product_mcp_endpoint_registry(
             review_mcp_tools::MUTATING_TOOL_NAMES,
         ))),
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-            Arc::new(SubagentProductMcpServer::new(
+            Arc::new(AgentOpsProductMcpServer::new(
                 subagent_service.clone(),
                 session_runtime,
                 workspace_runtime.clone(),
-                subagent_mcp_auth,
+                agent_ops_mcp_auth,
             )),
             Some(WorkspaceOperationKind::SubagentWrite),
-            subagent_mcp_tools::MUTATING_TOOL_NAMES,
+            agent_ops_mcp_tools::MUTATING_TOOL_NAMES,
         ))),
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
             Arc::new(CoworkProductMcpServer::new(

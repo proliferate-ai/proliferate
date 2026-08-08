@@ -223,7 +223,7 @@ mutating the child.
 Current tools:
 
 - `get_subagent_launch_options`
-- `create_subagent`
+- `spawn_subagent` (deprecated alias: `create_subagent`)
 - `list_subagents`
 - `send_subagent_message`
 - `get_subagent_status`

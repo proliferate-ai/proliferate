@@ -53,6 +53,7 @@ use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
+use crate::domains::sessions::agent_ops::auth::AgentOpsMcpAuth;
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::domains::sessions::links::completions::LinkCompletionStore;
 use crate::domains::sessions::links::service::SessionLinkService;
@@ -64,7 +65,6 @@ use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
-use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::domains::terminals::store::TerminalStore;
@@ -365,7 +365,7 @@ impl AppState {
             workspace_access_gate.clone(),
         ));
         let (review_hook_event_tx, review_hook_event_rx) = tokio::sync::mpsc::channel(256);
-        let subagent_mcp_auth = Arc::new(SubagentMcpAuth::new(runtime_home.clone()));
+        let agent_ops_mcp_auth = Arc::new(AgentOpsMcpAuth::new(runtime_home.clone()));
         let subagent_session_hooks = Arc::new(SubagentSessionHooks::new(
             subagent_service.clone(),
             acp_manager.clone(),
@@ -383,9 +383,8 @@ impl AppState {
                 runtime_base_url: runtime_base_url.clone(),
                 bearer_token: bearer_token.clone(),
                 review_mcp_auth: review_mcp_auth.clone(),
-                subagent_mcp_auth: subagent_mcp_auth.clone(),
+                agent_ops_mcp_auth: agent_ops_mcp_auth.clone(),
                 cowork_mcp_auth: cowork_mcp_auth.clone(),
-                subagent_service: subagent_service.clone(),
             });
         let goal_runtime = Arc::new(GoalRuntime::new(
             goal_service.clone(),
@@ -550,7 +549,7 @@ impl AppState {
                 subagent_service: subagent_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
-                subagent_mcp_auth,
+                agent_ops_mcp_auth,
                 cowork_artifact_runtime: cowork_artifact_runtime.clone(),
                 cowork_runtime: cowork_runtime.clone(),
                 cowork_mcp_auth,
