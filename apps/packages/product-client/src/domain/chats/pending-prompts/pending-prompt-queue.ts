@@ -5,6 +5,7 @@ import {
   formatAgentWakePromptQueueText,
   formatReviewFeedbackQueueText,
   formatWakePromptQueueText,
+  isAgentSessionProvenance,
   isAgentWakeProvenance,
   isSubagentWakeProvenance,
 } from "../subagents/provenance";
@@ -19,6 +20,17 @@ export interface PendingPromptQueueEntry {
   isBeingEdited: boolean;
   promptProvenance?: PromptProvenance | null;
   localOutboxDeliveryState?: PromptOutboxDeliveryState | null;
+}
+
+/**
+ * The agent an entry was queued BY. Present only for entries an agent put in
+ * the queue - a wake pointer or an agent message - which the composer collapses
+ * into one quiet "delivered next turn" row instead of showing their bodies.
+ */
+export interface PendingPromptQueueAgentSource {
+  sessionId: string | null;
+  sessionLinkId: string | null;
+  label: string | null;
 }
 
 export interface PendingPromptQueueRow {
@@ -41,6 +53,37 @@ export interface PendingPromptQueueRow {
   canDelete: boolean;
   deleteDisabledReason: string | null;
   deleteAction: "runtime" | "cancel_local" | "dismiss_local" | null;
+  /** Set iff an agent queued this entry. Null for the human's own messages. */
+  agentSource: PendingPromptQueueAgentSource | null;
+}
+
+export function pendingPromptAgentSource(
+  provenance: PendingPromptQueueEntry["promptProvenance"],
+): PendingPromptQueueAgentSource | null {
+  if (isSubagentWakeProvenance(provenance)) {
+    return {
+      // A link-scoped pointer names a link, not a session: the composer
+      // resolves the session through the delegation link it already holds.
+      sessionId: null,
+      sessionLinkId: provenance.sessionLinkId,
+      label: provenance.label ?? null,
+    };
+  }
+  if (isAgentWakeProvenance(provenance)) {
+    return {
+      sessionId: provenance.targetSessionId,
+      sessionLinkId: null,
+      label: provenance.label ?? null,
+    };
+  }
+  if (isAgentSessionProvenance(provenance)) {
+    return {
+      sessionId: provenance.sourceSessionId,
+      sessionLinkId: null,
+      label: provenance.label ?? null,
+    };
+  }
+  return null;
 }
 
 export function derivePendingPromptQueueRow(
@@ -52,6 +95,7 @@ export function derivePendingPromptQueueRow(
   // unique for runtime queue rows.
   const key = `seq:${entry.seq}`;
   const deleteAction = resolveDeleteAction(entry);
+  const agentSource = pendingPromptAgentSource(entry.promptProvenance);
   const isSending =
     entry.localOutboxDeliveryState === "preparing"
     || entry.localOutboxDeliveryState === "dispatching";
@@ -78,6 +122,7 @@ export function derivePendingPromptQueueRow(
       canDelete: deleteAction !== null && isRuntimeConfirmed,
       deleteDisabledReason: null,
       deleteAction: isRuntimeConfirmed ? deleteAction : null,
+      agentSource,
     };
   }
 
@@ -101,6 +146,7 @@ export function derivePendingPromptQueueRow(
       canDelete: deleteAction !== null && isRuntimeConfirmed,
       deleteDisabledReason: null,
       deleteAction: isRuntimeConfirmed ? deleteAction : null,
+      agentSource,
     };
   }
 
@@ -133,6 +179,7 @@ export function derivePendingPromptQueueRow(
     canDelete,
     deleteDisabledReason: showDeleteAction && !canDelete ? "Available once queued" : null,
     deleteAction,
+    agentSource,
   };
 }
 

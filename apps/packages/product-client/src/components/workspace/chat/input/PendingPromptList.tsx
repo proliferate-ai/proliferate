@@ -1,12 +1,15 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Button } from "#product/primitives/Button";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { ArrowUpRight, GripVertical, Pencil, X } from "#product/primitives/icons/core";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { usePendingPromptQueue } from "#product/hooks/chat/ui/use-pending-prompt-queue";
+import { useSubagentComposerStrip } from "#product/hooks/chat/facade/subagents/use-subagent-composer-strip";
 import { useVerticalReorder } from "#product/hooks/chat/ui/use-vertical-reorder";
 import type { PendingPromptQueueRow } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
+import { groupPendingAgentUpdates } from "#product/domain/chats/pending-prompts/pending-agent-updates";
+import { PendingAgentUpdatesRow } from "#product/components/workspace/chat/input/PendingAgentUpdatesRow";
 
 export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];
@@ -17,9 +20,18 @@ export interface PendingPromptListProps {
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  /** Resolves a delegation link to the session behind it, for wake pointers. */
+  sessionIdByLinkId?: Readonly<Record<string, string>>;
+  onOpenAgent?: (sessionId: string) => void;
 }
 
-/** Presentational queued-message list with reorder, steer, edit, and remove. */
+/**
+ * Presentational queued-message list with reorder, steer, edit, and remove.
+ *
+ * The human's own queued messages get the full row. Anything an agent queued
+ * collapses into ONE quiet row underneath them (ADR §4): you see that updates
+ * are pending, not what they say.
+ */
 export function PendingPromptList({
   entries,
   steeringSeq,
@@ -29,9 +41,13 @@ export function PendingPromptList({
   onDelete,
   onSteer,
   onReorder,
+  sessionIdByLinkId,
+  onOpenAgent,
 }: PendingPromptListProps) {
+  const humanEntries = entries.filter((entry) => !entry.agentSource);
+  const agentUpdates = groupPendingAgentUpdates({ rows: entries, sessionIdByLinkId });
   const { dragIndex, dropIndex, handleDragStart } = useVerticalReorder({
-    itemCount: entries.length,
+    itemCount: humanEntries.length,
     onReorder,
   });
 
@@ -39,7 +55,7 @@ export function PendingPromptList({
     return null;
   }
 
-  const runtimeEntryIndexes = entries.flatMap((entry, index) => entry.seq > 0 ? [index] : []);
+  const runtimeEntryIndexes = humanEntries.flatMap((entry, index) => entry.seq > 0 ? [index] : []);
 
   return (
     <div
@@ -51,7 +67,7 @@ export function PendingPromptList({
         className="vertical-scroll-fade-mask flex max-h-[30dvh] flex-col gap-px overflow-y-auto px-3 py-1.5 scrollbar-none [--edge-fade-distance:8px]"
         data-reorder-container
       >
-        {entries.map((entry, index) => {
+        {humanEntries.map((entry, index) => {
           const runtimeIndex = runtimeEntryIndexes.indexOf(index);
           return (
             <PendingPromptRow
@@ -78,6 +94,9 @@ export function PendingPromptList({
             />
           );
         })}
+        {agentUpdates && (
+          <PendingAgentUpdatesRow updates={agentUpdates} onOpenAgent={onOpenAgent} />
+        )}
       </div>
     </div>
   );
@@ -85,12 +104,26 @@ export function PendingPromptList({
 
 export function ConnectedPendingPromptList() {
   const queue = usePendingPromptQueue();
+  // A link-scoped wake pointer names a link, not a session. The composer
+  // already holds this session's delegation links, so it can resolve one to the
+  // agent a glyph click should open.
+  const subagents = useSubagentComposerStrip();
+  const sessionIdByLinkId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const row of [...(subagents?.rows ?? []), ...(subagents?.ownedAgents ?? [])]) {
+      map[row.sessionLinkId] = row.childSessionId;
+    }
+    return map;
+  }, [subagents]);
+
   if (queue.rows.length === 0) {
     return null;
   }
 
   return (
     <PendingPromptList
+      sessionIdByLinkId={sessionIdByLinkId}
+      onOpenAgent={subagents?.openSubagent}
       entries={queue.rows}
       steeringSeq={queue.steeringSeq}
       sessionMaterialized={queue.sessionMaterialized}
