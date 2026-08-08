@@ -23,6 +23,7 @@ export interface AgentsPaneProps {
   onOpenAgent: (sessionId: string, sessionLinkId: string) => void;
   onBack: () => void;
   onOpenSession: (agent: AgentsPaneAgent) => void;
+  onConfigure: (agent: AgentsPaneAgent) => void;
   onPromote: (agent: AgentsPaneAgent) => void;
   onClose: (agent: AgentsPaneAgent) => void;
   onSend: (agent: AgentsPaneAgent, text: string) => void;
@@ -53,6 +54,7 @@ export function AgentsPane({
   onOpenAgent,
   onBack,
   onOpenSession,
+  onConfigure,
   onPromote,
   onClose,
   onSend,
@@ -87,6 +89,7 @@ export function AgentsPane({
           closeAttribution={closeAttributionFor?.(agent) ?? null}
           onBack={onBack}
           onOpenSession={onOpenSession}
+          onConfigure={onConfigure}
           onRequestPromote={(target) => setConfirm({ kind: "promote", agent: target })}
           onRequestClose={requestClose}
           onSend={onSend}

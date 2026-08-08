@@ -7,12 +7,14 @@ import {
   agentsPaneCanClose,
   agentsPaneCanPromote,
   agentsPaneCloseAttribution,
+  agentsPaneCloseAttributionForAgent,
   agentsPaneCloseNeedsConfirm,
   agentsPaneClusterSummary,
   agentsPaneDetailEntries,
   agentsPaneOverviewSummary,
   agentsPaneStack,
   agentsPaneStatusLine,
+  buildAgentsPaneClusters,
   partitionAgentsPaneSections,
   toAgentsPaneAgent,
   type AgentsPaneAgentSource,
@@ -38,6 +40,8 @@ function source(
     wakeScheduled: false,
     closeRequested: false,
     closeRequestedLabel: null,
+    closedBySessionId: null,
+    closeReason: null,
     ownership: "subagent",
     workspaceId: null,
     ...overrides,
@@ -155,11 +159,17 @@ describe("agents pane close and promote gating", () => {
     expect(agentsPaneCanPromote(agent("Spike", "Closed"))).toBe(false);
   });
 
-  it("keeps the ADR's confirm copy exactly", () => {
+  it("keeps the confirm copy exactly, and says what close actually does", () => {
+    // ADR §4 wrote "it will finish the current step, then stop" — that is §6's
+    // SOFT close, which stamps `closed_by_session_id` and so has no human
+    // route. The human button hits `POST /sessions/{id}/close`, which stops the
+    // tree now. The copy has to describe the wiring that exists, or the confirm
+    // is a lie. See the ADR §4 amendment and #1734.
     expect(AGENTS_PANE_CLOSE_CONFIRM_BODY).toBe(
-      "It's mid-turn — it will finish the current step, then stop. "
+      "It's mid-turn — closing stops it now. "
       + "The transcript stays readable under Closed.",
     );
+    expect(AGENTS_PANE_CLOSE_CONFIRM_BODY).not.toContain("finish the current step");
     expect(AGENTS_PANE_PROMOTE_CONFIRM_BODY).toBe(
       "It becomes a top-level session in this workspace's tabs, keeps its transcript, "
       + "and can spawn its own subagents",
@@ -182,6 +192,84 @@ describe("agents pane close attribution", () => {
     expect(agentsPaneCloseAttribution({ closedByTitle: "  ", closeReason: null })).toBeNull();
     expect(agentsPaneCloseAttribution({ closeReason: "superseded" }))
       .toBe("Closed · superseded");
+  });
+
+  it("resolves the closer from the sessions the client already holds", () => {
+    const closed = source("Repro flake", "Working", {
+      closedBySessionId: "sess_parent",
+      closeReason: "superseded",
+    });
+
+    expect(agentsPaneCloseAttributionForAgent(
+      closed,
+      (sessionId) => (sessionId === "sess_parent" ? "Refactor billing webhooks" : null),
+    )).toBe("Closed by Refactor billing webhooks · superseded");
+  });
+
+  it("falls back to the short id when nothing knows the closing session", () => {
+    const closed = source("Repro flake", "Working", {
+      closedBySessionId: "9f3c2a10-0000-4000-8000-000000000000",
+      closeReason: "superseded",
+    });
+
+    expect(agentsPaneCloseAttributionForAgent(closed, () => "9f3c2a"))
+      .toBe("Closed by 9f3c2a · superseded");
+  });
+
+  it("says nothing when no close has been requested", () => {
+    expect(agentsPaneCloseAttributionForAgent(
+      source("Repro flake", "Working"),
+      () => "Never asked",
+    )).toBeNull();
+  });
+});
+
+describe("agents pane clusters", () => {
+  it("keeps a child's peers out of its parent's cluster", () => {
+    const clusters = buildAgentsPaneClusters({
+      activeSessionId: "sess_child",
+      activeSessionTitle: "Repro the flake",
+      ownRows: [source("Bisect the suite", "Working")],
+      ownedAgents: [source("Docs peer", "Idle", { ownership: "owned_agent" })],
+      parent: { sessionId: "sess_parent", title: "Refactor billing webhooks" },
+      siblingRows: [source("Audit retry queue schema", "Working")],
+    });
+
+    expect(clusters.map((cluster) => cluster.sessionId))
+      .toEqual(["sess_child", "sess_parent"]);
+    expect(clusters[0].title).toBe("Repro the flake");
+    expect(clusters[0].agents.map((agent) => agent.identity.title))
+      .toEqual(["Bisect the suite", "Docs peer"]);
+    // The parent spawned exactly one agent. Its cluster must not grow the
+    // child's own fanout or the peers the child owns.
+    expect(clusters[1].title).toBe("Refactor billing webhooks");
+    expect(clusters[1].agents.map((agent) => agent.identity.title))
+      .toEqual(["Audit retry queue schema"]);
+  });
+
+  it("lists one cluster when the session in view has no parent", () => {
+    const clusters = buildAgentsPaneClusters({
+      activeSessionId: "sess_top",
+      activeSessionTitle: null,
+      ownRows: [source("Audit retry queue schema", "Working")],
+      ownedAgents: [],
+      parent: null,
+      siblingRows: [],
+    });
+
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0].title).toBe("This session");
+  });
+
+  it("drops a cluster with nothing in it rather than showing an empty owner", () => {
+    expect(buildAgentsPaneClusters({
+      activeSessionId: "sess_child",
+      activeSessionTitle: "Repro the flake",
+      ownRows: [],
+      ownedAgents: [],
+      parent: { sessionId: "sess_parent", title: "Refactor billing webhooks" },
+      siblingRows: [],
+    })).toEqual([]);
   });
 });
 

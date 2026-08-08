@@ -244,8 +244,13 @@ this order:
    Queued AGENT updates do not: they collapse into one quiet row
    (`PendingAgentUpdatesRow`) carrying overlapping identity glyphs, a count and
    `delivered next turn`. You see THAT, not WHAT — no bodies, no preview, no
-   edit, no delete. A glyph's hover reads `{title} · N queued updates — click
-   to open` and clicking it opens that agent's session.
+   edit, no delete. A glyph's hover reads `N queued · click to open` — the
+   ADR's wording, with the click half dropped when nothing resolved a session —
+   and clicking it opens that agent's session. The glyph's accessible name
+   prefixes the agent's title, because a screen reader cannot see the seal.
+   Reordering the human rows is key-based: a drag moves the dragged prompt and
+   can never move an agent-sourced entry, which is what an index into the
+   filtered human list would have done.
 2. **`activeSlot`** — the active agent state. Permission approvals, user-input
    questions, and MCP elicitation forms take precedence. If there is no blocking
    request, this slot may show `TodoTrackerPanel`.
@@ -259,7 +264,14 @@ popover pattern for reviews and subagents. That control is this session's
 "N working" cap, and it is one of the two entry points into the agents pane:
 `Open agents pane` in its popover opens THIS session's cluster in the right
 panel. The other entry point is the panel's own `Agents` tab, which opens the
-overview. The pane never auto-follows tab focus. The review section owns reviewer
+overview — the tab handler calls `openOverview()` before activating the entry,
+so the pane cannot reappear pointed at another session's agent detail. The pane
+never auto-follows tab focus.
+
+The cap itself is the popover's trigger button, so today the popover's
+`Open agents pane` action is the only cap surface that navigates; there is no
+separate goal-bar or status-cap component wired to open a cluster. The review
+section owns reviewer
 rows, critique links, stop, send-feedback, and review-revision actions. Review
 automation and linked subagents are parallel delegated work and must not make
 normal parent chat input unavailable by themselves. They should not displace

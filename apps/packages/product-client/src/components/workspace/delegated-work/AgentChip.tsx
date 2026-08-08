@@ -7,7 +7,7 @@ import type { DelegatedAgentIdentity } from "#product/lib/domain/delegated-work/
  * The agent chip — the one way an agent appears inside somebody else's
  * transcript (agent-ops ADR §4, "Spawn receipts" + "Agent messages").
  *
- * Anatomy is locked by the Spawn Receipts canvas page: a 28px (`h-7`) pill on
+ * Anatomy is locked by the Spawn Receipts canvas page: a 28px (`h-control`) pill on
  * `surface-elevated` with a `border-light` edge, a 16px seal glyph, the
  * task-derived name truncating at 288px (`max-w-72`), and a hover that raises
  * border + background. The name carries the agent's colour token so the glyph
@@ -22,13 +22,17 @@ import type { DelegatedAgentIdentity } from "#product/lib/domain/delegated-work/
 /**
  * 28px pill · 16px glyph · truncate at 288px. Shared by every chip surface.
  *
+ * The height is `h-control`, the token utility Tailwind emits from
+ * `--height-control`. `h-7` renders the same 28px today, but it is a second
+ * authority for a number the token table owns.
+ *
  * The label sits at `text-ui` (13px) rather than inheriting the 14px transcript
  * size, because the glyph's `icon-paired` tier is relative to it and only lands
  * on the locked 16px against 13px text. The Workspace Ops canvas chip sizes its
  * label the same way.
  */
 export const AGENT_CHIP_SHAPE_CLASS =
-  "inline-flex h-7 max-w-72 min-w-0 items-center gap-1.5 rounded-full border py-0 pe-2.5 ps-2 align-middle text-ui";
+  "inline-flex h-control max-w-72 min-w-0 items-center gap-1.5 rounded-full border py-0 pe-2.5 ps-2 align-middle text-ui";
 export const AGENT_CHIP_LIVE_TONE_CLASS =
   "border-border-light bg-surface-elevated hover:border-border hover:bg-hover";
 /** Closed: transparent fill + muted text, so "closed" reads at a glance. */

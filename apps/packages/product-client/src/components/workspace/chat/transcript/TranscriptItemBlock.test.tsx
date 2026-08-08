@@ -192,7 +192,90 @@ describe("TranscriptItemBlock", () => {
     expect(container.querySelector("[title]")?.getAttribute("title"))
       .toContain("billing-webhooks");
   });
+
+  it("renders an inbound agent message as chip + verb, never as a user bubble", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = agentMessageItem({ sessionLinkId: null });
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptItemBlock
+          item={item}
+          transcript={transcript}
+          workspaceId={null}
+          onOpenArtifact={() => {}}
+        />
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    // ADR §4: "Message content never gets its own UI." The row is a chip and a
+    // verb; the literal body only exists in the hover card's title.
+    expect(container.querySelector("[data-agent-inbound-message]")).toBeTruthy();
+    expect(container.querySelector("[data-chat-user-message]")).toBeNull();
+    expect(container.textContent).not.toContain("The retry ceiling was the culprit");
+    expect(container.textContent).toContain("messaged");
+  });
+
+  it("never calls a peer's message a parent's: no link, no parent claim", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = agentMessageItem({ sessionLinkId: null });
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptItemBlock
+          item={item}
+          transcript={transcript}
+          workspaceId={null}
+          onOpenArtifact={() => {}}
+        />
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    expect(container.innerHTML).not.toContain("Sent by parent");
+    expect(
+      container.querySelector("[data-agent-inbound-message]")
+        ?.getAttribute("data-agent-inbound-origin"),
+    ).toBe("peer");
+  });
+
+  it("says parent only when a delegation link says so", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = agentMessageItem({ sessionLinkId: "link-1" });
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptItemBlock
+          item={item}
+          transcript={transcript}
+          workspaceId={null}
+          onOpenArtifact={() => {}}
+        />
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    expect(container.querySelector("[data-chat-user-message]")).toBeNull();
+    expect(
+      container.querySelector("[data-agent-inbound-message]")
+        ?.getAttribute("data-agent-inbound-origin"),
+    ).toBe("parent");
+  });
 });
+
+function agentMessageItem({ sessionLinkId }: { sessionLinkId: string | null }) {
+  return {
+    ...userItem("agent-message", "turn-1", 1),
+    text: "The retry ceiling was the culprit — pushed the fix.",
+    promptProvenance: {
+      type: "agentSession" as const,
+      sourceSessionId: "peer-1",
+      sessionLinkId,
+      label: "dispatch-peer",
+    },
+  };
+}
 
 function activityBlockClassName(container: HTMLElement): string {
   const block = container.querySelector("[data-transcript-activity-block]");

@@ -183,7 +183,7 @@ Level 2 — cluster
 Level 3 — agent
   glyph, title, status line, copyable short id
   Parent prompt / Tool / latest Agent message
-  actions: Open as tab · Promote · Close
+  actions: Open as tab · Configure agent… · Promote · Close
   composer: "Message this agent — delivered on its next turn"
 ```
 
@@ -204,7 +204,22 @@ Rules:
   it and is not counted by the overview summary.
 - Level 3 shows only what the read models carry. The session-subagents endpoint
   reports the delegated task and the latest completion; it carries no tool
-  cursor and no message text, so those lines are absent rather than faked.
+  cursor and no message text, so those lines are absent rather than faked. In
+  particular `SubagentCompletionSummary` carries no summary TEXT, so the pane's
+  latest-update line cannot show one; a subagent's completion summary is
+  readable on the spawn chip's hover card in the transcript, which is the only
+  surface that has it.
+- `Configure agent…` is a hand-off, not a second config UI. The client's session
+  config surface (`SessionConfigControls` over `POST
+  /v1/sessions/{id}/config-options`) is built for the session in view and has no
+  out-of-tab form, so the action opens the agent's tab — where its model, mode
+  and effort controls already live — and its tooltip says so.
+- One cluster per DELEGATING SESSION, each built from that session's own read
+  model only. The session in view contributes the fanout it parents plus the
+  peers it owns; the parent link in the strip contributes the PARENT's fanout
+  under the parent's title. The two are never merged: a child's peers are not
+  the parent's, and folding them together would file agents under an owner that
+  never spawned them.
 - The "Wake me on reply" toggle renders DISABLED with a tooltip saying why:
   `wakeOnReply` is a flag on the agents' own `send_agent_message` tool, and the
   human prompt route carries no equivalent. It must not pretend to arm one.
@@ -226,14 +241,27 @@ Rules:
   transcript trace at all.
 - Close sits on a cluster row's hover and in the agent detail header. An idle
   or finished agent closes instantly; only work in flight asks, with exactly
-  this sentence: "It's mid-turn — it will finish the current step, then stop.
-  The transcript stays readable under Closed."
+  this sentence: "It's mid-turn — closing stops it now. The transcript stays
+  readable under Closed."
+- That sentence is deliberately NOT the ADR's "it will finish the current step,
+  then stop". The finish-current-step behaviour is the SOFT close, which stamps
+  `closed_by_session_id` and is therefore agent-attributed by design; no human
+  route reaches it. The human button calls `POST /v1/sessions/{id}/close`, which
+  stops the tree immediately. The copy describes the wiring that exists. A human
+  soft-close route is tracked on issue #1734; when it lands, this sentence and
+  the ADR's converge.
 - The confirm is calm. Nothing on it is destructive-styled — closing is
   routine, not an alarm.
 - The pane names a closer only where the read models carry one. The subagents
   endpoint returns OPEN links, so attribution exists exactly in the
   close-requested window and in the transcript's close receipt. A landed close
   gets `Closed · transcript is read-only` and no invented closer.
+- Consequence of the immediate close: because the close lands at once, the link
+  leaves the OPEN set the subagents endpoint returns, so the closed agent stops
+  arriving in `getSubagents` and the pane's `Closed` section holds only agents
+  whose close was requested but has not landed, plus whatever the session in
+  view still reports as `Closed`. The section is honest about what it has; it
+  does not reconstruct a roster of everything ever closed.
 
 ## Tool And Workflow Result Rendering
 

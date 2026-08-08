@@ -1,7 +1,10 @@
+// @vitest-environment jsdom
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { createTranscriptState, type ToolCallItem } from "@anyharness/sdk";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { toolItem } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import {
   SubagentCreationGroupBlock,
@@ -48,9 +51,14 @@ function chip(overrides: Partial<SpawnChip>): SpawnChip {
     settled: true,
     failed: false,
     hoverTitle: identity.displayName,
+    summary: null,
     ...overrides,
   };
 }
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("SubagentCreationGroupBlock", () => {
   it("renders the spawn run as a chip run with one trailing verb", () => {
@@ -115,6 +123,35 @@ describe("SubagentCreationGroupBlock", () => {
 
     // No pre-state: nothing is drawn until the subagent is up.
     expect(html).toBe("");
+  });
+
+  it("gives the completion summary a home in the hover card, not the transcript flow", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = spawnItem("create-1", "Audit retry queue schema");
+    item.rawOutput = {
+      ...(item.rawOutput as Record<string, unknown>),
+      summary: "Retry ceiling was 3; raised to 8 and added a jitter test.",
+    };
+    transcript.itemsById = { "create-1": item };
+
+    const { container } = render(
+      createElement(SubagentCreationGroupBlock, {
+        itemIds: ["create-1"],
+        transcript,
+      }),
+    );
+
+    // ADR §4: the summary never becomes its own transcript UI.
+    expect(container.querySelector("[data-subagent-spawn-run]")?.textContent)
+      .not.toContain("Retry ceiling was 3");
+
+    const anchor = container.querySelector("[data-agent-chip]")?.parentElement;
+    expect(anchor).toBeTruthy();
+    fireEvent.mouseEnter(anchor as Element);
+
+    // ...but it is not thrown away either: hovering the chip reads it.
+    expect(document.querySelector("[data-agent-message-body]")?.textContent)
+      .toBe("Retry ceiling was 3; raised to 8 and added a jitter test.");
   });
 });
 

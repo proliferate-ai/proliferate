@@ -21,21 +21,31 @@ const TranscriptCanOpenSessionContext = createContext<
  * Open to offer.
  */
 const TranscriptOpenWorkspaceContext = createContext<((workspaceId: string) => void) | null>(null);
+/**
+ * The workspace this transcript's session lives in. Receipts read it to tell a
+ * spawn that landed HERE from one that landed elsewhere: ADR §4 scopes the
+ * "— in {workspace}" suffix to the cross-workspace case, so a same-workspace
+ * spawn must not repeat the workspace the reader is already looking at.
+ */
+const TranscriptWorkspaceIdContext = createContext<string | null>(null);
 
 export function TranscriptContextProviders({
   sessionId,
+  workspaceId = null,
   onOpenSession,
   canOpenSession,
   onOpenWorkspace,
   children,
 }: {
   sessionId: string;
+  workspaceId?: string | null;
   onOpenSession?: TranscriptOpenSessionHandler;
   canOpenSession?: (sessionId: string, role?: TranscriptOpenSessionRole) => boolean;
   onOpenWorkspace?: (workspaceId: string) => void;
   children: ReactNode;
 }) {
   return (
+    <TranscriptWorkspaceIdContext.Provider value={workspaceId}>
     <TranscriptSessionIdContext.Provider value={sessionId}>
       <TranscriptOpenSessionContext.Provider value={onOpenSession ?? null}>
         <TranscriptCanOpenSessionContext.Provider value={canOpenSession ?? null}>
@@ -45,7 +55,12 @@ export function TranscriptContextProviders({
         </TranscriptCanOpenSessionContext.Provider>
       </TranscriptOpenSessionContext.Provider>
     </TranscriptSessionIdContext.Provider>
+    </TranscriptWorkspaceIdContext.Provider>
   );
+}
+
+export function useTranscriptWorkspaceId(): string | null {
+  return useContext(TranscriptWorkspaceIdContext);
 }
 
 export function useTranscriptOpenWorkspace(): ((workspaceId: string) => void) | null {

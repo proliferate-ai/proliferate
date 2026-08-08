@@ -17,12 +17,10 @@ import {
  */
 export function AgentsPaneClusterSections({
   agents,
-  selectedLinkId,
   onSelect,
   onRequestClose,
 }: {
   agents: readonly AgentsPaneAgent[];
-  selectedLinkId?: string | null;
   onSelect: (agent: AgentsPaneAgent) => void;
   onRequestClose?: (agent: AgentsPaneAgent) => void;
 }) {
@@ -46,7 +44,6 @@ export function AgentsPaneClusterSections({
               <AgentsPaneAgentRow
                 key={agent.sessionLinkId}
                 agent={agent}
-                selected={selectedLinkId === agent.sessionLinkId}
                 onSelect={onSelect}
                 onRequestClose={onRequestClose}
               />
@@ -60,21 +57,17 @@ export function AgentsPaneClusterSections({
 
 function AgentsPaneAgentRow({
   agent,
-  selected,
   onSelect,
   onRequestClose,
 }: {
   agent: AgentsPaneAgent;
-  selected: boolean;
   onSelect: (agent: AgentsPaneAgent) => void;
   onRequestClose?: (agent: AgentsPaneAgent) => void;
 }) {
   const closed = agent.section === "closed";
   return (
     <div
-      className={`group flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg pe-1 ps-2 py-1 text-left hover:bg-hover ${
-        selected ? "bg-selected" : ""
-      }`}
+      className="group flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg pe-1 ps-2 py-1 text-left hover:bg-hover"
       data-agents-pane-agent-row
     >
       <Button

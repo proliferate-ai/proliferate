@@ -18,6 +18,8 @@ type PlaygroundSubagentStripRow = {
   wakeScheduled: boolean;
   closeRequested: boolean;
   closeRequestedLabel: string | null;
+  closedBySessionId: string | null;
+  closeReason: string | null;
   ownership: "subagent" | "promoted" | "owned_agent";
   workspaceId: string | null;
 };
@@ -109,6 +111,8 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
   | "statusCategory"
   | "closeRequested"
   | "closeRequestedLabel"
+  | "closedBySessionId"
+  | "closeReason"
   | "ownership"
   | "workspaceId"
 >[];
@@ -130,6 +134,8 @@ export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] =
     // of these agents to close.
     closeRequested: false,
     closeRequestedLabel: null,
+    closedBySessionId: null,
+    closeReason: null,
     ownership: "subagent" as const,
     workspaceId: null,
   }));

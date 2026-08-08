@@ -117,8 +117,8 @@ describe("usePendingPromptQueue", () => {
     const firstRow = result.current.rows[0]!;
 
     act(() => {
-      result.current.onReorder(0, 1);
-      result.current.onReorder(0, 1);
+      result.current.onReorder("seq:1", "seq:2");
+      result.current.onReorder("seq:1", "seq:2");
       result.current.onSteer(firstRow);
     });
 
@@ -150,7 +150,7 @@ describe("usePendingPromptQueue", () => {
 
     expect(rendered.result.current.rows.map((row) => row.seq)).toEqual([2, 1]);
     expect(rendered.result.current.steeringSeq).toBe(2);
-    act(() => rendered.result.current.onReorder(0, 1));
+    act(() => rendered.result.current.onReorder("seq:1", "seq:2"));
     expect(mocks.reorderPendingPrompts).not.toHaveBeenCalled();
 
     await act(async () => pending.resolve());
@@ -173,7 +173,7 @@ describe("usePendingPromptQueue", () => {
 
     expect(rendered.result.current.steeringSeq).toBeNull();
     expect(rendered.result.current.queueMutationInFlight).toBe(false);
-    act(() => rendered.result.current.onReorder(0, 1));
+    act(() => rendered.result.current.onReorder("seq:1", "seq:2"));
     expect(mocks.reorderPendingPrompts).toHaveBeenCalledWith(
       "session-2",
       [1, 2],
@@ -215,7 +215,7 @@ describe("usePendingPromptQueue", () => {
     expect(steerCall.cause).toBe("steer conflict");
 
     mocks.reorderPendingPrompts.mockRejectedValueOnce(new Error("queue changed"));
-    act(() => rendered.result.current.onReorder(0, 1));
+    act(() => rendered.result.current.onReorder("seq:1", "seq:2"));
     await waitFor(() => expect(rendered.result.current.queueMutationInFlight).toBe(false));
     const reorderCall = mocks.showErrorToast.mock.calls[1]![0] as {
       headline: string;

@@ -11,13 +11,11 @@ export function AgentsPaneHeader({
   summary,
   onBack,
   glyph,
-  actions,
 }: {
   title: string;
   summary: string | null;
   onBack?: (() => void) | null;
   glyph?: ReactNode;
-  actions?: ReactNode;
 }) {
   return (
     <div
@@ -43,7 +41,6 @@ export function AgentsPaneHeader({
           <p className="m-0 truncate text-ui-sm text-sidebar-muted-foreground">{summary}</p>
         )}
       </div>
-      {actions}
     </div>
   );
 }

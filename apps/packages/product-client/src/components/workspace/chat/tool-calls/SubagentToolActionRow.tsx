@@ -1,6 +1,9 @@
 import { AgentChip, AgentChipVerb } from "#product/components/workspace/delegated-work/AgentChip";
 import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";
-import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
+import {
+  useTranscriptOpenSession,
+  useTranscriptWorkspaceId,
+} from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { useWorkspaceNameResolver } from "#product/hooks/workspaces/derived/use-workspace-name";
 import type {
   SubagentMcpReceiptPresentation,
@@ -25,13 +28,9 @@ export function SubagentToolActionRow({
 }: {
   presentation: SubagentMcpReceiptPresentation;
   status: ToolActionStatus;
-  /**
-   * Retained for call-site compatibility. Raw tool output is deliberately not
-   * rendered: the chip opens the thread and the agent's prose says what matters.
-   */
-  resultText?: string | null;
 }) {
   const openSession = useTranscriptOpenSession();
+  const transcriptWorkspaceId = useTranscriptWorkspaceId();
   const targetSessionId = presentation.childSessionId?.trim() || null;
   const canOpenSession =
     presentation.openSessionAllowed && !!targetSessionId && !!openSession;
@@ -70,13 +69,12 @@ export function SubagentToolActionRow({
   };
 
   return (
-    <div className="min-w-0 text-message leading-8" data-subagent-receipt>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-message" data-subagent-receipt>
       <DelegatedAgentHoverCard
         agent={hoverAgent}
         message={presentation.messageText}
         cardAriaLabel={`Open ${identity.displayName}`}
         onCardClick={canOpenSession ? openTarget : undefined}
-        className="me-1.5 align-middle"
       >
         <AgentChip
           identity={identity}
@@ -93,9 +91,11 @@ export function SubagentToolActionRow({
         {presentation.detailLabel && presentation.action !== "close" && (
           <span className="text-muted-foreground/70">{` — ${presentation.detailLabel}`}</span>
         )}
-        {/* A peer spawned elsewhere carries its workspace, per the Workspace Ops
-            canvas page: "<chip> — in billing-hotfix-dispatch". */}
-        {presentation.workspaceId && (
+        {/* A peer spawned ELSEWHERE carries its workspace, per the Workspace Ops
+            canvas page: "<chip> — in billing-hotfix-dispatch". ADR §4 scopes
+            that to the cross-workspace case, so a spawn into this transcript's
+            own workspace says nothing: the reader is already there. */}
+        {presentation.workspaceId && presentation.workspaceId !== transcriptWorkspaceId && (
           <AgentWorkspaceSuffix workspaceId={presentation.workspaceId} />
         )}
       </AgentChipVerb>

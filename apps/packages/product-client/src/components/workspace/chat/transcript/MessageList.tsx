@@ -320,6 +320,7 @@ export function MessageList({
       <DebugProfiler id="transcript-context-providers">
         <TranscriptContextProviders
           sessionId={activeSessionId}
+          workspaceId={selectedWorkspaceId}
           onOpenSession={onOpenSession}
           canOpenSession={canOpenSession}
           onOpenWorkspace={openWorkspace}

@@ -8,6 +8,8 @@ import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated
 import { AgentsPaneHeader } from "#product/components/workspace/agents-pane/AgentsPaneHeader";
 import {
   AGENTS_PANE_COMPOSER_PLACEHOLDER,
+  AGENTS_PANE_CONFIGURE_ACTION,
+  AGENTS_PANE_CONFIGURE_HINT,
   AGENTS_PANE_PROMOTED_BADGE,
   AGENTS_PANE_WAKE_TOGGLE_LABEL,
   AGENTS_PANE_WAKE_TOGGLE_UNAVAILABLE_HINT,
@@ -21,30 +23,31 @@ import {
  * Level 3 — one agent (Agent Operations canvas, DETAIL block).
  *
  * Glyph, title, status line, copyable short id, and the facts the read models
- * carry: Parent prompt / Tool / latest Agent message. Actions are Open as
- * tab · Promote · Close; the composer at the bottom is the same messaging
- * primitive the agents use, delivered on the agent's next turn.
+ * carry: Parent prompt / Tool / latest Agent message. Actions are the ADR's
+ * four — Open as tab · Configure agent… · Promote · Close; the composer at the
+ * bottom is the same messaging primitive the agents use, delivered on the
+ * agent's next turn.
  */
 export function AgentsPaneAgentDetail({
   agent,
   closeAttribution,
   onBack,
   onOpenSession,
+  onConfigure,
   onRequestPromote,
   onRequestClose,
   onSend,
   isSending = false,
-  canSend = true,
 }: {
   agent: AgentsPaneAgent;
   closeAttribution?: string | null;
   onBack: () => void;
   onOpenSession: (agent: AgentsPaneAgent) => void;
+  onConfigure: (agent: AgentsPaneAgent) => void;
   onRequestPromote: (agent: AgentsPaneAgent) => void;
   onRequestClose: (agent: AgentsPaneAgent) => void;
   onSend: (agent: AgentsPaneAgent, text: string) => void;
   isSending?: boolean;
-  canSend?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [copied, setCopied] = useState(false);
@@ -71,16 +74,30 @@ export function AgentsPaneAgentDetail({
           type="button"
           variant="ghost"
           size="unstyled"
-          className="flex h-7 items-center gap-1 rounded-md px-2 text-ui-sm"
+          className="flex h-control items-center gap-1 rounded-md px-2 text-ui-sm"
           onClick={() => onOpenSession(agent)}
         >
           Open as tab
         </Button>
+        {/* The agent's own config controls live in its composer, which is
+            built for the session in view. So this opens the agent rather than
+            growing a second configuration surface in the pane. */}
+        <Tooltip content={AGENTS_PANE_CONFIGURE_HINT}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="unstyled"
+            className="flex h-control items-center gap-1 rounded-md px-2 text-ui-sm"
+            onClick={() => onConfigure(agent)}
+          >
+            {AGENTS_PANE_CONFIGURE_ACTION}
+          </Button>
+        </Tooltip>
         <Button
           type="button"
           variant="ghost"
           size="unstyled"
-          className="flex h-7 items-center gap-1 rounded-md px-2 font-mono text-ui-sm"
+          className="flex h-control items-center gap-1 rounded-md px-2 font-mono text-ui-sm"
           aria-label={`Copy session id ${agent.identity.shortId}`}
           onClick={() => {
             void navigator.clipboard?.writeText(agent.childSessionId);
@@ -95,7 +112,7 @@ export function AgentsPaneAgentDetail({
             type="button"
             variant="ghost"
             size="unstyled"
-            className="flex h-7 items-center gap-1 rounded-md px-2 text-ui-sm"
+            className="flex h-control items-center gap-1 rounded-md px-2 text-ui-sm"
             onClick={() => onRequestPromote(agent)}
           >
             Promote
@@ -106,7 +123,7 @@ export function AgentsPaneAgentDetail({
             type="button"
             variant="ghost"
             size="unstyled"
-            className="flex h-7 items-center gap-1 rounded-md px-2 text-ui-sm hover:text-destructive"
+            className="flex h-control items-center gap-1 rounded-md px-2 text-ui-sm hover:text-destructive"
             onClick={() => onRequestClose(agent)}
           >
             Close
@@ -155,7 +172,7 @@ export function AgentsPaneAgentDetail({
                 size="unstyled"
                 disabled
                 aria-disabled="true"
-                className="flex h-7 items-center gap-1 rounded-md px-2 text-ui-sm"
+                className="flex h-control items-center gap-1 rounded-md px-2 text-ui-sm"
                 data-agents-pane-wake-toggle
               >
                 {AGENTS_PANE_WAKE_TOGGLE_LABEL}
@@ -166,7 +183,7 @@ export function AgentsPaneAgentDetail({
               variant="primary"
               size="sm"
               loading={isSending}
-              disabled={!canSend || draft.trim().length === 0}
+              disabled={draft.trim().length === 0}
               onClick={() => {
                 onSend(agent, draft.trim());
                 setDraft("");

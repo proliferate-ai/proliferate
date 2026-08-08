@@ -19,7 +19,14 @@ export interface PendingPromptListProps {
   onBeginEdit: (entry: PendingPromptQueueRow) => void;
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
-  onReorder: (fromIndex: number, toIndex: number) => void;
+  /**
+   * Moves the row keyed `fromKey` to where `toKey` sits. Keys, not positions:
+   * this list renders only the human's own queued messages, so a rendered
+   * index is not a queue index, and handing one to the queue would move
+   * whatever row happened to sit there — including an agent-queued update the
+   * human may not touch.
+   */
+  onReorder: (fromKey: string, toKey: string) => void;
   /** Resolves a delegation link to the session behind it, for wake pointers. */
   sessionIdByLinkId?: Readonly<Record<string, string>>;
   onOpenAgent?: (sessionId: string) => void;
@@ -44,18 +51,36 @@ export function PendingPromptList({
   sessionIdByLinkId,
   onOpenAgent,
 }: PendingPromptListProps) {
-  const humanEntries = entries.filter((entry) => !entry.agentSource);
+  const humanEntries = useMemo(
+    () => entries.filter((entry) => !entry.agentSource),
+    [entries],
+  );
   const agentUpdates = groupPendingAgentUpdates({ rows: entries, sessionIdByLinkId });
+  // The drag mechanics count rendered rows, so they speak in this list's own
+  // indexes. They are translated to row keys HERE, at the only boundary that
+  // knows which rows were filtered out.
+  const handleReorderByRenderedIndex = useCallback((fromIndex: number, toIndex: number) => {
+    const fromKey = humanEntries[fromIndex]?.key;
+    const toKey = humanEntries[toIndex]?.key;
+    if (fromKey && toKey) {
+      onReorder(fromKey, toKey);
+    }
+  }, [humanEntries, onReorder]);
   const { dragIndex, dropIndex, handleDragStart } = useVerticalReorder({
     itemCount: humanEntries.length,
-    onReorder,
+    onReorder: handleReorderByRenderedIndex,
   });
 
   if (entries.length === 0) {
     return null;
   }
 
-  const runtimeEntryIndexes = humanEntries.flatMap((entry, index) => entry.seq > 0 ? [index] : []);
+  // Only runtime-confirmed rows can be reordered, so the keyboard's up/down
+  // neighbours are the neighbours in THAT list — a local outbox row in between
+  // is stepped over rather than swapped with.
+  const runtimeEntryKeys = humanEntries
+    .filter((entry) => entry.seq > 0)
+    .map((entry) => entry.key);
 
   return (
     <div
@@ -68,19 +93,19 @@ export function PendingPromptList({
         data-reorder-container
       >
         {humanEntries.map((entry, index) => {
-          const runtimeIndex = runtimeEntryIndexes.indexOf(index);
+          const runtimeIndex = runtimeEntryKeys.indexOf(entry.key);
           return (
             <PendingPromptRow
               key={entry.key}
               entry={entry}
               index={index}
-              previousReorderIndex={runtimeIndex > 0
-                ? runtimeEntryIndexes[runtimeIndex - 1] ?? null
+              previousReorderKey={runtimeIndex > 0
+                ? runtimeEntryKeys[runtimeIndex - 1] ?? null
                 : null}
-              nextReorderIndex={runtimeIndex >= 0
-                ? runtimeEntryIndexes[runtimeIndex + 1] ?? null
+              nextReorderKey={runtimeIndex >= 0
+                ? runtimeEntryKeys[runtimeIndex + 1] ?? null
                 : null}
-              runtimeEntryCount={runtimeEntryIndexes.length}
+              runtimeEntryCount={runtimeEntryKeys.length}
               sessionMaterialized={sessionMaterialized}
               isSteering={steeringSeq === entry.seq}
               isDragging={dragIndex === index}
@@ -139,8 +164,8 @@ export function ConnectedPendingPromptList() {
 interface PendingPromptRowProps {
   entry: PendingPromptQueueRow;
   index: number;
-  previousReorderIndex: number | null;
-  nextReorderIndex: number | null;
+  previousReorderKey: string | null;
+  nextReorderKey: string | null;
   runtimeEntryCount: number;
   sessionMaterialized: boolean;
   isSteering: boolean;
@@ -151,7 +176,7 @@ interface PendingPromptRowProps {
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
   onDragStart: (index: number, event: React.PointerEvent) => void;
-  onReorder: (fromIndex: number, toIndex: number) => void;
+  onReorder: (fromKey: string, toKey: string) => void;
 }
 
 const ROW_ACTION_CLASSNAME =
@@ -160,8 +185,8 @@ const ROW_ACTION_CLASSNAME =
 function PendingPromptRow({
   entry,
   index,
-  previousReorderIndex,
-  nextReorderIndex,
+  previousReorderKey,
+  nextReorderKey,
   runtimeEntryCount,
   sessionMaterialized,
   isSteering,
@@ -204,14 +229,14 @@ function PendingPromptRow({
     [index, onDragStart],
   );
   const handleReorderKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (event.key === "ArrowUp" && previousReorderIndex != null) {
+    if (event.key === "ArrowUp" && previousReorderKey != null) {
       event.preventDefault();
-      onReorder(index, previousReorderIndex);
-    } else if (event.key === "ArrowDown" && nextReorderIndex != null) {
+      onReorder(entry.key, previousReorderKey);
+    } else if (event.key === "ArrowDown" && nextReorderKey != null) {
       event.preventDefault();
-      onReorder(index, nextReorderIndex);
+      onReorder(entry.key, nextReorderKey);
     }
-  }, [index, nextReorderIndex, onReorder, previousReorderIndex]);
+  }, [entry.key, nextReorderKey, onReorder, previousReorderKey]);
 
   const stateHint = entry.isSending || isSteering
     ? (

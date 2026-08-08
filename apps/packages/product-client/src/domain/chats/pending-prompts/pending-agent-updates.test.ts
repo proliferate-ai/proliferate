@@ -39,11 +39,10 @@ describe("groupPendingAgentUpdates", () => {
     expect(updates?.countLabel).toBe("3 updates");
     expect(updates?.groups[0]?.count).toBe(2);
     expect(updates?.groups[0]?.sessionId).toBe("sess-audit");
-    // Hover says how many and that it opens — never what the updates say.
-    expect(updates?.groups[0]?.hoverLabel)
-      .toBe("Audit retry schema · 2 queued updates — click to open");
-    expect(updates?.groups[1]?.hoverLabel)
-      .toBe("Docs pass · 1 queued update — click to open");
+    // Hover says how many and that it opens — never what the updates say. ADR
+    // §4 fixes the wording: "N queued · click to open".
+    expect(updates?.groups[0]?.hoverLabel).toBe("2 queued · click to open");
+    expect(updates?.groups[1]?.hoverLabel).toBe("1 queued · click to open");
   });
 
   it("never counts the human's own queued messages", () => {
@@ -73,6 +72,6 @@ describe("groupPendingAgentUpdates", () => {
     });
 
     expect(updates?.groups[0]?.sessionId).toBeNull();
-    expect(updates?.groups[0]?.hoverLabel).toBe("Audit · 1 queued update");
+    expect(updates?.groups[0]?.hoverLabel).toBe("1 queued");
   });
 });

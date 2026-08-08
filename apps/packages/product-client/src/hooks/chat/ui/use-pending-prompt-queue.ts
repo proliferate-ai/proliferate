@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   derivePendingPromptQueueRow,
+  reorderHumanPendingPromptRows,
   type PendingPromptQueueRow,
 } from "#product/domain/chats/pending-prompts/pending-prompt-queue";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
@@ -20,7 +21,8 @@ export interface PendingPromptQueueState {
   onBeginEdit: (entry: PendingPromptQueueRow) => void;
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
-  onReorder: (fromIndex: number, toIndex: number) => void;
+  /** Addressed by row key, never by rendered position — see `reorderHumanPendingPromptRows`. */
+  onReorder: (fromKey: string, toKey: string) => void;
 }
 
 interface PendingQueueMutation {
@@ -141,26 +143,19 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
   );
 
   const handleReorder = useCallback(
-    (fromIndex: number, toIndex: number) => {
+    (fromKey: string, toKey: string) => {
       if (
         !activeSessionId
         || !sessionMaterialized
         || mutationsBySessionIdRef.current.has(activeSessionId)
-        || fromIndex === toIndex
-        || fromIndex < 0
-        || toIndex < 0
-        || fromIndex >= rows.length
-        || toIndex >= rows.length
       ) {
         return;
       }
       const expectedSeqs = rows.filter((row) => row.seq > 0).map((row) => row.seq);
-      const reorderedRows = [...rows];
-      const [moved] = reorderedRows.splice(fromIndex, 1);
-      if (!moved) {
+      const reorderedRows = reorderHumanPendingPromptRows(rows, fromKey, toKey);
+      if (!reorderedRows) {
         return;
       }
-      reorderedRows.splice(toIndex, 0, moved);
       const desiredSeqs = reorderedRows
         .filter((row) => row.seq > 0)
         .map((row) => row.seq);

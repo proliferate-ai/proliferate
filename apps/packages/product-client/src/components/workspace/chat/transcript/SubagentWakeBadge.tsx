@@ -7,8 +7,6 @@ interface SubagentWakeBadgeProps {
   sessionLinkId?: string | null;
   outcome?: string | null;
   titleFallback?: string;
-  originKind?: "subagent" | "cowork";
-  parentTitle?: string | null;
   onOpenChild?: (childSessionId: string) => void;
 }
 
@@ -43,11 +41,11 @@ export function SubagentWakeBadge({
 
   return (
     <div
-      className="min-w-0 text-message leading-8"
+      className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-message"
       data-telemetry-mask
       data-agent-inbound-receipt
     >
-      <AgentChipVerb className="me-1.5">{formatWakeReceipt(outcome)}</AgentChipVerb>
+      <AgentChipVerb>{formatWakeReceipt(outcome)}</AgentChipVerb>
       <AgentChip
         identity={identity}
         showShortId={addressedById}

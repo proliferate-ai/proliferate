@@ -1,5 +1,6 @@
 import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import { AgentChip, AgentChipVerb } from "#product/components/workspace/delegated-work/AgentChip";
+import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
@@ -42,20 +43,47 @@ export function SubagentCreationGroupBlock({
   const verb = spawnRunVerb(chips);
 
   return (
-    <div className="min-w-0 text-message leading-8" data-subagent-spawn-run>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-message" data-subagent-spawn-run>
       {liveChips.map((chip) => {
         const childSessionId = chip.childSessionId;
+        const open = childSessionId && openSession
+          ? () => openSession(childSessionId, "linked-child")
+          : undefined;
         return (
-          <span key={chip.key} className="chip-enter me-1.5 inline-block align-middle">
+          <DelegatedAgentHoverCard
+            key={chip.key}
+            agent={{
+              identity: chip.identity,
+              kind: "subagent",
+              originLabel: "Subagent",
+              statusCategory: chip.failed
+                ? "failed"
+                : chip.settled
+                  ? "finished"
+                  : "running",
+              statusLabel: chip.failed
+                ? "Did not start"
+                : chip.settled
+                  ? "Done"
+                  : "Working",
+              parentTitle: null,
+              hoverTitle: chip.hoverTitle,
+            }}
+            // The structured result the parent agent received. ADR §4 keeps it
+            // out of the transcript flow — the hover is where a literal body is
+            // readable, which is the same rule agent messages follow.
+            message={chip.summary}
+            cardAriaLabel={`Open ${chip.identity.displayName}`}
+            onCardClick={open}
+            className="chip-enter min-w-0"
+          >
             <AgentChip
               identity={chip.identity}
               dimmed={chip.failed}
               title={chip.hoverTitle}
-              onOpen={childSessionId && openSession
-                ? () => openSession(childSessionId, "linked-child")
-                : undefined}
+              onOpen={open}
             />
-          </span>
+          </DelegatedAgentHoverCard>
         );
       })}
       {verb && <AgentChipVerb>{verb}</AgentChipVerb>}
@@ -73,6 +101,11 @@ export interface SpawnChip {
   settled: boolean;
   failed: boolean;
   hoverTitle: string;
+  /**
+   * The subagent's own result summary, as the parent agent received it. The
+   * one place it is readable now that the expandable "done" row is gone.
+   */
+  summary: string | null;
 }
 
 function toSpawnChip(item: ToolCallItem): SpawnChip {
@@ -95,7 +128,24 @@ function toSpawnChip(item: ToolCallItem): SpawnChip {
     hoverTitle: failed
       ? `${identity.displayName} — did not start`
       : identity.displayName,
+    summary: readCompletionSummary(item),
   };
+}
+
+/**
+ * The clean summary from the structured result, never the raw
+ * `tool_result_text` parts — those can carry internal orchestration metadata.
+ */
+function readCompletionSummary(item: ToolCallItem): string | null {
+  const rawOutput = typeof item.rawOutput === "object" && item.rawOutput !== null
+    ? item.rawOutput as Record<string, unknown>
+    : null;
+  const summary = rawOutput?.summary;
+  if (typeof summary !== "string") {
+    return null;
+  }
+  const trimmed = summary.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /**

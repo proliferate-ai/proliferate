@@ -7,8 +7,10 @@ import { useSessionDirectoryStore } from "#product/stores/sessions/session-direc
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useAgentsPaneStore } from "#product/stores/agents/agents-pane-store";
+import { shortSessionId } from "#product/domain/chats/subagents/provenance";
 import {
-  toAgentsPaneAgent,
+  agentsPaneCloseAttributionForAgent,
+  buildAgentsPaneClusters,
   type AgentsPaneAgent,
   type AgentsPaneCluster,
 } from "#product/lib/domain/delegated-work/agents-pane-model";
@@ -18,9 +20,10 @@ import {
  *
  * Level 1 is built from the delegated work the client has actually read. The
  * session-subagents endpoint is per session, so the overview lists the sessions
- * whose fanout has been read — today that is the session in view. Nothing here
- * invents a global read model, and native harness work and terminals are never
- * candidates: they do not come through this endpoint at all.
+ * whose fanout has been read — the session in view, and its parent when a child
+ * is in view. Nothing here invents a global read model, and native harness work
+ * and terminals are never candidates: they do not come through this endpoint at
+ * all.
  */
 export function ConnectedAgentsPane() {
   const delegated = useDelegatedWorkComposer();
@@ -42,24 +45,42 @@ export function ConnectedAgentsPane() {
   const promptSessionMutation = usePromptSessionTextMutation({ workspaceId });
 
   const subagents = delegated?.subagents ?? null;
-  // The cluster is the DELEGATING session — for a child in view that is its
-  // parent, which is exactly the fanout the strip already reads.
-  const clusterSessionId = subagents?.parent?.parentSessionId ?? activeSessionId ?? null;
 
+  // One cluster per DELEGATING session, each built only from that session's own
+  // read model. The session in view contributes the fanout it parents plus the
+  // peers it owns; a parent in the strip contributes its own fanout under its
+  // own title. Merging the two would put a child's peers — which the parent
+  // does not own — inside the parent's cluster.
   const clusters = useMemo<AgentsPaneCluster[]>(() => {
-    if (!subagents || !clusterSessionId) {
+    if (!subagents) {
       return [];
     }
-    const agents = [...subagents.rows, ...subagents.ownedAgents].map(toAgentsPaneAgent);
-    if (agents.length === 0) {
-      return [];
-    }
-    return [{
-      sessionId: clusterSessionId,
-      title: subagents.parent?.label ?? sessionTitle ?? "This session",
-      agents,
-    }];
-  }, [clusterSessionId, sessionTitle, subagents]);
+    const parent = subagents.parent;
+    return buildAgentsPaneClusters({
+      activeSessionId,
+      activeSessionTitle: sessionTitle,
+      ownRows: subagents.ownRows,
+      ownedAgents: subagents.ownedAgents,
+      parent: parent
+        ? { sessionId: parent.parentSessionId, title: parent.label }
+        : null,
+      // `rows` is the sibling strip: the PARENT's fanout, read so a child can
+      // see its siblings. It belongs under the parent's title and nowhere else.
+      siblingRows: subagents.rows,
+    });
+  }, [activeSessionId, sessionTitle, subagents]);
+
+  // "Closed by X · reason". The endpoint returns OPEN links, so this is
+  // readable exactly in the close-requested window. The closer is a session id;
+  // it resolves to a title only from sessions already in the directory, and
+  // falls back to the short id rather than inventing a name.
+  const sessionsById = useSessionDirectoryStore((state) => state.entriesById);
+  const closeAttributionFor = useCallback((agent: AgentsPaneAgent) => (
+    agentsPaneCloseAttributionForAgent(
+      agent,
+      (sessionId) => sessionsById[sessionId]?.title?.trim() || shortSessionId(sessionId),
+    )
+  ), [sessionsById]);
 
   const openSession = useCallback((agent: AgentsPaneAgent) => {
     if (!subagents) return;
@@ -69,6 +90,15 @@ export function ConnectedAgentsPane() {
     }
     subagents.openOwnedAgent(agent.childSessionId);
   }, [subagents]);
+
+  // ADR §4's fourth detail action. The session config surface
+  // (`SessionConfigControls` over the `config-options` route) is built for the
+  // session in view and has no out-of-tab form, so "Configure agent…" opens the
+  // agent's tab — where its model / mode / effort controls already live —
+  // rather than growing a second config UI here.
+  const configure = useCallback((agent: AgentsPaneAgent) => {
+    openSession(agent);
+  }, [openSession]);
 
   const promote = useCallback((agent: AgentsPaneAgent) => {
     subagents?.promote(agent.childSessionId);
@@ -105,10 +135,12 @@ export function ConnectedAgentsPane() {
     <AgentsPane
       view={view}
       clusters={clusters}
+      closeAttributionFor={closeAttributionFor}
       onOpenCluster={openCluster}
       onOpenAgent={openAgent}
       onBack={back}
       onOpenSession={openSession}
+      onConfigure={configure}
       onPromote={promote}
       onClose={closeAgent}
       onSend={send}

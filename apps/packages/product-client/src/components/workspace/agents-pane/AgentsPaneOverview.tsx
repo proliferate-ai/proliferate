@@ -49,7 +49,7 @@ export function AgentsPaneOverview({
             {agentsPaneStack(cluster).map((agent) => (
               <span
                 key={agent.sessionLinkId}
-                className="flex size-5 items-center justify-center rounded-full bg-surface-elevated ring-1 ring-border"
+                className="icon-large flex items-center justify-center rounded-full bg-surface-elevated ring-1 ring-border"
               >
                 <DelegatedAgentIdenticon
                   identity={agent.identity}

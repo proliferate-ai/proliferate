@@ -14,9 +14,11 @@ describe("AgentChip", () => {
   it("renders the locked chip anatomy: 28px pill, 16px seal, 288px truncation", () => {
     const html = renderToStaticMarkup(<AgentChip identity={identity} onOpen={() => {}} />);
 
-    // Spawn Receipts canvas: h-7 pill · border-light on surface-elevated ·
-    // 16px glyph · task-derived name truncating at max-w-72 (288px).
-    expect(html).toContain("h-7");
+    // Spawn Receipts canvas: 28px pill · border-light on surface-elevated ·
+    // 16px glyph · task-derived name truncating at max-w-72 (288px). The pill
+    // height is the `--height-control` token (1.75rem = 28px), not a raw pin,
+    // so it tracks the control scale instead of drifting from it.
+    expect(html).toContain("h-control");
     expect(html).toContain("max-w-72");
     expect(html).toContain("rounded-full");
     expect(html).toContain("border-border-light");

@@ -53,10 +53,10 @@ describe("PendingPromptList", () => {
     expect(handles[0]?.getAttribute("aria-keyshortcuts")).toBe("ArrowUp ArrowDown");
 
     fireEvent.keyDown(handles[0]!, { key: "ArrowDown" });
-    expect(props.onReorder).toHaveBeenCalledWith(0, 1);
+    expect(props.onReorder).toHaveBeenCalledWith("seq:4", "seq:9");
 
     fireEvent.keyDown(handles[1]!, { key: "ArrowUp" });
-    expect(props.onReorder).toHaveBeenCalledWith(1, 0);
+    expect(props.onReorder).toHaveBeenCalledWith("seq:9", "seq:4");
   });
 
   it("disables queue actions and drag handles during either queue mutation", () => {
@@ -93,7 +93,35 @@ describe("PendingPromptList", () => {
     fireEvent.keyDown(handles[0]!, { key: "ArrowDown" });
     fireEvent.keyDown(handles[1]!, { key: "ArrowUp" });
 
-    expect(props.onReorder).toHaveBeenNthCalledWith(1, 0, 2);
-    expect(props.onReorder).toHaveBeenNthCalledWith(2, 2, 0);
+    expect(props.onReorder).toHaveBeenNthCalledWith(1, "seq:4", "seq:9");
+    expect(props.onReorder).toHaveBeenNthCalledWith(2, "seq:9", "seq:4");
+  });
+
+  it("addresses the dragged human row by key when agent updates share the queue", () => {
+    // The regression this pins: the list renders only the human rows, so the
+    // second human message is at rendered index 1 but queue index 2. An index
+    // handed to the queue would move the FIRST human message instead — and
+    // move it past an agent-queued update the human may not touch.
+    const agentWake = derivePendingPromptQueueRow({
+      seq: 7,
+      promptId: null,
+      text: "",
+      contentParts: [],
+      isBeingEdited: false,
+      promptProvenance: {
+        type: "subagentWake",
+        completionId: "completion-1",
+        sessionLinkId: "link-1",
+        label: "Schema audit",
+      },
+    });
+    const { props } = renderList({ entries: [agentWake, ENTRIES[0]!, ENTRIES[1]!] });
+    const handles = screen.getAllByRole("button", { name: "Reorder queued message" });
+
+    expect(handles).toHaveLength(2);
+    fireEvent.keyDown(handles[1]!, { key: "ArrowUp" });
+
+    expect(props.onReorder).toHaveBeenCalledWith("seq:9", "seq:4");
+    expect(props.onReorder).not.toHaveBeenCalledWith("seq:7", expect.anything());
   });
 });

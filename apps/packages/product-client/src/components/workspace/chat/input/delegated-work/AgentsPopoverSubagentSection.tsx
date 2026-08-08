@@ -99,7 +99,7 @@ export function AgentsPopoverSubagentSection({
           type="button"
           variant="ghost"
           size="sm"
-          className="mt-1 h-7 w-full justify-start rounded-md px-2 text-ui-sm"
+          className="mt-1 h-control w-full justify-start rounded-md px-2 text-ui-sm"
           onClick={() => {
             onOpenPane();
             onClose();
@@ -185,7 +185,7 @@ function SubagentPopoverRow({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 px-2"
+            className="h-control px-2"
             aria-label={`Promote ${row.identity.displayName}`}
             onClick={onPromote}
           >
@@ -200,7 +200,7 @@ function SubagentPopoverRow({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 px-2"
+            className="h-control px-2"
             loading={isSchedulingWake}
             aria-label={`Schedule wake for ${row.identity.displayName}`}
             onClick={onScheduleWake}

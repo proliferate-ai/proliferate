@@ -3,6 +3,7 @@ import type { ContentPart } from "@anyharness/sdk";
 import {
   derivePendingPromptQueueRow,
   findNewestEditablePendingPrompt,
+  reorderHumanPendingPromptRows,
   type PendingPromptQueueEntry,
 } from "./pending-prompt-queue";
 
@@ -315,5 +316,56 @@ describe("findNewestEditablePendingPrompt", () => {
       localOutboxDeliveryState: "dispatching",
     });
     expect(findNewestEditablePendingPrompt([dispatching])).toBeNull();
+  });
+});
+
+describe("reorderHumanPendingPromptRows", () => {
+  const agentWake = derivePendingPromptQueueRow(entry({
+    seq: 1,
+    promptId: null,
+    text: "",
+    promptProvenance: {
+      type: "subagentWake",
+      sessionLinkId: "link-1",
+      completionId: "completion-1",
+      label: "Schema audit",
+    },
+  }));
+  const firstHuman = derivePendingPromptQueueRow(entry({ seq: 2, text: "first" }));
+  const secondHuman = derivePendingPromptQueueRow(entry({ seq: 3, text: "second" }));
+
+  it("moves exactly the named human row and pins the agent update in its slot", () => {
+    const reordered = reorderHumanPendingPromptRows(
+      [agentWake, firstHuman, secondHuman],
+      secondHuman.key,
+      firstHuman.key,
+    );
+
+    // The dragged message moved; the agent-queued update is still the first
+    // entry in the queue, which is the whole point — the human may not
+    // reorder what an agent queued.
+    expect(reordered?.map((row) => row.seq)).toEqual([1, 3, 2]);
+    expect(reordered?.[0]).toBe(agentWake);
+  });
+
+  it("never moves an agent row even when one is asked for by key", () => {
+    expect(reorderHumanPendingPromptRows(
+      [agentWake, firstHuman, secondHuman],
+      agentWake.key,
+      secondHuman.key,
+    )).toBeNull();
+  });
+
+  it("reports a no-op move as nothing to do", () => {
+    expect(reorderHumanPendingPromptRows(
+      [firstHuman, secondHuman],
+      firstHuman.key,
+      firstHuman.key,
+    )).toBeNull();
+    expect(reorderHumanPendingPromptRows(
+      [firstHuman, secondHuman],
+      "seq:404",
+      firstHuman.key,
+    )).toBeNull();
   });
 });

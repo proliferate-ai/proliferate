@@ -18,7 +18,7 @@ export interface PendingAgentUpdateGroup {
   /** Where clicking the glyph goes. Null when nothing resolved a session. */
   sessionId: string | null;
   count: number;
-  /** "Audit retry schema · 2 queued updates — click to open" */
+  /** ADR §4, verbatim: "2 queued · click to open". */
   hoverLabel: string;
 }
 
@@ -71,9 +71,13 @@ export function groupPendingAgentUpdates(input: {
       identity,
       sessionId: value.sessionId,
       count: value.count,
-      hoverLabel: `${identity.title} · ${formatQueuedLabel(value.count)}${
-        value.sessionId ? " — click to open" : ""
-      }`,
+      // ADR §4 fixes the glyph hover: "N queued · click to open". The agent's
+      // name is already on the glyph, and the click half only appears when a
+      // session actually resolved — a hover cannot promise a click that has
+      // nowhere to go.
+      hoverLabel: value.sessionId
+        ? `${value.count} queued · click to open`
+        : `${value.count} queued`,
     } satisfies PendingAgentUpdateGroup;
   });
   const totalCount = groups.reduce((total, group) => total + group.count, 0);
@@ -83,8 +87,4 @@ export function groupPendingAgentUpdates(input: {
     totalCount,
     countLabel: `${totalCount} ${totalCount === 1 ? "update" : "updates"}`,
   };
-}
-
-function formatQueuedLabel(count: number): string {
-  return `${count} queued update${count === 1 ? "" : "s"}`;
 }

@@ -37,7 +37,7 @@ export function PendingAgentUpdatesRow({
               />
             );
             const wellClassName =
-              "flex size-5 items-center justify-center rounded-full bg-surface-elevated ring-1 ring-border transition-transform";
+              "icon-large flex items-center justify-center rounded-full bg-surface-elevated ring-1 ring-border transition-transform";
             if (!sessionId || !onOpenAgent) {
               return (
                 <span
@@ -56,9 +56,12 @@ export function PendingAgentUpdatesRow({
                 type="button"
                 variant="unstyled"
                 size="unstyled"
-                className={`${wellClassName} hover:z-10 hover:scale-110`}
+                className={`${wellClassName} hover:z-raised hover:scale-110`}
                 title={group.hoverLabel}
-                aria-label={group.hoverLabel}
+                // The visible hover is the ADR's verbatim "N queued · click to
+                // open"; the accessible name still has to say WHICH agent,
+                // because a screen reader cannot see the seal.
+                aria-label={`${group.identity.title} · ${group.hoverLabel}`}
                 data-pending-agent-update-glyph
                 onClick={() => onOpenAgent(sessionId)}
               >

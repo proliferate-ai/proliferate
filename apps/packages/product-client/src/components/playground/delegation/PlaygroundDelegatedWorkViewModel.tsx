@@ -14,6 +14,9 @@ export function buildPlaygroundDelegatedWorkViewModel(args: {
   const subagents = args.subagentRows
     ? {
       rows: args.subagentRows,
+      // No parent in the fixture, so the sibling strip IS this session's own
+      // fanout — the two lists are the same rows for a top-level session.
+      ownRows: args.subagentRows,
       ownedAgents: [],
       parent: null,
       summary: buildPlaygroundSubagentSummary(args.subagentRows),

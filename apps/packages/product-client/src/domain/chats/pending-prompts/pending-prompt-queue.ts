@@ -183,6 +183,44 @@ export function derivePendingPromptQueueRow(
   };
 }
 
+/**
+ * Move ONE human-queued row, addressed by key, and leave every agent-queued
+ * entry exactly where it sits.
+ *
+ * Keys, not indexes: the composer renders the human rows and the agent-queued
+ * ones as two different things (ADR §4), so a position in the rendered human
+ * list is not a position in the queue. Splicing the rendered index into the
+ * full queue moves whichever row happens to sit there — a different message
+ * than the one dragged, and, when an agent update sits above it, an update the
+ * human is not allowed to touch at all.
+ *
+ * The rebuild below is why agent entries cannot move: only the human-occupied
+ * slots are refilled, in the human list's new order. Returns null when the
+ * move is a no-op or names a row that is not a human-queued one.
+ */
+export function reorderHumanPendingPromptRows(
+  rows: readonly PendingPromptQueueRow[],
+  fromKey: string,
+  toKey: string,
+): PendingPromptQueueRow[] | null {
+  const humanRows = rows.filter((row) => !row.agentSource);
+  const fromIndex = humanRows.findIndex((row) => row.key === fromKey);
+  const toIndex = humanRows.findIndex((row) => row.key === toKey);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+    return null;
+  }
+  const reorderedHumanRows = [...humanRows];
+  const [moved] = reorderedHumanRows.splice(fromIndex, 1);
+  if (!moved) {
+    return null;
+  }
+  reorderedHumanRows.splice(toIndex, 0, moved);
+  let cursor = 0;
+  return rows.map((row) => (
+    row.agentSource ? row : reorderedHumanRows[cursor++] ?? row
+  ));
+}
+
 export function findNewestEditablePendingPrompt(
   entries: readonly PendingPromptQueueEntry[],
 ): PendingPromptQueueEntry | null {

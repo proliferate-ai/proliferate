@@ -1,6 +1,7 @@
 import { RightPanelHeaderEntryDropZone } from "#product/components/workspace/shell/right-panel/RightPanelHeaderEntryDropZone";
 import { TerminalHeaderButton } from "#product/components/workspace/shell/right-panel/TerminalHeaderButton";
 import { ToolHeaderButton } from "#product/components/workspace/shell/right-panel/ToolHeaderButton";
+import { useAgentsPaneStore } from "#product/stores/agents/agents-pane-store";
 import { ViewerHeaderButton } from "#product/components/workspace/shell/right-panel/ViewerHeaderButton";
 import type { RightPanelHeaderDragController } from "#product/hooks/workspaces/ui/use-right-panel-header-drag";
 import {
@@ -73,6 +74,15 @@ export function RightPanelHeaderEntryList({
                 isDragging={drag.draggedHeaderKey === entry.key}
                 shouldSuppressClick={drag.shouldSuppressHeaderClick}
                 onSelect={() => {
+                  // ADR §4 entry points: the panel's own Agents tab opens the
+                  // OVERVIEW. Without this the pane reappears wherever it was
+                  // last pointed — possibly deep inside another session's
+                  // agent detail. The other entry point (a session's "N
+                  // working" cap) sets its cluster and then switches tools, so
+                  // it must not go through here.
+                  if (entry.tool === "agents") {
+                    useAgentsPaneStore.getState().openOverview();
+                  }
                   onActivateEntry(entry.key);
                 }}
               />

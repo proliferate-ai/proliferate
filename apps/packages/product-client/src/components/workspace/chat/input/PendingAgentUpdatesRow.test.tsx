@@ -65,7 +65,7 @@ describe("PendingAgentUpdatesRow", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Audit retry schema · 1 queued update — click to open" }),
+      screen.getByRole("button", { name: "Audit retry schema · 1 queued · click to open" }),
     );
     expect(onOpenAgent).toHaveBeenCalledWith("sess-audit");
   });

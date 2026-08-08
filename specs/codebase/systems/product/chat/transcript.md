@@ -194,10 +194,22 @@ Communication receipts:
   right-aligned, where wake receipts always sat.
 - Message content never gets its own UI. The literal message lives in the
   chip's hover card (`DelegatedAgentHoverCard`), nowhere else.
-- An agent spawned in another workspace carries `— in {workspace name}` after
-  its verb, resolved from the client-cached workspace collection.
-- Parent messages rendered inside a child session show
-  `Sent by parent - {parent chat title}`.
+- An agent spawned in a DIFFERENT workspace than the transcript being read
+  carries `— in {workspace name}` after its verb, resolved from the
+  client-cached workspace collection. A spawn into this transcript's own
+  workspace says nothing: the reader is already there.
+- A message that ARRIVED from another agent is a receipt too, not a user
+  bubble. It renders verb-then-chip on the right (`replied` when this session
+  already messaged that agent, otherwise `messaged`); the literal body lives in
+  the hover card only. Rendering it as a `UserMessage` would give message
+  content its own UI and attribute the agent's words to the human.
+- `replied` is derived from the transcript, not from provenance:
+  `agentSession` carries a source session and an optional link and nothing
+  about what it answers, so the client looks for a prior outbound send to that
+  same session, stopping at the message being labelled.
+- Parent or peer is read off `sessionLinkId`. A delegation link is the only
+  thing that makes the sender this session's parent; without one the sender is
+  a peer and the receipt must not claim a parent.
 - Wake receipts source labels from prompt provenance plus
   `linkCompletionsByCompletionId`.
 - When a valid child target exists, the chip itself — not a separate visible
@@ -218,6 +230,11 @@ Workspace receipts:
 - The same idiom covers a run script the agent configured
   (`· run script → pnpm i && pnpm test:webhooks`) and a failed creation
   (`Could not create workspace …`, with nothing to open).
+- There is no workspace-UPDATE receipt, because there is no producer: §3.4 of
+  the ADR gives agents `spawn_workspace` and nothing that edits a workspace
+  after creation. The run-script suffix above is part of the CREATION receipt.
+  An update line must not be built ahead of a tool that can emit it — flagged
+  as an ADR nit rather than implemented.
 
 Native harness subagents use the same durable item stream as the parent turn:
 

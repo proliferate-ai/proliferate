@@ -11,6 +11,7 @@ import {
   isClaudeExitPlanModeCall,
 } from "#product/domain/chats/tools/claude-plan-tool-call";
 import { deriveModeSwitchDisplay } from "#product/domain/chats/tools/mode-switch-display";
+import { agentInboundMessageVerb } from "#product/domain/chats/subagents/agent-message-direction";
 import {
   isAgentSessionProvenance,
   isAgentWakeProvenance,
@@ -39,12 +40,12 @@ import { ClaudePlanCard } from "#product/components/workspace/chat/transcript/Cl
 import { ModeTransitionDivider } from "#product/components/workspace/chat/transcript/ModeTransitionDivider";
 import { ConnectedProposedPlanItem } from "#product/components/workspace/chat/transcript/ConnectedProposedPlanItem";
 import { SessionErrorItem } from "#product/components/workspace/chat/transcript/SessionErrorItem";
+import { AgentInboundMessageRow } from "#product/components/workspace/chat/transcript/AgentInboundMessageRow";
 import { SubagentWakeBadge } from "#product/components/workspace/chat/transcript/SubagentWakeBadge";
 import { SystemMessage } from "#product/components/workspace/chat/transcript/SystemMessage";
 import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
 import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
-import { UserMessageProvenanceChrome } from "#product/components/workspace/chat/transcript/UserMessageProvenanceChrome";
 import { useProposedPlanToolCallIds } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
 import {
   useTranscriptCanOpenSession,
@@ -112,8 +113,6 @@ export function TranscriptItemBlock({
                   ? "Coding session"
                   : "Subagent"
               }
-              originKind={childRole === "cowork-coding-child" ? "cowork" : "subagent"}
-              parentTitle={transcript.sessionMeta.title}
               onOpenChild={canOpenChild
                 ? (targetSessionId) => {
                   useSessionDirectoryStore.getState().recordRelationshipHint(targetSessionId, {
@@ -155,7 +154,6 @@ export function TranscriptItemBlock({
               childSessionId={targetSessionId}
               outcome={null}
               titleFallback="Agent"
-              parentTitle={transcript.sessionMeta.title}
               onOpenChild={canOpenTarget
                 ? (sessionIdToOpen) => openSession(sessionIdToOpen, "generic")
                 : undefined}
@@ -164,26 +162,33 @@ export function TranscriptItemBlock({
         );
       }
 
+      // A message FROM another agent. It is the same chip language as every
+      // other agent receipt, never a bubble: ADR §4 says message content gets
+      // no UI of its own, so the literal body rides in the hover card and the
+      // chip opens the thread. `sessionLinkId` is what separates a parent from
+      // a peer here — the client must not assume the one it did not read.
       if (isAgentSessionProvenance(item.promptProvenance)) {
         const sourceSessionId = item.promptProvenance.sourceSessionId;
-        const canOpenParent = !!openSession
-          && (canOpenSession?.(sourceSessionId, "agent-parent") ?? true);
+        const sessionLinkId = item.promptProvenance.sessionLinkId ?? null;
+        const sourceRole: TranscriptOpenSessionRole = sessionLinkId
+          ? "agent-parent"
+          : "generic";
+        const canOpenSource = !!openSession
+          && (canOpenSession?.(sourceSessionId, sourceRole) ?? true);
         return (
-          <UserMessage
-            sessionId={sessionId}
-            content={item.text}
-            contentParts={item.contentParts}
-            showCopyButton
-            timestampLabel={resolveUserMessageActionTime(item)}
-            footer={(
-              <UserMessageProvenanceChrome
-                sourceSessionId={sourceSessionId}
-                label={item.promptProvenance.label ?? null}
-                onOpenParent={canOpenParent
-                  ? (parentSessionId) => openSession(parentSessionId, "agent-parent")
-                  : undefined}
-              />
-            )}
+          <AgentInboundMessageRow
+            sourceSessionId={sourceSessionId}
+            sessionLinkId={sessionLinkId}
+            label={item.promptProvenance.label ?? null}
+            verb={agentInboundMessageVerb({
+              transcript,
+              sourceSessionId,
+              itemId: item.itemId,
+            })}
+            message={item.text || null}
+            onOpenSource={canOpenSource
+              ? (targetSessionId) => openSession(targetSessionId, sourceRole)
+              : undefined}
           />
         );
       }

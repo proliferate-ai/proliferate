@@ -211,11 +211,12 @@ export function TranscriptToolCallItemBlock({
 
   if (rows.length === 0 && subagentReceipt) {
     rows.push(
+      // No `resultText`: an agent-ops receipt never exposes raw tool output.
+      // The chip opens the thread and the agent's own prose says what matters.
       <SubagentToolActionRow
         key="subagent-receipt"
         presentation={subagentReceipt}
         status={status}
-        resultText={normalizedResultText}
       />,
     );
   }

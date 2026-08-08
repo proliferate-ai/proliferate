@@ -1,11 +1,20 @@
 // @vitest-environment jsdom
 
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SubagentToolActionRow } from "#product/components/workspace/chat/tool-calls/SubagentToolActionRow";
+import {
+  TranscriptContextProviders,
+} from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import type {
   SubagentMcpReceiptPresentation,
 } from "#product/domain/chats/subagents/subagent-tool-presentation";
+
+vi.mock("#product/hooks/workspaces/derived/use-workspace-name", () => ({
+  useWorkspaceNameResolver: () => (workspaceId: string) => (
+    workspaceId === "ws_hotfix" ? "billing-hotfix-dispatch" : null
+  ),
+}));
 
 function presentation(
   overrides: Partial<SubagentMcpReceiptPresentation> = {},
@@ -88,5 +97,32 @@ describe("SubagentToolActionRow", () => {
     const chip = container.querySelector("[data-agent-chip]");
     expect(chip?.className).toContain("bg-transparent");
     expect(container.textContent).toContain("closed — superseded by the schema audit");
+  });
+
+  it("names the workspace only when the spawn landed somewhere else", () => {
+    const { container } = render(
+      <TranscriptContextProviders sessionId="sess_parent" workspaceId="ws_home">
+        <SubagentToolActionRow
+          presentation={presentation({ action: "spawn_agent", workspaceId: "ws_hotfix" })}
+          status="completed"
+        />
+      </TranscriptContextProviders>,
+    );
+
+    expect(container.textContent).toContain("— in billing-hotfix-dispatch");
+  });
+
+  it("says nothing about the workspace the reader is already in", () => {
+    const { container } = render(
+      <TranscriptContextProviders sessionId="sess_parent" workspaceId="ws_hotfix">
+        <SubagentToolActionRow
+          presentation={presentation({ action: "spawn_agent", workspaceId: "ws_hotfix" })}
+          status="completed"
+        />
+      </TranscriptContextProviders>,
+    );
+
+    expect(container.textContent).not.toContain("billing-hotfix-dispatch");
+    expect(container.textContent).not.toContain("— in ");
   });
 });

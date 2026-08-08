@@ -25,7 +25,7 @@ describe("SubagentWakeBadge", () => {
     const row = container.querySelector("[data-agent-inbound-receipt]");
     expect(row?.textContent).toBe("finishedexplore-dotfiles");
     const chip = container.querySelector("[data-agent-chip]");
-    expect(chip?.className).toContain("h-7");
+    expect(chip?.className).toContain("h-control");
     expect(chip?.className).toContain("rounded-full");
     // A pointer never carries turn output, so the verb stops at "finished".
     expect(row?.textContent).not.toContain("a turn");

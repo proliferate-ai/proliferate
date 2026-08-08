@@ -30,6 +30,8 @@ function makeAgent(
     wakeScheduled: false,
     closeRequested: false,
     closeRequestedLabel: null,
+    closedBySessionId: null,
+    closeReason: null,
     ownership: "subagent",
     workspaceId: null,
     ...overrides,
@@ -57,6 +59,7 @@ function renderPane(props: Partial<Parameters<typeof AgentsPane>[0]> = {}) {
       onOpenAgent={noop}
       onBack={noop}
       onOpenSession={noop}
+      onConfigure={noop}
       onPromote={noop}
       onClose={noop}
       onSend={noop}
@@ -114,7 +117,7 @@ describe("AgentsPane", () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByText('Close "Audit retry queue schema"?')).toBeTruthy();
     expect(screen.getByText(
-      "It's mid-turn — it will finish the current step, then stop. "
+      "It's mid-turn — closing stops it now. "
       + "The transcript stays readable under Closed.",
     )).toBeTruthy();
     // Calm, not alarmed: the affirmative action is the primary button, and
@@ -161,6 +164,7 @@ describe("AgentsPane", () => {
         onOpenAgent={noop}
         onBack={noop}
         onOpenSession={noop}
+        onConfigure={noop}
         onPromote={noop}
         onClose={noop}
         onSend={onSend}
@@ -175,6 +179,19 @@ describe("AgentsPane", () => {
     fireEvent.change(composer, { target: { value: "Ship the cap as configurable." } });
     fireEvent.click(screen.getByText("Send"));
     expect(onSend).toHaveBeenCalledWith(docs, "Ship the cap as configurable.");
+  });
+
+  it("level 3 offers the ADR's fourth action, which hands off to the session's own config", () => {
+    const onConfigure = vi.fn();
+    const { container } = renderPane({
+      view: { kind: "agent", sessionId: "s1", sessionLinkId: docs.sessionLinkId },
+      onConfigure,
+    });
+
+    expect(container.textContent).toContain("Configure agent…");
+
+    fireEvent.click(screen.getByText("Configure agent…"));
+    expect(onConfigure).toHaveBeenCalledWith(docs);
   });
 
   it("shows the wake toggle disabled, because only agents can arm a wake on reply", () => {

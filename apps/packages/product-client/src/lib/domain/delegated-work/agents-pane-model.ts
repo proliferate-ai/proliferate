@@ -27,6 +27,9 @@ export interface AgentsPaneAgentSource {
   wakeScheduled: boolean;
   closeRequested: boolean;
   closeRequestedLabel: string | null;
+  /** Who asked for the close and why, while the close has not landed. */
+  closedBySessionId: string | null;
+  closeReason: string | null;
   ownership: AgentOwnershipState;
   workspaceId: string | null;
 }
@@ -178,6 +181,66 @@ export function agentsPaneCloseAttribution(source: {
 }
 
 /**
+ * The pane's own attribution line for one agent.
+ *
+ * `closedBySessionId` is a session id, not a name. `resolveTitle` looks it up
+ * in whatever the client already has; when nothing knows that session the line
+ * falls back to its short id rather than inventing a title or dropping the
+ * reason on the floor.
+ */
+export function agentsPaneCloseAttributionForAgent(
+  agent: Pick<AgentsPaneAgentSource, "closedBySessionId" | "closeReason">,
+  resolveTitle: (sessionId: string) => string | null,
+): string | null {
+  const closerId = agent.closedBySessionId?.trim();
+  return agentsPaneCloseAttribution({
+    closedByTitle: closerId ? resolveTitle(closerId) : null,
+    closeReason: agent.closeReason,
+  });
+}
+
+/**
+ * Level 1's clusters, partitioned honestly.
+ *
+ * The session-subagents endpoint is per session and returns two different
+ * things: the fanout the session in view PARENTS (plus the peers it owns), and
+ * — when a child is in view — the sibling strip, which is the PARENT's fanout.
+ * Those belong to two different owners, so they become two clusters. Folding
+ * the siblings into the session's own cluster would file a child's peers under
+ * a parent that never spawned them; folding the session's own fanout under the
+ * parent's title would claim the parent spawned agents it has never seen.
+ */
+export function buildAgentsPaneClusters(input: {
+  activeSessionId: string | null;
+  activeSessionTitle: string | null;
+  /** The session in view: the subagents it parents. */
+  ownRows: readonly AgentsPaneAgentSource[];
+  /** The session in view: the peers it owns. */
+  ownedAgents: readonly AgentsPaneAgentSource[];
+  /** Set when a CHILD is in view: its parent, and that parent's own fanout. */
+  parent: { sessionId: string; title: string } | null;
+  siblingRows: readonly AgentsPaneAgentSource[];
+}): AgentsPaneCluster[] {
+  const clusters: AgentsPaneCluster[] = [];
+  const own = [...input.ownRows, ...input.ownedAgents].map(toAgentsPaneAgent);
+  if (input.activeSessionId && own.length > 0) {
+    clusters.push({
+      sessionId: input.activeSessionId,
+      title: input.activeSessionTitle ?? "This session",
+      agents: own,
+    });
+  }
+  if (input.parent && input.siblingRows.length > 0) {
+    clusters.push({
+      sessionId: input.parent.sessionId,
+      title: input.parent.title,
+      agents: input.siblingRows.map(toAgentsPaneAgent),
+    });
+  }
+  return clusters;
+}
+
+/**
  * Level 3's body: Parent prompt / current Tool / latest Agent message.
  *
  * Only what the read models actually carry gets a line. The session-subagents
@@ -232,11 +295,20 @@ export function agentsPaneCanClose(agent: AgentsPaneAgent): boolean {
 }
 
 /**
- * ADR §4 fixes this sentence. The Closures canvas writes it with a full stop
- * after "mid-turn"; the ADR's em dash wins.
+ * What the human close actually does today.
+ *
+ * ADR §4 writes this confirm as "it will finish the current step, then stop",
+ * which is §6 step 5.3's soft close — and that mechanism is agent-attributed by
+ * design (`closed_by_session_id` names the closing SESSION), so there is no
+ * human soft-close route to reach it. The human route is `POST
+ * /v1/sessions/{id}/close`, which shuts the tree down immediately. Until the
+ * route exists the copy says what happens rather than what was designed; the
+ * tone stays calm, because close is routine, not an alarm.
+ *
+ * See the ADR §4 "Closing" amendment and the human soft-close item on #1734.
  */
 export const AGENTS_PANE_CLOSE_CONFIRM_BODY =
-  "It's mid-turn — it will finish the current step, then stop. "
+  "It's mid-turn — closing stops it now. "
   + "The transcript stays readable under Closed.";
 
 export const AGENTS_PANE_PROMOTE_CONFIRM_BODY =
@@ -244,6 +316,17 @@ export const AGENTS_PANE_PROMOTE_CONFIRM_BODY =
   + "and can spawn its own subagents";
 
 export const AGENTS_PANE_PROMOTED_BADGE = "Promoted · top-level session";
+
+/**
+ * ADR §4's fourth detail action, verbatim. The client's session config surface
+ * (`SessionConfigControls` over `POST /sessions/{id}/config-options`) is built
+ * for the session in view and has no out-of-tab form, so the action opens the
+ * agent's tab where those controls already are — and says so, rather than
+ * looking like a dialog that never comes.
+ */
+export const AGENTS_PANE_CONFIGURE_ACTION = "Configure agent…";
+export const AGENTS_PANE_CONFIGURE_HINT =
+  "Opens the agent's tab — its model, mode and effort controls live in its own composer.";
 
 export const AGENTS_PANE_COMPOSER_PLACEHOLDER =
   "Message this agent — delivered on its next turn";

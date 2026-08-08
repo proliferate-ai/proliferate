@@ -24,7 +24,6 @@ interface AgentsPaneStoreState {
   openAgent: (sessionId: string, sessionLinkId: string) => void;
   /** One step back up the drill; the overview is the floor. */
   back: () => void;
-  resetForTests: () => void;
 }
 
 const OVERVIEW: AgentsPaneView = { kind: "overview" };
@@ -41,5 +40,4 @@ export const useAgentsPaneStore = create<AgentsPaneStoreState>((set) => ({
         ? { kind: "cluster", sessionId: state.view.sessionId }
         : OVERVIEW,
     })),
-  resetForTests: () => set({ view: OVERVIEW }),
 }));

@@ -48,6 +48,13 @@ export interface SubagentComposerStripRow {
    */
   closeRequested: boolean;
   closeRequestedLabel: string | null;
+  /**
+   * The raw close attribution behind `closeRequestedLabel`: the session that
+   * asked, and why. Kept alongside the label so the pane can resolve the
+   * closer's id to a title instead of restating the label.
+   */
+  closedBySessionId: string | null;
+  closeReason: string | null;
   /** Subordinate, promoted, or a peer this session merely owns. */
   ownership: AgentOwnershipState;
   /**
@@ -59,6 +66,15 @@ export interface SubagentComposerStripRow {
 
 export interface SubagentComposerStripViewModel {
   rows: SubagentComposerStripRow[];
+  /**
+   * The session IN VIEW's own fanout — the children it parents itself.
+   *
+   * `rows` is the sibling strip, which for a child in view is its PARENT's
+   * fanout. A surface that titles a group with one session (the agents pane
+   * cluster) has to build it from THAT session's read model, or it files one
+   * agent's work under another agent's name.
+   */
+  ownRows: SubagentComposerStripRow[];
   /**
    * Peers this session owns without parenting them. A SEPARATE list, never
    * folded into `rows`: `rows` is the parent's fanout, and an owned agent is
@@ -143,6 +159,14 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
     )),
     [children],
   );
+  // Read off the ACTIVE session, never the sibling fallback: this is the fanout
+  // the session in view actually parents.
+  const ownRows = useMemo(
+    () => (subagentsQuery.data?.children ?? EMPTY_CHILDREN)
+      .filter(isSubordinateChild)
+      .map((child, index) => buildSubagentRow(child, index + 1)),
+    [subagentsQuery.data?.children],
+  );
   const ownedAgents = useMemo(
     () => [
       ...promotedChildren.map((child, index) => buildSubagentRow(child, index + 1)),
@@ -204,6 +228,7 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
 
   return {
     rows,
+    ownRows,
     ownedAgents,
     parent,
     summary,
@@ -281,6 +306,8 @@ function buildSubagentRow(
     wakeScheduled: child.wakeScheduled,
     closeRequested: isCloseRequested(child),
     closeRequestedLabel: closeRequestedLabel(child),
+    closedBySessionId: child.closedBySessionId ?? null,
+    closeReason: child.closeReason ?? null,
     ownership: childOwnershipState(child),
     workspaceId: null,
   };
@@ -310,6 +337,8 @@ function buildOwnedAgentRow(
     wakeScheduled: false,
     closeRequested: isCloseRequested(agent),
     closeRequestedLabel: closeRequestedLabel(agent),
+    closedBySessionId: agent.closedBySessionId ?? null,
+    closeReason: agent.closeReason ?? null,
     ownership: "owned_agent",
     workspaceId: agent.workspaceId,
   };
