@@ -128,8 +128,10 @@ pub struct SpawnAgentArgs {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpawnWorkspaceArgs {
-    /// Defaults to the caller's own repo root — "the same git repo" of ADR §1
-    /// requirement 7.
+    /// Defaults to the caller's own repo root, and accepts any other configured
+    /// root on this machine — ADR §3.4's `get_workspace_options` contract lists
+    /// them all with the caller's marked as the default (§1 requirement 7's
+    /// "the same git repo" is the summary that amendment supersedes).
     #[serde(default)]
     pub repo_root_id: Option<String>,
     /// `worktree` (default) or `local`.
@@ -416,7 +418,9 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
     if ctx.can_spawn_agent && !ctx.is_unpromoted_subagent {
         tools.push(tool_definition(
             "spawn_agent",
-            "Create a new top-level agent you own, in your workspace, and send it a first message. \
+            "Create a new top-level agent you own and send it a first message. It lands in \
+             workspaceId, which defaults to your own workspace — pass the one spawn_workspace \
+             returned, or any workspaceId from get_workspace_options, to put it somewhere else. \
              It is a PEER, not a subagent: it is not capped, it does not close when you close, and \
              it can spawn agents of its own from the start. Talk to it afterwards with \
              send_agent_message and its sessionId, exactly like any other agent. Use \
@@ -426,7 +430,7 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
                 "properties": {
                     "prompt": { "type": "string", "description": "First message, delivered inside an envelope naming you and your session id so the agent can reply." },
                     "label": { "type": "string", "description": "Short name for the agent, shown wherever it appears." },
-                    "harnessId": { "type": "string", "description": "Defaults to your own harness. See get_subagent_launch_options for what this workspace can launch." },
+                    "harnessId": { "type": "string", "description": "Defaults to your own harness. Checked against the TARGET workspace's catalog: get_subagent_launch_options describes YOUR workspace, which is the right answer only when workspaceId is yours." },
                     // Open, and open for the same reason `spawn_subagent` is:
                     // one launch vocabulary across both spawns, so an agent
                     // that learned one does not meet a stricter second. Only
@@ -439,12 +443,12 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
                         "type": "object",
                         "additionalProperties": true,
                         "properties": {
-                            "modelId": { "type": "string", "description": "Defaults to your current model." },
-                            "modeId": { "type": "string", "description": "Defaults to your current mode." }
+                            "modelId": { "type": "string", "description": "Defaults to your current model. A model you name that the target workspace does not offer is refused; an inherited one it does not offer becomes that workspace's default." },
+                            "modeId": { "type": "string", "description": "Defaults to your current mode, with the same rule as modelId against the target workspace." }
                         }
                     },
                     "wakeOnCompletion": { "type": "boolean", "description": "Wake you when the new agent finishes its first turn. Its reply already wakes you with the full message; this is the safety net for one that answers nobody." },
-                    "workspaceId": { "type": "string", "description": "Where to put the agent. Defaults to your own workspace; pass the workspaceId from spawn_workspace to put it somewhere new. The harness and model are checked against THAT workspace's catalog, not yours." }
+                    "workspaceId": { "type": "string", "description": "Where to put the agent. Defaults to your own workspace. To put it somewhere else, pass the workspaceId spawn_workspace returned (get_workspace_options first, for the repos you can spawn one in), or one list_agents reports for an existing agent. The harness, model and mode are all checked against the TARGET workspace's catalog, not yours." }
                 },
                 "required": ["prompt"]
             }),
@@ -454,10 +458,12 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
             "Create a new workspace on this machine and get back its workspaceId, so you can \
              spawn_agent into it. mode=worktree (the default) makes a new branch in its own \
              checkout and leaves every existing checkout alone; mode=local opens a repo's \
-             existing checkout in place, sharing files and git state with whoever else is in it. \
-             Call get_workspace_options first for the repos you can use. Base branch, name \
-             collisions and the setup script are handled for you. Workspaces you spawn cannot be \
-             removed by you or any other agent — only a person can retire one.",
+             existing checkout in place, sharing files and git state with whoever else is in it — \
+             and giving you back the workspace that already covers that checkout if there is one, \
+             rather than a second one. Call get_workspace_options first for the repos you can \
+             use. Base branch, name collisions and the setup script are handled for you. \
+             Workspaces you spawn cannot be removed by you or any other agent — only a person can \
+             retire one.",
             json!({
                 "type": "object",
                 "properties": {
@@ -468,7 +474,7 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
                         "description": "Defaults to worktree."
                     },
                     "branchName": { "type": "string", "description": "Branch to create. Required for mode=worktree, ignored for mode=local. A name already in use gets a numeric suffix rather than failing." },
-                    "label": { "type": "string", "description": "Short note recorded with the workspace, shown to whoever looks at where it came from." }
+                    "label": { "type": "string", "description": "Short note recorded with the workspace, shown to whoever looks at where it came from. Trimmed to 200 characters." }
                 }
             }),
         ));
@@ -1084,6 +1090,47 @@ mod tests {
     }
 
     #[test]
+    fn spawn_agent_tells_the_agent_where_the_peer_lands_and_what_authorizes_it() {
+        // A session's tool list is frozen at launch, so this copy is the whole
+        // of the contract for as long as that agent runs — a description that
+        // still says "in your workspace" is not self-correcting, and an agent
+        // that reads `get_subagent_launch_options` as authoritative for a
+        // CROSS-workspace spawn gets a refusal it was told to expect success
+        // from. Both facts are pinned here rather than left to a reader.
+        let spawn = build_tool_list(&context(true, 0))
+            .into_iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("spawn_agent"))
+            .expect("spawn_agent is advertised");
+        let description = spawn
+            .get("description")
+            .and_then(Value::as_str)
+            .expect("spawn_agent has a description");
+
+        assert!(
+            !description.contains("in your workspace"),
+            "spawn_agent no longer creates only in the caller's workspace"
+        );
+        assert!(description.contains("workspaceId"));
+        assert!(description.contains("spawn_workspace"));
+
+        for field in ["harnessId", "workspaceId"] {
+            let field_description = spawn
+                .pointer(&format!("/inputSchema/properties/{field}/description"))
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("{field} has a description"));
+            assert!(
+                field_description.contains("TARGET"),
+                "{field} is validated against the target workspace's catalog, and its description \
+                 has to say so: {field_description}"
+            );
+        }
+        assert!(spawn
+            .pointer("/inputSchema/properties/workspaceId/description")
+            .and_then(Value::as_str)
+            .is_some_and(|description| description.contains("get_workspace_options")));
+    }
+
+    #[test]
     fn spawn_workspace_takes_the_three_arguments_the_adr_allows() {
         let spawn = build_tool_list(&context(true, 0))
             .into_iter()
@@ -1116,9 +1163,18 @@ mod tests {
                 "spawn_workspace exposes {withheld}, which is server-side policy"
             );
         }
-        // Every argument is optional: the default is a worktree off the
-        // caller's own repo.
+        // No `required` array, which is NOT the same as "every argument is
+        // optional": the default mode is `worktree`, and `worktree` requires
+        // `branchName`, so an argument-free call always fails. The requirement
+        // is conditional and JSON Schema cannot say so here without a `oneOf`
+        // the harnesses read inconsistently, so it is stated in `branchName`'s
+        // own description instead. What this pins is that nothing was made
+        // unconditionally required — `repoRootId` and `mode` genuinely default.
         assert!(spawn.pointer("/inputSchema/required").is_none());
+        assert!(spawn
+            .pointer("/inputSchema/properties/branchName/description")
+            .and_then(Value::as_str)
+            .is_some_and(|description| description.contains("Required for mode=worktree")));
         assert_eq!(
             spawn
                 .pointer("/inputSchema/properties/mode/enum")

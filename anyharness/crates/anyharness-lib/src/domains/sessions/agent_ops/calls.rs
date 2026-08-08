@@ -96,10 +96,11 @@ pub async fn call_tool(
         "get_workspace_options" => {
             let caller = caller_session(service, &ctx.parent_session_id)?;
             workspace_ops::get_workspace_options(
-                &workspaces.workspace_runtime,
-                &workspaces.repo_roots,
+                workspaces.workspace_runtime.clone(),
+                workspaces.repo_roots.clone(),
                 &caller,
             )
+            .await
         }
         "spawn_workspace" => {
             let args: SpawnWorkspaceArgs = deserialize_args(arguments)?;
@@ -497,10 +498,11 @@ fn caller_session(
         .ok_or_else(|| anyhow::anyhow!("calling session not found: {caller_session_id}"))
 }
 
-/// A workspace an agent may be put into: it has to exist and be a standard
-/// workspace, the same eligibility `validate_caller_can_create` applies to the
-/// caller's own. Whether it may be MUTATED right now is the access gate's
-/// question, asked when the lease is taken.
+/// A workspace an agent may be put into: it has to exist, be a standard
+/// workspace, and still have its checkout — the same eligibility
+/// `validate_caller_can_create` applies to the caller's own. Whether it may be
+/// MUTATED right now is the access gate's question, asked when the lease is
+/// taken.
 fn assert_spawnable_workspace(
     workspace_runtime: &crate::domains::workspaces::runtime::WorkspaceRuntime,
     workspace_id: &str,
@@ -516,6 +518,19 @@ fn assert_spawnable_workspace(
     if workspace.surface != WorkspaceSurface::Standard {
         anyhow::bail!(
             "workspace {workspace_id} is not a standard workspace; agents cannot be spawned in it"
+        );
+    }
+    // A workspace row whose directory has been deleted is not somewhere an
+    // agent can run. Without this the session is created, `start_persisted_session`
+    // fails on the missing cwd, and the whole thing unwinds — correct, but a
+    // noisier answer than a refusal that names the reason. The predicate is the
+    // proven-deleted one (it fails OPEN on unreadable paths), so this refuses
+    // only when the checkout is genuinely gone.
+    if workspace.checkout_directory_missing() {
+        anyhow::bail!(
+            "workspace {workspace_id}'s checkout is gone from disk ({}), so an agent cannot be \
+             started there. Ask a person to restore it, or spawn a workspace of your own.",
+            workspace.path
         );
     }
     Ok(())
@@ -543,7 +558,7 @@ async fn spawn_workspace(
     let caller = caller_session(service, &ctx.parent_session_id)?;
     workspace_ops::spawn_workspace(
         &workspaces.workspace_runtime,
-        &workspaces.worktree_runtime,
+        workspaces.worktree_runtime.as_ref(),
         &workspaces.repo_roots,
         service.access_gate(),
         &caller,
@@ -1249,4 +1264,175 @@ fn close_result(
             "That agent is closed. Its transcript stays readable."
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::agents::readiness::launch_options::{
+        ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedWorkspaceLaunchOptions,
+    };
+    use crate::domains::sessions::agent_ops::spawn_ops::{
+        resolve_launch_against_target_workspace, CreateAgentSessionRequest,
+    };
+    use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+    use crate::domains::sessions::agent_ops::tools::SpawnAgentArgs;
+
+    fn session(id: &str, workspace_id: &str) -> SessionRecord {
+        SessionRecord {
+            id: id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            agent_kind: "claude".to_string(),
+            native_session_id: None,
+            agent_auth_contexts: None,
+            requested_model_id: Some("caller-model".to_string()),
+            current_model_id: Some("caller-model".to_string()),
+            requested_mode_id: Some("caller-mode".to_string()),
+            current_mode_id: Some("caller-mode".to_string()),
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: "2026-08-08T00:00:00Z".to_string(),
+            updated_at: "2026-08-08T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
+            mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+            system_prompt_append: None,
+            subagents_enabled: true,
+            action_capabilities_json: None,
+            origin: None,
+        }
+    }
+
+    fn target_catalog(workspace_id: &str) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
+        assert_eq!(workspace_id, "workspace-2", "the TARGET's catalog, always");
+        Ok(ResolvedWorkspaceLaunchOptions {
+            agents: vec![ResolvedLaunchAgentOption {
+                kind: "claude".to_string(),
+                display_name: "claude".to_string(),
+                default_model_id: Some("target-model".to_string()),
+                unattended_mode_id: Some("target-mode".to_string()),
+                models: vec![ResolvedLaunchModelOption {
+                    id: "target-model".to_string(),
+                    display_name: "target-model".to_string(),
+                    aliases: Vec::new(),
+                    is_default: true,
+                    default_opt_in: None,
+                    description: None,
+                    provider: None,
+                    status: None,
+                    effort: None,
+                    live_effort_candidates: Vec::new(),
+                    fast_mode: false,
+                    modes: Some(vec!["target-mode".to_string()]),
+                }],
+            }],
+        })
+    }
+
+    #[test]
+    fn applied_initial_config_reports_what_the_cross_workspace_peer_actually_launched_with() {
+        // `subagents.md` promises `appliedInitialConfig` reports what the agent
+        // launched with, "so a key that was not honoured is visibly absent
+        // there" — and the cross-workspace path is exactly where the request
+        // and the row diverge: an inherited model the target does not offer is
+        // replaced by the target's default, and the inherited mode with it.
+        // Reporting the REQUEST here would tell the caller it got something it
+        // did not.
+        let caller = session("ses_caller", "workspace-1");
+        let mut request = CreateAgentSessionRequest::owned_agent(
+            &caller,
+            SpawnAgentArgs {
+                prompt: "Audit the schema".to_string(),
+                label: None,
+                harness_id: None,
+                initial_config: None,
+                wake_on_completion: false,
+                workspace_id: Some("workspace-2".to_string()),
+            },
+        )
+        .expect("build request");
+        assert!(request.is_cross_workspace(&caller));
+        assert_eq!(request.model_id.as_deref(), Some("caller-model"));
+
+        resolve_launch_against_target_workspace(&mut request, target_catalog)
+            .expect("the target's catalog decides");
+
+        // The row `create_durable_session` writes carries the RESOLVED
+        // selection, which is what the response then reads back.
+        let mut created = session("ses_peer", &request.workspace_id);
+        created.agent_kind = request.agent_kind.clone();
+        created.requested_model_id = request.model_id.clone();
+        created.current_model_id = None;
+        created.requested_mode_id = request.mode_id.clone();
+        created.current_mode_id = None;
+
+        let applied = applied_initial_config(&created);
+        assert_eq!(applied["harnessId"], "claude");
+        assert_eq!(
+            applied["modelId"], "target-model",
+            "the caller's model does not exist in the target workspace, so reporting it would be \
+             a lie the caller has no way to detect"
+        );
+        assert_eq!(applied["modeId"], "target-mode");
+        assert_ne!(applied["modelId"], "caller-model");
+        assert_ne!(applied["modeId"], "caller-mode");
+    }
+
+    #[test]
+    fn a_target_workspace_whose_checkout_is_gone_is_refused_before_anything_is_created() {
+        // Without this arm the session is created, `start_persisted_session`
+        // fails on the missing cwd, and the whole call unwinds — correct, but
+        // it answers "spawn failed" where it could answer "that workspace's
+        // checkout is gone". The gate already refuses a missing row and a
+        // non-standard surface; this is the third fact it can cheaply read.
+        use crate::app::test_support;
+        use crate::domains::repo_roots::service::RepoRootService;
+        use crate::domains::repo_roots::store::RepoRootStore;
+        use crate::domains::sessions::deletion::SessionDeleteWorkflow;
+        use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
+        use crate::domains::workspaces::runtime::WorkspaceRuntime;
+        use crate::domains::workspaces::store::WorkspaceStore;
+        use crate::persistence::Db;
+
+        let db = Db::open_in_memory().expect("open db");
+        let home = std::env::temp_dir().join(format!("anyharness-spawnable-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&home).expect("create runtime home");
+        let runtime = WorkspaceRuntime::new(
+            WorkspaceStore::new(db.clone()),
+            WorkspaceDeleteWorkflow::new(db.clone(), SessionDeleteWorkflow::new(db.clone())),
+            RepoRootService::new(RepoRootStore::new(db.clone())),
+            home.clone(),
+        );
+
+        test_support::seed_workspace_with_repo_root(
+            &db,
+            "workspace-here",
+            "local",
+            &home.to_string_lossy(),
+        );
+        test_support::seed_workspace_with_repo_root(
+            &db,
+            "workspace-gone",
+            "local",
+            &home.join("deleted-checkout").to_string_lossy(),
+        );
+
+        assert_spawnable_workspace(&runtime, "workspace-here")
+            .expect("a workspace whose checkout is on disk is spawnable");
+
+        let error = assert_spawnable_workspace(&runtime, "workspace-gone")
+            .err()
+            .expect("a workspace whose checkout was deleted is refused");
+        assert!(
+            error.to_string().contains("gone from disk"),
+            "unexpected refusal: {error}"
+        );
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }

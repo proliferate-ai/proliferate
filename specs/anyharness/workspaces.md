@@ -176,27 +176,51 @@ paths above, not a third path. `mode=worktree` calls
 `POST /v1/workspaces/worktrees`; `mode=local` calls
 `create_workspace_with_origin_and_creator_context`, the routine behind
 `POST /v1/workspaces`. Everything workspace creation already enforces —
-path-uniqueness for worktrees, non-idempotent local create, managed repo paths —
-applies unchanged.
+path-uniqueness for worktrees, managed repo paths — applies unchanged.
 
-What the agent surface adds is three things:
+The **repo root an agent may target is any configured root present on this
+machine**, not only the caller's own. `get_workspace_options` enumerates every
+root with `available` and, when it is not, an `unavailableReason`; the tool
+refuses anything that enumeration marks unusable. (This widens the original
+"same git repo" phrasing of the agent-ops ADR §1 requirement 1.7; the ADR's §3.4
+repo-root-selection contract is the one that governs, and 1.7 carries the
+amendment note. Placement stays local-only either way.)
+
+What the agent surface adds is four things:
 
 - a **local-only gate**: the caller's workspace must have a local checkout that
   still exists, and the target repo root must be checked out on this machine.
   There is no cloud/sandbox placement to select today, so the gate is expressed
   against `has_local_checkout()` plus those two filesystem facts, and refuses
-  with the reason rather than silently creating something elsewhere.
+  with the reason rather than silently creating something elsewhere. The two
+  filesystem facts are read as a three-valued `CheckoutPresence`
+  (present / missing / unreadable) and the gate fails CLOSED: a path the server
+  cannot stat refuses and names the check, rather than being treated as present.
 - **server-side defaults for everything an agent does not pass.** The tool takes
   only a repo root, a mode, a branch name and a label; base branch
   (`repo_root.default_branch`, then the caller workspace's original/current
   branch, then `main`), target path, surface, `checkout_mode = NewBranch` and
-  `name_conflict_policy = SuffixPathAndBranch` are chosen server-side. The setup
-  script is the command this machine last ran for the caller's own workspace,
-  and never runs for `mode=local`.
+  `name_conflict_policy = SuffixPathAndBranch` are chosen server-side. `label`
+  is trimmed and bounded to 200 characters.
+- **a setup script chosen per REPO ROOT, never carried across repos.** When the
+  target root is the caller's own, the new worktree reuses the command this
+  machine last ran for the caller's workspace. When it is a different root, the
+  command is taken from that root's own active workspaces instead; if none of
+  them has ever run one, the new worktree gets no setup command. A setup script
+  is one repo's build instructions and running it in another repo's checkout is
+  a defect, not a convenience. `mode=local` never runs one.
 - **a creator stamp**: `WorkspaceCreatorContext::Agent` carrying the calling
   session id, so the workspace's provenance resolves back to the agent that
   asked for it. `session_link_id` stays `None` — a workspace is not the far end
   of a `session_links` row.
+
+**`mode=local` is idempotent per repo root on this surface.** The human route
+creates a second local workspace happily; the agent route does not. If an active
+local workspace already exists for the requested root, `spawn_workspace` returns
+it with `reused: true` instead of creating a duplicate. The reason is ruling 11:
+agents retry, and only a person can retire a workspace, so a retried call that
+created a second row would leave litter no agent can clean up. Worktree mode
+keeps the non-idempotent behavior — a branch name makes each request distinct.
 
 Retirement, purge and deletion are NOT reachable from this surface. A workspace
 an agent created is retired by a person, through the same routes as any other.

@@ -60,16 +60,38 @@ impl fmt::Display for SessionLinkRelation {
     }
 }
 
+/// Where the child of a link lives relative to its parent.
+///
+/// A durable fact, not a derived one: the workspace ids on both sessions can
+/// move (mobility) or be retired, so the relation the link was CREATED with is
+/// what says whether the two agents were ever meant to share a checkout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionLinkWorkspaceRelation {
     SameWorkspace,
+    /// The child was placed in a workspace that is not the parent's. Since
+    /// `spawn_agent` took a `workspaceId` this is an ordinary outcome, not an
+    /// exotic one: an owner may staff a workspace it just spawned.
+    CrossWorkspace,
     CoworkManagedWorkspace,
 }
 
 impl SessionLinkWorkspaceRelation {
+    /// Which of the two ordinary relations a parent/child pair is, from the
+    /// only fact that decides it. Cowork's managed relation is not reachable
+    /// from here — it names a workspace the cowork feature owns, which is a
+    /// different claim than "these two are not in the same place".
+    pub fn between(parent_workspace_id: &str, child_workspace_id: &str) -> Self {
+        if parent_workspace_id == child_workspace_id {
+            Self::SameWorkspace
+        } else {
+            Self::CrossWorkspace
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::SameWorkspace => "same_workspace",
+            Self::CrossWorkspace => "cross_workspace",
             Self::CoworkManagedWorkspace => "cowork_managed_workspace",
         }
     }
@@ -77,6 +99,7 @@ impl SessionLinkWorkspaceRelation {
     pub fn parse(value: &str) -> Result<Self, SessionLinkParseError> {
         match value {
             "same_workspace" => Ok(Self::SameWorkspace),
+            "cross_workspace" => Ok(Self::CrossWorkspace),
             "cowork_managed_workspace" => Ok(Self::CoworkManagedWorkspace),
             other => Err(SessionLinkParseError::UnknownWorkspaceRelation(
                 other.to_string(),

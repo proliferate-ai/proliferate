@@ -99,7 +99,12 @@ It stores an advisory relationship between two existing sessions:
   `review_agent`
 - parent session id
 - child session id
-- workspace relation, currently `same_workspace`
+- workspace relation: `same_workspace`, `cross_workspace`, or
+  `cowork_managed_workspace`. It is decided when the link is written, by
+  comparing the two sessions' workspace ids, and is a durable fact rather than a
+  derived one — both sessions' workspaces can later move or be retired, so the
+  row records where the child actually landed at creation. `spawn_agent` writes
+  `cross_workspace` whenever its `workspaceId` is not the caller's own.
 - optional label for display and wake copy
 - optional creator turn id
 - optional creator tool-call id

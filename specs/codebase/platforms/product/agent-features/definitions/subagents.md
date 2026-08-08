@@ -149,6 +149,21 @@ target's default for that harness rather than failing the call. The
 `appliedInitialConfig` in the response is read off the created session, so it
 reports what the agent actually launched with.
 
+`modeId` follows the SAME named-versus-inherited policy, against the modes the
+chosen model advertises in the target's catalog: a mode the caller named that
+the target's model does not offer is refused, and one that only came along with
+the inheritance is replaced by the target harness's unattended default. A model
+whose catalog entry carries no mode control at all states no opinion about
+modes, so there is nothing to check against and the mode passes through
+untouched.
+
+That pass-through is the same asymmetry an EMPTY target catalog has: when the
+target workspace advertises no launch options, composition has nothing to
+validate against and the caller's selection passes through verbatim. The check
+is "the target says no", not "the target says yes" — an unreadable or
+not-yet-populated catalog must not become a refusal for every peer spawn into
+that workspace.
+
 This is the same principle peer configuration follows below, applied one step
 earlier: the target's universe decides, never the caller's.
 
@@ -161,16 +176,30 @@ own root marked as the default, and the two modes — and marks a repo it cannot
 use as unavailable WITH the reason rather than hiding it.
 
 `spawn_workspace` takes three things and a label: a repo root (defaulting to the
-caller's), a mode, and, for `mode=worktree`, a branch name. Everything else is
-server-side policy — base branch, path, name-conflict handling, setup script —
-because those are choices a human makes from a form with the repo in front of
-them, and an agent guessing at them is how you get eleven half-configured
-worktrees. A branch name that is already taken is suffixed rather than refused.
+caller's, but ANY configured root this machine has is allowed), a mode, and, for
+`mode=worktree`, a branch name. Everything else is server-side policy — base
+branch, path, name-conflict handling, setup script — because those are choices a
+human makes from a form with the repo in front of them, and an agent guessing at
+them is how you get eleven half-configured worktrees. A branch name that is
+already taken is suffixed rather than refused. The label is trimmed and bounded
+to 200 characters.
+
+The setup script is chosen for the REPO the worktree is for, never carried over
+from the caller: same root, reuse the caller's last command; different root, take
+that root's own active workspaces' last command, or none. Running one repo's
+build steps inside another repo's checkout is a defect, not a shortcut.
+
+`mode=local` is idempotent per repo root here, unlike the human route: an active
+local workspace that already exists for the requested root is returned with
+`reused: true` rather than duplicated. Agents retry, and the asymmetry below
+gives them no way to undo a duplicate.
 
 Placement is local-only: the workspace lands on this machine, in a repo this
-machine has checked out, or the call is refused with which of those was false.
-Every workspace it makes carries `WorkspaceCreatorContext::Agent` with the
-calling session id, so the provenance a person sees names the agent that asked.
+machine has checked out, or the call is refused with which of those was false —
+including when the server cannot read the path at all, which refuses rather than
+assuming the checkout is there. Every workspace it makes carries
+`WorkspaceCreatorContext::Agent` with the calling session id, so the provenance a
+person sees names the agent that asked.
 
 The asymmetry is deliberate: an agent may create a workspace and may not retire
 one. Creation is recoverable — an unwanted workspace is a directory and a row.

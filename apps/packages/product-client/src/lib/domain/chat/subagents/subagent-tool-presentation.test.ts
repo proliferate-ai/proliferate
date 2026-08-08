@@ -153,12 +153,18 @@ describe("subagent tool presentation", () => {
       isRunning: false,
     })).toBe("Workspace options read");
     // The failure fallback is "Subagent launch failed", which would report a
-    // launch for a call that never touched an agent.
+    // launch for a call that never touched an agent — but the settled verb is
+    // not the answer either: a failed spawn must not read as a successful one.
     expect(formatSubagentHeaderVerb({
       item: { nativeToolName: "mcp__subagents__spawn_workspace" },
       executionState: "failed",
       isRunning: false,
-    })).toBe("Workspace spawned");
+    })).toBe("Workspace spawn failed");
+    expect(formatSubagentHeaderVerb({
+      item: { nativeToolName: "mcp__subagents__get_workspace_options" },
+      executionState: "failed",
+      isRunning: false,
+    })).toBe("Workspace options unavailable");
   });
 
   it("keeps a workspace spawn out of the subagent launch ledger", () => {

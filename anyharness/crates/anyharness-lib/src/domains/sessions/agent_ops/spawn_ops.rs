@@ -21,7 +21,9 @@
 //! point: the two spawn shapes cannot drift apart on the parts that are not
 //! about ownership.
 
-use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
+use crate::domains::agents::readiness::launch_options::{
+    ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedWorkspaceLaunchOptions,
+};
 use crate::domains::sessions::delegation::parent_to_child_provenance;
 use crate::domains::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
@@ -82,6 +84,11 @@ pub(super) struct CreateAgentSessionRequest {
     /// target's default. See [`resolve_launch_against_target_workspace`].
     pub model_id_explicit: bool,
     pub mode_id: Option<String>,
+    /// The same NAMED-vs-INHERITED distinction `model_id_explicit` draws, for
+    /// the same reason: a mode the target does not offer is a refusal when the
+    /// caller asked for it and a substitution when it only came along for the
+    /// ride.
+    pub mode_id_explicit: bool,
     pub label: Option<String>,
     pub prompt: String,
     pub wake_on_completion: bool,
@@ -164,6 +171,7 @@ impl CreateAgentSessionRequest {
             anyhow::bail!("prompt is required");
         }
         let named_model_id = initial_config_string(initial_config, &["modelId", "model"]);
+        let named_mode_id = initial_config_string(initial_config, &["modeId", "mode"]);
         Ok(Self {
             ownership,
             workspace_id,
@@ -172,7 +180,8 @@ impl CreateAgentSessionRequest {
             model_id: named_model_id
                 .or_else(|| caller.current_model_id.clone())
                 .or_else(|| caller.requested_model_id.clone()),
-            mode_id: initial_config_string(initial_config, &["modeId", "mode"])
+            mode_id_explicit: named_mode_id.is_some(),
+            mode_id: named_mode_id
                 .or_else(|| caller.current_mode_id.clone())
                 .or_else(|| caller.requested_mode_id.clone()),
             label: label
@@ -213,7 +222,8 @@ impl CreateAgentSessionRequest {
 /// there, which fails later, at spawn, with a durable half-built session
 /// already inserted.
 ///
-/// The two selections are treated differently on purpose:
+/// All three selections are treated the same way, which is the point — the
+/// target's universe decides, never the caller's:
 ///
 /// - the harness is always refused when the target cannot launch it. There is
 ///   no sensible substitute — "one like me" is the request, and quietly picking
@@ -222,11 +232,19 @@ impl CreateAgentSessionRequest {
 ///   INHERITED from the caller is replaced by the target's own default: the
 ///   caller never asked for it, it only asked for "one like me", and the
 ///   target's default is exactly what the human create flow would pick there.
+/// - the mode follows the model's rule exactly. Modes are a per-model control
+///   (`ResolvedLaunchModelOption::modes`, from `controls.mode.values`), so a
+///   NAMED mode the target's model does not list is refused and an INHERITED
+///   one is replaced by that harness's curated default (`unattended_mode_id`),
+///   or dropped when the harness declares none.
 ///
-/// A target whose catalog resolves to no launchable agents at all says nothing
-/// about the request — it means readiness could not be established on this
-/// machine — so it is passed through rather than turned into a refusal that
-/// names nothing.
+/// Two arms deliberately pass through rather than refuse, and they are the same
+/// asymmetry: a target whose catalog resolves to NO launchable agents says
+/// nothing about the request — readiness could not be established on this
+/// machine — and a model that declares NO mode control says nothing about the
+/// mode. Refusing on either would name nothing the caller could act on. The
+/// cost is that an unresolvable workspace admits any harness/model/mode here;
+/// they are re-checked at start, where the failure is specific.
 ///
 /// The catalog arrives as a closure, so *which workspace id this asks about* is
 /// testable without a runtime.
@@ -253,14 +271,18 @@ where
             join_quoted(catalog.agents.iter().map(|agent| agent.kind.as_str()))
         );
     };
+    resolve_model_against_agent(request, agent)?;
+    resolve_mode_against_agent(request, agent)
+}
+
+fn resolve_model_against_agent(
+    request: &mut CreateAgentSessionRequest,
+    agent: &ResolvedLaunchAgentOption,
+) -> anyhow::Result<()> {
     let Some(model_id) = request.model_id.clone() else {
         return Ok(());
     };
-    let offered = agent
-        .models
-        .iter()
-        .any(|model| model.id == model_id || model.aliases.iter().any(|alias| *alias == model_id));
-    if offered {
+    if find_model(agent, &model_id).is_some() {
         return Ok(());
     }
     if request.model_id_explicit {
@@ -275,6 +297,56 @@ where
     // have chosen by itself rather than refusing a launch nobody specified.
     request.model_id = agent.default_model_id.clone();
     Ok(())
+}
+
+/// The mode, against the model the request SETTLED on — which is why this runs
+/// after the model is resolved: an inherited model replaced by the target's
+/// default brings the target's mode menu with it, and validating against the
+/// model the caller arrived with would check the wrong list.
+fn resolve_mode_against_agent(
+    request: &mut CreateAgentSessionRequest,
+    agent: &ResolvedLaunchAgentOption,
+) -> anyhow::Result<()> {
+    let Some(mode_id) = request.mode_id.clone() else {
+        return Ok(());
+    };
+    let model = request
+        .model_id
+        .clone()
+        .and_then(|model_id| find_model(agent, &model_id));
+    // `modes: None` is an authoritative "this model has no mode control", not
+    // an empty menu, so there is nothing here to check the selection against.
+    let Some(offered) = model.and_then(|model| model.modes.as_ref()) else {
+        return Ok(());
+    };
+    if offered.iter().any(|offered| *offered == mode_id) {
+        return Ok(());
+    }
+    if request.mode_id_explicit {
+        anyhow::bail!(
+            "mode {mode_id:?} is not available for {} in workspace {}. Available there: {}.",
+            request.agent_kind,
+            request.workspace_id,
+            join_quoted(offered.iter().map(String::as_str))
+        );
+    }
+    // Inherited only. The curated unattended mode is what this harness is
+    // vetted to run with when nobody is watching, and `None` there is an
+    // authoritative "no vetted default" — so the mode is dropped and the
+    // target picks its own at launch, rather than carrying over one the
+    // target's model does not list.
+    request.mode_id = agent.unattended_mode_id.clone();
+    Ok(())
+}
+
+fn find_model<'a>(
+    agent: &'a ResolvedLaunchAgentOption,
+    model_id: &str,
+) -> Option<&'a ResolvedLaunchModelOption> {
+    agent
+        .models
+        .iter()
+        .find(|model| model.id == model_id || model.aliases.iter().any(|alias| alias == model_id))
 }
 
 fn join_quoted<'a>(values: impl Iterator<Item = &'a str>) -> String {
@@ -394,9 +466,16 @@ fn link_new_agent(
             None,
             None,
         )?,
-        AgentSessionOwnership::OwnedAgent => {
-            ownership.link_owned_agent(&caller.id, child_session_id, request.label.clone())?
-        }
+        // The two workspace ids are handed over rather than assumed: a peer
+        // can land in a workspace the caller spawned, and the link row records
+        // which of the two it was.
+        AgentSessionOwnership::OwnedAgent => ownership.link_owned_agent(
+            &caller.id,
+            &caller.workspace_id,
+            child_session_id,
+            &request.workspace_id,
+            request.label.clone(),
+        )?,
     };
     // Which is exactly why the relation is checked rather than passed: the two
     // paths each choose their own, and a spawn that wrote the other mode's
@@ -750,6 +829,16 @@ mod tests {
         }
     }
 
+    /// A model that declares a mode control, which is the only case a mode can
+    /// be checked against. `modes: None` on `model_option` is the other case,
+    /// and it is a real one — see the pass-through test below.
+    fn model_option_offering(id: &str, modes: &[&str]) -> ResolvedLaunchModelOption {
+        ResolvedLaunchModelOption {
+            modes: Some(modes.iter().map(|mode| (*mode).to_string()).collect()),
+            ..model_option(id)
+        }
+    }
+
     fn agent_option(kind: &str, model_ids: &[&str]) -> ResolvedLaunchAgentOption {
         ResolvedLaunchAgentOption {
             kind: kind.to_string(),
@@ -757,6 +846,19 @@ mod tests {
             default_model_id: model_ids.first().map(|id| (*id).to_string()),
             unattended_mode_id: None,
             models: model_ids.iter().map(|id| model_option(id)).collect(),
+        }
+    }
+
+    fn agent_option_offering(
+        kind: &str,
+        model_id: &str,
+        modes: &[&str],
+        unattended_mode_id: Option<&str>,
+    ) -> ResolvedLaunchAgentOption {
+        ResolvedLaunchAgentOption {
+            unattended_mode_id: unattended_mode_id.map(ToString::to_string),
+            models: vec![model_option_offering(model_id, modes)],
+            ..agent_option(kind, &[model_id])
         }
     }
 
@@ -782,11 +884,21 @@ mod tests {
                 self.asked.borrow_mut().push(workspace_id.to_string());
                 Ok(ResolvedWorkspaceLaunchOptions {
                     agents: match workspace_id {
-                        "workspace-1" => {
-                            vec![agent_option("claude", &["caller-only-model"])]
-                        }
+                        "workspace-1" => vec![agent_option_offering(
+                            "claude",
+                            "caller-only-model",
+                            &["caller-only-mode"],
+                            Some("caller-only-mode"),
+                        )],
                         "workspace-2" => vec![
-                            agent_option("claude", &["target-only-model"]),
+                            agent_option_offering(
+                                "claude",
+                                "target-only-model",
+                                &["target-only-mode"],
+                                Some("target-only-mode"),
+                            ),
+                            // No mode control at all, which is the arm that
+                            // has nothing to check a mode against.
                             agent_option("codex", &["target-codex-model"]),
                         ],
                         _ => Vec::new(),
@@ -825,6 +937,79 @@ mod tests {
         // the caller workspace's default.
         assert_eq!(request.model_id.as_deref(), Some("target-only-model"));
         assert_ne!(request.model_id.as_deref(), Some("caller-only-model"));
+        // The mode is the third selection and follows the same rule: inherited,
+        // not offered there, so it becomes the target harness's curated default
+        // rather than travelling across as-is.
+        assert_eq!(request.mode_id.as_deref(), Some("target-only-mode"));
+    }
+
+    #[test]
+    fn a_mode_only_the_callers_workspace_offers_is_refused_when_the_caller_named_it() {
+        let spy = CatalogSpy::new();
+        let mut request = CreateAgentSessionRequest::owned_agent(
+            &session("ses_caller"),
+            SpawnAgentArgs {
+                workspace_id: Some("workspace-2".to_string()),
+                initial_config: Some(
+                    json!({ "modelId": "target-only-model", "modeId": "caller-only-mode" }),
+                ),
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request");
+        assert!(request.mode_id_explicit);
+
+        let error = resolve_launch_against_target_workspace(&mut request, spy.resolver())
+            .err()
+            .expect("a named mode outside the target's menu is refused");
+
+        let message = error.to_string();
+        assert!(message.contains("caller-only-mode"), "{message}");
+        // The refusal names what IS offered there, so the agent can retry.
+        assert!(message.contains("target-only-mode"), "{message}");
+    }
+
+    #[test]
+    fn a_mode_the_target_workspace_offers_is_kept_verbatim() {
+        let spy = CatalogSpy::new();
+        let mut request = CreateAgentSessionRequest::owned_agent(
+            &session("ses_caller"),
+            SpawnAgentArgs {
+                workspace_id: Some("workspace-2".to_string()),
+                initial_config: Some(
+                    json!({ "modelId": "target-only-model", "modeId": "target-only-mode" }),
+                ),
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request");
+
+        resolve_launch_against_target_workspace(&mut request, spy.resolver()).expect("accepted");
+
+        assert_eq!(request.mode_id.as_deref(), Some("target-only-mode"));
+    }
+
+    #[test]
+    fn a_model_with_no_mode_control_has_nothing_to_check_the_mode_against() {
+        // `modes: None` is "this model declares no mode control", not "no modes
+        // are allowed". Refusing there would name an empty list, so the caller's
+        // mode is passed through — the same asymmetry the empty catalog has.
+        let spy = CatalogSpy::new();
+        let mut request = CreateAgentSessionRequest::owned_agent(
+            &session("ses_caller"),
+            SpawnAgentArgs {
+                harness_id: Some("codex".to_string()),
+                workspace_id: Some("workspace-2".to_string()),
+                initial_config: Some(json!({ "modeId": "anything-at-all" })),
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request");
+
+        resolve_launch_against_target_workspace(&mut request, spy.resolver())
+            .expect("a model with no mode control decides nothing about the mode");
+
+        assert_eq!(request.mode_id.as_deref(), Some("anything-at-all"));
     }
 
     #[test]

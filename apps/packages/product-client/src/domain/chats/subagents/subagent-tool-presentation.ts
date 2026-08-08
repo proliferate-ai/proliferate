@@ -129,10 +129,18 @@ export function formatSubagentHeaderVerb({
   // Workspace ops. Nothing here creates an agent, so the fallback verb below
   // would report a subagent launch — and, for `spawn_workspace`, a failure
   // would read as "Subagent launch failed" for a call that never touched one.
+  // These branches name the failure themselves rather than falling through:
+  // reporting a failed call as a settled success is worse than the wrong noun.
   if (toolName === "mcp__subagents__get_workspace_options") {
+    if (executionState === "failed") {
+      return "Workspace options unavailable";
+    }
     return isRunning ? "Reading workspace options" : "Workspace options read";
   }
   if (toolName === "mcp__subagents__spawn_workspace") {
+    if (executionState === "failed") {
+      return "Workspace spawn failed";
+    }
     return isRunning ? "Spawning workspace" : "Workspace spawned";
   }
   if (executionState === "failed") {

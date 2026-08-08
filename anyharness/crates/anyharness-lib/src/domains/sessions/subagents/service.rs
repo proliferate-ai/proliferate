@@ -142,9 +142,15 @@ impl SubagentService {
     /// ruling 9 puts no numeric limit on it, and it is subordinate to nobody,
     /// so a caller holding eight subagents may still spawn one. What they do
     /// share is every rule about the CALLER — including subordination, below —
-    /// plus the workspace the new session lands in being mutable, which for
-    /// this tool is the caller's own, the one whose write lease the route
-    /// already took.
+    /// and that includes the CALLER's workspace still being mutable, asserted
+    /// below.
+    ///
+    /// The workspace the new session LANDS in is a separate question here, and
+    /// it is not this gate's. Since `spawn_workspace`, `spawn_agent` may place
+    /// a peer in any workspace, so the tool left `MUTATING_TOOL_NAMES` (the
+    /// route's lease is the caller's, which is the wrong one) and takes the
+    /// TARGET workspace's write lease itself, in the call, held across
+    /// creation, start and the first prompt.
     ///
     /// Ruling 3's spawn block IS restated here, even though
     /// `agent_ops::calls::call_tool` already refuses an unpromoted subagent

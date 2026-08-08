@@ -146,19 +146,28 @@ impl AgentOwnershipService {
     /// `spawn_agent` is this relation's only producer. Promotion never writes
     /// it: a promoted subagent keeps `relation = 'subagent'` and gains
     /// `promoted_at`, because the row also records how the agent came to be.
+    ///
+    /// The two workspace ids are taken rather than assumed. `spawn_agent` may
+    /// place a peer in a workspace that is not the caller's, so the row records
+    /// which of the two it was — a durable claim on a public field
+    /// (`SessionLinkView::workspace_relation`), and one that is far cheaper to
+    /// get right at insert than to reinterpret later.
     pub fn link_owned_agent(
         &self,
         owner_session_id: &str,
+        owner_workspace_id: &str,
         agent_session_id: &str,
+        agent_workspace_id: &str,
         label: Option<String>,
     ) -> Result<SessionLinkRecord, OwnershipError> {
         Ok(self.link_service.create_link(CreateSessionLinkInput {
             relation: SessionLinkRelation::OwnedAgent,
             parent_session_id: owner_session_id.to_string(),
             child_session_id: agent_session_id.to_string(),
-            // The agent is a peer, but it is still born in one workspace, and
-            // in this tool that is the caller's own.
-            workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+            workspace_relation: SessionLinkWorkspaceRelation::between(
+                owner_workspace_id,
+                agent_workspace_id,
+            ),
             label,
             created_by_turn_id: None,
             created_by_tool_call_id: None,
@@ -483,7 +492,13 @@ mod tests {
 
         let link = fixture
             .ownership
-            .link_owned_agent("ses_owner", "ses_peer", Some("Schema audit".to_string()))
+            .link_owned_agent(
+                "ses_owner",
+                "workspace-1",
+                "ses_peer",
+                "workspace-1",
+                Some("Schema audit".to_string()),
+            )
             .expect("link the owned agent");
 
         assert_eq!(link.relation, SessionLinkRelation::OwnedAgent);
@@ -513,6 +528,56 @@ mod tests {
     }
 
     #[test]
+    fn the_owned_link_records_which_workspace_the_peer_actually_landed_in() {
+        // `spawn_agent` takes a `workspaceId`, so a peer is routinely NOT in
+        // the owner's workspace. `workspace_relation` is durable and public
+        // (`SessionLinkView`), so stamping every row `same_workspace` would
+        // write a claim that is false for exactly the rows the cross-workspace
+        // feature creates — and one nothing downstream could later recover.
+        let fixture = fixture(&["ses_owner", "ses_here", "ses_elsewhere"]);
+
+        let same = fixture
+            .ownership
+            .link_owned_agent("ses_owner", "workspace-1", "ses_here", "workspace-1", None)
+            .expect("link the peer next door");
+        assert_eq!(
+            same.workspace_relation,
+            SessionLinkWorkspaceRelation::SameWorkspace
+        );
+
+        let elsewhere = fixture
+            .ownership
+            .link_owned_agent(
+                "ses_owner",
+                "workspace-1",
+                "ses_elsewhere",
+                "workspace-2",
+                None,
+            )
+            .expect("link the peer in the workspace the owner spawned");
+        assert_eq!(
+            elsewhere.workspace_relation,
+            SessionLinkWorkspaceRelation::CrossWorkspace
+        );
+
+        // And it survives the round trip through the store, which is what
+        // makes it a durable fact rather than a value in this call.
+        let reread = fixture
+            .ownership
+            .resolve_owned("ses_owner", None, Some("ses_elsewhere"))
+            .expect("the owner owns it");
+        assert_eq!(
+            reread.link.workspace_relation,
+            SessionLinkWorkspaceRelation::CrossWorkspace
+        );
+        assert_eq!(
+            reread.link.workspace_relation.as_str(),
+            "cross_workspace",
+            "the stored spelling is the one the public view serialises"
+        );
+    }
+
+    #[test]
     fn an_owned_agent_link_does_not_claim_a_subagent_parent_slot() {
         // Negative control on the relation: the child of an owned link must not
         // read as somebody's subagent anywhere, or the depth rule and the
@@ -520,7 +585,7 @@ mod tests {
         let fixture = fixture(&["ses_owner", "ses_peer"]);
         fixture
             .ownership
-            .link_owned_agent("ses_owner", "ses_peer", None)
+            .link_owned_agent("ses_owner", "workspace-1", "ses_peer", "workspace-1", None)
             .expect("link the owned agent");
 
         assert!(fixture
