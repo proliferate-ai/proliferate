@@ -1,5 +1,5 @@
-import { DelegatedAgentReceiptName } from "#product/components/workspace/chat/transcript/DelegatedAgentReceiptName";
-import { Button } from "#product/primitives/Button";
+import { AgentChip, AgentChipVerb } from "#product/components/workspace/delegated-work/AgentChip";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
 interface SubagentWakeBadgeProps {
   label?: string | null;
@@ -12,6 +12,14 @@ interface SubagentWakeBadgeProps {
   onOpenChild?: (childSessionId: string) => void;
 }
 
+/**
+ * An inbound agent receipt — the same chip language as a spawn or a send, on
+ * the other side of the transcript.
+ *
+ * Direction gets a side (ADR §4): TO an agent is left, FROM an agent is right,
+ * where wake receipts always sat. So the verb leads and the chip follows, and
+ * the caller aligns the row to the end.
+ */
 export function SubagentWakeBadge({
   label,
   childSessionId,
@@ -21,63 +29,52 @@ export function SubagentWakeBadge({
   onOpenChild,
 }: SubagentWakeBadgeProps) {
   const title = label?.trim() || titleFallback;
-  const receiptText = formatWakeReceipt(outcome);
   const targetChildSessionId = childSessionId?.trim() || null;
   const canOpenChild = Boolean(targetChildSessionId && onOpenChild);
-  const className =
-    "max-w-[77%] text-right text-chat font-normal text-muted-foreground";
-  const content = (
-    <>
-      {/* The outer receipt owns opening; keep the name static to avoid nested buttons. */}
-      <DelegatedAgentReceiptName
-        id={sessionLinkId ?? childSessionId ?? title}
-        title={title}
-        sessionId={childSessionId ?? null}
-        sessionLinkId={sessionLinkId ?? null}
-      />
-      <span> {receiptText}.</span>
-    </>
-  );
-
-  if (canOpenChild && targetChildSessionId) {
-    return (
-      <Button
-        type="button"
-        variant="unstyled"
-        size="unstyled"
-        className={`${className} inline-block whitespace-normal rounded-sm hover:text-foreground focus-visible:text-foreground focus-visible:underline`}
-        aria-label={`Open ${title} session`}
-        title={title}
-        data-telemetry-mask
-        onClick={() => onOpenChild?.(targetChildSessionId)}
-      >
-        {content}
-      </Button>
-    );
-  }
+  const identity = buildDelegatedAgentIdentity({
+    id: sessionLinkId ?? childSessionId ?? title,
+    title,
+    sessionId: childSessionId ?? null,
+    sessionLinkId: sessionLinkId ?? null,
+  });
+  // A wake pointer is addressed by session id when no delegation link carried
+  // it — the session-scoped pointer has no link to resolve the target through.
+  const addressedById = !sessionLinkId && !!targetChildSessionId;
 
   return (
-    <p
-      className={className}
+    <div
+      className="min-w-0 text-message leading-8"
       data-telemetry-mask
+      data-agent-inbound-receipt
     >
-      {content}
-    </p>
+      <AgentChipVerb className="me-1.5">{formatWakeReceipt(outcome)}</AgentChipVerb>
+      <AgentChip
+        identity={identity}
+        showShortId={addressedById}
+        onOpen={canOpenChild && targetChildSessionId
+          ? () => onOpenChild?.(targetChildSessionId)
+          : undefined}
+      />
+    </div>
   );
 }
 
+/**
+ * A pointer never carries turn output, so the verb stops at what happened:
+ * "finished", or how the turn ended when a completion row says.
+ */
 function formatWakeReceipt(outcome: string | null | undefined): string {
   const normalized = normalizeOutcome(outcome);
   if (!normalized || normalized === "completed") {
-    return "finished a turn";
+    return "finished";
   }
   if (normalized === "failed") {
-    return "failed a turn";
+    return "failed";
   }
   if (normalized === "cancelled" || normalized === "canceled") {
-    return "cancelled a turn";
+    return "cancelled";
   }
-  return `${normalized} a turn`;
+  return normalized;
 }
 
 function normalizeOutcome(outcome: string | null | undefined): string | null {

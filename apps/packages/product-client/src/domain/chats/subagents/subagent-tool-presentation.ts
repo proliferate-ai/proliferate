@@ -36,6 +36,30 @@ export interface SubagentMcpReceiptPresentation {
    * the caller's subagent, and the receipt must not say otherwise.
    */
   originLabel: "Subagent" | "Agent";
+  /**
+   * The quiet trailing verb that follows the chip in the transcript (ADR §4:
+   * "messaged", "replied", "finished", "closed — …"). Never a sentence — the
+   * chip carries the identity and the agent's prose carries the meaning.
+   */
+  chipVerb: string;
+  /**
+   * The literal message body, for the hover badge only. Message content never
+   * gets its own UI: the agent narrates what matters and the chip opens the
+   * thread, so this is read on hover and nowhere else.
+   */
+  messageText: string | null;
+  /**
+   * The target was addressed cross-session by raw session id, with no link to
+   * resolve it. The chip carries the mono short id so the addressing stays
+   * visible.
+   */
+  addressedById: boolean;
+  /**
+   * Where a spawned peer landed. A peer spawn can create its agent in a
+   * workspace of its own, and the receipt says where — the client resolves the
+   * id to a name from its cached workspace collection.
+   */
+  workspaceId: string | null;
 }
 
 export function formatSubagentMcpActionLabel(toolName: string | null | undefined): string | null {
@@ -219,9 +243,29 @@ export function deriveSubagentMcpReceiptPresentation(
     : null;
   const detailLabel = detailLabelForAction(action, rawOutput, statusLabel);
 
+  const messageText =
+    readStringField(rawInput, "message")
+    ?? readStringField(rawInput, "text")
+    ?? readStringField(rawInput, "prompt");
+  // Addressed by raw session id: the caller named a session, and no delegation
+  // link resolved it. Only then does the short id ride inside the chip.
+  const addressedById = !sessionLinkId
+    && !!(
+      readStringField(rawInput, "sessionId")
+      ?? readStringField(rawInput, "targetSessionId")
+      ?? readStringField(rawInput, "target_session_id")
+    );
+
   return {
     action,
     actionLabel: actionLabel(action, item.status === "in_progress", item.nativeToolName),
+    chipVerb: chipVerb(action, item.status === "in_progress", rawInput, rawOutput),
+    messageText,
+    addressedById,
+    workspaceId:
+      readStringField(rawOutput, "workspaceId")
+      ?? readStringField(rawInput, "workspaceId")
+      ?? readStringField(rawInput, "workspace_id"),
     title,
     subagentId,
     sessionLinkId,
@@ -330,6 +374,55 @@ function actionLabel(
   }
 }
 
+/**
+ * The quiet verb that trails an agent chip in the transcript (ADR §4). Same
+ * language as a spawn run: one short phrase, never a sentence, never a bubble.
+ */
+function chipVerb(
+  action: SubagentMcpReceiptAction,
+  running: boolean,
+  input: Record<string, unknown>,
+  output: Record<string, unknown>,
+): string {
+  switch (action) {
+    case "send":
+    case "agent_send": {
+      const messaged = running ? "messaging" : "messaged";
+      // A send that armed a reply wake says so — it is the whole reason the
+      // sender will hear back without asking again.
+      return readBooleanField(input, "wakeOnReply") || readBooleanField(input, "wake_on_reply")
+        ? `${messaged} · wake on reply`
+        : messaged;
+    }
+    case "wake":
+    case "agent_wake":
+      return running ? "scheduling a wake" : "wake scheduled";
+    case "status":
+      return running ? "checking" : "checked";
+    case "read":
+    case "agent_read":
+      return running ? "reading" : "read";
+    case "search":
+      return running ? "searching" : "searched";
+    case "promote":
+      return running ? "promoting" : "promoted";
+    case "close": {
+      if (running) {
+        return "closing";
+      }
+      if (readBooleanField(output, "closeRequested")) {
+        return "closing — finishing its current step";
+      }
+      const reason = readStringField(output, "closeReason");
+      return reason ? `closed — ${reason}` : "closed";
+    }
+    case "spawn_agent":
+      return running ? "starting" : "started working";
+    case "configure":
+      return running ? "configuring" : "configured";
+  }
+}
+
 function detailLabelForAction(
   action: SubagentMcpReceiptAction,
   output: Record<string, unknown>,
@@ -366,9 +459,9 @@ function detailLabelForAction(
       return readStringField(output, "closeReason");
     case "spawn_agent":
       // A peer spawn can land in a workspace of its own — that is the whole
-      // point of the workspace pair — so the receipt says where.
-      // TODO(agent-ops-ux): the result carries only the workspace id; resolving
-      // it to the workspace's name is the design pass.
+      // point of the workspace pair. The receipt says where via `workspaceId`
+      // above, which the client resolves to a name against its cached workspace
+      // collection; the status stays here for the hover card.
       return statusLabel;
     case "agent_send":
       return statusLabel;

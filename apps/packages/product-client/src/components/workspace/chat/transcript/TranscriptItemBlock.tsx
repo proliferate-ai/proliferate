@@ -140,8 +140,9 @@ export function TranscriptItemBlock({
       // A session-scoped wake pointer. It names a target session but no link, so
       // there is no completion row to read an outcome off and no relation to
       // claim — the target may be a peer this session does not parent, and
-      // asserting parentage here would put a peer inside a parent's fanout.
-      // TODO(agent-ops-ux): visual treatment (glyph/chip) is the design pass.
+      // asserting parentage here would put a peer inside a parent's fanout. It
+      // renders in the same inbound chip language as a linked wake — the chip
+      // is how any agent appears in somebody else's transcript.
       if (isAgentWakeProvenance(item.promptProvenance)) {
         const wakeProvenance = item.promptProvenance;
         const targetSessionId = wakeProvenance.targetSessionId;

@@ -28,6 +28,12 @@ interface DelegatedAgentHoverCardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactElement;
   cardAriaLabel?: string;
   onCardClick?: () => void;
+  /**
+   * The literal message body for an agent-message receipt. Message content gets
+   * no UI of its own (ADR §4) — this hover is the only place it is readable,
+   * and the chip itself opens the thread.
+   */
+  message?: string | null;
 }
 
 export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgentHoverCardProps>(
@@ -41,6 +47,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
     onBlur,
     cardAriaLabel,
     onCardClick,
+    message,
     ...props
   }, forwardedRef) {
     const anchorRef = useRef<HTMLDivElement>(null);
@@ -129,6 +136,15 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
           )}
           <HoverCardRow label="Status" value={agent.statusLabel} />
         </div>
+        {message && (
+          <div
+            className="mt-2 border-t border-border/60 pt-2 text-chat text-popover-foreground/90"
+            style={{ textWrap: "pretty" }}
+            data-agent-message-body
+          >
+            {message}
+          </div>
+        )}
       </div>
     );
 

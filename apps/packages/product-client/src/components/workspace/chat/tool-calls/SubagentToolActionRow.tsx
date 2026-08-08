@@ -1,11 +1,7 @@
-import { useState } from "react";
-import { Button } from "#product/primitives/Button";
-import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
-import { Robot } from "#product/primitives/icons/product";
-import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
+import { AgentChip, AgentChipVerb } from "#product/components/workspace/delegated-work/AgentChip";
 import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
+import { useWorkspaceNameResolver } from "#product/hooks/workspaces/derived/use-workspace-name";
 import type {
   SubagentMcpReceiptPresentation,
 } from "#product/domain/chats/subagents/subagent-tool-presentation";
@@ -13,22 +9,28 @@ import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/
 import {
   delegatedWorkStatusCategoryFromLabel,
 } from "#product/lib/domain/delegated-work/presentation";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import type { ToolActionStatus } from "./ToolActionRow";
 
-const CHAT_ACTION_TEXT_CLASS =
-  "text-chat";
-
+/**
+ * An agent-ops receipt in the transcript: chip + one quiet verb (ADR §4).
+ *
+ * This is the sending side, so it sits on the LEFT — the agent acting. Anything
+ * arriving FROM an agent lands right (SubagentWakeBadge). The message body
+ * never gets its own UI: hovering the chip shows the literal message, and
+ * clicking it opens the thread.
+ */
 export function SubagentToolActionRow({
   presentation,
   status,
-  resultText,
 }: {
   presentation: SubagentMcpReceiptPresentation;
   status: ToolActionStatus;
+  /**
+   * Retained for call-site compatibility. Raw tool output is deliberately not
+   * rendered: the chip opens the thread and the agent's prose says what matters.
+   */
   resultText?: string | null;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const openSession = useTranscriptOpenSession();
   const targetSessionId = presentation.childSessionId?.trim() || null;
   const canOpenSession =
@@ -43,6 +45,7 @@ export function SubagentToolActionRow({
     sessionId: presentation.childSessionId,
     sessionLinkId: presentation.sessionLinkId,
   });
+  const failed = status === "failed";
   const hoverAgent = {
     identity,
     kind: "subagent" as const,
@@ -59,8 +62,6 @@ export function SubagentToolActionRow({
       presentation.detailLabel ?? presentation.statusLabel,
     ].filter((value): value is string => !!value).join("\n"),
   };
-  const failed = status === "failed";
-  const expandable = !!resultText;
 
   const openTarget = () => {
     if (canOpenSession && targetSessionId) {
@@ -68,88 +69,50 @@ export function SubagentToolActionRow({
     }
   };
 
-  const identityContent = (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-baseline">
-      <DelegatedAgentIdenticon
-        identity={identity}
-        className={`size-3 shrink-0 ${identity.textColorClassName}`}
-      />
-      <span className={`truncate font-medium ${identity.textColorClassName}`}>
-        {identity.displayName}
-      </span>
-    </span>
-  );
-
-  const identityNode = canOpenSession ? (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      data-chat-transcript-ignore
-      className="h-auto min-w-0 max-w-full rounded-none bg-transparent p-0 text-left text-chat font-normal hover:bg-transparent focus-visible:ring-0"
-      title={`Open ${identity.displayName}`}
-      aria-label={`Open ${identity.displayName}`}
-      onClick={openTarget}
-    >
-      {identityContent}
-    </Button>
-  ) : (
-    <span className="inline-flex min-w-0 max-w-full">{identityContent}</span>
-  );
-
   return (
-    <div>
-      <div
-        {...(expandable ? { "data-chat-transcript-ignore": true } : {})}
-        className={`group/subagent-action inline-flex min-w-0 max-w-full items-center gap-1 overflow-hidden whitespace-nowrap rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal ${
-          failed ? "text-destructive/80" : "text-muted-foreground/60"
-        }`}
+    <div className="min-w-0 text-message leading-8" data-subagent-receipt>
+      <DelegatedAgentHoverCard
+        agent={hoverAgent}
+        message={presentation.messageText}
+        cardAriaLabel={`Open ${identity.displayName}`}
+        onCardClick={canOpenSession ? openTarget : undefined}
+        className="me-1.5 align-middle"
       >
-        {expandable && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-auto rounded-none bg-transparent p-0 hover:bg-transparent focus-visible:ring-0"
-            aria-label={expanded ? "Hide subagent tool result" : "Show subagent tool result"}
-            aria-expanded={expanded}
-            onClick={() => setExpanded((next) => !next)}
-          >
-            <Robot
-              className={`icon-compact shrink-0 transition-colors ${
-                expanded ? "text-foreground/70" : "text-faint hover:text-muted-foreground"
-              }`}
-            />
-          </Button>
+        <AgentChip
+          identity={identity}
+          dimmed={presentation.action === "close" && !presentation.openSessionAllowed}
+          showShortId={presentation.addressedById}
+          onOpen={canOpenSession ? openTarget : undefined}
+        />
+      </DelegatedAgentHoverCard>
+      <AgentChipVerb className={failed ? "text-destructive/80" : ""}>
+        {failed ? `${presentation.chipVerb} — failed` : presentation.chipVerb}
+        {/* Facts the verb cannot carry ("2 events", "Working") trail it as a
+            faint suffix, the same idiom the workspace receipts use. Never a
+            second verb, and never the message body. */}
+        {presentation.detailLabel && presentation.action !== "close" && (
+          <span className="text-muted-foreground/70">{` — ${presentation.detailLabel}`}</span>
         )}
-        <span className="shrink-0">{presentation.actionLabel}</span>
-        <DelegatedAgentHoverCard
-          agent={hoverAgent}
-          cardAriaLabel={`Open ${identity.displayName}`}
-          onCardClick={canOpenSession ? openTarget : undefined}
-        >
-          {identityNode}
-        </DelegatedAgentHoverCard>
-        {presentation.detailLabel && (
-          <span className="min-w-0 truncate text-muted-foreground/70">
-            - {presentation.detailLabel}
-          </span>
+        {/* A peer spawned elsewhere carries its workspace, per the Workspace Ops
+            canvas page: "<chip> — in billing-hotfix-dispatch". */}
+        {presentation.workspaceId && (
+          <AgentWorkspaceSuffix workspaceId={presentation.workspaceId} />
         )}
-      </div>
-      {expanded && resultText && (
-        <div className="mt-1.5">
-          <ToolActionDetailsPanel>
-            <AutoHideScrollArea
-              className="w-full"
-              viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
-            >
-              <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-readable-code text-muted-foreground">
-                {resultText}
-              </pre>
-            </AutoHideScrollArea>
-          </ToolActionDetailsPanel>
-        </div>
-      )}
+      </AgentChipVerb>
     </div>
   );
+}
+
+/**
+ * Resolves the receipt's workspace id to the name the human already knows.
+ * It is its own component so the workspace-collection read only happens for the
+ * receipts that name a workspace — every other receipt stays a leaf.
+ */
+function AgentWorkspaceSuffix({ workspaceId }: { workspaceId: string }) {
+  const resolveWorkspaceName = useWorkspaceNameResolver();
+  const workspaceName = resolveWorkspaceName(workspaceId);
+  if (!workspaceName) {
+    return null;
+  }
+  return <span className="text-muted-foreground/70">{` — in ${workspaceName}`}</span>;
 }

@@ -186,7 +186,8 @@ describe("TranscriptItemBlock", () => {
     // The receipt shows the shared delegated-agent identity (a generated name
     // keyed on the target session), and never an outcome: a session-scoped
     // pointer carries no completion row to read one from.
-    expect(container.textContent).toContain("finished a turn");
+    expect(container.textContent).toContain("finished");
+    expect(container.textContent).not.toContain("a turn");
     expect(container.textContent).not.toContain("Hidden pointer body");
     expect(container.querySelector("[title]")?.getAttribute("title"))
       .toContain("billing-webhooks");

@@ -134,10 +134,12 @@ describe("TranscriptToolCallItemBlock", () => {
       }),
     );
 
-    expect(html).toContain("Checked subagent");
+    // Chip + one quiet verb; the fact trails as a faint suffix.
+    expect(html).toContain("data-agent-chip");
     expect(html).toContain("API Surface Check");
+    expect(html).toContain("checked");
     expect(html).toContain("Working");
-    expect(html).toContain("text-chat");
+    expect(html).not.toContain("Checked subagent");
   });
 
   it("renders subagent event reads as delegated agent receipts", () => {
@@ -165,8 +167,9 @@ describe("TranscriptToolCallItemBlock", () => {
       }),
     );
 
-    expect(html).toContain("Read subagent events");
+    expect(html).toContain("data-agent-chip");
     expect(html).toContain("API Surface Check");
+    expect(html).toContain("read");
     expect(html).toContain("2 events");
     expect(html).not.toContain("event-1");
   });
@@ -189,7 +192,7 @@ describe("TranscriptToolCallItemBlock", () => {
       }),
     );
 
-    expect(html).toContain("Checked subagent");
+    expect(html).toContain("checked");
     expect(html).toContain("Subagent");
     expect(html).not.toContain("subagent_abc123");
   });
@@ -215,8 +218,10 @@ describe("TranscriptToolCallItemBlock", () => {
       }),
     );
 
-    expect(html).toContain("Closed agent");
+    // A landed close keeps its chip, dimmed, with a plain trailing verb.
+    expect(html).toContain("closed");
     expect(html).toContain("API Surface Check");
+    expect(html).toContain("bg-transparent");
     expect(html).not.toContain("Open API Surface Check");
   });
 
@@ -281,7 +286,7 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(screen.queryByRole("button", { name: /open .*api surface check/i })).toBeNull();
   });
 
-  it("expands subagent receipt result text on demand", () => {
+  it("keeps raw agent-ops result text out of the transcript entirely", () => {
     const item = toolCallItem({
       semanticKind: "subagent",
       nativeToolName: "mcp__subagents__search_subagent_transcript",
@@ -303,10 +308,10 @@ describe("TranscriptToolCallItemBlock", () => {
       />,
     );
 
+    // The receipt is chip + verb and nothing else: raw output never gets its
+    // own UI, and there is no expander to reveal it (ADR §4).
     expect(screen.queryByText(/needle/)).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /show subagent tool result/i }));
-
-    expect(screen.getByText(/needle/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /show subagent tool result/i })).toBeNull();
+    expect(screen.getByText(/searched/)).toBeTruthy();
   });
 });
