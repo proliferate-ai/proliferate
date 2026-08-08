@@ -192,13 +192,6 @@ impl SubagentService {
         if ownership.is_some_and(|link| link.is_unpromoted_subagent()) {
             return Err(SubagentError::DepthLimit);
         }
-        if self
-            .link_service
-            .find_parent_by_relation(SessionLinkRelation::CoworkCodingSession, parent_session_id)?
-            .is_some()
-        {
-            return Err(SubagentError::DepthLimit);
-        }
         // Promoted children no longer occupy one of the parent's slots — the
         // cap bounds concurrent subordinates, not lifetime descendants. One
         // predicate serves the pre-check here, the advertised limits in the
@@ -896,6 +889,45 @@ mod tests {
             .service
             .validate_caller_can_spawn_agent("ses_subagent")
             .expect("a promoted agent is a peer and may spawn");
+    }
+
+    /// The depth rule used to have a second clause: the child of a
+    /// `cowork_coding_session` link was refused as well. Cowork is deleted, so
+    /// the clause went with it — an inbound link carrying the retired relation
+    /// no longer subordinates anyone. Subagent subordination is untouched,
+    /// which is what makes this a removal and not a hole.
+    #[test]
+    fn a_retired_cowork_child_is_no_longer_depth_limited() {
+        let fixture = fixture(&["ses_owner", "ses_legacy_child", "ses_subagent"]);
+        fixture
+            .links
+            .create_link(CreateSessionLinkInput {
+                relation: SessionLinkRelation::CoworkCodingSession,
+                parent_session_id: "ses_owner".to_string(),
+                child_session_id: "ses_legacy_child".to_string(),
+                workspace_relation: SessionLinkWorkspaceRelation::CoworkManagedWorkspace,
+                label: None,
+                created_by_turn_id: None,
+                created_by_tool_call_id: None,
+            })
+            .expect("write a legacy cowork link");
+
+        fixture
+            .service
+            .validate_parent_can_spawn("ses_legacy_child")
+            .expect("a legacy cowork child is an ordinary session now");
+
+        // Negative control: the depth rule that remains still bites. An
+        // unpromoted subagent of the same owner is refused, so the pass above
+        // is the deleted clause and not a fixture that gates nothing.
+        fixture
+            .service
+            .link_child("ses_owner", "ses_subagent", None, None, None)
+            .expect("link the subagent");
+        assert!(matches!(
+            fixture.service.validate_parent_can_spawn("ses_subagent"),
+            Err(SubagentError::DepthLimit)
+        ));
     }
 
     #[test]

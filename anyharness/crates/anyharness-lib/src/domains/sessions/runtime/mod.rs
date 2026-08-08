@@ -102,9 +102,6 @@ pub enum CreateAndStartSessionError {
     WorkspaceDirectoryMissing {
         path: String,
     },
-    WorkspaceSingleSession {
-        session_id: String,
-    },
     SessionIdConflict {
         session_id: String,
     },

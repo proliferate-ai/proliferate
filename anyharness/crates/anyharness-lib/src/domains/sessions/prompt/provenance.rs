@@ -34,19 +34,14 @@ pub(crate) enum PromptProvenance {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// Retired: only the cowork coding-session runtime ever wrote a link-scoped
+    /// wake (ADR §6 step 8). Kept so historical prompt rows still decode and
+    /// render their wake badge instead of losing their source.
     #[serde(rename_all = "camelCase")]
     LinkWake {
         relation: String,
         session_link_id: String,
         completion_id: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        label: Option<String>,
-    },
-    #[serde(rename_all = "camelCase")]
-    ReviewFeedback {
-        review_run_id: String,
-        review_round_id: String,
-        feedback_job_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
@@ -96,17 +91,6 @@ impl PromptProvenance {
                 completion_id: completion_id.clone(),
                 label: label.clone(),
             }),
-            PromptProvenance::ReviewFeedback {
-                review_run_id,
-                review_round_id,
-                feedback_job_id,
-                label,
-            } => Some(PublicPromptProvenance::ReviewFeedback {
-                review_run_id: review_run_id.clone(),
-                review_round_id: review_round_id.clone(),
-                feedback_job_id: feedback_job_id.clone(),
-                label: label.clone(),
-            }),
             PromptProvenance::Automation { label, .. } => {
                 label.as_ref().map(|label| PublicPromptProvenance::System {
                     label: Some(label.clone()),
@@ -124,6 +108,10 @@ impl PromptProvenance {
     }
 }
 
+/// Decoding is deliberately fault-tolerant: a row written by a retired feature
+/// (the review agents' `review_feedback` provenance is the one that existed)
+/// no longer names a variant, so it decodes to `None` and the prompt renders
+/// without a source rather than failing the read.
 pub(super) fn decode_prompt_provenance(value: Option<&str>) -> Option<PromptProvenance> {
     let value = value.map(str::trim).filter(|value| !value.is_empty())?;
     match serde_json::from_str(value) {

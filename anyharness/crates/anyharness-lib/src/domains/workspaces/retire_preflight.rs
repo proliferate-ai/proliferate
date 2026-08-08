@@ -454,8 +454,6 @@ impl RetirePreflightChecker {
             WorkspaceOperationKind::SetupCommand,
             WorkspaceOperationKind::HostingWrite,
             WorkspaceOperationKind::PlanWrite,
-            WorkspaceOperationKind::ReviewWrite,
-            WorkspaceOperationKind::CoworkWrite,
             WorkspaceOperationKind::SubagentWrite,
             WorkspaceOperationKind::MobilityWrite,
         ]);

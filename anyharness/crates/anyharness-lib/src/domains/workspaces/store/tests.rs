@@ -94,7 +94,7 @@ fn stores_and_loads_workspace_creator_context() {
         source_session_workspace_id: Some("workspace-parent".to_string()),
         session_link_id: None,
         source_workspace_id: Some("workspace-source".to_string()),
-        label: Some("Cowork thread".to_string()),
+        label: Some("Delegated thread".to_string()),
     });
 
     store.insert(&workspace).expect("insert workspace");

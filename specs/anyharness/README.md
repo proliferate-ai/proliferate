@@ -51,7 +51,7 @@ files, running git, opening hosting metadata, or executing a process.
 
 **Product extension vs. protocol mechanics.** Product features own what their
 tools do. Integration code owns how to speak MCP, ACP, or a provider CLI. A
-shared MCP `tools/list` helper is protocol mechanics; a cowork or review tool
+shared MCP `tools/list` helper is protocol mechanics; an agent-ops tool
 is product behavior.
 
 **Composition vs. implementation.** App wiring constructs the runtime graph and
@@ -136,8 +136,6 @@ own running state.
 Product features build on the core primitives:
 
 ```text
-domains/cowork
-domains/reviews
 domains/plans
 domains/mobility
 domains/workflows
@@ -152,7 +150,7 @@ Example:
 
 ```text
 domains/sessions/extensions::SessionExtension
-  implemented by cowork, reviews, subagents
+  implemented by subagents
   wired by app/
   consumed by SessionRuntime at launch/prompt boundaries
 ```
@@ -256,15 +254,13 @@ Specs:
   MCP server pattern: definition, auth, injection, context, tools, calls, UI
   exposure, and session MCP selection.
 - [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md) for the concrete product
-  MCP definitions currently being standardized: subagents, artifacts, and
-  reviews.
+  MCP definitions currently being standardized: agent ops and skills.
 
 Subsystem docs at the top level of `specs/anyharness/**` own
 behavior for runtime areas that do not yet have a focused guide or spec:
 
 - [agents.md](agents.md)
 - [acp.md](acp.md)
-- [../codebase/systems/product/agents/cowork-artifacts.md](../codebase/systems/product/agents/cowork-artifacts.md)
 - [files.md](files.md)
 - [git.md](git.md)
 - [persistence-database.md](persistence-database.md)
@@ -315,12 +311,10 @@ which guide to read and where the code belongs.
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [adapters.md](adapters.md) |
 | Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [live-runtime.md](live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md), [domains.md](domains.md) |
-| Product MCP tool servers for artifacts, reviews, agent ops | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/agent_ops/**` | owning product domain | [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md), [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md), [domains.md](domains.md) |
+| Product MCP tool servers for agent ops | `domains/sessions/agent_ops/**` | owning product domain | [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md), [../codebase/platforms/product/agent-features/definitions/README.md](../codebase/platforms/product/agent-features/definitions/README.md), [domains.md](domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [integrations.md](integrations.md), [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md) |
-| Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [domains.md](domains.md) |
-| Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [domains.md](domains.md), [../codebase/systems/product/agents/cowork-artifacts.md](../codebase/systems/product/agents/cowork-artifacts.md) |
-| Session link graph: subagent, cowork, review-agent, fork relationships | `anyharness-lib/src/domains/sessions/links/**` | `domains/sessions/links/**` | [domains.md](domains.md), [session-engine.md](session-engine.md) |
-| Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [domains.md](domains.md), [mobility.md](mobility.md) |
+| Session link graph: subagent, owned-agent, fork relationships | `anyharness-lib/src/domains/sessions/links/**` | `domains/sessions/links/**` | [domains.md](domains.md), [session-engine.md](session-engine.md) |
+| Plans, mobility, or repo-root product behavior | `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [domains.md](domains.md), [mobility.md](mobility.md) |
 | Durable one-prompt workflow execution in an existing workspace (run/step records, canonical-JSON replay, restart fencing) | `anyharness-lib/src/domains/workflows/**` | `domains/workflows/**` | [domains.md](domains.md), [specs/FEATURE_DOCS/WORKFLOWS.md](../FEATURE_DOCS/WORKFLOWS.md) |
 | Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [observability.md](observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [repo-shape.md](repo-shape.md) |
@@ -359,9 +353,6 @@ anyharness/crates/
         workspaces/
         agents/
         repo_roots/
-        artifacts/
-        cowork/
-        reviews/
         plans/
         mobility/
         terminals/
@@ -452,6 +443,6 @@ persistence -> domains
 
 Core domains should not import product surface domains. When a product surface
 needs to plug into a core lifecycle, use an extension point wired in `app/`.
-For example, the session engine owns the `SessionExtension` trait; cowork,
-reviews, and subagents implement it; `app` wires them into
+For example, the session engine owns the `SessionExtension` trait; the
+subagent surface implements it; `app` wires it into
 `SessionRuntime`.

@@ -339,7 +339,7 @@ mod tests {
     fn endpoint_handler_adapter_gates_only_mutating_tool_calls() {
         let adapter = ProductMcpEndpointHandlerAdapter::new(
             Arc::new(TestProductMcpServer),
-            Some(WorkspaceOperationKind::ReviewWrite),
+            Some(WorkspaceOperationKind::SubagentWrite),
             &["mutating_tool"],
         );
 
@@ -347,7 +347,7 @@ mod tests {
             adapter.endpoint_operation_kind(ProductMcpEndpointOperation::ToolsCall {
                 tool_name: Some("mutating_tool".to_string())
             }),
-            Some(WorkspaceOperationKind::ReviewWrite)
+            Some(WorkspaceOperationKind::SubagentWrite)
         );
         assert_eq!(
             adapter.endpoint_operation_kind(ProductMcpEndpointOperation::ToolsCall {

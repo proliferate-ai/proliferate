@@ -55,9 +55,9 @@ cannot be resolved, or the model advertises a mode list that excludes it.
 Omission is the conservative fallback: the agent process keeps its own normal
 default.
 
-Standard interactive chat does not consult `unattendedModeId`. Cowork,
-workflow, plan handoff, and review execution may opt into the resolver because
-those launches are explicitly unattended. Their independent product behavior
+Standard interactive chat does not consult `unattendedModeId`. Workflow and
+plan-handoff execution may opt into the resolver because those launches are
+explicitly unattended. Their independent product behavior
 does not justify separate per-agent fallback maps.
 
 ## Catalog Validation

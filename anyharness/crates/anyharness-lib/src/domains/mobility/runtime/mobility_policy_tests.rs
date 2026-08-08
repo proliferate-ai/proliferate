@@ -5,8 +5,8 @@
 use super::mobility_policy::{
     archive_size_blocker, assess_mobility_preflight, classify_session_support, movable_session_ids,
     plan_source_destruction, terminal_status_is_active, workspace_can_move, DefaultBranchFact,
-    MaterializationDestruction, PreflightFacts, PreflightGitStatus, PreflightReviewRun,
-    PreflightSessionFacts, SourceDestructionFacts, SourceDestructionRejection, TerminalFact,
+    MaterializationDestruction, PreflightFacts, PreflightGitStatus, PreflightSessionFacts,
+    SourceDestructionFacts, SourceDestructionRejection, TerminalFact,
 };
 use crate::domains::mobility::model::{MobilityBlocker, MAX_MOBILITY_ARCHIVE_BODY_BYTES};
 use crate::domains::terminals::model::TerminalStatus;
@@ -30,7 +30,6 @@ fn clean_preflight_facts() -> PreflightFacts {
             clean: true,
         },
         active_terminal_ids: Vec::new(),
-        active_review_runs: Vec::new(),
         sessions: Vec::new(),
         partial_subagent_graph_session_ids: Vec::new(),
     }
@@ -273,23 +272,6 @@ fn active_terminals_warn_but_never_block() {
 }
 
 #[test]
-fn active_review_runs_block_and_name_the_parent_session() {
-    let mut facts = clean_preflight_facts();
-    facts.active_review_runs = vec![PreflightReviewRun {
-        run_id: "run-1".to_string(),
-        parent_session_id: "session-1".to_string(),
-    }];
-
-    let assessment = assess_mobility_preflight(&facts);
-
-    assert_eq!(codes(&assessment.blockers), vec!["review_active"]);
-    assert_eq!(
-        assessment.blockers[0].session_id.as_deref(),
-        Some("session-1")
-    );
-}
-
-#[test]
 fn starting_and_running_sessions_block_the_move() {
     for status in ["starting", "running"] {
         let mut facts = clean_preflight_facts();
@@ -378,7 +360,7 @@ fn a_partial_subagent_graph_blocks_per_missing_session() {
 }
 
 #[test]
-fn blocker_order_is_workspace_then_review_then_session_then_graph() {
+fn blocker_order_is_workspace_then_session_then_graph() {
     // The whole matrix at once: the emitted order is user-visible (it is
     // serialized straight to the API), so it is pinned here.
     let mut facts = clean_preflight_facts();
@@ -394,10 +376,6 @@ fn blocker_order_is_workspace_then_review_then_session_then_graph() {
         clean: false,
     };
     facts.active_terminal_ids = vec!["terminal-1".to_string()];
-    facts.active_review_runs = vec![PreflightReviewRun {
-        run_id: "run-1".to_string(),
-        parent_session_id: "session-1".to_string(),
-    }];
     let mut session = idle_session("session-1");
     session.status = "running".to_string();
     facts.sessions = vec![session];
@@ -412,7 +390,6 @@ fn blocker_order_is_workspace_then_review_then_session_then_graph() {
             "setup_running",
             "workspace_dirty",
             "local_default_branch_in_use",
-            "review_active",
             "session_running",
             "partial_subagent_graph",
         ]

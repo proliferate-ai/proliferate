@@ -4,7 +4,7 @@
 //! runtime-wide (there is no per-workspace or per-owner scoping to apply), a
 //! closed or dismissed session stays readable but takes no more input, an agent
 //! is not its own peer, and `internal_only` sessions are not peers at all —
-//! they are workflow/review plumbing the runtime drives, so they are refused as
+//! they are workflow plumbing the runtime drives, so they are refused as
 //! a target for both intents and hidden from `search_sessions`. **It enforces
 //! no ownership check at all** — any caller may `Read` or `Send` to any other
 //! ordinary target, runtime-wide.
@@ -90,7 +90,7 @@ pub fn authorize(
     let target = session_store
         .find_by_id(target_session_id)?
         .ok_or_else(|| AgentAccessError::TargetNotFound(target_session_id.to_string()))?;
-    // Workflow and review plumbing is not part of the peer-reachable set. It is
+    // Workflow plumbing is not part of the peer-reachable set. It is
     // not an agent the human is running, it is a session another product
     // feature drives; discovery hides it (`search_sessions`) and this refuses it
     // for BOTH intents so the two surfaces agree.

@@ -20,10 +20,9 @@
 //! Observers run in a **single ordered pass in registration order**. Envelopes
 //! returned by observer `i` are published immediately and observed only by
 //! observers `j > i` as [`SessionObservation::Event`]; they are never re-fed
-//! backward, and the pass is bounded by the observer list. This observer must
-//! therefore be registered **before** the reviews observer, which picks up the
-//! proposed-plan envelopes emitted here (see "reviews" note on
-//! [`PlanSessionObserver::ingest_completed_plan`]).
+//! backward, and the pass is bounded by the observer list. This observer is
+//! registered first; nothing downstream consumes the proposed-plan envelopes
+//! it emits today.
 //!
 //! # Partial-failure contract
 //!
@@ -188,13 +187,6 @@ impl PlanSessionObserver {
     /// partial-failure contract: on `Err` nothing was committed and we return
     /// no envelopes; on `Ok` we return the full batch so the sink can advance
     /// its counter and broadcast.
-    ///
-    /// NOTE (reviews): the legacy `ingest_completed_plan` also called
-    /// `ReviewService::record_candidate_plan(&batch.plan)`. That side effect
-    /// is intentionally NOT performed here — it moves to the reviews
-    /// observer, which must be registered AFTER this one so it sees the
-    /// proposed-plan envelopes emitted in this pass as
-    /// `SessionObservation::Event(..)`.
     ///
     /// NOTE (transcript closing): the legacy path called
     /// `sink.close_open_transcript_items()` before ingesting. Closing open

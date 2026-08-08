@@ -221,8 +221,7 @@ Migration exceptions: `sessions_contract.rs::session_to_contract` delegates to
 an async fetching mapper on the session runtime (store reads + live lookups
 per record, called in a loop on list paths); `api/http/agents_model_registry.rs`
 carries a second error mechanism (`ProblemResponse`) alongside `ApiError`;
-`cowork.rs`
-and `mobility.rs` carry duplicate copies of mappers owned elsewhere. Targets:
+`mobility.rs` carries duplicate copies of mappers owned elsewhere. Targets:
 runtime-composed `SessionView` + dep-less mapper; one `ApiError` mechanism;
 one mapper per type pair.
 

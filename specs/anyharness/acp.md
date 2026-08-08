@@ -206,7 +206,7 @@ The result contains:
 
 `SessionRuntime` maps that actor result into extension-facing
 `SessionTurnFinishedContext` and calls registered session extensions. This is
-how cowork autosave and subagent parent wake behavior observe completed turns
+how subagent parent wake behavior observes completed turns
 without re-querying "latest" event state after the fact.
 
 ### Prompt Flow

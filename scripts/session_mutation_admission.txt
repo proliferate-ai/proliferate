@@ -34,12 +34,6 @@ replay::advance_replay_session fenced replay advance (replay sessions cannot be 
 plans::approve_plan fenced plan decision mutates the owning session projection
 plans::reject_plan fenced plan decision mutates the owning session projection
 plans::handoff_plan fenced plan handoff before projection/file writes
-reviews::start_plan_review fenced review creation targeting the plan's parent session
-reviews::start_code_review fenced review creation targeting the request parent session
-reviews::retry_review_assignment fenced review mutation against the run's parent session
-reviews::stop_review fenced review mutation against the run's parent session
-reviews::send_review_feedback fenced review mutation against the run's parent session
-reviews::mark_review_revision_ready fenced review mutation against the run's parent session
 workspaces_purge::purge_workspace fenced fail-closed: holds sorted permits for every workspace session
 mobility::export_workspace_mobility_archive fenced fail-closed removal/detach: holds sorted permits for every workspace session
 workspaces_lifecycle::retire_workspace fenced fail-closed (RETIRE-01 ruling B): retirement can dematerialize a controlled session's workspace; holds sorted permits for every workspace session
@@ -56,7 +50,6 @@ product_mcp::post_product_mcp_endpoint derived-safe workflow sessions are Intern
 # ── creation (a controller cannot exist for a not-yet-created resource) ──
 sessions::create_session creation ordinary session creation (preselected-id seam is crate-internal)
 replay::create_replay_session creation replay session creation
-cowork::create_cowork_thread creation new cowork thread + fresh session
 workspaces::create_workspace creation new workspace
 workspaces_worktrees::create_worktree creation new worktree workspace
 terminals::create_terminal creation workspace terminal, not session execution
@@ -102,7 +95,6 @@ mobility::update_workspace_mobility_runtime_state workspace-scoped mobility stat
 mobility::install_workspace_mobility_archive workspace-scoped installs NEW sessions from an archive
 repo_roots::prepare_repo_root_mobility_destination workspace-scoped mobility destination preparation
 repo_roots::materialize_workspace_at_ref workspace-scoped exact-ref workspace placement; no session execution mutation or session removal
-cowork::enable_cowork workspace-scoped cowork enablement
 agents::install_agent workspace-scoped agent installer
 agents::reconcile_agents workspace-scoped agent installer
 agents::start_agent_login workspace-scoped agent auth flow

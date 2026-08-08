@@ -117,7 +117,7 @@ product-hook ports  SessionEventObserver, PermissionAdvisor, SessionDomainOp
 
 Live defines these traits; domains implement them
 (`domains/sessions/live_ports.rs` for the durable capabilities,
-`domains/plans/` and `domains/reviews/` for the product hooks); `app/` wires
+`domains/plans/` for the product hooks); `app/` wires
 the implementations in. Live never imports domain services or stores.
 
 ## Manager
@@ -693,7 +693,7 @@ Sink
 
 Product domains react to a live session through four mechanisms, all declared
 in `live/sessions/model.rs` and wired in `app/`. The actor's pockets are
-empty: it never imports plan or review services.
+empty: it never imports plan services.
 
 The mechanism decision table:
 
@@ -705,7 +705,6 @@ The mechanism decision table:
 | `SessionDomainOp` | product-initiated write needing command ordering | actor loop via the mailbox, sink lock per phase | yes — via `SessionOpEmitter::publish` | sqlite tx only (sync per phase) |
 
 Current implementors: `domains/plans/session_observer.rs` (plan sniffing),
-`domains/reviews/session_observer.rs` (candidate plans),
 `domains/plans/permission_advisor.rs` (plan-linked permissions),
 `domains/plans/decision_op.rs` (approve/reject via
 `SessionCommand::RunDomainOp`).

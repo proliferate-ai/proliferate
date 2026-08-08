@@ -5,7 +5,6 @@ use crate::domains::sessions::replay::{
     derive_source_agent_kind, export_recording, list_recordings, load_recording, validate_speed,
     ReplayError,
 };
-use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::live::sessions::LiveSessionCommandError;
 use crate::origin::OriginContext;
 
@@ -52,25 +51,10 @@ impl SessionRuntime {
         let source_agent_kind = derive_source_agent_kind(&events).ok_or_else(|| {
             ReplayError::InvalidJson("recording has no source agent kind".to_string())
         })?;
-        let workspace = self
-            .workspace_runtime
+        self.workspace_runtime
             .get_workspace(workspace_id)
             .map_err(ReplayError::Internal)?
             .ok_or_else(|| ReplayError::WorkspaceNotFound(workspace_id.to_string()))?;
-        if workspace.surface == WorkspaceSurface::Cowork
-            && self
-                .session_service
-                .list_sessions(Some(workspace_id), true)
-                .map_err(ReplayError::Internal)?
-                .into_iter()
-                .next()
-                .is_some()
-        {
-            return Err(ReplayError::Internal(anyhow::anyhow!(
-                "cowork workspaces support only one session"
-            )));
-        }
-
         let now = chrono::Utc::now().to_rfc3339();
         let mut record = SessionRecord {
             id: uuid::Uuid::new_v4().to_string(),

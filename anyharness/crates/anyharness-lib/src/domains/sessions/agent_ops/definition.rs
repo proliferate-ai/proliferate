@@ -135,7 +135,7 @@ mod tests {
     /// returning `false` for any of these cases.
     #[test]
     fn mounts_for_sessions_the_subagents_mcp_used_to_skip() {
-        for surface in [WorkspaceSurface::Standard, WorkspaceSurface::Cowork] {
+        for surface in [WorkspaceSurface::Standard] {
             for subagents_enabled in [true, false] {
                 let workspace = workspace(surface);
                 let session = session(subagents_enabled);

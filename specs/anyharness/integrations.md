@@ -72,8 +72,6 @@ session
 auth
 billing
 cloud
-review
-cowork
 tools
 ```
 
@@ -340,14 +338,8 @@ product_server/errors.rs
 What does not belong in `integrations/mcp/**`:
 
 ```text
-domains/cowork/mcp
-  cowork tool behavior
-
-domains/reviews/mcp
-  review tool behavior
-
 domains/sessions/agent_ops
-  subagent tool behavior
+  agent-ops tool behavior
 
 domains/sessions/mcp_bindings
   session MCP selection/injection/assembly

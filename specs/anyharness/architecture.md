@@ -16,8 +16,7 @@ It owns:
   SQLite.
 - **Applied runtime config** — external MCP servers, skills, and agent/provider
   auth — and its materialization into a session.
-- **The product MCP tools** we expose back to the agent (subagents, reviews,
-  cowork, skills, …).
+- **The product MCP tools** we expose back to the agent (agent ops, skills, …).
 
 It does **not** own product orchestration or account/billing truth (Cloud's
 job), nor the external launch/update machinery used by Desktop, Worker, or an
@@ -51,7 +50,7 @@ serve."
 ```text
 api/            edges — HTTP/ACP surface. Translates wire ↔ runtime, nothing more.
 app/            composition root — wires deps, mounts SessionExtensions, registers product MCPs.
-domains/        DURABLE product meaning — sessions, agents, runtime_config, plugins, reviews, …
+domains/        DURABLE product meaning — sessions, agents, runtime_config, plugins, plans, …
 live/           EPHEMERAL coordination — running sessions: the ACP actors, event sinks, rendezvous.
 adapters/       translate between a domain's types and an integration's types.
 integrations/   leaf I/O — talk to the outside (ACP processes, MCP protocol, filesystem).

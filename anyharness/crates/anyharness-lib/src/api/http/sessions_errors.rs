@@ -128,10 +128,6 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
             format!("workspace directory is missing: {path}"),
             "WORKSPACE_DIRECTORY_MISSING",
         ),
-        CreateAndStartSessionError::WorkspaceSingleSession { session_id } => ApiError::conflict(
-            format!("workspace only allows a single session; existing session: {session_id}"),
-            "WORKSPACE_SINGLE_SESSION",
-        ),
         CreateAndStartSessionError::SessionIdConflict { session_id } => ApiError::conflict(
             format!("session id is already owned by a different create request: {session_id}"),
             "SESSION_ID_CONFLICT",

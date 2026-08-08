@@ -316,9 +316,6 @@ pub fn user_route_allowed(
         ["sessions", session_id, "subagents"] if method == Method::GET => {
             require_session_permission(claim, session_id, Permission::Read)
         }
-        ["sessions", session_id, "reviews"] if method == Method::GET => {
-            require_session_permission(claim, session_id, Permission::Read)
-        }
         ["terminals", _] if method == Method::GET => require_permission(claim, Permission::Read),
         ["terminals", _, "ws"] if method == Method::GET => {
             require_permission(claim, Permission::Write)

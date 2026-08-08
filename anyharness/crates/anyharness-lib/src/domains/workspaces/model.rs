@@ -74,6 +74,10 @@ pub enum WorkspaceKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceSurface {
     Standard,
+    /// Retired. Cowork is deleted and nothing creates a cowork workspace any
+    /// more; the value stays parseable so historical `workspaces.surface` rows
+    /// still load. `workspace_can_purge` already refuses every non-standard
+    /// surface, so such a row is inert.
     Cowork,
 }
 

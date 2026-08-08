@@ -74,10 +74,6 @@ pub(super) fn map_service_error(e: FileServiceError) -> ApiError {
         FileServiceError::NotADirectory(path) => {
             ApiError::bad_request(format!("not a directory: {path}"), "NOT_A_DIRECTORY")
         }
-        FileServiceError::ProtectedPath(path) => ApiError::conflict(
-            format!("workspace path is protected: {path}"),
-            "FILE_PATH_PROTECTED",
-        ),
         FileServiceError::BinaryFile(path) => {
             ApiError::bad_request(format!("binary file, not editable: {path}"), "BINARY_FILE")
         }

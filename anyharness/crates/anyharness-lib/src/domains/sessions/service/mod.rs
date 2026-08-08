@@ -53,10 +53,6 @@ impl CreateSessionOutcome {
 #[derive(Debug)]
 pub enum CreateSessionError {
     WorkspaceNotFound(String),
-    WorkspaceSingleSession {
-        workspace_id: String,
-        session_id: String,
-    },
     SessionIdConflict {
         session_id: String,
     },

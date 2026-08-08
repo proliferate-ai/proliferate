@@ -333,10 +333,6 @@ fn map_create_session_service_error(
         crate::domains::sessions::service::CreateSessionError::WorkspaceNotFound(_) => {
             CreateAndStartSessionError::WorkspaceNotFound
         }
-        crate::domains::sessions::service::CreateSessionError::WorkspaceSingleSession {
-            session_id,
-            ..
-        } => CreateAndStartSessionError::WorkspaceSingleSession { session_id },
         crate::domains::sessions::service::CreateSessionError::SessionIdConflict { session_id } => {
             CreateAndStartSessionError::SessionIdConflict { session_id }
         }

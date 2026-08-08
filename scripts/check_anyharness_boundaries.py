@@ -55,7 +55,7 @@ PRODUCT_DOMAIN_ROOTS = {"domains"}
 # `is_acp_runtime_import`, OR'd into every rule below that used to key off this
 # set including "acp".
 LIVE_RUNTIME_ROOTS = {"live"}
-PRODUCT_SURFACE_DOMAINS = {"cowork", "mobility", "plans", "plugins", "reviews"}
+PRODUCT_SURFACE_DOMAINS = {"mobility", "plans", "plugins"}
 DOMAIN_PATH_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/domains/",
 )

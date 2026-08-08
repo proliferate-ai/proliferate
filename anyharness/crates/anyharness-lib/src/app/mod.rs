@@ -18,20 +18,12 @@ use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::store::ActivityStore;
 use crate::domains::agents::catalog::gateway_plan::GatewayModelPlanner;
 use crate::domains::agents::catalog::service::AgentCatalogService;
-use crate::domains::agents::model_snapshot::targets::RuntimeProbeTargets;
-use crate::domains::agents::model_snapshot::ModelSnapshotService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
+use crate::domains::agents::model_snapshot::targets::RuntimeProbeTargets;
+use crate::domains::agents::model_snapshot::ModelSnapshotService;
 use crate::domains::agents::runtime::AgentRuntime;
-use crate::domains::artifacts::protection::ArtifactProtectionService;
-use crate::domains::artifacts::runtime::ArtifactRuntime;
-use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
-use crate::domains::cowork::delegation::service::CoworkDelegationService;
-use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
-use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
-use crate::domains::cowork::service::CoworkService;
-use crate::domains::cowork::store::{CoworkDeleteParticipant, CoworkStore};
 use crate::domains::goals::hooks::GoalSessionHooks;
 use crate::domains::goals::runtime::GoalRuntime;
 use crate::domains::goals::service::GoalService;
@@ -48,24 +40,18 @@ use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
 use crate::domains::repo_roots::service::RepoRootService;
 use crate::domains::repo_roots::store::RepoRootStore;
-use crate::domains::reviews::hooks::ReviewSessionHooks;
-use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
-use crate::domains::reviews::runtime::ReviewRuntime;
-use crate::domains::reviews::service::ReviewService;
-use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
 use crate::domains::sessions::agent_ops::auth::AgentOpsMcpAuth;
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
-use crate::domains::sessions::links::completions::LinkCompletionStore;
 use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::links::store::SessionLinkStore;
 use crate::domains::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
 use crate::domains::sessions::mcp_bindings::integration_gateway::IntegrationGatewaySessionLaunchExtension;
 use crate::domains::sessions::mcp_bindings::product_registry::ProductMcpEndpointRegistry;
+use crate::domains::sessions::ownership::hooks::AgentCloseSessionHooks;
+use crate::domains::sessions::ownership::service::AgentOwnershipService;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
-use crate::domains::sessions::ownership::hooks::AgentCloseSessionHooks;
-use crate::domains::sessions::ownership::service::AgentOwnershipService;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
@@ -76,15 +62,13 @@ use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
-use crate::domains::workspaces::files_runtime::{
-    WorkspaceFileProtection, WorkspaceFileProtectionRegistry, WorkspaceFilesRuntime,
-};
+use crate::domains::workspaces::files_runtime::WorkspaceFilesRuntime;
 use crate::domains::workspaces::inventory::WorktreeInventoryService;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::purge::WorkspacePurgeService;
-use crate::domains::workspaces::retire::WorkspaceRetireService;
 use crate::domains::workspaces::restore_runtime::RestoreWorktreeRuntime;
 use crate::domains::workspaces::retention::WorkspaceRetentionService;
+use crate::domains::workspaces::retire::WorkspaceRetireService;
 use crate::domains::workspaces::retire_preflight::RetirePreflightChecker;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
@@ -144,11 +128,6 @@ pub struct AppState {
     pub process_service: Arc<ProcessService>,
     pub workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
     pub pr_status_cache: Arc<PrStatusCache>,
-    pub artifact_runtime: Arc<ArtifactRuntime>,
-    pub cowork_service: Arc<CoworkService>,
-    pub cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
-    pub cowork_session_hooks: Arc<CoworkSessionHooks>,
-    pub cowork_runtime: Arc<CoworkRuntime>,
     pub subagent_service: Arc<SubagentService>,
     pub subagent_session_hooks: Arc<SubagentSessionHooks>,
     pub agent_wake_service: Arc<AgentWakeService>,
@@ -157,10 +136,7 @@ pub struct AppState {
     /// because the human client promotes through an HTTP route as well as the
     /// parent agent through the MCP (ADR ruling 7).
     pub agent_ownership_service: Arc<AgentOwnershipService>,
-    pub review_service: Arc<ReviewService>,
-    pub review_session_hooks: Arc<ReviewSessionHooks>,
     pub integration_gateway_session_launch_extension: Arc<IntegrationGatewaySessionLaunchExtension>,
-    pub review_runtime: Arc<ReviewRuntime>,
     pub product_mcp_endpoint_registry: Arc<ProductMcpEndpointRegistry>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
@@ -204,18 +180,9 @@ impl AppState {
         let auth_manager = AuthManager::new(load_runtime_target_id());
         let session_data_cipher =
             load_data_cipher_from_env().map_err(AppStateInitError::InvalidDataKey)?;
-        let session_delete_workflow = SessionDeleteWorkflow::with_participants(
-            db.clone(),
-            vec![
-                Arc::new(CoworkDeleteParticipant),
-                Arc::new(ReviewDeleteParticipant),
-            ],
-        );
-        let workspace_delete_workflow = WorkspaceDeleteWorkflow::with_participants(
-            db.clone(),
-            session_delete_workflow.clone(),
-            vec![Arc::new(CoworkDeleteParticipant)],
-        );
+        let session_delete_workflow = SessionDeleteWorkflow::new(db.clone());
+        let workspace_delete_workflow =
+            WorkspaceDeleteWorkflow::new(db.clone(), session_delete_workflow.clone());
         let repo_root_service = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
         let workspace_runtime = Arc::new(WorkspaceRuntime::new(
             WorkspaceStore::new(db.clone()),
@@ -278,20 +245,8 @@ impl AppState {
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
         let pr_status_cache = Arc::new(PrStatusCache::new());
-        let artifact_runtime = Arc::new(ArtifactRuntime::new());
-        let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
-        let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::from_artifact_runtime(
-            artifact_runtime.clone(),
-        ));
-        let cowork_mcp_auth = Arc::new(CoworkMcpAuth::new(runtime_home.clone()));
-        let artifact_protection_service =
-            Arc::new(ArtifactProtectionService::for_surfaces(["cowork"]));
-        let file_protection_registry = WorkspaceFileProtectionRegistry::new(vec![
-            artifact_protection_service as Arc<dyn WorkspaceFileProtection>,
-        ]);
         let files_runtime = Arc::new(WorkspaceFilesRuntime::new(
             workspace_runtime.clone(),
-            file_protection_registry,
             workspace_file_search_cache.clone(),
         ));
         let session_service = Arc::new(SessionService::with_observed_universe(
@@ -338,34 +293,14 @@ impl AppState {
             SessionLinkStore::new(db.clone()),
             SessionStore::new(db.clone()),
         );
-        let review_service = Arc::new(ReviewService::new(
-            ReviewStore::new(db.clone()),
-            SessionStore::new(db.clone()),
-            session_delete_workflow.clone(),
-            session_link_service.clone(),
-            plan_service.clone(),
-        ));
         let acp_manager = sessions::wire_live_sessions(&sessions::LiveSessionsWiringDeps {
             db: db.clone(),
             runtime_home: runtime_home.clone(),
             plan_service: plan_service.clone(),
-            review_service: review_service.clone(),
             goal_service: goal_service.clone(),
             loop_service: loop_service.clone(),
             activity_service: activity_service.clone(),
         });
-        let cowork_delegation_service = CoworkDelegationService::new(
-            (*cowork_service).clone(),
-            SessionStore::new(db.clone()),
-            session_link_service.clone(),
-            LinkCompletionStore::new(db.clone()),
-            workspace_runtime.clone(),
-            workspace_access_gate.clone(),
-        );
-        let cowork_session_hooks = Arc::new(CoworkSessionHooks::new(
-            cowork_delegation_service.clone(),
-            acp_manager.clone(),
-        ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
             session_delete_workflow.clone(),
@@ -374,16 +309,10 @@ impl AppState {
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
         ));
-        let (review_hook_event_tx, review_hook_event_rx) = tokio::sync::mpsc::channel(256);
         let agent_ops_mcp_auth = Arc::new(AgentOpsMcpAuth::new(runtime_home.clone()));
         let subagent_session_hooks = Arc::new(SubagentSessionHooks::new(
             subagent_service.clone(),
             acp_manager.clone(),
-        ));
-        let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
-        let review_session_hooks = Arc::new(ReviewSessionHooks::new(
-            review_hook_event_tx,
-            review_service.clone(),
         ));
         let integration_gateway_session_launch_extension = Arc::new(
             IntegrationGatewaySessionLaunchExtension::new(runtime_home.clone()),
@@ -392,9 +321,7 @@ impl AppState {
             product_mcp::build_product_mcp_launch_catalog(product_mcp::LaunchCatalogDeps {
                 runtime_base_url: runtime_base_url.clone(),
                 bearer_token: bearer_token.clone(),
-                review_mcp_auth: review_mcp_auth.clone(),
                 agent_ops_mcp_auth: agent_ops_mcp_auth.clone(),
-                cowork_mcp_auth: cowork_mcp_auth.clone(),
             });
         let goal_runtime = Arc::new(GoalRuntime::new(
             goal_service.clone(),
@@ -459,11 +386,9 @@ impl AppState {
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
-            cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             agent_wake_session_hooks.clone(),
             agent_close_session_hooks.clone(),
-            review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
             goal_session_hooks,
             loop_session_hooks,
@@ -544,15 +469,6 @@ impl AppState {
             workspace_runtime.clone(),
             workspace_operation_gate.clone(),
         ));
-        let cowork_runtime = Arc::new(CoworkRuntime::new(
-            (*cowork_service).clone(),
-            cowork_delegation_service,
-            (*repo_root_service).clone(),
-            workspace_runtime.clone(),
-            session_service.clone(),
-            session_runtime.clone(),
-            runtime_home.clone(),
-        ));
         let mobility_runtime = mobility::wire_mobility(mobility::MobilityWiringDeps {
             db: db.clone(),
             runtime_home: runtime_home.clone(),
@@ -579,19 +495,8 @@ impl AppState {
             workspace_access_gate.clone(),
             runtime_home.clone(),
         ));
-        let review_runtime = Arc::new(ReviewRuntime::new(
-            review_service.clone(),
-            session_runtime.clone(),
-            workspace_runtime.clone(),
-            runtime_home.clone(),
-        ));
-        review_runtime
-            .clone()
-            .spawn_background_tasks(review_hook_event_rx);
         let product_mcp_endpoint_registry =
             product_mcp::build_product_mcp_endpoint_registry(product_mcp::EndpointRegistryDeps {
-                review_runtime: review_runtime.clone(),
-                review_mcp_auth,
                 subagent_service: subagent_service.clone(),
                 agent_wake_service: agent_wake_service.clone(),
                 session_runtime: session_runtime.clone(),
@@ -602,9 +507,6 @@ impl AppState {
                 session_admission: session_admission.clone(),
                 workspace_operation_gate: workspace_operation_gate.clone(),
                 agent_ops_mcp_auth,
-                cowork_artifact_runtime: cowork_artifact_runtime.clone(),
-                cowork_runtime: cowork_runtime.clone(),
-                cowork_mcp_auth,
             })
             .map_err(AppStateInitError::InvalidProductMcpRegistry)?;
         // Drive the emulated-loop scheduler (fires only live+idle sessions).
@@ -638,20 +540,12 @@ impl AppState {
             process_service,
             workspace_file_search_cache,
             pr_status_cache,
-            artifact_runtime,
-            cowork_service,
-            cowork_artifact_runtime,
-            cowork_session_hooks,
-            cowork_runtime,
             subagent_service,
             subagent_session_hooks,
             agent_wake_service,
             agent_wake_session_hooks,
             agent_ownership_service,
-            review_service,
-            review_session_hooks,
             integration_gateway_session_launch_extension,
-            review_runtime,
             product_mcp_endpoint_registry,
             session_service,
             session_runtime,

@@ -320,7 +320,7 @@ mod tests {
             .mint_product_mcp_token(ProductMcpCapabilityScope {
                 workspace_id: "workspace-1",
                 session_id: "session-1",
-                product_mcp_id: "reviews",
+                product_mcp_id: "agent_ops",
             })
             .unwrap();
 
@@ -330,7 +330,7 @@ mod tests {
                 ProductMcpCapabilityScope {
                     workspace_id: "workspace-1",
                     session_id: "session-1",
-                    product_mcp_id: "reviews",
+                    product_mcp_id: "agent_ops",
                 },
             )
             .unwrap());

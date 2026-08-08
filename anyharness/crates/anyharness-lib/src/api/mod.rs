@@ -20,8 +20,6 @@ mod workflow_workspaces_tests;
 #[cfg(test)]
 mod session_admission_tests;
 #[cfg(test)]
-mod review_admission_tests;
-#[cfg(test)]
 mod sessions_subagents_promote_tests;
 #[cfg(test)]
 mod sessions_wakes_tests;

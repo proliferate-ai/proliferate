@@ -190,7 +190,7 @@ impl SessionStore {
     /// the human is running: dismissed sessions (deleted from the sidebar, and
     /// refused by the boot path, so advertising them as messageable is a lie),
     /// closed sessions unless asked for, and `internal_only` sessions (workflow
-    /// and review plumbing — see the module note on
+    /// plumbing — see the module note on
     /// [`crate::domains::sessions::authorize`]).
     pub fn search_sessions(
         &self,

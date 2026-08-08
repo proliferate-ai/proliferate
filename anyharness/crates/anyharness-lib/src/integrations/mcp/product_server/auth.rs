@@ -91,9 +91,9 @@ mod tests {
             home.clone(),
             "test-product.key",
             McpCapabilityTokenSignature::HmacSha256,
-            "reviews",
+            "agent_ops",
         );
-        let request = ProductMcpRequestContext::new("workspace-1", "session-1", "reviews");
+        let request = ProductMcpRequestContext::new("workspace-1", "session-1", "agent_ops");
         let product_token = auth
             .mint_capability_token("workspace-1", "session-1")
             .expect("mint product token");

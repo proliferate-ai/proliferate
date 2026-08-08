@@ -326,8 +326,8 @@ pub struct ActorCapabilities {
     /// Consulted before every turn START. `None` only in unit tests that wire
     /// no link store; production always supplies it.
     pub close_requests: Option<Arc<dyn PendingCloseRequests>>,
-    /// Product reactors, registration order = dispatch order (plans before
-    /// reviews). See the dispatch contract on [`SessionEventObserver`].
+    /// Product reactors, registration order = dispatch order. See the
+    /// dispatch contract on [`SessionEventObserver`].
     pub observers: Vec<Arc<dyn SessionEventObserver>>,
     /// Consulted by the inbound permission door before parking.
     pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,

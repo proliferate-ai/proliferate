@@ -142,9 +142,8 @@ Rename semantics:
 4. requires the destination parent directory to already exist
 5. requires the destination path to not exist
 6. rejects moving a directory inside itself
-7. rejects cowork artifact paths and their ancestors in the runtime layer
-8. invalidates file search cache in the runtime layer
-9. returns the old path and renamed entry metadata
+7. invalidates file search cache in the runtime layer
+8. returns the old path and renamed entry metadata
 
 ### Deleting
 
@@ -160,9 +159,8 @@ Delete semantics:
 3. requires the path to exist
 4. removes files and symlinks with `remove_file`
 5. removes directories recursively with `remove_dir_all`
-6. rejects cowork artifact paths and their ancestors in the runtime layer
-7. invalidates file search cache in the runtime layer
-8. returns the deleted path and entry kind
+6. invalidates file search cache in the runtime layer
+7. returns the deleted path and entry kind
 
 ## Boundaries
 

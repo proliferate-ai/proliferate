@@ -2,7 +2,7 @@ use super::*;
 use crate::domains::sessions::store::{
     SessionSearchCursor, SessionSearchQuery, SESSION_SEARCH_DEFAULT_LIMIT, SESSION_SEARCH_MAX_LIMIT,
 };
-use crate::origin::OriginContext;
+use crate::origin::{OriginContext, OriginEntrypoint, OriginKind};
 
 #[test]
 fn insert_or_find_by_id_reuses_the_original_session_row() {
@@ -44,7 +44,12 @@ fn stores_and_loads_session_origin() {
 
     let store = SessionStore::new(db);
     let mut record = session_record();
-    record.origin = Some(OriginContext::cowork());
+    // The retired cowork origin: nothing writes it any more, but a stored
+    // blob carrying it must still decode rather than be dropped on read.
+    record.origin = Some(OriginContext {
+        kind: OriginKind::Cowork,
+        entrypoint: OriginEntrypoint::Cowork,
+    });
 
     store.insert(&record).expect("insert session");
     let stored = store
@@ -52,7 +57,13 @@ fn stores_and_loads_session_origin() {
         .expect("find session")
         .expect("session record");
 
-    assert_eq!(stored.origin, Some(OriginContext::cowork()));
+    assert_eq!(
+        stored.origin,
+        Some(OriginContext {
+            kind: OriginKind::Cowork,
+            entrypoint: OriginEntrypoint::Cowork,
+        })
+    );
 }
 
 #[test]

@@ -499,7 +499,7 @@ fn validate_branch_name(branch_name: Option<&str>) -> anyhow::Result<String> {
 
 /// The base branch a person would have picked: the repo's default, then
 /// whatever the caller's own workspace came from. `main` is the last resort and
-/// matches what cowork's creation path already assumes.
+/// matches what the human worktree-creation path already assumes.
 fn base_branch_for(repo_root: &RepoRootRecord, caller_workspace: &WorkspaceRecord) -> String {
     repo_root
         .default_branch

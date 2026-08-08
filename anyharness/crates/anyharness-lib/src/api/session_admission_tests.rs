@@ -367,7 +367,7 @@ async fn ordinary_sessions_keep_existing_behavior() {
 // ── PR1227-LOCK-01: permit-vs-operation-gate lock order ───────────────────
 //
 // The per-session mutation permit and the per-workspace `WorkspaceOperationGate`
-// RwLock are both held at once by fork/plan/review/retire/purge/mobility
+// RwLock are both held at once by fork/plan/retire/purge/mobility
 // handlers. Acquiring them in inconsistent orders is an ABBA deadlock. The
 // canonical order (fix) is ALWAYS `permit -> operation lease`. These two proofs
 // pin that: a concurrency test that DEADLOCKS under the old reversed order and
@@ -426,7 +426,7 @@ async fn reversed_order_deadlocks() -> Result<(), ()> {
         let gate = gate.clone();
         tokio::spawn(async move {
             // Start only once A holds the permit, then take the workspace READ
-            // first (the OLD buggy order plans.rs/reviews.rs used), release A to
+            // first (the OLD buggy order the plan/review handlers used), release A to
             // reach for the write, and only then reach for the permit A holds.
             let _ = a_held_rx.await;
             let _read = gate
@@ -537,7 +537,7 @@ async fn reversed_read_then_permit_order_deadlocks() {
     // ABBA deadlock against the permit-then-write camp on the same
     // session/workspace pair. It wedges and trips the bounded timeout, proving
     // the reordering fix addresses a real deadlock, not a cosmetic reshuffle.
-    // In the pre-fix tree plans.rs/reviews.rs held exactly this reversed order.
+    // In the pre-fix tree the plan/review handlers held exactly this reversed order.
     assert!(
         reversed_order_deadlocks().await.is_err(),
         "reversed read-then-permit order must deadlock (bounded timeout must trip)"
@@ -611,9 +611,6 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
         ("plans.rs", "approve_plan", PLAN, SHARED),
         ("plans.rs", "reject_plan", PLAN, SHARED),
         ("plans.rs", "handoff_plan", PLAN, SHARED),
-        // reviews: admit_session_mutation before the ReviewWrite shared lease.
-        ("reviews.rs", "start_plan_review", ADMIT, SHARED),
-        ("reviews.rs", "start_code_review", ADMIT, SHARED),
         // fork: admit before the exclusive session operation lease.
         ("sessions_fork.rs", "fork_session", ADMIT, FORK_LEASE),
         // subagent wake: admit before the SubagentWrite shared lease.

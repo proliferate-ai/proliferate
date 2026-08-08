@@ -6,8 +6,7 @@
 //! assistant messages) plus feed-forward of envelopes emitted by earlier
 //! observers in the same pass — NOT every routine envelope the sink persists.
 //! This matches the legacy behavior exactly: the plan sniffers only ever saw
-//! those three inputs, and the reviews observer sees the plan envelopes via
-//! feed-forward.
+//! those three inputs.
 
 use std::sync::Arc;
 

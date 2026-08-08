@@ -106,11 +106,6 @@ pub(super) enum PreflightGitStatus {
     },
 }
 
-pub(super) struct PreflightReviewRun {
-    pub run_id: String,
-    pub parent_session_id: String,
-}
-
 /// One session's resolved facts. `supported`/`reason` come from
 /// [`classify_session_support`]; the rest are store and live reads.
 pub(super) struct PreflightSessionFacts {
@@ -133,7 +128,6 @@ pub(super) struct PreflightFacts {
     pub setup_running: bool,
     pub git_status: PreflightGitStatus,
     pub active_terminal_ids: Vec<String>,
-    pub active_review_runs: Vec<PreflightReviewRun>,
     pub sessions: Vec<PreflightSessionFacts>,
     /// Linked subagent sessions that sit outside the moving set.
     pub partial_subagent_graph_session_ids: Vec<String>,
@@ -150,7 +144,7 @@ pub(super) struct PreflightAssessment {
 /// sequence below is deliberate and matches the pre-extraction interleaved
 /// pipeline exactly: workspace-level rules first (mutability, default branch,
 /// setup, git state, default-branch-in-use), then per-terminal warnings, then
-/// review runs, then per-session rules, then the subagent graph. The
+/// per-session rules, then the subagent graph. The
 /// archive-size blocker is appended later by the caller, after the estimate is
 /// resolved — see [`archive_size_blocker`].
 pub(super) fn assess_mobility_preflight(facts: &PreflightFacts) -> PreflightAssessment {
@@ -247,14 +241,6 @@ pub(super) fn assess_mobility_preflight(facts: &PreflightFacts) -> PreflightAsse
         warnings.push(format!(
             "Terminal {terminal_id} will be force-closed after the move commits"
         ));
-    }
-
-    for run in &facts.active_review_runs {
-        blockers.push(MobilityBlocker {
-            code: "review_active".to_string(),
-            message: format!("Review run {} is still active", run.run_id),
-            session_id: Some(run.parent_session_id.clone()),
-        });
     }
 
     for session in &facts.sessions {

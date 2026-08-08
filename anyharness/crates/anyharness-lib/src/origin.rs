@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum OriginKind {
     Human,
+    /// Retired. Cowork is deleted; nothing writes this kind. It stays so
+    /// historical `origin_json` blobs keep decoding instead of being dropped
+    /// by [`decode_origin_json`].
     Cowork,
     Api,
     System,
@@ -16,6 +19,7 @@ pub enum OriginEntrypoint {
     Desktop,
     Cloud,
     LocalRuntime,
+    /// Retired alongside [`OriginKind::Cowork`]; read-only legacy value.
     Cowork,
 }
 
@@ -38,13 +42,6 @@ impl OriginContext {
         Self {
             kind: OriginKind::Human,
             entrypoint: OriginEntrypoint::Cloud,
-        }
-    }
-
-    pub fn cowork() -> Self {
-        Self {
-            kind: OriginKind::Cowork,
-            entrypoint: OriginEntrypoint::Cowork,
         }
     }
 

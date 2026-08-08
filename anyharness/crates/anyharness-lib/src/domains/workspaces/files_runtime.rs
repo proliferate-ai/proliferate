@@ -12,73 +12,19 @@ use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
-pub trait WorkspaceFileProtection: Send + Sync {
-    fn is_protected_relative_path(
-        &self,
-        workspace: &WorkspaceRecord,
-        relative_path: &str,
-    ) -> anyhow::Result<bool>;
-
-    fn is_protected_relative_path_or_ancestor(
-        &self,
-        workspace: &WorkspaceRecord,
-        relative_path: &str,
-    ) -> anyhow::Result<bool>;
-}
-
-#[derive(Clone, Default)]
-pub struct WorkspaceFileProtectionRegistry {
-    participants: Vec<Arc<dyn WorkspaceFileProtection>>,
-}
-
-impl WorkspaceFileProtectionRegistry {
-    pub fn new(participants: Vec<Arc<dyn WorkspaceFileProtection>>) -> Self {
-        Self { participants }
-    }
-
-    fn is_protected_relative_path(
-        &self,
-        workspace: &WorkspaceRecord,
-        relative_path: &str,
-    ) -> anyhow::Result<bool> {
-        for participant in &self.participants {
-            if participant.is_protected_relative_path(workspace, relative_path)? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    fn is_protected_relative_path_or_ancestor(
-        &self,
-        workspace: &WorkspaceRecord,
-        relative_path: &str,
-    ) -> anyhow::Result<bool> {
-        for participant in &self.participants {
-            if participant.is_protected_relative_path_or_ancestor(workspace, relative_path)? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-}
-
 #[derive(Clone)]
 pub struct WorkspaceFilesRuntime {
     workspace_runtime: Arc<WorkspaceRuntime>,
-    file_protection_registry: WorkspaceFileProtectionRegistry,
     workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
 }
 
 impl WorkspaceFilesRuntime {
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
-        file_protection_registry: WorkspaceFileProtectionRegistry,
         workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
     ) -> Self {
         Self {
             workspace_runtime,
-            file_protection_registry,
             workspace_file_search_cache,
         }
     }
@@ -121,8 +67,6 @@ impl WorkspaceFilesRuntime {
         expected_version_token: &str,
     ) -> Result<WriteWorkspaceFileResult, FileServiceError> {
         let workspace = self.resolve_workspace(workspace_id)?;
-        self.ensure_relative_path_mutable(&workspace, relative_path)?;
-
         let result = WorkspaceFilesService::write_file(
             &PathBuf::from(&workspace.path),
             relative_path,
@@ -141,8 +85,6 @@ impl WorkspaceFilesRuntime {
         content: Option<&str>,
     ) -> Result<CreateWorkspaceFileEntryResult, FileServiceError> {
         let workspace = self.resolve_workspace(workspace_id)?;
-        self.ensure_relative_path_mutable(&workspace, relative_path)?;
-
         let result = WorkspaceFilesService::create_entry(
             &PathBuf::from(&workspace.path),
             relative_path,
@@ -160,9 +102,6 @@ impl WorkspaceFilesRuntime {
         new_relative_path: &str,
     ) -> Result<RenameWorkspaceFileEntryResult, FileServiceError> {
         let workspace = self.resolve_workspace(workspace_id)?;
-        self.ensure_relative_path_or_ancestor_mutable(&workspace, relative_path)?;
-        self.ensure_relative_path_mutable(&workspace, new_relative_path)?;
-
         let result = WorkspaceFilesService::rename_entry(
             &PathBuf::from(&workspace.path),
             relative_path,
@@ -178,8 +117,6 @@ impl WorkspaceFilesRuntime {
         relative_path: &str,
     ) -> Result<DeleteWorkspaceFileEntryResult, FileServiceError> {
         let workspace = self.resolve_workspace(workspace_id)?;
-        self.ensure_relative_path_or_ancestor_mutable(&workspace, relative_path)?;
-
         let result =
             WorkspaceFilesService::delete_entry(&PathBuf::from(&workspace.path), relative_path)?;
         self.workspace_file_search_cache.invalidate(workspace_id);
@@ -202,35 +139,5 @@ impl WorkspaceFilesRuntime {
             .ok_or_else(|| {
                 FileServiceError::NotFound(format!("workspace not found: {workspace_id}"))
             })
-    }
-
-    fn ensure_relative_path_mutable(
-        &self,
-        workspace: &WorkspaceRecord,
-        relative_path: &str,
-    ) -> Result<(), FileServiceError> {
-        let is_protected = self
-            .file_protection_registry
-            .is_protected_relative_path(workspace, relative_path)
-            .map_err(|error| FileServiceError::ProtectedPath(error.to_string()))?;
-        if is_protected {
-            return Err(FileServiceError::ProtectedPath(relative_path.to_string()));
-        }
-        Ok(())
-    }
-
-    fn ensure_relative_path_or_ancestor_mutable(
-        &self,
-        workspace: &WorkspaceRecord,
-        relative_path: &str,
-    ) -> Result<(), FileServiceError> {
-        let is_protected = self
-            .file_protection_registry
-            .is_protected_relative_path_or_ancestor(workspace, relative_path)
-            .map_err(|error| FileServiceError::ProtectedPath(error.to_string()))?;
-        if is_protected {
-            return Err(FileServiceError::ProtectedPath(relative_path.to_string()));
-        }
-        Ok(())
     }
 }

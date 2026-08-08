@@ -8,7 +8,10 @@ pub enum SessionLinkRelation {
     /// spawn_agent step is its only producer — but ownership reads already span
     /// it, so an owned agent is closeable the day it can be created.
     OwnedAgent,
+    /// Retired. Cowork is deleted; nothing writes this relation. Kept so
+    /// historical rows still parse (ADR §6 step 8).
     CoworkCodingSession,
+    /// Retired alongside [`Self::CoworkCodingSession`]: review agents are gone.
     ReviewAgent,
     Fork,
 }
@@ -47,7 +50,7 @@ impl SessionLinkRelation {
 
     /// Whether the relation makes `parent_session_id` the OWNER of
     /// `child_session_id` — the one predicate behind close and promote rights.
-    /// A fork is a copy and cowork/reviews are the superseded features; none of
+    /// A fork is a copy and cowork/reviews are the deleted features; none of
     /// them confers ownership.
     pub fn is_ownership(self) -> bool {
         matches!(self, Self::Subagent | Self::OwnedAgent)
@@ -72,14 +75,15 @@ pub enum SessionLinkWorkspaceRelation {
     /// `spawn_agent` took a `workspaceId` this is an ordinary outcome, not an
     /// exotic one: an owner may staff a workspace it just spawned.
     CrossWorkspace,
+    /// Retired with cowork; kept so historical rows still parse.
     CoworkManagedWorkspace,
 }
 
 impl SessionLinkWorkspaceRelation {
     /// Which of the two ordinary relations a parent/child pair is, from the
-    /// only fact that decides it. Cowork's managed relation is not reachable
-    /// from here — it names a workspace the cowork feature owns, which is a
-    /// different claim than "these two are not in the same place".
+    /// only fact that decides it. The retired cowork managed relation is not
+    /// reachable from here — it named a workspace the deleted cowork feature
+    /// owned, a different claim than "these two are not in the same place".
     pub fn between(parent_workspace_id: &str, child_workspace_id: &str) -> Self {
         if parent_workspace_id == child_workspace_id {
             Self::SameWorkspace
@@ -202,7 +206,7 @@ mod tests {
             assert!(relation.is_ownership(), "{relation} should confer ownership");
         }
         // A fork is a copy, not a subordinate; cowork and reviews are the
-        // superseded features. None makes the parent an owner, so none is
+        // deleted features. None makes the parent an owner, so none is
         // closeable or promotable through the ownership tools.
         for relation in [
             SessionLinkRelation::Fork,

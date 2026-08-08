@@ -15,7 +15,6 @@ use crate::domains::agents::registry;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::idempotent_create::InsertSessionByIdOutcome;
 use crate::domains::workspaces::env::read_materialized_launch_env;
-use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::origin::OriginContext;
 
 impl SessionService {
@@ -75,21 +74,6 @@ impl SessionService {
             elapsed_ms = workspace_lookup_started.elapsed().as_millis(),
             "[workspace-latency] session.create.workspace_validated"
         );
-
-        if workspace.surface == WorkspaceSurface::Cowork {
-            if let Some(existing) = self
-                .session_store
-                .list_with_dismissed_by_workspace(workspace_id)
-                .map_err(CreateSessionError::Internal)?
-                .into_iter()
-                .next()
-            {
-                return Err(CreateSessionError::WorkspaceSingleSession {
-                    workspace_id: workspace_id.to_string(),
-                    session_id: existing.id,
-                });
-            }
-        }
 
         let registry_lookup_started = Instant::now();
         let descriptor = registry::descriptor(agent_kind).ok_or_else(|| {

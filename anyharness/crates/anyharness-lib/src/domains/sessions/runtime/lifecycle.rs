@@ -6,9 +6,6 @@ use std::time::Instant;
 use crate::domains::sessions::extensions::SessionClosingContext;
 use crate::domains::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
 use crate::domains::sessions::model::SessionRecord;
-use crate::domains::sessions::runtime_event::{
-    RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
-};
 
 use super::{SessionLifecycleError, SessionRuntime};
 
@@ -188,6 +185,9 @@ impl SessionRuntime {
             // Every relationship that pointed at it ends with it, promoted or
             // not — unlike the outbound cascade, which is about what this
             // session takes down with it.
+            // The two retired relations are still listed: cowork and reviews
+            // are deleted and nothing writes them, but rows written before the
+            // deletion must still close with the session they name.
             if !matches!(
                 link.relation,
                 SessionLinkRelation::Subagent
@@ -276,14 +276,6 @@ impl SessionRuntime {
         Ok(Some(restored))
     }
 
-    pub(crate) async fn emit_runtime_event(
-        &self,
-        session_id: &str,
-        event: RuntimeInjectedSessionEvent,
-    ) -> RuntimeEventInjectionResult {
-        self.acp_manager.emit_runtime_event(session_id, event).await
-    }
-
     pub(super) fn get_session_or_not_found(
         &self,
         session_id: &str,
@@ -344,6 +336,8 @@ impl SessionRuntime {
 pub(super) fn cascades_to_child(link: &SessionLinkRecord) -> bool {
     match link.relation {
         SessionLinkRelation::Subagent => link.promoted_at.is_none(),
+        // Retired relations, legacy rows only: a delegated coding session and
+        // a review agent were always subordinate, so they still cascade.
         SessionLinkRelation::CoworkCodingSession | SessionLinkRelation::ReviewAgent => true,
         // An owned agent is a peer by construction — it was never subordinate,
         // so there is no cascade to sever. A fork is a copy, not a dependent.

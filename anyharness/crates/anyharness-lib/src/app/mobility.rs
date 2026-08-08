@@ -10,7 +10,6 @@ use std::sync::Arc;
 use crate::domains::mobility::runtime::MobilityRuntime;
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
-use crate::domains::reviews::store::ReviewStore;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::subagents::service::SubagentService;
@@ -42,12 +41,11 @@ pub(super) fn wire_mobility(deps: MobilityWiringDeps) -> Arc<MobilityRuntime> {
     ));
     Arc::new(MobilityRuntime::new(
         service,
-        MobilityStore::new(deps.db.clone()),
+        MobilityStore::new(deps.db),
         deps.workspace_runtime,
         deps.session_service,
         deps.session_runtime,
         deps.subagent_service,
-        ReviewStore::new(deps.db),
         deps.workspace_access_gate,
         deps.terminal_service,
     ))

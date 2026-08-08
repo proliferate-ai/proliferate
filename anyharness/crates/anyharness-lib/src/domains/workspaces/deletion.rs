@@ -1,21 +1,10 @@
-use std::sync::Arc;
-
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::persistence::Db;
-
-pub trait WorkspaceDeleteParticipant: Send + Sync {
-    fn delete_workspace_rows_in_tx(
-        &self,
-        conn: &rusqlite::Connection,
-        workspace_id: &str,
-    ) -> rusqlite::Result<()>;
-}
 
 #[derive(Clone)]
 pub struct WorkspaceDeleteWorkflow {
     db: Db,
     session_delete_workflow: SessionDeleteWorkflow,
-    participants: Vec<Arc<dyn WorkspaceDeleteParticipant>>,
 }
 
 impl WorkspaceDeleteWorkflow {
@@ -23,19 +12,6 @@ impl WorkspaceDeleteWorkflow {
         Self {
             db,
             session_delete_workflow,
-            participants: Vec::new(),
-        }
-    }
-
-    pub fn with_participants(
-        db: Db,
-        session_delete_workflow: SessionDeleteWorkflow,
-        participants: Vec<Arc<dyn WorkspaceDeleteParticipant>>,
-    ) -> Self {
-        Self {
-            db,
-            session_delete_workflow,
-            participants,
         }
     }
 
@@ -70,9 +46,6 @@ impl WorkspaceDeleteWorkflow {
         workspace_id: &str,
     ) -> rusqlite::Result<()> {
         crate::domains::workspaces::store::delete_workspace_access_modes_in_tx(conn, workspace_id)?;
-        for participant in &self.participants {
-            participant.delete_workspace_rows_in_tx(conn, workspace_id)?;
-        }
         crate::domains::terminals::store::delete_workspace_terminal_rows_in_tx(conn, workspace_id)?;
         Ok(())
     }

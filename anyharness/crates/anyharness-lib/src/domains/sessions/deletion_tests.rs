@@ -1,10 +1,7 @@
 use super::SessionDeleteWorkflow;
-use crate::domains::cowork::store::CoworkDeleteParticipant;
-use crate::domains::reviews::store::ReviewDeleteParticipant;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 use crate::persistence::Db;
-use std::sync::Arc;
 
 #[test]
 fn delete_session_removes_cross_domain_dependents() {
@@ -25,12 +22,6 @@ fn delete_session_removes_cross_domain_dependents() {
 
     assert_eq!(count_where(&db, "sessions", "id = 'session-1'"), 0);
     assert_eq!(count_where(&db, "sessions", "id = 'session-child'"), 1);
-    assert_eq!(count_all(&db, "cowork_threads"), 0);
-    assert_eq!(count_all(&db, "cowork_managed_workspaces"), 0);
-    assert_eq!(count_all(&db, "review_feedback_jobs"), 0);
-    assert_eq!(count_all(&db, "review_assignments"), 0);
-    assert_eq!(count_all(&db, "review_rounds"), 0);
-    assert_eq!(count_all(&db, "review_runs"), 0);
     assert_eq!(count_all(&db, "session_link_wake_schedules"), 0);
     assert_eq!(count_all(&db, "session_link_completions"), 0);
     assert_eq!(count_all(&db, "session_links"), 0);
@@ -41,13 +32,7 @@ fn delete_session_removes_cross_domain_dependents() {
 }
 
 fn test_delete_workflow(db: Db) -> SessionDeleteWorkflow {
-    SessionDeleteWorkflow::with_participants(
-        db,
-        vec![
-            Arc::new(CoworkDeleteParticipant),
-            Arc::new(ReviewDeleteParticipant),
-        ],
-    )
+    SessionDeleteWorkflow::new(db)
 }
 
 fn seed_workspace_and_repo(db: &Db) {
@@ -79,24 +64,6 @@ fn seed_workspace_and_repo(db: &Db) {
 
 fn seed_cross_domain_dependents(db: &Db) {
     db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO cowork_threads (
-                id, repo_root_id, workspace_id, session_id, agent_kind, requested_model_id,
-                branch_name, created_at
-             ) VALUES (
-                'thread-1', 'repo-root-1', 'workspace-1', 'session-1', 'claude', NULL,
-                'main', '2026-03-25T00:01:00Z'
-             )",
-            [],
-        )?;
-        conn.execute(
-            "INSERT INTO cowork_managed_workspaces (
-                id, parent_session_id, workspace_id, label, created_at
-             ) VALUES (
-                'managed-1', 'session-1', 'workspace-1', 'Managed', '2026-03-25T00:01:01Z'
-             )",
-            [],
-        )?;
         conn.execute(
             "INSERT INTO session_links (
                 id, relation, parent_session_id, child_session_id, workspace_relation,
@@ -130,45 +97,6 @@ fn seed_cross_domain_dependents(db: &Db) {
                 watcher_session_id, target_session_id, created_at
              ) VALUES ('session-child', 'session-1', ?1)",
             ["2026-03-25T00:01:03Z"],
-        )?;
-        conn.execute(
-            "INSERT INTO review_runs (
-                id, workspace_id, parent_session_id, kind, status, title, max_rounds,
-                auto_iterate, current_round_number, created_at, updated_at
-             ) VALUES (
-                'review-run-1', 'workspace-1', 'session-1', 'code', 'reviewing',
-                'Review', 2, 1, 1, ?1, ?1
-             )",
-            ["2026-03-25T00:01:04Z"],
-        )?;
-        conn.execute(
-            "INSERT INTO review_rounds (
-                id, review_run_id, round_number, status, created_at, updated_at
-             ) VALUES (
-                'review-round-1', 'review-run-1', 1, 'reviewing', ?1, ?1
-             )",
-            ["2026-03-25T00:01:05Z"],
-        )?;
-        conn.execute(
-            "INSERT INTO review_assignments (
-                id, review_run_id, review_round_id, reviewer_session_id, session_link_id,
-                persona_id, persona_label, persona_prompt, agent_kind, status, deadline_at,
-                created_at, updated_at
-             ) VALUES (
-                'assignment-1', 'review-run-1', 'review-round-1', 'session-child', 'link-1',
-                'skeptic', 'Skeptic', 'Find issues.', 'claude', 'reviewing', ?1, ?1, ?1
-             )",
-            ["2026-03-25T00:31:00Z"],
-        )?;
-        conn.execute(
-            "INSERT INTO review_feedback_jobs (
-                id, review_run_id, review_round_id, parent_session_id, state, prompt_text,
-                created_at, updated_at
-             ) VALUES (
-                'feedback-job-1', 'review-run-1', 'review-round-1', 'session-1',
-                'pending', 'Revise this.', ?1, ?1
-             )",
-            ["2026-03-25T00:01:06Z"],
         )?;
         Ok(())
     })

@@ -16,8 +16,8 @@
 //! Operation-gate ordering (PR1227-LOCK-01): the frozen spec fixes only the
 //! run-gate/permit pair and is SILENT on the permit vs. the per-workspace
 //! `WorkspaceOperationGate` RwLock (`acquire_shared` = read, `acquire_exclusive`
-//! and the exclusive session lease = write). Because fork/plan/review/retire/
-//! purge/mobility handlers hold BOTH the permit and an operation lease at once,
+//! and the exclusive session lease = write). Because fork/plan/retire/purge/
+//! mobility handlers hold BOTH the permit and an operation lease at once,
 //! a single documented order is mandatory to avoid an ABBA deadlock: the
 //! session mutation permit is ALWAYS acquired BEFORE any workspace operation
 //! lease (shared or exclusive), never in reverse. The full canonical order is
@@ -128,7 +128,6 @@ pub enum SessionMutationKind {
     Goal,
     Loop,
     Plan,
-    Review,
     SubagentWake,
     /// Arming a session-scoped wake: the mutation lands on the WATCHER's
     /// future prompt queue, which is the session the permit is taken for.
@@ -159,7 +158,6 @@ impl SessionMutationKind {
             Self::Goal => "goal",
             Self::Loop => "loop",
             Self::Plan => "plan",
-            Self::Review => "review",
             Self::SubagentWake => "subagent_wake",
             Self::AgentWake => "agent_wake",
             Self::ReplayAdvance => "replay_advance",

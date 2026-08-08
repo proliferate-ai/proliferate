@@ -25,7 +25,7 @@ They answer questions like:
 - Where does execution happen?
 - Which agents are supported and ready?
 - What durable events and config are recorded?
-- What does a cowork thread, review run, plan, or mobility transfer own?
+- What does a plan or mobility transfer own?
 
 Domains should be readable without knowing HTTP routing or live actor internals.
 
@@ -44,7 +44,7 @@ repo_roots
 ```
 
 These are foundational runtime concepts. Other product domains may depend on
-them. They should not depend on product surfaces such as cowork or reviews.
+them. They should not depend on product surfaces such as plans or mobility.
 
 Core primitive domains may define extension traits when product surfaces need
 to participate in a core lifecycle. `app/` wires implementations into the core.
@@ -90,9 +90,6 @@ workspaces/
 ### Product Surface Domains
 
 ```text
-artifacts
-cowork
-reviews
 plans
 mobility
 ```
@@ -113,7 +110,7 @@ Expected shape:
 ```
 
 Product domains should use extension points instead of forking core session
-behavior. For example, reviews can inject review-specific MCP tools through a
+behavior. For example, a product surface can inject its own MCP tools through a
 session extension; it should not duplicate session launch logic.
 
 ### Session-Owned Product Subdomains
@@ -346,8 +343,6 @@ domains/sessions/extensions/
 Product surfaces implement the trait:
 
 ```text
-domains/cowork/session_extension.rs
-domains/reviews/session_extension.rs
 domains/sessions/subagents/session_extension.rs
 ```
 
@@ -374,8 +369,6 @@ way (see `guides/live-runtime.md` for the mechanism decision table):
 
 ```text
 domains/plans/session_observer.rs     SessionEventObserver: plan sniffing
-domains/reviews/session_observer.rs   SessionEventObserver: candidate plans
-                                      (registered after the plans observer)
 domains/plans/permission_advisor.rs   PermissionAdvisor: plan-linked
                                       permissions, predecided answers
 domains/plans/decision_op.rs          SessionDomainOp: approve/reject,
@@ -430,8 +423,6 @@ mod.rs
 Examples:
 
 ```text
-domains/cowork/mcp/
-domains/reviews/mcp/
 domains/sessions/agent_ops/
 ```
 

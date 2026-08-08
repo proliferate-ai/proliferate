@@ -19,7 +19,7 @@ that another runtime is canonical.
 Source preflight requires a workspace that exists, is a Git workspace, and is
 in `normal` runtime mode. Movement is blocked by detached HEAD, unresolved
 default branch for a local workspace, source on the default branch, in-progress
-Git operation, conflicts, dirty state, setup in progress, active review,
+Git operation, conflicts, dirty state, setup in progress,
 starting/running session, pending interaction, or pending prompt.
 
 Only Claude and Codex session bundles are supported. An unsupported session or

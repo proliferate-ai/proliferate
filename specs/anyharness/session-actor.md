@@ -116,8 +116,8 @@ live/sessions/model.rs capability traits
   ActorCapabilities — the actor never sees a concrete store
 
 live/sessions/model.rs product-hook ports
-  SessionEventObserver, PermissionAdvisor, SessionDomainOp — how plans and
-  reviews react without the actor importing their services
+  SessionEventObserver, PermissionAdvisor, SessionDomainOp — how plans
+  react without the actor importing their services
 
 domains/sessions/prompt
   product prompt payload preparation before the actor receives a command;

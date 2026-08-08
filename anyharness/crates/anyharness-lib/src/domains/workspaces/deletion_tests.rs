@@ -1,6 +1,4 @@
 use super::WorkspaceDeleteWorkflow;
-use crate::domains::cowork::store::CoworkDeleteParticipant;
-use crate::domains::reviews::store::ReviewDeleteParticipant;
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::domains::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
@@ -9,7 +7,6 @@ use crate::domains::terminals::model::{
 };
 use crate::domains::terminals::store::TerminalStore;
 use crate::persistence::Db;
-use std::sync::Arc;
 
 #[test]
 fn purge_workspace_deletes_sessions_and_workspace_scoped_dependents() {
@@ -48,24 +45,13 @@ fn purge_workspace_deletes_sessions_and_workspace_scoped_dependents() {
     assert_eq!(count_all(&db, "sessions"), 0);
     assert_eq!(count_all(&db, "session_events"), 0);
     assert_eq!(count_all(&db, "workspace_access_modes"), 0);
-    assert_eq!(count_all(&db, "cowork_threads"), 0);
     assert_eq!(count_all(&db, "workspace_setup_state"), 0);
     assert_eq!(count_all(&db, "terminal_command_runs"), 0);
 }
 
 fn test_delete_workflow(db: Db) -> WorkspaceDeleteWorkflow {
-    let session_delete_workflow = SessionDeleteWorkflow::with_participants(
-        db.clone(),
-        vec![
-            Arc::new(CoworkDeleteParticipant),
-            Arc::new(ReviewDeleteParticipant),
-        ],
-    );
-    WorkspaceDeleteWorkflow::with_participants(
-        db.clone(),
-        session_delete_workflow,
-        vec![Arc::new(CoworkDeleteParticipant)],
-    )
+    let session_delete_workflow = SessionDeleteWorkflow::new(db.clone());
+    WorkspaceDeleteWorkflow::new(db.clone(), session_delete_workflow)
 }
 
 fn seed_workspace_and_repo(db: &Db) {
@@ -100,16 +86,6 @@ fn seed_workspace_scoped_dependents(db: &Db) {
         conn.execute(
             "INSERT INTO workspace_access_modes (workspace_id, mode, handoff_op_id, updated_at)
              VALUES ('workspace-1', 'remote_owned', 'handoff-1', '2026-03-25T00:01:00Z')",
-            [],
-        )?;
-        conn.execute(
-            "INSERT INTO cowork_threads (
-                id, repo_root_id, workspace_id, session_id, agent_kind, requested_model_id,
-                branch_name, created_at
-             ) VALUES (
-                'thread-1', 'repo-root-1', 'workspace-1', 'session-1', 'claude', NULL,
-                'main', '2026-03-25T00:01:00Z'
-             )",
             [],
         )?;
         Ok(())

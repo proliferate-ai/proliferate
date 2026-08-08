@@ -201,14 +201,13 @@ implemented over store + attachment storage) loads every referenced part;
 `domains/sessions/prompt/render.rs` is the pure half — `ResolvedParts` in,
 ACP content blocks out, no IO, base64 and UTF-8 validation only.
 
-### Plans And Reviews Hooks
+### Plans Hooks
 
-Plans and reviews never appear inside the actor. They hook in through the
+Plans never appear inside the actor. They hook in through the
 ports declared in `live/sessions/model.rs` and wired in `app/sessions.rs`:
 
-- `domains/plans/session_observer.rs` / `domains/reviews/session_observer.rs`
-  — `SessionEventObserver`s run in one ordered in-loop pass (plans before
-  reviews; reviews consumes the plan envelopes via feed-forward).
+- `domains/plans/session_observer.rs` — a `SessionEventObserver` running in
+  the ordered in-loop dispatch pass.
 - `domains/plans/permission_advisor.rs` — `PermissionAdvisor` consulted by the
   inbound door before parking a permission request (plan linking, predecided
   answers).

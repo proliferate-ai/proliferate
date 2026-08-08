@@ -12,14 +12,12 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth::{delete_agent_auth_state, put_agent_auth_state},
-    agent_gateway_catalog, agent_model_snapshot, agents, auth as http_auth, catalogs, cowork,
-    files, git, goals, health,
-    hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
-    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_prompt, sessions_resume, sessions_wakes, subagents, terminals, workflow_runs,
-    workflow_workspaces,
-    workspaces, workspaces_lifecycle, workspaces_purge, workspaces_restore, workspaces_setup,
-    workspaces_worktrees, worktrees,
+    agent_gateway_catalog, agent_model_snapshot, agents, auth as http_auth, catalogs, files, git,
+    goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots,
+    sessions, sessions_config, sessions_events, sessions_fork, sessions_interactions,
+    sessions_lifecycle, sessions_prompt, sessions_resume, sessions_wakes, subagents, terminals,
+    workflow_runs, workflow_workspaces, workspaces, workspaces_lifecycle, workspaces_purge,
+    workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -171,24 +169,6 @@ pub fn build_router(state: AppState) -> Router {
             "/repo-roots/{repo_root_id}/mobility/prepare-destination",
             post(repo_roots::prepare_repo_root_mobility_destination),
         )
-        .route("/cowork", get(cowork::get_cowork_status))
-        .route("/cowork/enable", post(cowork::enable_cowork))
-        .route(
-            "/cowork/threads",
-            get(cowork::list_cowork_threads).post(cowork::create_cowork_thread),
-        )
-        .route(
-            "/cowork/sessions/{session_id}/managed-workspaces",
-            get(cowork::get_cowork_managed_workspaces),
-        )
-        .route(
-            "/workspaces/{workspace_id}/cowork/manifest",
-            get(cowork::get_cowork_manifest),
-        )
-        .route(
-            "/workspaces/{workspace_id}/cowork/artifacts/{artifact_id}",
-            get(cowork::get_cowork_artifact),
-        )
         .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_slug}",
             get(product_mcp::get_product_mcp_endpoint).post(product_mcp::post_product_mcp_endpoint),
@@ -240,14 +220,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/plans/{plan_id}/handoff",
             post(plans::handoff_plan),
-        )
-        .route(
-            "/workspaces/{workspace_id}/plans/{plan_id}/review",
-            post(reviews::start_plan_review),
-        )
-        .route(
-            "/workspaces/{workspace_id}/reviews/code",
-            post(reviews::start_code_review),
         )
         .route(
             "/workspaces/{workspace_id}/mobility/preflight",
@@ -425,27 +397,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/sessions/{session_id}/wakes/{target_session_id}",
             post(sessions_wakes::schedule_agent_wake),
-        )
-        .route(
-            "/sessions/{session_id}/reviews",
-            get(reviews::get_session_reviews),
-        )
-        .route(
-            "/reviews/{review_run_id}/assignments/{assignment_id}/critique",
-            get(reviews::get_review_assignment_critique),
-        )
-        .route(
-            "/reviews/{review_run_id}/assignments/{assignment_id}/retry",
-            post(reviews::retry_review_assignment),
-        )
-        .route("/reviews/{review_run_id}/stop", post(reviews::stop_review))
-        .route(
-            "/reviews/{review_run_id}/send-feedback",
-            post(reviews::send_review_feedback),
-        )
-        .route(
-            "/reviews/{review_run_id}/revision-ready",
-            post(reviews::mark_review_revision_ready),
         )
         .route(
             "/sessions/{session_id}/title",

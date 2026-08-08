@@ -61,7 +61,7 @@ these vendor messages are present or stable.
 Grok's ACP `session/new` advertises **no modes** (`modes: null` at probe time),
 so AnyHarness exposes no create-session permission-mode control for Grok: the
 catalog carries only a `model` control, the desktop shows no mode picker, and
-cowork launches Grok with no `mode_id` (sending one is rejected by
+unattended launches send Grok no `mode_id` (sending one is rejected by
 `validate_mode`). Grok's CLI does accept a top-level `--permission-mode`
 (`default`/`acceptEdits`/`auto`/`dontAsk`/`bypassPermissions`/`plan`), but that
 surface is not exposed over the ACP `agent stdio` path Grok runs under here. If

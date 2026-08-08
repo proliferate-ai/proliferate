@@ -1055,7 +1055,7 @@ fn an_owned_agent_and_a_fork_are_never_cascade_collateral() {
 }
 
 #[test]
-fn delegated_coding_and_review_children_are_unaffected_by_promotion() {
+fn retired_delegated_coding_and_review_children_still_cascade() {
     for relation in [
         SessionLinkRelation::CoworkCodingSession,
         SessionLinkRelation::ReviewAgent,

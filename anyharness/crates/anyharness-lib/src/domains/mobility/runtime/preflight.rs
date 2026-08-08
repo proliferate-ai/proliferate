@@ -24,7 +24,7 @@ use std::time::Instant;
 
 use super::mobility_policy::{
     archive_size_blocker, assess_mobility_preflight, classify_session_support, movable_session_ids,
-    workspace_can_move, DefaultBranchFact, PreflightFacts, PreflightGitStatus, PreflightReviewRun,
+    workspace_can_move, DefaultBranchFact, PreflightFacts, PreflightGitStatus,
     PreflightSessionFacts,
 };
 use super::MobilityRuntime;
@@ -119,16 +119,6 @@ impl MobilityRuntime {
             .map(|terminal| terminal.id)
             .collect::<Vec<_>>();
 
-        let active_review_runs = self
-            .review_store
-            .list_active_runs_for_workspace(workspace_id)?
-            .into_iter()
-            .map(|run| PreflightReviewRun {
-                run_id: run.id,
-                parent_session_id: run.parent_session_id,
-            })
-            .collect::<Vec<_>>();
-
         let mut session_facts = Vec::with_capacity(sessions.len());
         for candidate in &sessions {
             let execution_summary = self
@@ -168,7 +158,6 @@ impl MobilityRuntime {
             setup_running,
             git_status,
             active_terminal_ids,
-            active_review_runs,
             sessions: session_facts,
             partial_subagent_graph_session_ids: partial_graph,
         });

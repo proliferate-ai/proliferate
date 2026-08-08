@@ -58,8 +58,6 @@ pub enum SessionEvent {
     SessionStateUpdate(SessionStateUpdatePayload),
     SessionInfoUpdate(SessionInfoUpdatePayload),
     SubagentTurnCompleted(SubagentTurnCompletedPayload),
-    SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
-    ReviewRunUpdated(ReviewRunUpdatedPayload),
     UsageUpdate(UsageUpdatePayload),
     GoalUpdated(GoalUpdatedPayload),
     GoalMet(GoalMetPayload),
@@ -104,8 +102,6 @@ impl SessionEvent {
             Self::SessionStateUpdate(_) => "session_state_update",
             Self::SessionInfoUpdate(_) => "session_info_update",
             Self::SubagentTurnCompleted(_) => "subagent_turn_completed",
-            Self::SessionLinkTurnCompleted(_) => "session_link_turn_completed",
-            Self::ReviewRunUpdated(_) => "review_run_updated",
             Self::UsageUpdate(_) => "usage_update",
             Self::GoalUpdated(_) => "goal_updated",
             Self::GoalMet(_) => "goal_met",
@@ -247,16 +243,6 @@ pub enum PromptProvenance {
         session_link_id: String,
         #[serde(rename = "completionId")]
         completion_id: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        label: Option<String>,
-    },
-    ReviewFeedback {
-        #[serde(rename = "reviewRunId")]
-        review_run_id: String,
-        #[serde(rename = "reviewRoundId")]
-        review_round_id: String,
-        #[serde(rename = "feedbackJobId")]
-        feedback_job_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
@@ -690,36 +676,6 @@ pub struct SubagentTurnCompletedPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionLinkTurnCompletedPayload {
-    pub relation: String,
-    pub completion_id: String,
-    pub session_link_id: String,
-    pub parent_session_id: String,
-    pub child_session_id: String,
-    pub child_turn_id: String,
-    pub child_last_event_seq: i64,
-    pub outcome: SubagentTurnOutcome,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewRunUpdatedPayload {
-    pub review_run_id: String,
-    pub parent_session_id: String,
-    pub kind: super::reviews::ReviewKind,
-    pub status: super::reviews::ReviewRunStatus,
-    pub current_round_number: u32,
-    pub max_rounds: u32,
-    pub auto_iterate: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub active_round_id: Option<String>,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct GoalUpdatedPayload {
     pub goal: Goal,
 }
@@ -907,91 +863,6 @@ mod tests {
         };
         assert_eq!(payload.completion_id, "completion-1");
         assert_eq!(payload.outcome, SubagentTurnOutcome::Completed);
-    }
-
-    #[test]
-    fn session_link_turn_completed_event_round_trips() {
-        let event = SessionEvent::SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload {
-            relation: "cowork_coding_session".to_string(),
-            completion_id: "completion-1".to_string(),
-            session_link_id: "link-1".to_string(),
-            parent_session_id: "parent-1".to_string(),
-            child_session_id: "child-1".to_string(),
-            child_turn_id: "turn-child-1".to_string(),
-            child_last_event_seq: 42,
-            outcome: SubagentTurnOutcome::Failed,
-            label: Some("Fixer".to_string()),
-        });
-
-        let json = serde_json::to_value(&event).expect("serialize link event");
-        assert_eq!(
-            json,
-            serde_json::json!({
-                "type": "session_link_turn_completed",
-                "relation": "cowork_coding_session",
-                "completionId": "completion-1",
-                "sessionLinkId": "link-1",
-                "parentSessionId": "parent-1",
-                "childSessionId": "child-1",
-                "childTurnId": "turn-child-1",
-                "childLastEventSeq": 42,
-                "outcome": "failed",
-                "label": "Fixer"
-            })
-        );
-
-        let round_tripped: SessionEvent =
-            serde_json::from_value(json).expect("deserialize link event");
-        assert_eq!(round_tripped.event_type(), "session_link_turn_completed");
-        let SessionEvent::SessionLinkTurnCompleted(payload) = round_tripped else {
-            panic!("expected session link turn completed event");
-        };
-        assert_eq!(payload.relation, "cowork_coding_session");
-        assert_eq!(payload.outcome, SubagentTurnOutcome::Failed);
-    }
-
-    #[test]
-    fn review_run_updated_event_round_trips() {
-        let event = SessionEvent::ReviewRunUpdated(ReviewRunUpdatedPayload {
-            review_run_id: "review-1".to_string(),
-            parent_session_id: "parent-1".to_string(),
-            kind: super::super::reviews::ReviewKind::Plan,
-            status: super::super::reviews::ReviewRunStatus::ParentRevising,
-            current_round_number: 1,
-            max_rounds: 2,
-            auto_iterate: true,
-            active_round_id: Some("round-1".to_string()),
-            updated_at: "2026-04-28T12:00:00Z".to_string(),
-        });
-
-        let json = serde_json::to_value(&event).expect("serialize review update event");
-        assert_eq!(
-            json,
-            serde_json::json!({
-                "type": "review_run_updated",
-                "reviewRunId": "review-1",
-                "parentSessionId": "parent-1",
-                "kind": "plan",
-                "status": "parent_revising",
-                "currentRoundNumber": 1,
-                "maxRounds": 2,
-                "autoIterate": true,
-                "activeRoundId": "round-1",
-                "updatedAt": "2026-04-28T12:00:00Z"
-            })
-        );
-
-        let round_tripped: SessionEvent =
-            serde_json::from_value(json).expect("deserialize review update event");
-        assert_eq!(round_tripped.event_type(), "review_run_updated");
-        let SessionEvent::ReviewRunUpdated(payload) = round_tripped else {
-            panic!("expected review run updated event");
-        };
-        assert_eq!(payload.review_run_id, "review-1");
-        assert_eq!(
-            payload.status,
-            super::super::reviews::ReviewRunStatus::ParentRevising
-        );
     }
 
     fn sample_loop() -> super::super::loops::Loop {

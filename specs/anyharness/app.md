@@ -85,7 +85,6 @@ WorkspaceRuntime
 LiveSessionManager
 Terminal manager/service
 ProductMcpEndpointRegistry
-ReviewRuntime
 PlanRuntime
 AgentAuthService
 RuntimeConfigService
@@ -112,7 +111,7 @@ the owning module as a function.
 10. Return AppState.
 ```
 
-If a branch decides how sessions, workspaces, agents, reviews, MCPs, or
+If a branch decides how sessions, workspaces, agents, MCPs, or
 terminal workflows behave, move that branch to the owning domain/runtime/live
 module.
 
@@ -148,8 +147,6 @@ Example:
 domains/sessions/extensions
   defines SessionExtension
 
-domains/cowork/session_extension.rs
-domains/reviews/session_extension.rs
 domains/sessions/subagents/session_extension.rs
   implement the trait
 
@@ -177,11 +174,7 @@ ProductMcpEndpointRegistry
 `app/` may list product MCP servers:
 
 ```text
-ReviewProductMcpServer
-SubagentProductMcpServer
-WorkspaceNamingProductMcpServer
-CoworkProductMcpServer
-SkillsProductMcpServer
+AgentOpsProductMcpServer
 ```
 
 `app/` must not implement tool behavior, token semantics, or session selection
@@ -232,7 +225,7 @@ Bad app split:
 
 ```text
 app/product_mcp.rs
-  implement cowork/review/subagent tool behavior
+  implement agent-ops tool behavior
 ```
 
 Use this test:

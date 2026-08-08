@@ -18,8 +18,6 @@ pub enum WorkspaceOperationKind {
     SetupCommand,
     HostingWrite,
     PlanWrite,
-    ReviewWrite,
-    CoworkWrite,
     SubagentWrite,
     MobilityWrite,
     WorktreeRestore,

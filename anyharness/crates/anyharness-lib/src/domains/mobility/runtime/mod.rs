@@ -24,7 +24,6 @@ use crate::domains::mobility::model::{
 };
 use crate::domains::mobility::service::{MobilityError, MobilityService};
 use crate::domains::mobility::store::MobilityStore;
-use crate::domains::reviews::store::ReviewStore;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::subagents::service::SubagentService;
@@ -48,7 +47,6 @@ pub struct MobilityRuntime {
     session_service: Arc<SessionService>,
     session_runtime: Arc<SessionRuntime>,
     subagent_service: Arc<SubagentService>,
-    review_store: ReviewStore,
     access_gate: Arc<WorkspaceAccessGate>,
     terminal_service: Arc<TerminalService>,
 }
@@ -62,7 +60,6 @@ impl MobilityRuntime {
         session_service: Arc<SessionService>,
         session_runtime: Arc<SessionRuntime>,
         subagent_service: Arc<SubagentService>,
-        review_store: ReviewStore,
         access_gate: Arc<WorkspaceAccessGate>,
         terminal_service: Arc<TerminalService>,
     ) -> Self {
@@ -73,7 +70,6 @@ impl MobilityRuntime {
             session_service,
             session_runtime,
             subagent_service,
-            review_store,
             access_gate,
             terminal_service,
         }

@@ -59,7 +59,7 @@ Adapters must not:
 - import API handlers/auth/request context
 - import live actors/managers/handles
 - import domain services or domain stores
-- decide session, workspace, mobility, review, cowork, or billing policy
+- decide session, workspace, mobility, or billing policy
 - import contract request/response types as their internal model
 - map errors to HTTP responses
 
@@ -361,7 +361,6 @@ Files adapter code does not decide:
 
 - whether a workspace may be modified
 - whether a file should appear in transcript context
-- whether an operation belongs to a review flow
 - how API errors are rendered
 
 ### Git
@@ -397,8 +396,7 @@ Git adapter code does not decide:
 
 - whether dirty status blocks workspace retirement
 - how mobility archives interpret deltas
-- whether a review should include a diff
-- when a cowork workspace should autosave as product policy
+- when a workspace should autosave as product policy
 
 Watch for product-flavored names in git adapter operations. If an operation is
 truly product-specific, move policy to a domain and keep only raw git mechanics
@@ -554,7 +552,7 @@ utils.rs
 misc.rs
 common.rs
 operations/workspace.rs
-operations/review.rs
+operations/misc_helpers.rs
 ```
 
 Prefer specific names:
