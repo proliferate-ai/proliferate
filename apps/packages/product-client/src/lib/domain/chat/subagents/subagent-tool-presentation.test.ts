@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import {
   deriveSubagentMcpReceiptPresentation,
+  formatAgentOpsToolHint,
   formatSubagentHeaderVerb,
   formatSubagentMcpActionLabel,
   isSubagentProvisioningAction,
@@ -193,6 +194,7 @@ describe("subagent tool presentation", () => {
       action: "status",
       actionLabel: "Checked subagent",
       title: "API Surface Check",
+      originLabel: "Subagent",
       subagentId: "subagent_123",
       sessionLinkId: "link-123",
       childSessionId: "child-123",
@@ -216,6 +218,113 @@ describe("subagent tool presentation", () => {
       subagentId: "subagent_abc123",
       detailLabel: "Idle",
     });
+  });
+
+  it("derives a peer spawn receipt addressed by session id, not subagent id", () => {
+    const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__spawn_agent",
+      rawOutput: {
+        sessionId: "peer-session",
+        workspaceId: "workspace-2",
+        label: "billing-webhooks",
+        agentId: "agent_123",
+        ownership: "owned_agent",
+        promptStatus: "queued",
+      },
+    }));
+
+    expect(presentation).toMatchObject({
+      action: "spawn_agent",
+      actionLabel: "Spawned agent",
+      title: "billing-webhooks",
+      // A peer has no delegation link, so the receipt opens the session itself.
+      sessionLinkId: null,
+      childSessionId: "peer-session",
+      subagentId: "agent_123",
+      detailLabel: "Queued",
+      openSessionAllowed: true,
+      // The receipt must not call a peer somebody's subagent.
+      originLabel: "Agent",
+    });
+  });
+
+  it("names the peer by its session title when there is no link label", () => {
+    const presentation = deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__send_agent_message",
+      rawOutput: {
+        sessionId: "peer-session",
+        title: "Refactor billing webhooks",
+        status: "queued",
+      },
+    }));
+
+    expect(presentation).toMatchObject({
+      action: "agent_send",
+      actionLabel: "Sent message to agent",
+      title: "Refactor billing webhooks",
+      childSessionId: "peer-session",
+      detailLabel: "Queued",
+    });
+  });
+
+  it("derives a session-scoped wake receipt", () => {
+    expect(deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__schedule_agent_wake",
+      rawOutput: {
+        sessionId: "peer-session",
+        title: "Refactor billing webhooks",
+        scheduled: true,
+        alreadyScheduled: false,
+      },
+    }))).toMatchObject({
+      action: "agent_wake",
+      actionLabel: "Scheduled wake for agent",
+      detailLabel: "Wake scheduled",
+      wakeScheduled: true,
+    });
+
+    expect(deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__schedule_agent_wake",
+      rawOutput: { sessionId: "peer-session", alreadyScheduled: true },
+    }))).toMatchObject({ detailLabel: "Already scheduled" });
+  });
+
+  it("reports what a configure call actually set", () => {
+    expect(deriveSubagentMcpReceiptPresentation(toolCallItem({
+      nativeToolName: "mcp__subagents__configure_agent",
+      rawOutput: {
+        sessionId: "peer-session",
+        title: "Refactor billing webhooks",
+        configId: "modelId",
+        value: "gpt-5",
+        queued: true,
+      },
+    }))).toMatchObject({
+      action: "configure",
+      actionLabel: "Configured agent",
+      detailLabel: "modelId → gpt-5",
+    });
+  });
+
+  it("names what a workspace spawn made instead of calling it a subagent", () => {
+    expect(formatAgentOpsToolHint(toolCallItem({
+      nativeToolName: "mcp__subagents__spawn_workspace",
+      rawOutput: {
+        workspaceId: "workspace-2",
+        repoName: "proliferate",
+        mode: "worktree",
+        branchName: "billing-hotfix",
+      },
+    }))).toBe("proliferate · worktree · billing-hotfix");
+
+    expect(formatAgentOpsToolHint(toolCallItem({
+      nativeToolName: "mcp__subagents__get_workspace_options",
+    }))).toBe("Workspace");
+
+    // Agent calls keep the agent hint.
+    expect(formatAgentOpsToolHint(toolCallItem({
+      nativeToolName: "mcp__subagents__spawn_agent",
+    }))).toBeNull();
   });
 
   it("derives read-event receipts with event counts", () => {

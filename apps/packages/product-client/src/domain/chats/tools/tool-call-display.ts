@@ -6,6 +6,7 @@ import {
 } from "./mcp-tool-presentation";
 import { resolveSubagentLaunchDisplay } from "../subagents/subagent-launch";
 import {
+  formatAgentOpsToolHint,
   formatSubagentMcpActionLabel,
 } from "../subagents/subagent-tool-presentation";
 
@@ -43,7 +44,9 @@ export function describeToolCallDisplay(
       if (subagentActionLabel) {
         return {
           label: subagentActionLabel,
-          hint: "Subagent",
+          // The workspace pair shares the subagent semantic kind but operates on
+          // workspaces, so it names what it touched instead.
+          hint: formatAgentOpsToolHint(item) ?? "Subagent",
           iconKey: "clipboard-list",
         };
       }

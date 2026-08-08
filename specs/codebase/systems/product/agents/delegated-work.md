@@ -191,6 +191,15 @@ Rules:
 - Status, close, read, and search tool calls are not launch/provisioning
   ledgers. They should render their own concise result rows/details instead of
   showing misleading "agent started" affordances.
+- Peer calls — spawning a peer, messaging one, waking one, reading one's
+  transcript, configuring one — render agent receipts of their own and say
+  "agent", never "subagent". The target of a peer call is addressed by session
+  id and is nobody's subagent; a peer receipt opens that session directly,
+  because there is no delegation link behind it.
+- The workspace pair names no agent at all. `spawn_workspace` and
+  `get_workspace_options` render as workspace work, and a landed spawn says what
+  it made — repo, mode, branch — rather than borrowing the subagent label they
+  share a semantic kind with.
 
 ## Tab Strip
 

@@ -46,7 +46,7 @@ export function SubagentToolActionRow({
   const hoverAgent = {
     identity,
     kind: "subagent" as const,
-    originLabel: "Subagent",
+    originLabel: presentation.originLabel,
     statusCategory: delegatedWorkStatusCategoryFromLabel({
       statusLabel: presentation.detailLabel ?? presentation.statusLabel,
       wakeScheduled: presentation.wakeScheduled,
@@ -55,7 +55,7 @@ export function SubagentToolActionRow({
     parentTitle: null,
     hoverTitle: [
       identity.displayName,
-      "Subagent",
+      presentation.originLabel,
       presentation.detailLabel ?? presentation.statusLabel,
     ].filter((value): value is string => !!value).join("\n"),
   };

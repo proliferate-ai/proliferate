@@ -10,7 +10,15 @@ export type SubagentMcpReceiptAction =
   | "read"
   | "search"
   | "promote"
-  | "close";
+  | "close"
+  // Peer-agent ops. They are separate actions rather than reusing the subagent
+  // ones so their copy can say "agent": the target of a peer call is not the
+  // caller's subagent, and the receipt must not imply that it is.
+  | "spawn_agent"
+  | "agent_send"
+  | "agent_wake"
+  | "agent_read"
+  | "configure";
 
 export interface SubagentMcpReceiptPresentation {
   action: SubagentMcpReceiptAction;
@@ -23,6 +31,11 @@ export interface SubagentMcpReceiptPresentation {
   detailLabel: string | null;
   wakeScheduled: boolean;
   openSessionAllowed: boolean;
+  /**
+   * What the target is to the caller. Peer calls address an agent that is not
+   * the caller's subagent, and the receipt must not say otherwise.
+   */
+  originLabel: "Subagent" | "Agent";
 }
 
 export function formatSubagentMcpActionLabel(toolName: string | null | undefined): string | null {
@@ -177,6 +190,8 @@ export function deriveSubagentMcpReceiptPresentation(
   const rawOutput = isRecord(item.rawOutput) ?? parseToolResultJsonObject(item) ?? {};
   const subagentId =
     readStringField(rawOutput, "subagentId")
+    // A peer reports `agentId`: same ownership handle, no subagent behind it.
+    ?? readStringField(rawOutput, "agentId")
     ?? readStringField(rawInput, "subagentId")
     ?? readStringField(rawInput, "subagent_id");
   const sessionLinkId =
@@ -191,6 +206,9 @@ export function deriveSubagentMcpReceiptPresentation(
     ?? readStringField(rawInput, "sessionId");
   const title =
     readStringField(rawOutput, "label")
+    // Peer results name the target session with `title`; there is no link label
+    // to read because there is no link.
+    ?? readStringField(rawOutput, "title")
     ?? readStringField(rawInput, "label")
     ?? "Subagent";
   const rawStatus =
@@ -210,13 +228,29 @@ export function deriveSubagentMcpReceiptPresentation(
     childSessionId,
     statusLabel,
     detailLabel,
-    wakeScheduled: action === "wake",
+    wakeScheduled: action === "wake" || action === "agent_wake",
+    originLabel: receiptOriginLabel(action),
     // A close that is only REQUESTED leaves the agent running, so the receipt
     // still offers to open it.
     openSessionAllowed:
       (action !== "close" || readBooleanField(rawOutput, "closeRequested"))
       && normalizeStatus(rawStatus) !== "closed",
   };
+}
+
+function receiptOriginLabel(
+  action: SubagentMcpReceiptAction,
+): SubagentMcpReceiptPresentation["originLabel"] {
+  switch (action) {
+    case "spawn_agent":
+    case "agent_send":
+    case "agent_wake":
+    case "agent_read":
+    case "configure":
+      return "Agent";
+    default:
+      return "Subagent";
+  }
 }
 
 function normalizeToolName(toolName: string | null | undefined): string {
@@ -242,6 +276,19 @@ function receiptActionFromToolName(toolName: string | null | undefined): Subagen
     case "mcp__subagents__close_agent":
     case "mcp__subagents__close_subagent":
       return "close";
+    case "mcp__subagents__spawn_agent":
+      return "spawn_agent";
+    case "mcp__subagents__send_agent_message":
+      return "agent_send";
+    case "mcp__subagents__schedule_agent_wake":
+      return "agent_wake";
+    case "mcp__subagents__read_agent_transcript":
+      return "agent_read";
+    case "mcp__subagents__configure_agent":
+      return "configure";
+    // The workspace pair and `list_agents` name no single agent, so they get no
+    // agent receipt; they fall through to the generic tool row, whose hint is
+    // widened for them in `tool-call-display`.
     default:
       return null;
   }
@@ -270,6 +317,16 @@ function actionLabel(
       return running ? "Promoting subagent" : "Promoted subagent";
     case "close":
       return running ? "Closing agent" : "Closed agent";
+    case "spawn_agent":
+      return running ? "Spawning agent" : "Spawned agent";
+    case "agent_send":
+      return running ? "Sending message to agent" : "Sent message to agent";
+    case "agent_wake":
+      return running ? "Scheduling wake for agent" : "Scheduled wake for agent";
+    case "agent_read":
+      return running ? "Reading agent transcript" : "Read agent transcript";
+    case "configure":
+      return running ? "Configuring agent" : "Configured agent";
   }
 }
 
@@ -307,7 +364,54 @@ function detailLabelForAction(
         return "Already closed";
       }
       return readStringField(output, "closeReason");
+    case "spawn_agent":
+      // A peer spawn can land in a workspace of its own — that is the whole
+      // point of the workspace pair — so the receipt says where.
+      // TODO(agent-ops-ux): the result carries only the workspace id; resolving
+      // it to the workspace's name is the design pass.
+      return statusLabel;
+    case "agent_send":
+      return statusLabel;
+    case "agent_wake":
+      return readBooleanField(output, "alreadyScheduled")
+        ? "Already scheduled"
+        : "Wake scheduled";
+    case "agent_read":
+      return readArrayCountLabel(output, "turns", "turn")
+        ?? readArrayCountLabel(output, "events", "event");
+    case "configure": {
+      const configId = readStringField(output, "configId");
+      const value = readStringField(output, "value");
+      if (configId && value) {
+        return `${configId} → ${value}`;
+      }
+      return readBooleanField(output, "queued") ? "Queued" : configId;
+    }
   }
+}
+
+/**
+ * The hint for an agent-ops call that names no single agent.
+ *
+ * The workspace pair is served by the agent-ops MCP but operates on workspaces,
+ * so labelling it "Subagent" — the semantic kind it shares — would say the wrong
+ * thing. A landed spawn names what it made instead.
+ */
+export function formatAgentOpsToolHint(item: ToolCallItem): string | null {
+  const toolName = normalizeToolName(item.nativeToolName);
+  if (toolName === "mcp__subagents__get_workspace_options") {
+    return "Workspace";
+  }
+  if (toolName !== "mcp__subagents__spawn_workspace") {
+    return null;
+  }
+  const output = isRecord(item.rawOutput) ?? parseToolResultJsonObject(item) ?? {};
+  const parts = [
+    readStringField(output, "repoName"),
+    readStringField(output, "mode"),
+    readStringField(output, "branchName"),
+  ].filter((part): part is string => !!part);
+  return parts.length > 0 ? parts.join(" · ") : "Workspace";
 }
 
 function readArrayCountLabel(
