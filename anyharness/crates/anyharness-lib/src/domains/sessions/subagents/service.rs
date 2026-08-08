@@ -111,10 +111,13 @@ impl SubagentService {
         if !parent.subagents_enabled {
             return Err(SubagentError::Disabled);
         }
+        // Depth is capped at one level of subordination, and promotion is
+        // exactly what lifts it (ADR §3.3): a promoted agent is a peer, so it
+        // may spawn its own children even though its ownership row survives.
         if self
             .link_service
             .find_subagent_parent(parent_session_id)?
-            .is_some()
+            .is_some_and(|link| link.is_unpromoted_subagent())
         {
             return Err(SubagentError::DepthLimit);
         }
@@ -125,10 +128,16 @@ impl SubagentService {
         {
             return Err(SubagentError::DepthLimit);
         }
+        // Promoted children no longer occupy one of the parent's slots — the
+        // cap bounds concurrent subordinates, not lifetime descendants. This
+        // must agree with the store's own subselect in
+        // `create_subagent_link_with_child_limit`, which is the real cap.
         if self
             .link_service
             .list_subagent_children(parent_session_id)?
-            .len()
+            .iter()
+            .filter(|link| link.promoted_at.is_none())
+            .count()
             >= MAX_SUBAGENTS_PER_PARENT
         {
             return Err(SubagentError::FanoutLimit);
@@ -276,6 +285,9 @@ impl SubagentService {
                 mode_id: child.current_mode_id.or(child.requested_mode_id),
                 created_at: child.created_at,
                 closed_at: link.closed_at,
+                promoted_at: link.promoted_at,
+                closed_by_session_id: link.closed_by_session_id,
+                close_reason: link.close_reason,
             });
         }
         Ok(summaries)

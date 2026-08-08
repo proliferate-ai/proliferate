@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::time::Instant;
 
 use crate::domains::sessions::extensions::SessionClosingContext;
-use crate::domains::sessions::links::model::SessionLinkRelation;
+use crate::domains::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
@@ -138,12 +138,7 @@ impl SessionRuntime {
             .map_err(SessionLifecycleError::Internal)?;
         let mut closed_child_session_ids = std::collections::HashSet::new();
         for link in links {
-            if !matches!(
-                link.relation,
-                SessionLinkRelation::Subagent
-                    | SessionLinkRelation::CoworkCodingSession
-                    | SessionLinkRelation::ReviewAgent
-            ) {
+            if !cascades_to_child(&link) {
                 continue;
             }
             self.close_session_tree(&link.child_session_id, visited)
@@ -189,9 +184,14 @@ impl SessionRuntime {
             .map_err(SessionLifecycleError::Internal)?;
         let now = chrono::Utc::now().to_rfc3339();
         for link in links {
+            // Inbound, not outbound: this session is the CHILD, and it is gone.
+            // Every relationship that pointed at it ends with it, promoted or
+            // not — unlike the outbound cascade, which is about what this
+            // session takes down with it.
             if !matches!(
                 link.relation,
                 SessionLinkRelation::Subagent
+                    | SessionLinkRelation::OwnedAgent
                     | SessionLinkRelation::CoworkCodingSession
                     | SessionLinkRelation::ReviewAgent
             ) {
@@ -331,6 +331,23 @@ impl SessionRuntime {
             Some(ConditionalCancelOutcome::NotActive) => LiveTurnCancelOutcome::NotActive,
             None => LiveTurnCancelOutcome::ActorUnavailable,
         }
+    }
+}
+
+/// Whether closing the PARENT takes this child down with it.
+///
+/// The close cascade is the one place the promotion flag changes lifecycle, and
+/// it is the whole point of promotion: a promoted subagent keeps its row, its
+/// transcript and its owner — it simply stops dying when the owner dies. Ruling
+/// 7 keeps the row precisely so the former parent can still close it
+/// deliberately; only the automatic cascade is severed.
+pub(super) fn cascades_to_child(link: &SessionLinkRecord) -> bool {
+    match link.relation {
+        SessionLinkRelation::Subagent => link.promoted_at.is_none(),
+        SessionLinkRelation::CoworkCodingSession | SessionLinkRelation::ReviewAgent => true,
+        // An owned agent is a peer by construction — it was never subordinate,
+        // so there is no cascade to sever. A fork is a copy, not a dependent.
+        SessionLinkRelation::OwnedAgent | SessionLinkRelation::Fork => false,
     }
 }
 

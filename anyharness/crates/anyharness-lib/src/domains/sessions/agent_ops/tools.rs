@@ -26,15 +26,36 @@ pub const DEPRECATED_TOOL_ALIASES: &[(&str, &str)] = &[
 // `permit -> workspace lease` order: a route lease taken before the permit is
 // the reversed order `api/session_admission_tests.rs` proves deadlocks against
 // retire/purge. Absent here means "leases itself", never "mutates nothing".
+// `close_agent`/`close_subagent` joined that list when close was link-scoped and
+// therefore always same-workspace. It is now `close_agent(sessionId)`, whose
+// target can be any owned agent anywhere, so it leases itself for the same two
+// reasons — and it must, because a close acts on the target session and so
+// takes that session's mutation permit, which has to be OUTSIDE any workspace
+// lease.
 pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "spawn_subagent",
     "create_subagent",
     "send_subagent_message",
     "schedule_subagent_wake",
     "schedule_agent_wake",
-    "close_agent",
-    "close_subagent",
+    "promote_subagent",
 ];
+
+/// The tools that make a session an owner of new agents. Withheld entirely from
+/// an unpromoted subagent (ADR §3.3) — not merely refused at the fanout cap,
+/// which is what `can_create` covers. Listed by wire name, aliases included,
+/// because `calls::call_tool` enforces this at DISPATCH: a session's tool list
+/// is frozen at launch, so an agent promoted (or not) after launch is holding a
+/// stale advertisement either way.
+pub const SPAWN_STYLE_TOOL_NAMES: &[&str] = &[
+    "get_subagent_launch_options",
+    "spawn_subagent",
+    "create_subagent",
+];
+
+pub fn is_spawn_style_tool(name: &str) -> bool {
+    SPAWN_STYLE_TOOL_NAMES.contains(&name)
+}
 
 /// Resolves a wire tool name to the implementation it dispatches to.
 pub fn canonical_tool_name(name: &str) -> &str {
@@ -63,6 +84,33 @@ pub struct CreateSubagentArgs {
 pub struct ChildSessionArgs {
     #[serde(default)]
     pub subagent_id: Option<String>,
+}
+
+/// Both spellings of "which of my children", because promotion is reachable
+/// from the subagent vocabulary (`subagentId`, what every link-scoped tool
+/// takes) and from the peer vocabulary (`sessionId`, what `list_agents`
+/// returns). They resolve through the same owned-link lookup.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromoteSubagentArgs {
+    #[serde(default)]
+    pub subagent_id: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
+}
+
+/// `sessionId` is the tool's own argument; `subagentId` is kept for callers
+/// still holding the pre-agent-ops `close_subagent` tool list, whose schema had
+/// only that field.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloseAgentArgs {
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub subagent_id: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,12 +233,22 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
     // Peer messaging and peer reads are unconditional: reach is runtime-wide,
     // and every agent has them — including an unpromoted subagent, which loses
     // only the spawn-style tools.
-    let mut tools = vec![
-        tool_definition(
+    let mut tools = Vec::new();
+
+    // Spawn-style tools are withheld from an unpromoted subagent entirely: it
+    // is subordinate, so the shape of its options is not information it can
+    // act on. Promotion returns them. This is advertisement only — the gate
+    // that matters runs in `calls::call_tool`, because tool lists are frozen at
+    // session launch and promotion happens later.
+    if !ctx.is_unpromoted_subagent {
+        tools.push(tool_definition(
             "get_subagent_launch_options",
             "Describe subagent creation defaults, limits, supported agent/model choices, and available parent mode hints.",
             json!({ "type": "object", "properties": {} }),
-        ),
+        ));
+    }
+
+    tools.extend([
         tool_definition(
             "list_subagents",
             "List child sessions owned by this parent session.",
@@ -282,9 +340,9 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
                 "required": ["sessionId"]
             }),
         ),
-    ];
+    ]);
 
-    if ctx.can_create {
+    if ctx.can_create && !ctx.is_unpromoted_subagent {
         tools.push(
             tool_definition(
                 "spawn_subagent",
@@ -387,12 +445,25 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
             }),
         ),
         tool_definition(
-            "close_agent",
-            "Close an owned subagent and stop future prompts/wakes while preserving history.",
+            "promote_subagent",
+            "Promote one of your subagents to a peer. It keeps its transcript, its label and you as its owner, and it gains the full tool surface — including spawning its own agents. What it loses is subordination: it no longer closes when you close, and it no longer counts against your subagent limit. Promotion cannot be undone.",
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string", "description": "Stable subagent target id." }
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
+                    "sessionId": { "type": "string", "description": "The subagent's session id, if you have that instead." }
+                }
+            }),
+        ),
+        tool_definition(
+            "close_agent",
+            "Close an agent you own and stop future prompts and wakes; its transcript stays readable. Its own unpromoted subagents close with it; agents it promoted do not. Closing an agent that is mid-turn does not interrupt it — it finishes the step it is on and then stops.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string", "description": "Session id of the agent to close. Must be one you own." },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id, if you have that instead." },
+                    "reason": { "type": "string", "description": "Short note recorded with the close, shown to whoever looks at the agent later." }
                 }
             }),
         ),
@@ -405,8 +476,8 @@ pub fn build_tool_list(ctx: &AgentOpsMcpContext) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_tool_list, canonical_tool_name, AgentOpsMcpContext, DEPRECATED_TOOL_ALIASES,
-        MUTATING_TOOL_NAMES,
+        build_tool_list, canonical_tool_name, is_spawn_style_tool, AgentOpsMcpContext,
+        DEPRECATED_TOOL_ALIASES, MUTATING_TOOL_NAMES, SPAWN_STYLE_TOOL_NAMES,
     };
     use serde_json::Value;
 
@@ -422,6 +493,16 @@ mod tests {
             },
             existing_subagent_count,
             max_subagents_per_parent: 8,
+            is_unpromoted_subagent: false,
+        }
+    }
+
+    /// A live unpromoted subagent: subordinate, so `validate_parent_can_spawn`
+    /// already refuses it with DepthLimit, and it has no children of its own.
+    fn unpromoted_subagent_context() -> AgentOpsMcpContext {
+        AgentOpsMcpContext {
+            is_unpromoted_subagent: true,
+            ..context(false, 0)
         }
     }
 
@@ -498,9 +579,9 @@ mod tests {
 
     #[test]
     fn peer_messaging_and_reads_are_offered_to_every_caller() {
-        // A caller with no children and no spawn rights is the unpromoted
-        // subagent case: it keeps messaging, listing and reading.
-        for ctx in [context(true, 2), context(false, 0)] {
+        // An unpromoted subagent keeps messaging, listing and reading; it loses
+        // only the spawn-style tools.
+        for ctx in [context(true, 2), unpromoted_subagent_context()] {
             let tools = build_tool_list(&ctx);
             let names = tool_names(&tools);
 
@@ -541,7 +622,7 @@ mod tests {
     fn configure_tools_are_offered_to_every_caller() {
         // Ruling 3: an unpromoted subagent loses the spawn tools and keeps
         // messaging, reading, waking and configuring.
-        for ctx in [context(true, 2), context(false, 0)] {
+        for ctx in [context(true, 2), unpromoted_subagent_context()] {
             let tools = build_tool_list(&ctx);
             let names = tool_names(&tools);
 
@@ -570,7 +651,7 @@ mod tests {
     fn session_scoped_wakes_are_offered_to_every_caller() {
         // Same reasoning as peer messaging: an unpromoted subagent loses spawn
         // tools, not the ability to wait on a peer.
-        for ctx in [context(true, 2), context(false, 0)] {
+        for ctx in [context(true, 2), unpromoted_subagent_context()] {
             let tools = build_tool_list(&ctx);
             let names = tool_names(&tools);
 
@@ -674,5 +755,126 @@ mod tests {
                 "alias {alias} and canonical {canonical} disagree on mutating status"
             );
         }
+    }
+
+    // --- ownership, promotion and close (ADR §3.3, §3.4) -----------------
+
+    #[test]
+    fn an_unpromoted_subagent_is_offered_no_spawn_style_tool() {
+        let tools = build_tool_list(&unpromoted_subagent_context());
+        let names = tool_names(&tools);
+
+        for spawn_tool in SPAWN_STYLE_TOOL_NAMES {
+            assert!(
+                !names.contains(spawn_tool),
+                "{spawn_tool} is advertised to an unpromoted subagent"
+            );
+        }
+    }
+
+    #[test]
+    fn launch_options_come_back_once_the_subagent_is_promoted() {
+        // Same session, one column later: it is still somebody's child, but it
+        // is no longer subordinate, so the spawn surface returns.
+        let promoted = AgentOpsMcpContext {
+            is_unpromoted_subagent: false,
+            ..context(true, 0)
+        };
+        let names_before = tool_names(&build_tool_list(&unpromoted_subagent_context()))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let tools_after = build_tool_list(&promoted);
+        let names_after = tool_names(&tools_after);
+
+        assert!(!names_before.iter().any(|name| name == "spawn_subagent"));
+        assert!(names_after.contains(&"spawn_subagent"));
+        assert!(names_after.contains(&"get_subagent_launch_options"));
+    }
+
+    #[test]
+    fn a_capped_parent_still_sees_its_launch_options() {
+        // `can_create` is false at the fanout cap too, and that parent is NOT
+        // subordinate — withholding the option description there would hide the
+        // limit it is bumping against.
+        let tools = build_tool_list(&context(false, 8));
+        let names = tool_names(&tools);
+
+        assert!(names.contains(&"get_subagent_launch_options"));
+        assert!(!names.contains(&"spawn_subagent"));
+    }
+
+    #[test]
+    fn spawn_style_names_cover_the_deprecated_create_alias() {
+        // The dispatch gate matches wire names, so the old name has to be here
+        // or a launch-frozen subagent walks straight through it.
+        assert!(is_spawn_style_tool("create_subagent"));
+        assert!(is_spawn_style_tool("spawn_subagent"));
+        assert!(is_spawn_style_tool("get_subagent_launch_options"));
+        assert!(!is_spawn_style_tool("send_agent_message"));
+        assert!(!is_spawn_style_tool("close_agent"));
+        for (alias, canonical) in DEPRECATED_TOOL_ALIASES {
+            if is_spawn_style_tool(canonical) {
+                assert!(
+                    is_spawn_style_tool(alias),
+                    "alias {alias} escapes the spawn gate its canonical {canonical} is under"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn close_agent_leases_in_the_call_because_it_takes_the_targets_permit() {
+        // A close acts on the TARGET session, so it takes that session's
+        // mutation permit — which must be outside any workspace lease
+        // (PR1227-LOCK-01). A route-level lease would be taken first and invert
+        // the order. It is also the caller's workspace, and the target need not
+        // be in it.
+        assert!(!MUTATING_TOOL_NAMES.contains(&"close_agent"));
+        assert!(!MUTATING_TOOL_NAMES.contains(&"close_subagent"));
+        // Promotion only stamps the caller's own link row, in the caller's own
+        // workspace, and touches no session actor: the route lease is right.
+        assert!(MUTATING_TOOL_NAMES.contains(&"promote_subagent"));
+    }
+
+    #[test]
+    fn promote_and_close_are_offered_to_anyone_who_owns_agents() {
+        for ctx in [context(true, 0), context(false, 3)] {
+            let names_owned = tool_names(&build_tool_list(&ctx))
+                .into_iter()
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+
+            assert!(names_owned.iter().any(|name| name == "promote_subagent"));
+            assert!(names_owned.iter().any(|name| name == "close_agent"));
+        }
+
+        // Owning nothing and unable to spawn: nothing to promote or close.
+        let names = tool_names(&build_tool_list(&unpromoted_subagent_context()))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert!(!names.iter().any(|name| name == "promote_subagent"));
+        assert!(!names.iter().any(|name| name == "close_agent"));
+    }
+
+    #[test]
+    fn close_agent_takes_a_session_id_and_an_optional_reason() {
+        let close = build_tool_list(&context(true, 1))
+            .into_iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("close_agent"))
+            .expect("close_agent is advertised");
+
+        assert!(close
+            .pointer("/inputSchema/properties/sessionId")
+            .is_some());
+        assert!(close.pointer("/inputSchema/properties/reason").is_some());
+        // `subagentId` survives for sessions still holding the pre-agent-ops
+        // `close_subagent` schema.
+        assert!(close
+            .pointer("/inputSchema/properties/subagentId")
+            .is_some());
+        // Neither target spelling is required: the call resolves whichever came.
+        assert!(close.pointer("/inputSchema/required").is_none());
     }
 }

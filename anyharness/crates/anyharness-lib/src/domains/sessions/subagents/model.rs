@@ -17,6 +17,13 @@ pub struct SubagentSummary {
     pub mode_id: Option<String>,
     pub created_at: String,
     pub closed_at: Option<String>,
+    /// Set once this child was promoted to a peer: it keeps the row and the
+    /// owner, and stops being subordinate. `None` is an ordinary subagent.
+    pub promoted_at: Option<String>,
+    /// Who closed it and why, when somebody did. Both are `None` on an agent
+    /// closed by a person through the UI — the columns record an AGENT's close.
+    pub closed_by_session_id: Option<String>,
+    pub close_reason: Option<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -4,7 +4,12 @@ mod calls_helpers;
 mod config_ops;
 pub mod context;
 pub mod definition;
-mod peer_ops;
+// The peer gates are the runtime's ownership-independent fence: session
+// mutation permit, then the TARGET workspace's write lease, in that order
+// (PR1227-LOCK-01). The deferred close in `sessions::ownership::hooks` takes
+// exactly the same pair, so it reuses these rather than restating a lock-order
+// contract in a second place.
+pub(crate) mod peer_ops;
 pub mod tools;
 
 use std::sync::Arc;
@@ -15,6 +20,7 @@ use serde_json::Value;
 use self::auth::AgentOpsMcpAuth;
 use self::context::AgentOpsMcpContext;
 use crate::domains::sessions::admission::SessionMutationAdmission;
+use crate::domains::sessions::ownership::service::AgentOwnershipService;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::wakes::service::AgentWakeService;
@@ -42,16 +48,19 @@ pub struct AgentOpsProductMcpServer {
     wake_service: Arc<AgentWakeService>,
     session_runtime: Arc<SessionRuntime>,
     workspace_runtime: Arc<WorkspaceRuntime>,
+    ownership: Arc<AgentOwnershipService>,
     peer_gates: AgentOpsPeerGates,
     auth: Arc<AgentOpsMcpAuth>,
 }
 
 impl AgentOpsProductMcpServer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         service: Arc<SubagentService>,
         wake_service: Arc<AgentWakeService>,
         session_runtime: Arc<SessionRuntime>,
         workspace_runtime: Arc<WorkspaceRuntime>,
+        ownership: Arc<AgentOwnershipService>,
         peer_gates: AgentOpsPeerGates,
         auth: Arc<AgentOpsMcpAuth>,
     ) -> Self {
@@ -60,6 +69,7 @@ impl AgentOpsProductMcpServer {
             wake_service,
             session_runtime,
             workspace_runtime,
+            ownership,
             peer_gates,
             auth,
         }
@@ -103,6 +113,7 @@ impl ProductMcpServer for AgentOpsProductMcpServer {
             &self.service,
             &self.wake_service,
             &self.session_runtime,
+            &self.ownership,
             &self.peer_gates,
             ctx,
             name,

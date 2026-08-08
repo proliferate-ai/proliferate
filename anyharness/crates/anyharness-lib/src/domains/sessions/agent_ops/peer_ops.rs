@@ -85,7 +85,7 @@ pub(super) fn prepare_agent_message(
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(super) enum PeerGateError {
+pub(crate) enum PeerGateError {
     #[error(
         "that agent's execution is controlled by an active workflow run and cannot be \
          prompted or reconfigured until the run finishes"
@@ -113,7 +113,7 @@ pub(super) enum PeerGateError {
 /// The permit is held across the dispatch, so a workflow that takes control
 /// mid-call cannot interleave, and a peer mutation is visible to the
 /// destructive workspace paths that admit a whole workspace's session set.
-pub(super) async fn admit_peer_mutation(
+pub(crate) async fn admit_peer_mutation(
     admission: &SessionMutationAdmission,
     target_session_id: &str,
     kind: SessionMutationKind,
@@ -161,7 +161,7 @@ pub(super) async fn admit_peer_mutation(
 /// which hold every session permit in a workspace and then reach for that
 /// workspace's exclusive lease. Exactly one workspace lease is taken here, so
 /// there is no second lease to order against either.
-pub(super) async fn lease_target_workspace_for_peer_write(
+pub(crate) async fn lease_target_workspace_for_peer_write(
     operation_gate: &WorkspaceOperationGate,
     access_gate: &WorkspaceAccessGate,
     target_workspace_id: &str,
@@ -177,7 +177,7 @@ pub(super) async fn lease_target_workspace_for_peer_write(
 
 /// Access-state check with no lease attached — the caller-side half of what the
 /// route used to do for this tool (`assert_workspace_mutable`).
-pub(super) fn assert_workspace_can_be_mutated(
+pub(crate) fn assert_workspace_can_be_mutated(
     access_gate: &WorkspaceAccessGate,
     workspace_id: &str,
 ) -> Result<(), PeerGateError> {
@@ -413,6 +413,127 @@ mod tests {
             dispatched_at < consumed_at,
             "the recipient's wake must be consumed AFTER the send lands"
         );
+    }
+
+    /// Read `calls.rs` once for the guards below. Same technique, and the same
+    /// justification, as `send_agent_message_arms_before_the_dispatch...`
+    /// above: these are orderings inside an async handler that needs a live
+    /// runtime, and the ordering IS the guarantee.
+    fn calls_source() -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/domains/sessions/agent_ops/calls.rs");
+        std::fs::read_to_string(&path).expect("read calls.rs")
+    }
+
+    fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("{signature} is defined in calls.rs"));
+        let rest = &source[start..];
+        &rest[..rest[1..]
+            .find("\nasync fn ")
+            .or_else(|| rest[1..].find("\nfn "))
+            .map_or(rest.len(), |at| at + 1)]
+    }
+
+    #[test]
+    fn the_spawn_gate_runs_before_dispatch_not_only_in_the_tool_list() {
+        // Tool lists are frozen at session launch, so hiding the spawn tools in
+        // `tools/list` cannot bind an agent whose state changed afterwards — a
+        // subagent launched before its promotion, or promoted after its launch,
+        // holds a stale list either way. Only this check runs against the
+        // caller's state at the moment it acts. It must also come BEFORE the
+        // dispatch match, or the handler has already run by the time it refuses.
+        let source = calls_source();
+        let body = function_body(&source, "pub async fn call_tool(");
+
+        let gate_at = body
+            .find("is_spawn_style_tool(name)")
+            .expect("call_tool gates the spawn-style tools at dispatch");
+        let dispatch_at = body
+            .find("match canonical_tool_name(name)")
+            .expect("call_tool dispatches on the canonical tool name");
+        assert!(
+            gate_at < dispatch_at,
+            "the spawn gate must refuse BEFORE the tool dispatches"
+        );
+        // Matched on the WIRE name: `canonical_tool_name` would map the
+        // deprecated `create_subagent` spelling onto `spawn_subagent` and let a
+        // launch-frozen subagent walk around the gate under the old name.
+        assert!(
+            !body[..gate_at].contains("canonical_tool_name(name)"),
+            "the spawn gate must match the wire name, not the canonicalized one"
+        );
+    }
+
+    #[test]
+    fn close_agent_takes_the_targets_permit_before_any_workspace_lease() {
+        // H1: a close mutates a session that need not be in the caller's link
+        // tree or workspace, so it must take that session's mutation permit —
+        // otherwise it runs straight through a workflow holding control. And it
+        // must take it OUTERMOST (PR1227-LOCK-01): the reverse order is what
+        // `api/session_admission_tests.rs` proves deadlocks against
+        // retire/purge, which hold every session permit in a workspace and then
+        // reach for that workspace's exclusive lease.
+        let source = calls_source();
+        let body = function_body(&source, "async fn close_agent(");
+
+        let permit_at = body
+            .find("admit_peer_mutation(")
+            .expect("close_agent takes the target session's mutation permit");
+        let lease_at = body
+            .find("lease_target_workspace_for_peer_write(")
+            .expect("close_agent leases the target workspace");
+        let close_at = body
+            .find("close_live_session(")
+            .expect("close_agent closes the live session");
+
+        assert!(
+            body[permit_at..lease_at].contains("SessionMutationKind::Close"),
+            "the permit must be taken for the Close kind"
+        );
+        assert!(
+            permit_at < lease_at,
+            "the session mutation permit must be taken BEFORE the workspace lease"
+        );
+        assert!(
+            lease_at < close_at,
+            "both gates must be held across the close itself"
+        );
+        // The attribution stamp is what arms a deferred close, so it must land
+        // under the permit too — a refused call must arm nothing.
+        let stamp_at = body
+            .find("record_close_attribution(")
+            .expect("close_agent records who closed the agent and why");
+        assert!(
+            permit_at < stamp_at,
+            "the close request must not be armed by a call the fence would refuse"
+        );
+    }
+
+    #[test]
+    fn the_deferred_half_of_a_soft_close_retakes_the_same_gates_in_the_same_order() {
+        // The requesting call returned long ago and control can be acquired in
+        // between, so the turn-finish completion cannot carry the gates — it
+        // re-takes them, and in the same order, or the deferred path becomes a
+        // second lock order.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/domains/sessions/ownership/hooks.rs");
+        let body = std::fs::read_to_string(&path).expect("read ownership/hooks.rs");
+
+        let permit_at = body
+            .find("admit_peer_mutation(")
+            .expect("the deferred close takes the target's mutation permit");
+        let lease_at = body
+            .find("lease_target_workspace_for_peer_write(")
+            .expect("the deferred close leases the target workspace");
+        let close_at = body
+            .find("close_live_session(")
+            .expect("the deferred close closes the live session");
+
+        assert!(body[permit_at..lease_at].contains("SessionMutationKind::Close"));
+        assert!(permit_at < lease_at);
+        assert!(lease_at < close_at);
     }
 
     #[test]

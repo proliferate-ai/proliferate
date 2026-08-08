@@ -13,6 +13,13 @@ pub struct AgentOpsMcpContext {
     pub create_block_reason: Option<String>,
     pub existing_subagent_count: usize,
     pub max_subagents_per_parent: usize,
+    /// True while this session is somebody's subagent and has not been
+    /// promoted. It is deliberately NOT the negation of `can_create`:
+    /// `can_create` is also false at the fanout cap or with subagents disabled,
+    /// which are temporary conditions of a session that is still allowed to
+    /// think in terms of spawning. This one says the session is subordinate, so
+    /// the spawn tools are withheld entirely (ADR §3.3).
+    pub is_unpromoted_subagent: bool,
 }
 
 pub fn resolve_context(
@@ -48,6 +55,10 @@ pub fn resolve_context(
         Ok(_) => None,
         Err(error) => Some(resolve_create_block_reason(error)?),
     };
+    let is_unpromoted_subagent = service
+        .find_subagent_parent(&request.session_id)
+        .map_err(ProductMcpContextError::Internal)?
+        .is_some_and(|link| link.is_unpromoted_subagent());
 
     Ok(AgentOpsMcpContext {
         parent_session_id: request.session_id.clone(),
@@ -56,6 +67,7 @@ pub fn resolve_context(
         create_block_reason,
         existing_subagent_count,
         max_subagents_per_parent: MAX_SUBAGENTS_PER_PARENT,
+        is_unpromoted_subagent,
     })
 }
 
