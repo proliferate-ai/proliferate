@@ -3,6 +3,7 @@
 import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  SHORTCUT_REVEAL_HOLD_MS,
   SHORTCUT_REVEAL_RESET_EVENT,
   useShortcutRevealState,
 } from "#product/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
@@ -16,8 +17,20 @@ function ShortcutRevealProbe() {
   return <output aria-label="shortcut reveal visible">{String(visible)}</output>;
 }
 
+function pressPrimaryModifier() {
+  window.dispatchEvent(new KeyboardEvent("keydown", {
+    key: "Meta",
+    metaKey: true,
+  }));
+}
+
+function holdOutTheDelay() {
+  vi.advanceTimersByTime(SHORTCUT_REVEAL_HOLD_MS);
+}
+
 describe("useShortcutRevealState", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
       userAgent: "Mac OS X",
@@ -30,29 +43,46 @@ describe("useShortcutRevealState", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it("reveals immediately while the primary modifier is held", () => {
+  it("reveals only after the primary modifier is held out the delay", () => {
     const { result } = renderHook(() => useShortcutRevealState());
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Meta",
-        metaKey: true,
-      }));
+      pressPrimaryModifier();
+    });
+    expect(result.current).toBe(false);
+
+    act(() => {
+      holdOutTheDelay();
     });
     expect(result.current).toBe(true);
+  });
+
+  it("never reveals when the modifier is released before the delay", () => {
+    const { result } = renderHook(() => useShortcutRevealState());
+
+    act(() => {
+      pressPrimaryModifier();
+      vi.advanceTimersByTime(SHORTCUT_REVEAL_HOLD_MS - 1);
+      window.dispatchEvent(new KeyboardEvent("keyup", {
+        key: "Meta",
+        metaKey: false,
+      }));
+      holdOutTheDelay();
+    });
+
+    expect(result.current).toBe(false);
   });
 
   it("resets on primary modifier keyup", () => {
     const { result } = renderHook(() => useShortcutRevealState());
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Meta",
-        metaKey: true,
-      }));
+      pressPrimaryModifier();
+      holdOutTheDelay();
     });
     expect(result.current).toBe(true);
 
@@ -65,14 +95,28 @@ describe("useShortcutRevealState", () => {
     expect(result.current).toBe(false);
   });
 
-  it("does not reveal after a non-modifier key is pressed", () => {
+  it("does not reveal after a chorded non-modifier key is pressed", () => {
     const { result } = renderHook(() => useShortcutRevealState());
 
     act(() => {
+      pressPrimaryModifier();
       window.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Meta",
+        key: "n",
+        code: "KeyN",
         metaKey: true,
       }));
+      holdOutTheDelay();
+    });
+
+    expect(result.current).toBe(false);
+  });
+
+  it("resets an already-visible reveal when a non-modifier key is pressed", () => {
+    const { result } = renderHook(() => useShortcutRevealState());
+
+    act(() => {
+      pressPrimaryModifier();
+      holdOutTheDelay();
     });
     expect(result.current).toBe(true);
 
@@ -83,7 +127,6 @@ describe("useShortcutRevealState", () => {
         metaKey: true,
       }));
     });
-
     expect(result.current).toBe(false);
   });
 
@@ -91,10 +134,8 @@ describe("useShortcutRevealState", () => {
     const { result } = renderHook(() => useShortcutRevealState());
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Meta",
-        metaKey: true,
-      }));
+      pressPrimaryModifier();
+      holdOutTheDelay();
     });
     expect(result.current).toBe(true);
 
@@ -108,10 +149,8 @@ describe("useShortcutRevealState", () => {
     const { result } = renderHook(() => useShortcutRevealState());
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Meta",
-        metaKey: true,
-      }));
+      pressPrimaryModifier();
+      holdOutTheDelay();
     });
     expect(result.current).toBe(true);
 
@@ -121,10 +160,8 @@ describe("useShortcutRevealState", () => {
     expect(result.current).toBe(false);
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Meta",
-        metaKey: true,
-      }));
+      pressPrimaryModifier();
+      holdOutTheDelay();
     });
     expect(result.current).toBe(true);
 
@@ -149,10 +186,8 @@ describe("useShortcutRevealState", () => {
     );
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Meta",
-        metaKey: true,
-      }));
+      pressPrimaryModifier();
+      holdOutTheDelay();
     });
 
     expect(screen.getByLabelText("shortcut reveal visible").textContent).toBe("true");
