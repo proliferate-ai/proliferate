@@ -1,7 +1,4 @@
-import type {
-  HomeNextDestination,
-  HomeNextRepoLaunchKind,
-} from "#product/lib/domain/home/home-next-launch";
+import type { HomeNextRepoLaunchKind } from "#product/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import type { CloudRepoActionState } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
@@ -19,12 +16,8 @@ export function homeRepoLaunchKindLabel(kind: HomeNextRepoLaunchKind): string {
 }
 
 export function homeTargetProjectLabel(input: {
-  destination: HomeNextDestination;
   selectedRepository: SettingsRepositoryEntry | null;
 }): string {
-  if (input.destination === "cowork") {
-    return "No project";
-  }
   return input.selectedRepository?.name ?? "Choose repository";
 }
 
@@ -48,12 +41,8 @@ export function homeTargetRuntimeOptionLabel(input: {
 }
 
 export function homeTargetProjectAriaLabel(input: {
-  destination: HomeNextDestination;
   selectedRepository: SettingsRepositoryEntry | null;
 }): string {
-  if (input.destination === "cowork") {
-    return "Project: No project";
-  }
   return input.selectedRepository
     ? `Project: ${input.selectedRepository.name} repository`
     : "Project: Choose repository";
@@ -62,9 +51,8 @@ export function homeTargetProjectAriaLabel(input: {
 export function homeTargetRuntimeAriaLabel(input: {
   label: string;
   selectedRepository: SettingsRepositoryEntry | null;
-  destination: HomeNextDestination;
 }): string {
-  if (!input.selectedRepository || input.destination === "cowork") {
+  if (!input.selectedRepository) {
     return "Runtime: no repository selected";
   }
   return `Runtime: ${input.label}`;

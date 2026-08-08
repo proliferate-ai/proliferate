@@ -14,7 +14,6 @@ describe("ToolCallSummary", () => {
         summary="2 messages, 3 tool calls"
         showWorkDivider
         borderless
-        completionContent={<div>Edited files</div>}
         renderChildren={() => <div>Work ledger</div>}
       />,
     );

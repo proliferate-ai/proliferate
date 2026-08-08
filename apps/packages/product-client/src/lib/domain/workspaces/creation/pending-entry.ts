@@ -4,21 +4,12 @@ import type { CreateWorktreeWorkspaceInput } from "#product/lib/domain/workspace
 export type PendingWorkspaceSource =
   | "local-created"
   | "worktree-created"
-  | "cloud-created"
-  | "cowork-created";
+  | "cloud-created";
 
 export type PendingWorkspaceStage =
   | "submitting"
   | "awaiting-cloud-ready"
   | "failed";
-
-export interface PendingCoworkRequestInput {
-  agentKind: string;
-  modelId: string;
-  modeId?: string;
-  draftText?: string | null;
-  sourceWorkspaceId?: string | null;
-}
 
 export interface PendingCloudWorkspaceRequestInput {
   gitProvider: "github";
@@ -38,7 +29,6 @@ export type PendingWorkspaceRequest =
     retryInput?: CreateWorktreeWorkspaceInput;
   }
   | { kind: "cloud"; input: PendingCloudWorkspaceRequestInput }
-  | { kind: "cowork"; input: PendingCoworkRequestInput }
   | { kind: "select-existing"; workspaceId: string };
 
 export type PendingWorktreeWorkspaceRequest = Extract<
@@ -103,7 +93,6 @@ export function resolvePendingWorkspacePath(
     case "worktree":
       return entry.request.input.targetPath?.trim() || null;
     case "cloud":
-    case "cowork":
     case "select-existing":
       return null;
   }

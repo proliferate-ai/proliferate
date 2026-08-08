@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import type { ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderableOutboxEntriesForTranscript } from "#product/domain/sessions/intents/session-intent-selectors";
@@ -24,25 +23,19 @@ import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-inten
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 import type { HomeLaunchTarget } from "#product/lib/domain/home/home-next-launch";
-import { CoworkThreadLaunchProvider } from "#product/providers/CoworkThreadLaunchProvider";
 
-const mocks = vi.hoisted(() => {
-  const createThreadFromSelection = vi.fn();
-  return {
-    createCloudWorkspaceAndEnterWithResult: vi.fn(),
-    createEmptySessionWithResolvedConfig: vi.fn(),
-    createLocalWorkspaceAndEnterWithResult: vi.fn(),
-    createSessionWithResolvedConfig: vi.fn(),
-    createThreadFromSelection,
-    createWorktreeAndEnterWithResult: vi.fn(),
-    navigate: vi.fn(),
-    productHost: { desktop: {} as object | null },
-    selectWorkspace: vi.fn(),
-    showToast: vi.fn(),
-    showErrorToast: vi.fn(),
-    useCoworkThreadWorkflow: vi.fn(() => ({ createThreadFromSelection })),
-  };
-});
+const mocks = vi.hoisted(() => ({
+  createCloudWorkspaceAndEnterWithResult: vi.fn(),
+  createEmptySessionWithResolvedConfig: vi.fn(),
+  createLocalWorkspaceAndEnterWithResult: vi.fn(),
+  createSessionWithResolvedConfig: vi.fn(),
+  createWorktreeAndEnterWithResult: vi.fn(),
+  navigate: vi.fn(),
+  productHost: { desktop: {} as object | null },
+  selectWorkspace: vi.fn(),
+  showToast: vi.fn(),
+  showErrorToast: vi.fn(),
+}));
 
 vi.mock("react-router-dom", async (importOriginal) => ({
   ...await importOriginal<typeof import("react-router-dom")>(),
@@ -63,10 +56,6 @@ vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
   useCreateCloudWorkspace: () => ({
     createCloudWorkspaceAndEnterWithResult: mocks.createCloudWorkspaceAndEnterWithResult,
   }),
-}));
-
-vi.mock("#product/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
-  useCoworkThreadWorkflow: mocks.useCoworkThreadWorkflow,
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
@@ -108,12 +97,8 @@ vi.mock("#product/hooks/sessions/workflows/use-session-interaction-resolution-ac
   }),
 }));
 
-function launchWrapper({ children }: { children: ReactNode }) {
-  return <CoworkThreadLaunchProvider>{children}</CoworkThreadLaunchProvider>;
-}
-
 function renderHomeNextLaunch() {
-  return renderHook(() => useHomeNextLaunch(), { wrapper: launchWrapper });
+  return renderHook(() => useHomeNextLaunch());
 }
 
 describe("useHomeNextLaunch", () => {
@@ -198,51 +183,6 @@ describe("useHomeNextLaunch", () => {
     expect(mocks.navigate).toHaveBeenCalledTimes(1);
   });
 
-  it("does not invoke the Desktop Cowork workflow from Web Home", async () => {
-    mocks.productHost.desktop = null;
-    const { result } = renderHomeNextLaunch();
-
-    let succeeded = true;
-    await act(async () => {
-      succeeded = await result.current.launch({
-        text: "start cowork on web",
-        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
-        launchControlValues: {},
-        target: { kind: "cowork" },
-      });
-    });
-
-    expect(succeeded).toBe(false);
-    expect(result.current.isLaunching).toBe(false);
-    expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
-    expect(mocks.createThreadFromSelection).not.toHaveBeenCalled();
-    expect(mocks.navigate).not.toHaveBeenCalled();
-    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
-    expect(mocks.showToast).toHaveBeenCalledWith(
-      "Cowork threads are available in the Desktop app.",
-      "info",
-    );
-  });
-
-  it("still invokes the Cowork workflow from Desktop Home", async () => {
-    mocks.createThreadFromSelection.mockResolvedValue(null);
-    const { result } = renderHomeNextLaunch();
-
-    await act(async () => {
-      await result.current.launch({
-        text: "start cowork on desktop",
-        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
-        launchControlValues: {},
-        target: { kind: "cowork" },
-      });
-    });
-
-    expect(mocks.useCoworkThreadWorkflow).toHaveBeenCalledTimes(1);
-    expect(mocks.createThreadFromSelection).toHaveBeenCalledTimes(1);
-  });
-
   it.each([
     {
       label: "local",
@@ -278,7 +218,6 @@ describe("useHomeNextLaunch", () => {
     });
 
     expect(succeeded).toBe(false);
-    expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
     expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createCloudWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
@@ -312,7 +251,6 @@ describe("useHomeNextLaunch", () => {
       });
     });
 
-    expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
     expect(mocks.createCloudWorkspaceAndEnterWithResult).toHaveBeenCalledTimes(1);
     expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();

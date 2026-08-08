@@ -29,7 +29,7 @@ describe("isProjectedSessionMaterializationCandidate", () => {
 
   it.each<SessionRelationship>([
     { kind: "subagent_child", parentSessionId: "parent-1" },
-    { kind: "cowork_child", parentSessionId: "parent-1" },
+    { kind: "linked_child", parentSessionId: "parent-1" },
     { kind: "review_child", parentSessionId: "parent-1" },
     { kind: "linked_child", parentSessionId: "parent-1" },
   ])("leaves an unmaterialized $kind session to its parent flow", (sessionRelationship) => {

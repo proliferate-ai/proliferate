@@ -8,10 +8,7 @@ import type {
 } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/presentation";
-import type {
-  HomeNextDestination,
-  ModelAvailabilityState,
-} from "#product/lib/domain/home/home-next-launch";
+import type { ModelAvailabilityState } from "#product/lib/domain/home/home-next-launch";
 
 /**
  * Adapters that let the home screen drive the SAME composer controls the chat
@@ -97,24 +94,18 @@ export function buildHomeModeControlDescriptor({
 }
 
 export function buildHomeSessionConfigControls({
-  destination,
   agentKind,
   modes,
   selectedModeId,
   launchControls,
   onSelectMode,
 }: {
-  destination: HomeNextDestination;
   agentKind: string | null;
   modes: ConfiguredSessionControlValue[];
   selectedModeId: string | null;
   launchControls: LiveSessionControlDescriptor[];
   onSelectMode: (modeId: string) => void;
 }): LiveSessionControlDescriptor[] {
-  if (destination === "cowork") {
-    return launchControls.filter((control) => control.key !== "mode");
-  }
-
   const hasCollaborationMode = launchControls.some(
     (control) => control.key === "collaboration_mode",
   );

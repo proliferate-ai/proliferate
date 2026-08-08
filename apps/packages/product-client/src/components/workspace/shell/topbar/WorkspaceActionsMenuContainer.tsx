@@ -38,7 +38,6 @@ export function WorkspaceActionsMenuContainer() {
   );
   const activeSessionId = viewModel?.activeSessionId ?? null;
   const canDismissActiveSession = activeTab !== null
-    && !activeTab.isReviewAgentChild
     && !isWorkspaceSetupSessionId(activeTab.id)
     && chatVisibilityActions.canHideChatSessionTabs([activeTab.id]);
 
@@ -69,12 +68,10 @@ export function WorkspaceActionsMenuContainer() {
     <WorkspaceActions
       session={{
         canRename: activeTab !== null
-          && !activeTab.isReviewAgentChild
           && !isWorkspaceSetupSessionId(activeTab.id),
         canFork: activeTab !== null
           && activeTab.canFork
-          && !activeTab.isChild
-          && !activeTab.isReviewAgentChild,
+          && !activeTab.isChild,
         canDismiss: canDismissActiveSession,
         onRename: handleRename,
         onFork: handleFork,

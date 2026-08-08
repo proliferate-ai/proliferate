@@ -83,12 +83,6 @@ describe("createAppQueryClient query telemetry", () => {
       status: 400,
       code: "HOSTING_GH_NOT_INSTALLED",
     })],
-    ["missing Cowork thread lifecycle state", new AnyHarnessError({
-      type: "about:blank",
-      title: "Cowork thread not found",
-      status: 404,
-      code: "COWORK_THREAD_NOT_FOUND",
-    })],
   ])("does not capture %s while preserving query error state", async (_name, error) => {
     const captureException = vi.fn();
     const client = createAppQueryClient({ captureException });
@@ -120,8 +114,8 @@ describe("createAppQueryClient query telemetry", () => {
     ["5xx request failure", new ProliferateClientError("Unavailable", 503)],
     ["network failure", new TypeError("Failed to fetch")],
     ["unknown programming failure", new Error("Invariant failed")],
-    ["Cowork code-like message without a typed code", new Error(
-      "COWORK_THREAD_NOT_FOUND",
+    ["hosting code-like message without a typed code", new Error(
+      "HOSTING_GH_NOT_INSTALLED",
     )],
     [
       "configuration-like unknown failure",
@@ -147,16 +141,16 @@ describe("createAppQueryClient query telemetry", () => {
     });
   });
 
-  it("captures the Cowork lifecycle code when its status is 5xx", async () => {
+  it("captures an expected lifecycle code when its status is 5xx", async () => {
     const captureException = vi.fn();
     const client = createAppQueryClient({ captureException });
     const error = new AnyHarnessError({
       type: "about:blank",
-      title: "Cowork request failed",
+      title: "Hosting request failed",
       status: 503,
-      code: "COWORK_THREAD_NOT_FOUND",
+      code: "HOSTING_GH_NOT_INSTALLED",
     });
-    const queryKey = ["cowork", "managed-workspaces"];
+    const queryKey = ["hosting", "availability"];
 
     await runFailingQuery(client, queryKey, error);
 
@@ -165,9 +159,9 @@ describe("createAppQueryClient query telemetry", () => {
     expect(capturedError).not.toBe(error);
     expect(capturedError).toMatchObject({
       name: "AnyHarnessError",
-      message: "AnyHarness request failed (COWORK_THREAD_NOT_FOUND)",
+      message: "AnyHarness request failed (HOSTING_GH_NOT_INSTALLED)",
       status: 503,
-      code: "COWORK_THREAD_NOT_FOUND",
+      code: "HOSTING_GH_NOT_INSTALLED",
     });
     expect(context).toEqual({
       tags: {

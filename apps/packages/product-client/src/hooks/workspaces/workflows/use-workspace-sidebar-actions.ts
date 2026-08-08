@@ -58,7 +58,6 @@ export function useWorkspaceSidebarActions() {
 
   const handleGoHomeForRepository = useCallback((sourceRoot: string) => {
     patchTargetSelection({
-      destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot },
       baseBranchOverride: null,
     });

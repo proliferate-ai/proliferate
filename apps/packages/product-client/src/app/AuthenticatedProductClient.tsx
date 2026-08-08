@@ -8,7 +8,6 @@ import { WorkspaceAvailabilityActionHost } from "#product/components/workspace/r
 import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter"
 import { AuthenticatedAppHost } from "#product/pages/AuthenticatedAppHost"
-import { CoworkThreadLaunchProvider } from "#product/providers/CoworkThreadLaunchProvider"
 import "./authenticated.css"
 
 /**
@@ -22,7 +21,7 @@ import "./authenticated.css"
  */
 export default function AuthenticatedProductClient(): ReactElement {
   return (
-    <CoworkThreadLaunchProvider>
+    <>
       <AuthenticatedAppHost />
       <RepoSetupModalHost />
       <AddRepoFlowHost />
@@ -31,6 +30,6 @@ export default function AuthenticatedProductClient(): ReactElement {
       <MaterializationHealthPassHost />
       <HarnessUpdateToastPresenter />
       <KeyboardShortcutsDialog />
-    </CoworkThreadLaunchProvider>
+    </>
   )
 }

@@ -179,7 +179,7 @@ export function buildDelegatedAgentIdentity({
 export function shortDelegatedWorkId(id: string | null | undefined): string {
   const normalized = id?.trim() ?? "";
   const withoutPrefix = normalized
-    .replace(/^(client-session|pending-session|subagent|review|cowork|session|link)[:_-]+/u, "")
+    .replace(/^(client-session|pending-session|subagent|session|link)[:_-]+/u, "")
     .replace(/[^a-zA-Z0-9]+/gu, "");
   const compact = withoutPrefix || normalized.replace(/[^a-zA-Z0-9]+/gu, "");
   return compact.length > 6 ? compact.slice(0, 6) : compact || "agent";

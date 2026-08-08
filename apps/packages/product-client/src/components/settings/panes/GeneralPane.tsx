@@ -42,7 +42,6 @@ export function GeneralPane() {
     branchPrefixType: state.branchPrefixType,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     subagentsEnabled: state.subagentsEnabled,
-    coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
     autoUpdateEnabled: state.autoUpdateEnabled,
     set: state.set,
@@ -170,15 +169,6 @@ export function GeneralPane() {
             <Switch
               checked={preferences.subagentsEnabled}
               onChange={(value) => preferences.set("subagentsEnabled", value)}
-            />
-          </SettingsRow>
-          <SettingsRow
-            label="Allow cowork agents to create coding workspaces"
-            description="Applies to new cowork sessions. Existing cowork sessions keep their saved workspace policy."
-          >
-            <Switch
-              checked={preferences.coworkWorkspaceDelegationEnabled}
-              onChange={(value) => preferences.set("coworkWorkspaceDelegationEnabled", value)}
             />
           </SettingsRow>
       </SettingsSection>

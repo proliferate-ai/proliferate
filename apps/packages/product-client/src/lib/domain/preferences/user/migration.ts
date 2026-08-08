@@ -3,10 +3,6 @@ import {
   resolveWindowZoomId,
 } from "#product/lib/domain/preferences/appearance";
 import {
-  sanitizeReviewDefaultsByKind,
-  sanitizeReviewPersonalitiesByKind,
-} from "#product/lib/domain/preferences/review-preferences";
-import {
   normalizeDefaultChatModelId,
   sanitizeChatModelVisibilityOverridesByAgentKind,
   sanitizeDefaultChatModelIdByAgentKind,
@@ -133,11 +129,6 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
 
-  if (typeof next.coworkWorkspaceDelegationEnabled !== "boolean") {
-    next.coworkWorkspaceDelegationEnabled = PERSISTED_RECORD_BACKFILL.coworkWorkspaceDelegationEnabled;
-    changed = true;
-  }
-
   if (!isValidWorktreeAutoDeleteLimit(next.worktreeAutoDeleteLimit)) {
     next.worktreeAutoDeleteLimit = PERSISTED_RECORD_BACKFILL.worktreeAutoDeleteLimit;
     changed = true;
@@ -168,23 +159,6 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
   const windowZoomId = resolveWindowZoomId(next.windowZoomId);
   if (windowZoomId !== next.windowZoomId) {
     next.windowZoomId = windowZoomId;
-    changed = true;
-  }
-
-  const sanitizedReviewDefaultsByKind = sanitizeReviewDefaultsByKind(next.reviewDefaultsByKind);
-  if (JSON.stringify(sanitizedReviewDefaultsByKind) !== JSON.stringify(next.reviewDefaultsByKind)) {
-    next.reviewDefaultsByKind = sanitizedReviewDefaultsByKind;
-    changed = true;
-  }
-
-  const sanitizedReviewPersonalitiesByKind = sanitizeReviewPersonalitiesByKind(
-    next.reviewPersonalitiesByKind,
-  );
-  if (
-    JSON.stringify(sanitizedReviewPersonalitiesByKind)
-    !== JSON.stringify(next.reviewPersonalitiesByKind)
-  ) {
-    next.reviewPersonalitiesByKind = sanitizedReviewPersonalitiesByKind;
     changed = true;
   }
 

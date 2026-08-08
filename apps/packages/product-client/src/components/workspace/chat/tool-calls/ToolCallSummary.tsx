@@ -12,8 +12,6 @@ interface ToolCallSummaryProps {
   defaultExpanded?: boolean;
   /** When true, renders the completed-work hairline below the disclosure. */
   showWorkDivider?: boolean;
-  /** Always-visible completion UI that remains part of the work block. */
-  completionContent?: React.ReactNode;
   /** Fade in only when a mounted live turn becomes completed history. */
   animateCompletion?: boolean;
   /** Removes only the outer disclosure border box; nested detail panels stay framed. */
@@ -28,7 +26,6 @@ export function ToolCallSummary({
   itemCount,
   defaultExpanded = false,
   showWorkDivider = false,
-  completionContent = null,
   animateCompletion = false,
   borderless = false,
 }: ToolCallSummaryProps) {
@@ -67,11 +64,6 @@ export function ToolCallSummary({
           {renderedChildren}
         </div>
       </AnimatedCollapsibleContent>
-      {completionContent && (
-        <div className="mt-4 flex flex-col gap-4" data-completed-work-content>
-          {completionContent}
-        </div>
-      )}
       {showWorkDivider && !expanded && <ToolCallWorkDivider className="mt-1" />}
     </div>
   );

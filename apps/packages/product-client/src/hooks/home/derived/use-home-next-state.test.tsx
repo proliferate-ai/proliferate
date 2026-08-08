@@ -3,7 +3,6 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-  HomeNextDestination,
   HomeNextRepoLaunchKind,
   ModelAvailabilityState,
 } from "#product/lib/domain/home/home-next-launch";
@@ -135,16 +134,13 @@ function resetMocks() {
 
 function renderHomeNextState({
   desktopTargetsAvailable = true,
-  destination = "cowork",
   repoLaunchKind = "local",
 }: {
   desktopTargetsAvailable?: boolean;
-  destination?: HomeNextDestination;
   repoLaunchKind?: HomeNextRepoLaunchKind;
 } = {}) {
   return renderHook(() => useHomeNextState({
     desktopTargetsAvailable,
-    destination,
     repositorySelection: { kind: "auto" },
     repoLaunchKind,
     modelSelectionOverride: null,
@@ -184,14 +180,13 @@ describe("useHomeNextState", () => {
 
   it("keeps target-specific disabled reasons", () => {
     stateMocks.repository.selectedRepository = null;
-    const noRepo = renderHomeNextState({ destination: "repository", repoLaunchKind: "worktree" });
+    const noRepo = renderHomeNextState({ repoLaunchKind: "worktree" });
     expect(noRepo.result.current.targetDisabledReason).toBe("Choose a repository");
     noRepo.unmount();
 
     resetMocks();
     stateMocks.repository.branchQuery = { isLoading: true, isError: false };
     const loadingBranches = renderHomeNextState({
-      destination: "repository",
       repoLaunchKind: "worktree",
     });
     expect(loadingBranches.result.current.targetDisabledReason).toBe("Loading branches");
@@ -199,7 +194,7 @@ describe("useHomeNextState", () => {
 
     resetMocks();
     stateMocks.repository.selectedBranchName = null;
-    const noBranch = renderHomeNextState({ destination: "repository", repoLaunchKind: "worktree" });
+    const noBranch = renderHomeNextState({ repoLaunchKind: "worktree" });
     expect(noBranch.result.current.targetDisabledReason).toBe("Choose a base branch");
     noBranch.unmount();
   });
@@ -209,19 +204,12 @@ describe("useHomeNextState", () => {
     stateMocks.computeTargets.isLoading = true;
     const web = renderHomeNextState({
       desktopTargetsAvailable: false,
-      destination: "cowork",
       repoLaunchKind: "worktree",
     });
 
     expect(stateMocks.modelArgs).toMatchObject({ repoLaunchKind: "cloud" });
-    expect(stateMocks.repositoryArgs).toMatchObject({
-      destination: "repository",
-      repoLaunchKind: "cloud",
-    });
-    expect(stateMocks.modeArgs).toMatchObject({
-      destination: "repository",
-      repoLaunchKind: "cloud",
-    });
+    expect(stateMocks.repositoryArgs).toMatchObject({ repoLaunchKind: "cloud" });
+    expect(stateMocks.modeArgs).toMatchObject({ repoLaunchKind: "cloud" });
     expect(stateMocks.computeTargetArgs).toEqual({ enabled: false });
     expect(web.result.current.sshTargetOptions).toEqual([]);
     expect(web.result.current.sshTargetsLoading).toBe(false);
@@ -241,7 +229,6 @@ describe("useHomeNextState", () => {
 
     const web = renderHomeNextState({
       desktopTargetsAvailable: false,
-      destination: "repository",
       repoLaunchKind: "cloud",
     });
 

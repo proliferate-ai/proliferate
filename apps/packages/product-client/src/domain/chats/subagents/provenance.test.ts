@@ -6,7 +6,6 @@ import {
   formatSubagentLabel,
   isAgentWakeProvenance,
   isSubagentWakeProvenance,
-  resolveReviewFeedbackPromptReference,
   shortSessionId,
 } from "./provenance";
 
@@ -37,7 +36,7 @@ describe("isSubagentWakeProvenance", () => {
   it("accepts relation-aware link wake provenance", () => {
     expect(isSubagentWakeProvenance({
       type: "linkWake",
-      relation: "cowork_coding_session",
+      relation: "owned_agent",
       sessionLinkId: "link-1",
       completionId: "completion-1",
     })).toBe(true);
@@ -54,13 +53,13 @@ describe("formatWakePromptQueueText", () => {
     })).toBe("runtime-server-sdk-survey finished");
   });
 
-  it("falls back for unlabeled cowork wake prompts", () => {
+  it("falls back to generic subagent copy for unlabeled link wake prompts", () => {
     expect(formatWakePromptQueueText({
       type: "linkWake",
-      relation: "cowork_coding_session",
+      relation: "owned_agent",
       sessionLinkId: "link-1",
       completionId: "completion-1",
-    })).toBe("Coding session finished");
+    })).toBe("Subagent finished");
   });
 });
 
@@ -104,41 +103,5 @@ describe("formatAgentWakePromptQueueText", () => {
       targetSessionId: "target-1",
       label: "billing-webhooks",
     })).toBe("billing-webhooks finished");
-  });
-});
-
-describe("resolveReviewFeedbackPromptReference", () => {
-  it("resolves first-class review feedback provenance", () => {
-    expect(resolveReviewFeedbackPromptReference({
-      type: "reviewFeedback",
-      reviewRunId: "run-1",
-      reviewRoundId: "round-1",
-      feedbackJobId: "job-1",
-    }, "ignored")).toEqual({
-      reviewRunId: "run-1",
-      reviewRoundId: "round-1",
-      feedbackJobId: "job-1",
-      roundNumber: null,
-      label: null,
-    });
-  });
-
-  it("resolves legacy system review feedback prompts", () => {
-    expect(resolveReviewFeedbackPromptReference({
-      type: "system",
-      label: "review_feedback",
-    }, [
-      "Review feedback is ready.",
-      "",
-      "Review run: cf16ea77-09a1-4a38-819c-804458f92d33",
-      "Round: 1",
-      "Target: plan",
-    ].join("\n"))).toEqual({
-      reviewRunId: "cf16ea77-09a1-4a38-819c-804458f92d33",
-      reviewRoundId: null,
-      feedbackJobId: null,
-      roundNumber: 1,
-      label: null,
-    });
   });
 });

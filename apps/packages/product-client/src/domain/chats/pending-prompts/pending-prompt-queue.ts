@@ -3,14 +3,13 @@ import { summarizeContentParts } from "../composer/prompt-display-parts";
 import type { PromptOutboxDeliveryState } from "../../sessions/intents/session-intent-model";
 import {
   formatAgentWakePromptQueueText,
-  formatReviewFeedbackQueueText,
   formatWakePromptQueueText,
   isAgentSessionProvenance,
   isAgentWakeProvenance,
   isSubagentWakeProvenance,
 } from "../subagents/provenance";
 
-export type PendingPromptQueueRowKind = "plain" | "wake" | "review_feedback";
+export type PendingPromptQueueRowKind = "plain" | "wake";
 
 export interface PendingPromptQueueEntry {
   seq: number;
@@ -113,30 +112,6 @@ export function derivePendingPromptQueueRow(
       promptId: entry.promptId ?? null,
       label: collapseQueueLabel(wakeLabel),
       kind: "wake",
-      isBeingEdited: entry.isBeingEdited,
-      isSending,
-      showEditAction: false,
-      canEdit: false,
-      editDisabledReason: null,
-      showDeleteAction: deleteAction !== null && isRuntimeConfirmed,
-      canDelete: deleteAction !== null && isRuntimeConfirmed,
-      deleteDisabledReason: null,
-      deleteAction: isRuntimeConfirmed ? deleteAction : null,
-      agentSource,
-    };
-  }
-
-  const reviewLabel = formatReviewFeedbackQueueText({
-    provenance: entry.promptProvenance,
-    text: entry.text,
-  });
-  if (reviewLabel) {
-    return {
-      key,
-      seq: entry.seq,
-      promptId: entry.promptId ?? null,
-      label: collapseQueueLabel(reviewLabel),
-      kind: "review_feedback",
       isBeingEdited: entry.isBeingEdited,
       isSending,
       showEditAction: false,

@@ -16,7 +16,6 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
 import type { ToastErrorInput } from "#product/primitives/utils/toast-model";
 import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
-import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -72,8 +71,6 @@ export function useChatLaunchActions(options?: {
   const { openExternal } = useProductHost().links;
   const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
   const { setActiveSessionConfigOption } = useSessionConfigActions();
-  const { desktopTargetsAvailable, createThreadFromSelection } =
-    useCoworkThreadLaunchContext();
   const {
     activeSessionId,
     currentLaunchIdentity,
@@ -135,40 +132,6 @@ export function useChatLaunchActions(options?: {
     // Last-used-wins: persist the selection so subsequent new chats default to it.
     persistLastUsedLaunchSelection(launchSelection);
 
-    if (selectedWorkspace?.surface === "cowork") {
-      if (!desktopTargetsAvailable) {
-        showToast("Cowork threads are available in the Desktop app.", "info");
-        return;
-      }
-      const latencyFlowId = startLatencyFlow({
-        flowKind: "session_create",
-        source: "model_selector",
-        targetWorkspaceId: selectedWorkspaceId,
-      });
-      void createThreadFromSelection({
-        agentKind: launchSelection.kind,
-        modelId: launchSelection.modelId,
-        draftText: getCurrentDraftText(),
-        sourceWorkspaceId: selectedWorkspaceId,
-      })
-        .then(() => {
-          setWorkspaceArrivalEvent(null);
-        })
-        .catch((error) => {
-          failLatencyFlow(latencyFlowId, "session_create_failed");
-          reportChatOpenFailure(error, launchSelection, {
-            workspaceId: selectedWorkspaceId,
-            workspaceLabel: selectedWorkspaceLabel,
-            openExternal,
-            recordRefusal: recordModelSupportRefusal,
-            requestPicker: requestModelPicker,
-            showErrorToast,
-            retry: () => handleLaunchSelect(launchSelection),
-          });
-        });
-      return;
-    }
-
     const latencyFlowId = startLatencyFlow({
       flowKind: "session_create",
       source: "model_selector",
@@ -203,12 +166,10 @@ export function useChatLaunchActions(options?: {
   }, [
     configuredLaunch.disabledReason,
     configuredLaunch.launchCatalog.launchAgents,
-    createThreadFromSelection,
     getCurrentDraftText,
     createEmptySessionWithResolvedConfig,
     selectedWorkspace?.surface,
     selectedWorkspaceId,
-    desktopTargetsAvailable,
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showErrorToast,

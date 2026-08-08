@@ -3,7 +3,6 @@ import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud
 import { localWorkspaceGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
 import { isCloudWorkspaceId, parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { CloudWorkspaceRepoTarget } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import { isStandardWorkspace } from "#product/lib/domain/workspaces/display/usability";
 
 export function getRepoForSelectedWorkspace(
   selectedWorkspaceId: string | null,
@@ -14,7 +13,7 @@ export function getRepoForSelectedWorkspace(
   }
 
   const selectedWs = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
-  if (!selectedWs || !isStandardWorkspace(selectedWs)) {
+  if (!selectedWs) {
     return null;
   }
 
@@ -22,7 +21,6 @@ export function getRepoForSelectedWorkspace(
     .filter(
       (workspace) =>
         !isCloudWorkspaceId(workspace.id)
-        && isStandardWorkspace(workspace)
         && localWorkspaceGroupKey(workspace) === localWorkspaceGroupKey(selectedWs),
     )
     .sort((a, b) => {

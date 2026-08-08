@@ -135,26 +135,6 @@ describe("buildTranscriptCopyText", () => {
     expect(copied).not.toContain("Hidden pointer body");
   });
 
-  it("copies review-feedback provenance as transcript chrome instead of raw feedback prompt text", () => {
-    const user = {
-      ...userItem("review", "turn-1", 1),
-      text: "Review feedback is ready.\nReview run: run-1\nRound: 1\nFull hidden critique payload",
-      promptProvenance: {
-        type: "reviewFeedback",
-        reviewRunId: "run-1",
-        reviewRoundId: "round-1",
-        feedbackJobId: "job-1",
-        label: null,
-      } satisfies PromptProvenance,
-    };
-    const transcript = makeTranscript([user], ["review"]);
-
-    const copied = copyText({ transcript });
-
-    expect(copied).toBe("Review feedback");
-    expect(copied).not.toContain("Full hidden critique payload");
-  });
-
   it("serializes completed history once before final assistant prose", () => {
     const read = {
       ...toolItem("read", "turn-1", 2, "file_read"),
@@ -333,25 +313,24 @@ describe("buildTranscriptCopyText", () => {
     ].join("\n\n"));
   });
 
-  it("copies optimistic prompt provenance using queued transcript chrome", () => {
+  it("copies optimistic prompt provenance as transcript chrome", () => {
     const transcript = createTranscriptState("session-1");
     const optimisticPrompt: PendingPromptEntry = {
       seq: 1,
       promptId: "prompt-1",
-      text: "Hidden optimistic review payload",
+      text: "Hidden optimistic wake payload",
       contentParts: [],
       queuedAt: "2026-04-04T00:00:00Z",
       promptProvenance: {
-        type: "reviewFeedback",
-        reviewRunId: "run-1",
-        reviewRoundId: "round-1",
-        feedbackJobId: "job-1",
-        label: null,
+        type: "subagentWake",
+        sessionLinkId: "link-1",
+        completionId: "completion-1",
+        label: "api-survey",
       },
     };
 
     expect(copyText({ transcript, visibleOptimisticPrompt: optimisticPrompt })).toBe(
-      "Review feedback queued",
+      "api-survey finished",
     );
   });
 });

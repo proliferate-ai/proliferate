@@ -292,7 +292,5 @@ function isCollapsibleAction(
   // like normal actions.
   return item.semanticKind !== "subagent"
     && !isKnownModeSwitchToolCall(item)
-    && item.semanticKind !== "cowork_artifact_create"
-    && item.semanticKind !== "cowork_artifact_update"
     && item.nativeToolName !== "Agent";
 }

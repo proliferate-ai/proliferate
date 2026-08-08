@@ -45,7 +45,13 @@ const screenMocks = vi.hoisted(() => {
     modelAvailabilityState: "launchable",
     canLaunchTarget: true,
     effectiveModelSelection: { kind: "codex", modelId: "gpt-5.4" },
-    launchTarget: { kind: "cowork" },
+    launchTarget: {
+      kind: "worktree",
+      repoRootId: "repo-root-1",
+      sourceWorkspaceId: null,
+      baseBranch: "main",
+      defaultBranch: "main",
+      },
   } as any;
 
   return {
@@ -117,7 +123,6 @@ vi.mock("#product/components/home/screen/HomeTargetPicker", () => ({
       <div data-testid="target-picker">
         {props.desktopTargetsAvailable ? (
           <>
-            <button type="button" onClick={() => props.onSelectCowork()}>Mock cowork</button>
             <button type="button" onClick={() => props.onSelectRuntime("local")}>Mock local</button>
             <button type="button" onClick={() => props.onSelectRuntime("ssh", "ssh-target-1")}>
               Mock ssh
@@ -178,7 +183,13 @@ function resetHomeNext() {
   screenMocks.homeNext.modelAvailabilityState = "launchable";
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
-  screenMocks.homeNext.launchTarget = { kind: "cowork" };
+  screenMocks.homeNext.launchTarget = {
+    kind: "worktree",
+    repoRootId: "repo-root-1",
+    sourceWorkspaceId: null,
+    baseBranch: "main",
+    defaultBranch: "main",
+  };
   screenMocks.onboardingCards.splice(0);
   screenMocks.homeNext.sshTargetOptions = [];
   screenMocks.homeNext.sshTargetsLoading = false;
@@ -274,18 +285,6 @@ describe("HomeNextScreen model availability notices", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "hello" } });
 
     expect(screen.getByText("Choose a repository")).toBeTruthy();
-  });
-
-  it("hands cowork prompts directly to launch without rendering a Home preview", () => {
-    submitPrompt("start cowork");
-
-    expect(screenMocks.homeNextStateArgs).toMatchObject({ destination: "cowork" });
-    expect(screenMocks.targetPickerProps).toMatchObject({ desktopTargetsAvailable: true });
-    expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
-      text: "start cowork",
-      target: { kind: "cowork" },
-    }));
-    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
   });
 
   it("clears and hands a repository prompt off exactly once without waiting for a paint", async () => {
@@ -445,7 +444,6 @@ describe("HomeNextScreen target selection persistence", () => {
 
   it("hydrates the last selected launch target into home next state", async () => {
     memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
-      destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "ssh",
       selectedSshTargetId: "ssh-target-1",
@@ -456,7 +454,6 @@ describe("HomeNextScreen target selection persistence", () => {
     render(<HomeNextScreen />);
 
     expect(screenMocks.homeNextStateArgs).toMatchObject({
-      destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "ssh",
       selectedSshTargetId: "ssh-target-1",
@@ -471,7 +468,6 @@ describe("HomeNextScreen target selection persistence", () => {
 
     expect(screenMocks.homeNextStateArgs).toMatchObject({
       desktopTargetsAvailable: false,
-      destination: "repository",
       repoLaunchKind: "cloud",
       selectedSshTargetId: null,
     });
@@ -480,7 +476,6 @@ describe("HomeNextScreen target selection persistence", () => {
       repoLaunchKind: "cloud",
       selectedSshTargetId: null,
     });
-    expect(screen.queryByRole("button", { name: "Mock cowork" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Mock local" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Mock ssh" })).toBeNull();
   });
@@ -488,7 +483,6 @@ describe("HomeNextScreen target selection persistence", () => {
   it("normalizes and rejects persisted Desktop targets on Web", async () => {
     screenMocks.productHost.desktop = null;
     memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
-      destination: "cowork",
       repositorySelection: { kind: "auto" },
       repoLaunchKind: "ssh",
       selectedSshTargetId: "ssh-target-1",
@@ -499,12 +493,10 @@ describe("HomeNextScreen target selection persistence", () => {
     render(<HomeNextScreen />);
 
     expect(screenMocks.homeNextStateArgs).toMatchObject({
-      destination: "repository",
       repoLaunchKind: "cloud",
       selectedSshTargetId: null,
     });
     await act(async () => {
-      screenMocks.targetPickerProps.onSelectCowork();
       screenMocks.targetPickerProps.onSelectRuntime("local");
       screenMocks.targetPickerProps.onSelectRuntime("worktree");
       screenMocks.targetPickerProps.onSelectRuntime("ssh", "ssh-target-2");
@@ -512,15 +504,13 @@ describe("HomeNextScreen target selection persistence", () => {
       await Promise.resolve();
     });
     expect(screenMocks.homeNextStateArgs).toMatchObject({
-      destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
       repoLaunchKind: "cloud",
       selectedSshTargetId: null,
     });
     expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
       .toMatchObject({
-        destination: "repository",
-        repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
+          repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
         repoLaunchKind: "cloud",
         selectedSshTargetId: null,
       });
@@ -536,8 +526,7 @@ describe("HomeNextScreen target selection persistence", () => {
 
     expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
       .toMatchObject({
-        destination: "repository",
-        repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
+          repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
         repoLaunchKind: "ssh",
         selectedSshTargetId: "ssh-target-1",
         baseBranchOverride: "feature/sticky",
@@ -546,7 +535,6 @@ describe("HomeNextScreen target selection persistence", () => {
 
   it("keeps the selected branch when switching to a local runtime", async () => {
     memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
-      destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "worktree",
       selectedSshTargetId: null,
@@ -560,8 +548,7 @@ describe("HomeNextScreen target selection persistence", () => {
 
     expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
       .toMatchObject({
-        destination: "repository",
-        repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
+          repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
         repoLaunchKind: "local",
         baseBranchOverride: "feature/sticky",
       });
@@ -588,7 +575,6 @@ describe("HomeNextScreen target selection persistence", () => {
 
     // In-memory selection still applied even though the persisted write rejected.
     expect(screenMocks.homeNextStateArgs).toMatchObject({
-      destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
     });
     expect(captured.length).toBeGreaterThan(0);

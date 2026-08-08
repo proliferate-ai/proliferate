@@ -97,8 +97,6 @@ function row(args: {
     subagentData,
     reviewSuccess: false,
     reviewData: null,
-    coworkSuccess: false,
-    coworkData: null,
   };
 }
 

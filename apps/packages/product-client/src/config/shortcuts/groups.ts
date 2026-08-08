@@ -53,7 +53,6 @@ export const SHORTCUT_GROUPS = [
       "tabByIndex",
       "newSessionTab",
       "restoreTab",
-      "toggleCoworkThreads",
       "closeActiveTab",
       "closeOtherTabs",
       "closeOtherTabsShiftAlias",

@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
-  HomeNextDestination,
   HomeNextRepoLaunchKind,
   HomeNextRepositorySelection,
 } from "#product/lib/domain/home/home-next-launch";
@@ -14,7 +13,6 @@ import {
 export const HOME_NEXT_TARGET_SELECTION_STORAGE_KEY = "home_next_target_selection.v1";
 
 export interface HomeNextTargetSelectionState {
-  destination: HomeNextDestination;
   repositorySelection: HomeNextRepositorySelection;
   repoLaunchKind: HomeNextRepoLaunchKind;
   selectedSshTargetId: string | null;
@@ -24,7 +22,6 @@ export interface HomeNextTargetSelectionState {
 type HomeNextTargetSelectionPatch = Partial<HomeNextTargetSelectionState>;
 
 const DEFAULT_HOME_NEXT_TARGET_SELECTION: HomeNextTargetSelectionState = {
-  destination: "cowork",
   repositorySelection: { kind: "auto" },
   repoLaunchKind: "worktree",
   selectedSshTargetId: null,
@@ -47,12 +44,6 @@ export function setHomeNextTargetSelectionStorageContext(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function normalizeDestination(value: unknown): HomeNextDestination {
-  return value === "repository" || value === "cowork"
-    ? value
-    : DEFAULT_HOME_NEXT_TARGET_SELECTION.destination;
 }
 
 function normalizeRepoLaunchKind(value: unknown): HomeNextRepoLaunchKind {
@@ -91,7 +82,6 @@ export function normalizeHomeNextTargetSelectionState(
   }
 
   return {
-    destination: normalizeDestination(value.destination),
     repositorySelection: normalizeRepositorySelection(value.repositorySelection),
     repoLaunchKind: normalizeRepoLaunchKind(value.repoLaunchKind),
     selectedSshTargetId: normalizeNullableString(value.selectedSshTargetId),
@@ -106,8 +96,7 @@ function normalizeDesktopTargetAvailability(
   if (
     desktopTargetsAvailable
     || (
-      selection.destination === "repository"
-      && selection.repoLaunchKind === "cloud"
+      selection.repoLaunchKind === "cloud"
       && selection.selectedSshTargetId === null
     )
   ) {
@@ -115,7 +104,6 @@ function normalizeDesktopTargetAvailability(
   }
   return {
     ...selection,
-    destination: "repository",
     repoLaunchKind: "cloud",
     selectedSshTargetId: null,
   };
@@ -224,10 +212,6 @@ export function useHomeNextTargetSelectionState() {
     ...targetSelection,
     desktopTargetsAvailable,
     patchTargetSelection,
-    setDestination: useCallback(
-      (destination: HomeNextDestination) => patchTargetSelection({ destination }),
-      [patchTargetSelection],
-    ),
     setRepositorySelection: useCallback(
       (repositorySelection: HomeNextRepositorySelection) =>
         patchTargetSelection({ repositorySelection }),

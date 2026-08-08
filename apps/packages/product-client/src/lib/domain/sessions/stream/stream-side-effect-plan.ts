@@ -27,13 +27,6 @@ export type PlannedSessionChildRelationship =
     workspaceId?: string | null;
   }
   | {
-    kind: "cowork_child";
-    parentSessionId: string | null;
-    sessionLinkId?: string | null;
-    relation?: string | null;
-    workspaceId?: string | null;
-  }
-  | {
     kind: "linked_child";
     parentSessionId: string | null;
     sessionLinkId?: string | null;
@@ -78,8 +71,6 @@ export interface BatchedStreamSideEffectPlan {
   invalidatePrStatus: boolean;
   lastActivityTimestamp: string | null;
   invalidateSessionSubagents: boolean;
-  invalidateCowork: boolean;
-  reviewParentSessionIds: string[];
   orderedEffects: OrderedStreamSideEffect[];
 }
 
@@ -96,8 +87,6 @@ export function planBatchedStreamSideEffects(input: {
   let invalidatePrStatus = false;
   let lastActivityTimestamp: string | null = null;
   let invalidateSessionSubagents = false;
-  let invalidateCowork = false;
-  const reviewParentSessionIds = new Set<string>();
   const eventEffects: PlannedStreamEventEffect[] = [];
   const orderedEffects: OrderedStreamSideEffect[] = [];
 
@@ -166,38 +155,6 @@ export function planBatchedStreamSideEffects(input: {
       });
       invalidateSessionSubagents = true;
     }
-    if (
-      event.type === "session_link_turn_completed"
-      && event.relation === "cowork_coding_session"
-    ) {
-      eventEffects.push({
-        kind: "record_session_relationship_hint",
-        sessionId: event.childSessionId,
-        relationship: {
-          kind: "cowork_child",
-          parentSessionId: event.parentSessionId,
-          sessionLinkId: event.sessionLinkId,
-          relation: event.relation,
-          workspaceId: input.workspaceId,
-        },
-      });
-      invalidateCowork = true;
-    } else if (event.type === "session_link_turn_completed") {
-      eventEffects.push({
-        kind: "record_session_relationship_hint",
-        sessionId: event.childSessionId,
-        relationship: {
-          kind: "linked_child",
-          parentSessionId: event.parentSessionId,
-          sessionLinkId: event.sessionLinkId,
-          relation: event.relation,
-          workspaceId: input.workspaceId,
-        },
-      });
-    }
-    if (event.type === "review_run_updated") {
-      reviewParentSessionIds.add(event.parentSessionId);
-    }
     if (event.type === "item_completed" && envelope.itemId) {
       const item = input.transcript.itemsById[envelope.itemId];
       if (item?.kind === "tool_call" && isSubagentMcpMutation(item)) {
@@ -238,14 +195,6 @@ export function planBatchedStreamSideEffects(input: {
       ) {
         invalidateWorkspaceCollections = true;
       }
-      if (
-        item?.kind === "tool_call"
-        && item.status === "completed"
-        && isCoworkCodingCreateMcpMutation(item)
-      ) {
-        invalidateCowork = true;
-        invalidateWorkspaceCollections = true;
-      }
     }
   }
 
@@ -259,8 +208,6 @@ export function planBatchedStreamSideEffects(input: {
     invalidatePrStatus,
     lastActivityTimestamp,
     invalidateSessionSubagents,
-    invalidateCowork,
-    reviewParentSessionIds: [...reviewParentSessionIds],
     orderedEffects,
   };
 }
@@ -319,19 +266,6 @@ function isSubagentMcpCreateMutation(item: ToolCallItem): boolean {
   const nativeToolName = item.nativeToolName?.trim().toLowerCase();
   return nativeToolName === "mcp__subagents__spawn_subagent"
     || nativeToolName === "mcp__subagents__create_subagent";
-}
-
-function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {
-  const nativeToolName = item.nativeToolName?.trim().toLowerCase();
-  return nativeToolName === "mcp__cowork__create_cowork_workspace"
-    || nativeToolName === "mcp__cowork__create_coding_workspace"
-    || nativeToolName === "mcp__cowork__create_cowork_agent"
-    || nativeToolName === "mcp__cowork__create_coding_session"
-    || nativeToolName === "mcp__cowork__send_cowork_agent_message"
-    || nativeToolName === "mcp__cowork__send_coding_message"
-    || nativeToolName === "mcp__cowork__schedule_cowork_agent_wake"
-    || nativeToolName === "mcp__cowork__schedule_coding_wake"
-    || nativeToolName === "mcp__cowork__close_cowork_agent";
 }
 
 function shouldScheduleActiveSummaryRefresh(eventType: string): boolean {

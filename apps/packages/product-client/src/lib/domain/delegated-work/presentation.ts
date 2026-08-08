@@ -1,7 +1,6 @@
 import type {
   DelegatedAgentIdentity,
   DelegatedWorkKind,
-  DelegatedWorkSource,
   DelegatedWorkStatusCategory,
   DelegatedWorkTabIdentity,
 } from "#product/lib/domain/delegated-work/model";
@@ -11,26 +10,7 @@ export function delegatedWorkKindLabel(kind: DelegatedWorkKind): string {
   switch (kind) {
     case "subagent":
       return "Subagent";
-    case "cowork":
-      return "Cowork";
-    case "code_review":
-      return "Code review";
-    case "plan_review":
-      return "Plan review";
   }
-}
-
-export function delegatedWorkKindFromSource(input: {
-  source: DelegatedWorkSource;
-  reviewKind?: string | null;
-}): DelegatedWorkKind {
-  if (input.source === "subagent") {
-    return "subagent";
-  }
-  if (input.source === "cowork") {
-    return "cowork";
-  }
-  return input.reviewKind === "code" ? "code_review" : "plan_review";
 }
 
 export function delegatedWorkStatusCategoryFromLabel(input: {
@@ -77,24 +57,6 @@ export function delegatedWorkStatusCategoryFromLabel(input: {
   return "finished";
 }
 
-export function reviewRunStatusCategory(status: string): DelegatedWorkStatusCategory {
-  switch (status) {
-    case "feedback_ready":
-    case "waiting_for_revision":
-      return "needs_attention";
-    case "system_failed":
-      return "failed";
-    case "reviewing":
-    case "parent_revising":
-      return "running";
-    case "passed":
-    case "stopped":
-      return "finished";
-    default:
-      return "queued";
-  }
-}
-
 export function shouldShowDelegatedWorkInComposer(input: {
   statusCategory: DelegatedWorkStatusCategory;
   hasActionNeeded?: boolean;
@@ -127,8 +89,6 @@ export function selectSingleDelegatedAgentTriggerIdentity(
 export function buildDelegatedWorkTabIdentity(input: {
   id: string;
   title: string | null | undefined;
-  source: DelegatedWorkSource;
-  reviewKind?: string | null;
   statusLabel: string;
   wakeScheduled?: boolean | null;
   workspaceId?: string | null;
@@ -136,10 +96,7 @@ export function buildDelegatedWorkTabIdentity(input: {
   sessionLinkId?: string | null;
   parentTitle?: string | null;
 }): DelegatedWorkTabIdentity {
-  const kind = delegatedWorkKindFromSource({
-    source: input.source,
-    reviewKind: input.reviewKind,
-  });
+  const kind: DelegatedWorkKind = "subagent";
   const originLabel = delegatedWorkKindLabel(kind);
   const statusCategory = delegatedWorkStatusCategoryFromLabel({
     statusLabel: input.statusLabel,

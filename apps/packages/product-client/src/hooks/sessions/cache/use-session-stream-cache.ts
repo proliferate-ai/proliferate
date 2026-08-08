@@ -1,8 +1,5 @@
 import {
-  anyHarnessCoworkManagedWorkspacesKey,
-  anyHarnessRuntimeKey,
   anyHarnessGitStatusKey,
-  anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
@@ -20,14 +17,6 @@ export interface SessionStreamCache {
   invalidateSessionSubagents(input: {
     workspaceId: string | null;
     sessionId: string;
-  }): void;
-  invalidateCoworkManagedWorkspaces(input: {
-    runtimeUrl: string;
-    sessionId: string;
-  }): void;
-  invalidateSessionReviews(input: {
-    workspaceId: string | null;
-    parentSessionId: string;
   }): void;
   invalidateGitStatus(input: {
     workspaceId: string;
@@ -59,31 +48,6 @@ export function useSessionStreamCache(): SessionStreamCache {
     invalidateSessionSubagents({ workspaceId, sessionId }) {
       void queryClient.invalidateQueries({
         queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, sessionId),
-      });
-    },
-    invalidateCoworkManagedWorkspaces({ runtimeUrl, sessionId }) {
-      void queryClient.invalidateQueries({
-        queryKey: anyHarnessCoworkManagedWorkspacesKey(
-          runtimeUrl,
-          sessionId,
-          cacheScopeKey,
-        ),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: [
-          ...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey),
-          "cowork",
-          "sessions",
-        ],
-      });
-    },
-    invalidateSessionReviews({ workspaceId, parentSessionId }) {
-      void queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionReviewsKey(
-          cacheScopeKey,
-          workspaceId,
-          parentSessionId,
-        ),
       });
     },
     invalidateGitStatus({ workspaceId }) {

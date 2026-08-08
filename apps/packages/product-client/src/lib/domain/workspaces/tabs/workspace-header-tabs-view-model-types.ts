@@ -11,8 +11,7 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   agentKind: string;
   viewState: SessionViewState;
   canFork: boolean;
-  isReviewAgentChild: boolean;
-  source: "subagent" | "review" | "cowork" | null;
+  source: "subagent" | null;
   sessionLinkId: string | null;
   workspaceId: string | null;
   isActive: boolean;

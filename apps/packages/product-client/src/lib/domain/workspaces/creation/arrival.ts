@@ -10,7 +10,7 @@ import {
 
 export interface WorkspaceArrivalEvent {
   workspaceId: string;
-  source: "local-created" | "worktree-created" | "cloud-created" | "cowork-created";
+  source: "local-created" | "worktree-created" | "cloud-created";
   setupScript?: SetupScriptExecution | null;
   baseBranchName?: string | null;
   createdAt: number;
@@ -211,10 +211,6 @@ function resolveWorkspaceArrivalBadge(
   source: WorkspaceArrivalEvent["source"],
   isWorktree: boolean,
 ): string {
-  if (source === "cowork-created") {
-    return WORKSPACE_ARRIVAL_LABELS.workspaceBadge;
-  }
-
   if (isWorktree) {
     return WORKSPACE_ARRIVAL_LABELS.newWorktreeBadge;
   }

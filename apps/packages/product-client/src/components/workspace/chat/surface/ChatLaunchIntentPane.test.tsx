@@ -41,7 +41,7 @@ describe("ChatLaunchIntentPane", () => {
       />,
     );
 
-    expect(screen.getByText("Start cowork")).not.toBeNull();
+    expect(screen.getByText("Start the work")).not.toBeNull();
     // Launch dispatch says "Thinking" (same voice as agent work). The
     // ThinkingText shimmer renders the label on a data-thinking-text span.
     expect(
@@ -78,14 +78,20 @@ function intent(): ChatLaunchIntent {
   return {
     id: "launch-1",
     promptId: "prompt-1",
-    text: "Start cowork",
+    text: "Start the work",
     contentParts: [],
-    targetKind: "cowork",
+    targetKind: "worktree",
     retryInput: {
-      text: "Start cowork",
+      text: "Start the work",
       modelSelection: { kind: "agent", modelId: "model-1" },
       modeId: null,
-      target: { kind: "cowork" },
+      target: {
+        kind: "worktree",
+        repoRootId: "repo-root-1",
+        sourceWorkspaceId: null,
+        baseBranch: "main",
+        defaultBranch: "main",
+      },
     },
     materializedWorkspaceId: null,
     materializedSessionId: null,

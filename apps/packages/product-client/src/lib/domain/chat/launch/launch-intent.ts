@@ -94,9 +94,6 @@ export function resolveLaunchIntentPendingWorkspaceId(
   }
 
   const target = intent.retryInput.target;
-  if (target.kind === "cowork") {
-    return pending.source === "cowork-created" ? pending.workspaceId : null;
-  }
   if (target.kind === "worktree") {
     return pending.source === "worktree-created" ? pending.workspaceId : null;
   }
@@ -162,8 +159,6 @@ export function resolveChatLaunchIntentView(
 
 function resolvePendingLaunchTitle(targetKind: ChatLaunchTargetKind): string {
   switch (targetKind) {
-    case "cowork":
-      return "Starting cowork thread";
     case "local":
       return "Opening workspace";
     case "worktree":

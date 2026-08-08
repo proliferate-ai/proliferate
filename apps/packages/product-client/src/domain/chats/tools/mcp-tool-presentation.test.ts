@@ -6,10 +6,10 @@ import {
 } from "./mcp-tool-presentation";
 
 describe("parseMcpToolName", () => {
-  it("parses cowork artifact tool names", () => {
-    expect(parseMcpToolName("mcp__cowork__create_artifact")).toEqual({
-      server: "cowork",
-      action: "create_artifact",
+  it("parses namespaced MCP tool names", () => {
+    expect(parseMcpToolName("mcp__proliferate_agents__create_agent")).toEqual({
+      server: "proliferate_agents",
+      action: "create_agent",
     });
   });
 
@@ -22,7 +22,7 @@ describe("parseMcpToolName", () => {
 
   it("returns null for malformed MCP names", () => {
     expect(parseMcpToolName("create_artifact")).toBeNull();
-    expect(parseMcpToolName("mcp__cowork")).toBeNull();
+    expect(parseMcpToolName("mcp__proliferate_agents")).toBeNull();
     expect(parseMcpToolName("mcp____create_artifact")).toBeNull();
   });
 });

@@ -1,8 +1,4 @@
-import type { CoworkStatus } from "@anyharness/sdk";
 import {
-  anyHarnessCoworkArtifactScopeKey,
-  anyHarnessCoworkManifestKey,
-  anyHarnessCoworkStatusKey,
   anyHarnessWorkspaceQueryKeyRoots,
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
@@ -21,7 +17,6 @@ import {
 export interface WorkspaceSelectionCacheSnapshot {
   workspaceCollections: WorkspaceCollections | undefined;
   cloudMobilityWorkspaces: CloudMobilityWorkspaceSummary[] | undefined;
-  coworkStatus: CoworkStatus | undefined;
 }
 
 interface CancelPreviousWorkspaceDisplayQueriesInput {
@@ -54,9 +49,6 @@ export function useWorkspaceSelectionCache() {
     cloudMobilityWorkspaces: queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
       cloudMobilityWorkspacesKey(),
     ),
-    coworkStatus: queryClient.getQueryData<CoworkStatus>(
-      anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
-    ),
   }), [authUserId, cacheScopeKey, cloudActive, queryClient]);
 
   const cancelPreviousWorkspaceDisplayQueries = useCallback((
@@ -72,11 +64,7 @@ export function useWorkspaceSelectionCache() {
       if (!workspaceId || nextIds.has(workspaceId)) {
         continue;
       }
-      const workspaceRoots = [
-        ...anyHarnessWorkspaceQueryKeyRoots(cacheScopeKey, workspaceId),
-        anyHarnessCoworkManifestKey(input.runtimeUrl, workspaceId, cacheScopeKey),
-        anyHarnessCoworkArtifactScopeKey(input.runtimeUrl, workspaceId, cacheScopeKey),
-      ];
+      const workspaceRoots = anyHarnessWorkspaceQueryKeyRoots(cacheScopeKey, workspaceId);
       for (const root of workspaceRoots) {
         roots.add(JSON.stringify(root));
       }

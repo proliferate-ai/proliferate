@@ -9,7 +9,6 @@ import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/us
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
-import { useCoworkManagedWorkspaces } from "#product/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import {
   resolveTranscriptOpenSessionWorkspaceId,
@@ -99,24 +98,6 @@ export function SessionTranscriptPane({
       ? workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === cloudWorkspaceId) ?? null
       : null;
   }, [selectedWorkspaceId, workspaceCollections?.cloudWorkspaces]);
-  const hasCoworkCodingCompletions = useMemo(
-    () => transcript
-      ? Object.values(transcript.linkCompletionsByCompletionId).some(
-      (completion) => completion.relation === "cowork_coding_session",
-    )
-      : false,
-    [transcript],
-  );
-  const { workspaces: coworkManagedWorkspaces } = useCoworkManagedWorkspaces(
-    activeSessionId,
-    hasCoworkCodingCompletions,
-  );
-  const linkedSessionWorkspaces = useMemo(() => {
-    const entries = coworkManagedWorkspaces.flatMap((workspace) =>
-      workspace.sessions.map((session) => [session.codingSessionId, workspace.workspaceId] as const)
-    );
-    return Object.fromEntries(entries);
-  }, [coworkManagedWorkspaces]);
   const hasOlderHistory = oldestLoadedEventSeq !== null && oldestLoadedEventSeq > 1;
   const isLoadingOlderHistory = olderHistoryLoadingSessionId === activeSessionId;
 
@@ -214,12 +195,10 @@ export function SessionTranscriptPane({
       fallbackWorkspaceId: activeSessionId
         ? activeRecord?.workspaceId ?? selectedWorkspaceId
         : selectedWorkspaceId,
-      linkedSessionWorkspaces,
       contextWorkspaces: [selectedWorkspace, selectedCloudWorkspace],
     });
   }, [
     activeSessionId,
-    linkedSessionWorkspaces,
     selectedCloudWorkspace,
     selectedWorkspace,
     selectedWorkspaceId,

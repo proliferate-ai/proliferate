@@ -150,8 +150,8 @@ export async function runWorkspaceSelection(
     // a fresh actor the collections query may not be populated yet. The creator
     // threads the resolved workspace through `options.knownWorkspace` so we can
     // select it directly instead of hard-failing. The same hint restores the
-    // last workspace on reopen. Both local and cowork workspaces resolve through
-    // the local runtime.
+    // last workspace on reopen. Local workspaces resolve through the local
+    // runtime.
     const directWorkspace = deps.rawWorkspaces.find(
       (workspace) => workspace.id === request.workspaceId,
     ) ?? (
@@ -160,15 +160,12 @@ export async function runWorkspaceSelection(
         : null
     );
     if (directWorkspace) {
-      // A cowork workspace has no logical-workspace slot, so its logical
-      // selection is null (unchanged). A local workspace does have one; persist
-      // its id as the selected logical workspace so a reload restores it (the
-      // collections cache resolves `findLogicalWorkspace(..., workspace.id)` via
+      // A local workspace has a logical-workspace slot; persist its id as the
+      // selected logical workspace so a reload restores it (the collections
+      // cache resolves `findLogicalWorkspace(..., workspace.id)` via
       // `localWorkspace.id`). Persisting null here would leave the shell empty
       // after reopen.
-      const directLogicalWorkspaceId = directWorkspace.surface === "cowork"
-        ? null
-        : directWorkspace.id;
+      const directLogicalWorkspaceId = directWorkspace.id;
       const selectionStartedAt = startLatencyTimer();
       const previousSelection = useSessionSelectionStore.getState();
       const currentId = previousSelection.selectedWorkspaceId;

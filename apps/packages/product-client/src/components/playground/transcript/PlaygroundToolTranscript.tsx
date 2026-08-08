@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Settings } from "#product/primitives/icons/core";
 import { MessageList } from "#product/components/workspace/chat/transcript/MessageList";
 import { BashCommandCall } from "#product/components/workspace/chat/tool-calls/BashCommandCall";
-import { CoworkArtifactToolActionRow } from "#product/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
 import { FileChangeCall } from "#product/components/workspace/chat/tool-calls/FileChangeCall";
 import { FileReadCall } from "#product/components/workspace/chat/tool-calls/FileReadCall";
 import { GenericToolResultRow } from "#product/components/workspace/chat/tool-calls/GenericToolResultRow";
@@ -10,9 +9,6 @@ import { ReasoningBlock } from "#product/components/workspace/chat/tool-calls/Re
 import { CollapsedActions } from "#product/components/workspace/chat/tool-calls/CollapsedActions";
 import type { ScenarioKey } from "#product/config/playground";
 import { PLAYGROUND_END_TURN_DIFF_TRANSCRIPT } from "#product/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
-import {
-  PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
-} from "#product/lib/domain/chat/__fixtures__/playground/tool-artifact-transcript-fixtures";
 import {
   PLAYGROUND_ACTIVITY_LEDGER_EDIT_ITEMS,
   PLAYGROUND_ACTIVITY_LEDGER_READ_ITEMS,
@@ -156,12 +152,6 @@ export function renderPlaygroundToolTranscript(
       return (
         <TranscriptPreviewShell>
           <ReasoningBlock content={"Inspecting transcript rendering paths.\nChecking subagent nested tool output.\nChoosing the compact row migration."} />
-        </TranscriptPreviewShell>
-      );
-    case "tool-cowork-artifact":
-      return (
-        <TranscriptPreviewShell>
-          <CoworkArtifactToolActionRow item={PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL} />
         </TranscriptPreviewShell>
       );
     case "tool-generic-result":

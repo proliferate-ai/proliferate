@@ -28,7 +28,6 @@ import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/ho
 export function HomeNextScreen() {
   const {
     desktopTargetsAvailable,
-    destination,
     repositorySelection,
     repoLaunchKind,
     selectedSshTargetId,
@@ -49,7 +48,6 @@ export function HomeNextScreen() {
   } = useHomeScreen();
   const homeNext = useHomeNextState({
     desktopTargetsAvailable,
-    destination,
     repositorySelection,
     repoLaunchKind,
     modelSelectionOverride,
@@ -77,7 +75,6 @@ export function HomeNextScreen() {
   // supportsAttachments=false → chat's exact pre-session detail).
   const homeAgentKind = homeNext.effectiveModelSelection?.kind ?? null;
   const homeSessionConfigControls = buildHomeSessionConfigControls({
-    destination,
     agentKind: homeAgentKind,
     modes: homeNext.modeOptions,
     selectedModeId: homeNext.effectiveMode?.value ?? null,
@@ -103,9 +100,7 @@ export function HomeNextScreen() {
       })
       : "cloud";
 
-  const promptTarget = destination === "repository"
-    ? homeNext.selectedRepository?.name?.trim()
-    : null;
+  const promptTarget = homeNext.selectedRepository?.name?.trim();
   // Model-probe onboarding card (spec §10). Inputs may be absent when the
   // facade is mocked; hide the card in that case.
   const modelProbeState = modelProbeInputs
@@ -157,20 +152,14 @@ export function HomeNextScreen() {
                             {promptTarget}
                           </Button>
                         )}
-                        coworkAvailable={desktopTargetsAvailable}
                         side="bottom"
-                        destination={destination}
                         repositories={homeNext.repositories}
                         selectedRepository={homeNext.selectedRepository}
                         onSelectRepository={(sourceRoot) => {
                           patchTargetSelection({
-                            destination: "repository",
                             repositorySelection: { kind: "repository", sourceRoot },
                             repoLaunchKind: launchKindForRepository(sourceRoot),
                           });
-                        }}
-                        onSelectCowork={() => {
-                          patchTargetSelection({ destination: "cowork" });
                         }}
                         onAddRepository={() => handleHomeAction("add-repository")}
                       />
@@ -243,7 +232,6 @@ export function HomeNextScreen() {
               targetPickerSlot={(
                 <HomeTargetPicker
                   desktopTargetsAvailable={desktopTargetsAvailable}
-                  destination={destination}
                   repoLaunchKind={repoLaunchKind}
                   repositories={homeNext.repositories}
                   selectedRepository={homeNext.selectedRepository}
@@ -254,12 +242,8 @@ export function HomeNextScreen() {
                   sshTargetOptions={homeNext.sshTargetOptions}
                   selectedSshTargetId={selectedSshTargetId}
                   sshTargetsLoading={homeNext.sshTargetsLoading}
-                  onSelectCowork={() => {
-                    patchTargetSelection({ destination: "cowork" });
-                  }}
                   onSelectRepository={(sourceRoot) => {
                     patchTargetSelection({
-                      destination: "repository",
                       repositorySelection: { kind: "repository", sourceRoot },
                       repoLaunchKind: launchKindForRepository(sourceRoot),
                     });

@@ -33,42 +33,41 @@ describe("workspace header tab view model derivation", () => {
     });
 
     expect(tabs[0]?.delegatedAgent).toMatchObject({
-      kind: "cowork",
-      originLabel: "Cowork",
+      kind: "subagent",
+      originLabel: "Subagent",
       statusCategory: "running",
     });
     expect(tabs[0]?.delegatedAgent?.identity.displayName)
       .toMatch(/\(.+ [a-z0-9]{6}\)/u);
   });
 
-  it("carries cowork child routing metadata onto child tabs", () => {
+  it("carries child routing metadata onto child tabs", () => {
     const tabs = buildHeaderChatTabs({
       groupedTabs: [{
-        sessionId: "cowork-child",
+        sessionId: "linked-child",
         parentSessionId: "parent",
         groupRootSessionId: "parent",
         isChild: true,
       }],
       rowsBySessionId: new Map([[
-        "cowork-child",
+        "linked-child",
         {
-          ...delegatedChildRow("cowork-child", "Working", false),
-          sessionLinkId: "link-cowork",
-          workspaceId: "managed-workspace",
-          source: "cowork",
+          ...delegatedChildRow("linked-child", "Working", false),
+          sessionLinkId: "link-child",
+          workspaceId: "linked-workspace",
         },
       ]]),
       childrenByParentSessionId: new Map(),
-      resolvedSessionIds: new Set(["cowork-child"]),
+      resolvedSessionIds: new Set(["linked-child"]),
       knownSessions: new Map(),
       manualGroupByTopLevelSessionId: new Map(),
     });
 
     expect(tabs[0]).toMatchObject({
-      id: "cowork-child",
-      source: "cowork",
-      sessionLinkId: "link-cowork",
-      workspaceId: "managed-workspace",
+      id: "linked-child",
+      source: "subagent",
+      sessionLinkId: "link-child",
+      workspaceId: "linked-workspace",
       parentSessionId: "parent",
     });
   });
@@ -192,8 +191,8 @@ function delegatedChildRow(
     workspaceId: "workspace",
     title: sessionId,
     agentKind: "claude",
-    source: "cowork",
-    meta: "Cowork",
+    source: "subagent",
+    meta: null,
     statusLabel,
     wakeScheduled,
     isActive: false,
@@ -227,7 +226,6 @@ function baseHeaderTab(sessionId: string) {
     agentKind: "claude",
     viewState: "idle" as const,
     canFork: false,
-    isReviewAgentChild: false,
     source: null,
     sessionLinkId: null,
     workspaceId: "workspace",

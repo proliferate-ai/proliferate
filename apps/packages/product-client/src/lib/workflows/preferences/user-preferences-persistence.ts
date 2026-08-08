@@ -115,11 +115,8 @@ async function readLegacyUserPreferences(
     turnEndSoundId: defaults.turnEndSoundId,
     transparentChromeEnabled: defaults.transparentChromeEnabled,
     subagentsEnabled: defaults.subagentsEnabled,
-    coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     worktreeAutoDeleteLimit: defaults.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: defaults.pasteAttachmentsEnabled,
-    reviewDefaultsByKind: defaults.reviewDefaultsByKind,
-    reviewPersonalitiesByKind: defaults.reviewPersonalitiesByKind,
   };
 }
 

@@ -34,7 +34,6 @@ const productRepository: SettingsRepositoryEntry = {
 };
 
 function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]> = {}) {
-  const onSelectCowork = vi.fn();
   const onSelectRepository = vi.fn();
   const onSelectRuntime = vi.fn();
   const onSelectBranch = vi.fn();
@@ -44,7 +43,6 @@ function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]>
   render(
     <HomeTargetPicker
       desktopTargetsAvailable={true}
-      destination="repository"
       repoLaunchKind="worktree"
       repositories={[keystoneRepository, productRepository]}
       selectedRepository={keystoneRepository}
@@ -58,7 +56,6 @@ function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]>
       sshTargetOptions={[]}
       selectedSshTargetId={null}
       sshTargetsLoading={false}
-      onSelectCowork={onSelectCowork}
       onSelectRepository={onSelectRepository}
       onSelectRuntime={onSelectRuntime}
       onSelectBranch={onSelectBranch}
@@ -69,7 +66,6 @@ function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]>
   );
 
   return {
-    onSelectCowork,
     onSelectRepository,
     onSelectRuntime,
     onSelectBranch,
@@ -130,36 +126,6 @@ describe("HomeTargetPicker", () => {
     expect(callbacks.onSelectRuntime).not.toHaveBeenCalledWith("cloud");
     expect(screen.queryByRole("button", { name: /Work locally/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /New worktree/i })).toBeNull();
-  });
-
-  it("hides the runtime control for cowork starts", () => {
-    renderPicker({
-      destination: "cowork",
-      selectedRepository: null,
-    });
-
-    const projectButton = screen.getByRole("button", { name: /No project/i });
-    expect(projectButton.className).toContain("h-7");
-    expect(projectButton.className).toContain("px-2.5");
-    expect(screen.queryByRole("button", { name: /No repository/i })).toBeNull();
-  });
-
-  it("offers the projectless Cowork target on Desktop", () => {
-    const callbacks = renderPicker();
-
-    fireEvent.click(screen.getByRole("button", { name: /Project: Keystone repository/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Don't work in a project" }));
-
-    expect(callbacks.onSelectCowork).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not offer the Desktop-only Cowork target on Web", () => {
-    const callbacks = renderPicker({ desktopTargetsAvailable: false });
-
-    fireEvent.click(screen.getByRole("button", { name: /Project: Keystone repository/i }));
-
-    expect(screen.queryByRole("button", { name: "Don't work in a project" })).toBeNull();
-    expect(callbacks.onSelectCowork).not.toHaveBeenCalled();
   });
 
   it("normalizes forged Web runtime props and exposes only Cloud", () => {

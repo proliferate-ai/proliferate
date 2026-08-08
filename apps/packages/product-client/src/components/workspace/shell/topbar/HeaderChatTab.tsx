@@ -4,7 +4,6 @@ import type {
 } from "react";
 import { ChatTabWithMenu } from "#product/components/workspace/shell/tabs/ChatTabWithMenu";
 import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
-import { useOpenCoworkCodingSession } from "#product/hooks/cowork/workflows/use-open-cowork-coding-session";
 import {
   isPrimaryMultiSelectClick,
   isPrimaryMultiSelectPointer,
@@ -90,7 +89,6 @@ export function HeaderChatTab({
   suppressNextSelectClick,
   consumeSuppressedSelectClick,
 }: HeaderChatTabProps) {
-  const openCoworkCodingSession = useOpenCoworkCodingSession();
   const canMultiSelect = !tab.isChild;
   const canCreateGroup = canMultiSelect
     && multiSelectedSessionIds.has(tab.id)
@@ -98,15 +96,6 @@ export function HeaderChatTab({
 
   const activateTab = () => {
     clearSelection();
-    if (tab.source === "cowork" && tab.workspaceId) {
-      void openCoworkCodingSession({
-        workspaceId: tab.workspaceId,
-        sessionId: tab.id,
-        parentSessionId: tab.parentSessionId,
-        sessionLinkId: tab.sessionLinkId,
-      });
-      return;
-    }
     onActivate(tab.id);
   };
 

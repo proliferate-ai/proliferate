@@ -1,6 +1,5 @@
 export type TranscriptOpenSessionRole =
   | "agent-parent"
-  | "cowork-coding-child"
   | "linked-child"
   | "generic";
 
@@ -25,7 +24,6 @@ export interface ResolveTranscriptOpenSessionWorkspaceInput {
   role: TranscriptOpenSessionRole;
   sessionSlots: Record<string, TranscriptOpenSessionSlot | undefined>;
   fallbackWorkspaceId: string | null;
-  linkedSessionWorkspaces?: Record<string, string | null | undefined>;
   contextWorkspaces?: Array<TranscriptOpenSessionWorkspace | null | undefined>;
 }
 
@@ -34,21 +32,11 @@ export function resolveTranscriptOpenSessionWorkspaceId({
   role,
   sessionSlots,
   fallbackWorkspaceId,
-  linkedSessionWorkspaces = {},
   contextWorkspaces = [],
 }: ResolveTranscriptOpenSessionWorkspaceInput): string | null {
   const slotWorkspaceId = sessionSlots[sessionId]?.workspaceId?.trim();
   if (slotWorkspaceId) {
     return slotWorkspaceId;
-  }
-
-  const linkedWorkspaceId = linkedSessionWorkspaces[sessionId]?.trim();
-  if (linkedWorkspaceId) {
-    return linkedWorkspaceId;
-  }
-
-  if (role === "cowork-coding-child") {
-    return null;
   }
 
   if (role === "agent-parent") {

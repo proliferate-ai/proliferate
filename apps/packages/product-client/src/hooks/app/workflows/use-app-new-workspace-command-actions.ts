@@ -46,7 +46,6 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
   const { navigateToWorkspaceShell } = useWorkspaceNavigationWorkflow();
   const homeTargetSelection = useHomeNextTargetSelectionSnapshot();
   const homeRepositorySelection = useHomeNextRepositorySelection({
-    destination: homeTargetSelection.destination,
     repositorySelection: homeTargetSelection.repositorySelection,
     repoLaunchKind: homeTargetSelection.repoLaunchKind,
     baseBranchOverride: homeTargetSelection.baseBranchOverride,
@@ -84,10 +83,7 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     && !repoConfigs;
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
   const homeNewWorkspaceScope = useMemo(() => {
-    if (
-      location.pathname !== APP_ROUTES.home
-      || homeTargetSelection.destination !== "repository"
-    ) {
+    if (location.pathname !== APP_ROUTES.home) {
       return null;
     }
 
@@ -98,7 +94,6 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
       homeRepositorySelection.defaultBranchName,
     );
   }, [
-    homeTargetSelection.destination,
     homeRepositorySelection.defaultBranchName,
     homeRepositorySelection.selectedBranchName,
     homeRepositorySelection.selectedRepository,

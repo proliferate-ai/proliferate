@@ -19,8 +19,6 @@ export function homeNextLaunchErrorMessage(error: unknown): string {
  */
 export function describeHomeLaunchTarget(target: HomeLaunchTarget): string {
   switch (target.kind) {
-    case "cowork":
-      return "a new Cowork thread";
     case "local":
       return target.sourceRoot;
     case "worktree":

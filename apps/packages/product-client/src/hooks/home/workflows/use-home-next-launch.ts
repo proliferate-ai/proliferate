@@ -8,7 +8,7 @@ import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/doma
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { launchHomeCloudTarget } from "#product/hooks/home/workflows/launch-home-cloud-target";
 import {
   buildHomePendingWorkspaceInitialSession,
@@ -41,8 +41,7 @@ export function useHomeNextLaunch() {
   const failLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.failIfActive);
   const markLaunchIntentMaterialized =
     useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
-  const { desktopTargetsAvailable, createThreadFromSelection } =
-    useCoworkThreadLaunchContext();
+  const desktopTargetsAvailable = useProductHost().desktop !== null;
   const {
     promptExistingSession,
     promptProjectedOrCreateFreshSession,
@@ -67,10 +66,7 @@ export function useHomeNextLaunch() {
       return false;
     }
     if (!desktopTargetsAvailable && target.kind !== "cloud") {
-      const message = target.kind === "cowork"
-        ? "Cowork threads are available in the Desktop app."
-        : "Local launch targets are available in the Desktop app.";
-      showToast(message, "info");
+      showToast("Local launch targets are available in the Desktop app.", "info");
       return false;
     }
 
@@ -115,51 +111,6 @@ export function useHomeNextLaunch() {
     });
 
     try {
-      if (target.kind === "cowork") {
-        const resultPromise = createThreadFromSelection({
-          agentKind: modelSelection.kind,
-          modelId: modelSelection.modelId,
-          modeId,
-          launchControlValues: resolvedLaunchControlValues,
-          draftText: null,
-          sourceWorkspaceId: null,
-        });
-        const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
-          text: prompt,
-          promptId,
-          launchIntentId,
-          waitUntil: resultPromise,
-        });
-        if (queuedProjectedSessionId) {
-          navigate("/");
-        }
-        const result = await resultPromise;
-        if (!result) {
-          throw new Error("Cowork thread creation was interrupted.");
-        }
-        if (!queuedProjectedSessionId) {
-          navigate("/");
-        }
-        const projectedSessionId = queuedProjectedSessionId ?? result.projectedSessionId ?? null;
-        markLaunchIntentMaterialized(launchIntentId, {
-          workspaceId: result.workspace.id,
-          sessionId: result.session.id,
-          clientSessionId: projectedSessionId,
-        });
-
-        if (!queuedProjectedSessionId) {
-          await promptExistingSession({
-            sessionId: projectedSessionId ?? result.session.id,
-            text: prompt,
-            workspaceId: result.workspace.id,
-            promptId,
-            launchIntentId,
-          });
-        }
-        clearLaunchIntentIfActive(launchIntentId);
-        return true;
-      }
-
       if (target.kind === "local") {
         const createdWorkspacePromise = target.existingWorkspaceId
           ? null
@@ -308,7 +259,6 @@ export function useHomeNextLaunch() {
     promptProjectedOrCreateFreshSession,
     promptProjectedPendingWorkspaceSession,
     createLocalWorkspaceAndEnterWithResult,
-    createThreadFromSelection,
     createWorktreeAndEnterWithResult,
     desktopTargetsAvailable,
     enqueueDeferredLaunch,

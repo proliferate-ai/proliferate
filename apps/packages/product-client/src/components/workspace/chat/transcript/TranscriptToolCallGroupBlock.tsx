@@ -18,16 +18,12 @@ export function TranscriptToolCallGroupBlock({
   childIds,
   transcript,
   childrenByParentId,
-  workspaceId,
-  onOpenArtifact,
   renderChild,
 }: {
   item: ToolCallItem;
   childIds: string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
-  workspaceId: string | null;
-  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   renderChild: (childId: string) => ReactNode;
 }) {
   if (isSubagentItem(item)) {
@@ -65,11 +61,7 @@ export function TranscriptToolCallGroupBlock({
       renderChildren={() => (
         <div className="space-y-1.5">
           {hasRenderableToolDetails(item) && (
-            <TranscriptToolCallItemBlock
-              item={item}
-              workspaceId={workspaceId}
-              onOpenArtifact={onOpenArtifact}
-            />
+            <TranscriptToolCallItemBlock item={item} />
           )}
           <div className="ml-1 space-y-1.5">
             {childIds.map((childId) => (

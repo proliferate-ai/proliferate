@@ -187,15 +187,6 @@ export const WORKSPACE_SHORTCUTS = {
     match: { kind: "fixed", key: "t", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
-  toggleCoworkThreads: {
-    id: "workspace.toggle-cowork-threads",
-    label: "⌘⌥T",
-    nonMacLabel: "Ctrl+Alt+T",
-    description: "Toggle cowork threads",
-    owner: "js",
-    match: { kind: "fixed", key: "t", meta: true, shift: false, alt: true },
-    allowInInputs: true,
-  },
   closeActiveTab: {
     id: "workspace.close-active-tab",
     label: "⌘W",

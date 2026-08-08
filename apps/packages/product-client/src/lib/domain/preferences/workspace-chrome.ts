@@ -31,12 +31,6 @@ export interface StandardWorkspaceChromeClasses {
   header: string;
 }
 
-export interface CoworkWorkspaceChromeClasses {
-  root: string;
-  contentShell: string;
-  header: string;
-}
-
 export interface EditorTabChromeClasses {
   tablist: string;
   shape: string;
@@ -95,23 +89,6 @@ export function resolveStandardWorkspaceChromeClasses({
             : "rounded-tl-none border-transparent",
         ].filter(Boolean).join(" "),
     header,
-  };
-}
-
-export function resolveCoworkWorkspaceChromeClasses({
-  transparent,
-  sidebarOpen,
-}: {
-  transparent: boolean;
-  sidebarOpen: boolean;
-}): CoworkWorkspaceChromeClasses {
-  return {
-    root: transparent ? "bg-transparent" : "bg-sidebar",
-    contentShell: [
-      "bg-background",
-      sidebarOpen && !transparent ? "rounded-tl-2xl border-l border-t border-border" : "",
-    ].filter(Boolean).join(" "),
-    header: transparent ? WORKSPACE_GLASS_HEADER_CLASS : WORKSPACE_SOLID_HEADER_CLASS,
   };
 }
 

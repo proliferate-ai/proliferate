@@ -23,7 +23,7 @@ export type ChatSelectedWorkspaceKind = "cloud" | "local";
 export type ChatInputPendingInteractionKind = "permission" | "user_input" | "mcp_elicitation";
 
 export interface ChatInputPendingWorkspaceEntry {
-  source: "local-created" | "worktree-created" | "cloud-created" | "cowork-created";
+  source: "local-created" | "worktree-created" | "cloud-created";
   stage: "submitting" | "awaiting-cloud-ready" | "failed";
 }
 

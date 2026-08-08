@@ -40,13 +40,7 @@ export interface HomeNextRepositoryTarget {
   existingWorkspaceId: string | null;
 }
 
-export interface HomeNextCoworkTarget {
-  kind: "cowork";
-}
-
-export type HomeNextLaunchTarget = HomeNextCoworkTarget | HomeNextRepositoryTarget;
-
-export type HomeNextDestination = "cowork" | "repository";
+export type HomeNextLaunchTarget = HomeNextRepositoryTarget;
 
 export type HomeNextRepoLaunchKind = "worktree" | "local" | "cloud" | "ssh";
 
@@ -66,7 +60,6 @@ export interface HomeNextLaunchPreferences {
 }
 
 export type HomeLaunchTarget =
-  | { kind: "cowork" }
   | { kind: "local"; sourceRoot: string; existingWorkspaceId: string | null }
   | {
     kind: "worktree";
@@ -239,7 +232,6 @@ export function findHomeNextLocalWorkspace(input: {
     .filter((workspace) =>
       workspace.repoRootId === input.repoRootId
       && workspace.kind === "local"
-      && workspace.surface !== "cowork"
       && !isWorkspaceArchived(workspace.id, archivedWorkspaceIdSet)
     )
     .sort((left, right) => {
@@ -260,17 +252,12 @@ export function findHomeNextLocalWorkspace(input: {
 }
 
 export function resolveHomeLaunchTarget(input: {
-  destination: HomeNextDestination;
   repository: SettingsRepositoryEntry | null;
   repoLaunchKind: HomeNextRepoLaunchKind;
   baseBranch: string | null;
   defaultBranch: string | null;
   existingLocalWorkspaceId: string | null;
 }): HomeLaunchTarget | null {
-  if (input.destination === "cowork") {
-    return { kind: "cowork" };
-  }
-
   const repository = input.repository;
   if (!repository) {
     return null;
@@ -342,7 +329,6 @@ export function findHomeNextMatchingWorkspace(input: {
   return input.workspaces
     .filter((workspace) =>
       workspace.repoRootId === input.repoRootId
-      && workspace.surface !== "cowork"
       && !isWorkspaceArchived(workspace.id, archivedWorkspaceIdSet)
       && rawWorkspaceBranch(workspace) === input.branchName
     )

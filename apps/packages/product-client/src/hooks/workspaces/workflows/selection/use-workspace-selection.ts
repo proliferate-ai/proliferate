@@ -5,7 +5,6 @@ import { useWorkspaceBootstrapActions } from "#product/hooks/workspaces/workflow
 import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useWorkspaceSelectionCache } from "#product/hooks/workspaces/cache/use-workspace-selection-cache";
 import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
-import { buildStandardRepoProjection } from "#product/lib/domain/workspaces/cloud/standard-projection";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -55,22 +54,13 @@ export function useWorkspaceSelection() {
       const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
       const {
         cloudMobilityWorkspaces,
-        coworkStatus,
         workspaceCollections,
       } = getWorkspaceSelectionSnapshot(runtimeUrl);
-      const standardProjection = workspaceCollections
-        ? buildStandardRepoProjection({
-          repoRoots: workspaceCollections.repoRoots,
-          localWorkspaces: workspaceCollections.localWorkspaces,
-          cloudWorkspaces: workspaceCollections.cloudWorkspaces,
-          coworkRootRepoRootId: coworkStatus?.root?.repoRootId ?? null,
-        })
-        : null;
       const logicalWorkspaces = workspaceCollections
         ? buildLogicalWorkspaces({
-          localWorkspaces: standardProjection?.localWorkspaces ?? [],
-          repoRoots: standardProjection?.repoRoots ?? [],
-          cloudWorkspaces: standardProjection?.cloudWorkspaces ?? [],
+          localWorkspaces: workspaceCollections.localWorkspaces,
+          repoRoots: workspaceCollections.repoRoots,
+          cloudWorkspaces: workspaceCollections.cloudWorkspaces,
           cloudMobilityWorkspaces,
           currentSelectionId: useSessionSelectionStore.getState().selectedWorkspaceId,
         })

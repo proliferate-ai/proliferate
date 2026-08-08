@@ -18,7 +18,6 @@ import {
   resolveHomeNextDefaultBranchName,
   resolveHomeNextRepositorySelection,
   type HomeLaunchTarget,
-  type HomeNextDestination,
   type HomeNextRepoLaunchKind,
   type HomeNextRepositorySelection,
 } from "#product/lib/domain/home/home-next-launch";
@@ -33,14 +32,12 @@ const EMPTY_REPO_ROOTS: RepoRoot[] = [];
 const EMPTY_BRANCH_REFS: GitBranchRef[] = [];
 
 interface UseHomeNextRepositorySelectionArgs {
-  destination: HomeNextDestination;
   repositorySelection: HomeNextRepositorySelection;
   repoLaunchKind: HomeNextRepoLaunchKind;
   baseBranchOverride: string | null;
 }
 
 export function useHomeNextRepositorySelection({
-  destination,
   repositorySelection,
   repoLaunchKind,
   baseBranchOverride,
@@ -66,11 +63,10 @@ export function useHomeNextRepositorySelection({
     );
   }, [hiddenRepoRootIds, localWorkspaces, repoConfigsQuery.data?.repositories, repoRoots]);
 
-  const selectedRepository = useMemo(() => (
-    destination === "repository"
-      ? resolveHomeNextRepositorySelection(repositories, repositorySelection)
-      : null
-  ), [destination, repositories, repositorySelection]);
+  const selectedRepository = useMemo(
+    () => resolveHomeNextRepositorySelection(repositories, repositorySelection),
+    [repositories, repositorySelection],
+  );
 
   const selectedRepoRoot = useMemo(() => (
     selectedRepository
@@ -175,7 +171,6 @@ export function useHomeNextRepositorySelection({
 
   const launchTarget = useMemo<HomeLaunchTarget | null>(() =>
     resolveHomeLaunchTarget({
-      destination,
       repository: selectedRepository,
       repoLaunchKind,
       baseBranch: selectedBranchName,
@@ -183,7 +178,6 @@ export function useHomeNextRepositorySelection({
       existingLocalWorkspaceId: existingLocalWorkspace?.id ?? null,
     }), [
     defaultBranchName,
-    destination,
     existingLocalWorkspace?.id,
     repoLaunchKind,
     selectedBranchName,

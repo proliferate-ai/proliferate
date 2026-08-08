@@ -98,8 +98,6 @@ function buildPendingSubtitle(entry: PendingWorkspaceEntry): string {
       return "Creating worktree...";
     case "cloud-created":
       return "Creating cloud workspace...";
-    case "cowork-created":
-      return "Starting cowork thread...";
   }
 }
 

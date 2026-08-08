@@ -249,13 +249,13 @@ describe("session records facade invariants", () => {
 
   it("preserves existing relationship metadata across summary patches", () => {
     const relationship = {
-      kind: "review_child" as const,
+      kind: "linked_child" as const,
       parentSessionId: "parent-session",
-      sessionLinkId: "review-link-1",
-      relation: "review",
+      sessionLinkId: "link-1",
+      relation: "owned_agent",
       workspaceId: "workspace-1",
     };
-    const record = createEmptySessionRecord("review-session", "codex", {
+    const record = createEmptySessionRecord("linked-session", "codex", {
       workspaceId: "workspace-1",
       sessionRelationship: relationship,
     });
@@ -263,11 +263,11 @@ describe("session records facade invariants", () => {
 
     const patch = buildSessionSlotPatchFromSummary(
       {
-        id: "review-session",
+        id: "linked-session",
         agentKind: "codex",
         modelId: "gpt-5.4",
         modeId: "default",
-        title: "Reviewer",
+        title: "Linked agent",
         status: "idle",
         liveConfig: null,
         executionSummary: null,
@@ -277,9 +277,9 @@ describe("session records facade invariants", () => {
       "workspace-1",
       record.transcript,
     );
-    patchSessionRecord("review-session", patch);
+    patchSessionRecord("linked-session", patch);
 
-    expect(useSessionDirectoryStore.getState().entriesById["review-session"]?.sessionRelationship)
+    expect(useSessionDirectoryStore.getState().entriesById["linked-session"]?.sessionRelationship)
       .toEqual(relationship);
   });
 });

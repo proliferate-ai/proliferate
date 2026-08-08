@@ -62,7 +62,6 @@ export function TranscriptItemBlock({
   animateAssistantReveal = false,
   onAssistantRevealStateChange,
   workspaceId,
-  onOpenArtifact,
   onHandOffPlanToNewSession,
 }: {
   item: TranscriptItem;
@@ -74,7 +73,6 @@ export function TranscriptItemBlock({
     state: AssistantMessageRevealState,
   ) => void;
   workspaceId: string | null;
-  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const sessionId = useTranscriptSessionId();
@@ -91,11 +89,7 @@ export function TranscriptItemBlock({
         const wakeProvenance = item.promptProvenance;
         const completion =
           transcript.linkCompletionsByCompletionId[wakeProvenance.completionId] ?? null;
-        const childRole: TranscriptOpenSessionRole =
-          wakeProvenance.type === "linkWake"
-          && wakeProvenance.relation === "cowork_coding_session"
-            ? "cowork-coding-child"
-            : "linked-child";
+        const childRole: TranscriptOpenSessionRole = "linked-child";
         const childSessionId = completion?.childSessionId ?? null;
         const canOpenChild = !!openSession
           && !!childSessionId
@@ -107,20 +101,13 @@ export function TranscriptItemBlock({
               childSessionId={childSessionId}
               sessionLinkId={wakeProvenance.sessionLinkId}
               outcome={completion?.outcome ?? null}
-              titleFallback={
-                wakeProvenance.type === "linkWake"
-                && wakeProvenance.relation === "cowork_coding_session"
-                  ? "Coding session"
-                  : "Subagent"
-              }
+              titleFallback="Subagent"
               onOpenChild={canOpenChild
                 ? (targetSessionId) => {
                   useSessionDirectoryStore.getState().recordRelationshipHint(targetSessionId, {
                     kind: wakeProvenance.type === "subagentWake"
                       ? "subagent_child"
-                      : childRole === "cowork-coding-child"
-                        ? "cowork_child"
-                        : "linked_child",
+                      : "linked_child",
                     parentSessionId: sessionId,
                     sessionLinkId: wakeProvenance.sessionLinkId,
                     relation: wakeProvenance.type === "linkWake"
@@ -249,8 +236,6 @@ export function TranscriptItemBlock({
         <ToolCallTranscriptItem
           item={item}
           animateActivityEntry={animateActivityEntry}
-          workspaceId={workspaceId}
-          onOpenArtifact={onOpenArtifact}
         />
       );
     }
@@ -285,13 +270,9 @@ export function TranscriptItemBlock({
 function ToolCallTranscriptItem({
   item,
   animateActivityEntry,
-  workspaceId,
-  onOpenArtifact,
 }: {
   item: ToolCallItem;
   animateActivityEntry: boolean;
-  workspaceId: string | null;
-  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
   // Only tool calls participate in proposed-plan suppression. Keeping this
   // context subscription out of the generic item component prevents a rare
@@ -332,11 +313,7 @@ function ToolCallTranscriptItem({
     <div data-transcript-activity-shell className="flex justify-start relative">
       <div className="flex flex-col w-full max-w-full space-y-1 break-words">
         <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
-          <TranscriptToolCallItemBlock
-            item={item}
-            workspaceId={workspaceId}
-            onOpenArtifact={onOpenArtifact}
-          />
+            <TranscriptToolCallItemBlock item={item} />
         </TranscriptActivityBlock>
       </div>
     </div>

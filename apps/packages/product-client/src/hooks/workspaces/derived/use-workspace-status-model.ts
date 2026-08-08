@@ -1,23 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSessionReviewsQuery } from "@anyharness/sdk-react";
-import type { ReviewAssignmentDetail } from "@anyharness/sdk";
 import { useComposerWorkspaceActivityModel } from "#product/hooks/workspaces/derived/use-composer-workspace-activity-model";
 import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
 import { useSubagentComposerStrip } from "#product/hooks/chat/facade/subagents/use-subagent-composer-strip";
 import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
-import {
-  useActiveSessionId,
-  useActiveSessionWorkspaceId,
-} from "#product/hooks/chat/derived/use-active-session-identity";
 import { useRefreshPrStatuses } from "#product/hooks/workspaces/cache/use-pr-status-refresh";
-import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import { isPendingSessionId } from "#product/stores/sessions/session-records";
-import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
-import {
-  isReviewRunShowable,
-  latestReviewRound,
-} from "#product/lib/domain/reviews/review-runs";
 import {
   buildWorkspaceStatusModel,
   type WorkspaceStatusAgentSource,
@@ -34,13 +21,6 @@ const NOW_TICK_MS = 30_000;
  * the moment checks settle. */
 const CHECKS_WATCH_INTERVAL_MS = 60_000;
 
-const WORKING_ASSIGNMENT_STATUSES = new Set<ReviewAssignmentDetail["status"]>([
-  "queued",
-  "launching",
-  "reviewing",
-  "reminded",
-]);
-
 export function useWorkspaceStatusModel() {
   const {
     gitStatus,
@@ -51,16 +31,6 @@ export function useWorkspaceStatusModel() {
   const activity = useSessionActivity();
   const subagentStrip = useSubagentComposerStrip();
 
-  const activeSessionId = useActiveSessionId();
-  const activeWorkspaceId = useActiveSessionWorkspaceId();
-  const materializedSessionId = useSessionDirectoryStore((state) =>
-    activeSessionId
-      ? state.entriesById[activeSessionId]?.materializedSessionId ?? activeSessionId
-      : null);
-  const reviewsQuery = useSessionReviewsQuery(materializedSessionId, {
-    enabled: !!materializedSessionId && !isPendingSessionId(materializedSessionId),
-    workspaceId: activeWorkspaceId,
-  });
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -87,29 +57,8 @@ export function useWorkspaceStatusModel() {
       });
     }
 
-    for (const run of reviewsQuery.data?.reviews ?? []) {
-      if (!isReviewRunShowable(run)) {
-        continue;
-      }
-      const assignments = latestReviewRound(run)?.assignments ?? [];
-      for (const assignment of assignments) {
-        rows.push({
-          key: `review-${assignment.id}`,
-          name: `Review · ${assignment.personaLabel}`,
-          sessionId: assignment.reviewerSessionId ?? null,
-          tintClassName: buildDelegatedAgentIdentity({
-            id: assignment.sessionLinkId ?? assignment.id,
-            title: assignment.personaLabel,
-            sessionId: assignment.reviewerSessionId ?? assignment.id,
-            sessionLinkId: assignment.sessionLinkId ?? null,
-          }).textColorClassName,
-          working: WORKING_ASSIGNMENT_STATUSES.has(assignment.status),
-        });
-      }
-    }
-
     return rows;
-  }, [reviewsQuery.data?.reviews, subagentStrip?.rows]);
+  }, [subagentStrip?.rows]);
 
   const { repoRoot } = useSelectedRepoRoot();
   // Compare branch opens the hosting provider's base...current compare page.

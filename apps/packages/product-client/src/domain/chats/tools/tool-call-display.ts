@@ -101,18 +101,6 @@ export function describeToolCallDisplay(
         hint: cleanedToolName && normalizedToolName !== "edit" ? cleanedToolName : undefined,
         iconKey: "file-pen",
       };
-    case "cowork_artifact_create":
-      return {
-        label: "Create artifact",
-        hint: "Cowork",
-        iconKey: "proliferate",
-      };
-    case "cowork_artifact_update":
-      return {
-        label: "Update artifact",
-        hint: "Cowork",
-        iconKey: "proliferate",
-      };
     default:
       if (parsedMcp) {
         if (parsedMcp.server === "proliferate_skills") {
@@ -121,7 +109,7 @@ export function describeToolCallDisplay(
         return {
           label: formatMcpActionLabel(parsedMcp.action),
           hint: formatMcpServerHint(parsedMcp.server),
-          iconKey: parsedMcp.server === "cowork" ? "proliferate" : "settings",
+          iconKey: "settings",
         };
       }
       if (nativeName && nativeName !== cleanedToolName) {

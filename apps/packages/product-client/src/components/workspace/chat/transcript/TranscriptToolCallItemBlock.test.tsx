@@ -31,10 +31,6 @@ function renderToStaticMarkup(ui: ReactElement) {
   );
 }
 
-vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
-  useOpenCoworkCodingSession: () => vi.fn(),
-}));
-
 vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: vi.fn(),

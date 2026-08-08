@@ -12,20 +12,6 @@ export type SessionChildRelationship =
     workspaceId?: string | null;
   }
   | {
-    kind: "cowork_child";
-    parentSessionId: string | null;
-    sessionLinkId?: string | null;
-    relation?: string | null;
-    workspaceId?: string | null;
-  }
-  | {
-    kind: "review_child";
-    parentSessionId: string | null;
-    sessionLinkId?: string | null;
-    relation?: string | null;
-    workspaceId?: string | null;
-  }
-  | {
     kind: "linked_child";
     parentSessionId: string | null;
     sessionLinkId?: string | null;

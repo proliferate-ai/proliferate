@@ -166,42 +166,42 @@ describe("useAppShortcuts", () => {
     expect(actions.openWebApp.execute).toHaveBeenCalledWith("shortcut");
   });
 
-  it("prioritizes a child Cowork owner across unmount and remount regardless of effect order", () => {
+  it("prioritizes a contextual child owner across unmount and remount regardless of effect order", () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
       userAgent: "Mac OS X",
     });
     const actions = commandActions();
-    const createCoworkThread = vi.fn();
+    const contextualNewChat = vi.fn();
     const { rerender } = render(
       <GlobalShortcutOwner actions={actions}>
-        <ContextualCoworkShortcutOwner onCreateThread={createCoworkThread} />
+        <ContextualShortcutOwner onContextualNewChat={contextualNewChat} />
       </GlobalShortcutOwner>,
     );
 
     expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
-    expect(createCoworkThread).toHaveBeenCalledTimes(1);
+    expect(contextualNewChat).toHaveBeenCalledTimes(1);
     expect(actions.goHome.execute).not.toHaveBeenCalled();
     expect(actions.newLocalWorkspace.execute).not.toHaveBeenCalled();
     expect(actions.newWorktreeWorkspace.execute).not.toHaveBeenCalled();
 
     rerender(<GlobalShortcutOwner actions={actions} />);
     expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
-    expect(createCoworkThread).toHaveBeenCalledTimes(1);
+    expect(contextualNewChat).toHaveBeenCalledTimes(1);
     expect(actions.goHome.execute).toHaveBeenCalledTimes(1);
     expect(actions.newWorktreeWorkspace.execute).not.toHaveBeenCalled();
 
     rerender(
       <GlobalShortcutOwner actions={actions}>
-        <ContextualCoworkShortcutOwner onCreateThread={createCoworkThread} />
+        <ContextualShortcutOwner onContextualNewChat={contextualNewChat} />
       </GlobalShortcutOwner>,
     );
     expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
-    expect(createCoworkThread).toHaveBeenCalledTimes(2);
+    expect(contextualNewChat).toHaveBeenCalledTimes(2);
     expect(actions.goHome.execute).toHaveBeenCalledTimes(1);
   });
 
-  it("opens New Chat and focuses its composer outside Cowork", () => {
+  it("opens New Chat and focuses its composer with no contextual owner", () => {
     vi.useFakeTimers();
     const actions = commandActions();
     const chatZone = document.createElement("div");
@@ -270,12 +270,12 @@ function GlobalShortcutOwner({
   return children;
 }
 
-function ContextualCoworkShortcutOwner({
-  onCreateThread,
+function ContextualShortcutOwner({
+  onContextualNewChat,
 }: {
-  onCreateThread: () => void;
+  onContextualNewChat: () => void;
 }) {
-  useShortcutHandler("workspace.new-default", onCreateThread, {
+  useShortcutHandler("workspace.new-default", onContextualNewChat, {
     priority: "contextual",
   });
   return null;

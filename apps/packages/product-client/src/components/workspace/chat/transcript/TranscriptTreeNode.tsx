@@ -16,7 +16,6 @@ export function TranscriptTreeNode({
   animateAssistantReveal = false,
   onAssistantRevealStateChange,
   workspaceId,
-  onOpenArtifact,
   onHandOffPlanToNewSession,
 }: {
   itemId: string;
@@ -29,7 +28,6 @@ export function TranscriptTreeNode({
     state: AssistantMessageRevealState,
   ) => void;
   workspaceId: string | null;
-  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const item = transcript.itemsById[itemId];
@@ -44,8 +42,6 @@ export function TranscriptTreeNode({
           childIds={childIds}
           transcript={transcript}
           childrenByParentId={childrenByParentId}
-          workspaceId={workspaceId}
-          onOpenArtifact={onOpenArtifact}
           renderChild={(childId) => (
             <TranscriptTreeNode
               itemId={childId}
@@ -55,7 +51,6 @@ export function TranscriptTreeNode({
               animateAssistantReveal={false}
               onAssistantRevealStateChange={onAssistantRevealStateChange}
               workspaceId={workspaceId}
-              onOpenArtifact={onOpenArtifact}
               onHandOffPlanToNewSession={onHandOffPlanToNewSession}
             />
           )}
@@ -72,7 +67,6 @@ export function TranscriptTreeNode({
       animateAssistantReveal={animateAssistantReveal}
       onAssistantRevealStateChange={onAssistantRevealStateChange}
       workspaceId={workspaceId}
-      onOpenArtifact={onOpenArtifact}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
     />
   );

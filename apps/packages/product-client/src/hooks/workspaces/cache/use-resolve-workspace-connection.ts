@@ -1,5 +1,4 @@
-import { anyHarnessCoworkStatusKey } from "@anyharness/sdk-react";
-import type { CoworkStatus, TerminalWebSocketAuthTransport } from "@anyharness/sdk";
+import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { QueryClient } from "@tanstack/react-query";
@@ -16,7 +15,6 @@ import {
   resolveLogicalWorkspaceMaterializationId,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import { buildStandardRepoProjection } from "#product/lib/domain/workspaces/cloud/standard-projection";
 import { cloudMobilityWorkspacesKey } from "#product/hooks/access/cloud/query-keys";
 import { getWorkspaceCollectionsFromCache } from "#product/hooks/workspaces/cache/query-keys";
 import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
@@ -90,22 +88,11 @@ export function useResolveWorkspaceConnection({
       const cloudMobilityWorkspaces = queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
         cloudMobilityWorkspacesKey(),
       );
-      const coworkStatus = queryClient.getQueryData<CoworkStatus>(
-        anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
-      );
-      const standardProjection = workspaceCollections
-        ? buildStandardRepoProjection({
-          repoRoots: workspaceCollections.repoRoots,
-          localWorkspaces: workspaceCollections.localWorkspaces,
-          cloudWorkspaces: workspaceCollections.cloudWorkspaces,
-          coworkRootRepoRootId: coworkStatus?.root?.repoRootId ?? null,
-        })
-        : null;
       const logicalWorkspaces = workspaceCollections
         ? buildLogicalWorkspaces({
-          localWorkspaces: standardProjection?.localWorkspaces ?? [],
-          repoRoots: standardProjection?.repoRoots ?? [],
-          cloudWorkspaces: standardProjection?.cloudWorkspaces ?? [],
+          localWorkspaces: workspaceCollections.localWorkspaces,
+          repoRoots: workspaceCollections.repoRoots,
+          cloudWorkspaces: workspaceCollections.cloudWorkspaces,
           cloudMobilityWorkspaces,
           currentSelectionId: selectedWorkspaceId,
         })

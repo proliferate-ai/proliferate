@@ -1,6 +1,4 @@
-export type DelegatedWorkKind = "subagent" | "cowork" | "plan_review" | "code_review";
-
-export type DelegatedWorkSource = "subagent" | "review" | "cowork";
+export type DelegatedWorkKind = "subagent";
 
 export type DelegatedWorkStatusCategory =
   | "needs_attention"

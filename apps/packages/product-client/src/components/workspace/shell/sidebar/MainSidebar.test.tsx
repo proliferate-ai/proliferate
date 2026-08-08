@@ -107,10 +107,6 @@ vi.mock("./WorkspaceCleanupAttentionSection", () => ({
   WorkspaceCleanupAttentionSection: () => <div data-testid="cleanup-attention" />,
 }));
 
-vi.mock("#product/components/workspace/cowork/sidebar/CoworkThreadsSection", () => ({
-  CoworkThreadsSection: () => <div data-testid="cowork-threads" />,
-}));
-
 vi.mock("#product/primitives/PopoverMenuItem", () => ({
   PopoverMenuItem: ({
     label,
@@ -329,22 +325,6 @@ function getRepositoriesHeaderNewChatButton(): HTMLButtonElement {
 
   return button;
 }
-
-describe("MainSidebar host capabilities", () => {
-  it("omits Desktop-only Cowork threads on Web", () => {
-    renderMainSidebar();
-
-    expect(screen.queryByTestId("cowork-threads")).toBeNull();
-  });
-
-  it("shows Cowork threads when the Desktop bridge is available", () => {
-    productHostState.desktop = {};
-
-    renderMainSidebar();
-
-    expect(screen.getByTestId("cowork-threads")).not.toBeNull();
-  });
-});
 
 describe("MainSidebar support modal", () => {
   it("opens the feedback modal from Support", async () => {

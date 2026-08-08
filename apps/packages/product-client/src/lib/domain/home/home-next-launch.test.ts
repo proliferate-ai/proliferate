@@ -150,7 +150,7 @@ describe("home-next branch helpers", () => {
 });
 
 describe("findHomeNextMatchingWorkspace", () => {
-  it("matches by repo root and raw branch, excluding archived and cowork workspaces", () => {
+  it("matches by repo root and raw branch, excluding archived workspaces", () => {
     const match = findHomeNextMatchingWorkspace({
       repoRootId: "repo-root-1",
       branchName: "feature/raw-name",
@@ -159,7 +159,6 @@ describe("findHomeNextMatchingWorkspace", () => {
       workspaces: [
         workspace({ id: "label-only", currentBranch: "Feature Raw Name" }),
         workspace({ id: "archived", currentBranch: "feature/raw-name" }),
-        workspace({ id: "cowork", surface: "cowork", currentBranch: "feature/raw-name" }),
         workspace({ id: "match", currentBranch: "feature/raw-name" }),
       ],
     });

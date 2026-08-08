@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import {
-  type HomeNextDestination,
   type HomeNextModelSelection,
   type HomeNextRepoLaunchKind,
   type HomeNextRepositorySelection,
@@ -12,7 +11,6 @@ import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-comp
 
 interface UseHomeNextStateArgs {
   desktopTargetsAvailable: boolean;
-  destination: HomeNextDestination;
   repositorySelection: HomeNextRepositorySelection;
   repoLaunchKind: HomeNextRepoLaunchKind;
   modelSelectionOverride: HomeNextModelSelection | null;
@@ -24,7 +22,6 @@ interface UseHomeNextStateArgs {
 // Owns read-only Home Next launch state composition. Does not own launch actions.
 export function useHomeNextState({
   desktopTargetsAvailable,
-  destination,
   repositorySelection,
   repoLaunchKind,
   modelSelectionOverride,
@@ -32,26 +29,23 @@ export function useHomeNextState({
   modeOverrideId,
   selectedSshTargetId = null,
 }: UseHomeNextStateArgs) {
-  const effectiveDestination = desktopTargetsAvailable ? destination : "repository";
   const effectiveRepoLaunchKind = desktopTargetsAvailable ? repoLaunchKind : "cloud";
   const model = useHomeNextModelSelection({
     modelSelectionOverride,
     repoLaunchKind: effectiveRepoLaunchKind,
   });
   const repository = useHomeNextRepositorySelection({
-    destination: effectiveDestination,
     repositorySelection,
     repoLaunchKind: effectiveRepoLaunchKind,
     baseBranchOverride,
   });
   const mode = useHomeNextModeSelection({
-    destination: effectiveDestination,
     modelSelection: model.effectiveModelSelection,
     modeOverrideId,
     repoLaunchKind: effectiveRepoLaunchKind,
   });
   const computeTargets = useComputeTargetOptions({
-    enabled: desktopTargetsAvailable && effectiveDestination === "repository",
+    enabled: desktopTargetsAvailable,
   });
   const sshTargetOptions = desktopTargetsAvailable ? computeTargets.sshTargetOptions : [];
   const selectedSshTarget = sshTargetOptions.find((target) =>
@@ -63,9 +57,6 @@ export function useHomeNextState({
       : null;
 
   const targetDisabledReason = useMemo(() => {
-    if (effectiveDestination === "cowork") {
-      return null;
-    }
     if (!repository.selectedRepository) {
       return "Choose a repository";
     }
@@ -126,7 +117,6 @@ export function useHomeNextState({
   }, [
     computeTargets.isLoading,
     computeTargets.sshTargetOptions.length,
-    effectiveDestination,
     effectiveRepoLaunchKind,
     launchTarget,
     repository.branchOptions.length,

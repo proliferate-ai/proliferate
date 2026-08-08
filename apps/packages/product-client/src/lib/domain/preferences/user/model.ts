@@ -9,10 +9,6 @@ import type {
   DefaultLiveSessionControlValuesByAgentKind,
 } from "#product/lib/domain/preferences/user/session-defaults";
 import { WORKTREE_AUTO_DELETE_LIMIT_DEFAULT } from "#product/lib/domain/preferences/user/worktree-auto-delete";
-import type {
-  ReviewDefaultsByKind,
-  ReviewPersonalitiesByKind,
-} from "#product/lib/domain/preferences/review-preferences";
 import { DEFAULT_OPEN_IN_TARGET_ID } from "#product/config/open-target-defaults";
 import type { ReleaseTitle } from "#product/lib/domain/updates/release-notice";
 
@@ -45,7 +41,6 @@ export interface UserPreferences {
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
   subagentsEnabled: boolean;
-  coworkWorkspaceDelegationEnabled: boolean;
   worktreeAutoDeleteLimit: number;
   pasteAttachmentsEnabled: boolean;
   /**
@@ -55,8 +50,6 @@ export interface UserPreferences {
    * for the click, because then a click is genuinely required.
    */
   autoUpdateEnabled: boolean;
-  reviewDefaultsByKind: ReviewDefaultsByKind;
-  reviewPersonalitiesByKind: ReviewPersonalitiesByKind;
   acknowledgedReleaseVersion: string | null;
   cachedInstalledRelease: ReleaseTitle | null;
 }
@@ -79,12 +72,9 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   turnEndSoundId: "ding",
   transparentChromeEnabled: false,
   subagentsEnabled: true,
-  coworkWorkspaceDelegationEnabled: true,
   worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
   autoUpdateEnabled: true,
-  reviewDefaultsByKind: { plan: null, code: null },
-  reviewPersonalitiesByKind: { plan: [], code: [] },
   acknowledgedReleaseVersion: null,
   cachedInstalledRelease: null,
 };
@@ -109,12 +99,9 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   // only fresh installs use the opaque NEW_USER_DEFAULTS value.
   transparentChromeEnabled: true,
   subagentsEnabled: true,
-  coworkWorkspaceDelegationEnabled: true,
   worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
   autoUpdateEnabled: true,
-  reviewDefaultsByKind: { plan: null, code: null },
-  reviewPersonalitiesByKind: { plan: [], code: [] },
   acknowledgedReleaseVersion: null,
   cachedInstalledRelease: null,
 };

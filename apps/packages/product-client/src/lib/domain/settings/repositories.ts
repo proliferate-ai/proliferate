@@ -43,7 +43,7 @@ export function buildSettingsRepositoryEntries(
   const workspacesByRepoRootId = new Map<string, Workspace[]>();
   for (const workspace of workspaces) {
     const repoRootId = workspace.repoRootId?.trim();
-    if (!repoRootId || workspace.surface === "cowork") {
+    if (!repoRootId) {
       continue;
     }
     const repoWorkspaces = workspacesByRepoRootId.get(repoRootId);

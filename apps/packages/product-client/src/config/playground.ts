@@ -69,7 +69,6 @@ export type ScenarioKey =
   | "tool-file-change-diff"
   | "tool-activity-ledger"
   | "tool-reasoning"
-  | "tool-cowork-artifact"
   | "tool-generic-result"
   | "tool-subagent-task"
   | "tool-subagent-creation-single"
@@ -186,7 +185,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "tool-file-change-diff": { label: "Tool file diff" },
   "tool-activity-ledger": { label: "Activity ledger" },
   "tool-reasoning": { label: "Tool reasoning" },
-  "tool-cowork-artifact": { label: "Tool artifact" },
   "tool-generic-result": { label: "Tool generic result" },
   "tool-subagent-task": { label: "Tool subagent task" },
   "tool-subagent-creation-single": { label: "Tool subagent creation" },

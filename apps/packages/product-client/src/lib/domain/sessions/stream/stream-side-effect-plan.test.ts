@@ -117,45 +117,6 @@ describe("planBatchedStreamSideEffects", () => {
     ]);
   });
 
-  it("plans cowork relationship and invalidation commands", () => {
-    const plan = planBatchedStreamSideEffects({
-      ...baseInput(),
-      envelopes: [
-        sessionLinkTurnCompleted(2, "cowork_coding_session"),
-      ],
-    });
-
-    expect(plan.invalidateCowork).toBe(true);
-    expect(plan.eventEffects).toEqual([
-      {
-        kind: "record_session_relationship_hint",
-        sessionId: "child-session",
-        relationship: {
-          kind: "cowork_child",
-          parentSessionId: "session-1",
-          sessionLinkId: "link-1",
-          relation: "cowork_coding_session",
-          workspaceId: "workspace-1",
-        },
-      },
-    ]);
-  });
-
-  it("dedupes review parent ids while preserving first-seen order", () => {
-    const plan = planBatchedStreamSideEffects({
-      ...baseInput(),
-      envelopes: [
-        reviewRunUpdated(2, "parent-1"),
-        reviewRunUpdated(3, "parent-2"),
-        reviewRunUpdated(4, "parent-1"),
-      ],
-    });
-
-    expect(plan.reviewParentSessionIds).toEqual(["parent-1", "parent-2"]);
-    // review_run_updated is a mid-turn tick and does not bump activity
-    expect(plan.lastActivityTimestamp).toBe(null);
-  });
-
   it("plans subagent effects from completed MCP tool calls", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById["tool-1"] = toolCallItem({
@@ -296,25 +257,6 @@ describe("planBatchedStreamSideEffects", () => {
     expect(plan.eventEffects).toEqual([]);
   });
 
-  it("plans cowork invalidation from completed MCP tool calls", () => {
-    const transcript = createTranscriptState("session-1");
-    transcript.itemsById["tool-1"] = toolCallItem({
-      itemId: "tool-1",
-      nativeToolName: "mcp__cowork__create_coding_session",
-      status: "completed",
-    });
-
-    const plan = planBatchedStreamSideEffects({
-      ...baseInput({ transcript }),
-      envelopes: [
-        itemCompleted(2, "tool-1"),
-      ],
-    });
-
-    expect(plan.invalidateCowork).toBe(true);
-    expect(plan.invalidateWorkspaceCollections).toBe(true);
-  });
-
   it("bumps activity on turn boundary events only", () => {
     const plan = planBatchedStreamSideEffects({
       ...baseInput(),
@@ -342,12 +284,11 @@ describe("planBatchedStreamSideEffects", () => {
     expect(plan.lastActivityTimestamp).toBe(null);
   });
 
-  it("does not bump activity on subagent or session_link mid-turn events", () => {
+  it("does not bump activity on subagent mid-turn events", () => {
     const plan = planBatchedStreamSideEffects({
       ...baseInput(),
       envelopes: [
         subagentTurnCompleted(2),
-        sessionLinkTurnCompleted(3, "cowork_coding_session"),
       ],
     });
 
@@ -490,35 +431,6 @@ function subagentTurnCompleted(seq: number): SessionEventEnvelope {
     completionId: "completion-1",
     outcome: "completed",
     label: "Child",
-  });
-}
-
-function sessionLinkTurnCompleted(seq: number, relation: string): SessionEventEnvelope {
-  return envelope(seq, {
-    type: "session_link_turn_completed",
-    childSessionId: "child-session",
-    parentSessionId: "session-1",
-    sessionLinkId: "link-1",
-    childTurnId: "child-turn-1",
-    childLastEventSeq: 10,
-    completionId: "completion-1",
-    outcome: "completed",
-    relation,
-  });
-}
-
-function reviewRunUpdated(seq: number, parentSessionId: string): SessionEventEnvelope {
-  return envelope(seq, {
-    type: "review_run_updated",
-    parentSessionId,
-    reviewRunId: `review-${seq}`,
-    kind: "code",
-    status: "reviewing",
-    autoIterate: false,
-    currentRoundNumber: 1,
-    maxRounds: 1,
-    activeRoundId: null,
-    updatedAt: `2026-04-04T00:00:0${seq}Z`,
   });
 }
 

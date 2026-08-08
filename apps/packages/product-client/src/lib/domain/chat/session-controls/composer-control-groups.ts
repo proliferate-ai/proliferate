@@ -3,7 +3,6 @@ import type {
   SupportedLiveControlKey,
 } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
-import type { WorkspaceSurface } from "@anyharness/sdk";
 
 export type ComposerModeControlDescriptor = LiveSessionControlDescriptor & {
   key: ConfiguredSessionControlKey;
@@ -46,20 +45,6 @@ export function buildComposerSessionControlGroups(
     fastModeControl,
     overflowControls: uniqueControls.filter((control) => !promotedControls.has(control)),
   };
-}
-
-export function filterComposerSessionControlsForSurface(
-  controls: LiveSessionControlDescriptor[],
-  surface: WorkspaceSurface | null | undefined,
-): LiveSessionControlDescriptor[] {
-  if (surface !== "cowork") {
-    return controls;
-  }
-
-  // Cowork owns its access policy, so the raw approval preset remains hidden.
-  // Working mode (`collaboration_mode`) and independent tuning dimensions such
-  // as reasoning and fast mode still belong in the composer.
-  return controls.filter((control) => control.key !== "mode");
 }
 
 export function uniqueSessionControls(

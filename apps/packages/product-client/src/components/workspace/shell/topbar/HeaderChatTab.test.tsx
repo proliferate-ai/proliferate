@@ -8,10 +8,6 @@ import { HeaderChatTab } from "#product/components/workspace/shell/topbar/Header
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import type { HeaderChatTabEntry } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
-vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
-  useOpenCoworkCodingSession: () => vi.fn(),
-}));
-
 vi.mock("#product/hooks/workspaces/ui/tabs/use-workspace-tab-native-context-menu", () => ({
   useWorkspaceTabNativeContextMenu: () => ({ onContextMenuCapture: vi.fn() }),
 }));

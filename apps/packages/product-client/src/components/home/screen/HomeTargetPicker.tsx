@@ -10,10 +10,7 @@ import { ProjectNotebook } from "#product/primitives/icons/workspace";
 import { GitBranchIcon } from "#product/primitives/icons/workspace-git";
 import { matchesPickerSearch } from "#product/primitives/utils/search";
 import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
-import type {
-  HomeNextDestination,
-  HomeNextRepoLaunchKind,
-} from "#product/lib/domain/home/home-next-launch";
+import type { HomeNextRepoLaunchKind } from "#product/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import type { CloudRepoActionState } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
@@ -36,7 +33,6 @@ import { HomeProjectMenu } from "#product/components/home/screen/HomeProjectMenu
 
 interface HomeTargetPickerProps {
   desktopTargetsAvailable: boolean;
-  destination: HomeNextDestination;
   repoLaunchKind: HomeNextRepoLaunchKind;
   repositories: SettingsRepositoryEntry[];
   selectedRepository: SettingsRepositoryEntry | null;
@@ -47,7 +43,6 @@ interface HomeTargetPickerProps {
   sshTargetOptions: ComputeLaunchTargetOption[];
   selectedSshTargetId: string | null;
   sshTargetsLoading: boolean;
-  onSelectCowork: () => void;
   onSelectRepository: (sourceRoot: string) => void;
   onSelectRuntime: (launchKind: HomeNextRepoLaunchKind, targetId?: string | null) => void;
   onSelectBranch: (branchName: string) => void;
@@ -57,7 +52,6 @@ interface HomeTargetPickerProps {
 
 export function HomeTargetPicker({
   desktopTargetsAvailable,
-  destination,
   repoLaunchKind,
   repositories,
   selectedRepository,
@@ -68,7 +62,6 @@ export function HomeTargetPicker({
   sshTargetOptions,
   selectedSshTargetId,
   sshTargetsLoading,
-  onSelectCowork,
   onSelectRepository,
   onSelectRuntime,
   onSelectBranch,
@@ -79,7 +72,7 @@ export function HomeTargetPicker({
   const filteredBranches = branchOptions.filter((branch) =>
     matchesPickerSearch([branch], runtimeSearchValue)
   );
-  const isRepositoryTarget = destination === "repository" && !!selectedRepository;
+  const isRepositoryTarget = !!selectedRepository;
   const canShowBranchChoices = isRepositoryTarget;
   const selectedRepositoryCloudAction: CloudRepoActionState = selectedRepository
     ? cloudActionBySourceRoot[selectedRepository.sourceRoot] ?? { kind: "hidden", label: null }
@@ -106,13 +99,12 @@ export function HomeTargetPicker({
   const runtimeButton = (
     <HomeTargetRowItem
       icon={homeTargetLaunchKindIcon(effectiveRepoLaunchKind, selectedSshTarget)}
-      value={destination === "cowork" ? "No repository" : runtimeLabel}
-      disabled={!selectedRepository || destination === "cowork"}
-      disclosure={!!selectedRepository && destination === "repository"}
+      value={runtimeLabel}
+      disabled={!selectedRepository}
+      disclosure={!!selectedRepository}
       aria-label={homeTargetRuntimeAriaLabel({
         label: runtimeLabel,
         selectedRepository,
-        destination,
       })}
     />
   );
@@ -123,20 +115,17 @@ export function HomeTargetPicker({
         trigger={(
           <HomeTargetRowItem
             icon={<ProjectNotebook className="icon-paired" />}
-            value={homeTargetProjectLabel({ destination, selectedRepository })}
-            aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
+            value={homeTargetProjectLabel({ selectedRepository })}
+            aria-label={homeTargetProjectAriaLabel({ selectedRepository })}
           />
         )}
-        coworkAvailable={desktopTargetsAvailable}
-        destination={destination}
         repositories={repositories}
         selectedRepository={selectedRepository}
         onSelectRepository={onSelectRepository}
-        onSelectCowork={onSelectCowork}
         onAddRepository={onAddRepository}
       />
 
-      {selectedRepository && destination === "repository" ? (
+      {selectedRepository ? (
         <PopoverButton
           trigger={runtimeButton}
           side="top"
@@ -212,7 +201,7 @@ export function HomeTargetPicker({
         </PopoverButton>
       ) : null}
 
-      {selectedRepository && destination === "repository" && canShowBranchChoices ? (
+      {selectedRepository && canShowBranchChoices ? (
         <PopoverButton
           trigger={(
             <HomeTargetRowItem
@@ -254,7 +243,7 @@ export function HomeTargetPicker({
           )}
         </PopoverButton>
       ) : null}
-      {!selectedRepository && destination === "repository" ? runtimeButton : null}
+      {!selectedRepository ? runtimeButton : null}
     </>
   );
 }

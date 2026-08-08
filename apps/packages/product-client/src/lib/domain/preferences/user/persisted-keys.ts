@@ -18,12 +18,9 @@ const USER_PREFERENCE_KEYS = [
   "turnEndSoundId",
   "transparentChromeEnabled",
   "subagentsEnabled",
-  "coworkWorkspaceDelegationEnabled",
   "worktreeAutoDeleteLimit",
   "pasteAttachmentsEnabled",
   "autoUpdateEnabled",
-  "reviewDefaultsByKind",
-  "reviewPersonalitiesByKind",
   "acknowledgedReleaseVersion",
   "cachedInstalledRelease",
 ] as const satisfies readonly (keyof UserPreferences)[];

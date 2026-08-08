@@ -23,43 +23,7 @@ describe("useHomeNextModeSelection", () => {
     mocks.runtimeAgents = [];
   });
 
-  it("uses the local runtime's authoritative unattended declaration", () => {
-    mocks.runtimeAgents = [runtimeAgent(null)];
-    const { result } = renderHook(() => useHomeNextModeSelection({
-      destination: "cowork",
-      modelSelection: { kind: "claude", modelId: "sonnet" },
-      modeOverrideId: null,
-      repoLaunchKind: "local",
-    }));
-
-    expect(result.current.effectiveModeId).toBeNull();
-  });
-
-  it("does not use a cloud default before the local target declares one", () => {
-    const { result } = renderHook(() => useHomeNextModeSelection({
-      destination: "cowork",
-      modelSelection: { kind: "claude", modelId: "sonnet" },
-      modeOverrideId: null,
-      repoLaunchKind: "local",
-    }));
-
-    expect(result.current.effectiveModeId).toBeNull();
-  });
-
-  it("uses cloud curation for an explicitly cloud launch target", () => {
-    const { result } = renderHook(() => useHomeNextModeSelection({
-      destination: "repository",
-      modelSelection: { kind: "claude", modelId: "sonnet" },
-      modeOverrideId: null,
-      repoLaunchKind: "cloud",
-    }));
-
-    // Interactive repository launches retain their safe user/default mode;
-    // cloud unattended curation is not applied outside an unattended surface.
-    expect(result.current.effectiveModeId).toBe("default");
-  });
-
-  it("uses a newer target default even when cloud mode metadata is stale", () => {
+  it("merges the local runtime's launch options into the mode vocabulary", () => {
     mocks.runtimeAgents = [{
       ...runtimeAgent("target-unattended"),
       models: [{
@@ -70,39 +34,34 @@ describe("useHomeNextModeSelection", () => {
       }],
     }];
     const { result } = renderHook(() => useHomeNextModeSelection({
-      destination: "cowork",
       modelSelection: { kind: "claude", modelId: "sonnet" },
       modeOverrideId: null,
       repoLaunchKind: "local",
     }));
 
-    expect(result.current.effectiveModeId).toBe("target-unattended");
     expect(result.current.modeOptions.map((option) => option.value))
       .toContain("target-unattended");
   });
 
-  it("keeps cowork on the local runtime when the repository target is cloud", () => {
-    mocks.runtimeAgents = [runtimeAgent(null)];
+  it("uses cloud curation for an explicitly cloud launch target", () => {
     const { result } = renderHook(() => useHomeNextModeSelection({
-      destination: "cowork",
       modelSelection: { kind: "claude", modelId: "sonnet" },
       modeOverrideId: null,
       repoLaunchKind: "cloud",
     }));
 
-    expect(result.current.effectiveModeId).toBeNull();
+    expect(result.current.effectiveModeId).toBe("default");
   });
 
-  it("keeps an explicit user mode ahead of the selected target default", () => {
+  it("keeps an explicit user mode ahead of the catalog default", () => {
     mocks.runtimeAgents = [runtimeAgent(null)];
     const { result } = renderHook(() => useHomeNextModeSelection({
-      destination: "cowork",
       modelSelection: { kind: "claude", modelId: "sonnet" },
-      modeOverrideId: "default",
+      modeOverrideId: "bypassPermissions",
       repoLaunchKind: "local",
     }));
 
-    expect(result.current.effectiveModeId).toBe("default");
+    expect(result.current.effectiveModeId).toBe("bypassPermissions");
   });
 });
 

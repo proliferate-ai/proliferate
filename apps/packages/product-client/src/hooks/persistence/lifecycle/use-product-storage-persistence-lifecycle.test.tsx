@@ -67,7 +67,7 @@ describe("useProductStoragePersistenceLifecycle", () => {
   it("wires and hydrates every module-singleton product store", async () => {
     memory.values.set("proliferate.chatDiffPreferences.v1", { wrapLongLines: true });
     memory.values.set("proliferate.fileTreeOverlay.v1", { width: 512 });
-    memory.values.set("home_next_target_selection.v1", { destination: "repository" });
+    memory.values.set("home_next_target_selection.v1", { repoLaunchKind: "local" });
     memory.values.set("proliferate.cloudDisplayNameBackfillSuppression.v1", { "cloud-1": true });
     memory.values.set("proliferate.session-replacement-tombstones.v1", {
       "workspace-1": [{ runtimeSessionId: "runtime-old", suppressedSessionIds: ["runtime-old"] }],
@@ -78,7 +78,7 @@ describe("useProductStoragePersistenceLifecycle", () => {
     await waitFor(() => {
       expect(useChatDiffPreferencesStore.getState().wrapLongLines).toBe(true);
       expect(useFileTreeStore.getState().width).toBe(512);
-      expect(readHomeNextTargetSelectionState().destination).toBe("repository");
+      expect(readHomeNextTargetSelectionState().repoLaunchKind).toBe("local");
       expect(isCloudDisplayNameBackfillSuppressed("cloud-1")).toBe(true);
       expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(true);
     });

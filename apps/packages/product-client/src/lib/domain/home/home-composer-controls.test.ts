@@ -90,24 +90,6 @@ describe("home composer controls", () => {
       },
     ]);
   });
-
-  it("hides Cowork permission mode while retaining independent collaboration mode", () => {
-    const collaborationMode = descriptor({
-      key: "collaboration_mode",
-      label: "Collaboration Mode",
-    });
-    const permissionMode = descriptor({ key: "mode", label: "Permissions" });
-    const effort = descriptor({ key: "effort", label: "Reasoning effort" });
-
-    expect(buildHomeSessionConfigControls({
-      destination: "cowork",
-      agentKind: "codex",
-      modes: CODEX_ACCESS_MODES,
-      selectedModeId: "auto",
-      launchControls: [collaborationMode, permissionMode, effort],
-      onSelectMode: vi.fn(),
-    })).toEqual([collaborationMode, effort]);
-  });
 });
 
 function descriptor({

@@ -281,7 +281,6 @@ function createTestSessionStreamCache(): SessionStreamCache {
   return {
     invalidateWorkspaceCollections: vi.fn(),
     invalidateSessionSubagents: vi.fn(),
-    invalidateCoworkManagedWorkspaces: vi.fn(),
     invalidateSessionReviews: vi.fn(),
     invalidateGitStatus: vi.fn(),
     refreshPrStatuses: vi.fn(),

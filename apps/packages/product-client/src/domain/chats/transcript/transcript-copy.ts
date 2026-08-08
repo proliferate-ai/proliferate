@@ -39,7 +39,6 @@ export function buildTranscriptCopyText({
       text: visibleOptimisticPrompt.text,
       promptProvenance: visibleOptimisticPrompt.promptProvenance,
       transcript,
-      state: "queued",
     }));
   }
 

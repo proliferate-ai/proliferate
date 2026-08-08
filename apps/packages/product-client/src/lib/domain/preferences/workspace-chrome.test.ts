@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  resolveCoworkWorkspaceChromeClasses,
   resolveEditorTabChromeClasses,
   resolveMainSidebarEdgeClassName,
   resolveStandardWorkspaceChromeClasses,
@@ -42,25 +41,6 @@ describe("workspace chrome classes", () => {
       transparent: false,
       sidebarOpen: false,
     }).contentShell).toBe("bg-background border-l transition-[border-color,border-top-left-radius] duration-panel ease-out-cubic border-t rounded-tl-none border-transparent");
-  });
-
-  it("matches cowork content chrome to the standard shell", () => {
-    expect(resolveCoworkWorkspaceChromeClasses({
-      transparent: true,
-      sidebarOpen: true,
-    }).contentShell).toBe("bg-background");
-    expect(resolveCoworkWorkspaceChromeClasses({
-      transparent: false,
-      sidebarOpen: false,
-    }).contentShell).toBe("bg-background");
-    expect(resolveCoworkWorkspaceChromeClasses({
-      transparent: true,
-      sidebarOpen: false,
-    }).contentShell).toBe("bg-background");
-    expect(resolveCoworkWorkspaceChromeClasses({
-      transparent: false,
-      sidebarOpen: true,
-    }).contentShell).toBe("bg-background rounded-tl-2xl border-l border-t border-border");
   });
 
   it("preserves editor tab classes", () => {

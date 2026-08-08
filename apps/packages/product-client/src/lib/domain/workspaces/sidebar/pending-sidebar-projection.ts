@@ -27,12 +27,6 @@ export function buildPendingSidebarProjection(args: {
   activeSessionTitle: string | null;
 }): PendingSidebarProjection | null {
   const { entry, repoRootsById } = args;
-  // Cowork owns its pending and materialized rows in CoworkThreadsSection.
-  // Projecting the same pending entry into the generic repository groups made
-  // a second row flash there while a newly opened thread finished activating.
-  if (entry.source === "cowork-created") {
-    return null;
-  }
   const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
   const materializedSelectedLogicalId =
     entry.workspaceId
@@ -143,7 +137,6 @@ function pendingSidebarVariant(entry: PendingWorkspaceEntry): SidebarWorkspaceVa
     case "select-existing":
       return pendingSelectExistingCloudWorkspaceId(entry) ? "cloud" : "local";
     case "local":
-    case "cowork":
       return "local";
   }
 }
@@ -163,8 +156,6 @@ function pendingSidebarRepoKey(
       return entry.request.input.repoRootId.trim() || null;
     case "cloud":
       return `${entry.request.input.gitProvider}:${entry.request.input.gitOwner}:${entry.request.input.gitRepoName}`;
-    case "cowork":
-      return entry.request.input.sourceWorkspaceId?.trim() || null;
     case "select-existing":
       return pendingSelectExistingCloudWorkspaceId(entry)
         ? pendingCloudRepoKeyFromLabel(entry) ?? (entry.request.workspaceId.trim() || null)
@@ -216,7 +207,6 @@ function pendingExistingWorkspaceKey(entry: PendingWorkspaceEntry): string | nul
     case "local":
     case "worktree":
     case "cloud":
-    case "cowork":
       return null;
   }
 }
@@ -231,8 +221,6 @@ function pendingSidebarSourceRoot(entry: PendingWorkspaceEntry): string | null {
     }
     case "cloud":
       return `${entry.request.input.gitProvider}:${entry.request.input.gitOwner}:${entry.request.input.gitRepoName}`;
-    case "cowork":
-      return null;
     case "select-existing":
       return pendingSelectExistingSourceRoot(entry) ?? pendingExistingWorkspaceKey(entry);
   }

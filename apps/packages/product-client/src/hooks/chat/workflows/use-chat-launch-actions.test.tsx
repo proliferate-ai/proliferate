@@ -6,7 +6,6 @@ import { useChatLaunchActions } from "#product/hooks/chat/workflows/use-chat-lau
 
 const mocks = vi.hoisted(() => ({
   createEmptySessionWithResolvedConfig: vi.fn(async () => "client-new"),
-  createThreadFromSelection: vi.fn(),
   failLatencyFlow: vi.fn(),
   persistPreferences: vi.fn(),
   setActiveSessionConfigOption: vi.fn(),
@@ -32,13 +31,6 @@ vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => 
 vi.mock("#product/hooks/sessions/workflows/use-session-config-actions", () => ({
   useSessionConfigActions: () => ({
     setActiveSessionConfigOption: mocks.setActiveSessionConfigOption,
-  }),
-}));
-
-vi.mock("#product/providers/CoworkThreadLaunchProvider", () => ({
-  useCoworkThreadLaunchContext: () => ({
-    desktopTargetsAvailable: true,
-    createThreadFromSelection: mocks.createThreadFromSelection,
   }),
 }));
 

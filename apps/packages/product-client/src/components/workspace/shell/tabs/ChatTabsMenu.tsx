@@ -209,12 +209,7 @@ function SubagentFlyout({
           label={child.title}
           trailing={renderSubagentTrailing(child)}
           className={child.isActive ? "bg-selected" : ""}
-          disabled={child.source === "review"}
-          title={child.source === "review" ? "Review agents are managed by the review run" : undefined}
           onClick={() => {
-            if (child.source === "review") {
-              return;
-            }
             recordSubagentChildRelationshipHint({
               sessionId: child.sessionId,
               parentSessionId: child.parentSessionId,

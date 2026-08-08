@@ -26,19 +26,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 }
 
 describe("workspace arrival view model", () => {
-  it("does not label cowork-created worktrees as new worktrees", () => {
-    const view = buildWorkspaceArrivalViewModel({
-      event: buildWorkspaceArrivalEvent({
-        workspaceId: "workspace-1",
-        source: "cowork-created",
-      }),
-      workspace: makeWorkspace({ surface: "cowork" }),
-      configuredSetupScript: "",
-    });
-
-    expect(view.badgeLabel).toBe("Workspace");
-  });
-
   it("keeps normal worktree-created arrivals labeled as new worktrees", () => {
     const view = buildWorkspaceArrivalViewModel({
       event: buildWorkspaceArrivalEvent({

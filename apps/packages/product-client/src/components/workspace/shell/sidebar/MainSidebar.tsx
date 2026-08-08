@@ -11,7 +11,6 @@ import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/si
 import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceContent";
 import { WorkspaceCleanupAttentionSection } from "#product/components/workspace/shell/sidebar/WorkspaceCleanupAttentionSection";
-import { CoworkThreadsSection } from "#product/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import {
   ProductSidebarBody,
   ProductSidebarBrandRow,
@@ -413,7 +412,6 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
               />
             </DebugProfiler>
           )}
-          {isDesktopHost ? <CoworkThreadsSection /> : null}
         </ProductSidebarScrollableContent>
         </ProductSidebarBody>
         <ConfirmationDialog

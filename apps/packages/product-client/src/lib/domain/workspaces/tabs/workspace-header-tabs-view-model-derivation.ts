@@ -74,7 +74,6 @@ export function buildHeaderChatTabs(args: {
           ? getKnownSessionViewState(known)
           : getLinkedChildViewState(hierarchyChild!),
         canFork: known ? getKnownSessionCanFork(known) : false,
-        isReviewAgentChild: hierarchyChild?.source === "review",
         source: hierarchyChild?.source ?? null,
         sessionLinkId: hierarchyChild?.sessionLinkId ?? null,
         workspaceId: hierarchyChild?.workspaceId ?? null,
@@ -97,8 +96,6 @@ export function buildHeaderChatTabs(args: {
           ? buildDelegatedWorkTabIdentity({
             id: hierarchyChild.sessionLinkId || hierarchyChild.sessionId,
             title: hierarchyChild.title,
-            source: hierarchyChild.source,
-            reviewKind: hierarchyChild.reviewKind,
             // A requested close is the truest thing to say about the agent
             // while it finishes its last step.
             statusLabel: hierarchyChild.closeRequestedLabel ?? hierarchyChild.statusLabel,
@@ -119,7 +116,6 @@ export function selectHeaderStripChatSessionIds(
 ): string[] {
   return stripRows
     .filter((row): row is Extract<HeaderChatStripRow, { kind: "tab" }> => row.kind === "tab")
-    .filter((row) => !row.tab.isReviewAgentChild)
     .map((row) => row.tab.sessionId);
 }
 

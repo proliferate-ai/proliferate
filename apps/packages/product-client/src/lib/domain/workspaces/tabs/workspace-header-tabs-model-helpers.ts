@@ -20,8 +20,7 @@ export interface HeaderHierarchyChildRow {
   workspaceId?: string | null;
   title: string;
   agentKind: string;
-  source: "subagent" | "review" | "cowork";
-  reviewKind?: string | null;
+  source: "subagent";
   meta: string | null;
   statusLabel: string;
   wakeScheduled: boolean;

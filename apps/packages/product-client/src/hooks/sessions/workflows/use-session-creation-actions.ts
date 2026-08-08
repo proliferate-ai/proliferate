@@ -21,7 +21,6 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
-import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
 import {
   createPendingSessionId,
@@ -72,7 +71,6 @@ export function useSessionCreationActions() {
   const { getWorkspaceRuntimeBlockError } = useWorkspaceRuntimeBlock();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
-  const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
   const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
@@ -132,15 +130,12 @@ export function useSessionCreationActions() {
         ...explicitLiveLaunchControls,
       };
     }
-    const workspaceSurface = getWorkspaceSurface(workspaceId);
     const resolvedModeId = options.resolvedModeId !== undefined
       ? options.resolvedModeId
       : resolveSessionCreationModeId({
         explicitModeId: options.modeId
           ?? options.launchControlValues?.mode
           ?? options.launchControlValues?.access_mode,
-        workspaceSurface,
-        unattendedModeId: options.unattendedModeId,
         preferredModeId,
       });
     const pendingSessionId = options.clientSessionId ?? createPendingSessionId(options.agentKind);
@@ -428,7 +423,6 @@ export function useSessionCreationActions() {
     getWorkspaceRuntimeBlockError,
     invalidateWorkspaceCollectionsForRuntime,
     runtimeUrl,
-    getWorkspaceSurface,
     localRuntime,
     ssh,
     cloudClient,

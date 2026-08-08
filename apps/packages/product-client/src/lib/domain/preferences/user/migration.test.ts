@@ -134,7 +134,6 @@ describe("user preference migration", () => {
   it("falls back invalid persisted values without changing new-user defaults", () => {
     const result = migrateUserPreferences({
       subagentsEnabled: "yes" as unknown as boolean,
-      coworkWorkspaceDelegationEnabled: "yes" as unknown as boolean,
       worktreeAutoDeleteLimit: 8,
       pasteAttachmentsEnabled: "yes" as unknown as boolean,
       defaultOpenInTargetId: "  ",
@@ -147,7 +146,6 @@ describe("user preference migration", () => {
     expect(result.changed).toBe(true);
     expect(result.preferences.defaultNewWorkspaceMode).toBe("worktree");
     expect(result.preferences.subagentsEnabled).toBe(true);
-    expect(result.preferences.coworkWorkspaceDelegationEnabled).toBe(true);
     expect(result.preferences.worktreeAutoDeleteLimit).toBe(WORKTREE_AUTO_DELETE_LIMIT_DEFAULT);
     expect(result.preferences.pasteAttachmentsEnabled).toBe(true);
     expect(result.preferences.defaultOpenInTargetId).toBe("cursor");

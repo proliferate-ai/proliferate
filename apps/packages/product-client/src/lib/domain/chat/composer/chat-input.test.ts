@@ -9,8 +9,8 @@ describe("resolveChatDraftWorkspaceId", () => {
     expect(resolveChatDraftWorkspaceId("logical-1", "workspace-1")).toBe("logical-1");
   });
 
-  it("falls back to the raw workspace id for cowork workspaces", () => {
-    expect(resolveChatDraftWorkspaceId(null, "cowork-1")).toBe("cowork-1");
+  it("falls back to the raw workspace id when no logical workspace is known", () => {
+    expect(resolveChatDraftWorkspaceId(null, "workspace-1")).toBe("workspace-1");
   });
 
   it("returns null when no workspace is selected", () => {

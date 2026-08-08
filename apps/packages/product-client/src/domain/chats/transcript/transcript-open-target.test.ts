@@ -48,25 +48,4 @@ describe("resolveTranscriptOpenSessionWorkspaceId", () => {
       fallbackWorkspaceId: "parent-workspace",
     })).toBe("parent-workspace");
   });
-
-  it("uses managed cowork workspace metadata for cowork coding child sessions", () => {
-    expect(resolveTranscriptOpenSessionWorkspaceId({
-      sessionId: "child-session",
-      role: "cowork-coding-child",
-      sessionSlots: {},
-      linkedSessionWorkspaces: {
-        "child-session": "coding-workspace",
-      },
-      fallbackWorkspaceId: "parent-workspace",
-    })).toBe("coding-workspace");
-  });
-
-  it("does not route unresolved cowork coding child sessions to the parent workspace", () => {
-    expect(resolveTranscriptOpenSessionWorkspaceId({
-      sessionId: "child-session",
-      role: "cowork-coding-child",
-      sessionSlots: {},
-      fallbackWorkspaceId: "parent-workspace",
-    })).toBeNull();
-  });
 });

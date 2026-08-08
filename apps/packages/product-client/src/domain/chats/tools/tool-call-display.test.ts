@@ -18,21 +18,6 @@ describe("describeToolCallDisplay", () => {
     });
   });
 
-  it("uses the Proliferate icon for generic cowork MCP tools", () => {
-    const display = describeToolCallDisplay(
-      toolCallItem({
-        nativeToolName: "mcp__cowork__list_artifacts",
-      }),
-      "mcp__cowork__list_artifacts",
-    );
-
-    expect(display).toEqual({
-      label: "List artifacts",
-      hint: "Cowork",
-      iconKey: "proliferate",
-    });
-  });
-
   it("formats proliferate skills MCP tool calls", () => {
     expect(describeToolCallDisplay(
       toolCallItem({
@@ -89,19 +74,6 @@ describe("describeToolCallDisplay", () => {
       label: "update_model_mode",
       hint: undefined,
       iconKey: "settings",
-    });
-  });
-
-  it("keeps cowork artifact semantic kinds specialized", () => {
-    const display = describeToolCallDisplay(
-      toolCallItem({ semanticKind: "cowork_artifact_update" }),
-      "mcp__cowork__update_artifact",
-    );
-
-    expect(display).toEqual({
-      label: "Update artifact",
-      hint: "Cowork",
-      iconKey: "proliferate",
     });
   });
 });

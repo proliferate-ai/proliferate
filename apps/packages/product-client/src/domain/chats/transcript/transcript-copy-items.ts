@@ -9,16 +9,13 @@ import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
 } from "../tools/claude-plan-tool-call";
-import { deriveCoworkCodingToolPresentation } from "../tools/cowork-coding-tool-presentation";
 import { describeToolCallDisplay } from "../tools/tool-call-display";
 import { normalizeToolResultText } from "../tools/tool-result-text";
 import {
-  formatReviewFeedbackTranscriptText,
   formatAgentWakePromptTranscriptText,
   formatWakePromptTranscriptText,
   isAgentWakeProvenance,
   isSubagentWakeProvenance,
-  resolveReviewFeedbackPromptReference,
 } from "../subagents/provenance";
 import { resolveSubagentLaunchDisplay } from "../subagents/subagent-launch";
 import {
@@ -39,7 +36,6 @@ export function serializeTranscriptItem(
         text: item.text,
         promptProvenance: item.promptProvenance,
         transcript,
-        state: "completed",
       });
     case "assistant_prose":
       return normalizeCopySections([item.text]);
@@ -63,13 +59,11 @@ export function serializeUserPromptContent({
   text,
   promptProvenance,
   transcript,
-  state,
 }: {
   parts: readonly ContentPart[];
   text: string;
   promptProvenance: PromptProvenance | null | undefined;
   transcript: TranscriptState;
-  state: "queued" | "completed";
 }): string[] {
   if (isSubagentWakeProvenance(promptProvenance)) {
     return normalizeCopySections([
@@ -83,13 +77,6 @@ export function serializeUserPromptContent({
   if (isAgentWakeProvenance(promptProvenance)) {
     return normalizeCopySections([
       formatAgentWakePromptTranscriptText(promptProvenance),
-    ]);
-  }
-
-  const reviewReference = resolveReviewFeedbackPromptReference(promptProvenance, text);
-  if (reviewReference) {
-    return normalizeCopySections([
-      formatReviewFeedbackTranscriptText(reviewReference, state),
     ]);
   }
 
@@ -121,22 +108,6 @@ function serializeToolCall(
       display.title,
       display.meta,
       display.prompt,
-    ]));
-  }
-
-  const cowork = deriveCoworkCodingToolPresentation(item);
-  if (cowork) {
-    sections.push(...normalizeCopySections([
-      cowork.label,
-      cowork.displayName,
-      cowork.meta,
-      cowork.prompt,
-      cowork.promptStatus,
-      cowork.sourceWorkspaceId,
-      cowork.workspaceId,
-      cowork.coworkWorkspaceId,
-      cowork.codingSessionId,
-      cowork.coworkAgentId,
     ]));
   }
 

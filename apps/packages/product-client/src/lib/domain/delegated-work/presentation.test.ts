@@ -1,22 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDelegatedWorkTabIdentity,
-  delegatedWorkKindFromSource,
   delegatedWorkStatusCategoryFromLabel,
-  reviewRunStatusCategory,
   selectSingleDelegatedAgentTriggerIdentity,
   shouldShowDelegatedWorkInComposer,
 } from "#product/lib/domain/delegated-work/presentation";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
-
-describe("delegatedWorkKindFromSource", () => {
-  it("derives plan/code review kinds from review run kind", () => {
-    expect(delegatedWorkKindFromSource({ source: "review", reviewKind: "code" }))
-      .toBe("code_review");
-    expect(delegatedWorkKindFromSource({ source: "review", reviewKind: "plan" }))
-      .toBe("plan_review");
-  });
-});
 
 describe("delegatedWorkStatusCategoryFromLabel", () => {
   it("maps common child status labels into shared categories", () => {
@@ -28,14 +17,6 @@ describe("delegatedWorkStatusCategoryFromLabel", () => {
       statusLabel: "Idle",
       wakeScheduled: true,
     })).toBe("wake_scheduled");
-  });
-});
-
-describe("reviewRunStatusCategory", () => {
-  it("keeps feedback and waiting states visible as attention states", () => {
-    expect(reviewRunStatusCategory("feedback_ready")).toBe("needs_attention");
-    expect(reviewRunStatusCategory("waiting_for_revision")).toBe("needs_attention");
-    expect(reviewRunStatusCategory("parent_revising")).toBe("running");
   });
 });
 
@@ -87,18 +68,16 @@ describe("buildDelegatedWorkTabIdentity", () => {
   it("returns generated display identity and hover metadata", () => {
     const tabIdentity = buildDelegatedWorkTabIdentity({
       id: "assignment-1",
-      title: "Architecture Review",
-      source: "review",
-      reviewKind: "plan",
+      title: "Architecture Survey",
       statusLabel: "Working",
       sessionId: "session-1",
-      sessionLinkId: "review_assignment_abc123456",
+      sessionLinkId: "subagent_abc123456",
       parentTitle: "Main chat",
     });
 
-    expect(tabIdentity.kind).toBe("plan_review");
-    expect(tabIdentity.originLabel).toBe("Plan review");
-    expect(tabIdentity.identity.displayName).toContain("Architecture Review");
+    expect(tabIdentity.kind).toBe("subagent");
+    expect(tabIdentity.originLabel).toBe("Subagent");
+    expect(tabIdentity.identity.displayName).toContain("Architecture Survey");
     expect(tabIdentity.hoverTitle).toContain("Parent: Main chat");
   });
 });

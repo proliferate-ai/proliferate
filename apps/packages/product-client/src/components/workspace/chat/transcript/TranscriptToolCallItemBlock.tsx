@@ -9,16 +9,12 @@ import type {
 } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
 import { BashCommandCall } from "#product/components/workspace/chat/tool-calls/BashCommandCall";
-import { CoworkArtifactToolActionRow } from "#product/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
-import { CoworkCodingToolActionRow } from "#product/components/workspace/chat/tool-calls/cowork/CoworkCodingToolActionRow";
 import { FileChangeCall } from "#product/components/workspace/chat/tool-calls/FileChangeCall";
 import { FileReadCall } from "#product/components/workspace/chat/tool-calls/FileReadCall";
 import { GenericToolResultRow } from "#product/components/workspace/chat/tool-calls/GenericToolResultRow";
 import { SkillsToolResultRow } from "#product/components/workspace/chat/tool-calls/SkillsToolResultRow";
 import { SubagentToolActionRow } from "#product/components/workspace/chat/tool-calls/SubagentToolActionRow";
 import { WorkspaceOpsReceiptRow } from "#product/components/workspace/chat/tool-calls/WorkspaceOpsReceiptRow";
-import { useOpenCoworkCodingSession } from "#product/hooks/cowork/workflows/use-open-cowork-coding-session";
-import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { deriveSubagentMcpReceiptPresentation } from "#product/domain/chats/subagents/subagent-tool-presentation";
 import { deriveWorkspaceOpsReceipt } from "#product/domain/chats/subagents/workspace-ops-presentation";
 import { deriveSkillsToolResultPresentation } from "#product/domain/chats/tools/skills-tool-result";
@@ -29,44 +25,10 @@ import { ToolKindIcon } from "#product/components/workspace/chat/transcript/Tran
 
 export function TranscriptToolCallItemBlock({
   item,
-  workspaceId,
-  onOpenArtifact,
 }: {
   item: ToolCallItem;
-  workspaceId: string | null;
-  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
-  const openCodingSession = useOpenCoworkCodingSession();
-  const { selectWorkspace } = useWorkspaceSelection();
   const [showAllFileChanges, setShowAllFileChanges] = useState(false);
-
-  if (
-    item.semanticKind === "cowork_artifact_create"
-    || item.semanticKind === "cowork_artifact_update"
-  ) {
-    return (
-      <CoworkArtifactToolActionRow
-        item={item}
-        onOpenArtifact={
-          workspaceId
-            ? (artifactId) => onOpenArtifact(workspaceId, artifactId)
-            : undefined
-        }
-      />
-    );
-  }
-
-  if (item.semanticKind === "cowork_coding") {
-    return (
-      <CoworkCodingToolActionRow
-        item={item}
-        onOpenCodingSession={(input) => { void openCodingSession(input); }}
-        onOpenWorkspace={(targetWorkspaceId) => {
-          void selectWorkspace(targetWorkspaceId, { force: true });
-        }}
-      />
-    );
-  }
 
   const fileChanges = item.contentParts.filter(
     (part): part is FileChangeContentPart => part.type === "file_change",

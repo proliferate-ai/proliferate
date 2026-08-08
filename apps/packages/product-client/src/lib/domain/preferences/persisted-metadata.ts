@@ -64,12 +64,9 @@ export function selectPersistedUserPreferencesSlice(
     turnEndSoundId: preferences.turnEndSoundId,
     transparentChromeEnabled: preferences.transparentChromeEnabled,
     subagentsEnabled: preferences.subagentsEnabled,
-    coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
     worktreeAutoDeleteLimit: preferences.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: preferences.pasteAttachmentsEnabled,
     autoUpdateEnabled: preferences.autoUpdateEnabled,
-    reviewDefaultsByKind: preferences.reviewDefaultsByKind,
-    reviewPersonalitiesByKind: preferences.reviewPersonalitiesByKind,
     acknowledgedReleaseVersion: preferences.acknowledgedReleaseVersion,
     cachedInstalledRelease: preferences.cachedInstalledRelease,
   };

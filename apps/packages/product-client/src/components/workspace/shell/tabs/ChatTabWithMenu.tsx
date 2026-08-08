@@ -76,14 +76,13 @@ export function ChatTabWithMenu({
   /** Visual order among the strip's chat tabs; testid-only (data-chat-tab-index). */
   stripIndex?: number;
 }) {
-  const isReviewAgentChild = tab.isReviewAgentChild;
   const isSetupSession = isWorkspaceSetupSessionId(tab.id);
   const menuItems = buildChatTabContextMenuItems({
-    canRename: !isReviewAgentChild && !isSetupSession,
-    canFork: tab.canFork && !tab.isChild && !isReviewAgentChild,
+    canRename: !isSetupSession,
+    canFork: tab.canFork && !tab.isChild,
     canClose: canClose && !isSetupSession,
-    canDismiss: canDismiss && !isReviewAgentChild && !isSetupSession,
-    canCreateGroup: !isReviewAgentChild && canCreateGroup,
+    canDismiss: canDismiss && !isSetupSession,
+    canCreateGroup,
     isChild: tab.isChild,
   });
   const { onContextMenuCapture } = useWorkspaceTabNativeContextMenu({

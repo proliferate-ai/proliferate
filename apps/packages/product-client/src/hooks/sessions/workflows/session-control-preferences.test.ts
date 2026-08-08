@@ -85,21 +85,6 @@ describe("session control preferences", () => {
     });
   });
 
-  it("does not persist control preferences for cowork workspaces", () => {
-    persistDefaultSessionControlPreference({
-      agentKind: "codex",
-      liveConfig: liveConfig({
-        effort: control("effort", "reasoning_effort", "xhigh"),
-      }),
-      rawConfigId: "reasoning_effort",
-      workspaceSurface: "cowork",
-    });
-
-    expect(
-      useUserPreferencesStore.getState().defaultLiveSessionControlValuesByAgentKind,
-    ).toEqual({});
-  });
-
   it("ignores controls that do not match the applied raw config id", () => {
     persistDefaultSessionControlPreference({
       agentKind: "codex",
@@ -117,6 +102,8 @@ describe("session control preferences", () => {
 
   it("only persists for known standard workspace surfaces", () => {
     expect(shouldPersistDefaultSessionControlPreference("standard")).toBe(true);
+    // Retired legacy surface value: rows written before cowork was removed still
+    // read back, and they must stay out of the shared control defaults.
     expect(shouldPersistDefaultSessionControlPreference("cowork")).toBe(false);
     expect(shouldPersistDefaultSessionControlPreference(null)).toBe(false);
     expect(shouldPersistDefaultSessionControlPreference(undefined)).toBe(false);

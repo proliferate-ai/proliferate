@@ -59,7 +59,6 @@ export function TranscriptTurnRow({
   sessionViewState,
   onOpenFile,
   onOpenTurnChanges,
-  onOpenArtifact,
   onHandOffPlanToNewSession,
 }: {
   row: Extract<TranscriptVirtualRow, { kind: "turn" }>;
@@ -75,7 +74,6 @@ export function TranscriptTurnRow({
   sessionViewState: SessionViewState;
   onOpenFile: (filePath: string) => void;
   onOpenTurnChanges?: () => void;
-  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const isLatestTurn = row.turnId === latestTurnId;
@@ -244,9 +242,7 @@ export function TranscriptTurnRow({
           animateActivityEntry={isLatestTurnInProgress}
           animateAssistantRevealItemId={animateAssistantRevealItemId}
           onAssistantRevealStateChange={handleAssistantRevealStateChange}
-          showCompletedArtifactFallback={row.isLastTurnRow}
           workspaceId={selectedWorkspaceId}
-          onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
         />
         {shouldRenderAssistantEndResource({

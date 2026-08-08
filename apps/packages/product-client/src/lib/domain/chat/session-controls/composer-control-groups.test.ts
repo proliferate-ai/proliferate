@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  buildComposerSessionControlGroups,
-  filterComposerSessionControlsForSurface,
-} from "#product/lib/domain/chat/session-controls/composer-control-groups";
+import { buildComposerSessionControlGroups } from "#product/lib/domain/chat/session-controls/composer-control-groups";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 describe("buildComposerSessionControlGroups", () => {
@@ -241,42 +238,6 @@ describe("buildComposerSessionControlGroups", () => {
       fastModeControl: fastMode,
       overflowControls: [],
     });
-  });
-});
-
-describe("filterComposerSessionControlsForSurface", () => {
-  it("keeps Cowork working mode and fast mode while hiding its permission preset", () => {
-    const approvalMode = descriptor({
-      key: "mode",
-      label: "Permissions",
-      detail: "Full Access",
-    });
-    const collaborationMode = descriptor({
-      key: "collaboration_mode",
-      label: "Mode",
-      detail: "Default",
-    });
-    const fastMode = descriptor({
-      key: "fast_mode",
-      label: "Fast mode",
-      detail: "Off",
-    });
-
-    expect(filterComposerSessionControlsForSurface(
-      [approvalMode, collaborationMode, fastMode],
-      "cowork",
-    )).toEqual([collaborationMode, fastMode]);
-  });
-
-  it("does not filter standard-workspace controls", () => {
-    const approvalMode = descriptor({
-      key: "mode",
-      label: "Permissions",
-      detail: "Full Access",
-    });
-
-    expect(filterComposerSessionControlsForSurface([approvalMode], "standard"))
-      .toEqual([approvalMode]);
   });
 });
 

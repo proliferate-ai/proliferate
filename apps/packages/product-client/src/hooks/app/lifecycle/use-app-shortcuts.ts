@@ -13,7 +13,6 @@ import {
 } from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import { requestRightPanelTabByIndex } from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { stepWindowZoomId } from "#product/lib/domain/preferences/appearance";
 import {
@@ -121,11 +120,6 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     if (targetId) {
       selectWorkspaceFromSurface(targetId, "shortcut");
     }
-  });
-
-  useShortcutHandler("workspace.toggle-cowork-threads", () => {
-    const store = useWorkspaceUiStore.getState();
-    store.setThreadsCollapsed(!store.threadsCollapsed);
   });
 
   useShortcutHandler("workspace.new-default", () => {

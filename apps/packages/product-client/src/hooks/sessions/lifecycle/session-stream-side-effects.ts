@@ -147,18 +147,6 @@ export function applyBatchedStreamSideEffects(input: {
       sessionId: input.sessionId,
     });
   }
-  if (plan.invalidateCowork) {
-    input.sessionStreamCache.invalidateCoworkManagedWorkspaces({
-      runtimeUrl: input.runtimeUrl,
-      sessionId: input.sessionId,
-    });
-  }
-  for (const parentSessionId of plan.reviewParentSessionIds) {
-    input.sessionStreamCache.invalidateSessionReviews({
-      workspaceId: input.workspaceId,
-      parentSessionId,
-    });
-  }
   if (plan.invalidateGitStatus && input.workspaceId) {
     input.sessionStreamCache.invalidateGitStatus({
       workspaceId: input.workspaceId,

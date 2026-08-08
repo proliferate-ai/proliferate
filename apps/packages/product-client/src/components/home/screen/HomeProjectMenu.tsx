@@ -5,26 +5,21 @@ import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/Popove
 import {
   Check,
   ChevronRight,
-  X,
 } from "#product/primitives/icons/core";
 import {
   FolderPlus,
   ProjectNotebook,
 } from "#product/primitives/icons/workspace";
 import { matchesPickerSearch } from "#product/primitives/utils/search";
-import type { HomeNextDestination } from "#product/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import { ProjectSearchField } from "#product/components/home/screen/HomeTargetPickerParts";
 interface HomeProjectMenuProps {
   trigger: ReactElement<{
     onClick?: (...args: unknown[]) => void;
   }>;
-  coworkAvailable: boolean;
-  destination: HomeNextDestination;
   repositories: SettingsRepositoryEntry[];
   selectedRepository: SettingsRepositoryEntry | null;
   onSelectRepository: (sourceRoot: string) => void;
-  onSelectCowork: () => void;
   onAddRepository: () => void;
   side?: "top" | "bottom";
 }
@@ -34,12 +29,9 @@ interface HomeProjectMenuProps {
  */
 export function HomeProjectMenu({
   trigger,
-  coworkAvailable,
-  destination,
   repositories,
   selectedRepository,
   onSelectRepository,
-  onSelectCowork,
   onAddRepository,
   side = "top",
 }: HomeProjectMenuProps) {
@@ -62,8 +54,7 @@ export function HomeProjectMenu({
           <div className="min-h-0 overflow-y-auto py-1">
             {filteredRepositories.map((repository) => {
               const isSelected =
-                destination === "repository"
-                && selectedRepository?.sourceRoot === repository.sourceRoot;
+                selectedRepository?.sourceRoot === repository.sourceRoot;
               return (
                 <PopoverMenuItem
                   key={repository.sourceRoot}
@@ -95,18 +86,6 @@ export function HomeProjectMenu({
                 close();
               }}
             />
-            {coworkAvailable ? (
-              <PopoverMenuItem
-                icon={<X className="icon-paired" />}
-                label="Don't work in a project"
-                trailing={destination === "cowork" ? <Check className="icon-paired" /> : null}
-                onClick={() => {
-                  onSelectCowork();
-                  setSearchValue("");
-                  close();
-                }}
-              />
-            ) : null}
           </div>
         </div>
       )}

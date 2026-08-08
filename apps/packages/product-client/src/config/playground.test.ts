@@ -37,7 +37,6 @@ const TOOL_CALL_SCENARIOS: ScenarioKey[] = [
   "tool-file-change-diff",
   "tool-activity-ledger",
   "tool-reasoning",
-  "tool-cowork-artifact",
   "tool-generic-result",
   "tool-subagent-task",
 ];

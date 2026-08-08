@@ -165,7 +165,7 @@ export function HeaderTabsStripRows({
           previousShellRow?.kind === "chat" && previousShellRow.row.kind === "tab";
         const nextIsChatTab =
           nextShellRow?.kind === "chat" && nextShellRow.row.kind === "tab";
-        const canDragTab = !tab.isReviewAgentChild;
+        const canDragTab = true;
 
         return (
           <HeaderChatTab

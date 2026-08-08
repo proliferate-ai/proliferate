@@ -11,7 +11,6 @@ import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "#product/config/chat-layout";
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
-import { useOpenCoworkArtifact } from "#product/hooks/cowork/workflows/use-open-cowork-artifact";
 import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";
@@ -119,7 +118,6 @@ export function MessageList({
     dismissPrompt,
   }), [retryPrompt, dismissPrompt]);
   const { openFile, openGitReviewPane } = useWorkspaceFileActions();
-  const { openArtifact } = useOpenCoworkArtifact();
   const transcriptViewState = useMemo<ChatTranscriptState>(() => ({
     activeSessionId,
     selectedWorkspaceId,
@@ -276,12 +274,10 @@ export function MessageList({
       sessionViewState={input.sessionViewState}
       onOpenFile={(filePath) => void openFile(filePath)}
       onOpenTurnChanges={() => openGitReviewPane({ mode: "last_turn" })}
-      onOpenArtifact={openArtifact}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
     />
   ), [
     onHandOffPlanToNewSession,
-    openArtifact,
     openFile,
     openGitReviewPane,
   ]);
