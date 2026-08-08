@@ -727,3 +727,102 @@ fn the_peer_tools_take_the_permit_before_the_target_workspace_lease() {
         assert!(lease_at < dispatch_at, "{tool}: dispatch escaped the locks");
     }
 }
+
+/// One private function's body, squashed to single spaces. Same extraction the
+/// peer-tool guard above does inline; the workspace-spawn tools need it too.
+fn private_fn_body(rel_path: &str, fn_name: &str) -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel_path);
+    let text =
+        std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("read {rel_path}: {error}"));
+    let signature = format!("async fn {fn_name}(");
+    let start = text
+        .find(&signature)
+        .unwrap_or_else(|| panic!("{rel_path}: {fn_name} not found"));
+    let rest = &text[start..];
+    let end = rest.find("\n}\n").map(|idx| idx + 3).unwrap_or(rest.len());
+    squash_whitespace(&rest[..end])
+}
+
+#[test]
+fn spawn_agent_holds_the_target_workspace_lease_across_creation() {
+    // `spawn_agent` can now create a peer in a workspace that is not the
+    // caller's (ADR §3.3), so it left `MUTATING_TOOL_NAMES` for the same reason
+    // `send_agent_message` and `configure_agent` did: the route's lease is the
+    // CALLER's workspace, which is the wrong one. It takes the TARGET
+    // workspace's write lease itself instead.
+    //
+    // Unlike the peer tools there is no admission permit, and none is possible:
+    // the target SESSION does not exist until the call creates it, so there is
+    // nothing to admit. With one lease and no permit LOCK-01 has no order to
+    // invert — what is left to prove is that the one lease is HELD across the
+    // creation, because that is what a concurrent retire preflight on the
+    // target workspace has to collide with.
+    assert!(
+        !crate::domains::sessions::agent_ops::tools::MUTATING_TOOL_NAMES.contains(&"spawn_agent"),
+        "spawn_agent must stay OUT of MUTATING_TOOL_NAMES — the route lease is the caller's \
+         workspace, and taking it here would both lease the wrong workspace and (were a permit \
+         ever added) invert LOCK-01"
+    );
+    let body = private_fn_body("src/domains/sessions/agent_ops/calls.rs", "spawn_agent");
+    let body = body.as_str();
+    // The BINDING, not the call: `let _ = lease_..(..)` drops the lease at the
+    // end of its own statement, which reads identically in call ORDER and
+    // fences nothing.
+    let lease_at = body
+        .find("let _target_workspace_lease = lease_target_workspace_for_peer_write(")
+        .expect(
+            "spawn_agent must BIND the TARGET workspace lease as `_target_workspace_lease` — \
+             an unbound `let _ =` drops it immediately",
+        );
+    let create_at = body
+        .find("create_agent_session(")
+        .expect("spawn_agent must create through the shared create_agent_session routine");
+    assert!(
+        lease_at < create_at,
+        "spawn_agent: the target workspace lease must be taken BEFORE create_agent_session, and \
+         it is held to the end of the function, so creation happens inside it"
+    );
+    // And the lease is on the TARGET, not on the caller's `ctx.workspace_id`.
+    assert!(
+        body.contains(
+            "lease_target_workspace_for_peer_write( &gates.workspace_operation_gate, \
+             service.access_gate(), &request.workspace_id,"
+        ),
+        "spawn_agent must lease `request.workspace_id` (the target), not the caller's workspace"
+    );
+}
+
+#[test]
+fn spawn_workspace_has_nothing_to_lease_and_says_so() {
+    // `spawn_workspace` creates a workspace, so at call time the thing a
+    // workspace operation lease would name does not exist. The human worktree
+    // route has the same problem and solves it the same way: no operation
+    // lease, an ACCESS-gate assertion on the repo root instead. Recording it
+    // here so a later reader does not "fix" the missing lease.
+    assert!(
+        !crate::domains::sessions::agent_ops::tools::MUTATING_TOOL_NAMES
+            .contains(&"spawn_workspace"),
+        "spawn_workspace must stay OUT of MUTATING_TOOL_NAMES — the route would lease the \
+         CALLER's workspace, which is not what the call mutates"
+    );
+    let body = private_fn_body(
+        "src/domains/sessions/agent_ops/workspace_ops.rs",
+        "spawn_workspace",
+    );
+    let body = body.as_str();
+    assert!(
+        !body.contains("acquire_shared(") && !body.contains("acquire_exclusive("),
+        "spawn_workspace must not take a workspace operation lease — there is no workspace to \
+         lease until it returns"
+    );
+    let gate_at = body
+        .find("assert_can_mutate_for_repo_root(")
+        .expect("spawn_workspace must gate on the repo root, as the human worktree route does");
+    let create_at = body
+        .find("spawn_worktree_workspace(")
+        .expect("spawn_workspace must delegate creation to the worktree path");
+    assert!(
+        gate_at < create_at,
+        "spawn_workspace: the repo-root access gate must run before anything is created"
+    );
+}

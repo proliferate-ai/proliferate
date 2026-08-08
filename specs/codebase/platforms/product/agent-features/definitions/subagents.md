@@ -95,20 +95,23 @@ subordination expressed on the session row; promotion lifts both, so a promoted
 agent can genuinely spawn rather than merely being offered the tools. An
 unpromoted subagent is offered no spawn-style tool at all — not
 `spawn_subagent`, not `spawn_agent`, not `get_subagent_launch_options`, not the
-`create_subagent` alias. That is stricter than the fanout cap, which merely
-refuses a spawn: a capped parent still sees its launch options, because the cap
-is a temporary condition of an agent that is allowed to think in terms of
-spawning. Subordination is not.
+`create_subagent` alias, and not the workspace pair `get_workspace_options` /
+`spawn_workspace`. That is stricter than the fanout cap, which merely refuses a
+spawn: a capped parent still sees its launch options, because the cap is a
+temporary condition of an agent that is allowed to think in terms of spawning.
+Subordination is not.
 
 The cap is also narrower than it looks. It counts unpromoted subagents, which
 are the children that cascade and that a parent is responsible for; owned agents
 are peers from birth and are not capped. An owner holding eight subagents is
-refused `spawn_subagent` and still offered `spawn_agent`.
+refused `spawn_subagent` and still offered `spawn_agent`. The workspace pair is
+not capped either: a workspace holds no agent by itself.
 
-`spawn_agent` creates a peer in the caller's own workspace and returns the new
-`sessionId` and an `agentId`. It reports no `subagentId`, because there is no
-subagent: the handle for a peer is its session id, the same one the peer tools
-take. Its launch vocabulary is `spawn_subagent`'s, deliberately: the same
+`spawn_agent` creates a peer and returns the new `sessionId` and an `agentId`.
+It reports no `subagentId`, because there is no subagent: the handle for a peer
+is its session id, the same one the peer tools take. It takes an optional
+`workspaceId` and defaults to the caller's, so the common case still needs no
+argument. Its launch vocabulary is `spawn_subagent`'s, deliberately: the same
 `harnessId` and the same open `initialConfig` object, of which `modelId` and
 `modeId` are read. `appliedInitialConfig` in the result reports what the new
 agent actually launched with, so a key that was not honoured is visibly absent
@@ -132,6 +135,48 @@ peer gate with a subordinate caller. Both are the same predicate — an open
 subagent link naming the caller as the child, not yet promoted — so an
 unpromoted subagent is refused whichever way it is reached, and no path into a
 spawn depends on dispatch having checked first.
+
+## Peer Placement
+
+A peer created in ANOTHER workspace is checked against that workspace, not
+against the caller's. The two can differ completely — a workspace authorizes its
+own harnesses, models and auth contexts — so the launch selection is composed
+against the target's catalog before anything is created. A harness the target
+cannot launch is refused and the refusal names what it can; a model the caller
+NAMED that the target does not offer is refused; and a model merely INHERITED
+from the caller, which the caller never asked for, is quietly replaced by the
+target's default for that harness rather than failing the call. The
+`appliedInitialConfig` in the response is read off the created session, so it
+reports what the agent actually launched with.
+
+This is the same principle peer configuration follows below, applied one step
+earlier: the target's universe decides, never the caller's.
+
+## Workspace Spawn
+
+`get_workspace_options` and `spawn_workspace` let a promoted agent make itself
+somewhere to work. `get_workspace_options` mirrors the human creation surface —
+the configured repo roots, which of them this machine actually has, the caller's
+own root marked as the default, and the two modes — and marks a repo it cannot
+use as unavailable WITH the reason rather than hiding it.
+
+`spawn_workspace` takes three things and a label: a repo root (defaulting to the
+caller's), a mode, and, for `mode=worktree`, a branch name. Everything else is
+server-side policy — base branch, path, name-conflict handling, setup script —
+because those are choices a human makes from a form with the repo in front of
+them, and an agent guessing at them is how you get eleven half-configured
+worktrees. A branch name that is already taken is suffixed rather than refused.
+
+Placement is local-only: the workspace lands on this machine, in a repo this
+machine has checked out, or the call is refused with which of those was false.
+Every workspace it makes carries `WorkspaceCreatorContext::Agent` with the
+calling session id, so the provenance a person sees names the agent that asked.
+
+The asymmetry is deliberate: an agent may create a workspace and may not retire
+one. Creation is recoverable — an unwanted workspace is a directory and a row.
+Retirement destroys a checkout that may hold the only copy of work, so it stays
+a decision a person makes. No tool on this server reaches a retire, purge or
+delete path, and a test asserts it by name.
 
 ## Peer Configuration
 

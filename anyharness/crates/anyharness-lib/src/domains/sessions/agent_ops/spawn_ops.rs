@@ -21,6 +21,7 @@
 //! point: the two spawn shapes cannot drift apart on the parts that are not
 //! about ownership.
 
+use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::sessions::delegation::parent_to_child_provenance;
 use crate::domains::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
@@ -68,9 +69,18 @@ impl AgentSessionOwnership {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CreateAgentSessionRequest {
     pub ownership: AgentSessionOwnership,
+    /// Where the new agent lands. A subagent's is always the caller's own
+    /// (ADR §5 flow 4: "subagents stay own-workspace only"); a peer's is
+    /// whatever `spawn_agent` was asked for, which since `spawn_workspace`
+    /// exists can be a workspace the caller just created.
     pub workspace_id: String,
     pub agent_kind: String,
     pub model_id: Option<String>,
+    /// Whether `model_id` was NAMED by the caller or inherited from it. The
+    /// two behave differently when the target workspace does not offer that
+    /// model: a named model is an error, an inherited one is replaced by the
+    /// target's default. See [`resolve_launch_against_target_workspace`].
+    pub model_id_explicit: bool,
     pub mode_id: Option<String>,
     pub label: Option<String>,
     pub prompt: String,
@@ -97,6 +107,10 @@ impl CreateAgentSessionRequest {
         Self::inherit_from(
             parent,
             AgentSessionOwnership::Subagent,
+            // Own workspace only, always. A subagent is subordinate to the
+            // caller AND to the caller's checkout; `spawn_workspace` +
+            // `spawn_agent` is the cross-workspace path (ADR §5 flow 4).
+            parent.workspace_id.clone(),
             args.prompt,
             args.label,
             args.harness_id,
@@ -108,30 +122,25 @@ impl CreateAgentSessionRequest {
     /// Resolve `spawn_agent`'s arguments against the calling session. The
     /// inheritance rule is deliberately the same one subagents get: an agent
     /// asking for a peer without naming a harness means "one like me".
+    ///
+    /// `workspaceId` names where the peer lands and defaults to the caller's
+    /// own. Any workspace is allowed — that is the second half of ADR §5's
+    /// flow 4, where `spawn_workspace` creates a workspace and `spawn_agent`
+    /// puts an agent in it. Whether that workspace EXISTS, is standard, and is
+    /// writable is not decided here: this mapping is pure, and the caller
+    /// resolves and fences the target before `create_agent_session` runs.
     pub fn owned_agent(caller: &SessionRecord, args: SpawnAgentArgs) -> anyhow::Result<Self> {
-        if let Some(requested) = args
+        let target_workspace_id = args
             .workspace_id
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
-        {
-            // The argument is accepted rather than ignored on purpose: silently
-            // dropping it would spawn the agent somewhere the caller did not
-            // ask for. Other workspaces become reachable with `spawn_workspace`
-            // (ADR §6 step 7); until then this tool creates the session in the
-            // workspace whose write lease the route already holds.
-            if requested != caller.workspace_id {
-                anyhow::bail!(
-                    "spawn_agent creates the agent in your own workspace ({}), and cannot yet \
-                     target {requested}. Send a message to an agent already in that workspace, \
-                     or ask a person to open one.",
-                    caller.workspace_id
-                );
-            }
-        }
+            .map(ToString::to_string)
+            .unwrap_or_else(|| caller.workspace_id.clone());
         Self::inherit_from(
             caller,
             AgentSessionOwnership::OwnedAgent,
+            target_workspace_id,
             args.prompt,
             args.label,
             args.harness_id,
@@ -140,9 +149,11 @@ impl CreateAgentSessionRequest {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn inherit_from(
         caller: &SessionRecord,
         ownership: AgentSessionOwnership,
+        workspace_id: String,
         prompt: String,
         label: Option<String>,
         harness_id: Option<String>,
@@ -152,11 +163,13 @@ impl CreateAgentSessionRequest {
         if prompt.trim().is_empty() {
             anyhow::bail!("prompt is required");
         }
+        let named_model_id = initial_config_string(initial_config, &["modelId", "model"]);
         Ok(Self {
             ownership,
-            workspace_id: caller.workspace_id.clone(),
+            workspace_id,
             agent_kind: harness_id.unwrap_or_else(|| caller.agent_kind.clone()),
-            model_id: initial_config_string(initial_config, &["modelId", "model"])
+            model_id_explicit: named_model_id.is_some(),
+            model_id: named_model_id
                 .or_else(|| caller.current_model_id.clone())
                 .or_else(|| caller.requested_model_id.clone()),
             mode_id: initial_config_string(initial_config, &["modeId", "mode"])
@@ -168,6 +181,11 @@ impl CreateAgentSessionRequest {
             prompt,
             wake_on_completion,
         })
+    }
+
+    /// Whether the new agent lands somewhere other than the caller's checkout.
+    pub fn is_cross_workspace(&self, caller: &SessionRecord) -> bool {
+        self.workspace_id != caller.workspace_id
     }
 
     /// Whether the new session may spawn agents of its own.
@@ -184,6 +202,93 @@ impl CreateAgentSessionRequest {
     }
 }
 
+/// Resolve the launch selection against the workspace the agent will actually
+/// run in — never the caller's (ADR §5 flow 4).
+///
+/// This is the spawn-side twin of `config_ops`' composition rule, and it exists
+/// for the same reason: since `spawn_workspace`, the target workspace is
+/// routinely NOT the caller's, and two workspaces can have entirely different
+/// catalogs, readiness and auth contexts. Composing the caller's would let an
+/// agent launch a harness or model the target machine cannot actually run
+/// there, which fails later, at spawn, with a durable half-built session
+/// already inserted.
+///
+/// The two selections are treated differently on purpose:
+///
+/// - the harness is always refused when the target cannot launch it. There is
+///   no sensible substitute — "one like me" is the request, and quietly picking
+///   a different harness would be a different agent.
+/// - a model the caller NAMED is refused for the same reason. A model merely
+///   INHERITED from the caller is replaced by the target's own default: the
+///   caller never asked for it, it only asked for "one like me", and the
+///   target's default is exactly what the human create flow would pick there.
+///
+/// A target whose catalog resolves to no launchable agents at all says nothing
+/// about the request — it means readiness could not be established on this
+/// machine — so it is passed through rather than turned into a refusal that
+/// names nothing.
+///
+/// The catalog arrives as a closure, so *which workspace id this asks about* is
+/// testable without a runtime.
+pub(super) fn resolve_launch_against_target_workspace<C>(
+    request: &mut CreateAgentSessionRequest,
+    resolve_workspace_launch_options: C,
+) -> anyhow::Result<()>
+where
+    C: FnOnce(&str) -> anyhow::Result<ResolvedWorkspaceLaunchOptions>,
+{
+    let catalog = resolve_workspace_launch_options(&request.workspace_id)?;
+    if catalog.agents.is_empty() {
+        return Ok(());
+    }
+    let Some(agent) = catalog
+        .agents
+        .iter()
+        .find(|agent| agent.kind == request.agent_kind)
+    else {
+        anyhow::bail!(
+            "{} cannot be launched in workspace {}. Launchable there: {}.",
+            request.agent_kind,
+            request.workspace_id,
+            join_quoted(catalog.agents.iter().map(|agent| agent.kind.as_str()))
+        );
+    };
+    let Some(model_id) = request.model_id.clone() else {
+        return Ok(());
+    };
+    let offered = agent
+        .models
+        .iter()
+        .any(|model| model.id == model_id || model.aliases.iter().any(|alias| *alias == model_id));
+    if offered {
+        return Ok(());
+    }
+    if request.model_id_explicit {
+        anyhow::bail!(
+            "model {model_id:?} is not available for {} in workspace {}. Available there: {}.",
+            request.agent_kind,
+            request.workspace_id,
+            join_quoted(agent.models.iter().map(|model| model.id.as_str()))
+        );
+    }
+    // Inherited, not asked for: fall back to what the target workspace would
+    // have chosen by itself rather than refusing a launch nobody specified.
+    request.model_id = agent.default_model_id.clone();
+    Ok(())
+}
+
+fn join_quoted<'a>(values: impl Iterator<Item = &'a str>) -> String {
+    let joined = values
+        .map(|value| format!("{value:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if joined.is_empty() {
+        "nothing".to_string()
+    } else {
+        joined
+    }
+}
+
 /// Create, own, start and prompt one new agent, unwinding on any failure.
 pub(super) async fn create_agent_session(
     service: &SubagentService,
@@ -191,8 +296,15 @@ pub(super) async fn create_agent_session(
     wake_service: &AgentWakeService,
     session_runtime: &SessionRuntime,
     caller: &SessionRecord,
-    request: CreateAgentSessionRequest,
+    mut request: CreateAgentSessionRequest,
 ) -> anyhow::Result<CreatedAgentSession> {
+    // Against the TARGET workspace's options, before a single durable row
+    // exists: a harness or model that workspace cannot run would otherwise
+    // fail at start, with a half-built session already inserted.
+    resolve_launch_against_target_workspace(&mut request, |workspace_id| {
+        session_runtime.resolved_workspace_launch_options(workspace_id)
+    })?;
+    let request = request;
     let child = session_runtime
         .create_durable_session(
             &request.workspace_id,
@@ -395,6 +507,9 @@ fn cleanup_child_session_after_failed_launch(
 mod tests {
     use super::*;
     use crate::app::test_support;
+    use crate::domains::agents::readiness::launch_options::{
+        ResolvedLaunchAgentOption, ResolvedLaunchModelOption,
+    };
     use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
     use crate::domains::sessions::agent_ops::peer_ops::consume_reply_wake;
     use crate::domains::sessions::agent_ops::tools::SpawnAgentArgs;
@@ -570,7 +685,7 @@ mod tests {
     }
 
     #[test]
-    fn spawn_agent_takes_the_callers_own_workspace_and_refuses_another() {
+    fn spawn_agent_lands_the_peer_in_the_workspace_it_was_given() {
         let caller = session("ses_caller");
 
         let same = CreateAgentSessionRequest::owned_agent(
@@ -582,20 +697,256 @@ mod tests {
         )
         .expect("naming your own workspace is fine");
         assert_eq!(same.workspace_id, "workspace-1");
+        assert!(!same.is_cross_workspace(&caller));
 
-        // Refused rather than ignored: silently spawning in the caller's
-        // workspace would put the agent somewhere it was not asked for, and the
-        // route's write lease covers only this workspace anyway.
-        let error = CreateAgentSessionRequest::owned_agent(
+        // The other half of ADR §5 flow 4: `spawn_workspace` makes a workspace,
+        // and this is the tool that puts an agent in it. Refusing here (as the
+        // pre-`spawn_workspace` build did) would leave the new workspace with
+        // no way to get an agent into it.
+        let elsewhere = CreateAgentSessionRequest::owned_agent(
             &caller,
             SpawnAgentArgs {
                 workspace_id: Some("workspace-2".to_string()),
                 ..spawn_agent_args()
             },
         )
-        .err()
-        .expect("another workspace is refused");
-        assert!(error.to_string().contains("workspace-2"));
+        .expect("another workspace is allowed");
+        assert_eq!(elsewhere.workspace_id, "workspace-2");
+        assert!(elsewhere.is_cross_workspace(&caller));
+
+        // Omitted still means "here".
+        let defaulted =
+            CreateAgentSessionRequest::owned_agent(&caller, spawn_agent_args()).expect("build");
+        assert_eq!(defaulted.workspace_id, "workspace-1");
+    }
+
+    #[test]
+    fn a_subagent_is_pinned_to_the_callers_workspace_with_no_way_to_ask_otherwise() {
+        // Ruling: subagents stay own-workspace only (ADR §5 flow 4). The tool
+        // takes no workspace argument at all, so this pins the derivation.
+        let request = CreateAgentSessionRequest::subagent(&session("ses_caller"), subagent_args())
+            .expect("build request");
+
+        assert_eq!(request.workspace_id, "workspace-1");
+        assert!(!request.is_cross_workspace(&session("ses_caller")));
+    }
+
+    // --- launch validation against the TARGET workspace (ADR §5 flow 4) ---
+
+    fn model_option(id: &str) -> ResolvedLaunchModelOption {
+        ResolvedLaunchModelOption {
+            id: id.to_string(),
+            display_name: id.to_string(),
+            aliases: Vec::new(),
+            is_default: false,
+            default_opt_in: None,
+            description: None,
+            provider: None,
+            status: None,
+            effort: None,
+            live_effort_candidates: Vec::new(),
+            fast_mode: false,
+            modes: None,
+        }
+    }
+
+    fn agent_option(kind: &str, model_ids: &[&str]) -> ResolvedLaunchAgentOption {
+        ResolvedLaunchAgentOption {
+            kind: kind.to_string(),
+            display_name: kind.to_string(),
+            default_model_id: model_ids.first().map(|id| (*id).to_string()),
+            unattended_mode_id: None,
+            models: model_ids.iter().map(|id| model_option(id)).collect(),
+        }
+    }
+
+    /// Records which workspace id the launch resolution asked the catalog
+    /// about, and answers with deliberately DISJOINT menus per workspace, so
+    /// composing the wrong one is visible in the outcome and not only in the
+    /// spy. Same shape as `config_ops`' spy, for the same guarantee.
+    struct CatalogSpy {
+        asked: std::cell::RefCell<Vec<String>>,
+    }
+
+    impl CatalogSpy {
+        fn new() -> Self {
+            Self {
+                asked: std::cell::RefCell::new(Vec::new()),
+            }
+        }
+
+        fn resolver(
+            &self,
+        ) -> impl FnOnce(&str) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> + '_ {
+            move |workspace_id: &str| {
+                self.asked.borrow_mut().push(workspace_id.to_string());
+                Ok(ResolvedWorkspaceLaunchOptions {
+                    agents: match workspace_id {
+                        "workspace-1" => {
+                            vec![agent_option("claude", &["caller-only-model"])]
+                        }
+                        "workspace-2" => vec![
+                            agent_option("claude", &["target-only-model"]),
+                            agent_option("codex", &["target-codex-model"]),
+                        ],
+                        _ => Vec::new(),
+                    },
+                })
+            }
+        }
+    }
+
+    fn cross_workspace_request() -> CreateAgentSessionRequest {
+        CreateAgentSessionRequest::owned_agent(
+            &session("ses_caller"),
+            SpawnAgentArgs {
+                workspace_id: Some("workspace-2".to_string()),
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request")
+    }
+
+    #[test]
+    fn the_launch_selection_is_resolved_against_the_target_workspace_not_the_caller() {
+        let spy = CatalogSpy::new();
+        let mut request = cross_workspace_request();
+        // Inherited from the caller, whose workspace is the only place that
+        // model exists.
+        assert_eq!(request.model_id.as_deref(), Some("current-model"));
+        assert!(!request.model_id_explicit);
+
+        resolve_launch_against_target_workspace(&mut request, spy.resolver())
+            .expect("an inherited model the target lacks falls back, it does not fail");
+
+        // The whole point: workspace-2, never workspace-1.
+        assert_eq!(spy.asked.borrow().as_slice(), ["workspace-2"]);
+        // And it landed on the TARGET's default, not the caller's model and not
+        // the caller workspace's default.
+        assert_eq!(request.model_id.as_deref(), Some("target-only-model"));
+        assert_ne!(request.model_id.as_deref(), Some("caller-only-model"));
+    }
+
+    #[test]
+    fn a_model_only_the_callers_workspace_offers_is_refused_when_the_caller_named_it() {
+        let spy = CatalogSpy::new();
+        let mut request = CreateAgentSessionRequest::owned_agent(
+            &session("ses_caller"),
+            SpawnAgentArgs {
+                workspace_id: Some("workspace-2".to_string()),
+                initial_config: Some(json!({ "modelId": "caller-only-model" })),
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request");
+        assert!(request.model_id_explicit);
+
+        let error = resolve_launch_against_target_workspace(&mut request, spy.resolver())
+            .err()
+            .expect("a named model outside the target's catalog is refused");
+
+        assert!(error.to_string().contains("caller-only-model"));
+        // Resolving against the caller's catalog would have accepted it.
+        assert_eq!(spy.asked.borrow().as_slice(), ["workspace-2"]);
+    }
+
+    #[test]
+    fn a_model_the_target_workspace_offers_is_kept_verbatim() {
+        let spy = CatalogSpy::new();
+        let mut request = CreateAgentSessionRequest::owned_agent(
+            &session("ses_caller"),
+            SpawnAgentArgs {
+                workspace_id: Some("workspace-2".to_string()),
+                initial_config: Some(json!({ "modelId": "target-only-model" })),
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request");
+
+        resolve_launch_against_target_workspace(&mut request, spy.resolver()).expect("accepted");
+
+        assert_eq!(request.model_id.as_deref(), Some("target-only-model"));
+    }
+
+    #[test]
+    fn a_harness_the_target_cannot_launch_is_refused_and_names_what_it_can() {
+        let spy = CatalogSpy::new();
+        let mut request = CreateAgentSessionRequest::owned_agent(
+            &session("ses_caller"),
+            SpawnAgentArgs {
+                harness_id: Some("grok".to_string()),
+                workspace_id: Some("workspace-2".to_string()),
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request");
+
+        let error = resolve_launch_against_target_workspace(&mut request, spy.resolver())
+            .err()
+            .expect("an unlaunchable harness is refused");
+
+        let message = error.to_string();
+        assert!(message.contains("grok"));
+        assert!(message.contains("claude"));
+        assert!(message.contains("codex"));
+    }
+
+    #[test]
+    fn a_workspace_whose_catalog_resolves_to_nothing_is_passed_through() {
+        // No launchable agents means readiness could not be established here,
+        // not that the request is wrong. Refusing would name nothing.
+        let spy = CatalogSpy::new();
+        let mut request = CreateAgentSessionRequest::owned_agent(
+            &session("ses_caller"),
+            SpawnAgentArgs {
+                workspace_id: Some("workspace-unknown".to_string()),
+                ..spawn_agent_args()
+            },
+        )
+        .expect("build request");
+
+        resolve_launch_against_target_workspace(&mut request, spy.resolver())
+            .expect("an empty catalog decides nothing");
+
+        assert_eq!(request.agent_kind, "claude");
+        assert_eq!(request.model_id.as_deref(), Some("current-model"));
+    }
+
+    #[test]
+    fn the_real_resolver_is_handed_the_target_workspace_too() {
+        // The spy tests above pin the ROUTINE. This pins the one call site that
+        // feeds it: `create_agent_session` has both the caller and the request
+        // in scope, and passing `caller.workspace_id` would compile, pass every
+        // test above, and quietly compose a cross-workspace spawn against the
+        // wrong catalog.
+        let source = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/domains/sessions/agent_ops/spawn_ops.rs"),
+        )
+        .expect("read spawn_ops.rs");
+        let body = source
+            .split_once("pub(super) async fn create_agent_session(")
+            .expect("create_agent_session exists")
+            .1;
+        let body = body
+            .split_once("\npub ")
+            .map(|(head, _)| head)
+            .unwrap_or(body);
+        let call = body
+            .split_once("resolve_launch_against_target_workspace(")
+            .expect("create_agent_session must resolve the launch selection first")
+            .1;
+        let call = &call[..call.find("})?;").expect("closure ends") + 4];
+        assert!(
+            call.contains("session_runtime.resolved_workspace_launch_options(workspace_id)"),
+            "create_agent_session must resolve against the workspace the routine names — the \
+             TARGET's"
+        );
+        assert!(
+            !call.contains("caller."),
+            "create_agent_session must not resolve the launch selection against the CALLER's \
+             workspace: the target authorizes its own harnesses and models"
+        );
     }
 
     #[test]

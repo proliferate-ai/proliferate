@@ -59,6 +59,23 @@ impl WorkspaceWorktreeRuntime {
         }
     }
 
+    /// The setup command this machine last ran for `workspace_id`, if any.
+    ///
+    /// The human creation flow carries a setup script in the request, chosen
+    /// interactively from detected hints. Surfaces that create a worktree with
+    /// no human in the loop — `spawn_workspace` on the agent ops MCP — need a
+    /// server-side answer to "what setup does this repo use here", and the
+    /// command already run for an existing workspace of the same repo IS that
+    /// answer, rather than a second detection policy that could disagree with
+    /// what the human picked.
+    pub fn latest_setup_command(&self, workspace_id: &str) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .setup_runtime
+            .latest_setup_run(workspace_id)
+            .map_err(anyhow::Error::from)?
+            .map(|run| run.command))
+    }
+
     pub async fn create_worktree(
         &self,
         input: CreateWorktreeWorkflowInput,

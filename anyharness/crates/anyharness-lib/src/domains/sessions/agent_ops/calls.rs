@@ -23,9 +23,10 @@ use super::tools::{
     CreateSubagentArgs, GetAgentConfigOptionsArgs, ListAgentsArgs, PromoteSubagentArgs,
     ReadAgentTranscriptArgs, ReadAgentTranscriptMode, ReadSubagentEventsArgs,
     ReadSubagentLatestTurnsArgs, ScheduleAgentWakeArgs, SearchSubagentTranscriptArgs,
-    SendAgentMessageArgs, SendSubagentMessageArgs, SpawnAgentArgs,
+    SendAgentMessageArgs, SendSubagentMessageArgs, SpawnAgentArgs, SpawnWorkspaceArgs,
 };
-use super::AgentOpsPeerGates;
+use super::workspace_ops;
+use super::{AgentOpsPeerGates, AgentOpsWorkspaceOps};
 use crate::domains::sessions::admission::SessionMutationKind;
 use crate::domains::sessions::authorize::{authorize, AgentAccessIntent};
 use crate::domains::sessions::ownership::service::{AgentOwnershipService, OwnedAgent};
@@ -42,14 +43,17 @@ use crate::domains::sessions::transcript_read::{
     read_session_events, read_session_latest_turns, search_session_transcript,
 };
 use crate::domains::sessions::wakes::service::AgentWakeService;
+use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn call_tool(
     service: &SubagentService,
     wake_service: &AgentWakeService,
     session_runtime: &SessionRuntime,
     ownership: &AgentOwnershipService,
     gates: &AgentOpsPeerGates,
+    workspaces: &AgentOpsWorkspaceOps,
     ctx: &AgentOpsMcpContext,
     name: &str,
     arguments: Option<Value>,
@@ -77,7 +81,29 @@ pub async fn call_tool(
         }
         "spawn_agent" => {
             let args: SpawnAgentArgs = deserialize_args(arguments)?;
-            spawn_agent(service, ownership, wake_service, session_runtime, ctx, args).await
+            spawn_agent(
+                service,
+                ownership,
+                wake_service,
+                session_runtime,
+                gates,
+                workspaces,
+                ctx,
+                args,
+            )
+            .await
+        }
+        "get_workspace_options" => {
+            let caller = caller_session(service, &ctx.parent_session_id)?;
+            workspace_ops::get_workspace_options(
+                &workspaces.workspace_runtime,
+                &workspaces.repo_roots,
+                &caller,
+            )
+        }
+        "spawn_workspace" => {
+            let args: SpawnWorkspaceArgs = deserialize_args(arguments)?;
+            spawn_workspace(service, workspaces, ctx, args).await
         }
         "list_subagents" => service
             .list_subagents(&ctx.parent_session_id)
@@ -312,7 +338,6 @@ async fn spawn_subagent(
     let parent = service.validate_parent_can_spawn(&ctx.parent_session_id)?;
     let request = CreateAgentSessionRequest::subagent(&parent, args)?;
     let wake_requested = request.wake_on_completion;
-    let applied = applied_initial_config(&request);
     let created = create_agent_session(
         service,
         ownership,
@@ -322,6 +347,7 @@ async fn spawn_subagent(
         request,
     )
     .await?;
+    let applied = applied_initial_config(&created.session);
 
     Ok(json!({
         "sessionLinkId": created.link.id,
@@ -351,16 +377,22 @@ async fn spawn_subagent(
 /// spawn block, enforced before dispatch reaches this function, and the
 /// caller's own workspace being writable.
 ///
-/// It stays in `MUTATING_TOOL_NAMES` because it mutates exactly one workspace —
-/// the caller's, the one it creates the session in — which is the workspace the
-/// route already leased. There is no target session yet, so unlike
-/// `close_agent` there is no target permit to take first and no reason to lease
-/// anything itself.
+/// Since `spawn_workspace`, `workspaceId` may name any workspace — that is the
+/// second step of ADR §5's flow 4. That changes the fencing: the session lands
+/// in the TARGET workspace, so it is the TARGET's write lease this takes, in
+/// the call, exactly as `send_agent_message` and `configure_agent` do (and why
+/// this tool left `MUTATING_TOOL_NAMES`; the route's lease is the CALLER's).
+/// There is still no target SESSION — this call is what creates it — so there
+/// is no admission permit to take, and with a single lease and no permit there
+/// is no lock order to invert (PR1227-LOCK-01).
+#[allow(clippy::too_many_arguments)]
 async fn spawn_agent(
     service: &SubagentService,
     ownership: &AgentOwnershipService,
     wake_service: &AgentWakeService,
     session_runtime: &SessionRuntime,
+    gates: &AgentOpsPeerGates,
+    workspaces: &AgentOpsWorkspaceOps,
     ctx: &AgentOpsMcpContext,
     args: SpawnAgentArgs,
 ) -> anyhow::Result<Value> {
@@ -374,8 +406,34 @@ async fn spawn_agent(
     }
     let caller = service.validate_caller_can_spawn_agent(&ctx.parent_session_id)?;
     let request = CreateAgentSessionRequest::owned_agent(&caller, args)?;
+    if request.is_cross_workspace(&caller) {
+        // Worth a line of its own: this is the one call that reaches out of the
+        // caller's workspace, and the lease taken below is that OTHER
+        // workspace's. When a retire preflight blocks, this says who was in it.
+        tracing::info!(
+            caller_session_id = %caller.id,
+            caller_workspace_id = %caller.workspace_id,
+            target_workspace_id = %request.workspace_id,
+            "spawn_agent creating a peer in another workspace"
+        );
+    }
+    // Read-only up to here. A target workspace that does not exist or is not a
+    // standard one is refused before any gate is taken.
+    assert_spawnable_workspace(&workspaces.workspace_runtime, &request.workspace_id)?;
     let wake_requested = request.wake_on_completion;
-    let applied = applied_initial_config(&request);
+    // The caller's own workspace still has to be writable — the route stopped
+    // checking when this tool left `MUTATING_TOOL_NAMES`. No lease on it:
+    // nothing here mutates the caller's workspace.
+    assert_workspace_can_be_mutated(service.access_gate(), &ctx.workspace_id)?;
+    // The TARGET workspace's write lease, held across creation, start and the
+    // first prompt. It is that workspace's retire preflight that has to see a
+    // session being built inside it.
+    let _target_workspace_lease = lease_target_workspace_for_peer_write(
+        &gates.workspace_operation_gate,
+        service.access_gate(),
+        &request.workspace_id,
+    )
+    .await?;
     let created = create_agent_session(
         service,
         ownership,
@@ -385,6 +443,7 @@ async fn spawn_agent(
         request,
     )
     .await?;
+    let applied = applied_initial_config(&created.session);
 
     Ok(json!({
         // `sessionId` is the handle for everything afterwards: this agent is a
@@ -406,12 +465,91 @@ async fn spawn_agent(
     }))
 }
 
-fn applied_initial_config(request: &CreateAgentSessionRequest) -> Value {
+/// What the new agent actually launched with, read off the row that exists
+/// rather than off the request.
+///
+/// The two can differ: the shared routine resolves the launch selection against
+/// the TARGET workspace's catalog first, and an inherited model that workspace
+/// does not offer is replaced by its default there. Reporting the request would
+/// tell the caller it got something it did not.
+fn applied_initial_config(session: &crate::domains::sessions::model::SessionRecord) -> Value {
     json!({
-        "harnessId": request.agent_kind,
-        "modelId": request.model_id,
-        "modeId": request.mode_id,
+        "harnessId": session.agent_kind,
+        "modelId": session
+            .current_model_id
+            .clone()
+            .or_else(|| session.requested_model_id.clone()),
+        "modeId": session
+            .current_mode_id
+            .clone()
+            .or_else(|| session.requested_mode_id.clone()),
     })
+}
+
+/// The caller's own session row, for the tools that need it beyond the id.
+fn caller_session(
+    service: &SubagentService,
+    caller_session_id: &str,
+) -> anyhow::Result<crate::domains::sessions::model::SessionRecord> {
+    service
+        .session_store()
+        .find_by_id(caller_session_id)?
+        .ok_or_else(|| anyhow::anyhow!("calling session not found: {caller_session_id}"))
+}
+
+/// A workspace an agent may be put into: it has to exist and be a standard
+/// workspace, the same eligibility `validate_caller_can_create` applies to the
+/// caller's own. Whether it may be MUTATED right now is the access gate's
+/// question, asked when the lease is taken.
+fn assert_spawnable_workspace(
+    workspace_runtime: &crate::domains::workspaces::runtime::WorkspaceRuntime,
+    workspace_id: &str,
+) -> anyhow::Result<()> {
+    let workspace = workspace_runtime
+        .get_workspace(workspace_id)?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "workspace {workspace_id} does not exist. Use list_agents or spawn_workspace to \
+                 get a workspaceId you can spawn into."
+            )
+        })?;
+    if workspace.surface != WorkspaceSurface::Standard {
+        anyhow::bail!(
+            "workspace {workspace_id} is not a standard workspace; agents cannot be spawned in it"
+        );
+    }
+    Ok(())
+}
+
+/// `spawn_workspace` (ADR §3.4, §6 step 7).
+///
+/// Eligibility is the same `can_spawn_agent` signal a peer spawn uses — ADR
+/// §3.4 marks this "promoted / top level agents only", and ruling 3's block on
+/// unpromoted subagents is enforced at dispatch, before this runs.
+async fn spawn_workspace(
+    service: &SubagentService,
+    workspaces: &AgentOpsWorkspaceOps,
+    ctx: &AgentOpsMcpContext,
+    args: SpawnWorkspaceArgs,
+) -> anyhow::Result<Value> {
+    if !ctx.can_spawn_agent {
+        anyhow::bail!(
+            "{}",
+            ctx.spawn_agent_block_reason
+                .as_deref()
+                .unwrap_or("spawning workspaces is not available for this session")
+        );
+    }
+    let caller = caller_session(service, &ctx.parent_session_id)?;
+    workspace_ops::spawn_workspace(
+        &workspaces.workspace_runtime,
+        &workspaces.worktree_runtime,
+        &workspaces.repo_roots,
+        service.access_gate(),
+        &caller,
+        args,
+    )
+    .await
 }
 
 async fn send_subagent_message(

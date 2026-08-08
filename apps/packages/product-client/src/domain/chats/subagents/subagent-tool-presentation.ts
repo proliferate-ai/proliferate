@@ -58,6 +58,10 @@ export function formatSubagentMcpActionLabel(toolName: string | null | undefined
       return "Read agent config options";
     case "mcp__subagents__configure_agent":
       return "Configured agent";
+    case "mcp__subagents__get_workspace_options":
+      return "Read workspace options";
+    case "mcp__subagents__spawn_workspace":
+      return "Spawned workspace";
     default:
       return null;
   }
@@ -121,6 +125,15 @@ export function formatSubagentHeaderVerb({
   }
   if (toolName === "mcp__subagents__configure_agent") {
     return isRunning ? "Configuring agent" : "Agent configured";
+  }
+  // Workspace ops. Nothing here creates an agent, so the fallback verb below
+  // would report a subagent launch — and, for `spawn_workspace`, a failure
+  // would read as "Subagent launch failed" for a call that never touched one.
+  if (toolName === "mcp__subagents__get_workspace_options") {
+    return isRunning ? "Reading workspace options" : "Workspace options read";
+  }
+  if (toolName === "mcp__subagents__spawn_workspace") {
+    return isRunning ? "Spawning workspace" : "Workspace spawned";
   }
   if (executionState === "failed") {
     return "Subagent launch failed";

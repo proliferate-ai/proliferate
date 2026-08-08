@@ -592,6 +592,8 @@ impl AppState {
                 agent_wake_service: agent_wake_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
+                workspace_worktree_runtime: workspace_worktree_runtime.clone(),
+                repo_root_service: repo_root_service.clone(),
                 agent_ownership_service: agent_ownership_service.clone(),
                 session_admission: session_admission.clone(),
                 workspace_operation_gate: workspace_operation_gate.clone(),

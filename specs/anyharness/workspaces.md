@@ -167,6 +167,40 @@ The HTTP worktree creation response returns the new workspace identity. Setup
 script execution is asynchronous in the current API surface; callers should not
 expect synchronous setup-script output in the creation response.
 
+### Agent-Requested Creation
+
+`spawn_workspace` on the agent ops MCP server
+(`domains/sessions/agent_ops/workspace_ops.rs`) is a second CALLER of the two
+paths above, not a third path. `mode=worktree` calls
+`WorkspaceWorktreeRuntime::create_worktree`, the routine behind
+`POST /v1/workspaces/worktrees`; `mode=local` calls
+`create_workspace_with_origin_and_creator_context`, the routine behind
+`POST /v1/workspaces`. Everything workspace creation already enforces —
+path-uniqueness for worktrees, non-idempotent local create, managed repo paths —
+applies unchanged.
+
+What the agent surface adds is three things:
+
+- a **local-only gate**: the caller's workspace must have a local checkout that
+  still exists, and the target repo root must be checked out on this machine.
+  There is no cloud/sandbox placement to select today, so the gate is expressed
+  against `has_local_checkout()` plus those two filesystem facts, and refuses
+  with the reason rather than silently creating something elsewhere.
+- **server-side defaults for everything an agent does not pass.** The tool takes
+  only a repo root, a mode, a branch name and a label; base branch
+  (`repo_root.default_branch`, then the caller workspace's original/current
+  branch, then `main`), target path, surface, `checkout_mode = NewBranch` and
+  `name_conflict_policy = SuffixPathAndBranch` are chosen server-side. The setup
+  script is the command this machine last ran for the caller's own workspace,
+  and never runs for `mode=local`.
+- **a creator stamp**: `WorkspaceCreatorContext::Agent` carrying the calling
+  session id, so the workspace's provenance resolves back to the agent that
+  asked for it. `session_link_id` stays `None` — a workspace is not the far end
+  of a `session_links` row.
+
+Retirement, purge and deletion are NOT reachable from this surface. A workspace
+an agent created is retired by a person, through the same routes as any other.
+
 `proliferate-worker` uses this endpoint for
 `materialize_workspace(mode=worktree)`. If worktree creation returns a
 non-success response that could represent a compatible existing worktree, the
