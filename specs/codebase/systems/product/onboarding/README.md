@@ -21,13 +21,13 @@ Out of scope:
 - low-level account auth routes and password/provider semantics, owned by
   [Product Auth](../auth/README.md)
 - server auth/resource-access structure, owned by
-  [../../../structures/server/guides/auth.md](../../../structures/server/guides/auth.md)
+  [specs/server/auth.md](../../../../server/auth.md)
 - managed-credit and LiteLLM gateway contracts, owned by
-  [../../../platforms/product/model-gateway.md](../../../platforms/product/model-gateway.md)
+  [specs/FEATURE_DOCS/MODELS.md](../../../../FEATURE_DOCS/MODELS.md)
   (auth selections and key delivery:
-  [../../../platforms/product/agent-auth.md](../../../platforms/product/agent-auth.md))
+  [specs/FEATURE_DOCS/AGENT_AUTH.md](../../../../FEATURE_DOCS/AGENT_AUTH.md))
 - billing authorization and Stripe subscription/refill behavior, owned by
-  [../../../platforms/product/billing.md](../../../platforms/product/billing.md)
+  [specs/FEATURE_DOCS/BILLING.md](../../../../FEATURE_DOCS/BILLING.md)
 - managed workspace creation, owned by
   [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)
 
@@ -40,7 +40,7 @@ Out of scope:
    billing, team, and configuration states appear.
 4. The managed model gateway platform (document removed; rewrite planned) for
    managed credits, virtual keys, and gateway QA.
-5. [../../../platforms/product/billing.md](../../../platforms/product/billing.md) for credit budgets,
+5. [specs/FEATURE_DOCS/BILLING.md](../../../../FEATURE_DOCS/BILLING.md) for credit budgets,
    free allocations, Stripe checkout, refill, and billing state.
 6. [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)
    and [Pending Workspace Shell](../workspaces/pending-shell.md) for first
@@ -132,7 +132,7 @@ for the operator path.
 ## Verification
 
 For onboarding changes, choose the narrowest useful matrix from
-[../../../../developing/testing/manual-release-qa.md](../../../../developing/testing/manual-release-qa.md) and include the
+[specs/TESTING/manual-release-qa.md](../../../../TESTING/manual-release-qa.md) and include the
 touched surfaces.
 
 Minimum local smoke for end-to-end onboarding changes:

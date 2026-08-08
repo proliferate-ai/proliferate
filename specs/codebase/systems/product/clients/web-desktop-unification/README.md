@@ -170,40 +170,8 @@ assets are emitted and loadable.
 ## The one host contract
 
 Desktop and Web each construct one immutable `ProductHost` value and pass it
-to one `ProductHostProvider`:
-
-```ts
-interface ProductHost {
-  surface: "desktop" | "web";
-  deployment: ProductDeploymentHost;
-  auth: ProductAuthHost;
-  cloud: { client: ProliferateCloudClient | null };
-  storage: ProductStorage;
-  links: ProductLinks;
-  clipboard: ProductClipboard;
-  telemetry: ProductTelemetry;
-  desktop: DesktopBridge | null;
-}
-```
-
-`cloud.client` is the host's current Cloud client. It may make anonymous
-requests before login and authenticated requests after the host resolves an
-authority; `null` means the host cannot currently construct a usable client.
-
-There is not a provider tree for each capability. Product code normally checks
-the capability it needs, especially `host.desktop !== null`, rather than
-scattering `surface === "desktop"` checks through the product.
-
-The host value is a reactive snapshot. When authentication, deployment, or
-the Cloud client changes, the host app provides a new `ProductHost` object so
-ordinary React context consumers update. `ProductHostProvider` preserves the
-identity it is given; it does not clone a host or hide host mutations.
-
-Each thin app owns the environment infrastructure needed to mount the shared
-product: its React root, router transport, Query client, Cloud-client
-construction/provider, and `ProductHostProvider`. ProductClient owns product
-providers, product routes, stores, and product lifecycles. This distinction
-does not give either host a second copy of product behavior.
+to one `ProductHostProvider`. See [specs/FEATURE_DOCS/DESKTOP_HOST.md](../../../../../FEATURE_DOCS/DESKTOP_HOST.md)
+for the host contract, DesktopBridge, and application-entry details.
 
 ## Deployment, Cloud, and AnyHarness
 
@@ -345,122 +313,13 @@ product event names or decide which product route is active.
 
 ## Desktop-only behavior
 
-Raw native startup remains app-owned: Tauri initialization, native window
-setup, sidecar/process startup, operating-system deep-link registration, and
-vendor installation run from the Desktop host.
-
-Product-aware Desktop behavior may live in ProductClient behind the optional
-bridge. It mounts only when a Desktop bridge exists:
-
-```tsx
-function ProductLifecycleRoot() {
-  const host = useProductHost();
-
-  return (
-    <>
-      <SharedProductLifecycles />
-      {host.desktop ? (
-        <DesktopProductLifecycles desktop={host.desktop} />
-      ) : null}
-    </>
-  );
-}
-```
-
-Because Web passes `desktop: null`, Desktop-only hooks, effects, queries, and
-listeners never mount there. Presentation-only differences may use the surface
-marker; CSS hiding is not a substitute for not mounting native behavior.
-
-Desktop-only product lifecycles include local runtime UI, local automation,
-worker enrollment tied to product auth, updater watching/presentation, native
-menu command handling, local-agent credential synchronization, SSH/tunnel UI,
-and native support/diagnostic collection.
-
-## DesktopBridge
-
-`DesktopBridge` is a typed set of product-level native capabilities. It is
-implemented in `apps/desktop` and consumed by ProductClient. It does not expose
-raw Tauri command names, generic `invoke`, generic process execution, or a
-general filesystem API.
-
-The bridge groups are:
-
-| Group | Why ProductClient needs it |
-| --- | --- |
-| `runtime` | Discover or restart the local AnyHarness runtime and return its base URL/token connection. |
-| `files` | Pick a local directory, inspect basic path availability, list/open editor/finder/terminal/copy targets, reveal paths, and open terminals. |
-| `localCredentials` | Read and update local agent/provider credentials; never Proliferate login credentials. |
-| `nativeUi` | Render native context menus, receive native commands, set running-agent quit protection, update Dock attention, and control WebView zoom. |
-| `updater` | Report updater support/version, check, download with progress, install, and relaunch while preserving the opaque native update handle. |
-| `worker` | Read the install id and ensure or stop the Desktop worker process. |
-| `ssh` | Persist SSH profiles and establish a tunnel that yields a normal AnyHarness connection. |
-| `scratch` | Preserve current local file-backed workspace scratch reads and writes. |
-| `diagnostics` | Write narrow renderer events, collect support bundles, save reports, and stage/read/delete support attachments. |
-
-Repo inspection, git, worktrees, workspaces, sessions, chat, and transcript are
-not bridge operations; they continue through AnyHarness. Product auth,
-deployment selection, links, storage, clipboard, telemetry, and Cloud behavior
-use their normal ProductHost groups rather than being duplicated in the
-Desktop bridge.
-
-The initial DesktopBridge may implement methods for the known inventoried
-consumers before those call sites migrate, as Desktop Host Adoption did. New
-methods beyond that inventory remain demand-driven: add one only when an
-actual consumer needs it, and preserve the concrete Desktop behavior and
-return shape at that boundary. The embedded browser is removed, not bridged.
-
-Root render-error reporting is one diagnostics operation with an acknowledged
-result: Desktop resolves success only after its native renderer diagnostic was
-persisted (or an identical event was already persisted inside the host-owned
-dedupe window). ProductClient keeps neutral sending copy until that result,
-reports failure or absence honestly, and contains reporter throws/rejections so
-the recovery surface cannot recursively fail.
+See [specs/FEATURE_DOCS/DESKTOP_HOST.md](../../../../../FEATURE_DOCS/DESKTOP_HOST.md)
+for Desktop-only product behavior, DesktopBridge groups, and the fail-closed mounting pattern.
 
 ## Styling and assets
 
-Web renders the Desktop product visual system. The shared CSS boundary is:
-
-```text
-apps/packages/design/src/css/
-  product.css   Tailwind setup, reset, package source scanning, shared product
-                theme and global product styling
-  desktop.css   genuine Desktop/native presentation overrides only
-
-apps/packages/product-client/src/index.css
-  imports product.css (rides with the eager ProductClient entry; xterm CSS
-  loads lazily with the terminal chunk)
-
-apps/desktop/src/main.tsx
-  imports desktop.css
-
-apps/web/src/index.css
-  imports product.css (import-only; the Web host carries no bespoke CSS)
-```
-
-The Tailwind entry explicitly scans ProductClient, the single DOM product
-source root:
-
-```css
-@source "../../../product-client/src";
-```
-
-The ProductClient source line covers all product JSX. Without it,
-both apps can compile while Tailwind silently omits product classes.
-
-Each host sets its surface before React renders:
-
-```ts
-document.documentElement.dataset.proliferateClient = "desktop";
-```
-
-or:
-
-```ts
-document.documentElement.dataset.proliferateClient = "web";
-```
-
-The marker may drive genuine styling differences. Capability behavior remains
-controlled by ProductHost and the optional Desktop bridge.
+See [specs/FEATURE_DOCS/DESKTOP_HOST.md](../../../../../FEATURE_DOCS/DESKTOP_HOST.md)
+for the shared CSS boundary, Tailwind scanning contract, and surface marker setup.
 
 ## Migration preparation
 
@@ -647,7 +506,7 @@ PR #1229, merge `d8ceabb4e`. The durable inputs and proofs across the
 extraction and replacement are:
 
 - [landed extraction proof](migration/d1g.md);
-- [application-entry contract](entry-contract.md);
+- [application-entry contract](../../../../../FEATURE_DOCS/DESKTOP_HOST.md);
 - [Desktop product move record](migration/d1h.md);
 - [legacy Web replacement record](migration/d1i.md);
 - [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json); and
@@ -660,17 +519,17 @@ in [the legacy Web replacement record](migration/d1i.md#phase-6--hosted-web-firs
 Related authoritative docs:
 
 - Frontend structure:
-  [`../../../../structures/frontend/README.md`](../../../../structures/frontend/README.md)
+  [`specs/frontend/README.md`](../../../../../frontend/README.md)
 - Frontend packages:
-  [`../../../../structures/frontend/packages/README.md`](../../../../structures/frontend/packages/README.md)
+  [`specs/frontend/packages.md`](../../../../../frontend/packages.md)
 - Styling:
-  [`../../../../structures/frontend/guides/styling.md`](../../../../structures/frontend/guides/styling.md)
+  [`specs/frontend/styling.md`](../../../../../frontend/styling.md)
 - Telemetry:
-  [`../../../../structures/frontend/guides/telemetry.md`](../../../../structures/frontend/guides/telemetry.md)
+  [`specs/frontend/telemetry.md`](../../../../../frontend/telemetry.md)
 - CI/CD and release:
   [`../../../../../../guides/deploying/README.md`](../../../../../../guides/deploying/README.md)
 - Testing:
-  [`../../../../../developing/testing/README.md`](../../../../../developing/testing/README.md)
+  [`specs/TESTING.md`](../../../../../TESTING.md)
 
 Older planning notes are history. This spec wins when they disagree with the
 simplified migration above.

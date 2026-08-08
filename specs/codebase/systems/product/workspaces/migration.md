@@ -7,7 +7,7 @@ service were removed. AnyHarness still has a narrow target-local mobility
 substrate, but raw runtime operations are not a supported user or founder
 procedure by themselves.
 
-Use [AnyHarness mobility](../../../structures/anyharness/src/mobility.md) for
+Use [AnyHarness mobility](../../../../anyharness/mobility.md) for
 the retained runtime mechanics.
 
 ## Current Product Boundary

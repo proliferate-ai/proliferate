@@ -2,7 +2,7 @@
 
 How to add, change, or remove models served by the model gateway, rotate
 its provider keys, and bump its upstream image. Architecture and account
-model: [model-gateway.md](../../specs/codebase/platforms/product/model-gateway.md).
+model: [MODELS.md](../../specs/FEATURE_DOCS/MODELS.md).
 
 Applies to hosted staging/production (ECS) and local dev
 (`make server-litellm-up`). Permissions: repo write for tier 1; GitHub

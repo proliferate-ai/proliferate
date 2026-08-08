@@ -282,7 +282,7 @@ parent because that source commit already passed the `main` push gate.
   preparation and readiness policy.
 - [Environment Sources](../../../../../guides/local/dev-profiles.md#environment-sources)
   and its variable catalog own configuration locations and precedence.
-- [Testing](../../../../developing/testing/README.md) owns release qualification,
+- [Testing](../../../../TESTING.md) owns release qualification,
   test tiers, scenarios, and evidence requirements.
 - [Desktop Updates](desktop-updates.md) owns installed-product updater and
   release-notice behavior.

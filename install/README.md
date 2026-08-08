@@ -48,9 +48,9 @@ anymore. The flag now only suppresses the D5 `desiredTopology` heartbeat
 signal that tells an already-running legacy worker (from before the cutover)
 to bridge onto a Supervisor; rolling back the launch topology itself means
 rolling back the server deploy. See
-[`server/architecture.md`](../specs/codebase/structures/server/architecture.md#5-managed-runtime-and-worker-detailed)
+[`specs/FEATURE_DOCS/MANAGED_RUNTIME.md`](../specs/FEATURE_DOCS/MANAGED_RUNTIME.md#launch-topology-by-surface)
 for the current launch flow and
-[`proliferate-supervisor/README.md`](../specs/codebase/structures/proliferate-supervisor/README.md#implementation-status-this-pr)
+[`specs/supervisor.md`](../specs/supervisor.md)
 for what Supervisor owns as the parent process.
 
 ## Environment Variables

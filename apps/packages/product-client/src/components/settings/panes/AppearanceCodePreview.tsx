@@ -1,5 +1,4 @@
 import type { CSSProperties, ReactNode } from "react";
-import { themePreviewColors } from "@proliferate/design/tokens";
 
 /**
  * The Appearance pane's code preview, drawn to the design mock.
@@ -13,18 +12,26 @@ import { themePreviewColors } from "@proliferate/design/tokens";
  *
  * It stays honest to the ramps the pane controls: the root carries
  * `text-readable-code` + `font-mono`, so the Code font size setting re-renders
- * it live exactly like the real surfaces.
+ * it live exactly like the real surfaces. Every ink and tint below is a live
+ * custom property for the same reason — including the keyword pink, which is a
+ * real `--color-syntax-keyword` role so it flips with `data-mode` in CSS rather
+ * than being resolved in JS.
  */
 
-const SYNTAX_KEYWORD_STYLE = { color: themePreviewColors.syntax.keyword } as CSSProperties;
+const SYNTAX_KEYWORD_STYLE = { color: "var(--color-syntax-keyword)" } as CSSProperties;
 const SYNTAX_TYPE_STYLE = { color: "var(--color-pr-merged)" } as CSSProperties;
 const SYNTAX_STRING_STYLE = { color: "var(--color-success)" } as CSSProperties;
 const SYNTAX_NUMBER_STYLE = { color: "var(--color-info)" } as CSSProperties;
 
-const DELETION_ROW_STYLE = { background: "var(--color-destructive-subtle)" } as CSSProperties;
-const ADDITION_ROW_STYLE = { background: "var(--color-success-subtle)" } as CSSProperties;
-const DELETION_NUMBER_STYLE = { color: "var(--color-destructive)" } as CSSProperties;
-const ADDITION_NUMBER_STYLE = { color: "var(--color-success)" } as CSSProperties;
+/**
+ * The row tints and line-number inks come from the dedicated diff roles, not
+ * the generic success/destructive roles — these are the same custom properties
+ * the real diff surfaces paint with, so the preview cannot drift from them.
+ */
+const DELETION_ROW_STYLE = { background: "var(--diffs-bg-deletion-override)" } as CSSProperties;
+const ADDITION_ROW_STYLE = { background: "var(--diffs-bg-addition-override)" } as CSSProperties;
+const DELETION_NUMBER_STYLE = { color: "var(--diffs-deletion-color-override)" } as CSSProperties;
+const ADDITION_NUMBER_STYLE = { color: "var(--diffs-addition-color-override)" } as CSSProperties;
 
 /**
  * The change gutters reuse the product's markers — solid 3px bar for
@@ -38,11 +45,11 @@ type LineKind = "context" | "deletion" | "addition";
 const GUTTER_BASE_STYLE = { flex: "none", width: "3px" } as CSSProperties;
 const GUTTER_STYLES: Record<LineKind, CSSProperties | undefined> = {
   context: GUTTER_BASE_STYLE,
-  addition: { ...GUTTER_BASE_STYLE, background: "var(--color-success)" },
+  addition: { ...GUTTER_BASE_STYLE, background: "var(--diffs-addition-color-override)" },
   deletion: {
     ...GUTTER_BASE_STYLE,
     background:
-      "repeating-linear-gradient(180deg, var(--color-destructive) 0 3px, transparent 3px 5px)",
+      "repeating-linear-gradient(180deg, var(--diffs-deletion-color-override) 0 3px, transparent 3px 5px)",
   },
 };
 
@@ -87,9 +94,14 @@ function FieldLine({ name, value, numeric }: { name: string; value: string; nume
   );
 }
 
+/**
+ * `aria-hidden` because the preview is decorative duplicate content: it depicts
+ * the settings around it rather than carrying information of its own, and the
+ * enclosing section heading already names it. Nothing inside is focusable.
+ */
 export function AppearanceCodePreview() {
   return (
-    <div className="grid grid-cols-2 py-2 font-mono text-readable-code" style={PREVIEW_LINE_HEIGHT_STYLE}>
+    <div className="grid grid-cols-2 py-2 font-mono text-readable-code" style={PREVIEW_LINE_HEIGHT_STYLE} aria-hidden="true">
       <div className="flex min-w-0 flex-col overflow-hidden">
         <Line number={1} kind="context"><OpeningLine /></Line>
         <Line number={2} kind="deletion"><FieldLine name="runtime" value={"\"local\""} /></Line>

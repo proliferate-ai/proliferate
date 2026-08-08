@@ -70,7 +70,7 @@ pub(super) fn choose_startup_strategy(
 /// - adapters with durable fork ids (e.g. Codex) get a reloadable native id at
 ///   fork time, so a recorded id always loads with no fallback.
 /// - adapters whose fork ids are process-local until first prompt (Claude — see
-///   `specs/.../src/sessions.md` fork invariants) only durably persist the
+///   `specs/anyharness/sessions.md` fork invariants) only durably persist the
 ///   child's native session after its first turn. Until then the eagerly
 ///   recorded id is valid only while the original actor stays alive; after a
 ///   cold restart-before-first-prompt the agent has no transcript for it and

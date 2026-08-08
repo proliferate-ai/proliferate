@@ -55,7 +55,7 @@ against this contract; the next contract is the legacy Web replacement (see
 - Prior completed implementation: PR #1195 (D1g, Prove ProductClient Extraction
   Mechanics), merge `9757e86de`, plus doc link-fix `1d0043756` (this base).
 - Parent architecture: [`../README.md`](../README.md)
-- Application-entry contract: [`../entry-contract.md`](../entry-contract.md)
+- Application-entry contract: [`specs/FEATURE_DOCS/DESKTOP_HOST.md`](../../../../../../FEATURE_DOCS/DESKTOP_HOST.md)
 - Move ledger: `../move-ledger.md` (consumed and removed after the move
   landed; see Git history). The one-shot ledger tooling named in the evidence
   tables below (`scripts/check-product-client-move-ledger*.py`,
