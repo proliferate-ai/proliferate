@@ -14,6 +14,18 @@ import { WORKSPACE_CREATION_RECEIPT_LABELS } from "#product/copy/workspaces/work
 export type WorkspaceCreationReceiptNoun = "worktree" | "workspace";
 
 /**
+ * Whether a pending workspace entry carries a creation receipt. Cloud and
+ * cowork provisioning keep their composer panel; the receipt owns only
+ * local/worktree creations.
+ */
+export function isReceiptPendingEntry<T extends { source: string }>(
+  entry: T | null,
+): entry is T {
+  return !!entry
+    && (entry.source === "local-created" || entry.source === "worktree-created");
+}
+
+/**
  * The receipt belongs to the workspace's first session only — the session
  * that came into being with the creation. Later sessions in the same
  * workspace must not replay it. "First" is derived from server truth

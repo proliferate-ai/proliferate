@@ -5,7 +5,7 @@ import {
   resolveTranscriptTurnDiffPanelKind,
   shouldRenderAssistantEndResource,
   shouldRenderStandaloneStoppedNotice,
-} from "#product/components/workspace/chat/transcript/TranscriptTurnRow";
+} from "#product/domain/chats/transcript/turn-row-presentation";
 import {
   isRecentAssistantCompletion,
   RECENT_ASSISTANT_REVEAL_WINDOW_MS,

@@ -28,6 +28,8 @@ export interface ResolveChatSurfaceStateInput {
   selectedWorkspaceId: string | null;
   hasPendingWorkspaceEntry: boolean;
   activeLaunchIntentId: string | null;
+  /** True while the active launch intent is still in flight (not failed). */
+  launchIntentInFlight: boolean;
   launchIntentSessionId: string | null;
   selectedLocalWorkspace: Workspace | null;
   isArrivalWorkspace: boolean;
@@ -101,9 +103,20 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
   }
 
   if (input.hasPendingWorkspaceEntry && scopedActiveSessionId) {
-    return scopedHasContent
-      ? { kind: "session-transcript", sessionId: scopedActiveSessionId }
-      : { kind: "session-empty", sessionId: scopedActiveSessionId };
+    if (scopedHasContent) {
+      return { kind: "session-transcript", sessionId: scopedActiveSessionId };
+    }
+    // With a launch intent still in flight, the queued prompt has not landed
+    // in the projected session yet (a one-beat gap after send). Fall through
+    // to the launch-intent pane, which already shows the prompt bubble and
+    // frontier status at final transcript geometry — rendering session-empty
+    // here instead double-mounts the creation receipt (canvas topSlot first,
+    // pending-prompt frontier a beat later) and the transcript jumps.
+    // Failed intents keep the session-empty surface: the pending entry's
+    // creation receipt owns retry/back for local and worktree creations.
+    if (!input.launchIntentInFlight) {
+      return { kind: "session-empty", sessionId: scopedActiveSessionId };
+    }
   }
 
   const launchIntentOverride = resolveLaunchIntentSurfaceOverride({

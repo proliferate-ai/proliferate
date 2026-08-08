@@ -84,6 +84,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     selectedWorkspaceId,
     hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
     activeLaunchIntentId: activeLaunchIntent?.id ?? null,
+    launchIntentInFlight: activeLaunchIntent ? activeLaunchIntent.failure === null : false,
     launchIntentSessionId:
       activeLaunchIntent?.materializedSessionId
       ?? activeLaunchIntent?.clientSessionId
@@ -105,6 +106,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     streamConnectionState,
   })), [
     activeLaunchIntent?.clientSessionId,
+    activeLaunchIntent?.failure,
     activeLaunchIntent?.id,
     activeLaunchIntent?.materializedSessionId,
     activeSessionId,

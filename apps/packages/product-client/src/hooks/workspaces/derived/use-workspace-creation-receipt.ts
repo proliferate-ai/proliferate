@@ -7,6 +7,7 @@ import {
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { summarizeSetupFailure } from "#product/lib/domain/workspaces/creation/arrival";
 import {
+  isReceiptPendingEntry,
   resolveFirstWorkspaceSessionId,
   type WorkspaceCreationReceiptNoun,
   type WorkspaceCreationReceiptSource,
@@ -25,13 +26,6 @@ export interface WorkspaceCreationReceiptState {
   source: WorkspaceCreationReceiptSource;
   /** Backing entry for creating/creation-failed receipts (Retry/Back). */
   pendingEntry: PendingWorkspaceEntry | null;
-}
-
-function isReceiptPendingSource(entry: PendingWorkspaceEntry | null): entry is PendingWorkspaceEntry {
-  // Cloud and cowork provisioning keep their composer panel; the receipt
-  // owns only local/worktree creations.
-  return !!entry
-    && (entry.source === "local-created" || entry.source === "worktree-created");
 }
 
 function pendingNoun(entry: PendingWorkspaceEntry): WorkspaceCreationReceiptNoun {
@@ -78,7 +72,7 @@ export function useWorkspaceCreationReceiptKey(): string | null {
   const { data: workspaceSessions } = useWorkspaceSessionsQuery({
     workspaceId: materializedWorkspaceId,
     enabled:
-      !isReceiptPendingSource(pendingWorkspaceEntry)
+      !isReceiptPendingEntry(pendingWorkspaceEntry)
       && shouldUseLocalRuntimeWorkspaceSessionsQuery({
         workspaceId: materializedWorkspaceId,
         hotPaintPending,
@@ -86,7 +80,7 @@ export function useWorkspaceCreationReceiptKey(): string | null {
   });
 
   return useMemo(() => {
-    if (isReceiptPendingSource(pendingWorkspaceEntry)) {
+    if (isReceiptPendingEntry(pendingWorkspaceEntry)) {
       return buildPendingWorkspaceUiKey(pendingWorkspaceEntry);
     }
     const { workspaceUiKey } = resolveSelectedWorkspaceIdentity({
@@ -168,7 +162,7 @@ export function useWorkspaceCreationReceiptState(): WorkspaceCreationReceiptStat
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const { data: workspaceCollections } = useWorkspaces();
 
-  const pendingEntry = isReceiptPendingSource(pendingWorkspaceEntry)
+  const pendingEntry = isReceiptPendingEntry(pendingWorkspaceEntry)
     ? pendingWorkspaceEntry
     : null;
 
