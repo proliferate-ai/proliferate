@@ -1,4 +1,4 @@
-Description: Define the v1 local workflows product and the architecture that can extend to later workflow capabilities.
+Description: Define the v1 local linear workflows product by extending the beta's ordered stages and steps.
 Date: 2026-08-07
 Status: working draft
 
@@ -13,10 +13,10 @@ the final PR of the ladder, after the decision has shipped.
 
 ### Purpose
 
-Workflows let a user define, save, and execute a directed graph of agentic work.
-A graph contains agentic work nodes (`agent` and `human_in_loop`), conditional
-decision nodes (`choice`), and terminal nodes (`succeed` and `fail`). A workflow
-definition is JSON conforming to a schema owned by this repository.
+Workflows let a user define, save, and execute a strictly ordered sequence of
+agentic work. The only user-authored node kinds are `agent` and
+`human_in_loop`. A workflow definition is JSON conforming to a schema owned by
+this repository.
 
 The product is intended to become a general infrastructure primitive for
 individuals and teams automating knowledge work, including software delivery,
@@ -27,8 +27,8 @@ support engineering, ticket triage, on-call response, bug fixes, and email.
 - Ship a deliberately scoped workflows feature end to end for v1.
 - Let a user manually create and save a workflow definition.
 - Let a user manually trigger a saved workflow.
-- Choose runtime and data-model primitives that can accommodate the planned
-  follow-up capabilities without redesigning the foundation.
+- Extend the beta's ordered definition and execution path instead of replacing
+  it with a second workflow model.
 
 ### Non-goals
 
@@ -37,55 +37,94 @@ support engineering, ticket triage, on-call response, bug fixes, and email.
 - Triggering workflows through webhooks or schedules. V1 supports only manual
   triggers.
 - Executing workflows in a cloud sandbox. V1 execution is local only.
+- Conditional routing, authored branches, cycles, parallel nodes, or a
+  `choice` node.
+- User-authored `succeed` or `fail` nodes. Success and failure are run outcomes,
+  not workflow-definition nodes.
 
 ### Requirements
 
 1. The implementation consists of four sequential PRs: engine, data models,
    workflow lifecycle orchestration, then UI and client. The ladder may carry
-   temporary migration code, but the released feature has one graph definition,
-   invocation, and run path. Each PR removes the beta behavior whose graph
-   replacement becomes complete in that PR.
-2. The v1 product surface stays intentionally narrow, but its runtime primitives
-   and data model account for the known follow-up capabilities so those changes
-   do not require an architectural redesign.
-3. A user can create a workflow manually in the graph UI.
+   temporary migration code, but the released feature has one linear
+   definition, invocation, and run path. Each PR extends the beta's ordered
+   `stages[].steps[]` representation and `(stageIndex, stepIndex)` execution
+   coordinates; it does not introduce an authored edge model or a branching
+   graph schema.
+2. Branching is deferred in full. V1 does not pre-build choice expressions,
+   authored edges, terminal nodes, graph traversal, or compatibility seams for a
+   future branching schema. A later decision may replace or version the linear
+   contract.
+3. A user can create a workflow manually in a linear graph UI. Node order is
+   the workflow order; connectors are derived from adjacent nodes and are not
+   authorable definition data.
 4. A user can save a workflow as a `workflowDefinition`.
 5. A user can modify an existing `workflowDefinition` and save it in place.
 6. A user can delete an existing `workflowDefinition`.
 7. A user can manually trigger an existing `workflowDefinition`.
-8. Each `agent` and `human_in_loop` node has its own model configuration.
+8. `agent` and `human_in_loop` are the only two node types. Each has its own
+   model configuration; model configuration is not inherited from another node.
 9. Each workflow run creates its own workspace.
 10. A `workflowDefinition` specifies whether a run creates a new worktree
     or runs at the repository root by default.
 11. When manually triggering a workflow, the user can override the definition's
     worktree or repository-root default in the UI.
-12. One workflow run owns one workspace, and each agentic workflow run node
-    maps to one session in that workspace.
-13. Each `agent` and `human_in_loop` node receives a prompt, a set of goals, and
-    optional verification methods.
-14. A `choice` node evaluates a condition and selects an outgoing branch.
-15. A valid workflow has exactly one `succeed` node and exactly one `fail` node;
-    these are its only terminal node types.
-16. Every non-terminal node has an edge to `fail` for runtime errors and
-    exceptions.
-17. Multiple nodes may have an edge to `succeed`.
-18. All nodes in a workflow run share context under
-    `<workspace-root>/context/shared/<document>`. Shared context is typically
-    Markdown but may be any file or artifact usable by agents and humans.
-19. All nodes have full read and write access to
-    `<workspace-root>/.proliferate/workflows/<workflow-name>/shared/`.
-20. Each agentic node can create files and artifacts under
-    `<workspace-root>/.proliferate/workflows/<workflow-name>/<node-index>/`, where
-    `<node-index>` is the zero-padded agentic-node index (`00`, `01`, `02`, and
-    so on).
-21. The graph UI shows each agentic node's index in both definition and run
-    views, matching the index used in the node artifact path in requirement 20.
-22. A workflow run workspace uses the same UI and UX primitives as a
+12. One workflow run owns one workspace. Each agentic node owns one ordinary
+    session in that workspace. Its workflow-owned turn and any user chat occur
+    in that session; retrying or resuming the node reuses the same session.
+13. An `agent` node is an automatically advancing unit of agent work. On entry,
+    the runtime dispatches one workflow-owned turn in the node's session. The
+    node completes only when that turn completes successfully and every
+    configured verification passes. It then advances to the next node in
+    authored order without waiting for user action. If it is the last node, the
+    workflow run becomes `completed`. An execution error, exception, or failed
+    verification makes the node and workflow run `failed`.
+14. A `human_in_loop` node is an agent-assisted human decision checkpoint. On
+    entry, it dispatches a workflow-owned turn in its session just like an
+    `agent` node. Successful completion and verification move the node to
+    `waiting_for_human`. Chat in the session does not advance it. An explicit
+    Continue decision completes the node and advances to the next node in
+    authored order, or completes the run when it is last. An explicit Fail
+    decision makes the node and run `failed`. An execution error or failed
+    verification before the checkpoint also fails the node and run.
+15. Each agentic node defines a prompt, a set of goals, and optional
+    verification methods. The prompt describes the work, the goals describe
+    the result the agent should achieve, and the verification methods determine
+    whether the workflow-owned turn may advance.
+16. V1 has no condition or routing primitive. Agent reasoning may change
+    workspace files and artifacts, but it cannot choose a different successor:
+    successful execution always advances to the next authored node.
+17. `completed` and `failed` are terminal workflow run states persisted in
+    control-plane `workflow_invocation_delivery.local_run_status` and
+    AnyHarness `workflow_runs.status`. They are not nodes and never appear in
+    the user-authored graph.
+18. The definition is strictly linear: it has one first node, every node has at
+    most one implicit successor, and only the final node has none. There are no
+    authored edges, branches, joins, cycles, unreachable nodes, or parallel
+    lanes.
+19. The user-facing definition and run graphs render only `agent` and
+    `human_in_loop` nodes. The UI may draw adjacency connectors, but it does not
+    render success or failure as nodes.
+20. Context docs are workflow-scoped files that a user supplies for nodes to
+    use. They may use any file format and may be reference material or writable
+    templates and artifacts. Examples include an `rca.md` template that a
+    support workflow fills in, or a collection of Markdown and PDF reference
+    documents. Context docs are versioned with the workflow definition and
+    frozen for each run.
+21. Before the first node starts, each run materializes its own writable copy of
+    the definition's context docs under
+    `<workspace-root>/.proliferate/context/`. Every workflow-generated or
+    user-created session in the run workspace can read and write those copies.
+    Run-time changes do not mutate the saved definition.
+22. Every node has full write/read access to every context doc.
+23. The graph UI shows each agentic node's index in both definition and run
+    views.
+24. A workflow run workspace uses the same UI and UX primitives as a
     normal workspace and its sessions.
-23. A user can chat in any workflow-generated session.
-24. A user can manually create additional sessions in a workflow run
-    workspace to work with the workflow's shared context.
-25. Agentic nodes (i.e. `agent`/`human_in_loop`) should inherit permissions for
+25. A user can chat in any workflow-generated session.
+26. A user can manually create additional sessions in a workflow run workspace
+    to work with the workflow's context docs.
+27. Agentic nodes (i.e. `agent`/`human_in_loop`) should inherit permissions for
     all configured integrations that the user has for their normal sessions.
 
 ## Current context
@@ -120,34 +159,38 @@ The beta models a workflow as a linear document executed remotely:
   behind a dismissable interstitial that gates nothing structurally
   ([WorkflowsBetaGateModal.tsx](../apps/packages/product-client/src/components/workflows/WorkflowsBetaGateModal.tsx)).
 
-This decision extends the beta into a locally executed JSON graph of `agent`,
-`human_in_loop`, `choice`, `succeed`, and `fail` nodes. Graph-specific work adds
-versioned definition, invocation, and run members, a transition engine,
-node-attempt state, and a graph editor. Parent resource names stay the same.
-Definition ownership and revisioning, immutable invocation acceptance,
-workflow-run replay and cancellation, session correlation, and workspace
-materialization already match the required boundaries.
+This decision keeps that linear model and extends it in place. Definition
+schema 2 retains ordered `inputs[]` and `stages[].steps[]`, adds
+`human_in_loop`, and constrains each stage to one node step so the stage remains
+the node's model/session boundary. AnyHarness extends the existing
+`workflow_run_steps` coordinate and executor from one prompt to the full ordered
+sequence. The ProductClient renders the order as a linear graph, but the saved
+definition contains no authored edges or terminal nodes. Definition ownership
+and revisioning, immutable invocation acceptance, workflow-run replay and
+cancellation, session correlation, and workspace materialization already match
+the required boundaries.
 
 The cutover migration is:
 
 ```text
-workflow definition schema 1  beta linear document      ── migrate in place ──► schema 2 graph document
+workflow definition schema 1  beta agent-only linear document ── migrate in place ──► schema 2 agent/HITL linear document
 
 workflow invocation schema 1  managed-cloud target      ── terminalize, then archive or delete
-workflow invocation schema 2  local graph-run delivery  ── only accepted member after cutover
+workflow invocation schema 2  local linear-run delivery ── only accepted member after cutover
 
 AnyHarness workflow run schema 1/2  beta one-prompt run ── terminalize, then archive or delete
-AnyHarness workflow run schema 3    graph run            ── only accepted member after cutover
+AnyHarness workflow run schema 3    linear multi-node run ── only accepted member after cutover
 
 workspace materialization schema 1  beta placement       ── archive or delete with its beta run
-workspace materialization schema 2  graph-run placement  ── only active member after cutover
+workspace materialization schema 2  local-run placement  ── only active member after cutover
 ```
 
 The version numbers preserve lineage and make stale clients fail closed; they
-do not define parallel supported behaviors. Graph writers are enabled only
+do not define parallel supported behaviors. Schema-2 writers are enabled only
 after the migration proves there are no active beta invocations or runs and no
 schema-1 definition remains in the live table. Final APIs reject beta contract
-members, and the released runtime contains no linear executor or recovery path.
+members, while the released runtime contains one extended linear executor and
+recovery path rather than separate beta and replacement implementations.
 
 ### Source tree, ordered by data flow
 
@@ -209,10 +252,13 @@ workflow surfaces.
 - Reused: app routing and navigation chrome; definition list, query, mutation,
   revision-conflict, and draft-preservation mechanics; the catalog-driven
   agent/model/effort selectors as the basis for per-node model configuration
-  (requirement 8); the ordinary workspace and session UI that requirement 22
+  (requirement 8); the ordinary workspace and session UI that requirement 24
   mandates, which the beta never modified.
-- Replaced at UI cutover: requirements 3 and 21 require a graph editor with
-  visible node indexes; the current surface is a sequential form, and
+- Extended at UI cutover: requirements 3 and 23 require the existing sequential
+  editor to render its ordered stages as a linear graph with visible node
+  indexes. It adds `human_in_loop` configuration and drag-to-reorder, but no
+  edge authoring or free-position canvas.
+  The current
   [Workflow Definitions](../specs/FEATURE_DOCS/WORKFLOWS.md#workflow-definitions)
   records "There is no canvas". The run detail view narrates remote delivery
   custody that local execution does not have.
@@ -229,12 +275,12 @@ pinned by
 [workflow-portable-execution/v1.json](../fixtures/contracts/workflow-portable-execution/v1.json).
 
 - Extended: the Cloud SDK keeps its definition and invocation resource clients,
-  adding graph-definition schema 2, local-invocation schema 2, and invocation
+  adding linear-definition schema 2, local-invocation schema 2, and invocation
   claim operations. The AnyHarness SDK keeps `/workflow-runs` and adds strict
   schema-3 request and response members plus human-decision and retry methods.
 - Removed at cutover: managed-cloud `deliver`, projection-specific client
   models, beta definition types, and AnyHarness V1/V2 run types. The final SDKs
-  expose only graph definitions, local invocations, and graph runs.
+  expose only linear definitions, local invocations, and linear runs.
 
 ### Hosted control plane — `server/`
 
@@ -260,11 +306,11 @@ ratchets this tree off the legacy Cloud sync planes.
   ownership and revision compare-and-set, `/workflow-invocations`, immutable
   `workflow_invocation` snapshots, caller-minted IDs, canonical replay,
   owner-safe conflicts, history pagination, and cancellation intent.
-- Added: graph-definition schema 2, local-invocation schema 2,
+- Added: linear-definition schema 2, local-invocation schema 2,
   `workflow_invocation_delivery`, and `workflow_invocation_claim`.
 - Removed at cutover: `workflow_managed_execution`, managed delivery workers,
   projection polling, sandbox custody, `/deliver`, and `run-eligibility`. They
-  encode the beta cloud target and have no graph-local responsibility.
+  encode the beta cloud target and have no local-run responsibility.
 
 ### AnyHarness runtime — `anyharness/`
 
@@ -292,9 +338,8 @@ Local persistence is three SQLite tables — `workflow_runs`,
 partial-unique active-controller index — across migrations 0060–0064, snapshot
 in [anyharness-db-schema.sql](../specs/GENERATED/anyharness-db-schema.sql).
 Steps are addressed as `(stage_index, step_index)`, a linear coordinate space
-with only `(0, 0)` ever materialized. Nothing resembling the requirement
-18–20 shared-context paths exists; run artifacts live only in session
-transcripts.
+with only `(0, 0)` ever materialized. The beta has no definition-owned context
+docs or `.proliferate/context/` materialization contract.
 
 - Reused and extended: `/workflow-runs`, `workflow_runs`, the
   accept/replay/conflict store boundary, state versions, durable cancellation,
@@ -304,11 +349,14 @@ transcripts.
   caller-owned prompt ID, `SessionExtension` completion hooks) and the
   workspace materialization state machine, worktree implementation, and
   operation gates.
-- Added: workflow-run schema 3, graph transition policy, one actor per live
-  schema-3 run, and `workflow_run_node_executions` for graph visits and retries.
-- Removed at cutover: `workflow_run_steps`, the one-prompt executor, run-level
-  session/resolved-plan fields, V1/V2 wire contracts, and V1/V2 startup
-  recovery. No beta run can execute after the graph writer is enabled.
+- Extended: workflow-run schema 3, the existing linear executor and
+  `workflow_run_steps` table for ordered `agent`/`human_in_loop` execution,
+  per-node sessions, human decisions, and retries.
+- Removed at cutover: the beta workflow-wide restriction that only one stage
+  containing one step may execute, run-wide session/resolved-plan assumptions,
+  and managed-cloud-only acceptance. Schema 2 separately requires exactly one
+  node step per stage and permits multiple ordered stages. The existing
+  run/store/runtime/session-extension path remains the one V1 implementation.
 
 ### Workspace and session lifecycle, repository/worktree setup
 
@@ -316,7 +364,7 @@ The beta consumes ordinary workspaces and sessions without changing their
 contracts: a placed workflow workspace is a visible ordinary workspace
 excluded from generic retention by creator context, and the run's session is
 a normal session inspectable through existing session APIs. The new feature
-keeps that posture (requirements 22–24) and needs two behaviors the beta
+keeps that posture (requirements 24–26) and needs two behaviors the beta
 lacks: run-owned workspace creation with a repository-root mode
 (requirements 9–10), and open chat in workflow sessions, which the beta's
 exclusive admission deliberately rejects while a run is nonterminal
@@ -342,15 +390,16 @@ generated references in the same PR that changes their behavior, per
 
 | Shipped primitive | V1 treatment |
 | --- | --- |
-| `workflow_definition`, five `/v1/workflows` routes, ownership, revision CAS, soft delete | Keep the resource and routes. Migrate every live row to graph schema 2, then remove linear columns, contracts, validation, and editor code. |
+| `workflow_definition`, five `/v1/workflows` routes, ownership, revision CAS, soft delete | Keep the resource, routes, `inputs_json`, and `stages_json`. Migrate rows to linear schema 2 by normalizing each authored beta step into one ordered stage/node, then extend validation for `human_in_loop` and placement. |
+| No beta context-doc definition or workspace contract | Add a revisioned `context_docs_json` manifest and per-run writable materialization under `.proliferate/context/`. The data-model delivery spec closes the backing content storage and transfer contract before implementation. |
 | `workflow_invocation`, `/v1/workflow-invocations`, canonical replay, history, cancel | Keep the resource and routes for schema-2 local invocations. Stop beta acceptance, terminalize old work, and remove schema-1 contracts. |
 | `workflow_managed_execution`, managed delivery workers, `/deliver` | Remove after terminalizing beta invocations. Archive or delete historical rows before dropping the table. |
-| `/v1/workflow-runs`, `workflow_runs`, state versions, cancellation, replay | Keep the resource and table, rebuilding them for schema-3 graph runs only. |
-| `workflow_run_steps` | Remove after beta runs are terminalized and archived or deleted. Graph runs use `workflow_run_node_executions`. |
+| `/v1/workflow-runs`, `workflow_runs`, state versions, cancellation, replay | Keep the resource, table, and status vocabulary; extend schema 3 for the frozen linear sequence and per-step progression. |
+| `workflow_run_steps` | Keep and extend the existing `(stage_index, step_index)` coordinate space with node kind, attempt, session, resolved plan, human-wait, and retry state. |
 | `workflow_workspace_materializations` and worktree placement | Keep the table and workspace seams, rebuilding the active table for schema-2 repository-root/new-worktree placement only. |
-| One-prompt executor and run-wide resolved plan | Remove. The graph actor and per-node resolution become the only run implementation. |
-| Exclusive `SESSION_CONTROLLED_BY_WORKFLOW` policy | Remove. Graph node sessions use normal interactive session admission. |
-| Sequential editor and managed-cloud detail | Replace at UI cutover while retaining routes, CRUD actions, query infrastructure, catalog controls, and ordinary run/workspace surfaces. |
+| One-prompt executor and run-wide resolved plan | Extend the executor to visit every ordered step. Resolution and session correlation move from the run to each step because every node has its own model and session. |
+| Exclusive `SESSION_CONTROLLED_BY_WORKFLOW` policy | Remove. Linear workflow node sessions use normal interactive session admission. |
+| Sequential editor and managed-cloud detail | Keep the ordered editor/domain model and render it as a linear graph; replace only managed-cloud run projection while retaining routes, CRUD actions, query infrastructure, catalog controls, and ordinary run/workspace surfaces. |
 
 ### Migration through the ladder
 
@@ -358,13 +407,16 @@ Temporary migration readers may coexist inside the ladder, but they are not a
 second product mode. Engine work adds no writer. Data-model work adds the
 deterministic definition migration and the invocation/run disposition
 migrations. Lifecycle work drains beta delivery and wires schema-2 invocations
-to schema-3 runs. The UI/client PR enables graph writers and deletes the
-remaining linear and managed-cloud code. Release is blocked unless an invariant
-sweep proves that active tables contain only definition schema 2, invocation
-schema 2, run schema 3, and materialization schema 2.
+to schema-3 linear runs through the extended beta executor. The UI/client PR
+enables schema-2 writers and removes managed-cloud-only code. Release is blocked
+unless an invariant sweep proves that active tables contain only definition
+schema 2, invocation schema 2, run schema 3, and materialization schema 2, with
+no branching definition or executor path registered.
 
 ## External systems and spikes
-- 
+
+No external workflow DSL enters the V1 contract. The shipped beta's ordered
+stages and steps are the implementation reference.
 
 ## Design
 
@@ -373,7 +425,7 @@ schema 2, run schema 3, and materialization schema 2.
 The v1 launch keeps the beta's separation between durable product intent and a
 runtime-owned run. Reusable definitions and immutable invocations live in the
 hosted control plane. A claimed invocation becomes a run whose frozen
-definition and live graph state live in the executor runtime's SQLite database
+definition and live ordered state live in the executor runtime's SQLite database
 on the user's machine.
 
 This ADR uses the shipped resource vocabulary:
@@ -386,8 +438,35 @@ This ADR uses the shipped resource vocabulary:
   a new parent API resource, table, or domain aggregate.
 
 The beta schemas are migration inputs, not runtime variants. After cutover,
-live product APIs, workers, stores, and UI accept only graph definitions,
-local invocations, and graph runs.
+live product APIs, workers, stores, and UI accept only schema-2 linear
+definitions, local invocations, and schema-3 linear runs.
+
+#### Linear definition and outcome contract
+
+Definition schema 2 keeps the beta's ordered `stages[]` array and requires
+exactly one node step per stage. Flattening `stages[].steps[]` therefore yields
+the complete execution order, and `(stageIndex, 0)` remains the durable address
+of each node. The only step discriminators are `agent` and `human_in_loop`.
+Each node stores `goals[]`; migration maps the beta's optional singular `goal`
+to an empty or one-element array.
+
+The definition also owns a `contextDocs[]` manifest. Every entry uses a
+normalized relative path beneath `.proliferate/context/` plus immutable content
+identity and media metadata. Definition revision CAS covers both the manifest
+and its referenced content. Invocation acceptance freezes those identities, and
+the runtime verifies and materializes the files before starting the first node.
+Content is durably stored by immutable identity before the Postgres revision
+CAS commits, so a visible definition revision never references missing content.
+A failed CAS may leave unreferenced immutable content for the cleanup policy
+owned by the context-doc open decision.
+
+The definition stores no `next`, edge, condition, terminal, or layout member.
+The editor may render adjacent nodes with connectors and allow reorder, but it
+serializes only array order. A successful node at index `i` advances to
+`i + 1`; a successful final node atomically makes the run `completed`. A node
+error, failed verification, or explicit Fail decision atomically makes the node
+and run `failed`. Control-plane projection and AnyHarness persistence carry
+those outcomes without adding synthetic graph nodes.
 
 The maps below read from the outside in: infrastructure and trust boundary,
 deployment or container, operating-system process, logical module or endpoint,
@@ -410,17 +489,24 @@ HOSTED CLOUD — service trust boundary
 ├─ API deployment / container
 │  └─ Proliferate API process (FastAPI + Uvicorn)
 │     └─ Workflow-definition endpoints (`/v1/workflows`)
-└─ Postgres service
-   └─ Postgres database process
-      └─ Proliferate database
-         └─ table: workflow_definition
-            └─ graph, layout, placement default, revision, and metadata
+├─ Postgres service
+│  └─ Postgres database process
+│     └─ Proliferate database
+│        └─ table: workflow_definition
+│           └─ inputs, ordered stages, context-doc manifest, placement default,
+│              revision, and metadata
+└─ Context-doc content store: TBD by data-model delivery spec
 
 FLOW
 1. User ── create or edit ──► Workflow editor
-2. Workflow editor ── HTTPS + JSON ──► Workflow-definition endpoint
-3. Workflow-definition endpoint ── validate; INSERT or UPDATE (SQL)
-   ──► workflow_definition
+2. Workflow editor ── upload immutable context-doc content; transport TBD
+   ──► Workflow-definition endpoint
+3. Workflow-definition endpoint ── idempotently persist content by identity
+   ──► context-doc content store (TBD)
+4. Workflow editor ── HTTPS + JSON: definition, manifest, and revision
+   ──► Workflow-definition endpoint
+5. Workflow-definition endpoint ── verify every identity is durable, then
+   validate and INSERT or revision-CAS UPDATE (SQL) ──► workflow_definition
 ```
 
 Rendered map:
@@ -450,15 +536,19 @@ flowchart LR
         subgraph postgres_service["Postgres service"]
             subgraph postgres_process["Postgres database process"]
                 subgraph database["Proliferate database"]
-                    definitions[("Table: workflow_definition<br/>graph, layout, placement default,<br/>revision, and metadata")]
+                    definitions[("Table: workflow_definition<br/>inputs, ordered stages, context-doc manifest,<br/>placement default, revision, and metadata")]
                 end
             end
         end
+
+        context_store[("Context-doc content store<br/>TBD by data-model delivery spec")]
     end
 
     user -->|"1. Create or edit"| editor
-    editor -->|"2. HTTPS + JSON<br/>create or save definition"| definition_endpoint
-    definition_endpoint -->|"3. Validate; INSERT or UPDATE (SQL)"| definitions
+    editor -->|"2. Upload immutable context-doc content<br/>transport TBD"| definition_endpoint
+    definition_endpoint -->|"3. Idempotently persist by identity"| context_store
+    editor -->|"4. HTTPS + JSON<br/>definition, manifest, revision"| definition_endpoint
+    definition_endpoint -->|"5. Verify durable content;<br/>validate + INSERT or revision-CAS UPDATE (SQL)"| definitions
 ```
 
 #### Data-plane flow: run a saved definition locally
@@ -475,18 +565,18 @@ USER'S LOCAL MACHINE — data-plane trust boundary
 │  └─ claims pending invocations and forwards them to loopback
 ├─ AnyHarness runtime process (`anyharness serve`)
 │  ├─ Workflow-run HTTP ingress (`/v1/workflow-runs`)
-│  ├─ Workflow-run actor and transition engine
+│  ├─ Existing workflow runtime and linear executor
 │  ├─ Workspace and session services
 │  └─ ACP agent subprocesses (one per active agentic session)
 ├─ AnyHarness runtime home (filesystem)
 │  └─ SQLite file: db.sqlite
 │     ├─ workflow_runs: frozen envelope and aggregate run state
-│     ├─ workflow_run_node_executions: graph visits, retries, and correlation
+│     ├─ workflow_run_steps: ordered node attempts and correlation
 │     ├─ workflow_workspace_materializations: run workspace placement
 │     └─ existing workspace and session tables
 └─ Run workspace (filesystem)
    ├─ checkout: repository root or new worktree
-   └─ shared context and node artifacts (path ownership and semantics TBD)
+   └─ `.proliferate/context/`: per-run writable context docs
 
 HOSTED CLOUD — service trust boundary
 ├─ API deployment / container
@@ -496,10 +586,11 @@ HOSTED CLOUD — service trust boundary
 │  └─ Postgres database process
 │     └─ Proliferate database
 │        ├─ table: workflow_invocation
-│        ├─ table: workflow_invocation_delivery
+│        ├─ table: workflow_invocation_delivery (delivery + run-status projection)
 │        ├─ table: workflow_invocation_claim
 │        └─ table: workflow_definition
 │           └─ exact schemas in New and modified primitives
+├─ Context-doc content store: TBD by data-model delivery spec
 └─ Background deployment / container
    └─ Beat-fired claim-expiry task
 
@@ -512,13 +603,23 @@ FLOW
    ──► workflow_invocation + workflow_invocation_delivery
 5. Local delivery owner ── POST claim; claim endpoint INSERTs lease (SQL)
    ──► workflow_invocation_delivery + workflow_invocation_claim
-6. Local delivery owner ── invocation + frozen definition; transport TBD
-   ──► workflow-run PUT
-7. Workflow-run PUT ── create schema-3 run and frozen snapshot (SQL)
+6. Claim endpoint ── read frozen context-doc content
+   ──► context-doc content store; claim endpoint ── return content with the
+   claimed invocation; transfer TBD ──► local delivery owner
+7. Local delivery owner ── invocation + frozen definition + verified
+   context-doc content; transport TBD ──► workflow-run PUT
+8. Workflow-run PUT ── create accepted schema-3 run and frozen snapshot (SQL)
    ──► workflow_runs
-8. Workflow-run PUT ── start in process ──► workflow-run actor
-9. Workflow-run actor ── advance run state (SQL)
-   ──► workflow_runs + workflow_run_node_executions
+9. Workflow-run PUT ── start setup in process ──► workflow runtime
+10. Workflow runtime ── materialize run workspace and persist placement (SQL)
+    ──► workflow_workspace_materializations + checkout
+11. Workflow runtime ── verify frozen identities and materialize writable
+    copies ──► `<workspace-root>/.proliferate/context/`
+12. Workflow runtime ── atomically enter the first node, then advance ordered
+    run state (SQL)
+   ──► workflow_runs + workflow_run_steps
+13. Local delivery owner ── report run status + state version (HTTPS + JSON)
+    ──► workflow_invocation_delivery
 ```
 
 Rendered map:
@@ -538,11 +639,11 @@ flowchart LR
 
         subgraph anyharness["AnyHarness runtime process<br/>anyharness serve"]
             ingress["Workflow-run HTTP ingress<br/>/v1/workflow-runs"]
-            executor["Workflow-run actor<br/>and transition engine"]
+            executor["Existing workflow runtime<br/>and linear executor"]
             workspace_sessions["Workspace and session services"]
             agents["ACP agent subprocesses<br/>one per active agentic session"]
 
-            ingress -->|"8. Start in process"| executor
+            ingress -->|"9. Start setup in process"| executor
             executor -->|"Create or resume sessions"| workspace_sessions
             workspace_sessions -->|"Spawn"| agents
         end
@@ -550,7 +651,7 @@ flowchart LR
         subgraph runtime_home["AnyHarness runtime home — filesystem"]
             subgraph sqlite["SQLite file: db.sqlite"]
                 local_run[("workflow_runs<br/>frozen envelope<br/>and aggregate run state")]
-                local_nodes[("workflow_run_node_executions<br/>graph visits, retries,<br/>and correlation")]
+                local_nodes[("workflow_run_steps<br/>ordered node attempts<br/>and correlation")]
                 local_placement[("workflow_workspace_materializations<br/>run workspace placement")]
                 local_links[("Existing workspace<br/>and session tables")]
             end
@@ -558,16 +659,19 @@ flowchart LR
 
         subgraph run_workspace["Run workspace — filesystem"]
             checkout["Checkout<br/>repository root or new worktree"]
-            context["Shared context and node artifacts<br/>path ownership and semantics TBD"]
+            context["Workflow context docs<br/>.proliferate/context/"]
         end
 
         user -->|"1. Click Run"| client
-        ingress -->|"7. Create schema-3 run and snapshot (SQL)"| local_run
-        executor -->|"9. Advance aggregate state (SQL)"| local_run
-        executor -->|"Enter node or retry (SQL)"| local_nodes
-        ingress -->|"Materialize run workspace"| local_placement
+        ingress -->|"8. Create accepted schema-3 run<br/>and snapshot (SQL)"| local_run
+        executor -->|"12. Enter or advance run state (SQL)"| local_run
+        executor -->|"12. Enter node or retry (SQL)"| local_nodes
+        executor -->|"10. Request workspace placement"| workspace_sessions
+        workspace_sessions -->|"10. Persist placement (SQL)"| local_placement
         workspace_sessions -->|"Persist links (SQL)"| local_links
-        workspace_sessions -->|"Materialize"| checkout
+        workspace_sessions -->|"10. Materialize"| checkout
+        agents -->|"Read and write"| checkout
+        executor -->|"11. Verify and materialize<br/>frozen context docs"| context
         agents -->|"Read and write"| context
     end
 
@@ -583,8 +687,8 @@ flowchart LR
         subgraph postgres_service["Postgres service"]
             subgraph postgres_process["Postgres database process"]
                 subgraph database["Proliferate database"]
-                    invocations[("Tables: workflow_invocation<br/>workflow_invocation_delivery<br/>workflow_invocation_claim")]
-                    definitions[("Table: workflow_definition<br/>saved graph, layout,<br/>placement, and revision")]
+                    invocations[("Tables: workflow_invocation<br/>workflow_invocation_delivery<br/>delivery + run-status projection<br/>workflow_invocation_claim")]
+                    definitions[("Table: workflow_definition<br/>saved inputs, ordered stages,<br/>context-doc manifest, placement, and revision")]
                 end
             end
         end
@@ -593,15 +697,20 @@ flowchart LR
             expiry_task["Beat-fired<br/>claim-expiry task"]
         end
 
+        context_store[("Context-doc content store<br/>TBD by data-model delivery spec")]
+
         invocation_api -->|"3. Read and freeze exact revision (SQL)"| definitions
         invocation_api -->|"4. INSERT immutable snapshot<br/>and pending delivery (SQL)"| invocations
         invocation_api -->|"5. Claim row + insert lease (SQL)"| invocations
+        invocation_api -->|"6. Read frozen context-doc content"| context_store
         expiry_task -->|"Expire lease + requeue"| invocations
     end
 
     client -->|"2. HTTPS + JSON<br/>invoke definition ID"| invocation_api
-    delivery_owner -->|"5. Claim pending + receive snapshot"| invocation_api
-    delivery_owner -.->|"6. Invocation + frozen definition<br/>schema-3 run PUT"| ingress
+    delivery_owner -->|"5. Claim pending invocation"| invocation_api
+    invocation_api -.->|"6. Return frozen snapshot<br/>and context-doc content"| delivery_owner
+    delivery_owner -.->|"7. Invocation + frozen definition<br/>and context docs; schema-3 run PUT"| ingress
+    delivery_owner -->|"13. Report run status<br/>and state version"| invocation_api
 ```
 
 ### Assumptions
@@ -609,78 +718,73 @@ flowchart LR
 
 ### Tradeoffs
 
-n/a
+- Retaining ordered stages/steps minimizes V1 migration and execution risk, but
+  users cannot express conditional or parallel work.
+- The UI presents a graph-like sequence while storage remains an ordered
+  document. Future branching will require an explicit schema decision and
+  migration rather than unlocking dormant edges.
+- Keeping completion and failure on run records removes synthetic terminal
+  nodes from authoring, but the run header and node status must communicate the
+  outcome clearly.
+- Workflow-scoped context docs give every node a stable shared file surface,
+  but add versioned binary storage, transfer, path-safety, and cleanup work that
+  the beta did not have.
 
 ### Alternatives
 
-n/a
+- Replace the beta definition with an arbitrary directed graph and add
+  `choice` node type. We're scoping this out since this will require us to 
+  introduce a new primitive to send input into the choice node and the use case 
+  for choice node seems narrow enough that it should not be a lauch blocker.
+- Introduce a new flat `nodes[]` contract while enforcing linear order.
+  Rejected because `stages[].steps[]` and `(stage_index, step_index)` already
+  provide an ordered definition and durable execution coordinate.
 
 ### Open decisions
 
 | Decision | Owner | Must close by |
 | --- | --- | --- |
-| Define the canonical graph JSON vocabulary for definitions, run nodes, and the `succeed` terminal. The source draft used both `succeed` and `success`; this ADR consistently uses `succeed`. | Product and runtime | Engine PR delivery spec |
-| Decide whether requirements 18 and 19 describe two distinct context classes or two candidate paths for the same shared context, then define ownership, visibility, cleanup, and migration semantics. | Runtime and product | Engine PR delivery spec |
-| Define graph validation semantics, including entry-node cardinality, cycles, unreachable nodes, choice exhaustiveness, and whether every non-terminal node must have an explicit failure edge or may inherit one. | Runtime | Engine PR delivery spec |
-| Define what "account for follow-up capabilities" means as a finite capability list so requirement 2 is testable and does not force speculative generality. | Product | Engine PR delivery spec |
+| Define the remaining fields of the fixed schema-2 `agent` and `human_in_loop` step union inside the retained `stages[].steps[]` envelope: harness/model placement, verification shape, bounds, and human-checkpoint copy. The topology and absence of edge, condition, choice, terminal-node, and layout members are closed by this ADR. | Product and runtime | Engine PR delivery spec |
+| Define the bounded context-doc manifest and content storage/transfer contract: upload and download ownership, revision pinning and hashes, path normalization, size and media limits, secret handling, writable-copy semantics, cleanup, and failure behavior. The per-run destination `<workspace-root>/.proliferate/context/` is fixed by requirement 21. | Product, server, runtime, and security | Data-model PR delivery spec |
 | Choose archive/export versus deletion for terminal schema-1 invocations and schema-1/2 AnyHarness runs. Neither option may leave beta rows or readers in the active workflow path. | Product, server, and runtime | Data-model PR delivery spec |
-| Define the cutover drain window and operator proof that no managed-cloud invocation or one-prompt run remains non-terminal before their workers and executors are removed. | Server and runtime | Lifecycle PR delivery spec |
+| Define the cutover drain window and operator proof that no managed-cloud invocation or one-prompt run remains non-terminal before managed workers are removed and the schema-3 linear path is enabled. | Server and runtime | Lifecycle PR delivery spec |
 
 ## New and modified primitives, by grid cell
 
 ### AnyHarness
 
-1. **`live/workflows` — new**
-   - `LiveWorkflowRunManager` — owns the process-local run-to-actor registry,
-     guarantees at most one actor per schema-3 run in this process, and routes
-     start, recovery, and command submission by durable run ID
-   - `WorkflowRunActor` — monitors for node completion, human decisions,
-     cancellation, retry, and shutdown for one run, recording durable
-     state before each external effect or graph transition
-   - private `WorkflowRunActorHandle` — carries only the typed actor command sender
-     and request/reply plumbing so callers do not depend on mailbox details or
-     acquire a second workflow-state surface
-   - private `WorkflowRunCommand` — closes the actor's internal command vocabulary
-     over node completion, human decision, cancellation, retry, and shutdown;
-     it is neither a wire contract nor a domain-state model
-
-   An actor starts from a durable run ID and rehydrates through the
-   workflow domain; there is no separate `WorkflowLaunch` object. App wiring
-   supplies actor dependencies directly until a repeated dependency bundle
-   earns a named internal type, so V1 does not predeclare
-   `WorkflowRunActorCapabilities`. SQLite remains authoritative, and API reads
-   use durable run records, so V1 has no process-local `WorkflowLiveSnapshot`.
-   A live snapshot may be added only if a concrete transient state appears that
-   cannot correctly be represented by actor presence plus durable state.
-
-2. **`domains/workflows` — extended**
-   - `ValidatedWorkflowGraph` — fail-closed executable graph for pure transition policy.
-   - `WorkflowEvent` and `WorkflowTransitionPlan` — closed input and output of one graph decision.
+1. **`domains/workflows` — extended**
+   - `ValidatedLinearWorkflow` — fail-closed ordered stages/steps contract with
+     exactly one `agent` or `human_in_loop` step per stage.
    - `WorkflowRunStore` — existing SQLite boundary, extended with schema-3
-     acceptance and atomic run/node compare-and-set writes.
-   - `WorkflowRunService` — existing durable acceptance, transition, view, and
-     recovery boundary, with its linear policy replaced by graph rules.
-   - `WorkflowRunRuntime` — existing async facade, now routing every accepted
-     run through `LiveWorkflowRunManager`.
+     acceptance and atomic run/step compare-and-set writes.
+   - `WorkflowRunService` — existing durable acceptance, ordered-step
+     progression, view, and recovery boundary.
+   - `WorkflowRunRuntime` — existing async facade, extended to resolve, create a
+     session for, and dispatch the next durable step.
    - `WorkflowRunSessionExtension` — extends the exact session/prompt lookup to
-     return a node execution and forward its outcome to the run actor.
+     return a step execution and schedule the next linear progression through
+     `WorkflowRunRuntime`.
    - `WorkflowRunEnvelopeV3` — canonical immutable replay identity accepted
      before effects.
    - `FrozenWorkflowDefinition` — pins one validated definition revision across recovery.
    - `WorkflowRunRecordV3` — schema-3 aggregate state and external correlation.
-   - `WorkflowRunNodeExecutionRecord` — one graph visit or retry with
-     session/edge correlation.
+   - `WorkflowRunStepRecordV3` — one ordered node attempt with
+     stage/step/session correlation.
    - `WorkflowRunViewV3` — records plus allowed actions without policy in HTTP.
-   - `context_layout` — pure shared/node-artifact paths; the runtime materializes them.
-   - graph run/node status and failure/interruption enums — the only persisted
+   - `context_docs` — validates the frozen manifest, normalizes relative paths,
+     and materializes per-run writable copies under `.proliferate/context/`
+     before the first node.
+   - run/step status and failure/interruption enums — the only persisted
      workflow control vocabulary after cutover.
 
-   This cell owns durable workflow meaning. It validates frozen definitions,
-   decides graph transitions, records run and node state, correlates
-   workflow-owned session turns, and bridges durable state to
-   `LiveWorkflowRunManager`.
+   This cell owns durable workflow meaning. It validates frozen linear
+   definitions, advances only to the next array coordinate, records run and
+   step state, and correlates workflow-owned session turns. V1 adds no workflow
+   actor, manager, generic transition engine, edge model, or in-memory source of
+   truth.
 
-3. **`api/http/workflow_runs` — extended**
+2. **`api/http/workflow_runs` — extended**
 
    The required AnyHarness HTTP surface is:
 
@@ -692,15 +796,18 @@ n/a
    POST /v1/workflow-runs/{runId}/retry
    ```
 
-   - `PUT` accepts only schema 3, stores the frozen graph envelope and effective
+   - `PUT` accepts only schema 3, stores the frozen linear envelope and effective
      placement before effects, and rejects V1/V2 requests as unsupported. It
      returns `201` on create, `200` on exact replay, and `409` on mismatch.
-   - `GET` returns durable run and node views, links, selected edges, state
-     version, terminal or failure state, and currently allowed actions.
+     Context-doc paths and immutable identities are part of replay identity;
+     missing, mismatched, or unsafe content fails before a node starts.
+   - `GET` returns durable run and ordered step views, links, current position,
+     state version, terminal or failure state, and currently allowed actions.
    - `cancel` idempotently records intent and returns the latest truthful view;
      repeats preserve the terminal result or current non-terminal state.
-   - `human-decision` submits a configured choice for the waiting node at an
-     observed state version; stale, non-current, or invalid requests return `409`.
+   - `human-decision` submits `continue` or `fail` for the waiting
+     `human_in_loop` node at an observed state version; stale, non-current, or
+     invalid requests return `409`.
    - `retry` targets a failed or interrupted node and state version, inserting a
      new correlated attempt that may reuse its session; invalid requests return `409`.
 
@@ -711,21 +818,22 @@ n/a
    workflow-specific event stream; the ProductClient polls the durable `GET`
    while ordinary session streams carry node-session activity.
 
-4. **`anyharness-contract/v1/workflow_runs` — extended**
+3. **`anyharness-contract/v1/workflow_runs` — extended**
    - `VersionedPutWorkflowRunRequest::V3`
    - `VersionedWorkflowRunResponse::V3`
-   - frozen schema-3 run envelope
+   - frozen schema-3 linear run envelope
    - run view
-   - run-node view
+   - ordered run-step view
    - effective placement
    - human-decision and retry requests
    - typed problem responses
 
-   V1 and V2 request/response components are removed with the one-prompt
-   executor. The versioned wrapper retains only V3 so stale generated clients
-   receive an unsupported-schema error instead of invoking beta behavior.
+   V1 and V2 request/response components are removed at cutover. The versioned
+   wrapper retains only V3 so stale generated clients receive an
+   unsupported-schema error instead of invoking beta behavior; the underlying
+   executor is extended rather than replaced.
 
-5. **SQLite persistence schema — extended**
+4. **SQLite persistence schema — extended**
 
    `persistence/**` owns the migrations; `domains/workflows/store/**` owns the
    queries and row mapping. The schema is exactly:
@@ -764,23 +872,22 @@ n/a
      check (status <> 'cancelled' or cancel_requested_at is not null)
      check (status not in ('running', 'completed', 'interrupted') or
             workspace_id is not null)
+     check ((status in ('completed', 'failed', 'cancelled')) =
+            (finished_at is not null))
 
-   workflow_run_node_executions
+   workflow_run_steps
      id                         text primary key
      run_id                     text not null
                                 references workflow_runs(id) on delete cascade
-     definition_node_id         text not null
-     sequence                   integer not null check (sequence >= 0)
+     stage_index                integer not null check (stage_index >= 0)
+     step_index                 integer not null check (step_index = 0)
      attempt                    integer not null check (attempt >= 1)
-     retry_of_node_execution_id text null
-                                references workflow_run_node_executions(id)
+     retry_of_step_execution_id text null
+                                references workflow_run_steps(id)
                                 on delete set null
      node_kind                  text not null
                                 check (node_kind in
-                                ('agent', 'human_in_loop', 'choice',
-                                'succeed', 'fail'))
-     agentic_index              integer null
-                                check (agentic_index >= 0)
+                                ('agent', 'human_in_loop'))
      status                     text not null
                                 check (status in
                                 ('pending', 'running', 'waiting_for_human',
@@ -791,8 +898,8 @@ n/a
      resolved_plan_json         text null check
                                 (resolved_plan_json is null or
                                 json_valid(resolved_plan_json))
-     selected_edge_id           text null
-     next_definition_node_id    text null
+     human_decision             text null
+                                check (human_decision in ('continue', 'fail'))
      result_json                text null check
                                 (result_json is null or json_valid(result_json))
      failure_code               text null check (length(failure_code) <= 64)
@@ -806,18 +913,14 @@ n/a
      check ((status = 'interrupted') = (interruption_code is not null))
      check ((status not in ('pending', 'running', 'waiting_for_human')) =
             (finished_at is not null))
-     check ((node_kind in ('agent', 'human_in_loop')) =
-            (agentic_index is not null))
-     check ((node_kind in ('agent', 'human_in_loop')) =
-            (prompt_id is not null))
-     check ((node_kind in ('agent', 'human_in_loop')) =
-            (resolved_plan_json is not null))
-     check (node_kind in ('agent', 'human_in_loop') or
-            (session_id is null and turn_id is null))
      check (status <> 'waiting_for_human' or node_kind = 'human_in_loop')
+     check (human_decision is null or
+            (node_kind = 'human_in_loop' and
+             status in ('completed', 'failed')))
+     check (human_decision <> 'continue' or status = 'completed')
+     check (human_decision <> 'fail' or status = 'failed')
 
-     unique (run_id, sequence)
-     unique (run_id, definition_node_id, attempt)
+     unique (run_id, stage_index, step_index, attempt)
 
    workflow_workspace_materializations
      run_id                      text primary key
@@ -836,24 +939,27 @@ n/a
      created_at                  text not null
      updated_at                  text not null
      finished_at                 text null
+
+     check ((status in ('ready', 'failed')) = (finished_at is not null))
    ```
 
-   The active schema contains graph runs only. Agent/model resolution belongs
-   to each agentic node execution; there is no run-level session or resolved
-   plan. The run status remains `completed`; entering the graph's `succeed` node
-   causes that terminal status. `interrupted` is a retryable pause.
+   The active schema contains linear runs only. Agent/model resolution belongs
+   to each node execution; there is no run-level session or resolved plan. A
+   successful final step changes the run to `completed`; a failed step or
+   explicit human Fail decision changes it to `failed`. `interrupted` is a
+   retryable pause. No terminal-node row is created.
 
-   Node table checks require `failure_code` exactly for `failed` and
-   `interruption_code` exactly for `interrupted`. Node `finished_at` is present
+   Step table checks require `failure_code` exactly for `failed` and
+   `interruption_code` exactly for `interrupted`. Step `finished_at` is present
    for every state except `pending`, `running`, and `waiting_for_human`.
-   `cancel_requested_at` is write-once and required for `cancelled`.
-   `agentic_index` and `prompt_id` are present exactly for `agent` and
-   `human_in_loop`; `choice`, `succeed`, and `fail` also require null
-   `session_id` and `turn_id`. Only `human_in_loop` may be
-   `waiting_for_human`. Running, completed, and interrupted runs require
-   `workspace_id`; setup failure and pre-placement cancellation may
-   leave it null. The interrupted node execution itself is finished and
-   immutable.
+   Only `human_in_loop` may be `waiting_for_human` or carry a
+   `human_decision`; Continue requires a completed step and Fail requires a
+   failed step. The interrupted step attempt itself is finished and immutable.
+
+   On the run, `cancel_requested_at` is write-once and required for
+   `cancelled`; `finished_at` is present exactly for `completed`, `failed`, and
+   `cancelled`. Running, completed, and interrupted runs require `workspace_id`;
+   setup failure and pre-placement cancellation may leave it null.
 
    Materialization schema 2 owns strict repository-root/new-worktree request and
    response members and is driven by the run after acceptance. The existing
@@ -862,50 +968,55 @@ n/a
    The exact indexes are
    `idx_workflow_runs_nonterminal(status, updated_at)` for
    `accepted|running|interrupted`,
-   `idx_workflow_run_node_executions_sequence(run_id, sequence)`,
-   `idx_workflow_run_node_executions_session(session_id)`, and the partial
-   unique `idx_workflow_run_node_executions_active(run_id)` for
+   `idx_workflow_run_steps_sequence(run_id, stage_index, step_index, attempt)`,
+   `idx_workflow_run_steps_session(session_id)`, and the partial
+   unique `idx_workflow_run_steps_active(run_id)` for
    `pending|running|waiting_for_human`. All timestamps are RFC 3339 UTC text.
+
+   The workflow store enforces the cross-row invariant that a terminal run has
+   no active step. An `accepted` run may have no step while workspace and
+   context-doc setup is in progress. Setup success atomically changes the run to
+   `running` and inserts its first pending step; setup failure atomically changes
+   the run to `failed` without inserting a step.
 
    The run ID plus canonical `invocation_json` remains the replay authority.
    The active node is derived from the partial unique active-row index rather
-   than duplicated as a parent pointer. `sequence` is contiguous per run;
-   `attempt` is contiguous per definition node; and
-   `retry_of_node_execution_id` names an earlier row from that run.
+   than duplicated as a parent pointer. Stage indexes are contiguous per run;
+   `step_index` is always zero; `attempt` is contiguous per coordinate; and
+   `retry_of_step_execution_id` names an earlier row from that run.
    Workspace, repo-root, session, prompt, and turn IDs are durable correlations
    rather than foreign keys to those domains, so run history survives
-   ordinary artifact deletion. A node row is one graph visit or retry and
-   carries its attempt and correlation identity; no separate attempt or event
-   table exists in V1. `result_json` contains only the closed decision, choice,
-   and verification result, never transcript or assistant output.
+   ordinary artifact deletion. A step row is one node attempt and carries its
+   correlation identity; no separate attempt or event table exists in V1.
+   `result_json` contains only closed verification and human-decision results,
+   never transcript or free-form assistant output.
 
    A named custom foreign-key migration first verifies that no beta run is
    non-terminal, applies the chosen archive/delete policy to schema-1/2 rows,
-   drops `workflow_run_steps` and the active-session-controller index, rebuilds
-   `workflow_runs` for schema 3, and rebuilds
-   `workflow_workspace_materializations` for schema 2. It then creates
-   `workflow_run_node_executions`, restores FK enforcement, and runs
-   `foreign_key_check`. Migrations 0060–0064 remain in the chain, but no beta
-   table or row remains active after this migration.
+   rebuilds `workflow_runs` for schema 3, extends `workflow_run_steps` with the
+   fields above, removes the active-session-controller index, and rebuilds
+   `workflow_workspace_materializations` for schema 2. It restores FK
+   enforcement and runs `foreign_key_check`. Migrations 0060–0064 remain in the
+   chain; their tables and linear coordinates remain the base of V1.
 
-6. **`app/workflows` — extended**
+5. **`app/workflows` — extended**
    - retain workflow store/service/runtime construction
-   - add `LiveWorkflowRunManager` construction and run-actor wiring
    - extend route and `WorkflowRunSessionExtension` registration
-   - replace one-prompt startup recovery with graph-run recovery
+   - extend one-prompt startup recovery across schema-3 linear runs
 
-   This cell composes dependencies. It owns no graph or transition policy.
+   This cell composes dependencies. It owns no ordering or transition policy.
 
-7. **`domains/workspaces` — modified**
+6. **`domains/workspaces` — modified**
    - remove the beta scratch/worktree workflow-placement contract
    - rebuild workflow materialization records as schema 2
    - route repository-root and worktree placement through ordinary
      workspace creation with workflow creator context
 
-   A workflow run still owns one ordinary workspace. Context and artifact
-   directories belong to the workflow domain rather than the workspace domain.
+   A workflow run still owns one ordinary workspace. The workflow domain owns
+   `.proliferate/context/` validation and materialization; the workspace domain
+   remains unaware of context-doc semantics.
 
-8. **`domains/sessions` — modified**
+7. **`domains/sessions` — modified**
    - remove `SESSION_CONTROLLED_BY_WORKFLOW` and its active-controller index
    - retain caller-owned prompt IDs and `SessionExtension` completion
    - retain normal user prompts and user-created sessions
@@ -937,8 +1048,9 @@ n/a
      default_placement          varchar(32) not null
                                 check (default_placement in
                                 ('repository_root', 'new_worktree'))
-     graph_json                 jsonb not null
-     layout_json                jsonb not null
+     inputs_json                jsonb not null
+     stages_json                jsonb not null
+     context_docs_json          jsonb not null
      created_at                 timestamptz not null default now()
      updated_at                 timestamptz not null default now()
      deleted_at                 timestamptz null
@@ -980,6 +1092,12 @@ n/a
      local_workspace_id         varchar(255) null
      local_state_version        bigint null
                                 check (local_state_version >= 1)
+     local_run_status           varchar(32) null
+                                check (local_run_status in
+                                ('accepted', 'running', 'completed',
+                                'failed', 'cancelled', 'interrupted'))
+     local_failure_code         varchar(64) null
+     local_status_reported_at   timestamptz null
      cancel_requested_at        timestamptz null
      accepted_at                timestamptz null
      delivery_finished_at       timestamptz null
@@ -993,9 +1111,13 @@ n/a
      check ((delivery_status = 'accepted') =
             (local_run_id is not null))
      check ((delivery_status = 'accepted') =
-            (local_workspace_id is not null))
-     check ((delivery_status = 'accepted') =
             (local_state_version is not null))
+     check ((delivery_status = 'accepted') =
+            (local_run_status is not null))
+     check ((local_run_status is not null) =
+            (local_status_reported_at is not null))
+     check ((local_run_status = 'failed') =
+            (local_failure_code is not null))
      check ((delivery_status = 'accepted') = (accepted_at is not null))
      check (delivery_status <> 'failed' or
             last_delivery_error_code is not null)
@@ -1025,8 +1147,6 @@ n/a
      check ((status = 'acknowledged') =
             (local_run_id is not null))
      check ((status = 'acknowledged') =
-            (local_workspace_id is not null))
-     check ((status = 'acknowledged') =
             (local_state_version is not null))
      unique (invocation_id, attempt)
    ```
@@ -1035,23 +1155,36 @@ n/a
    live-list index is
    `ix_workflow_definition_user_updated(user_id, updated_at desc, id)` where
    `deleted_at is null`.
-   The definition migration moves `inputs_json` and `stages_json` into
-   `graph_json`, adds `layout_json` and `default_placement`, and retains
-   `default_repo_config_id`. `graph_json` is the node-and-edge contract;
-   `layout_json` contains editor coordinates only.
+   The definition migration retains `inputs_json`, `stages_json`, and
+   `default_repo_config_id`, adds `default_placement`, and normalizes every
+   stage to exactly one `agent` or `human_in_loop` step. It initializes
+   `context_docs_json` to an empty manifest. Linear graph layout is derived from
+   array order and is not persisted. The manifest contains normalized relative
+   paths, media metadata, size, and immutable content identity; the open
+   decision above owns the backing content location and transfer contract.
 
-   Invocation acceptance keeps the complete frozen definition in the existing
+   Invocation acceptance keeps the complete frozen definition, including the
+   context-doc manifest and immutable content identities, in the existing
    `invocation_json`; there is no definition-revision table.
    `workflow_definition_id` remains deliberately free of a foreign key, so
    invocation history survives definition deletion. Canonical typed
    `creation_request_json`, not JSONB equality, remains the replay authority.
 
    `cancel_requested_at` is present exactly when `desired_state = cancelled`.
-   Accepted local delivery requires `local_run_id`, `local_workspace_id`,
-   `local_state_version`, `accepted_at`, and `delivery_finished_at`. Failed
-   delivery requires `last_delivery_error_code` and `delivery_finished_at`;
-   cancelled delivery requires `desired_state = cancelled` and
-   `delivery_finished_at`.
+   Accepted local delivery requires `local_run_id`, `local_state_version`,
+   `local_run_status`, `local_status_reported_at`, `accepted_at`, and
+   `delivery_finished_at`. `local_workspace_id` is present after successful
+   placement and may remain null when an accepted run fails before placement.
+   Failed delivery requires `last_delivery_error_code` and
+   `delivery_finished_at`; cancelled delivery requires
+   `desired_state = cancelled` and `delivery_finished_at`.
+
+   `local_run_status` is a monotonic control-plane projection of the
+   authoritative AnyHarness `workflow_runs.status`. The local delivery owner
+   reports it with `local_state_version`; stale reports are ignored and an equal
+   version with different content conflicts. `local_failure_code` is present
+   exactly for `failed`. Completion and failure therefore remain persisted run
+   states in both planes without becoming definition nodes.
 
    Invocation history keeps
    `ix_workflow_invocation_user_created(user_id, created_at, id)` and
@@ -1067,18 +1200,21 @@ n/a
    `status = 'active'` permits one live lease;
    `ix_workflow_invocation_claim_expiry(status, expires_at)` drives expiry.
    Active claims have no `finished_at`; every other status does.
-   `acknowledged` requires all three local correlation fields, and `failed` requires
-   `failure_code`. Claim, acknowledgement, failure, cancellation, and expiry
-   update the claim and delivery in one transaction. Only an active claim can
-   acknowledge or fail. Acknowledgement copies local run, workspace, and
-   state-version correlation onto the delivery; expiry marks the claim expired and requeues
-   the same immutable invocation. `delivery_attempt_count` increments with each
-   claim insert and equals the greatest claim `attempt` for that invocation.
+   `acknowledged` requires local run and state-version correlation, and `failed`
+   requires `failure_code`. Claim, acknowledgement, failure, cancellation, and
+   expiry update the claim and delivery in one transaction. Only an active claim
+   can acknowledge or fail. Acknowledgement copies local run, optional
+   workspace, state version, and initial run status onto the delivery; expiry
+   marks the claim expired and requeues the same immutable invocation.
+   `delivery_attempt_count` increments with each claim insert and equals the
+   greatest claim `attempt` for that invocation.
    `delivery_status = claimed` if and only if that invocation has the active
    claim; the store updates both rows atomically.
 
 2. **`(domain, workflows)` — extended**
-   - replace linear validation with graph and stable agentic-node index validation
+   - extend linear validation with the closed two-kind step union and exactly
+     one step per stage
+   - validate context-doc manifest paths, metadata, and bounds
    - replace managed-cloud invocation policy with local-run invocation policy
    - add local-delivery and claim transition policy
 
@@ -1091,12 +1227,12 @@ n/a
 
    The stores own definition CRUD and revision compare-and-set, pending
    invocation creation, delivery transitions, acknowledgement, cancellation,
-   failure, and stale-delivery recovery.
+   failure, monotonic local-run projection, and stale-delivery recovery.
 
 4. **`(service, workflows)` — extended**
    - retain the current workflow definition and invocation service entry points
-   - replace linear parsing with graph-definition validation
-   - add local invocation-delivery operations
+   - extend linear parsing and validation for `human_in_loop` and placement
+   - add local invocation-delivery and run-state projection operations
 
    These services orchestrate the workflow stores, catalog reads, and selected
    local-delivery transport without exposing ORM rows.
@@ -1116,22 +1252,32 @@ n/a
    GET    /v1/workflow-invocations/{invocationId}
    GET    /v1/workflow-invocations?workflowDefinitionId={definitionId}&cursor={cursor}
    POST   /v1/workflow-invocations/{invocationId}/cancel
+   PUT    /v1/workflow-invocations/{invocationId}/local-run-state
 
    POST   /v1/workflow-invocation-claims
    POST   /v1/workflow-invocation-claims/{claimId}/acknowledge
    POST   /v1/workflow-invocation-claims/{claimId}/fail
    ```
 
-   - Definition CRUD keeps the five beta routes but accepts only graph schema 2;
-     update and delete keep revision compare-and-set.
+   - Definition CRUD keeps the five beta routes but accepts only linear schema
+     2, including the context-doc manifest; update and delete keep revision
+     compare-and-set. The data-model delivery spec must add the authenticated
+     content upload/download surface selected by the open decision before this
+     HTTP list is implementation-ready.
    - Invocation `PUT` keeps its client-minted UUID, canonical replay identity,
      and `201/200/409` create/replay/mismatch behavior. Schema 2 atomically
-     freezes the graph revision, repository, placement, and pending delivery.
+     freezes the linear definition revision, repository, placement, and pending
+     delivery.
    - Detail, definition-scoped history, and idempotent cancel expose Cloud request,
-     delivery, cancellation, and local links; AnyHarness owns graph and node state.
+     delivery, cancellation, and local links; AnyHarness owns run and ordered
+     node state.
    - Claim leases one pending envelope (`204` if none); its active ID gates
      acknowledgement or a closed failure, while expiry redelivers ambiguous handoffs.
-   - `run-eligibility` and managed-cloud `deliver` are removed. Graph
+   - `local-run-state` accepts the acknowledged local run ID, status, failure
+     code when applicable, and AnyHarness state version from the local delivery
+     owner. It advances the control-plane projection monotonically and is
+     idempotent for an exact replay.
+   - `run-eligibility` and managed-cloud `deliver` are removed. Linear
      definitions validate during save and invocation acceptance; local delivery
      uses claims.
 
@@ -1158,8 +1304,10 @@ n/a
    - invocation delivery identity
    - claim or dispatch lease
    - frozen-definition handoff envelope
+   - frozen context-doc retrieval, identity verification, and handoff
    - AnyHarness workflow-run acceptance call
    - certain/uncertain acknowledgement and retry
+   - monotonic AnyHarness run-state reporting to the control plane
 
    One owner must move a pending control-plane invocation to the user's loopback
    AnyHarness runtime. A Desktop ProductClient lifecycle can claim and forward
@@ -1180,6 +1328,8 @@ n/a
      - delivery operations: `claimWorkflowInvocation`,
        `acknowledgeWorkflowInvocationClaim`, and
        `failWorkflowInvocationClaim`
+     - projection operation: `reportWorkflowInvocationRunState`
+     - context-doc content operations selected by the data-model delivery spec
    - `src/types/workflows.ts`
      - thin public aliases for generated `WorkflowDefinition*`,
        `WorkflowInvocation*`, and `WorkflowInvocationClaim*` request/response
@@ -1198,7 +1348,8 @@ n/a
        `useWorkflowRun`, and `useWorkflowRunHistory`
      - mutations: retain `useWorkflowDefinitionActions` for create/update/delete
        and `useWorkflowRunActions` for invocation put/cancel; add
-       `useWorkflowInvocationClaimActions` for claim/acknowledge/fail
+       `useWorkflowInvocationClaimActions` for
+       claim/acknowledge/fail/run-state reporting
    - `src/lib/query-keys.ts`
      - `workflowDefinitionsRootKey`, `workflowDefinitionsListKey`, and
        `workflowDefinitionDetailKey`
@@ -1215,10 +1366,11 @@ n/a
 3. **`anyharness/sdk` — regenerated**
    - `src/generated/openapi.ts`
      - retain the generated `/workflow-runs` operations
-     - replace V1/V2 types with schema-3 run, node, human-decision, retry, and
+     - replace V1/V2 types with schema-3 linear run, ordered-step,
+       human-decision, retry, and
        typed-problem types
    - `src/workflow-runs.test.ts`
-     - pin the graph-run V3 contract fixture and rejection of stale V1/V2 input
+     - pin the linear-run V3 contract fixture and rejection of stale V1/V2 input
 
    The SDK keeps its generated-OpenAPI boundary; this decision does not add a
    parallel hand-written workflows client. V1 adds no workflow stream because
@@ -1255,11 +1407,12 @@ n/a
        └── useWorkflowDeliveryIdentityStore
    ```
 
-   `useWorkflowEditorStore` owns the active definition key, editable graph and
-   layout draft, loaded base revision, selected node/edge, and dirty state. Its
-   setters are local intents such as `replaceDraft`, `patchNode`, `patchEdge`,
-   `setNodePosition`, `setSelection`, and `clearDraft`. The saved definition and
-   layout remain Cloud query data; the store is not a second remote cache.
+   `useWorkflowEditorStore` owns the active definition key, editable ordered
+   stages and context-doc manifest draft, loaded base revision, selected node,
+   and dirty state. Its setters are local intents such as `replaceDraft`,
+   `patchNode`, `insertNode`, `moveNode`, `removeNode`, `addContextDoc`,
+   `removeContextDoc`, `setSelection`, and `clearDraft`. The saved definition
+   remains Cloud query data; the store is not a second remote cache.
 
    `workflow-delivery-identity-store.ts` exists only if the selected transport
    requires a renderer-owned device identity. If delivery belongs to another
@@ -1284,7 +1437,7 @@ n/a
    ```
 
    The two shipped access modules and product-facing run names remain.
-   Definition access adds graph authoring resources; run access composes the
+   Definition access adds linear node authoring resources; run access composes the
    schema-2 invocation with local run detail. Claim access is new and exists
    only if ProductClient is selected as the local delivery owner.
 
@@ -1320,34 +1473,36 @@ n/a
 
    ```text
    domain/workflows/
-   ├── definition.ts                 replace linear mapping with graph schema 2
-   ├── graph-draft.ts                draft creation and write-request projection
-   ├── validation.ts                 replace linear validation with graph rules
-   ├── node-index.ts                 stable agentic-node index projection
+   ├── definition.ts                 extend beta stages/steps with schema 2
+   ├── ordered-draft.ts              draft creation and write-request projection
+   ├── validation.ts                 linear two-kind definition rules
+   ├── context-docs.ts               manifest and path validation
+   ├── node-index.ts                 flattened authored-order index projection
    ├── run-presentation.ts           extend existing product run presentation
-   ├── run-graph.ts                  add read-only node/attempt graph projection
+   ├── run-sequence.ts               read-only ordered node/attempt projection
    └── placement.ts                  default and trigger-override resolution
 
    lib/domain/workflows/
-   ├── workflow-definition-authoring.ts   replace linear authoring projection
+   ├── workflow-definition-authoring.ts   extend linear authoring projection
    ├── workflow-run-state.ts              extend existing Cloud/local composition
    └── workflow-trigger-model.ts
    ```
 
-   `graph-draft.ts` owns `createWorkflowGraphDraft`,
+   `ordered-draft.ts` owns `createWorkflowOrderedDraft`,
    `workflowDefinitionToDraft`, `workflowDraftToCreateRequest`, and
    `workflowDraftToUpdateRequest`. `validation.ts` owns
-   `validateWorkflowDefinitionDraft`; `node-index.ts` owns
-   `projectStableAgenticNodeIndexes`; `run-graph.ts` owns
-   `projectWorkflowRunGraph`; and `placement.ts` owns
+   `validateWorkflowDefinitionDraft`; `context-docs.ts` owns
+   `validateWorkflowContextDocs`; `node-index.ts` owns
+   `projectAuthoredNodeIndexes`; `run-sequence.ts` owns
+   `projectWorkflowRunSequence`; and `placement.ts` owns
    `resolveWorkflowTriggerPlacement`.
 
    The existing pure modules remain the sharing boundary. They project Cloud
    definitions, repository choices,
    Cloud invocation delivery and AnyHarness run state into authoring, trigger,
    and run view models. They also own revision-conflict and safe failure
-   presentation. They do not settle the graph-validation or choice-language
-   decisions that remain open above.
+   presentation. They implement the fixed linear two-kind contract above and
+   contain no edge, condition, terminal-node, or graph-traversal policy.
 
    These modules contain synchronous product rules and import no React or
    transport clients. `domain/workflows` is the Mobile-safe sharing boundary;
@@ -1357,7 +1512,7 @@ n/a
 
    ```text
    hooks/workflows/workflows/
-   ├── use-workflow-definition-actions.ts   extend for graph save/delete
+   ├── use-workflow-definition-actions.ts   extend for linear schema-2 save/delete
    ├── use-workflow-run-launch-actions.ts   extend for schema-2 invocation
    ├── use-workflow-run-detail-actions.ts   extend for cancel/decision/retry
    ├── use-workflow-run-open-actions.ts     extend for local workspace link
@@ -1365,15 +1520,16 @@ n/a
    ```
 
    The shipped definition, launch, detail, and open hooks keep their names and
-   responsibilities. Save writes the graph/layout revision. Launch mints one
+   responsibilities. Save writes the ordered definition revision. Launch mints one
    invocation ID and preserves it as the AnyHarness run ID. Detail composes
    Cloud delivery with local run actions. Open follows the acknowledged local
    workspace link.
 
    `useWorkflowLocalDeliveryLifecycle` mounts only in the Desktop-capable host
    and only if ProductClient wins the delivery-owner decision. It drives
-   claim/forward/acknowledge recovery through access hooks and cleans up its
-   timers or subscriptions; otherwise the lifecycle file is absent. V1 creates
+   claim/forward/acknowledge recovery and monotonic run-state reporting through
+   access hooks, and cleans up its timers or subscriptions; otherwise the
+   lifecycle file is absent. V1 creates
    no empty `ui` or `cache` responsibility folder. The hooks define no query
    keys and write no remote cache objects directly.
 
@@ -1394,23 +1550,22 @@ n/a
    ├── editor/
    │   ├── WorkflowEditorHeader.tsx
    │   ├── WorkflowDefinitionFields.tsx
+   │   ├── WorkflowContextDocsEditor.tsx
    │   ├── WorkflowValidationSummary.tsx
    │   ├── graph/
-   │   │   ├── WorkflowGraphEditor.tsx
+   │   │   ├── WorkflowLinearGraph.tsx
    │   │   ├── WorkflowNodePalette.tsx
    │   │   ├── WorkflowEditorNode.tsx
-   │   │   └── WorkflowEditorEdge.tsx
+   │   │   └── WorkflowAdjacencyConnector.tsx
    │   └── inspector/
    │       ├── WorkflowNodeInspector.tsx
    │       ├── AgentNodeEditor.tsx
    │       ├── HumanInLoopNodeEditor.tsx
-   │       ├── ChoiceNodeEditor.tsx
-   │       ├── TerminalNodeEditor.tsx
    │       └── AgenticNodeConfigurationFields.tsx
    └── runs/
        ├── WorkflowRunsSurface.tsx               existing history/detail surface
        ├── WorkflowRunHeader.tsx
-       ├── WorkflowRunGraph.tsx
+       ├── WorkflowRunSequence.tsx
        ├── WorkflowRunNode.tsx
        ├── WorkflowRunInspector.tsx
        ├── WorkflowNodeSessionLink.tsx
@@ -1419,31 +1574,31 @@ n/a
    ```
 
    The existing definition and run containers keep their route and resource
-   responsibilities. `WorkflowDefinitionEditor` replaces its stage-card body
-   with metadata, default placement, graph editing, node inspection, validation,
-   and save/run/delete actions. `WorkflowRunsSurface`, `WorkflowRunList`, and
-   `WorkflowRunDetail` switch from managed-cloud projection to combined
-   invocation-delivery and local-run state.
-   `WorkflowEditorNode` and `WorkflowRunNode` both show the stable,
+   responsibilities. `WorkflowDefinitionEditor` keeps its ordered stage draft
+   and renders metadata, default placement, context-doc authoring, the linear
+   node graph, node inspection, validation, and save/run/delete actions.
+   `WorkflowRunsSurface`, `WorkflowRunList`, and `WorkflowRunDetail` switch from
+   managed-cloud projection to combined invocation-delivery and local-run state.
+   `WorkflowEditorNode` and `WorkflowRunNode` both show the authored-order,
    zero-padded index for `agent` and `human_in_loop` nodes.
 
    `WorkflowNodeInspector` selects the editor for the active node kind.
    `AgentNodeEditor` and `HumanInLoopNodeEditor` share
    `AgenticNodeConfigurationFields` for model, prompt, goals, and verification
-   methods; `ChoiceNodeEditor` owns condition and outcome configuration; and
-   `TerminalNodeEditor` covers the unique `succeed` and `fail` nodes.
+   methods. No choice or terminal-node editor exists.
 
    `WorkflowRunForm` composes repository selection with the effective placement
    and explicit override. `WorkflowRunDetail` composes Cloud invocation delivery
    state with the local AnyHarness run once it is accepted. Its header shows
    delivery and runtime status, workspace-open, and cancel
-   actions. Its read-only graph shows node status and attempts; its inspector
+   actions. Its read-only sequence shows node status and attempts; its inspector
    links agentic nodes to their ordinary sessions and renders human-decision or
    retry controls only when the selected node permits that action.
 
-   `WorkflowInputEditor`, `WorkflowStageEditor`, `WorkflowsBetaGateModal`, and
-   managed-cloud-only run presentation code are deleted. No route or feature
-   flag can reopen the sequential editor or managed-cloud launch flow.
+   `WorkflowInputEditor` and `WorkflowStageEditor` are retained and extended as
+   the ordered authoring primitives behind the linear graph. The
+   `WorkflowsBetaGateModal` and managed-cloud-only run presentation code are
+   deleted. No route or feature flag can enable authored branching.
 
    Components render state and call hooks; they own no raw access or
    orchestration. Generic controls and dialogs come from ProductClient
@@ -1455,8 +1610,8 @@ n/a
    - navigation and command-palette entries
 
    Existing workflow URLs remain. The list and detail surfaces keep their
-   resource hooks while the sequential editor and managed-cloud projection are
-   replaced at graph-writer cutover.
+   resource hooks while the sequential editor is extended and the managed-cloud
+   projection is replaced at schema-2 writer cutover.
 
 Catalogs, repo roots, the normal workspace/session UI,
 `LiveSessionManager`/`SessionActor`, and Desktop's AnyHarness sidecar lifecycle
@@ -1468,7 +1623,7 @@ cell.
 These flows use **local delivery owner** for the unresolved cell that claims or
 receives a pending control-plane invocation and hands it to the user's
 AnyHarness runtime. The owner, transport, delivery authentication and
-targeting, and condition language remain open decisions.
+targeting remain open decisions.
 The control-plane claim and acknowledgement paths and the AnyHarness paths are
 fixed above; the ordering and durability guarantees below do not depend on the
 remaining choices.
@@ -1485,45 +1640,48 @@ for an overview of definitions and executions.
 
 **Playable design:** [Create and save a workflow](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=CreateWorkflowArtifact.dc.html)
 
-1. The user opens the workflow editor and starts an unsaved graph draft.
-2. The user adds nodes and edges, configures each agentic node's model, prompt,
-   goals, and optional verification methods, and chooses the definition's
-   default placement.
-3. The ProductClient projects stable agentic-node indexes into the graph and
-   shows the same indexes that will name node artifact directories.
+1. The user opens the workflow editor and starts an unsaved ordered draft.
+2. The user adds or reorders `agent` and `human_in_loop` nodes, configures each
+   node's model, prompt, goals, and optional verification methods, adds any
+   workflow context docs, and chooses the definition's default placement. The
+   editor offers no edge, condition, choice, or terminal-node control.
+3. The ProductClient projects authored-order node indexes into the linear
+   graph and run views.
 4. On Save, the ProductClient validates the draft against the supported schema
-   and graph rules. At minimum, it requires exactly one `succeed` node, exactly
-   one `fail` node, and a failure edge from every non-terminal node.
-5. The save workflow sends the graph, layout, placement default, and metadata
-   through the Cloud SDK to the control-plane definition API.
-6. The API authenticates the user, checks resource access, and delegates to the
-   definition service. The server repeats graph, node-index, and catalog
+   and linear rules. It requires at least one stage, exactly one node step per
+   stage, only the two V1 node kinds, and a safe bounded context-doc manifest.
+5. Through the context-doc transfer selected by the data-model delivery spec,
+   the Cloud SDK idempotently uploads each new file by immutable content
+   identity before submitting the definition.
+6. The save request sends inputs, ordered stages, the context-doc manifest and
+   content identities, placement default, and metadata through the Cloud SDK to
+   the control-plane definition API.
+7. The API authenticates the user, checks resource access, verifies that every
+   referenced content identity is durable, and delegates to the definition
+   service. The server repeats linear shape, node-kind, context-doc, and catalog
    validation; client validation is not authoritative.
-7. The definition store atomically inserts the definition and its initial
+8. The definition store atomically inserts the definition and its initial
    revision, then returns the canonical saved representation.
-8. The ProductClient replaces the unsaved draft with the returned definition,
+9. The ProductClient replaces the unsaved draft with the returned definition,
    updates definition queries, and opens the saved-definition route. If any
    hop fails, the draft stays in the editor and no local run state is
    created.
-
-
-### Create a workflow definition from a template
-
-**Playable design:** [Create from a template](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=TemplateWorkflowArtifact.dc.html)
 
 ### Edit a workflow definition
 
 **Playable design:** [Edit a saved workflow](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=EditWorkflowArtifact.dc.html)
 
 1. The ProductClient loads the saved definition and its current revision into a
-   graph draft.
-2. The user changes the graph, node configuration, metadata, layout, or default
-   placement. The ProductClient preserves existing agentic-node indexes and
-   assigns new indexes without renumbering unchanged nodes.
-3. On Save, the client performs the same local validation as creation and sends
-   the edited definition with the revision it loaded.
-4. The control plane authenticates, authorizes, and revalidates the document,
-   then updates it with a revision compare-and-set.
+   linear draft.
+2. The user changes node order, node configuration, context docs, metadata, or
+   default placement. Node indexes are derived from the resulting authored
+   order.
+3. On Save, the client performs the same local validation and durable
+   content-before-manifest upload ordering as creation, then sends the edited
+   definition with the revision it loaded.
+4. The control plane authenticates, authorizes, verifies every referenced
+   content identity, and revalidates the document, then updates it with a
+   revision compare-and-set.
 5. A successful update creates the next definition revision and returns it to
    the ProductClient. Existing invocations and local runs remain pinned to the
    revision they already captured.
@@ -1567,114 +1725,108 @@ for an overview of definitions and executions.
    effective placement, and atomically copies that definition into a pending
    schema-2 invocation snapshot.
 5. The local delivery owner claims or receives the pending invocation, obtains
-   the exact definition revision, and resolves the repository reference to the
-   user's local repository.
+   the exact definition revision and frozen context-doc identities, and resolves
+   the repository reference to the user's local repository.
 6. The local delivery owner sends the invocation ID as the run ID, plus the
-   frozen definition and effective placement, to AnyHarness. Acceptance is
-   idempotent by run ID so an uncertain delivery can repeat this hop.
-7. AnyHarness validates the schema-3 envelope and persists the accepted run and
-   frozen definition before starting workflow effects.
+   frozen definition, context-doc payload required by the selected transfer
+   contract, and effective placement to AnyHarness. Acceptance is idempotent by
+   run ID so an uncertain delivery can repeat this hop.
+7. AnyHarness validates the schema-3 linear envelope and persists the accepted
+   run and frozen definition before starting workflow effects. It does not
+   create a step attempt during setup.
 8. The existing workspace-materialization service creates the run-owned
    ordinary workspace in the effective placement. Repository-root placement
    binds the workspace to the existing repository root without creating a
    branch or worktree.
    New-worktree placement creates a worktree through the existing
    worktree-creation path.
-9. The workflow domain records the workspace link and materializes the shared
-   context and node-artifact layout required by the definition.
-10. If placement fails, AnyHarness records the failed run before any
-    agentic node starts and returns a closed failure code. The delivery owner
-    fails the active claim instead of acknowledging it, and the flow ends.
-11. After placement succeeds, `LiveWorkflowRunManager` registers one
-    `WorkflowRunActor` for the durable run ID. The actor rehydrates the accepted
-    run and starts at the graph's entry node.
+9. The workflow domain records the workspace link, verifies the frozen
+   context-doc content identities, and materializes writable copies under
+   `<workspace-root>/.proliferate/context/`.
+10. If placement or context-doc materialization fails, AnyHarness records the
+    failed run before any agentic node starts and returns a closed failure code.
+    The delivery owner acknowledges the accepted run with `failed`, its state
+    version, and the workspace ID when placement succeeded so both planes retain
+    the run outcome, and the flow ends.
+11. After placement and context-doc materialization both succeed,
+    `WorkflowRunRuntime` atomically changes the run to `running` and creates the
+    pending `(stageIndex: 0, stepIndex: 0, attempt: 1)` node, then starts it
+    through the extended beta execution path.
 12. The local delivery owner acknowledges the run ID, local workspace, and
     state version to the control plane. The ProductClient opens the ordinary
     workspace and run view. If acknowledgement is uncertain, redelivery returns
     the existing local run and workspace rather than creating either again.
 
-### Advance through `agent`, `human_in_loop`, and `choice` nodes
+### Advance through `agent` and `human_in_loop` nodes
 
 **Playable designs:** [Running execution](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=RunningExecutionArtifact.dc.html) · [Human-in-the-loop checkpoint](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=HumanInLoopArtifact.dc.html)
 
-All node transitions pass through one `WorkflowRunActor`. The actor serializes
-session completion, human decisions, cancellation, retry, and shutdown, while
+All progression uses the existing `WorkflowRunRuntime` and durable
+`workflow_run_steps` coordinate. The store serializes session completion, human
+decisions, cancellation, and retry with state-version and attempt checks;
 SQLite remains authoritative.
 
 #### `agent`
 
 **Playable design:** [Advance an agent node](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=RunningExecutionArtifact.dc.html)
 
-1. The actor enters the `agent` node and durably records it as the current
-   running node before dispatching work.
+1. `WorkflowRunRuntime` changes the pending `agent` step to `running` before
+   dispatching work.
 2. The workflow runtime creates the node's ordinary session in the run
-   workspace, links that session to the node execution, and prepares the
-   node-indexed artifact directory.
+   workspace and links that session to the node execution.
 3. The runtime sends the node's prompt, goals, verification instructions, and
    model configuration through `SessionRuntime` with a workflow-owned prompt
    ID.
 4. The agent subprocess runs as an ordinary session and may read or write the
-   checkout, shared context, and its node artifacts.
+   workspace checkout and `.proliferate/context/`.
 5. `WorkflowRunSessionExtension` reports completion only for the workflow-owned
-   turn. The actor ignores ordinary user-chat turns for graph advancement.
-6. The transition policy evaluates the completion and configured verification
-   result. A successful result selects the node's normal outgoing edge; an
-   execution error or failed verification selects its explicit edge to `fail`.
-7. The actor atomically records the node result, selected edge, next node, and
-   new state version before it dispatches the next node.
+   turn. Ordinary user-chat turns do not advance the workflow.
+6. The service evaluates completion and the configured verification result. An
+   execution error or failed verification atomically marks the step and run
+   `failed`.
+7. On success, one transaction completes the current step and either inserts
+   the next authored coordinate as `pending` or, when this is the final node,
+   marks the run `completed`. Only creation of a new pending row schedules the
+   next node.
 
 #### `human_in_loop`
 
 **Playable design:** [Review and decide at a human checkpoint](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=HumanInLoopArtifact.dc.html)
 
-1. The actor enters the `human_in_loop` node, records it as current, and creates
-   its ordinary node session through the same path as an `agent` node.
+1. `WorkflowRunRuntime` starts the `human_in_loop` node and creates its ordinary
+   node session through the same path as an `agent` node.
 2. The runtime dispatches the workflow-owned turn using that node's prompt,
    goals, verification instructions, and model configuration.
-3. When the turn reaches its human checkpoint, the actor records that the node
-   is waiting for a human decision. It does not choose an outgoing edge.
-4. The run view shows the node session, relevant context, and the
-   decision controls defined by the node.
-5. The user may chat in the session without advancing the graph. To advance,
+3. When the turn reaches its human checkpoint, the service records that the node
+   is waiting for a human decision. It does not advance the sequence.
+4. The run view shows the node session, relevant context, and explicit Continue
+   and Fail controls.
+5. The user may chat in the session without advancing the sequence. To advance,
    the user submits an explicit human-decision request with the state version
    they observed.
-6. The actor rejects a stale or invalid decision, or durably records an
-   accepted decision and maps it to the node's configured outgoing edge.
-7. The actor records the completed node, selected edge, next node, and new
-   state version in one transition before continuing.
+6. The service rejects a stale or invalid decision. Continue atomically records
+   the decision, completes the current node, and inserts the next authored
+   coordinate or completes the run. Fail atomically records the decision and
+   a closed human-decision failure code, then marks the current node and run
+   `failed`.
 
-#### `choice`
-
-**Playable design:** [Observe automatic choice routing in the running graph](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=RunningExecutionArtifact.dc.html)
-
-1. The actor enters the `choice` node and durably records it as current. A
-   `choice` node does not create a session.
-2. The transition policy evaluates the node's condition against the frozen
-   node configuration and the inputs allowed by the condition contract.
-3. Exactly one matching outcome selects one configured outgoing edge.
-4. The actor atomically records the evaluated outcome, selected edge, next
-   node, and new state version before continuing, so recovery never evaluates
-   an already-committed choice a second time.
-5. An evaluation error or an outcome with no valid branch selects the node's
-   explicit edge to `fail`. The condition language and exhaustiveness rule
-   remain part of the graph-semantics open decision.
-
-### Succeed, fail, and cancel a run
+### Complete, fail, and cancel a run
 
 **Playable designs:** [Succeeded run](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=SucceededExecutionArtifact.dc.html) · [Failed run](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=FailedExecutionArtifact.dc.html) · [Cancel a running run](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=CancelRunArtifact.dc.html)
 
-#### Succeed
+#### Complete
 
 **Playable design:** [Inspect a succeeded run](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=SucceededExecutionArtifact.dc.html)
 
-1. A completed non-terminal node selects an edge to the workflow's unique
-   `succeed` node.
-2. The actor enters the `succeed` node and atomically records the predecessor's
-   result, terminal node, terminal run status, timestamp, and state
-   version.
-3. The actor dispatches no further nodes and rejects later completion or
+1. The final authored node completes successfully.
+2. The same transaction records the final step result and changes the
+   `workflow_runs` status to `completed` with its timestamp and next state
+   version. No terminal-node row exists.
+3. The runtime dispatches no further nodes and rejects later completion or
    decision messages as stale.
-4. The ProductClient reads the terminal state from AnyHarness and leaves the
+4. The local delivery owner reports `completed` and the new state version to
+   the control plane, which persists the monotonic run projection.
+5. The ProductClient reads the terminal state from AnyHarness and leaves the
    run workspace and its sessions available through the ordinary
    workspace UI.
 
@@ -1682,15 +1834,15 @@ SQLite remains authoritative.
 
 **Playable design:** [Inspect a failed run](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=FailedExecutionArtifact.dc.html)
 
-1. A node may select the unique `fail` node as a defined graph outcome. A
-   runtime error, exception, invalid choice result, or failed verification
-   takes the non-terminal node's required failure edge.
-2. The actor records the source-node result and a stable, scrubbed failure code
-   before entering `fail`.
-3. Entering `fail` atomically records the terminal node, failed run
-   status, timestamp, and state version.
-4. The actor dispatches no further nodes. The run view identifies the
+1. A runtime error, exception, failed verification, or explicit human Fail
+   decision fails the current node.
+2. One transaction records the source-node result, a stable scrubbed failure
+   code, and the `workflow_runs` status `failed` with its timestamp and next
+   state version. No terminal-node row exists.
+3. The runtime dispatches no further nodes. The run view identifies the
    failed node and exposes retry only when the eventual retry policy allows it.
+4. The local delivery owner reports `failed`, the scrubbed failure code, and the
+   new state version to the control plane.
 
 #### Cancel
 
@@ -1703,12 +1855,18 @@ SQLite remains authoritative.
 3. For a claimed invocation, the control plane records cancellation intent for
    the local delivery owner. For a locally accepted run, the ProductClient
    also sends an idempotent cancel command to AnyHarness.
-4. The `WorkflowRunActor` serializes cancellation against node completion and
-   durably records cancellation intent before asking `SessionRuntime` to stop
-   the active workflow-owned turn.
-5. The actor fences late session completions, records the current node as
-   cancelled, and terminalizes the run without traversing `fail`.
-6. Repeated cancellation returns the same terminal result. The ordinary
+4. `WorkflowRunRuntime` serializes cancellation against setup or node
+   completion and durably records cancellation intent. If the non-terminal run
+   has no active step, including an `accepted` run in setup or an `interrupted`
+   run with a finished attempt, state-version checks fence late setup or retry.
+   The runtime clears a run-level `interruption_code` when present, sets
+   `cancelled` and `finished_at`, and leaves any finished step unchanged.
+5. If an active step exists, the runtime asks `SessionRuntime` to stop its
+   workflow-owned turn. State-version and attempt checks fence late session
+   completions, record that step as cancelled, and terminalize the run directly.
+6. The local delivery owner reports `cancelled` and the new state version to the
+   control plane.
+7. Repeated cancellation returns the same terminal result. The ordinary
    workspace and completed session transcripts remain available.
 
 ### Recover or retry after process, session, or client interruption
@@ -1735,22 +1893,27 @@ SQLite remains authoritative.
 
 **Related playable state:** [Reopen the durable running execution](https://claude.ai/design/p/4f1f806c-1064-4edb-b09b-597ebf99b11d?file=RunningExecutionArtifact.dc.html). Runtime rehydration is intentionally transparent in the product UI.
 
-1. The workflow runtime persists the current node, node result, selected edge,
-   state version, and workflow-owned prompt identity before each corresponding
-   external effect or graph transition.
+1. The workflow runtime persists acceptance and setup progress before setup
+   effects. After setup, it persists the current stage/step/attempt, node
+   result, state version, and workflow-owned prompt identity before each
+   corresponding external effect or linear progression.
 2. On startup, the app composition root scans non-terminal schema-3 workflow
-   runs and registers at most one actor for each with
-   `LiveWorkflowRunManager`.
-3. Recovery reconciles the durable node record with the linked ordinary
-   session and its workflow-owned prompt. A completion already recorded by the
-   session is applied at most once.
-4. A waiting human checkpoint remains waiting. A committed choice continues
-   from its stored selected edge rather than evaluating again.
-5. If the agent process disappeared with no durable completion, recovery
+   runs and schedules reconciliation through the existing
+   `WorkflowRunRuntime`.
+3. For an `accepted` run with no step, recovery resumes durable workspace
+   placement and idempotently re-verifies or re-materializes every context doc.
+   It either atomically enters the first step after setup succeeds or records a
+   closed setup failure; it does not infer that a node had started.
+4. When a step exists, recovery reconciles its durable record with the linked
+   ordinary session and workflow-owned prompt. A completion already recorded by
+   the session is applied at most once.
+5. A waiting human checkpoint remains waiting. A completed node resumes from
+   the next durable array coordinate rather than rerunning the completed node.
+6. If the agent process disappeared with no durable completion, recovery
    records an interruption and follows the configured recovery policy; it
    never infers success from process disappearance.
-6. State-version checks fence commands and completion messages from the actor
-   that existed before restart.
+7. State-version and attempt checks fence commands and completion messages from
+   the process that existed before restart.
 
 #### Session interruption and explicit retry
 
@@ -1758,19 +1921,19 @@ SQLite remains authoritative.
 
 1. `WorkflowRunSessionExtension`, or startup reconciliation, reports that the
    workflow-owned turn ended without a valid completion.
-2. The actor records the interruption with a stable interruption code and does
-   not take the node's normal outgoing edge.
+2. The service records the interruption with a stable interruption code and
+   does not create the next node row.
 3. The user requests Retry or Resume from the run view. The request names the
    run, failed or interrupted node, and observed state version.
-4. The actor rejects stale requests and nodes that are not retryable under the
+4. The service rejects stale requests and nodes that are not retryable under the
    configured policy.
-5. For an accepted request, the actor records the retry transition before
+5. For an accepted request, the service records the retry transition before
    resuming or redispatching through the node's session. The frozen definition,
-   workspace, shared context, and prior node history do not change.
+   workspace contents, and prior node history do not change.
 6. The retried workflow-owned turn receives a new correlation identity, and
-   late events from the previous turn cannot complete the new attempt. The actor
-   inserts a new `workflow_run_node_executions` row with the next attempt
-   number and `retry_of_node_execution_id` pointing to the prior row.
+   late events from the previous turn cannot complete the new attempt. The service
+   inserts a new `workflow_run_steps` row with the next attempt number and
+   `retry_of_step_execution_id` pointing to the prior row.
 
 ### Chat in a workflow-generated session and create an additional session
 
@@ -1788,11 +1951,11 @@ SQLite remains authoritative.
    `SESSION_CONTROLLED_BY_WORKFLOW` admission policy no longer exists.
 4. Caller-owned prompt identities distinguish user turns from the
    workflow-owned turn that may advance the node.
-5. The user and agent can read and update the run workspace and shared
-   context under normal session permissions.
+5. The user and agent can read and update the run workspace and its context
+   docs under normal session permissions.
 6. Completion of the user turn updates the session transcript but does not
-   complete a node, select an edge, or substitute for the explicit decision on
-   a `human_in_loop` node.
+   complete or advance a node, or substitute for the explicit decision on a
+   `human_in_loop` node.
 
 #### Create an additional session
 
@@ -1802,22 +1965,22 @@ SQLite remains authoritative.
    action to create a session.
 2. The existing workspace/session service creates and persists the session
    without a workflow-node binding.
-3. The new session can work in the same checkout and with the same shared
-   context under ordinary workspace permissions.
-4. The workflow actor does not wait for, advance from, or cancel this session.
-   Any artifact it writes affects a later node only if that node reads it
-   through the workflow's defined context contract.
+3. The new session can work in the same checkout and
+   `.proliferate/context/` under ordinary workspace permissions.
+4. The workflow runtime does not wait for, advance from, or cancel this session.
+   Any context doc it changes is visible to later nodes through the shared run
+   workspace.
 5. The session remains visible under the ordinary workspace lifecycle after
    the workflow run becomes terminal.
 
-### Cut over beta data and remove linear behavior
+### Cut over beta data while retaining linear behavior
 
 **Playable design:** None. This is an operator-only data and code migration
 with no user-facing product state.
 
-#### Migrate definitions to graphs
+#### Normalize definitions to linear schema 2
 
-**Playable design:** None. The migration runs before graph writers are enabled.
+**Playable design:** None. The migration runs before schema-2 writers are enabled.
 
 1. The migration blocks definition writes, then reads every live schema-1
    definition under the same validation rules used by the beta.
@@ -1825,21 +1988,23 @@ with no user-facing product state.
    repository, catalog metadata, and authored inputs. It increments `revision`
    once because the stored representation changes.
 3. It flattens `stages[].steps[]` in authored order. Each `agent.prompt` step
-   becomes one graph `agent` node with the stage's harness/model/effort
-   configuration and the step's prompt and optional goal.
-4. It chains those agent nodes in order, adds one `succeed` and one `fail` node,
-   connects the last agent to `succeed`, and gives every agent an error edge to
-   `fail`. Agentic indexes and a deterministic initial layout follow the
-   existing stage/step order.
-5. Migrated definitions default to `new_worktree`, matching the beta's isolated
+   becomes one schema-2 stage containing one `agent` node step with the source
+   stage's harness/model/effort configuration, the step's prompt, and `goals[]`
+   containing its optional beta `goal` when present.
+4. The resulting `stages[]` order is the execution order and node index. The
+   migration adds no edge, choice, terminal node, or layout data.
+5. It initializes `context_docs_json` to an empty manifest because beta
+   definitions had no context-doc contract.
+6. Migrated definitions default to `new_worktree`, matching the beta's isolated
    repository behavior. A definition with no repository remains valid but
    requires repository selection before invocation.
-6. Multi-step beta definitions were never executable; mapping each step to its
-   own graph session does not change shipped run behavior. The only executable
-   beta shape, one stage with one step, maps exactly to one agent node.
-7. The migration validates the generated graph before updating the row to
-   schema 2. Any conversion failure aborts the migration; there is no legacy
-   editor or linear read fallback.
+7. Multi-step beta definitions were never executable; normalizing each step to
+   its own stage/session does not change shipped run behavior. The only
+   executable beta shape, one stage with one step, keeps that exact order and
+   coordinate.
+8. The migration validates the generated linear definition before updating the
+   row to schema 2. Any conversion failure aborts the migration; there is no
+   schema-1 write fallback.
 
 #### Drain and dispose of beta invocations and runs
 
@@ -1851,33 +2016,39 @@ with no user-facing product state.
    one-prompt runs to become terminal or explicitly cancels/interrupts them.
    Worker queues and outbox tasks must be empty before migration continues.
 3. Terminal beta invocations and runs are historical facts and are not rewritten
-   as graph activity. Rewriting them would falsify their immutable target,
+   as schema-3 activity. Rewriting them would falsify their immutable target,
    placement, and session semantics.
 4. The data-model delivery spec chooses archive/export or deletion for those
    terminal records. Either choice removes schema-1 invocations, managed
-   execution rows, schema-1/2 runs, run steps, and schema-1 materializations
-   from active workflow storage.
+   execution rows, schema-1/2 runs, and schema-1 materializations from active
+   workflow storage. The `workflow_run_steps` table itself remains and is
+   extended for schema-3 linear runs.
 
-#### Enable the graph-only path
+#### Enable the linear-only path
 
-**Playable design:** None. The user-facing result is the graph-only surface
+**Playable design:** None. The user-facing result is the linear graph surface
 shown in the artifacts above.
 
 1. Postgres rebuilds `workflow_definition` and `workflow_invocation` with their
-   graph-only checks, drops `workflow_managed_execution`, and creates local
-   delivery and claim tables.
+   linear schema-2 checks while retaining `inputs_json` and `stages_json`,
+   initializes `context_docs_json`, drops `workflow_managed_execution`, and
+   creates local delivery and claim tables.
 2. AnyHarness rebuilds `workflow_runs` and
-   `workflow_workspace_materializations`, drops `workflow_run_steps`, and
-   creates `workflow_run_node_executions`.
-3. The release deletes beta wire models, validators, workers, executor,
-   recovery, session-admission policy, SDK types, UI, tests, fixtures, and
-   canonical documentation.
-4. Graph writers remain disabled until invariant sweeps prove that active
+   `workflow_workspace_materializations` and extends `workflow_run_steps`; it
+   does not create a graph-node or edge table.
+3. The release deletes managed-cloud workers, the beta workflow-wide
+   one-stage/one-step executable-shape gate, run-wide session assumptions, the
+   exclusive session-admission policy, and stale schema-1 wire members. It
+   keeps schema 2's one-step-per-stage rule and extends rather than replaces the
+   linear validator, executor, recovery, UI, tests, fixtures, and canonical
+   documentation.
+4. Schema-2 writers remain disabled until invariant sweeps prove that active
    storage contains only definition schema 2, invocation schema 2, run schema 3,
-   and materialization schema 2, with no managed worker or one-prompt executor
+   and materialization schema 2, with no managed worker or branching executor
    registered.
-5. Future graph schema changes follow readers-before-writers migration
-   discipline, but no future compatibility rule revives the beta linear model.
+5. Future definition changes follow readers-before-writers migration
+   discipline. Branching requires a separate approved schema and migration; it
+   is not a dormant V1 path.
 
 ## Failure modes, tests, and observability
 
@@ -1889,37 +2060,47 @@ persisted or used for control flow.
 | --- | --- | --- | --- |
 | Invalid, unauthorized, or stale definition mutation or trigger | Typed validation, access, or revision result; no write on rejection | Keep the local draft and require reload or reconciliation | Tier 1; Tier 2 |
 | Delivery expiry, lost acknowledgement, or conflicting handoff | Lease and immutable-envelope checks; one invocation/run ID and envelope create at most one local run and workspace | Reclaim and resend the same envelope; exact replay returns the existing run and mismatch has no effects | Tier 1 with Postgres, contract fixtures, and SQLite; Tier 2 to the delivery seam; Tier 3 |
-| Workspace, context, session, node, choice, or verification failure | Persist the owning node and a closed failure code; setup fails before an agent starts, and node failures take the explicit edge to `fail` | No implicit retry; offer retry only when policy permits it | Tier 1 |
+| Stale or conflicting control-plane run-state report | Local run ID plus monotonic AnyHarness state version; exact replay is idempotent and same-version mismatch conflicts | Read the authoritative AnyHarness run and report its latest status again | Tier 1 with Postgres; Tier 3 |
+| Workspace, context-doc, session, node, or verification failure | Persist the owning run or node and a closed failure code; unsafe or missing context docs and other setup failures fail before an agent starts, while node failure directly makes the run `failed` | No implicit retry; offer retry only when policy permits it | Tier 1 |
 | Stale decision, retry, completion, or cancellation race | State version plus prompt and attempt identity; the first concurrent terminal transition wins at that version and repeated cancellation is idempotent | Refresh state, then issue a new valid command if still allowed | Tier 1 with real SQLite race tests |
-| Runtime or session interruption | Startup sweep and exact session/prompt correlation; at most one actor per non-terminal schema-3 run | Rehydrate durable state, never infer success, record interruption, then require explicit retry when needed | Tier 1 file-backed restart; Tier 3 restart |
+| Runtime or session interruption | Startup sweep plus exact coordinate/session/prompt correlation | Rehydrate durable state, never infer success, record interruption, then require explicit retry when needed | Tier 1 file-backed restart; Tier 3 restart |
 | Stale beta request, storage failure, failed migration, or impossible state | Reject V1/V2 or schema-1 input, verify transactions and migration invariants, and abort startup rather than registering a beta path. Hosted must-never-happen invariants emit `CRITICAL_FAILURE` | Retry only after a proven rollback; otherwise leave state untouched and stop before partial resume | Tier 1 rejection, fault, fixture, and migration tests; Tier 4 upgrade |
 
-Tiers 1 and 2 gate merge; Tiers 3 and 4 gate release. Tier 1 owns graph and
-transition matrices, the cross-language `definition.json` and
-`run-envelope.json` fixtures under `fixtures/contracts/workflow-v1/`,
-and stateful guarantees against real Postgres or SQLite with network boundaries
-faked. Agent execution uses a scripted executor. Tier 2 scenario
+Tiers 1 and 2 gate merge; Tiers 3 and 4 gate release. Tier 1 owns linear
+definition validation, coordinate-progression and run-outcome matrices, the
+closed two-kind node union, and the cross-language `definition.json` and
+`run-envelope.json` fixtures under `fixtures/contracts/workflow-v1/`, plus
+stateful guarantees against real Postgres or SQLite with network boundaries
+faked. Context-doc tests cover path traversal, duplicate normalized paths,
+content-identity mismatch, bounds, writable-copy isolation, and replay. Tests
+explicitly reject authored edges, choice/terminal node kinds, and non-linear
+definition members. Agent execution uses a scripted executor. Tier 2 scenario
 `T2-WORKFLOW-1` covers definition CRUD, revision conflict, manual trigger,
 pending state, and delivery attempt with the real renderer, server, and
 Postgres; it stops at the AnyHarness seam.
 
-Tier 3 guarantee `T3-WORKFLOW-1` extends the local-runtime smoke through one
-real-agent graph, a deterministic choice, a human decision, and terminal
-success. It asserts durable state and artifacts, not transcript wording, and
-proves redelivery creates no second workspace, session, prompt, or turn. When
-the workflow migrations land, `T4-DESKTOP-1` starts from an N-1 beta database
-and proves the exact candidate package converts definitions, disposes beta
-invocation/run state according to policy, and starts with graph-only schemas.
+Tier 3 guarantee `T3-WORKFLOW-1` extends the local-runtime smoke through an
+`agent` node, a `human_in_loop` checkpoint with Continue, and a final `agent`
+node whose completion makes the run `completed`. It asserts durable state and
+context-doc changes, not transcript wording, proves the control-plane projection
+reaches the same `completed` state version, and proves redelivery creates no
+second workspace, context-doc copy, session, prompt, or turn. When the workflow
+migrations land,
+`T4-DESKTOP-1` starts from an N-1 beta database and proves the exact candidate
+package normalizes definitions, disposes beta invocation/run state according
+to policy, and starts with linear-only schemas.
 
 Migration tests cover every valid beta definition shape, including multiple
 stages, multiple steps, goals, inputs, and default repositories. They also
-prove stale schema-1 definition/invocation and V1/V2 run requests fail closed.
+prove migration initializes an empty context-doc manifest and that stale
+schema-1 definition/invocation and V1/V2 run requests fail closed.
 An invariant test fails if the released composition registers managed delivery,
-the one-prompt executor, beta recovery, or the workflow session-admission gate.
+the beta workflow-wide one-stage/one-step executable-shape gate, the workflow
+session-admission gate, or any branching transition path.
 
 Regression tests cover ordinary workspace and session behavior, both
 repository-root and worktree creation, user chat in a workflow session, and
-additional sessions that must not advance the graph.
+additional sessions that can edit context docs.
 
 Hosted failures use structured server logs as the alert source and Sentry as
 diagnostic evidence. Runtime use-case entries have one tracing span; errors are
@@ -1938,27 +2119,32 @@ Typed events `workflow_definition_saved`, `workflow_run_triggered`, and
 `workflow_run_finished` are permitted for hosted PostHog; anonymous
 telemetry receives only their fixed counters. Payloads contain schema version,
 node counts, placement, terminal status, and closed failure class. They never
-contain graph or prompt content, conditions, repository names or paths, context
+contain definition or prompt content, repository names or paths, context
 or file contents, transcripts, terminal output, credentials, environment
 values, or provider responses. The editor and run views use
 `data-telemetry-block` or `data-telemetry-mask` around user-authored content.
 `workflow_run_finished` is emitted client-side after reading AnyHarness
-terminal state; Postgres stores no graph or node outcome projection.
+terminal state. Postgres stores only the closed aggregate run-status projection,
+not node outcomes or user-authored content.
 
 ## High-level sequencing
 
-1. Engine: add pure graph transitions and schema-3 run-actor behavior without
-   enabling a graph writer.
+1. Engine: extend the beta executor, store, runtime, and session extension for
+   schema-3 ordered progression, human checkpoints, and verified context-doc
+   materialization without enabling a schema-2 writer.
 2. Data models: extend the existing definition, invocation, run, and
-   materialization resources; add invocation delivery/claims and graph
-   node-attempt rows; add deterministic conversion and beta-data disposition
-   migrations without enabling writers.
+   materialization resources; add invocation delivery/claims and extend
+   `workflow_run_steps` for per-node attempts; add revisioned context-doc
+   metadata and content storage/transfer; add deterministic linear normalization
+   and beta-data disposition migrations without enabling writers.
 3. Workflow lifecycle orchestration: drain managed-cloud and one-prompt work,
    enable schema-2 invocation delivery and schema-3 AnyHarness runs, then remove
-   managed workers, the linear executor, beta recovery, and old API members.
-4. UI and client: replace the sequential editor and managed-cloud projection,
-   remove beta SDK and product models, run final invariants, and enable graph
-   writers. The release contains no switch back to beta behavior.
+   managed workers, the workflow-wide one-prompt executable-shape assumption,
+   and old API members while retaining one step per stage.
+4. UI and client: extend the sequential editor into a linear graph projection,
+   add context-doc authoring and transfer, replace managed-cloud projection,
+   remove stale SDK and product models, run final invariants, and enable schema-2
+   writers. The release contains no branching path.
 
 Each PR receives a frozen delivery specification. The ADR remains the working
 decision record across the ladder and is committed in the final PR as required
