@@ -1,20 +1,22 @@
-import { useState } from "react";
 import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
-import { Button } from "#product/primitives/Button";
-import { Robot } from "#product/primitives/icons/product";
-import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
-import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
-import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
+import { AgentChip, AgentChipVerb } from "#product/components/workspace/delegated-work/AgentChip";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
   isSubagentWorkComplete,
 } from "#product/domain/chats/subagents/subagent-launch";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
+import type { DelegatedAgentIdentity } from "#product/lib/domain/delegated-work/model";
 import { useTranscriptOpenSession } from "./TranscriptContexts";
 
-const CHAT_BUTTON_TEXT_CLASS = "text-chat";
-
+/**
+ * A spawn run — the locked language of the Spawn Receipts canvas page.
+ *
+ * The run is a horizontal chip run sitting between the prose, with ONE quiet
+ * trailing verb for the whole run. There is no pre-state: a chip pops in as its
+ * subagent comes up, and the verb only appears once the run is fully up. A
+ * settled run keeps its chips forever — only the verb changes.
+ */
 export function SubagentCreationGroupBlock({
   itemIds,
   transcript,
@@ -22,153 +24,92 @@ export function SubagentCreationGroupBlock({
   itemIds: readonly string[];
   transcript: TranscriptState;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const openSession = useTranscriptOpenSession();
+  // This block receives compact product-MCP creation receipts. Native
+  // subagent calls render through TranscriptAgentGroupBlock instead.
   const items = itemIds
     .map((itemId) => transcript.itemsById[itemId])
     .filter((item): item is ToolCallItem => item?.kind === "tool_call");
+  const chips = items.map(toSpawnChip);
+  // A chip that has not come up yet renders nothing at all — the run grows as
+  // the subagents appear rather than reserving slots for them.
+  const liveChips = chips.filter((chip) => chip.live);
 
-  // This block receives compact product-MCP creation receipts. Native
-  // subagent calls render through TranscriptAgentGroupBlock instead.
-  const finishedItems = items.filter((item) => isSubagentWorkComplete(item));
-  const openSession = useTranscriptOpenSession();
-  const summary = finishedItems.length === 1 ? "Subagent finished" : `${finishedItems.length} subagents finished`;
-
-  if (finishedItems.length === 0) {
+  if (liveChips.length === 0) {
     return null;
   }
 
+  const verb = spawnRunVerb(chips);
+
   return (
-    <div className="min-w-0 text-chat">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        data-chat-transcript-ignore
-        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
-        aria-expanded={expanded}
-        onClick={() => setExpanded((next) => !next)}
-      >
-        <Robot
-          aria-hidden="true"
-          className={`icon-compact shrink-0 transition-colors ${
-            expanded
-              ? "text-foreground/70"
-              : "text-faint group-hover/collapsed-actions:text-muted-foreground group-focus-visible/collapsed-actions:text-muted-foreground"
-          }`}
-        />
-        <span className="min-w-0 truncate">{summary}</span>
-      </Button>
-      {expanded && (
-        <div className="ml-1 space-y-1 border-l border-border/70 pl-2">
-          {finishedItems.map((item) => (
-            <SubagentFinishedRow
-              key={item.itemId}
-              item={item}
-              parentTitle={transcript.sessionMeta.title ?? "Parent session"}
-              onOpenChild={openSession
-                ? (childSessionId) => openSession(childSessionId, "linked-child")
+    <div className="min-w-0 text-message leading-8" data-subagent-spawn-run>
+      {liveChips.map((chip) => {
+        const childSessionId = chip.childSessionId;
+        return (
+          <span key={chip.key} className="chip-enter me-1.5 inline-block align-middle">
+            <AgentChip
+              identity={chip.identity}
+              dimmed={chip.failed}
+              title={chip.hoverTitle}
+              onOpen={childSessionId && openSession
+                ? () => openSession(childSessionId, "linked-child")
                 : undefined}
             />
-          ))}
-        </div>
-      )}
+          </span>
+        );
+      })}
+      {verb && <AgentChipVerb>{verb}</AgentChipVerb>}
     </div>
   );
 }
 
-/**
- * A quiet, collapsible line for a finished product-MCP creation receipt showing
- * the clean result summary the parent agent used. The line reads
- * "⑂ <task title> — done" and
- * expands to show the subagent's summary field (never the raw orchestration
- * metadata).
- */
-function SubagentFinishedRow({
-  item,
-  onOpenChild,
-}: {
-  item: ToolCallItem;
-  parentTitle: string;
-  onOpenChild?: (childSessionId: string) => void;
-}) {
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
+export interface SpawnChip {
+  key: string;
+  identity: DelegatedAgentIdentity;
+  childSessionId: string | null;
+  /** The subagent has come up — its creation receipt landed. */
+  live: boolean;
+  /** The subagent's own work has settled (not just the creation call). */
+  settled: boolean;
+  failed: boolean;
+  hoverTitle: string;
+}
+
+function toSpawnChip(item: ToolCallItem): SpawnChip {
   const launchDisplay = resolveSubagentLaunchDisplay(item);
   const launchResult = parseSubagentLaunchResult(item);
+  const failed = item.status === "failed";
   const identity = buildDelegatedAgentIdentity({
     id: item.toolCallId ?? item.itemId,
     title: launchDisplay.title,
     sessionId: launchResult?.childSessionId ?? null,
     sessionLinkId: launchResult?.sessionLinkId ?? item.toolCallId ?? item.itemId,
   });
-  const canOpenChild = !!launchResult?.childSessionId && !!onOpenChild;
-  const isFailed = item.status === "failed";
-
-  // Extract the clean summary from the rawOutput JSON (the structured result the
-  // parent agent received), not the raw tool_result_text contentParts (which may
-  // contain internal orchestration metadata).
-  const rawOutput = typeof item.rawOutput === "object" && item.rawOutput !== null
-    ? item.rawOutput as Record<string, unknown>
-    : null;
-  const summary = typeof rawOutput?.summary === "string" && rawOutput.summary.trim().length > 0
-    ? rawOutput.summary.trim()
-    : null;
-
-  const openChild = () => {
-    if (canOpenChild && launchResult?.childSessionId) {
-      onOpenChild(launchResult.childSessionId);
-    }
+  return {
+    key: item.itemId,
+    identity,
+    childSessionId: launchResult?.childSessionId ?? null,
+    live: item.status !== "in_progress",
+    settled: isSubagentWorkComplete(item),
+    failed,
+    hoverTitle: failed
+      ? `${identity.displayName} — did not start`
+      : identity.displayName,
   };
+}
 
-  return (
-    <div className="min-w-0">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        data-chat-transcript-ignore
-        className={`group/subagent-done h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
-        aria-expanded={detailsExpanded}
-        onClick={() => setDetailsExpanded((next) => !next)}
-      >
-        <DelegatedAgentIdenticon
-          identity={identity}
-          className={`size-3 shrink-0 transition-colors ${
-            detailsExpanded
-              ? "text-foreground/70"
-              : isFailed
-                ? "text-destructive/60"
-                : "text-faint group-hover/subagent-done:text-muted-foreground group-focus-visible/subagent-done:text-muted-foreground"
-          }`}
-        />
-        <span className="min-w-0 truncate">
-          {identity.displayName} — {isFailed ? "failed" : "done"}
-        </span>
-      </Button>
-      {detailsExpanded && (
-        <div className="ml-1 mt-1 space-y-1 border-l border-border/70 pl-2">
-          {canOpenChild && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              data-chat-transcript-ignore
-              className={`h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
-              onClick={openChild}
-            >
-              <span className="min-w-0 truncate">Open subagent session</span>
-            </Button>
-          )}
-          {summary && (
-            <div className="text-chat text-foreground/90">
-              <MarkdownBody
-                content={summary}
-                className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                renderCodeBlock={renderDesktopCodeBlock}
-              />
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+/**
+ * One verb for the whole run. It stays silent until every chip is up, so a
+ * half-spawned run never claims the run started; after that only the verb
+ * moves, never the chips.
+ */
+export function spawnRunVerb(chips: readonly SpawnChip[]): string | null {
+  if (chips.length === 0 || chips.some((chip) => !chip.live)) {
+    return null;
+  }
+  const started = chips.filter((chip) => !chip.failed);
+  if (started.length === 0) {
+    return "didn't start";
+  }
+  return started.every((chip) => chip.settled) ? "finished" : "started working";
 }
