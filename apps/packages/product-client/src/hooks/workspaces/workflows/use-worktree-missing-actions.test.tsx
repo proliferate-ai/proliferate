@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AnyHarnessError } from "@anyharness/sdk";
+import { AnyHarnessError, type Workspace } from "@anyharness/sdk";
+import { workspaceCollectionsKey } from "#product/hooks/workspaces/cache/query-keys";
 import { useWorktreeMissingActions } from "#product/hooks/workspaces/workflows/use-worktree-missing-actions";
 
 const mocks = vi.hoisted(() => ({
   restore: vi.fn(),
   restorePending: false,
   refresh: vi.fn(async () => undefined),
-  markDone: vi.fn(),
   showToast: vi.fn(),
 }));
 
@@ -22,14 +24,6 @@ vi.mock("@anyharness/sdk-react", () => ({
 
 vi.mock("#product/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
   useWorkspaceCollectionsInvalidation: () => mocks.refresh,
-}));
-
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-retire-actions", () => ({
-  useWorkspaceRetireActions: () => ({ markDone: mocks.markDone }),
-}));
-
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
-  workspaceRetireBlockedMessage: () => "blocked",
 }));
 
 vi.mock("#product/stores/sessions/harness-connection-store", () => ({
@@ -46,7 +40,6 @@ vi.mock("#product/stores/toast/toast-store", () => ({
 beforeEach(() => {
   mocks.restorePending = false;
   mocks.restore.mockResolvedValue({ outcome: "restored" });
-  mocks.markDone.mockResolvedValue({ outcome: "retired" });
 });
 
 afterEach(() => {
@@ -66,7 +59,7 @@ describe("useWorktreeMissingActions", () => {
     expect(restored).toBe(true);
     expect(mocks.restore).toHaveBeenCalledWith("workspace-1");
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
-    expect(mocks.showToast).toHaveBeenCalledWith("Worktree restored.");
+    expect(mocks.showToast).toHaveBeenCalledWith("Worktree restored.", "info");
     expect(result.current.restoreError).toBeNull();
   });
 
@@ -97,11 +90,53 @@ describe("useWorktreeMissingActions", () => {
 
     expect(result.current.isRestoring).toBe(true);
   });
+
+  it("reports a still-missing folder after checking again", async () => {
+    const { result } = renderActions();
+    seedCollections("workspace_directory_missing");
+
+    await act(async () => {
+      await result.current.checkAgain();
+    });
+
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expect(mocks.showToast).toHaveBeenCalledWith("Checked again. Worktree folder is still missing.");
+  });
+
+  it("stays silent when checking again finds the folder restored", async () => {
+    const { result } = renderActions();
+    seedCollections("available");
+
+    await act(async () => {
+      await result.current.checkAgain();
+    });
+
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expect(mocks.showToast).not.toHaveBeenCalled();
+  });
 });
 
+let queryClient: QueryClient;
+
 function renderActions() {
-  return renderHook(() => useWorktreeMissingActions({
-    workspaceId: "workspace-1",
-    logicalWorkspaceId: "logical-1",
-  }));
+  queryClient = new QueryClient();
+  return renderHook(() => useWorktreeMissingActions({ workspaceId: "workspace-1" }), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
+
+function seedCollections(availability: Workspace["availability"]) {
+  queryClient.setQueryData(workspaceCollectionsKey("http://localhost:7007", false, null), {
+    localWorkspaces: [],
+    retiredLocalWorkspaces: [],
+    repoRoots: [],
+    cloudWorkspaces: [],
+    workspaces: [],
+    allWorkspaces: [
+      { id: "workspace-1", kind: "worktree", availability } as unknown as Workspace,
+    ],
+    cleanupAttentionWorkspaces: [],
+  });
 }

@@ -162,7 +162,6 @@ export const ChatView = memo(function ChatView({
   const contentSearchEnabled = shouldEnableContentSearchOverlay(mode);
   const composerDockSlots = useComposerDockSlots({
     suppressSessionSlots,
-    suppressWorkspaceStatusPanels: !showWorkspaceStatusPanels,
   });
   const promptCapabilities = suppressComposerActiveSessionState
     ? null
@@ -206,6 +205,7 @@ export const ChatView = memo(function ChatView({
       attachments={promptAttachments}
       suppressActiveSessionState={suppressComposerActiveSessionState}
       suppressAutoFocus={activeWorkspaceSessionRecovery !== null}
+      suppressWorkspaceTakeover={!showWorkspaceStatusPanels}
       replacementSessionId={replacementSessionId}
       hasSessionTurns={hasSessionTurns}
     />
@@ -214,6 +214,7 @@ export const ChatView = memo(function ChatView({
     activeWorkspaceSessionRecovery,
     promptAttachments,
     replacementSessionId,
+    showWorkspaceStatusPanels,
     suppressComposerActiveSessionState,
   ]);
 

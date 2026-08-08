@@ -37,8 +37,13 @@ import {
   createPlaygroundEnvironmentTargetState,
 } from "#product/lib/domain/chat/__fixtures__/playground/environment-fixtures";
 import { PlaygroundAttachmentComposerSurface } from "#product/components/playground/PlaygroundAttachmentFixtures";
+import { renderComposerBlockedSurface } from "#product/components/playground/composer-slots/PlaygroundComposerBlockedFixtures";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
+  const blockedSurface = renderComposerBlockedSurface(scenario);
+  if (blockedSurface) {
+    return blockedSurface;
+  }
   switch (scenario) {
     case "composer-long-input":
       return <PlaygroundLongInputComposerSurface />;

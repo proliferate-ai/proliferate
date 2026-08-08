@@ -16,13 +16,6 @@ export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
     switch (scenario) {
       case "workspace-receipt-setup-succeeded":
       case "workspace-receipt-setup-failed":
-      case "cloud-first-runtime":
-      case "cloud-provisioning":
-      case "cloud-applying-files":
-      case "cloud-blocked":
-      case "cloud-error":
-      case "cloud-reconnecting":
-      case "cloud-reconnect-error":
         return renderPanelSlotFixture(scenario);
       default:
         return null;
