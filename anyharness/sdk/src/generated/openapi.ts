@@ -1012,6 +1012,22 @@ export interface paths {
         patch: operations["update_session_title"];
         trace?: never;
     };
+    "/v1/sessions/{session_id}/wakes/{target_session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["schedule_agent_wake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/terminal-command-runs/{command_run_id}": {
         parameters: {
             query?: never;
@@ -3775,6 +3791,11 @@ export interface components {
             /** @enum {string} */
             type: "agentSession";
         } | {
+            label?: string | null;
+            targetSessionId: string;
+            /** @enum {string} */
+            type: "agentWake";
+        } | {
             completionId: string;
             label?: string | null;
             sessionLinkId: string;
@@ -4324,6 +4345,18 @@ export interface components {
             memory?: null | components["schemas"]["RuntimeMemoryPressure"];
             /** Format: double */
             pressurePercent?: number | null;
+        };
+        /**
+         * @description Arm a session-scoped wake as the human. Same table, same pointer, same
+         *     one-shot consumption the agent tools use — the pane composer's "Wake me on
+         *     reply" is not a second mechanism.
+         */
+        ScheduleAgentWakeRequest: Record<string, never>;
+        ScheduleAgentWakeResponse: {
+            alreadyScheduled: boolean;
+            targetSessionId: string;
+            wakeScheduled: boolean;
+            watcherSessionId: string;
         };
         ScheduleSubagentWakeRequest: Record<string, never>;
         ScheduleSubagentWakeResponse: {
@@ -8358,6 +8391,62 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    schedule_agent_wake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Watcher session ID — the session that gets woken */
+                session_id: string;
+                /** @description Target session ID — the agent being waited on */
+                target_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleAgentWakeRequest"];
+            };
+        };
+        responses: {
+            /** @description Armed a one-shot wake on the target's next finished turn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleAgentWakeResponse"];
+                };
+            };
+            /** @description Invalid wake request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace or session state blocks wake scheduling */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
