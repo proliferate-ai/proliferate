@@ -1,9 +1,21 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import {
+  getAnyWorkspaceCollectionsFromCache,
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsKey,
 } from "#product/hooks/workspaces/cache/query-keys";
+
+// Read-only getter over the freshest cached collections for a runtime,
+// regardless of which auth-user/cloud key variant produced them. For
+// callers outside the cache layer that only need a post-refetch snapshot.
+export function useLatestWorkspaceCollectionsRead(runtimeUrl: string) {
+  const queryClient = useQueryClient();
+  return useCallback(
+    () => getAnyWorkspaceCollectionsFromCache(queryClient, runtimeUrl),
+    [queryClient, runtimeUrl],
+  );
+}
 
 export function useWorkspaceCollectionsCache(args: {
   runtimeUrl: string;
