@@ -13,6 +13,10 @@ mod pending_prompts;
 pub(crate) mod persisted_payloads;
 pub(crate) mod sessions;
 
+pub(crate) use sessions::{
+    SessionSearchCursor, SessionSearchQuery, SESSION_SEARCH_DEFAULT_LIMIT, SESSION_SEARCH_MAX_LIMIT,
+};
+
 #[cfg(test)]
 mod tests;
 

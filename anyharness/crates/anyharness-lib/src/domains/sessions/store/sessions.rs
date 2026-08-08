@@ -13,6 +13,47 @@ use crate::domains::sessions::model::{
 };
 use crate::origin::{decode_origin_json, encode_origin_json};
 
+pub const SESSION_SEARCH_DEFAULT_LIMIT: usize = 20;
+pub const SESSION_SEARCH_MAX_LIMIT: usize = 50;
+
+/// One page position in `search_sessions`' recency ordering. Both halves are
+/// needed: `updated_at` collides freely, and the id breaks the tie the same way
+/// the ORDER BY does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionSearchCursor<'a> {
+    pub updated_at: &'a str,
+    pub id: &'a str,
+}
+
+impl SessionSearchCursor<'_> {
+    /// Opaque page token handed back to agents. The separator is the one
+    /// character an RFC 3339 timestamp cannot contain, so the split is exact
+    /// even though ids are arbitrary.
+    pub fn encode(&self) -> String {
+        format!("{}|{}", self.updated_at, self.id)
+    }
+
+    pub fn decode(token: &str) -> Option<(String, String)> {
+        let (updated_at, id) = token.split_once('|')?;
+        (!updated_at.is_empty() && !id.is_empty())
+            .then(|| (updated_at.to_string(), id.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SessionSearchQuery<'a> {
+    /// Exact session-id lookup: how a bare id read out of a message envelope
+    /// (or pasted by a human) resolves to a titled row.
+    pub session_id: Option<&'a str>,
+    /// Case-insensitive substring over the session title and any subagent link
+    /// label pointing at it.
+    pub text: Option<&'a str>,
+    pub workspace_id: Option<&'a str>,
+    pub include_closed: bool,
+    pub cursor: Option<SessionSearchCursor<'a>>,
+    pub limit: usize,
+}
+
 impl SessionStore {
     pub fn insert(&self, record: &SessionRecord) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
@@ -117,6 +158,72 @@ impl SessionStore {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare("SELECT * FROM sessions ORDER BY updated_at DESC")?;
             let rows = stmt.query_map([], |row| map_session(row))?;
+            rows.collect()
+        })
+    }
+
+    /// Runtime-wide session list/search: the read behind `list_agents`, and the
+    /// one that turns a bare session id (pasted by a human or read out of a
+    /// message envelope) into a titled row.
+    ///
+    /// Ordering is recency-first with the id as a tie-break, which is also the
+    /// cursor: a page ends at its last row and the next page resumes strictly
+    /// after it, so rows can never be skipped or repeated when `updated_at`
+    /// collides.
+    pub fn search_sessions(
+        &self,
+        query: &SessionSearchQuery<'_>,
+    ) -> anyhow::Result<Vec<SessionRecord>> {
+        let limit = query.limit.clamp(1, SESSION_SEARCH_MAX_LIMIT);
+        let text_pattern = query
+            .text
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| format!("%{}%", value.to_lowercase()));
+        let session_id = query
+            .session_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let (cursor_updated_at, cursor_id) = match query.cursor {
+            Some(cursor) => (Some(cursor.updated_at), Some(cursor.id)),
+            None => (None, None),
+        };
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT s.*
+                   FROM sessions s
+                  WHERE (?1 IS NULL OR s.id = ?1)
+                    AND (?2 IS NULL OR s.workspace_id = ?2)
+                    AND (?3 = 1 OR s.closed_at IS NULL)
+                    AND (
+                      ?4 IS NULL
+                      OR LOWER(COALESCE(s.title, '')) LIKE ?4
+                      OR EXISTS (
+                        SELECT 1 FROM session_links l
+                         WHERE l.child_session_id = s.id
+                           AND LOWER(COALESCE(l.label, '')) LIKE ?4
+                      )
+                    )
+                    AND (
+                      ?5 IS NULL
+                      OR s.updated_at < ?5
+                      OR (s.updated_at = ?5 AND s.id < ?6)
+                    )
+                  ORDER BY s.updated_at DESC, s.id DESC
+                  LIMIT ?7",
+            )?;
+            let rows = stmt.query_map(
+                params![
+                    session_id,
+                    query.workspace_id,
+                    query.include_closed as i64,
+                    text_pattern,
+                    cursor_updated_at,
+                    cursor_id,
+                    limit as i64,
+                ],
+                map_session,
+            )?;
             rows.collect()
         })
     }

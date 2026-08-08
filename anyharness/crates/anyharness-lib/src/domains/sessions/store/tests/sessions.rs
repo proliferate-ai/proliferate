@@ -1,4 +1,7 @@
 use super::*;
+use crate::domains::sessions::store::{
+    SessionSearchCursor, SessionSearchQuery, SESSION_SEARCH_DEFAULT_LIMIT, SESSION_SEARCH_MAX_LIMIT,
+};
 use crate::origin::OriginContext;
 
 #[test]
@@ -264,4 +267,242 @@ fn pop_last_dismissed_restores_latest_session_atomically() {
         .pop_last_dismissed_in_workspace("workspace-1", "2026-03-25T06:00:00Z")
         .expect("pop empty dismissed stack");
     assert!(none.is_none());
+}
+
+fn subagent_link_record(
+    id: &str,
+    parent_session_id: &str,
+    child_session_id: &str,
+    label: &str,
+) -> SessionLinkRecord {
+    SessionLinkRecord {
+        id: id.to_string(),
+        public_id: Some(format!("subagent_{}", id.replace('-', ""))),
+        relation: SessionLinkRelation::Subagent,
+        parent_session_id: parent_session_id.to_string(),
+        child_session_id: child_session_id.to_string(),
+        workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+        label: Some(label.to_string()),
+        created_by_turn_id: None,
+        created_by_tool_call_id: None,
+        created_at: "2026-03-25T00:00:00Z".to_string(),
+        closed_at: None,
+    }
+}
+
+fn search_fixture() -> SessionStore {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    test_support::seed_workspace_with_repo_root(&db, "workspace-2", "local", "/tmp/workspace-2");
+    let store = SessionStore::new(db);
+
+    let mut caller = session_record();
+    caller.id = "ses_caller".to_string();
+    caller.title = Some("Refactor billing webhooks".to_string());
+    caller.updated_at = "2026-03-25T03:00:00Z".to_string();
+    store.insert(&caller).expect("insert caller");
+
+    let mut peer = session_record();
+    peer.id = "ses_peer".to_string();
+    peer.workspace_id = "workspace-2".to_string();
+    peer.title = Some("Deploy Checker".to_string());
+    peer.updated_at = "2026-03-25T02:00:00Z".to_string();
+    store.insert(&peer).expect("insert peer");
+
+    let mut child = session_record();
+    child.id = "ses_child".to_string();
+    child.title = None;
+    child.updated_at = "2026-03-25T01:00:00Z".to_string();
+    store
+        .insert_session_with_link(
+            &child,
+            &subagent_link_record("link-1", "ses_caller", "ses_child", "Schema audit"),
+        )
+        .expect("insert linked child");
+
+    let mut closed = session_record();
+    closed.id = "ses_closed".to_string();
+    closed.title = Some("Deploy Checker (old)".to_string());
+    closed.updated_at = "2026-03-25T00:30:00Z".to_string();
+    closed.closed_at = Some("2026-03-25T00:45:00Z".to_string());
+    closed.status = "closed".to_string();
+    store.insert(&closed).expect("insert closed session");
+
+    store
+}
+
+fn search_ids(store: &SessionStore, query: &SessionSearchQuery<'_>) -> Vec<String> {
+    store
+        .search_sessions(query)
+        .expect("search sessions")
+        .into_iter()
+        .map(|record| record.id)
+        .collect()
+}
+
+#[test]
+fn session_search_spans_workspaces_and_orders_by_recency() {
+    let store = search_fixture();
+
+    let ids = search_ids(
+        &store,
+        &SessionSearchQuery {
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+
+    assert_eq!(ids, vec!["ses_caller", "ses_peer", "ses_child"]);
+}
+
+#[test]
+fn session_search_matches_titles_and_subagent_labels() {
+    let store = search_fixture();
+
+    let by_title = search_ids(
+        &store,
+        &SessionSearchQuery {
+            text: Some("deploy"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert_eq!(by_title, vec!["ses_peer"]);
+
+    let by_label = search_ids(
+        &store,
+        &SessionSearchQuery {
+            text: Some("schema AUDIT"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert_eq!(by_label, vec!["ses_child"]);
+}
+
+#[test]
+fn session_search_resolves_a_bare_session_id_including_closed_ones() {
+    let store = search_fixture();
+
+    let open = search_ids(
+        &store,
+        &SessionSearchQuery {
+            session_id: Some("ses_peer"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert_eq!(open, vec!["ses_peer"]);
+
+    let closed_hidden = search_ids(
+        &store,
+        &SessionSearchQuery {
+            session_id: Some("ses_closed"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert!(closed_hidden.is_empty());
+
+    let closed_included = search_ids(
+        &store,
+        &SessionSearchQuery {
+            session_id: Some("ses_closed"),
+            include_closed: true,
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+    assert_eq!(closed_included, vec!["ses_closed"]);
+}
+
+#[test]
+fn session_search_scopes_to_one_workspace_when_asked() {
+    let store = search_fixture();
+
+    let ids = search_ids(
+        &store,
+        &SessionSearchQuery {
+            workspace_id: Some("workspace-2"),
+            limit: SESSION_SEARCH_DEFAULT_LIMIT,
+            ..SessionSearchQuery::default()
+        },
+    );
+
+    assert_eq!(ids, vec!["ses_peer"]);
+}
+
+#[test]
+fn session_search_pages_without_skipping_rows_that_share_a_timestamp() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db);
+    for id in ["ses_a", "ses_b", "ses_c"] {
+        let mut record = session_record();
+        record.id = id.to_string();
+        record.updated_at = "2026-03-25T00:00:00Z".to_string();
+        store.insert(&record).expect("insert session");
+    }
+
+    let first_page = store
+        .search_sessions(&SessionSearchQuery {
+            limit: 2,
+            ..SessionSearchQuery::default()
+        })
+        .expect("first page");
+    assert_eq!(
+        first_page
+            .iter()
+            .map(|record| record.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["ses_c", "ses_b"]
+    );
+
+    let last = first_page.last().expect("cursor row");
+    let cursor = SessionSearchCursor {
+        updated_at: &last.updated_at,
+        id: &last.id,
+    };
+    let second_page = search_ids(
+        &store,
+        &SessionSearchQuery {
+            cursor: Some(cursor),
+            limit: 2,
+            ..SessionSearchQuery::default()
+        },
+    );
+
+    assert_eq!(second_page, vec!["ses_a"]);
+}
+
+#[test]
+fn session_search_clamps_the_page_size_to_the_maximum() {
+    let store = search_fixture();
+
+    let records = store
+        .search_sessions(&SessionSearchQuery {
+            limit: usize::MAX,
+            ..SessionSearchQuery::default()
+        })
+        .expect("search sessions");
+
+    assert!(records.len() <= SESSION_SEARCH_MAX_LIMIT);
+    assert_eq!(records.len(), 3);
+}
+
+#[test]
+fn session_search_cursor_tokens_round_trip() {
+    let cursor = SessionSearchCursor {
+        updated_at: "2026-03-25T00:00:00Z",
+        id: "ses_a",
+    };
+
+    let token = cursor.encode();
+
+    assert_eq!(
+        SessionSearchCursor::decode(&token),
+        Some(("2026-03-25T00:00:00Z".to_string(), "ses_a".to_string()))
+    );
+    assert_eq!(SessionSearchCursor::decode("no-separator"), None);
+    assert_eq!(SessionSearchCursor::decode("|ses_a"), None);
 }
