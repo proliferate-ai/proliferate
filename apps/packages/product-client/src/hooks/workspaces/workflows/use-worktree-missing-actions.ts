@@ -47,7 +47,8 @@ export function useWorktreeMissingActions(args: { workspaceId: string }) {
       // The SDK mutation refreshes raw AnyHarness queries. This separate key
       // owns the product-composed workspace collection that drives the panel.
       await refresh();
-      showToast("Worktree restored.");
+      // The store's show() defaults to the error tone; this one is a success.
+      showToast("Worktree restored.", "info");
       return true;
     } catch (error) {
       setRestoreError(

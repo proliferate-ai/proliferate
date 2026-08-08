@@ -59,7 +59,7 @@ describe("useWorktreeMissingActions", () => {
     expect(restored).toBe(true);
     expect(mocks.restore).toHaveBeenCalledWith("workspace-1");
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
-    expect(mocks.showToast).toHaveBeenCalledWith("Worktree restored.");
+    expect(mocks.showToast).toHaveBeenCalledWith("Worktree restored.", "info");
     expect(result.current.restoreError).toBeNull();
   });
 
